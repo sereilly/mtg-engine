@@ -314,6 +314,14 @@ def _lower_tap(
             frozenset({
                 "card_types", "supertypes", "subtypes", "colors", "controller",
                 "tapped", "blocking", "blocked_source_this_turn",
+                # "Tap all **nonwhite** creatures." (Blinding Light.) The
+                # negated twin of `colors` one line up, and the sweep already
+                # resolves through `subject_matches`, which tests
+                # `exclude_colors` like any other key — so the whitelist was
+                # the only thing refusing it. A colourless creature is nonwhite
+                # (CR 105.2c), which falls out of testing membership rather
+                # than absence.
+                "excluded_colors",
             }),
         )
         if leftovers:

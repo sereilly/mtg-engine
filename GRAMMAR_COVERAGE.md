@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 71.2% | 65.5% | 39.6% | 176 |
+| MIR *(measured)* | 335 | 545 | 71.6% | 66.4% | 40.6% | 181 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,7 +46,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 350 | 179 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
-| 98 | 58 | unconsumed text |  |
+| 96 | 56 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -480,6 +480,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Blighted Shaman**
   - `{T}, Sacrifice a Swamp: Target creature gets +1/+1 until end of turn.`
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
+- **Blinding Light**
+  - `Tap all nonwhite creatures.`
 - **Blinking Spirit**
   - `{0}: Return this creature to its owner's hand.`
   - `{0}: Return this creature to its owner's hand.`
@@ -618,6 +620,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell.`
 - **Candelabra of Tawnos**
   - `{X}, {T}: Untap X target lands.`
+- **Canopy Dragon**
+  - `{1}{G}: This creature gains flying and loses trample until end of turn.`
 - **Canopy Stalker**
   - `When this creature dies, you gain 1 life for each creature that died this turn.`
 - **Capture Sphere**
@@ -1102,6 +1106,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Diseased Vermin**
   - `Whenever this creature deals combat damage to a player, put an infection counter on it.`
   - `At the beginning of your upkeep, this creature deals X damage to target opponent previously dealt damage by it, where X is the number of infection counters on it.`
+- **Disempower**
+  - `Put target artifact or enchantment on top of its owner's library.`
 - **Disenchant**
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`
@@ -1390,6 +1396,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fallen Angel**
   - `Sacrifice a creature: This creature gets +2/+1 until end of turn.`
   - `Sacrifice a creature: This creature gets +2/+1 until end of turn.`
+- **Fallow Earth**
+  - `Put target land on top of its owner's library.`
 - **False Demise**
   - `When enchanted creature dies, return that card to the battlefield under your control.`
 - **Fanatical Fever**
@@ -2484,6 +2492,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: This creature gets -0/-1 and gains flying until end of turn.`
 - **Leeches**
   - `Target player loses all poison counters. Leeches deals that much damage to that player.`
+- **Leering Gargoyle**
+  - `{T}: This creature gets -2/+2 and loses flying until end of turn.`
 - **Legion's Judgment**
   - `Destroy target creature with power 4 or greater.`
 - **Leshrac's Sigil**

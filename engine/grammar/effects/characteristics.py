@@ -119,6 +119,27 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             ast.GainKeyword(subject, keywords, keyword_duration, choose_one=choose_one),
         ))
     stream.reset(mark)
+
+    # "…gets -2/+2 and **loses flying** until end of turn." (Leering Gargoyle.)
+    # The mirror of the conjunction above, and its own arm rather than a verb
+    # alternative inside it for the reason `_KEYWORD_REMOVAL` is its own pattern
+    # in `auras.py`: a grant and a removal are opposite contributions to one
+    # layer (CR 613.4/613.9), so folding them together would let "loses flying"
+    # come back as a grant of it.
+    mark_loss = stream.mark()
+    if stream.accept_word("and") and stream.at_word("loses", "lose"):
+        stream.advance()
+        keywords, _disjunctive = parse_keyword_list(stream)
+        keyword_duration = _parse_duration(stream)
+        if duration.kind is None and keyword_duration.kind is not None:
+            pump = ast.Pump(
+                subject, power, toughness, keyword_duration,
+                power_negative, toughness_negative,
+            )
+        return ast.Conjunction((
+            pump, ast.LoseKeyword(subject, keywords, keyword_duration),
+        ))
+    stream.reset(mark_loss)
     return pump
 
 
@@ -297,6 +318,28 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             grant = ast.GainKeyword(subject, keywords, pump.duration)
         return ast.Conjunction((grant, pump))
     stream.reset(mark)
+
+    # "{1}{G}: This creature **gains flying and loses trample** until end of
+    # turn." (Canopy Dragon.) One sentence over both halves of layer 6, and the
+    # trailing duration governs both — the same join the two branches above
+    # make, with the opposite contribution on the right. Kept as its own arm
+    # rather than folded into the keyword list, because a list is a set of
+    # words the subject *gains*; a removal in it would be a grant.
+    loss_mark = stream.mark()
+    if stream.accept_word("and") and stream.at_word("loses", "lose"):
+        stream.advance()
+        lost, _disjunctive = parse_keyword_list(stream)
+        loss_duration = _parse_duration(stream)
+        if duration.kind is None and loss_duration.kind is not None:
+            grant = ast.GainKeyword(
+                subject, keywords, loss_duration, choose_one=choose_one
+            )
+        elif loss_duration.kind is None:
+            loss_duration = duration
+        return ast.Conjunction((
+            grant, ast.LoseKeyword(subject, lost, loss_duration),
+        ))
+    stream.reset(loss_mark)
     return grant
 
 

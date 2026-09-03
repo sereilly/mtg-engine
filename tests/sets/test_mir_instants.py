@@ -76,3 +76,55 @@ def test_a_permanent_reality_ripple_phased_out_comes_back_once(set_pool):
     game.start_next_turn()
     game.start_next_turn()
     assert game.is_on_battlefield(victim)
+
+
+# --- Round 6: a handler that pinned a type its card did not print ---
+
+def test_disempower_tucks_either_of_its_printed_types(set_pool):
+    """"Put target **artifact or enchantment** on top of its owner's library."
+
+    Reality Ripple's defect, one file over and found the same way. The tuck
+    lowering demanded ``card_types == ("creature",)`` and the handler asked
+    ``is_creature`` — two copies of a narrowing the printed noun phrase does not
+    have, on an effect that is the same for every permanent type: CR 400.3's
+    owner lookup and the library move do not care what was moved.
+    """
+    pool = set_pool("MIR")
+    for host_name in ("Charcoal Diamond", "Armor of Thorns"):
+        host = Permanent(card=pool[host_name])
+        game = Game(players=[
+            PlayerState(name="P1", hand=[pool["Disempower"]],
+                        library=[pool["Island"]] * 5),
+            PlayerState(name="P2", battlefield=[host],
+                        library=[pool["Island"]] * 5),
+        ])
+        game.enforce_mana_costs = False
+        game.interactive_seats = set()
+        result = game.cast_from_hand(
+            0, "Disempower", target_player_index=1, target_permanent_index=0
+        )
+        assert result.supported, result.details
+        game.resolve_stack()
+
+        assert not game.is_on_battlefield(host)
+        assert game.players[1].library[0].name == host_name
+
+
+def test_disempower_still_refuses_a_creature(set_pool):
+    """The narrowing is carried, not dropped — which is the other half of the
+    fix. Widening the lowering to any noun phrase would be worth nothing if the
+    handler then moved whatever it was handed."""
+    pool = set_pool("MIR")
+    creature = Permanent(card=pool["Femeref Knight"])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Disempower"]], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", battlefield=[creature], library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.cast_from_hand(
+        0, "Disempower", target_player_index=1, target_permanent_index=0
+    )
+    game.resolve_stack()
+
+    assert game.is_on_battlefield(creature)

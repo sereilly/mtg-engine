@@ -3137,12 +3137,30 @@ def phase_out_opponent_creatures(game: Game, instruction: OracleInstruction, con
 @effect_handler("put_target_on_library_top")
 def put_target_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put target creature on top of its owner's library." (Teferi, Timeless
-    Voyager's −3.) A zone change, not a destruction: no dies-trigger fires and
+    Voyager's −3); "target artifact or enchantment" (Disempower); "target land"
+    (Fallow Earth). A zone change, not a destruction: no dies-trigger fires and
     regeneration cannot save it. The card goes to its *owner's* library
-    (CR 400.3), whoever controlled the permanent."""
-    target_perm = resolve_target_permanent(game, context)
-    if target_perm is None or not target_perm.is_creature:
-        game.log.append(f"{context.card.name}: no valid creature target")
+    (CR 400.3), whoever controlled the permanent.
+
+    **The type comes from the printed noun phrase**, asked through the same
+    ``subject_matches`` the picker enumerated with. It was pinned to
+    ``is_creature`` here, which is Reality Ripple's defect one file over: a
+    spell whose target the engine had already accepted, declined at resolution
+    with "no valid creature target" and resolved having done nothing.
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
     owner_idx = game.owner_index_of(target_perm)
     owner = game.players[owner_idx] if owner_idx is not None else context.caster

@@ -1185,6 +1185,38 @@ halves are two channels there rather than one.
 
 `oracle_diff`: **4 changed of 2181**, exactly the four Auras.
 
+### Round 6 — three narrowings the engine was dropping: 213 → 218 supported
+
+Five cards, no new machinery, and every one of them a **restriction carried
+rather than pinned**. The set's long tail is 101 cards blocked by exactly one
+line, so from here a round is a handful of small families rather than one big
+rock; these three were the cheapest.
+
+- **The tuck pinned a type its card does not print.** `put_target_on_library_top`
+  demanded `card_types == ("creature",)` in the lowering *and* `is_creature` in
+  the handler — Reality Ripple's defect one file over, and found the same way.
+  CR 400.3's owner lookup and the library move are the same for every permanent
+  type, so Disempower ("target artifact or enchantment") and Fallow Earth
+  ("target land") refused on a narrowing the effect has no opinion about. Both
+  ends now read the printed noun phrase, through the same `subject_matches` the
+  picker enumerated with — which is what keeps Disempower from tucking a
+  creature.
+- **The tap sweep's whitelist knew `colors` and not `excluded_colors`.** The
+  sweep already resolves through `subject_matches`, which tests the key like any
+  other, so the whitelist was the only thing refusing "Tap all **nonwhite**
+  creatures" (Blinding Light). Dropping the word instead would have tapped the
+  caster's own white team.
+- **"…gains X and loses Y until end of turn" had no parse arm.** Two, in fact:
+  the conjunction after a `gains` (Canopy Dragon) and after a `gets` (Leering
+  Gargoyle), plus the self-subject keyword loss *with* a duration, which the
+  durationless branch above it and the targeted branch below it both missed.
+  Each is its own arm rather than a verb alternative inside the grant, for the
+  reason `auras.py` keeps `_KEYWORD_REMOVAL` separate from `_KEYWORD_GRANT`: a
+  grant and a removal are opposite contributions to one layer (CR 613.4/613.9),
+  and folded together "loses flying" comes back as a grant of it.
+
+`oracle_diff`: **5 changed of 2181**, all Mirage.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

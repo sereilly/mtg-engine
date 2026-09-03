@@ -55,10 +55,30 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
     assert isinstance(node.target, ast.TargetSpec)
     filt = node.target.filter
-    if filt.card_types != ("creature",) or filt.zone != "battlefield" or filt.is_card:
-        raise LoweringError("the tuck handler reads battlefield creatures", node=node)
+    if filt.zone != "battlefield" or filt.is_card:
+        raise LoweringError(
+            "the tuck handler moves a permanent, not a card in a zone", node=node
+        )
     payload: dict[str, object] = {}
     _describe_targets(payload, node.target)
+    # The printed noun phrase, whatever it is: "target **artifact or
+    # enchantment**" (Disempower), "target **land**" (Fallow Earth), "target
+    # creature" (Teferi, Timeless Voyager). The type used to be pinned to
+    # creature here *and* in the handler, so the two Mirage cards refused at a
+    # noun the tuck has no opinion about — CR 400.3's owner lookup and the
+    # library move are the same for every permanent type.
+    #
+    # Idiom 2 as always: a narrowing the matcher cannot test would be dropped,
+    # and a dropped narrowing on a *target* is a spell that moves a permanent
+    # its own text did not admit.
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    described = (payload.get("targets") or {}).get("filter") or {}
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if leftover:
+        raise LoweringError(
+            "the tuck cannot narrow by: " + ", ".join(sorted(leftover)), node=node
+        )
     return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 

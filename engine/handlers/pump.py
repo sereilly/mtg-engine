@@ -1644,11 +1644,16 @@ def remove_self_keyword(game: Game, instruction: OracleInstruction, context: Ora
     if source_permanent is None:
         return False, "ability not implemented"
     keywords = tuple(instruction.payload.get("keywords") or ())
+    # "…loses flying **until end of turn**" (Leering Gargoyle, Canopy Dragon).
+    # Absent means no expiry, which is what every payload written before this
+    # key meant and what Elder Land Wurm's defender loss still means.
+    duration = instruction.payload.get("duration")
     for keyword in keywords:
-        remove_keyword(source_permanent, keyword)
+        remove_keyword(source_permanent, keyword, duration=duration)
     game._recompute_continuous_effects()
     game.log.append(
         f"{source_permanent.card.name} loses {' and '.join(keywords)}"
+        + (" until end of turn" if duration == "end_of_turn" else "")
     )
     return True, "resolved"
 

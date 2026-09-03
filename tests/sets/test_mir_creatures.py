@@ -268,3 +268,58 @@ def test_crystal_golem_phases_itself_out_at_its_end_step(set_pool):
     game.resolve_stack()
 
     assert not game.is_on_battlefield(golem)
+
+
+# --- Round 6: "gains X and loses Y until end of turn" (CR 613 layer 6) ---
+
+def _r6_activate(set_pool, name: str):
+    """*name* on seat 0, with its ability activated and resolved."""
+    pool = set_pool("MIR")
+    creature = Permanent(card=pool[name])
+    creature.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[creature], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    result = game.activate_permanent_ability(0, name, permanent_index=0)
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    return game, creature
+
+
+def test_canopy_dragon_gains_one_keyword_and_loses_another(set_pool):
+    """"{1}{G}: This creature gains flying and loses trample until end of turn."
+
+    One printed sentence over both halves of layer 6, and the trailing duration
+    governs both. Its own parse arm rather than a verb alternative inside the
+    grant, because a grant and a removal are opposite contributions to one layer
+    (CR 613.4/613.9) — folded together, "loses trample" comes back as a grant of
+    it.
+    """
+    game, dragon = _r6_activate(set_pool, "Canopy Dragon")
+
+    assert game._has_keyword(dragon, "flying")
+    assert not game._has_keyword(dragon, "trample")
+
+
+def test_leering_gargoyle_pumps_and_loses_a_keyword(set_pool):
+    """"{T}: This creature gets -2/+2 and loses flying until end of turn." The
+    same conjunction with a pump on the left."""
+    game, gargoyle = _r6_activate(set_pool, "Leering Gargoyle")
+
+    assert (gargoyle.effective_power, gargoyle.effective_toughness) == (0, 4)
+    assert not game._has_keyword(gargoyle, "flying")
+
+
+def test_the_keyword_comes_back_at_cleanup(set_pool):
+    """"Until end of turn" is a real layer-6 record with an expiry, not an edit
+    to the printed card — so the cleanup sweep gives the word back."""
+    game, gargoyle = _r6_activate(set_pool, "Leering Gargoyle")
+    assert not game._has_keyword(gargoyle, "flying")
+
+    game.resolve_cleanup_step(0)
+
+    assert game._has_keyword(gargoyle, "flying")

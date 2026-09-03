@@ -765,6 +765,21 @@ def _lower_lose_keyword(
     team = _team_removal_payload(node)
     if team is not None:
         return (OracleInstruction("remove_team_keyword_until_eot", "", team),)
+    # "{1}{G}: This creature gains flying and **loses trample** until end of
+    # turn." (Canopy Dragon); "{T}: This creature gets -2/+2 and **loses
+    # flying** until end of turn." (Leering Gargoyle.) The ability's own source,
+    # with a duration — which the durationless branch above reads and the
+    # targeted branch below reads, and neither of them covered. Same kind as the
+    # durationless self-removal, carrying the duration as payload for the reason
+    # ``pump_self`` carries its "indefinite": every payload written before this
+    # branch existed meant no expiry, so the new answer has to say so out loud.
+    if _is_source(node.subject):
+        return (
+            OracleInstruction(
+                "remove_self_keyword", "",
+                {"keywords": tuple(node.keywords), "duration": "end_of_turn"},
+            ),
+        )
     if not _is_target(node.subject):
         raise LoweringError("no handler removes a keyword from this subject", node=node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}
