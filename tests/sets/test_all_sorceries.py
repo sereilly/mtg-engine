@@ -350,3 +350,71 @@ def test_w2g4_a_non_interactive_chooser_takes_the_first_printed_mode(set_pool):
 
     assert game.pending_choices == []
     assert [t.event for t in game.delayed_triggers] == ["next_turns_upkeep"]
+
+
+# --- W3G5: hollow lines, pickers and unclaimed text ---
+#
+# The family that already *looked* done. Behavioural tests, because that is the
+# check the census instruments cannot make.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition
+
+_W3G5S_POOLS: dict = {}
+
+
+def _w3g5s_from(code: str, name: str) -> CardDefinition:
+    if code not in _W3G5S_POOLS:
+        _W3G5S_POOLS[code] = {
+            card.name: card
+            for card in load_cards(manifest_set_path(code, include_measured=True))
+        }
+    return _W3G5S_POOLS[code][name]
+
+
+def test_foresight_exiles_three_of_the_library_and_no_more():
+    """A supported sorcery whose only sentence did nothing.
+
+    "Search your library for three cards, exile them, then shuffle" refused at
+    the search production, which had two shapes — one card put somewhere, or
+    "any number of" cards exiled out of two zones — and no counted one. The
+    printed number is a **ceiling** (CR 701.23b lets a search find fewer), so
+    it is checked before anything moves and a fourth pick refuses the answer
+    whole rather than exiling three of it.
+    """
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.players[0].library = [_w3g5s_from("LEA", "Forest") for _ in range(6)]
+    game.players[0].hand.append(_w3g5s_from("ALL", "Foresight"))
+
+    assert game.cast_from_hand(0, "Foresight").supported
+    game.resolve_stack()
+    pending = [c for c in game.pending_choices if c.kind == "search_exile_cards"]
+    assert len(pending) == 1 and pending[0].data["maximum"] == 3
+
+    over = [{"zone": "library", "index": index} for index in range(4)]
+    assert not game.confirm_search_exile(0, over), "a fourth pick is not offered"
+    assert len(game.players[0].library) == 6, "and nothing moved on the refusal"
+
+    assert game.confirm_search_exile(
+        0, [{"zone": "library", "index": index} for index in range(3)]
+    )
+    assert len(game.players[0].exile) == 3
+    assert len(game.players[0].library) == 3
+
+
+def test_foresights_default_takes_the_printed_number_rather_than_the_library():
+    """A non-interactive seat takes as much as the card allows, **bounded**.
+    Untrimmed, the whole-library answer would be refused and the seat would
+    take nothing, which is the opposite default."""
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.players[0].library = [_w3g5s_from("LEA", "Forest") for _ in range(6)]
+    game.players[0].hand.append(_w3g5s_from("ALL", "Foresight"))
+    game.cast_from_hand(0, "Foresight")
+    game.resolve_stack()
+
+    game._apply_choice_default(game.pending_choices[0])
+    assert len(game.players[0].exile) == 3
+    assert len(game.players[0].library) == 3

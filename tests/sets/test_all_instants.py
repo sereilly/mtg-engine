@@ -1006,3 +1006,35 @@ def test_omen_of_fire_bounces_the_islands_and_scales_the_sacrifice_per_seat():
     assert _w3g5_names(game, 1) == ["Grizzly Bears"], (
         "one white permanent means one sacrifice, and green is in neither half"
     )
+
+
+def test_gorilla_war_cry_gives_menace_to_both_players_creatures():
+    """"**All** creatures gain menace until end of turn" — every creature on
+    the table, not the caster's.
+
+    The keyword and its blocking restriction were both already there: menace is
+    in `IMPLEMENTED_KEYWORDS`, `layer_bridge` grants it, and
+    `_minimum_blockers` enforces CR 702.111a. What refused was the *scope* —
+    the team grant's lowering said "the team keyword grant reads one player's
+    board", which had stopped being true when Stampede taught the handler
+    `every_seat`.
+    """
+    game = _w3g5_duel()
+    mine = _w3g5_put(game, 0, _w3g5_from("LEA", "Grizzly Bears"))
+    theirs = _w3g5_put(game, 1, _w3g5_from("LEA", "Hill Giant"))
+    game.players[0].hand.append(_w3g5_from("ALL", "Gorilla War Cry"))
+
+    # "Cast this spell only during combat before blockers are declared."
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.cast_from_hand(0, "Gorilla War Cry").supported
+    game.resolve_stack()
+
+    assert mine.has_keyword("menace") and theirs.has_keyword("menace"), (
+        "\"all creatures\" is every seat's, and the caster does not choose which"
+    )
+    assert game._minimum_blockers(theirs) == 2, (
+        "CR 702.111a: the grant reaches the enforcement, not just the word"
+    )

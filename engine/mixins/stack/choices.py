@@ -1316,6 +1316,13 @@ class PendingChoicesMixin:
             if not self._exile_search_matches(source[index], choice.data):
                 return False
             cleaned.append((zone, index))
+        # "Search your library for **three** cards" (Foresight). A printed
+        # ceiling, checked before anything moves like every other part of this
+        # answer — CR 701.23b lets a search find fewer, so there is no floor,
+        # but a fourth pick is a card the effect never named.
+        maximum = choice.data.get("maximum")
+        if maximum is not None and len(cleaned) > int(maximum):
+            return False
         exiled = []
         for zone in ("library", "graveyard"):
             source = caster.library if zone == "library" else caster.graveyard
@@ -1335,7 +1342,7 @@ class PendingChoicesMixin:
             ctx.results["exiled_cards"] = exiled
         self.discard_pending_choice(choice)
         self.log.append(
-            f"{caster.name} searched graveyard and library and exiled "
+            f"{caster.name} searched {' and '.join(zones)} and exiled "
             + (", ".join(card.name for card in exiled) if exiled else "nothing")
         )
         return True
@@ -1343,7 +1350,12 @@ class PendingChoicesMixin:
     def _default_search_exile(self, choice: PendingChoice) -> None:
         """A non-interactive seat takes everything that matches: "any number"
         is a may per card, and the cards come back castable, so the maximum is
-        the only default that never leaves value on the table."""
+        the only default that never leaves value on the table.
+
+        Where a ceiling is printed the default takes that many — the same
+        "as much as the card allows" reading, bounded. Without the trim the
+        picks would be refused whole and the seat would take *nothing*, which
+        is the opposite default."""
         caster = self.players[choice.player_index]
         picks = [
             {"zone": zone, "index": index}
@@ -1354,6 +1366,9 @@ class PendingChoicesMixin:
             )
             if self._exile_search_matches(card, choice.data)
         ]
+        maximum = choice.data.get("maximum")
+        if maximum is not None:
+            picks = picks[: int(maximum)]
         if not self._resolve_search_exile(choice, picks):
             self._resolve_search_exile(choice, [])
 

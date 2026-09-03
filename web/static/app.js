@@ -7173,7 +7173,11 @@ function renderSearchExileModal(info) {
       (info.colors || []).join("/"),
       (info.card_types || []).join(" or "),
     ].filter(Boolean).join(" ");
-    subtitle.textContent = `Choose any number of ${what || "matching"} cards to exile. You may cast them this turn.`;
+    // "…for **three** cards" (Foresight) prints a ceiling; the "any number of"
+    // spelling (Chandra, Heart of Fire) does not. CR 701.23b lets a search find
+    // fewer than it names, so it is always "up to".
+    const howMany = info.maximum ? `up to ${info.maximum}` : "any number of";
+    subtitle.textContent = `Choose ${howMany} ${what || "matching"} cards to exile.`;
   }
 
   const confirmBtn = document.getElementById("searchExileConfirmBtn");
@@ -7198,7 +7202,12 @@ function renderSearchExileModal(info) {
       el.addEventListener("click", () => {
         const key = `${el.dataset.zone}:${el.dataset.idx}`;
         if (searchExileSelected.has(key)) searchExileSelected.delete(key);
-        else searchExileSelected.add(key);
+        else {
+          // The engine refuses an over-long answer *whole*, so a fourth pick
+          // would cost the player the other three. Refused here instead.
+          if (info.maximum && searchExileSelected.size >= info.maximum) return;
+          searchExileSelected.add(key);
+        }
         el.classList.toggle("selected");
         if (confirmBtn) {
           confirmBtn.textContent = searchExileSelected.size
