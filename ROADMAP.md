@@ -1072,6 +1072,100 @@ opponent, which is what the card actually says. And `_pick_x_value` reads only
 life (CR 601.2b) — comes back `None`; the parts are an X chooser that reads
 `cast_costs.additional_costs`' life price and a policy for spending life on X.
 
+### W3-justice — the last card. 143 → 144; the set is complete, zero hooks.
+
+Primitive Justice, and the inherited decline was **half wrong in the direction
+the playbook predicts**: of its four named pieces, one was already done, one was
+the wrong mechanism, one does not exist as a problem, and only the fourth
+survives — as an item this round deliberately did not take.
+
+**The parse was already complete, and the decline never said which layer it was
+in.** `parse_line` returns the whole three-sentence line as
+`Sequence(Destroy, ForEach(EachAdditionalCostPaid, Destroy), ForEach(…,
+Sequence(Destroy, GainLife)))`, with `distinct_from_prior=True` on both
+"another"s — W3G1 built every bit of that. The refusal was one line in the
+*lowering* (`_refuse_unfused_distinctness`), which is the taxonomy entry the
+playbook asks each round to record and the decline did not.
+
+**Piece 2 named the fix in its own refusal text, and pieces 1 and 3 dissolved
+against it.** `_refuse_unfused_distinctness`' docstring says a shape that grows
+a **fused** lowering is claimed above it and never reaches it, and
+`_fused_two_target_pump` one family over is the worked example: two clauses, one
+instruction, `count` + `distinct` on one target description. Three destroys over
+disjoint targets *are* "destroy 1+n distinct target artifacts", so the fuser is
+the whole of pieces 2 and 3 — there is no slot list to index into, because there
+is one slot list and `destroy_target_permanent` has read one since Avalanche.
+Piece 3's "the `for_each` body must name the i-th target" is a problem that
+stops existing the moment the destroys are one instruction; what stays in a loop
+is the {1}{G} clause's *life gain*, which is what the sentence prints.
+
+**Piece 1 was right about the need and wrong about the shape.** There is no
+`min_targets`/`max_targets` pair to derive, because the number is not derivable
+from the card: it is `1 + n({1}{R}) + n({1}{G})`, fixed by CR 601.2c one step
+after a CR 601.2b announcement that `derive_cast_spec` — which reads the
+compiled program and nothing else — never sees. So the spec carries the
+*arithmetic* (`cost_targets: {base, per_cost}`), exactly as `x_targets` carries
+a flag rather than a number one branch over, and one reader
+(`oracle_types.cost_target_count`) resolves it for the picker, the cast gate and
+the AI. Three copies of that sum would be three answers, and the quiet one is a
+picker offering a count the engine then refuses.
+
+**The floor is real and it is the engine's only one.**
+`legality.cast_target_refusal` now takes the announcement and refuses a cast
+whose target count is not the one the payment bought, and refuses a repeated id
+under the printed "another" (CR 601.2c: the same target can't be chosen twice
+for one instance of the word). Both refusals land before any mana leaves the
+pool. **This does not touch W2G5's negative finding**: "one or more target" still
+has no floor and Heaven's Gate and its four colour siblings may still be cast
+naming nothing. What makes the count answerable *here* and not there is that it
+came from an announcement the same cast already made; a general floor is a
+different change with a different blast radius.
+
+**Piece 4 is still owed, and it is now owed by two cost kinds.** No client emits
+`optional_cost_payments` — `_cost_picker_spec` models a *mandatory* cost, and an
+offer needs an offer shape ("cast for {1}{R}, or for {1}{R} plus {1}{R} plus
+{1}{G}?") that does not exist, plus a several-target collection whose maximum is
+recomputed as the offer is answered. The card is supported and plays correctly
+without it because the announcement a client *can* make — no offers — is the
+one-target cast, which the existing single-target picker gets right. See
+`web/schemas.py`'s `optional_cost_payments` and W1G4's twin item for the
+alternative cost.
+
+**The card that made a lowering module cross the guard also showed where its
+family line was.** `lowering/destruction.py` went to 1,051 lines. The cut is the
+three `… unless <someone> pays` productions: all three are parsed in
+`effects/board.py`, all three are one printed shape with three verbs — an
+*offer*, whose refusal is the effect — and the CR 701.7 split had carried two of
+them into `destruction` while `_lower_sacrifice_unless_pay` stayed behind. They
+are together again in `lowering/board.py` (959 / 641 lines), which is the mirror
+re-forming rather than a size cut. Both scans were run after the move: the
+dead-import one and a missing-name walk of every module touched.
+
+**The AI could not cast the card at all, and the floor is what exposed it.**
+`_choose_several_targets` derives which cards it answers for from
+`max_targets` — a number this spec does not carry — so the seat proposed
+Primitive Justice with **no target named** and was refused every turn:
+`refused_casts` 81 over eight games, which is exactly the "a seat doing nothing
+all game" signal the report exists to raise. The chooser now falls back to the
+cost-sized count with no offers taken (which is 1, and one is still a number a
+several-target handler has to be given, because it has no resolution-time board
+scan to fall into the way a single-target one does). And
+`ai_valuation._SLOT_DISPOSITION` gained `destroy_target_permanent: "opponent"`
+beside the tap already there — a destroy is a denial — without which the
+single-seat fallback pointed the spell at the caster's own artifacts. No shipped
+card reaches either change: every other several-target destroy in the pool is a
+sweep or announces its count off an X. After it: `refused_casts` empty,
+`interaction_count` 383 → 412.
+
+**Verification.** 12,599 passed / 0 failed. `support_report.py --set ALL`
+**144/144, 0 unsupported**; `--hollow-lines` 0; `picker_sweep.py --set ALL` 0
+findings; `parse_coverage.py --set ALL` unchanged at 2 unclaimed sentences on 1
+card (Suffocation). The whole-pool differential moved **exactly one program of
+1,869** — Primitive Justice — with no defaulted-field noise, because the round
+added no field to a dataclass the snapshot reprs. ALL's grammar row 89.6%
+parsed, 88.8% → **89.2% lowered**, 69.7% → **70.1% executed**; hook reliance
+0 entries over 144 supported cards.
+
 ### Round plan — wave 1, five worktree groups
 
 Split by grammar family, ranked by the fragment census rather than the
