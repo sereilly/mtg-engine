@@ -551,6 +551,10 @@ def run_ai_simulation(
                         # a mana cost the policy has already established this
                         # seat cannot pay, and be refused.
                         alternative_cost=cast_action.alternative_cost,
+                        # CR 601.2d, forwarded for exactly that reason: the
+                        # division is part of the announcement, and a cast that
+                        # drops it is refused now that the gate asks for one.
+                        divided_targets=cast_action.divided_targets,
                     )
                     _resolve_pending_choices(game)
                     after = _snap(game)

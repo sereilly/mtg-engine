@@ -487,6 +487,68 @@ def mana_ability_amount(card: CardDefinition) -> int | None:
     return None
 
 
+@dataclass(frozen=True)
+class DividedShape:
+    """What a divided spell (CR 601.2d) divides, in the terms the AI asks about.
+
+    Three facts, all read off the compiled program, because "which cards does
+    this reach" is this module's question and the answer must not be a list of
+    names: the division is announced as the spell is cast, so a policy that
+    guessed would announce Contagion's ``-2/-1`` counters onto its own
+    creatures and Bounty of the Hunt's ``+1/+1`` onto the opponent's.
+    """
+
+    #: Whose permanents the shares should land on — "you", "opponent", or None
+    #: for no preference. Derived from the *sign* of a placed counter where the
+    #: instruction places one, and otherwise from the effect's category, which
+    #: is the same reading :func:`activation_target_side` makes one table up.
+    side: str | None = None
+    #: Whether a share too small to matter is wasted. True for damage, which is
+    #: measured against a toughness: four damage split one apiece over four
+    #: creatures kills none of them, while four +1/+1 counters split the same
+    #: way are four counters either way. It is a fact about the effect, not a
+    #: policy — what the AI *does* about it is stated in ``ai_policy``.
+    thresholded: bool = False
+    #: Whether the card names a whole board rather than offering a choice —
+    #: "…among **all creatures target opponent controls**" (Dwarven Catapult).
+    #: Read as an evenly-divided description whose filter names a controller:
+    #: an evenly-divided spell's caster announces no shares, so the target list
+    #: is the only choice it has, and a filter bounding that list to one
+    #: player's board is the card making it.
+    whole_board: bool = False
+
+
+def divided_shape(program) -> DividedShape | None:
+    """*program*'s divided step described, or None when it divides nothing."""
+    from .divided_damage import CHOSEN, divided_instruction
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+    from .pt import pt_counter_deltas
+
+    instruction = divided_instruction(program.instructions)
+    if instruction is None:
+        return None
+    described = instruction.payload.get("targets") or {}
+    category = INSTRUCTION_CATEGORIES.get(instruction.kind)
+    side = None
+    deltas = pt_counter_deltas(str(instruction.payload.get("counter") or ""))
+    if deltas is not None:
+        # The sign, exactly as `several_target_slot_sides` reads a slot's P/T
+        # delta below: "+1/+1" is a gift and "-2/-1" is removal, and the two
+        # compile to one instruction kind whose category ("counters") is right
+        # about the family and silent about the side.
+        side = "you" if sum(deltas) > 0 else "opponent" if sum(deltas) < 0 else None
+    else:
+        side = activation_target_side(instruction)
+    return DividedShape(
+        side=side,
+        thresholded=category == "damage",
+        whole_board=(
+            described.get("division") != CHOSEN
+            and bool((described.get("filter") or {}).get("controller"))
+        ),
+    )
+
+
 def _several_target_instruction(program):
     """The one instruction in *program* whose description names several targets."""
 
@@ -581,12 +643,14 @@ __all__ = [
     "SELF_PAYMENT_KINDS",
     "SPELL_TYPES",
     "CounterProfile",
+    "DividedShape",
     "TollLoss",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
     "castable_commanders",
     "counters_a_spell",
     "destroyed_permanent_filter",
+    "divided_shape",
     "is_mana_ability",
     "mana_ability_amount",
     "offered_action_is_a_payment",
