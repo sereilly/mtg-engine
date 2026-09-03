@@ -849,3 +849,144 @@ def test_a_face_down_rider_on_any_other_exile_refuses(set_pool):
 
     with pytest.raises(LoweringError):
         lower_ability(parse_line("Exile target creature face down."))
+
+
+def _w3g3_helm(set_pool, library, x_value):
+    """Helm out, an opponent's library stacked, and its ability on the stack."""
+    game = _w3g3_duel()
+    helm = _w3g3_put(game, 0, set_pool("ALL")["Helm of Obedience"])
+    game.players[1].library = [_W3G3_LEA[name] for name in library]
+    result = game.activate_permanent_ability(
+        0, "Helm of Obedience", permanent_index=0,
+        x_value=x_value, target_player_index=1,
+    )
+    game._settle()
+    return game, helm, result
+
+
+def test_helm_of_obedience_stops_the_loop_on_the_first_creature_card(set_pool):
+    """"Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first."
+
+    A loop, not a count: the library is asked one card at a time and *what came
+    off the top* decides whether the next iteration happens. Read as a mill of
+    X it would take four cards here and leave the Lotus in the graveyard.
+    """
+    game, helm, result = _w3g3_helm(
+        set_pool, ["Lightning Bolt", "Healing Salve", "Grizzly Bears", "Black Lotus"],
+        x_value=10,
+    )
+
+    assert result.supported
+    assert [c.name for c in game.players[1].library] == ["Black Lotus"]
+    # The Bears was milled and then taken out of the graveyard by the sentence
+    # behind the loop, so what is left is the two cards in front of it.
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Lightning Bolt", "Healing Salve",
+    ]
+    assert helm not in game.players[0].battlefield
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+
+
+def test_helm_of_obedience_stops_the_loop_on_x_cards(set_pool):
+    """The other printed exit, and the reason both are fields: a loop that only
+    watched for the creature would empty the library looking for one.
+
+    Nothing is sacrificed and nothing is reanimated - the conditional behind
+    the loop reads the loop's own record, which is empty.
+    """
+    game, helm, result = _w3g3_helm(
+        set_pool, ["Lightning Bolt", "Healing Salve", "Black Lotus", "Grizzly Bears"],
+        x_value=2,
+    )
+
+    assert result.supported
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Lightning Bolt", "Healing Salve",
+    ]
+    assert [c.name for c in game.players[1].library] == ["Black Lotus", "Grizzly Bears"]
+    assert helm in game.players[0].battlefield, "nothing was sacrificed"
+    assert [p.card.name for p in game.players[0].battlefield] == ["Helm of Obedience"]
+
+
+def test_helm_of_obedience_stops_on_an_empty_library_without_a_loss(set_pool):
+    """The third exit, which the card does not print because the rules supply
+    it. CR 704.5b fires on an attempted *draw* from an empty library and a mill
+    is not a draw, so the loop simply runs out of cards."""
+    game, helm, _ = _w3g3_helm(set_pool, ["Lightning Bolt"], x_value=10)
+
+    assert game.players[1].library == []
+    assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt"]
+    assert not game.players[1].lost
+    assert helm in game.players[0].battlefield
+
+
+def test_helm_of_obedience_refuses_x_of_zero_with_nothing_paid(set_pool):
+    """"X can't be 0." A constraint on the value chosen for X (CR 601.2b), not
+    on when the ability may be activated - which is why it is enforced beside
+    the {X} payment rather than through the activation-restriction table, whose
+    every row is answered from the game state alone.
+
+    The grammar consumes the sentence on that same reader's say-so, so what is
+    claimed and what is enforced are one reading of the words.
+    """
+    game = _w3g3_duel()
+    helm = _w3g3_put(game, 0, set_pool("ALL")["Helm of Obedience"])
+    game.players[1].library = [_W3G3_LEA["Grizzly Bears"]]
+
+    result = game.activate_permanent_ability(
+        0, "Helm of Obedience", permanent_index=0, x_value=0, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert not helm.tapped, "nothing was paid"
+    assert game.players[1].graveyard == []
+
+
+def test_helm_of_obedience_keeps_the_stolen_creatures_owner(set_pool):
+    """CR 108.3: the creature is put onto the battlefield under *your* control
+    out of its owner's graveyard, so when it dies it goes back to that owner's
+    graveyard and not to the thief's. Recorded on the permanent as it arrives,
+    because by then the graveyard it came from is the only thing that knew."""
+    game, _, _ = _w3g3_helm(set_pool, ["Grizzly Bears"], x_value=5)
+    bears = next(
+        p for p in game.players[0].battlefield if p.card.name == "Grizzly Bears"
+    )
+    assert bears.metadata["owner_player_index"] == 1
+
+    game._permanent_to_graveyard(game.players[0], bears)
+    game._settle()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert "Grizzly Bears" not in [c.name for c in game.players[0].graveyard]
+
+
+def test_a_repeated_mill_refuses_a_count_other_than_one(set_pool):
+    """The loop is asked after every single card, so a wording that milled two
+    at a time would step past its own stopping card. It refuses loudly rather
+    than being read as this loop with a different number in it."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError
+
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Target opponent mills two cards, then repeats this process until "
+            "a creature card or X cards have been put into their graveyard "
+            "this way, whichever comes first."
+        )
+
+
+def test_one_of_them_refuses_with_no_loop_in_front_of_it(set_pool):
+    """"Them" names a set an earlier step of this same effect recorded. With
+    nothing in front of it the words name a record nothing writes, and an
+    unwritten record reads as empty - so the sentence would compile and put
+    nothing onto the battlefield."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(
+            parse_line("Put one of them onto the battlefield under your control.")
+        )

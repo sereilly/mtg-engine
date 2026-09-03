@@ -110,6 +110,7 @@ from .lowering import (
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
     _lower_mill,
+    _lower_put_milled_card_onto_battlefield,
     _lower_exile_entire_library,
     _lower_modal_head,
     _lower_player_gets_counters,
@@ -342,6 +343,12 @@ def lower_statement(
         # mills a card" names the seat the *firing event* froze, so the
         # lowering needs the event and the node no longer answers on its own.
         return _lower_mill(statement, event)
+
+    if isinstance(statement, ast.PutMilledCardOntoBattlefield):
+        # Here rather than in `by_node.py` because "one of **them**" names a
+        # set an earlier step of this same effect recorded, so the lowering
+        # needs `produced` and the node cannot answer on its own.
+        return _lower_put_milled_card_onto_battlefield(statement, produced)
 
     if isinstance(statement, ast.ReturnToZone):
         # `produced` is what makes "…for each card discarded this way" legal:

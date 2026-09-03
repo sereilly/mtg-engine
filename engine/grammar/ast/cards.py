@@ -133,6 +133,47 @@ class Mill:
 
 
 @dataclass(frozen=True)
+class MillUntil:
+    """``Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first.`` (Helm of Obedience.)
+
+    Not a :class:`Mill` with a count: a mill of N is one move of N cards and
+    nothing looks at them on the way, where this one is a **loop** asked after
+    every single card whether to keep going, and *which* card came off the top
+    decides. Both stopping conditions are fields because both are printed and
+    either can be the one that fires - a loop that only counted would keep
+    milling past the creature it was looking for, and one that only watched
+    would empty a creatureless library into a graveyard.
+
+    "Whichever comes first" is not a third field: it states what two stopping
+    conditions on one loop already mean.
+    """
+    player: PlayerRef
+    stop_filter: ObjectFilter
+    limit: Amount
+
+
+@dataclass(frozen=True)
+class PutMilledCardOntoBattlefield:
+    """``…put one of them onto the battlefield under your control.`` (Helm of
+    Obedience, the sentence after its loop.)
+
+    "Them" is the set the loop recorded, not a target and not a search: the
+    cards are in an opponent's graveyard, and *which* of them may be taken is
+    answered only by what this effect put there. A card the graveyard already
+    held is not one of them.
+
+    Its own node rather than a reanimation with a back-reference field, for
+    :class:`ExiledThisWay`'s reason one file over: what separates it from every
+    other reanimation is which earlier step recorded the set, and a node
+    carrying the record's name as data would be a back-reference free to name a
+    record nothing writes.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class Scry:
     """"Scry N." (CR 701.22a.)
 

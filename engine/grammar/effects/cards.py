@@ -182,7 +182,70 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("mills", "mill")
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
+    repeated = _parse_mill_repeat_tail(stream, player, count)
+    if repeated is not None:
+        return repeated
     return ast.Mill(player, count)
+
+
+def _parse_mill_repeat_tail(
+    stream: TokenStream, player: ast.PlayerRef, count: "ast.Amount"
+) -> "ast.Statement | None":
+    """``, then repeats this process until <noun> or <n> cards have been put
+    into their graveyard this way, whichever comes first`` (Helm of Obedience).
+
+    Declines without consuming on anything else, so every ordinary mill keeps
+    its own reading and its own refusal site.
+
+    The mill in front of it must be **one** card. The whole point of the
+    sentence is that the loop is asked after every single card, so a wording
+    milling two at a time would step past its own stopping card - and that
+    refuses loudly rather than being read as this loop.
+
+    Every word of both stopping conditions is required, and "whichever comes
+    first" is consumed and dropped because it states what two stopping
+    conditions on one loop already mean. A card printing only one of them is a
+    different loop, and this would rather refuse it than guess which half was
+    meant.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct(","):
+        return None
+    if not stream.accept_word("then"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("repeats", "repeat"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "process", "until"):
+        stream.reset(mark)
+        return None
+    if not (isinstance(count, ast.Fixed) and count.value == 1):
+        raise stream.error("a repeated mill mills one card at a time")
+    stream.accept_word("a", "an")
+    filter_mark = stream.mark()
+    try:
+        stop_filter = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(filter_mark)
+        raise stream.error("expected what the repeated mill stops on")
+    if not stop_filter.is_card or not stop_filter.card_types:
+        # The loop watches what is *put into a graveyard*, so the only thing it
+        # can be told to stop on is a printed card type. A phrase the record
+        # cannot answer refuses here rather than being dropped where it is
+        # tested, which would be a loop that never stopped early.
+        raise stream.error("a repeated mill stops on a printed card type")
+    stream.expect_word("or")
+    limit = parse_amount(stream)
+    for word in (
+        "cards", "have", "been", "put", "into", "their", "graveyard",
+        "this", "way",
+    ):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    for word in ("whichever", "comes", "first"):
+        stream.expect_word(word)
+    return ast.MillUntil(player, stop_filter, limit)
 
 
 def _parse_scry(stream: TokenStream) -> ast.Statement:
@@ -466,6 +529,32 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     ):
         zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
     return ast.PutExiledWithSource(zone, chosen=chosen, owned_by_you=owned_by_you)
+
+
+def parse_put_milled_card_onto_battlefield(
+    stream: TokenStream,
+) -> ast.Statement | None:
+    """``Put one of them onto the battlefield under your control.`` (Helm of
+    Obedience.)
+
+    Declines without consuming on anything else, because "put" opens a dozen
+    unrelated sentences and every one of them has a better refusal site than
+    this production's.
+
+    "Under your control" is required rather than defaulted: a card put onto the
+    battlefield goes under its owner's control unless the effect says otherwise
+    (CR 110.2a), and this one says otherwise about an **opponent's** card - so
+    a wording without the clause would be a different effect that handed the
+    creature back.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "one", "of", "them", "onto"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "battlefield", "under", "your", "control"):
+        stream.reset(mark)
+        return None
+    return ast.PutMilledCardOntoBattlefield()
 
 
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:

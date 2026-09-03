@@ -490,6 +490,36 @@ def _lower_condition(
             "state": condition.state,
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.MilledThisWay):
+        # "If one or more creature cards were put into that graveyard this
+        # way" (Helm of Obedience). The producer is demanded for
+        # `ItWas`'s reason above: with no loop in front of it the words name a
+        # set nothing wrote, and an unwritten record reads as empty - so the
+        # branch would never run and the card would still compile supported.
+        if "milled_this_way" not in produced:
+            raise LoweringError(
+                "'put into that graveyard this way' with no repeated mill in "
+                "this effect",
+                node=condition,
+            )
+        leftover = _restrictions_beyond(
+            condition.filter, {"card_types", "is_card", "type_match"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the milled-this-way test cannot ask this of a card: "
+                + ", ".join(leftover),
+                node=condition,
+            )
+        if not condition.filter.is_card or not condition.filter.card_types:
+            raise LoweringError(
+                "'put into that graveyard this way' reads a printed card type",
+                node=condition,
+            )
+        return {
+            "kind": "milled_this_way",
+            "card_types": list(condition.filter.card_types),
+        }
     if isinstance(condition, ast.DestroyedThisWay):
         # A back-reference names its producer or refuses, as the coin flip above
         # does: with no earlier step of this effect that armed a destruction,

@@ -227,6 +227,26 @@ class ExiledThisWay:
 
 
 @dataclass(frozen=True)
+class MilledThisWay:
+    """"If one or more creature cards **were put into that graveyard this
+    way**" (Helm of Obedience).
+
+    The fourth set-naming sibling of :class:`DiedThisWay`,
+    :class:`ExiledThisWay` and :class:`TappedThisWay`, and a *condition* rather
+    than an amount: the sentence asks whether the loop found one, not how many.
+    Its own node for those three's reason - what tells them apart is which
+    earlier step recorded the set, and a node carrying the record's name as
+    data would be a back-reference free to name one nothing writes.
+
+    The graveyard is not a field. "That graveyard" is the one the loop in front
+    of this sentence milled into and there is nothing else it could be; a
+    wording naming another pile would be asking about cards this effect never
+    put there, which the record cannot answer.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class TappedThisWay:
     """"for each creature **tapped this way**" (Raiding Party).
 

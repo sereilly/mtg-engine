@@ -1518,6 +1518,30 @@ def activation_restriction_line(sentence: str) -> bool:
     )
 
 
+#: "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) A constraint on the
+#: value chosen for X as the ability is activated (CR 601.2b), which is why it
+#: is not one of the ``ACTIVATION_RESTRICTIONS`` rows above: every one of those
+#: is answered from the game state alone, and this one is answered from a
+#: number the activator has just named — so it cannot be reached through
+#: ``activation_denial``'s signature and is enforced beside the {X} payment in
+#: ``mixins/stack/activation.py``.
+_X_CANT_BE_ZERO = re.compile(r"^x can'?t be 0$")
+
+
+def x_zero_restriction_line(sentence: str) -> bool:
+    """Whether one printed sentence is the "X can't be 0" constraint.
+
+    One reader, asked by three: the grammar production that consumes the
+    sentence, the support gate behind it, and the activation gate that enforces
+    it. Written down here rather than spelled again at the gate for this
+    module's standing reason — a restriction spelled twice is two readings free
+    to disagree about the same sentence, and the half that goes wrong is
+    silent, because an unenforced restriction is an ability that works *more
+    often* than the card allows.
+    """
+    return bool(_X_CANT_BE_ZERO.match((sentence or "").strip().lower().rstrip(".")))
+
+
 def unreadable_activation_clauses(oracle_text: str) -> list[str]:
     """The "Activate only ..." sentences this module does *not* implement.
 
@@ -1568,6 +1592,7 @@ __all__ = [
     "ActivationRestriction",
     "activation_denial",
     "activation_restriction_line",
+    "x_zero_restriction_line",
     "activations_ever",
     "already_activated_ever",
     "already_activated_this_turn",

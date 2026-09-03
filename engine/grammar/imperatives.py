@@ -84,6 +84,7 @@ from .effects import (
     _parse_distribute_counters,
     _parse_put_counter,
     _parse_put_exiled_with_source,
+    parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_put_source_into_zone,
     _parse_remove_counter,
@@ -308,6 +309,13 @@ def parse_imperative(
         moved = _parse_put_source_into_zone(stream)
         if moved is not None:
             return moved
+        # "Put one of them onto the battlefield under your control." (Helm of
+        # Obedience.) The last of the back-references and the same treatment:
+        # the counter production reads "one" as a count and then refuses with a
+        # site naming counters.
+        milled = parse_put_milled_card_onto_battlefield(stream)
+        if milled is not None:
+            return milled
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)

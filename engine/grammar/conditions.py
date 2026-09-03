@@ -491,6 +491,22 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.RevealedCardIs(revealed_filter, negated=negated)
     stream.reset(it_mark)
 
+    # "if **one or more creature cards were put into that graveyard this
+    # way**" (Helm of Obedience). A back-reference to the set the loop in front
+    # of it recorded, read before the bound-subject clause below because both
+    # open on a noun phrase and only this one opens on the printed floor.
+    milled_mark = stream.mark()
+    if stream.accept_phrase("one", "or", "more"):
+        try:
+            milled_filter = parse_object_filter(stream)
+        except GrammarError:
+            milled_filter = None
+        if milled_filter is not None and stream.accept_phrase(
+            "were", "put", "into", "that", "graveyard", "this", "way"
+        ):
+            return ast.MilledThisWay(milled_filter)
+    stream.reset(milled_mark)
+
     # "if **that creature was destroyed this way**" (Infinite Authority). The
     # bound object is read through the shared reader rather than skipped: the
     # sentence is checked at the next end step, long after the destruction it

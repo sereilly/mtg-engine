@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 79.7% | 77.7% | 58.6% | 111 |
+| ALL *(measured)* | 144 | 251 | 81.3% | 79.3% | 60.2% | 113 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 285 | 127 | expected a subject |  |
+| 284 | 126 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
-| 72 | 33 | unconsumed text |  |
+| 70 | 31 | unconsumed text |  |
 | 36 | 36 | unrecognized activation cost |  |
 | 32 | 17 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -58,11 +58,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 2 | the sacrifice prompt cannot test this restriction |  |
-| 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
@@ -1727,6 +1727,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Guerrilla Tactics**
   - `Guerrilla Tactics deals 2 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
+- **Gustha's Scepter**
+  - `{T}: Exile a card from your hand face down. You may look at it for as long as it remains exiled.`
+  - `{T}: Return a card you own exiled with this artifact to your hand.`
+  - `When you lose control of this artifact, put all cards exiled with this artifact into their owner's graveyard.`
 - **Gwendlyn Di Corci**
   - `{T}: Target player discards a card at random. Activate only during your turn.`
 - **Hail Storm**
@@ -1801,6 +1805,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+- **Helm of Obedience**
+  - `{X}, {T}: Target opponent mills a card, then repeats this process until a creature card or X cards have been put into their graveyard this way, whichever comes first. If one or more creature cards were put into that graveyard this way, sacrifice this artifact and put one of them onto the battlefield under your control. X can't be 0.`
 - **Hematite Talisman**
   - `Whenever a player casts a red spell, you may pay {3}. If you do, untap target permanent.`
 - **Heroic Intervention**

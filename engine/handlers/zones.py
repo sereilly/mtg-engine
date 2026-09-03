@@ -2731,6 +2731,119 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("mill_until_matching")
+def mill_until_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first." (Helm of Obedience, CR 701.13a per card.)
+
+    A loop rather than a count, and the difference is the whole card: the
+    library is asked one card at a time and *what came off the top* decides
+    whether the next iteration happens. Reading it as ``mill_target_player``
+    with an amount of X would mill X cards whatever was among them.
+
+    Three ways it ends, and all three are the card's own sentence:
+
+    * the stopping card was put into the graveyard - the loop stops **after**
+      that card, which is what makes it reachable by the sentence behind this
+      one;
+    * the printed limit is reached (X, chosen as the ability was activated);
+    * the library ran out. Not a loss: CR 704.5b fires on an attempted *draw*
+      from an empty library, and a mill is not a draw. The same rule
+      ``mill_target_player`` states one handler over.
+
+    ``milled_this_way`` records the cards this loop put there that matched the
+    stopping filter, which is what both sentences behind it read. The record is
+    written even when it is empty - an absent key is a back-reference with no
+    producer, which is a different thing from a producer that found nothing.
+    """
+    victim = context.target
+    if victim is None:
+        game.log.append(f"{context.card.name}: no player to mill")
+        return True, "resolved"
+    limit = resolve_amount(instruction.payload.get("limit", 0), context.x_value)
+    stop_filter = dict(instruction.payload.get("stop_filter") or {})
+    matched: list = []
+    milled = 0
+    while milled < limit and victim.library:
+        card = victim.library.pop(0)
+        victim.graveyard.append(card)
+        milled += 1
+        if _card_matches_filter(card, stop_filter):
+            matched.append(card)
+            break
+    context.results["milled_this_way"] = matched
+    game.log.append(
+        f"{victim.name} milled {milled} card(s) "
+        + (
+            f"and stopped on {matched[0].name}"
+            if matched
+            else "without hitting "
+            + ("a " + "/".join(stop_filter.get("type_filter") or ()) or "a card")
+        )
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_milled_card_onto_battlefield")
+def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…put one of them onto the battlefield under your control." (Helm of
+    Obedience.)
+
+    "Them" is the set the loop recorded, and reading it from the record rather
+    than from the graveyard is the whole point: the pile also holds cards this
+    effect never touched, and the card may take only the ones it put there.
+
+    The set has one member, because the loop stops on the first card its filter
+    matched - so the pick is not offered. A card that could put two matching
+    cards in at once would need a prompt here, and nothing in this engine can:
+    a mill is a direct move with no CR 614 seam of its own.
+
+    The card is taken out of the graveyard **by identity**, because two copies
+    of one card in a deck are the same ``CardDefinition`` object and
+    ``list.remove`` compares by value - it would take whichever copy was
+    nearest the bottom of the pile.
+    """
+    cards = list(context.results.get(instruction.payload.get("cards_from") or "milled_this_way") or ())
+    if not cards:
+        game.log.append(f"{context.card.name}: nothing was put there this way")
+        return True, "resolved"
+    card = cards[0]
+    owner = next(
+        (
+            player for player in game.players
+            if any(held is card for held in player.graveyard)
+        ),
+        None,
+    )
+    if owner is None:
+        # It has already left the graveyard by some other route. CR 608.2's "as
+        # much as possible" - and a card put onto the battlefield from nowhere
+        # is a card this effect created.
+        game.log.append(f"{card.name} is no longer in a graveyard")
+        return True, "resolved"
+    for index, held in enumerate(owner.graveyard):
+        if held is card:
+            del owner.graveyard[index]
+            break
+    seat = (
+        game.players.index(context.caster)
+        if instruction.payload.get("under_your_control")
+        else game.players.index(owner)
+    )
+    arrival = Permanent(card=card)
+    # CR 108.3: the owner is the player whose graveyard it came out of, and it
+    # is recorded because the controller is somebody else — without it the card
+    # would go to the thief's graveyard when it dies.
+    arrival.metadata["owner_player_index"] = game.players.index(owner)
+    game._put_permanent_onto_battlefield(seat, arrival, None)
+    game.log.append(
+        f"{game.players[seat].name} put {card.name} onto the battlefield"
+    )
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 @effect_handler("scry")
 def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """CR 701.22a: look at the top N cards of your library, put any number of

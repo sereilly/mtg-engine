@@ -476,6 +476,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "milled_this_way":
+        # "If one or more creature cards were put into that graveyard this
+        # way." (Helm of Obedience.) The record the loop wrote, not the
+        # graveyard: the pile also holds cards this effect never touched, and
+        # the sentence asks about the ones it did. No record means the loop
+        # never ran, which is False rather than a guess at a pile it did not
+        # fill — the same rule ``exiled_card_was`` states above.
+        #
+        # ``any``, not ``all``: the printed floor is "one or more", where the
+        # exiled-card test one branch up asks about a set the sentence in front
+        # of it defined in full.
+        cards = context.results.get("milled_this_way") or []
+        wanted = tuple(payload.get("card_types") or ())
+        return any(
+            any(name in card.type_line.lower() for name in wanted)
+            for card in cards
+        )
+
     if kind == "target_is_color":
         # "Counter target spell **if it's red**." (Hydroblast, Pyroblast.)
         # CR 608.2c: the colour is read while the instruction is followed, not
