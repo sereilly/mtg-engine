@@ -739,30 +739,65 @@ class TestRingOfMaruf:
 
 
 class TestSerendibDjinn:
+    """The complaint was "I didn't get to choose which land to sacrifice", and
+    the fix at the time gave the card its own targeted-upkeep-trigger channel.
+    W3G4 generalised the printed sentence into the grammar — "If you sacrifice
+    an **Island** this way" is Gargantuan Gorilla's "a **snow** Forest" with
+    one word changed — so the trigger is now an ordinary stack trigger and the
+    choice is the **standing forced-sacrifice prompt** every other sacrifice in
+    the engine goes through. What the player can do is unchanged and these
+    tests still say so; only the channel moved, from `resolve_optional_trigger`
+    to `sacrifice_select` / `sacrifice_confirm`.
+    """
+
     def _djinn_session(self, arn_by_name, lands=("Forest", "Island", "Mountain")):
-        return _upkeep_session(
+        sid, session, game = _new_session(
             [Permanent(card=arn_by_name["Serendib Djinn"])]
             + [Permanent(card=_C[n]) for n in lands],
             [],
             seed=22006,
         )
+        # `_end_turn` is called here rather than through the action endpoint,
+        # and it is the endpoint that keeps `interactive_seats` current — so a
+        # harness that drives the turn directly has to say which seats are
+        # human, or every prompt takes its default on the way in.
+        for _ in range(4):
+            game.interactive_seats = {0, 1}
+            if session.current_turn == 0 and game.current_step == "upkeep":
+                break
+            _end_turn(session, allow_manual_cleanup_selection=False)
+        game.interactive_seats = {0, 1}
+        return sid, session, game
+
+    def _sacrifice_prompt(self, sid, seat=0):
+        state = client.get(f"/api/sessions/{sid}/state", params={"seat": seat}).json()
+        return state["sacrifice_select"]
 
     def test_the_prompt_offers_every_land_the_player_controls(self, arn_by_name):
         sid, session, game = self._djinn_session(arn_by_name)
-        current = _pending_trigger(sid)
-        assert current is not None
-        assert current["mandatory"] is True
-        assert current["needs_target"] == "land"
-        assert [t["name"] for t in current["valid_targets"]] == ["Forest", "Island", "Mountain"]
-        assert [t["index"] for t in current["valid_targets"]] == [1, 2, 3]
+        prompt = self._sacrifice_prompt(sid)
+        assert prompt is not None
+        assert prompt["reason"] == "Serendib Djinn"
+        assert prompt["count"] == 1
+        assert [p["name"] for p in prompt["permanents"]] == ["Forest", "Island", "Mountain"]
+        assert [p["index"] for p in prompt["permanents"]] == [1, 2, 3]
+
+    def test_the_upkeep_waits_for_the_choice(self, arn_by_name):
+        """CR 117.3b: the trigger is still resolving, so no step advances. The
+        old channel held the beginning phase by pausing before the trigger; the
+        standing prompt holds the ability itself on the stack."""
+        sid, session, game = self._djinn_session(arn_by_name)
+        assert game.current_step == "upkeep"
+        assert game.waiting_prompt() is not None
+        assert [p.card.name for p in game.players[0].battlefield] == [
+            "Serendib Djinn", "Forest", "Island", "Mountain"
+        ], "nothing is given up until the player says which"
 
     def test_the_chosen_land_is_the_one_sacrificed(self, arn_by_name):
         sid, session, game = self._djinn_session(arn_by_name)
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "resolve_optional_trigger",
-                  "card_name": "Serendib Djinn", "accept": True,
-                  "target_seat": 0, "target_permanent_index": 3},
+            json={"seat": 0, "action": "sacrifice_confirm", "sacrifice_indices": [3]},
         )
         assert resp.status_code == 200, resp.text
         p0 = game.players[0]
@@ -774,18 +809,16 @@ class TestSerendibDjinn:
         sid, session, game = self._djinn_session(arn_by_name)
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "resolve_optional_trigger",
-                  "card_name": "Serendib Djinn", "accept": True,
-                  "target_seat": 0, "target_permanent_index": 2},
+            json={"seat": 0, "action": "sacrifice_confirm", "sacrifice_indices": [2]},
         )
         assert resp.status_code == 200, resp.text
         p0 = game.players[0]
         assert [c.name for c in p0.graveyard] == ["Island"]
         assert p0.life == 17
 
-    def test_headless_play_still_sacrifices_the_first_land(self, arn_by_name):
-        """No prompt channel (AI / scripted play) keeps the old deterministic
-        fallback rather than stalling the upkeep."""
+    def test_headless_play_still_sacrifices_a_land(self, arn_by_name):
+        """No interactive seat (AI / scripted play) takes the prompt's
+        deterministic default rather than stalling the upkeep."""
         djinn = _nosick(Permanent(card=arn_by_name["Serendib Djinn"]))
         p1 = PlayerState(
             name="P1",

@@ -1776,6 +1776,14 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             filter=described,
             exclude=exclude,
             reason=context.card.name,
+            # "If you sacrifice a **snow** Forest this way, …" (Gargantuan
+            # Gorilla). What went, recorded as it goes — the branch that reads
+            # it runs after this, and by then the permanent is a card in a
+            # graveyard and a different object (CR 400.7, CR 608.2h). The
+            # scratchpad is the resolution's own, so a step of some other
+            # effect cannot see it, and `_run`'s `run_resumable` is what carries
+            # the reading step across an interactive seat's prompt.
+            record=context.results,
         )
     context.results["sacrificed_this_way"] = could_pay
     return True, "resolved"

@@ -268,6 +268,34 @@ class DestroyedThisWay:
 
 
 @dataclass(frozen=True)
+class SacrificedThisWay:
+    """"**If you sacrifice a snow Forest this way,** …" (Gargantuan Gorilla),
+    "**If you sacrifice an Island this way,** …" (Serendib Djinn).
+
+    The yes/no reading of "this way", asked of a *narrower* noun phrase than
+    the sacrifice in front of it printed: the effect said "a Forest" and this
+    asks whether the one that went was a **snow** Forest. That narrowing is the
+    whole reason it is not :class:`ItHappened` — the offer can be taken and the
+    branch still not run.
+
+    Its own node rather than a filter field on ``ItHappened`` for
+    :class:`ExiledThisWay`'s reason one direction over: what tells these apart
+    is which earlier step recorded the set, and ``ItHappened`` deliberately
+    carries no field because "which step" is always the one immediately before.
+    This one has to describe what it is looking for, which means it has to know
+    it is looking at a sacrifice.
+
+    The comparison is against the **cards**, not the permanents: by the time
+    this is asked the sacrifice has put them in a graveyard and they are
+    different objects (CR 400.7, CR 608.2h), so the record is written as it
+    happens and read back here.
+
+    Refused without a producer like every other back-reference in this file.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class ChosenThisWay:
     """"for each of **those cards**" (Sylvan Library) / "for each of **those
     creatures**" (Winter's Chill).
@@ -849,6 +877,7 @@ Condition = Union[
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
+    SacrificedThisWay,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,

@@ -490,6 +490,34 @@ def _lower_condition(
             "state": condition.state,
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.SacrificedThisWay):
+        # A back-reference names its producer or refuses, as every other "this
+        # way" in this function does: with no sacrifice earlier in this effect
+        # the record is never written, `evaluate_condition` would quietly answer
+        # False, and the card would report supported with a branch that can
+        # never run.
+        if "sacrificed_cards" not in produced:
+            raise LoweringError(
+                "'sacrifice … this way' with no sacrifice before it in this "
+                "effect",
+                node=condition,
+            )
+        described = card_only_filter(condition.filter.to_payload())
+        if described is None:
+            # What went is a **card** in a graveyard by the time this is asked
+            # (CR 400.7), so only what `_card_matches_filter` can read off a
+            # printed line is testable. A phrase reaching past that would be
+            # dropped by the matcher and the branch would run for any sacrifice
+            # at all — the widening direction, which is the one that must fail.
+            raise LoweringError(
+                "'sacrifice … this way' names a card the matcher cannot test",
+                node=condition,
+            )
+        return {
+            "kind": "sacrificed_this_way_matches",
+            "key": "sacrificed_cards",
+            "filter": described,
+        }
     if isinstance(condition, ast.DestroyedThisWay):
         # A back-reference names its producer or refuses, as the coin flip above
         # does: with no earlier step of this effect that armed a destruction,

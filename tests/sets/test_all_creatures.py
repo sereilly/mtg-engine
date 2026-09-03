@@ -956,37 +956,6 @@ def test_gargantuan_gorillas_bite_line_lowers_with_the_word_another(set_pool):
     )
 
 
-def test_gargantuan_gorilla_is_declined_naming_three_parts(set_pool):
-    """The {T} line above lowers; the upkeep trigger does not, and the creature
-    gate is "every trigger", so the card stays unsupported. Three parts, and two
-    of the paragraph's three sentences already parse on their own:
-
-    1. **A restated action after "If you don't".** The pool's every other
-       printing is the bare "If you don't,"; this one writes the offer out
-       ("If you don't **sacrifice a Forest**, ..."). Today those words are read
-       as the *first action of the else-branch*, so the branch would sacrifice a
-       Forest and then the Gorilla - a silent mis-play rather than a refusal,
-       which is why this decline is written down rather than left to the
-       compile. The fix is to consume the restatement only when it equals the
-       offer's own action; ``parse_subject_verb`` reads exactly one clause and
-       stops at the comma, which is the reader that shape needs.
-    2. **A record of *which* permanent a forced sacrifice ate.** "If you
-       sacrifice a **snow** Forest this way" asks about the answer to a prompt.
-       ``arm_forced_sacrifice`` already takes a ``record`` that appends the
-       sacrificed cards (Transmute Artifact reads it), but
-       ``sacrifice_matching_permanent`` passes none - it records only the
-       boolean "could this be paid".
-    3. **A condition testing a narrowing against that record.** "a snow Forest"
-       is a supertype question about a card that is in a graveyard by the time
-       it is asked (CR 608.2h), and no condition kind reads a sacrifice record.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Gargantuan Gorilla"])
-
-    assert not program.supported
-    assert program.reason == "unsupported triggered ability"
-    assert [t.supported for t in program.triggered_abilities] == [False]
-
-
 # --- W2G3: upkeep and counters ---
 #
 # The pay-or-consequence upkeep family and the counter records behind it.
@@ -1435,3 +1404,123 @@ def test_sworn_defender_is_refused_out_of_combat(set_pool):
 
     assert not result.supported
     assert (defender.effective_power, defender.effective_toughness) == (1, 3)
+
+
+def _w3g4_land(name: str) -> CardDefinition:
+    """A Forest, a snow Forest or an Island, printed as the type line says.
+
+    Invented rather than taken from the pool because Alliances' own snow lands
+    are the *covered* ones ("Snow-Covered Forest"), and what the Gorilla asks
+    about is the supertype — so a card carrying it under a different name is
+    what proves the branch reads CR 205.4a and not a card name.
+    """
+    lines = {
+        "Forest": "Basic Land — Forest",
+        "Snow Forest": "Basic Snow Land — Forest",
+        "Island": "Basic Land — Island",
+    }
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=lines[name],
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": lines[name]},
+    )
+
+
+def _w3g4_upkeep(set_pool, name: str, lands, *, interactive=()):
+    """*name* on the battlefield with *lands* under it, taken through its
+    controller's upkeep.
+
+    ``interactive`` names the seats that are *asked* rather than defaulted; with
+    none — the AI simulator, every scripted duel — the queued choices are
+    drained to their defaults, which is the headless path.
+    """
+    subject = Permanent(card=set_pool("ALL")[name])
+    subject.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[subject] + [Permanent(card=_w3g4_land(l)) for l in lands],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    game.start_turn(0)
+    if not interactive:
+        game.auto_resolve_pending_choices()
+        game._settle()
+    return game, subject, p1
+
+
+def test_gargantuan_gorilla_sacrifices_a_forest_without_gaining_trample(set_pool):
+    """"At the beginning of your upkeep, you may sacrifice a Forest. If you
+    sacrifice a snow Forest this way, this creature gains trample until end of
+    turn."
+
+    The narrowing is the card: the offer is "a Forest" and the branch asks
+    whether the one that went was **snow** (CR 205.4a). With an ordinary Forest
+    the sacrifice happens and the trample does not — a reading that folded the
+    branch onto "if you do" would grant it here.
+    """
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Forest"])
+
+    assert [c.name for c in p1.graveyard] == ["Forest"]
+    assert not gorilla.has_keyword("trample")
+    assert p1.life == 20, "a Forest was sacrificed, so the penalty branch is off"
+
+
+def test_gargantuan_gorilla_gains_trample_for_a_snow_forest(set_pool):
+    """The same board with the supertype printed. The branch reads the
+    *sacrificed card*, which is in a graveyard by the time it is asked
+    (CR 608.2h) — so this is what proves the record is written as the sacrifice
+    happens rather than recovered from a board it has left."""
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Snow Forest"])
+
+    assert [c.name for c in p1.graveyard] == ["Snow Forest"]
+    assert gorilla.has_keyword("trample")
+
+
+def test_gargantuan_gorilla_eats_itself_with_no_forest(set_pool):
+    """"If you don't sacrifice a Forest, sacrifice this creature and it deals 7
+    damage to you." An offer with nothing legal to take is never made, so the
+    decline branch runs — and the Island is not a Forest, so it stays."""
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Island"])
+
+    assert [c.name for c in p1.graveyard] == ["Gargantuan Gorilla"]
+    assert p1.life == 13
+    assert [p.card.name for p in p1.battlefield] == ["Island"]
+
+
+def test_gargantuan_gorilla_lets_the_controller_choose_which_forest(set_pool):
+    """Two decisions in one resolution — whether to sacrifice, and which — and
+    the game waits for both (CR 117.3b), because the branch that reads what went
+    is still to run."""
+    game, gorilla, p1 = _w3g4_upkeep(
+        set_pool, "Gargantuan Gorilla", ["Forest", "Snow Forest"], interactive=(0,)
+    )
+
+    assert game.waiting_prompt() is not None
+    assert game.confirm_optional_pay(0, "Gargantuan Gorilla", accept=True)
+    prompt = game.pending_sacrifice_state()
+    assert prompt is not None and sorted(prompt["valid_indices"]) == [1, 2]
+    assert not p1.graveyard, "nothing goes until the seat says which"
+
+    assert game.confirm_sacrifice(0, [2])
+
+    assert [c.name for c in p1.graveyard] == ["Snow Forest"]
+    assert gorilla.has_keyword("trample"), (
+        "the branch runs after the prompt is answered, not before it"
+    )
+
+
+def test_a_narrowed_this_way_rider_needs_a_sacrifice_in_front_of_it():
+    """A back-reference names its producer or refuses. Without a sacrifice
+    earlier in the same effect the record is never written, the branch could
+    never run, and the card would report itself supported anyway."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(parse_line(
+            "Draw a card. If you sacrifice a Forest this way, you gain 2 life."
+        ))

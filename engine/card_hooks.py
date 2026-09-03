@@ -462,14 +462,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 named='Kobolds of Kher Keep',
             ),
     },
-    'Serendib Djinn': {
-        "at the beginning of your upkeep, sacrifice a land. if you sacrifice an "
-        "island this way, this creature deals 3 damage to you":
-            _line(
-                "upkeep_sacrifice_land_conditional_damage", "upkeep_effect",
-                land_type="island", damage=3,
-            ),
-    },
     'Shahrazad': {
         "players play a magic subgame, using their libraries as their decks. each "
         "player who doesn't win the subgame loses half their life, rounded up":

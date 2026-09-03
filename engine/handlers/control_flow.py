@@ -355,6 +355,21 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             source.metadata.get("cast_from_zone") == wanted
         )
 
+    if kind == "sacrificed_this_way_matches":
+        # "If you sacrifice a **snow** Forest this way, …" (Gargantuan Gorilla),
+        # "…an **Island** this way, …" (Serendib Djinn). The narrowed reading of
+        # "if you do": the sacrifice happened and the branch still runs only if
+        # what went matches the tighter phrase.
+        #
+        # Against the **cards** the sacrifice recorded, never the board: what
+        # went is in a graveyard by now and is a different object (CR 400.7),
+        # and a board read would answer about whatever is still there. An empty
+        # record is False — an offer declined, or a mandatory sacrifice that
+        # could not be paid, is not a sacrifice of anything.
+        given = list(context.results.get(payload.get("key")) or ())
+        described = payload.get("filter") or {}
+        return any(_card_matches_filter(card, described) for card in given)
+
     if kind == "it_happened":
         happened = bool(context.results.get(payload.get("key")))
         # "If you **can't**" (Cocoon) is the same record read the other way. An

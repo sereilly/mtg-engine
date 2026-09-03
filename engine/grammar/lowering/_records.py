@@ -275,7 +275,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Swamp cannot sacrifice two, so nothing is sacrificed and the branch runs.
     # Written *before* the prompt is armed, because an interactive seat answers
     # a queued prompt long after this instruction has returned.
-    "sacrifice_matching_permanent": "sacrificed_this_way",
+    #
+    # ``sacrificed_cards`` is the second record and answers a different
+    # question: not "could the printed count be paid" but "**what** went".
+    # "If you sacrifice a **snow** Forest this way, …" (Gargantuan Gorilla,
+    # Serendib Djinn) needs the card itself, and by the time the branch runs it
+    # is in a graveyard and a different object (CR 400.7, CR 608.2h) — so the
+    # sacrifice records it as it happens. It is written *after* the prompt is
+    # answered, which is the opposite half of the note above and is why the two
+    # are separate keys rather than one: only the first is available
+    # synchronously, and only the second says what was chosen.
+    "sacrifice_matching_permanent": ("sacrificed_this_way", "sacrificed_cards"),
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots
