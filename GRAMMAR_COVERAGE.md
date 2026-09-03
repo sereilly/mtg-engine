@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 72.8% | 67.7% | 41.8% | 187 |
+| MIR *(measured)* | 335 | 545 | 73.6% | 69.4% | 43.5% | 194 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,14 +44,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 350 | 179 | expected a subject |  |
-| 119 | 57 | unrecognized effect verb |  |
-| 95 | 55 | unconsumed text |  |
-| 35 | 35 | unrecognized activation cost |  |
+| 349 | 178 | expected a subject |  |
+| 118 | 56 | unrecognized effect verb |  |
+| 101 | 56 | unconsumed text |  |
+| 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 11 | 3 | expected a keyword ability |  |
-| 9 | 3 | expected 'the number of' in a where-clause |  |
 | 9 | 8 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
@@ -65,10 +64,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 3 | 3 | engine/lord_buffs.py carries no such restriction on the buffed creatures, so _recalculate_lord_buffs would drop it |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
+| 2 | 1 | expected what this creature can't block, or a duration |  |
 
 ## Cards executing through the grammar
 
@@ -373,6 +373,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barbed Sextant**
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
+- **Barbed-Back Wurm**
+  - `{B}: Target green creature blocking this creature gets -1/-1 until end of turn.`
 - **Barl's Cage**
   - `{3}: Target creature doesn't untap during its controller's next untap step.`
   - `{3}: Target creature doesn't untap during its controller's next untap step.`
@@ -656,6 +658,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {B}.`
   - `{2}, {T}: Add {U} or {R}.`
+- **Catacomb Dragon**
+  - `Whenever this creature becomes blocked by a nonartifact, non-Dragon creature, that creature gets -X/-0 until end of turn, where X is half the creature's power, rounded down.`
 - **Cave People**
   - `Whenever this creature attacks, it gets +1/-2 until end of turn.`
   - `{1}{R}{R}, {T}: Target creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
@@ -705,6 +709,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
+- **Chaosphere**
+  - `Creatures without flying have reach. (They can block creatures with flying.)`
 - **Charcoal Diamond**
   - `{T}: Add {B}.`
 - **Chromatic Armor**
@@ -3687,6 +3693,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Savage Twister deals X damage to each creature.`
 - **Sawback Manticore**
   - `{4}: This creature gains flying until end of turn.`
+  - `{1}: This creature deals 2 damage to target attacking or blocking creature. Activate only if this creature is attacking or blocking and only once each turn.`
 - **Scarab of the Unseen**
   - `{T}, Sacrifice this artifact: Return all Auras attached to target permanent you own to their owners' hands. Draw a card at the beginning of the next turn's upkeep.`
 - **Scarecrow**
@@ -4253,6 +4260,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
 - **Teleport**
   - `Target creature can't be blocked this turn.`
+- **Telim'Tor**
+  - `Whenever Telim'Tor attacks, all attacking creatures with flanking get +1/+1 until end of turn.`
 - **Telim'Tor's Darts**
   - `{2}, {T}: This artifact deals 1 damage to target player or planeswalker.`
 - **Telim'Tor's Edict**
@@ -4591,6 +4600,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`
+- **Urborg Panther**
+  - `{B}, Sacrifice this creature: Destroy target creature blocking it.`
+  - `Sacrifice a creature named Feral Shadow, a creature named Breathstealer, and this creature: Search your library for a card named Spirit of the Night, put that card onto the battlefield, then shuffle.`
 - **Urza's Avenger**
   - `{0}: This creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{0}: This creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
@@ -4804,6 +4816,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Water Wurm**
   - `This creature gets +0/+1 as long as an opponent controls an Island.`
+- **Wave Elemental**
+  - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
 - **Whalebone Glider**
@@ -4920,6 +4934,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
 - **Xira Arien**
   - `{B}{R}{G}, {T}: Target player draws a card.`
+- **Yare**
+  - `Target creature defending player controls gets +3/+0 until end of turn. That creature can block up to two additional creatures this turn.`
 - **Yavimaya Ancients**
   - `{G}: This creature gets +1/-2 until end of turn.`
 - **Yavimaya Gnats**

@@ -1395,15 +1395,26 @@ class LegalityMixin:
             # the other direction.
             if spec.get("opponent_only") and seat == caster_index:
                 continue
-            # "…**defending player controls**" (Floral Spuzzem). Not relative
-            # to the seat choosing but to the combat the ability's trigger
-            # fired in, so the seat travels on the spec beside the flag. A flag
-            # with no seat offers nothing rather than everything: a narrowing
-            # nobody can answer must refuse, never widen.
-            if spec.get("defending_player_only") and seat != spec.get(
-                "defending_player_index"
-            ):
-                continue
+            # "…**defending player controls**" (Floral Spuzzem, Yare). Not
+            # relative to the seat choosing but to a combat, and which combat
+            # depends on who is asking: a *trigger* names the one it fired in,
+            # which may be over by the time it resolves, so the announcement
+            # freezes the seat and passes it on the spec. A **spell** has no
+            # such record — it is being cast right now — so the seat is the
+            # live combat's, through the engine's one reader.
+            #
+            # The supplied seat wins wherever there is one, which is what keeps
+            # a trigger reading its own combat rather than whatever is
+            # happening when it resolves. And a flag with no seat and no combat
+            # still offers nothing rather than everything: outside combat there
+            # is no defending player (CR 506.2), so the card has no legal
+            # target, which is the answer rather than a fallback.
+            if spec.get("defending_player_only"):
+                defending = spec.get("defending_player_index")
+                if defending is None:
+                    defending = self.defending_player_index_now()
+                if seat != defending:
+                    continue
             # "…**that player** controls" (Fatal Lore). The same arrangement one
             # record over: CR 700.2e's mode choice froze the seat, and the
             # caller holding that record supplies it beside the flag. A flag

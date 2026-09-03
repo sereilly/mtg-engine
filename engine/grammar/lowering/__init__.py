@@ -287,6 +287,7 @@ from .stack import (
 )
 from .combat import (
     _lower_combat_restriction,
+    lower_block_count_grant,
     _lower_cant_be,
     _lower_attack_as_though,
     _lower_assigns_no_combat_damage,
@@ -515,6 +516,7 @@ __all__ = [
     "_lower_create_delayed_trigger",
     "_lower_modal_head",
     "_lower_combat_restriction",
+    "lower_block_count_grant",
     "_lower_cant_be",
     "_lower_attack_as_though",
     "_lower_assigns_no_combat_damage",

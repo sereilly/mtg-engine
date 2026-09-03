@@ -223,6 +223,26 @@ SUPPORTED_SPELL_PATTERNS = (
 # Checked in order; first match wins.
 # ---------------------------------------------------------------------------
 
+#: A run of comma-joined **negated** adjectives, for the front of a subject
+#: group -- "a **nonartifact, non-Dragon** creature" (Catacomb Dragon).
+#:
+#: The comma bound on a subject group is load-bearing everywhere in this table:
+#: a trigger condition ends at a comma, so a group bounded by ``[^,]+`` can
+#: never reach into the effect clause. This is the one printed shape where a
+#: comma falls *inside* the noun phrase instead of after it. The noun parser
+#: reads the run perfectly well; only the delimiter could not see past the first
+#: comma, so the whole condition went unread and the card was refused with every
+#: one of its lines grammar-clean -- the refusal the census cannot attribute to
+#: any clause.
+#:
+#: Admitted for a "non-" word alone, which is what keeps the bound load-bearing:
+#: no effect clause begins with one, so the run still cannot cross the trigger's
+#: own comma. A row adopting it is one name; rows that never print the shape
+#: keep the plain bound, per this table's rule that a narrowing is listed once
+#: the pool prints it.
+_NEGATED_ADJECTIVE_RUN = r"(?:non-?[a-z'-]+, )*"
+
+
 # "whenever" triggers
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
@@ -512,7 +532,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # creature that answers the filter (CR 509.1h), where the bare form below
     # fires once for the block itself. Same ordering rule.
     ("creature_becomes_blocked",
-     r"whenever this creature becomes blocked by (?P<blocker_subject>(?:a|another) [^,]+)"),
+     r"whenever this creature becomes blocked by "
+     r"(?P<blocker_subject>(?:a|another) " + _NEGATED_ADJECTIVE_RUN + r"[^,]+)"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     # "Whenever **enchanted creature** becomes blocked" (Bestial Fury). The
     # attacking half of the pair above watched by an Aura rather than by the

@@ -43,6 +43,53 @@ from ._events import (
 _BLOCKED_SUBJECT_EVENTS = frozenset({"creature_blocks"})
 
 
+def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruction, ...]:
+    """"That creature can block up to two additional creatures this turn."
+    (Yare.)
+
+    CR 509.1b's ceiling raised for one turn, on one chosen creature. Targeted
+    only: the printed sentence names a creature the spell chose, and a plural
+    subject would be a board-wide permission no card in this pool prints -- so
+    it refuses rather than reaching every creature the noun phrase describes,
+    which is the direction that lets the whole defending team multi-block.
+
+    The count travels as payload for the reason every printed number in this
+    family does, and the duration is checked here rather than trusted: a
+    permission whose end nothing sweeps is a permanent one.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a block-count permission with no end-of-turn duration is a "
+            "static ability",
+            node=node,
+        )
+    if (
+        not isinstance(node.subject, ast.TargetSpec)
+        or node.subject.quantifier not in ("target", "that")
+    ):
+        raise LoweringError(
+            "no handler grants extra blocks to an untargeted subject", node=node
+        )
+    payload: dict[str, object] = {"count": node.count}
+    if node.subject.quantifier == "target":
+        _describe_targets(payload, node.subject)
+    # "**That creature** can block up to two additional creatures this turn."
+    # (Yare's second sentence.) The bound object the sentence in front of it
+    # already targeted, not a second choice — so no ``targets`` description is
+    # emitted and the handler acts on the spell's one target, the idiom
+    # `lowering/keywords.py` established for the identical pronoun. A bound
+    # object carries no narrowing to honour, so a restated adjective refuses
+    # rather than being dropped.
+    elif _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+        raise LoweringError(
+            '"that creature" carries a narrowing the bound object cannot honour',
+            node=node,
+        )
+    return (
+        OracleInstruction("grant_additional_blocks_until_eot", "", payload),
+    )
+
+
 def _lower_combat_restriction(
     node: ast.CombatRestriction, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:

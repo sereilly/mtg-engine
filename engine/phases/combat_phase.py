@@ -38,6 +38,23 @@ class CombatPhaseMixin:
         defenders = self.combat_defending_players()
         return next(iter(defenders)) if len(defenders) == 1 else None
 
+    def defending_player_index_now(self) -> int | None:
+        """The defending player of the combat happening **right now**, or None.
+
+        CR 506.2 defines "defending player" only inside a combat phase, and the
+        scalar above deliberately does not: it is a two-player convenience read
+        by callers that already know a combat is in progress, and outside one it
+        still answers "the other seat".
+
+        A card printing the phrase needs the stricter question. "Target creature
+        defending player controls" (Yare) names no legal target in a main phase,
+        and a spell that could be cast there is one that works more often than
+        it says. So the phase gate is here, once, rather than at each reader.
+        """
+        if self.current_turn_phase != "combat":
+            return None
+        return self._resolve_defending_player_index()
+
     def _pending_block_declarer(self) -> int | None:
         """CR 802.4: the next defending player, in APNAP order starting with the
         player after the active player, who still needs to declare blocks (or be

@@ -172,6 +172,7 @@ from .stack import (
 from .combat import (
     AssignsNoCombatDamage,
     AttackingDoesntTap,
+    BlockCountGrant,
     CantBe,
     AttackAsThough,
     CombatRestriction,
@@ -244,7 +245,8 @@ Effect = Union[
     DiscardRevealedUnlessPayLife,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, ChooseColor, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
-    CantBe, AttackAsThough, CombatRestriction, AttackingDoesntTap,
+    CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
+    AttackingDoesntTap,
     AssignsNoCombatDamage,
     RemoveFromCombat, ChooseBlocksForDefenders, ReassignBlockersBetweenAttackers,
     ChangeText, GainControl, RawEffect,

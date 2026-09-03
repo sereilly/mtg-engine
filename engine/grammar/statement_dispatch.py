@@ -55,6 +55,7 @@ from .lowering import (
     _lower_cant_be,
     _lower_remove_from_combat,
     _lower_combat_restriction,
+    lower_block_count_grant,
     _lower_create_delayed_trigger,
     _lower_create_token,
     _lower_damage,
@@ -596,6 +597,12 @@ def lower_statement(
 
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement, dispatch_event)
+
+    if isinstance(statement, ast.BlockCountGrant):
+        # The permission twin of the restriction above, and its own branch for
+        # the node's own reason: the two say opposite things and share only the
+        # rule they read (CR 509.1b).
+        return lower_block_count_grant(statement)
 
     if isinstance(statement, ast.CantBe):
         # The **unfiltered** event, for the reason `_lower_destroy` above takes

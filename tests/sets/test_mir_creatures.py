@@ -1018,3 +1018,97 @@ def test_a_keyword_the_engine_does_not_implement_refuses_the_anthem(set_pool):
     )
     assert result.parsed and not result.lowered
     assert "shadow" in result.failure_reason
+
+
+# --- Catacomb Dragon: a halved characteristic in a where-clause ---
+
+
+def test_catacomb_dragon_halves_the_blockers_power(set_pool):
+    """"…gets -X/-0 until end of turn, where X is **half the creature's power,
+    rounded down**."
+
+    Two pieces the where-clause had neither of: an arithmetic over a
+    *characteristic* rather than over a count, and the definite-article
+    possessive ("**the** creature's power" beside the demonstrative one it
+    already read). The halving rides on the count spec like the multiplier and
+    the offset, so `_scaled` applies it -- which is also where the bug was: the
+    characteristic branch was the one computed quantity that never reached that
+    function at all.
+    """
+    dragon = _w1g1_nosick(Permanent(card=set_pool("MIR")["Catacomb Dragon"]))
+    blocker = Permanent(
+        card=CardDefinition(
+            name="Longbowman", mana_cost="", cmc=0.0, type_line="Creature - Test",
+            oracle_text="Reach", colors=(), color_identity=(), keywords=("Reach",),
+            produced_mana=(),
+            raw={"name": "Longbowman", "type_line": "Creature - Test",
+                 "power": "7", "toughness": "7"},
+        )
+    )
+    game = _w1g1_game([dragon], [blocker])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    assert len(game.stack) == 1, "the -X/-0 waits on the stack (CR 603.3)"
+
+    game.resolve_stack()
+    game._settle()
+
+    # 7 // 2 == 3, rounded down as printed.
+    assert (blocker.effective_power, blocker.effective_toughness) == (4, 7)
+
+
+def test_catacomb_dragon_reads_the_printed_exclusions(set_pool):
+    """"…blocked by a **nonartifact, non-Dragon** creature."
+
+    The comma bound on a trigger's subject group is load-bearing -- a condition
+    ends at one -- and this is the one printed shape where a comma falls
+    *inside* the noun phrase. The delimiter stopped at the first one, so the
+    whole condition went unread and the card refused with every line
+    grammar-clean, which is the refusal no census can attribute to a clause.
+    """
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Catacomb Dragon"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.payload["blocker_filter"] == {
+        "type_filter": "creature",
+        "exclude_types": ["artifact"],
+        "exclude_subtypes": ["dragon"],
+    }
+
+    for type_line in ("Artifact Creature - Golem", "Creature - Dragon"):
+        dragon = _w1g1_nosick(Permanent(card=pool["Catacomb Dragon"]))
+        exempt = Permanent(
+            card=CardDefinition(
+                name="Exempt", mana_cost="", cmc=0.0, type_line=type_line,
+                oracle_text="Reach", colors=(), color_identity=(),
+                keywords=("Reach",), produced_mana=(),
+                raw={"name": "Exempt", "type_line": type_line,
+                     "power": "4", "toughness": "4"},
+            )
+        )
+        game = _w1g1_game([dragon], [exempt])
+        assert game.declare_attackers(0, [0])[0]
+        game.advance_combat_phase()
+        assert game.declare_blockers(1, {0: 0})[0]
+
+        assert not game.stack, f"{type_line} is excluded by the printed phrase"
+        game._settle()
+        assert (exempt.effective_power, exempt.effective_toughness) == (4, 4)
+
+
+def test_a_halved_where_clause_must_print_its_rounding(set_pool):
+    """CR 107.1b gives no default. A sentence that halves always says which
+    way, so one that does not is a sentence this is misreading -- and guessing
+    "down" would be a silent arithmetic choice on a number the card never
+    printed."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Target creature gets -X/-0 until end of turn, "
+        "where X is half that creature's power.",
+        card_name="Test",
+    )
+    assert not result.parsed
+    assert "rounding" in result.failure_reason

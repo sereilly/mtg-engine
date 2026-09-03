@@ -633,6 +633,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
     "target_cant_block_until_eot": "combat_restrictions",
+    # The permission twin of the two above (Yare): CR 509.1b's block-count
+    # ceiling raised for a turn rather than a restriction imposed for one.
+    "grant_additional_blocks_until_eot": "combat_restrictions",
     # "Creatures can't attack this turn." (Festival.) The same category as its
     # blocking twin above, so GRAMMAR_CATEGORIES is unchanged.
     "cant_attack_until_eot": "combat_restrictions",

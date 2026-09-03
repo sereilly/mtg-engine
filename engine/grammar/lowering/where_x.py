@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -31,6 +31,42 @@ from ._amounts import _mentions_x, _stamp_x_from_count
 from ._records import produced_keys
 from ._common import _restrictions_beyond
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
+
+def _round_every_x_spec(
+    instructions: tuple[OracleInstruction, ...], rounding: str, divisor: int
+) -> tuple[OracleInstruction, ...]:
+    """Add the halving to every ``x_from_count`` spec *instructions* carries.
+
+    The mirror of :func:`_stamp_x_from_count`, and it recurses the same way and
+    for the same reason: a wrapper carries its steps in its payload, so touching
+    the top level alone would halve the outer instruction's X and leave the
+    nested ones reading the whole number.
+
+    ``divide_by`` is omitted at 2 so every spec written before fractions existed
+    stays byte-identical -- the rule ``ast.Half`` states for its own field.
+    """
+    stamped = []
+    for instruction in instructions:
+        payload = dict(instruction.payload)
+        spec = payload.get(X_FROM_COUNT)
+        if isinstance(spec, dict):
+            spec = dict(spec)
+            spec["half"] = rounding
+            if divisor != 2:
+                spec["divide_by"] = divisor
+            payload[X_FROM_COUNT] = spec
+        for key in ("steps", "then", "else", "otherwise", "action"):
+            nested = payload.get(key)
+            if (
+                isinstance(nested, tuple) and nested
+                and isinstance(nested[0], OracleInstruction)
+            ):
+                payload[key] = _round_every_x_spec(nested, rounding, divisor)
+        stamped.append(
+            OracleInstruction(instruction.kind, instruction.value, payload)
+        )
+    return tuple(stamped)
+
 
 def lower_where_x(
     node: ast.WhereX,
@@ -47,6 +83,20 @@ def lower_where_x(
     resolves it into the context's X at the single dispatch point, which is what
     lets one clause serve every effect family instead of one.
     """
+    # "…where X is **half** the creature's power, rounded down." (Catacomb
+    # Dragon.) The halving rides on the *spec* rather than on the definition —
+    # `_scaled` is the one place that applies it, so every definition below
+    # gets it without knowing it can, exactly as the multiplier and the offset
+    # already do. Unwrapped here rather than dispatched on, because it is not a
+    # definition at all: it is an arithmetic over whichever one follows.
+    if isinstance(node.definition, ast.Half):
+        halved = lower_where_x(
+            dataclasses.replace(node, definition=node.definition.of),
+            inner, produced, event=event,
+        )
+        return _round_every_x_spec(
+            halved, node.definition.rounding, node.definition.divisor
+        )
     damage = _damage_dealt_definition(node.definition)
     if damage is not None:
         return _lower_where_x_damage_dealt(node, damage, inner)

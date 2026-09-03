@@ -16,7 +16,10 @@ from ._common import (
 from .registry import effect_handler
 from ..keywords import grant_keyword
 from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
-from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
+from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
+                                  CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+                                  MUST_BLOCK_ALL_UNTIL_EOT,
+                                  ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -229,8 +232,8 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
     if blocker is not None:
         # Lets it block any number of attackers (_max_blocks_for) and requires it to
         # block each attacker it can (enforced when blocks are declared).
-        blocker.metadata["can_block_any_number_until_eot"] = True
-        blocker.metadata["must_block_all_until_eot"] = True
+        blocker.metadata[CAN_BLOCK_ANY_NUMBER_UNTIL_EOT] = True
+        blocker.metadata[MUST_BLOCK_ALL_UNTIL_EOT] = True
         game.log.append(f"{card.name}: {blocker.card.name} can block any number of creatures this turn")
     else:
         game.log.append(f"{card.name} found no creature to grant unlimited blocking")
@@ -763,6 +766,40 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target_creature.metadata[CANT_BLOCK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't block this turn")
+    return True, "resolved"
+
+
+@effect_handler("grant_additional_blocks_until_eot")
+def grant_additional_blocks_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That creature can block up to two additional creatures this turn."
+    (Yare.)
+
+    CR 509.1b's block-count ceiling raised on one permanent for one turn. A
+    record on the creature, read by ``_max_blocks_for`` beside the printed
+    static it already counts and swept with the turn by ``_EOT_METADATA_KEYS``
+    -- the arrangement every other granted combat permission here uses.
+
+    It **adds**, because CR 509.1b's restrictions are cumulative in both
+    directions: two grants on one creature are two more attackers, and a
+    creature that already blocks an additional one by its own printed line
+    keeps that too. Assignment rather than addition would have made the second
+    copy of the spell do nothing.
+    """
+    blocker = resolve_target_permanent(
+        game, context, predicate=lambda p: p.is_creature
+    )
+    if blocker is None:
+        game.log.append(
+            f"{context.card.name}: no creature to grant extra blocks to"
+        )
+        return True, "resolved"
+    extra = max(0, int(instruction.payload.get("count", 1)))
+    blocker.metadata[ADDITIONAL_BLOCKS_UNTIL_EOT] = (
+        int(blocker.metadata.get(ADDITIONAL_BLOCKS_UNTIL_EOT, 0)) + extra
+    )
+    game.log.append(
+        f"{blocker.card.name} can block {extra} additional creature(s) this turn"
+    )
     return True, "resolved"
 
 

@@ -752,6 +752,20 @@ def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
 
 def _x_definition_spec(definition: ast.Amount, node) -> dict:
     """The spec behind a where-clause's X, whichever aggregate it names."""
+    # "…, where X is **half** the creature's power, **rounded down**."
+    # (Catacomb Dragon.) The halving rides on the spec rather than on the
+    # definition, so every alternative below carries it without knowing it can
+    # — `_scaled` is the one place that applies it, the same arrangement the
+    # multiplier and the offset already have. Unwrapped first because it is not
+    # a definition at all: it is an arithmetic over whichever one follows.
+    if isinstance(definition, ast.Half):
+        spec = _x_definition_spec(definition.of, node)
+        spec["half"] = definition.rounding
+        # Omitted at 2, so every spec written before fractions existed stays
+        # byte-identical (see `ast.Half`).
+        if definition.divisor != 2:
+            spec["divide_by"] = definition.divisor
+        return spec
     if isinstance(definition, ast.GreatestPowerAmong):
         return count_spec(definition.filter, node, aggregate="greatest_power")
     if isinstance(definition, ast.ColorsAmong):
