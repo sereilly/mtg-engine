@@ -19,6 +19,7 @@ from ._common import (
     resolve_target_permanent, resolve_target_permanents,
 )
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                           LAST_DAMAGER_CONTROLLER,
                            X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
 from ..mana_payment import generic_cost
@@ -410,6 +411,51 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         game._deal_damage_to_player(
             host_controller, damage, source=source_permanent or card,
             then=_report_host, asks=True,
+        )
+        return True, "resolved"
+    if instruction.payload.get("recipient") == LAST_DAMAGER_CONTROLLER:
+        # "Suffocation deals 4 damage to **the controller of the last red
+        # instant or sorcery spell that dealt damage to you this turn**."
+        # A seat read out of the turn's damage ledger at resolution: nothing
+        # chose it and no event froze it, and by now the spell it names has
+        # left the stack — which is exactly why the ledger keeps the cast.
+        #
+        # "You" is the seat resolving this spell (CR 109.5), so the record read
+        # is the caster's own.
+        #
+        # An empty record deals nothing rather than falling through to a face,
+        # the same rule the three branches above follow. The cast gate
+        # (`cast_restrictions.cast_damage_source_line`) makes that unreachable
+        # from a hand — but CR 608.2b lets everything change between
+        # announcement and resolution, and a copy of this spell was never
+        # announced at all.
+        seat = None
+        described = instruction.payload.get("last_damager_filter") or {}
+        if described:
+            from ..damage_ledger import last_cast_that_damaged_seat
+
+            found = last_cast_that_damaged_seat(
+                game, game.players.index(caster), described
+            )
+            seat = found.seat if found is not None else None
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(
+                f"{card.name}: nothing it names has dealt {caster.name} damage "
+                "this turn, no damage dealt"
+            )
+            return True, "resolved"
+        damager = game.players[seat]
+
+        def _report_damager(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(
+                    f"{card.name} dealt {dealt} damage to {damager.name}"
+                )
+
+        game._deal_damage_to_player(
+            damager, damage, source=source_permanent or card,
+            then=_report_damager, asks=True,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "target_player":

@@ -742,6 +742,7 @@ class PlayerRef:
     """A player or set of players."""
     kind: str  # you | each_player | each_opponent | target_player | target_opponent
                # | that_player | controller | owner | defending_player | chosen_player
+               # | last_damager_controller
     # "target player or planeswalker" (Chandra's Magmutt) — one chosen target
     # that may be a player face or a planeswalker permanent (CR 115.4 without
     # the creature half). Set only by the production that read the union, so a
@@ -761,6 +762,18 @@ class PlayerRef:
     # permanent* hurt" is a fact about the permanent, and the picker has to be
     # handed the source to answer the second.
     damaged_by_source: bool = False
+    # "the controller of **the last red instant or sorcery spell that dealt
+    # damage to you this turn**" (Suffocation) — the noun phrase that says
+    # *which* history entry the seat is read out of, carried whole because a
+    # card printed about a blue spell or an artifact source is the same
+    # referent with one word changed.
+    #
+    # A field rather than a second kind for the reason every narrowing above is
+    # one, and set only by the production that reads the phrase — so a
+    # ``last_damager_controller`` without it is a shape no parse can produce
+    # and the lowering refuses it rather than defaulting to "any source", which
+    # would be 4 damage to whoever last pinged you with anything.
+    last_damager: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

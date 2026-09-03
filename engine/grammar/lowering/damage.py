@@ -22,9 +22,10 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import (
-    TESTABLE_SUBJECT_FILTER_KEYS, untestable_filter_keys,
+    TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter, untestable_filter_keys,
 )
-from ...oracle_types import ATTACHED_PERMANENT_CONTROLLER, X_FROM_COUNT
+from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                             LAST_DAMAGER_CONTROLLER, X_FROM_COUNT)
 from ._amounts import (
     _lower_board_count_damage,
     _lower_chosen_cast_damage,
@@ -682,6 +683,34 @@ def _lower_damage_shape(
             )
         elif not recipient.or_planeswalker:
             payload["recipient"] = "target_player"
+    elif (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind == "last_damager_controller"
+    ):
+        # "…deals 4 damage to **the controller of the last red instant or
+        # sorcery spell that dealt damage to you this turn**." (Suffocation.)
+        # A seat nobody chose and no event froze — the turn's damage ledger is
+        # asked for it at resolution — so it is its own recipient rather than a
+        # spelling of `target_player`, which for a spell that targets nothing
+        # would be whatever the resolution context happened to carry.
+        #
+        # The noun phrase goes through `card_only_filter`, not the permanent
+        # matcher's key set: what it names is a *spell*, and CR 613.1 gives a
+        # spell no computed characteristics, so the printed face is the whole
+        # of what is testable. A phrase reaching outside it refuses the line
+        # rather than being admitted with the narrowing dropped — dropped, this
+        # clause deals 4 to whoever last dealt you damage by any means at all,
+        # which is a card the printed one is nowhere near.
+        described = card_only_filter(
+            (recipient.last_damager or ast.ObjectFilter()).to_payload()
+        )
+        if not described:
+            raise LoweringError(
+                "the source this names cannot be tested against a card",
+                node=node,
+            )
+        payload["recipient"] = LAST_DAMAGER_CONTROLLER
+        payload["last_damager_filter"] = described
     elif isinstance(recipient, ast.PlayerRef):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
     elif (

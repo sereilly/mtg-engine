@@ -110,6 +110,30 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("defending_player")
     if stream.accept_phrase("the", "chosen", "player"):
         return ast.PlayerRef("chosen_player")
+    # "the controller of **the last red instant or sorcery spell that dealt
+    # damage to you this turn**" (Suffocation). A seat read out of a *history*,
+    # which is neither of the two referents this file already has: `that_player`
+    # is a seat an event froze and `target_player` is one the spell chose, and
+    # this one was chosen by nobody and frozen by nothing — the turn's damage
+    # record is asked for it when the spell resolves.
+    #
+    # The noun phrase is read by `parse_object_filter`, the same reader the
+    # matcher that answers it goes through, so "red instant or sorcery spell"
+    # cannot mean one thing here and another where the seat is looked up. Every
+    # word after it is required: "that dealt damage to you this turn" is the
+    # whole of the window and a printing naming another one would be a
+    # different record.
+    mark_last_damager = stream.mark()
+    if stream.accept_phrase("the", "controller", "of", "the", "last"):
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            described = None
+        if described is not None and stream.accept_phrase(
+            "that", "dealt", "damage", "to", "you", "this", "turn"
+        ):
+            return ast.PlayerRef("last_damager_controller", last_damager=described)
+    stream.reset(mark_last_damager)
     # "**An** opponent" is *not* "target opponent", and reading it as one was a
     # fork: CR 601.2c chooses nothing here, so the phrase names whichever
     # opponent the effect eventually reaches -- every one of them in turn for
