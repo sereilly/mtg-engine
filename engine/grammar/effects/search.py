@@ -168,6 +168,35 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
             stream.expect_word("that")
             stream.expect_word("card")
         stream.accept_punct(",")
+    # "…, **then shuffle and put that card on top**." (Enlightened Tutor,
+    # Mystical Tutor, Worldly Tutor.) The same search with its last two clauses
+    # in the other order, and the order is the effect: the card is placed
+    # **after** the shuffle, which is the whole of what these three do. Read
+    # here, before the ordinary destination clause below, because "then shuffle"
+    # is where the two spellings part company.
+    top_mark = stream.mark()
+    if stream.accept_punct(","):
+        pass
+    if stream.accept_word("then") and stream.accept_word("shuffle"):
+        if stream.accept_word("and") and stream.accept_word("put"):
+            if not stream.accept_word("it", "them"):
+                stream.expect_word("that", "the")
+                stream.expect_word("card")
+            stream.expect_word("on")
+            stream.expect_word("top")
+            # "…on top **of your library**" is the same clause spelled out; the
+            # zone is the one just shuffled either way, so the words are read
+            # and dropped rather than left to fail the line.
+            if stream.accept_word("of"):
+                stream.expect_word("your")
+                stream.expect_word("library")
+            return ast.SearchLibrary(
+                ast.PlayerRef("you"), filt, ast.Zone("library_top"), graveyard,
+                tapped=(False,), named_alternatives=tuple(alternatives),
+                reveal=reveal,
+            )
+    stream.reset(top_mark)
+
     # ", and put it into your hand" — the conjunction is the graveyard
     # template's punctuation, not a second effect: "put" must follow either way.
     stream.accept_word("and")

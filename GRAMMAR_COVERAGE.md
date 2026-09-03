@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 72.1% | 67.0% | 41.1% | 183 |
+| MIR *(measured)* | 335 | 545 | 72.7% | 67.5% | 41.7% | 186 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -65,10 +65,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | expected 'put' |  |
 | 3 | 3 | engine/lord_buffs.py carries no such restriction on the buffed creatures, so _recalculate_lord_buffs would drop it |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
@@ -1351,6 +1351,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Tap target artifact, creature, or land.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Enlightened Tutor**
+  - `Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.`
 - **Enslaved Scout**
   - `{2}: This creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Epitaph Golem**
@@ -2915,6 +2917,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}.`
 - **Mystic Skyfish**
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
+- **Mystical Tutor**
+  - `Search your library for an instant or sorcery card, reveal it, then shuffle and put that card on top.`
 - **Márton Stromgald**
   - `Whenever Márton Stromgald attacks, other attacking creatures get +1/+1 until end of turn for each attacking creature other than Márton Stromgald.`
   - `Whenever Márton Stromgald blocks, other blocking creatures get +1/+1 until end of turn for each blocking creature other than Márton Stromgald.`
@@ -4889,6 +4893,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target Wall. It can't be regenerated. Word of Blasting deals damage equal to that Wall's mana value to the Wall's controller.`
 - **Word of Undoing**
   - `Return target creature and all white Auras you own attached to it to their owners' hands.`
+- **Worldly Tutor**
+  - `Search your library for a creature card, reveal it, then shuffle and put the card on top.`
 - **Worms of the Earth**
   - `At the beginning of each upkeep, any player may sacrifice two lands of their choice or have this enchantment deal 5 damage to that player. If a player does either, destroy this enchantment.`
 - **Wormwood Treefolk**

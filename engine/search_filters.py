@@ -103,8 +103,20 @@ def search_matches(card, data: dict) -> bool:
     that caller — "a **noncreature, nonland** card" is the same question about
     the same card, asked with the answer inverted.
     """
+    # "an **artifact or enchantment** card" (Enlightened Tutor), "an **instant
+    # or sorcery** card" (Mystical Tutor). A printed union is an OR, the same
+    # reading `any_colors` below already gets and the same one every noun-phrase
+    # matcher in this engine gives a multi-type filter — so the key takes a
+    # tuple as well as a word, and one member is enough. It used to take a word
+    # alone and the lowering refused a union outright, which is the safe
+    # direction and cost the three tutors their cards.
     card_type = data.get("card_type", "any")
-    if card_type != "any" and not card_has_type(card, card_type):
+    wanted_types = (
+        card_type if isinstance(card_type, (list, tuple)) else (card_type,)
+    )
+    if "any" not in wanted_types and not any(
+        card_has_type(card, name) for name in wanted_types
+    ):
         return False
     type_line = card.type_line.lower()
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):

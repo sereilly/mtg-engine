@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (223/335 supported, still `measured`)
+## Mirage (MIR) — in progress (226/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1268,17 +1268,42 @@ a subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up
 below as it lands.
 
-### Where the set stands — eight rounds in
+### Round 9 — the tutor cycle (CR 701.19): 223 → 226 supported
 
-**223/335 supported (66.6%), from 184/335 (54.9%) at ingest.** Every gate is
+Two pieces of search machinery, both of which pay forward past this set.
+
+**A search may find one of several printed types.** "an **artifact or
+enchantment** card" (Enlightened Tutor), "an **instant or sorcery** card"
+(Mystical Tutor). The lowering refused a union outright — "the search picker
+tests one card type" — which was the safe direction and true of
+`search_matches` as it stood. It is not true any more: that predicate now reads
+the key as an OR, the same reading it already gave `any_colors` beside it and
+the same one every noun-phrase matcher in this engine gives a multi-type filter.
+The key takes a tuple *or* a word, so every payload written before is
+byte-identical, and nothing outside the engine reads it — the client renders the
+search prompt from the legal indices, not from the type.
+
+**A search may put its find on top of the library, and the order is the
+effect.** "…, reveal it, **then shuffle and put that card on top**" is the same
+search with its last two clauses the other way round, and reading it as the
+ordinary destination clause would place the card and *then* shuffle it back in —
+the card doing nothing at all. So `library_top` is a third destination with its
+own branch in the flow, which shuffles first and places after, and returns
+rather than falling through to the shared shuffle below it.
+
+`oracle_diff`: **3 changed of 2181**, the three tutors.
+
+### Where the set stands — nine rounds in
+
+**226/335 supported (67.5%), from 184/335 (54.9%) at ingest.** Every gate is
 green, the trackers are current, and each round is its own commit with its own
 `oracle_diff` reading. The set is **not finished** and is still `measured`;
 Phase 4 has not been attempted.
 
-**The remaining 112 cards have no more big rocks in them, and the census says so
-in a way it did not at ingest.** 92 of the 112 are blocked by **exactly one
-refused line**, and the 133 refused lines that remain sit over 132 distinct
-sentences — 1.01, and this time the fragment census agrees: the two readings
+**The remaining 109 cards have no more big rocks in them, and the census says so
+in a way it did not at ingest.** Nine in ten are blocked by **exactly one
+refused line**, and the refused lines that remain sit one-to-one over their
+distinct sentences — 1.01, and this time the fragment census agrees: the two readings
 that were wrong at ingest (flanking's ten reminder-text lines, phasing's seven)
 are both spent. What is left is one production per card or thereabouts, at the
 three generic refusal sites (`expected a subject` 43, `unconsumed text` 26,
@@ -1291,7 +1316,6 @@ already probed against the live compiler:
 
 | Next | Cards | What it needs |
 | --- | --- | --- |
-| The tutor cycle | 3 | a library-**top** search destination (shuffle first, then place), and a search picker that reads a *union* of card types — `search_matches` compares one `card_type`, and the payload key is read by the AI and the client too |
 | Chosen-source prevention | 5 | five different shapes, not one family: a shield whose recipient is "any target" (Circle of Despair), one over "you and/or creatures you control" plus a life rider (Shadowbane), a **redirect** rather than a prevention (Reflect Damage), a prevention with an exile rider (Bone Mask), and a source narrowed by a chosen colour (Prismatic Circle, whose line is also the set's last hollow one) |
 | Trailing riders | ~8 | "X. **They can't be regenerated.** You lose 2 life for each creature that died this way" (Reign of Terror), "…and an additional 1 damage to each green creature" (Kaervek's Hex, Tropical Storm) — the `unconsumed text` site is mostly a second sentence on one printed line |
 | `lord_buffs` restrictions | 3 | Spectral Guardian ("as long as this creature is untapped"), Shimmer (a chosen land type), Chaosphere ("creatures without flying") — three different narrowings on the buffed set, not one |

@@ -375,7 +375,13 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
     # onto the battlefield" — Garruk, Unleashed's emblem). Anywhere else
     # refuses rather than landing the card in the wrong zone.
     to_battlefield = node.to.name == "battlefield"
-    if not to_battlefield and (
+    # "…then shuffle and put that card on top" (the three Mirage tutors). A
+    # third destination with a flow, and the only one whose *order* is part of
+    # the effect: the card is placed after the shuffle, so it is on top rather
+    # than somewhere random. The parse side carries no owner on this zone —
+    # the library just shuffled is the searcher's by construction.
+    to_library_top = node.to.name == "library_top"
+    if not to_battlefield and not to_library_top and (
         node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you"
     ):
         raise LoweringError(
@@ -392,11 +398,18 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
             "the search picker cannot test this restriction: " + ", ".join(leftover),
             node=node,
         )
-    if len(filt.card_types) > 1:
-        # The picker compares one `primary_type`, so a union would silently
-        # widen to whichever type happened to be written first.
-        raise LoweringError("the search picker tests one card type", node=node)
-    card_type = filt.card_types[0] if filt.card_types else "any"
+    # A printed union of types ("an artifact or enchantment card", Enlightened
+    # Tutor) is carried as a tuple. It used to refuse — "the search picker tests
+    # one card type" — which was true of `search_matches` and is not any more:
+    # that predicate reads the key as an OR, the same reading it gives
+    # `any_colors` beside it, so a union narrows the search rather than widening
+    # it. Emitted as a bare word for the single-type case, so every payload
+    # written before this branch existed is byte-identical.
+    card_type = (
+        tuple(filt.card_types) if len(filt.card_types) > 1
+        else filt.card_types[0] if filt.card_types
+        else "any"
+    )
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
@@ -488,6 +501,8 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["restrictions"] = restrictions
     if node.graveyard:
         payload["zones"] = ("library", "graveyard")
+    if to_library_top:
+        payload["destination"] = "library_top"
     if to_battlefield and len(destinations) == 1:
         payload["destination"] = "battlefield"
         # "…put it onto the battlefield **tapped**" (Fabled Passage). Emitted
@@ -513,7 +528,12 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
 
 #: The zone names the search flow can put a found card into. A name outside this
 #: refuses rather than landing the card somewhere the flow does not implement.
-_SEARCH_DESTINATIONS = {"hand": "hand", "battlefield": "battlefield"}
+#: The third is "on top of your library" (the three Mirage tutors), and it is
+#: the one whose *order* is part of the effect: the flow shuffles first and
+#: places the find after, so the card is on top rather than back in the deck.
+_SEARCH_DESTINATIONS = {
+    "hand": "hand", "battlefield": "battlefield", "library_top": "library_top",
+}
 
 #: The same question for a search of *somebody else's* library. Exile is here
 #: and not above because only this sentence prints it, and the hand is the

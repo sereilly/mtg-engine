@@ -128,3 +128,79 @@ def test_disempower_still_refuses_a_creature(set_pool):
     game.resolve_stack()
 
     assert game.is_on_battlefield(creature)
+
+
+# --- Round 9: the tutor cycle (CR 701.19 / 701.23) ---
+
+from engine.search_filters import search_matches
+
+
+def _r9_tutor(set_pool, spell: str, library_names: list[str]):
+    """*spell* cast on seat 0 over a library built from *library_names*."""
+    pool = set_pool("MIR")
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[pool[spell]],
+            library=[pool[name] for name in library_names],
+        ),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    result = game.cast_from_hand(0, spell)
+    assert result.supported, result.details
+    game.resolve_stack()
+    (choice,) = game.pending_choices
+    assert choice.kind == "search_library"
+    return game, choice
+
+
+_R9_LIBRARY = [
+    "Island", "Femeref Knight", "Charcoal Diamond", "Armor of Thorns", "Island",
+]
+
+
+def test_enlightened_tutor_finds_either_of_its_two_types(set_pool):
+    """"Search your library for an **artifact or enchantment** card…"
+
+    A printed union is an OR — the reading `any_colors` beside it already gets,
+    and the one every noun-phrase matcher in this engine gives a multi-type
+    filter. The lowering used to refuse a union outright ("the search picker
+    tests one card type"), which was the safe direction and cost all three
+    tutors their cards.
+    """
+    _game, choice = _r9_tutor(set_pool, "Enlightened Tutor", _R9_LIBRARY)
+
+    assert choice.data["card_type"] == ("artifact", "enchantment")
+    assert choice.data["destination"] == "library_top"
+
+
+def test_enlightened_tutor_offers_only_the_matching_cards(set_pool):
+    """The union narrows the search; it does not widen it."""
+    game, choice = _r9_tutor(set_pool, "Enlightened Tutor", _R9_LIBRARY)
+
+    legal = {
+        card.name for card in game.players[0].library
+        if search_matches(card, choice.data)
+    }
+
+    assert legal == {"Charcoal Diamond", "Armor of Thorns"}
+
+
+def test_a_tutor_puts_its_find_on_top_after_the_shuffle(set_pool):
+    """"…, reveal it, **then shuffle and put that card on top**."
+
+    The order is the effect. Placing the find first and then shuffling — which
+    is what falling through to the shared shuffle would do — is the card doing
+    nothing at all, so the destination branch shuffles itself and returns.
+    """
+    game, _choice = _r9_tutor(set_pool, "Worldly Tutor", _R9_LIBRARY)
+    index = next(
+        i for i, card in enumerate(game.players[0].library)
+        if card.name == "Femeref Knight"
+    )
+
+    assert game.confirm_search_library(0, index)
+
+    assert game.players[0].library[0].name == "Femeref Knight"
+    assert len(game.players[0].library) == len(_R9_LIBRARY)

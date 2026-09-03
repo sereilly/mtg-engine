@@ -616,6 +616,24 @@ class PendingChoicesMixin:
                     self.log.append(
                         f"{card.name} untaps ({held} counted)"
                     )
+        elif destination == "library_top":
+            # "…then shuffle and put that card on top." (Enlightened Tutor,
+            # Mystical Tutor, Worldly Tutor.) The **order** is the effect: the
+            # library is shuffled first and the find placed after, so it is on
+            # top rather than somewhere random. That is why this branch shuffles
+            # itself and returns rather than falling through to the shared
+            # shuffle below — reaching that one would put the card on top and
+            # then shuffle it back in, which is the card doing nothing.
+            if zone == "library":
+                random.shuffle(caster.library)
+            self.put_card_into_library(caster, card, "top")
+            self.log.append(
+                f"{caster.name} searched {zone} and put {card.name} "
+                "on top of their library"
+            )
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
         elif destination == "exile":
             # CR 400.3: the card goes to its owner's exile, and its owner is the
             # player whose library it came out of — which is `caster` here, the
