@@ -68,6 +68,8 @@ from .characteristics import (
     _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
     _parse_change_text,
+)
+from .types import (
     _parse_becomes,
     _parse_no_longer_supertype,
 )

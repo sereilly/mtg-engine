@@ -292,7 +292,16 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "lower"]
 # elaborately its sentence is printed. The words are where the work is, so a
 # near-empty `lowering/search.py` would buy back the symmetry and cost the
 # thing symmetry is for — exactly the reasoning `zones` records in reverse.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
+# `types` is the *first* family to arrive on the parse side after the lowering
+# side already had it — every asymmetry recorded here so far was written the
+# other way round, and `lowering/types.py`'s own docstring predicted this file
+# would stay unwritten ("a near-empty `effects/types.py` would buy back the
+# symmetry and cost the thing symmetry is for"). It was right when it was
+# written and wrong two sets later: the `becomes` verb's five branches are 316
+# lines on their own, and `effects/characteristics.py` had reached 985 with the
+# P/T family beside them, sharing no helper. The prediction was about a size,
+# and the size changed.
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -411,7 +420,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
 # `loops` is the fifth lowering-only family and it split off `control_flow.py`
 # when that module reached the guard below. The line is the one that module's
 # own docstring already drew: `control_flow` is named after the *composers* —
@@ -475,6 +484,13 @@ AST_FAMILIES = [
     if family not in (
         "library", "search", "control_changes", "prevention", "counters",
         "tapping", "attachments",
+        # `types` is a parse family and a lowering family with no AST module of
+        # its own: what the `becomes` verb produces is `BecomeCreature`,
+        # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,
+        # and those five already live in `ast/characteristics.py` because they
+        # are what a permanent *is*. Splitting them out would put a node in one
+        # family and both of its readers in another.
+        "types",
     )
 ]
 
