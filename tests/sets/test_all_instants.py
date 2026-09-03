@@ -1291,3 +1291,181 @@ def test_w3g2_martyrdom_can_protect_a_creature_too(set_pool):
 
     assert theirs.damage_marked == 2, "one of the three points moved"
     assert mine.damage_marked == 1
+
+
+# --- W3G3: iterative library procedures ---
+#
+# Lim-Dul's Vault, whose three sentences are one procedure: a look, an offer
+# repeated as many times as the caster chooses, and a shuffle that stacks the
+# last cards looked at on top. The order of those last two halves is the whole
+# card - the kept cards come out of the library *before* the shuffle and go
+# back on top after it, which is what makes it a tutor rather than a look.
+
+import random as _w3g3_random
+
+import pytest as _w3g3_pytest
+
+from engine import Game as _W3G3IGame, PlayerState as _W3G3IPlayerState
+from engine.card_loader import load_cards as _w3g3i_load_cards
+from engine.card_loader import manifest_set_path as _w3g3i_set_path
+
+_W3G3I_LEA = {c.name: c for c in _w3g3i_load_cards(_w3g3i_set_path("LEA"))}
+
+#: Fifteen distinct cards, so every "top five" in a test names a different set
+#: and a bottoming that did nothing would show.
+_W3G3I_DECK = (
+    "Black Lotus", "Healing Salve", "Grizzly Bears", "Lightning Bolt",
+    "Ancestral Recall", "Mox Pearl", "Mox Ruby", "Mox Jet", "Mox Emerald",
+    "Mox Sapphire", "Time Walk", "Timetwister", "Fastbond", "Sol Ring",
+    "Icy Manipulator",
+)
+
+
+def _w3g3i_vault(set_pool, deck=_W3G3I_DECK, interactive=True, life=20):
+    """Cast Lim-Dul's Vault with *deck* stacked, and stop on its first offer."""
+    _w3g3_random.seed(4242)
+    game = _W3G3IGame(
+        players=[_W3G3IPlayerState(name="A"), _W3G3IPlayerState(name="B")]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game.interactive_seats = {0, 1} if interactive else set()
+    game._settle()
+    game.players[0].life = life
+    game.players[0].library = [_W3G3I_LEA[name] for name in deck]
+    game.players[0].hand = [set_pool("ALL")["Lim-D\u00fbl's Vault"]]
+    game.cast_from_hand(0, "Lim-D\u00fbl's Vault")
+    game._settle()
+    return game
+
+
+def test_lim_duls_vault_shuffles_before_it_stacks_the_cards_you_kept(set_pool):
+    """"Then shuffle and put the last cards you looked at this way on top in
+    any order."
+
+    The order of the two halves is the card. Shuffling with the five still in
+    the library would lose them; stacking before shuffling would shuffle them
+    away again. Either mistake leaves a card that reports supported and is a
+    look rather than a tutor, so the assertion is on the *set* of five that
+    ends up on top rather than on any one ordering.
+    """
+    game = _w3g3i_vault(set_pool)
+    looked = [c.name for c in game.players[0].library[:5]]
+    assert looked == list(_W3G3I_DECK[:5]), "the look changes no zone"
+
+    assert game.confirm_library_cycle_offer(0, False)
+    game._settle()
+
+    assert len(game.players[0].library) == 15, "nothing left the library"
+    assert sorted(c.name for c in game.players[0].library[:5]) == sorted(looked)
+
+
+def test_lim_duls_vault_lets_the_caster_order_the_five_it_stacked(set_pool):
+    """The ordering is chained onto the answer that ends the loop rather than
+    done inside it: ``reorder_library`` is a prompt that already exists with
+    its own UI, AI default and action, and a decision armed by answering
+    another stays inside the same resolution (CR 608.2)."""
+    game = _w3g3i_vault(set_pool)
+    game.confirm_library_cycle_offer(0, False)
+    game._settle()
+
+    ordering = game.pending_choice_of("reorder_library", 0)
+    assert ordering is not None
+    assert ordering.data["top_count"] == 5
+    assert ordering.data["may_shuffle"] is False
+
+    before = [c.name for c in game.players[0].library[:5]]
+    assert game.confirm_reorder_library(0, [4, 3, 2, 1, 0])
+    game._settle()
+
+    assert [c.name for c in game.players[0].library[:5]] == list(reversed(before))
+    assert game.stack == [], "the spell finished once the last prompt was answered"
+
+
+def test_lim_duls_vault_pays_a_life_a_round_and_asks_again(set_pool):
+    """"As many times as you choose, you may pay 1 life…"
+
+    Each acceptance bottoms the five just looked at, looks at the next five and
+    arms the *same* offer again - a prompt armed by answering an earlier one,
+    which is how a chain of decisions stays one resolution.
+    """
+    game = _w3g3i_vault(set_pool)
+
+    assert game.confirm_library_cycle_offer(0, True)
+    game._settle()
+    assert game.players[0].life == 19
+    assert [c.name for c in game.players[0].library[:5]] == list(_W3G3I_DECK[5:10])
+    assert [c.name for c in game.players[0].library[-5:]] == list(_W3G3I_DECK[:5])
+    assert game.pending_choice_of("library_cycle_offer", 0) is not None
+
+    assert game.confirm_library_cycle_offer(0, True)
+    game._settle()
+    assert game.players[0].life == 18
+    third = [c.name for c in game.players[0].library[:5]]
+    assert third == list(_W3G3I_DECK[10:15])
+
+    assert game.confirm_library_cycle_offer(0, False)
+    game._settle()
+    assert game.players[0].life == 18, "declining costs nothing"
+    assert sorted(c.name for c in game.players[0].library[:5]) == sorted(third)
+
+
+def test_lim_duls_vault_accepted_with_no_life_ends_the_loop(set_pool):
+    """CR 119.4 lets a player pay N life only with N or more to pay it from. A
+    yes that cannot be paid for is a decline, not a refused answer: refusing it
+    would leave the prompt queued with no answer that could ever clear it, and
+    the game waits on this prompt."""
+    game = _w3g3i_vault(set_pool, life=0)
+
+    assert game.confirm_library_cycle_offer(0, True)
+    game._settle()
+
+    assert game.players[0].life == 0
+    assert game.pending_choice_of("library_cycle_offer", 0) is None
+    assert game.pending_choice_of("reorder_library", 0) is not None
+
+
+def test_lim_duls_vault_declines_at_once_for_a_headless_seat(set_pool):
+    """The stated policy, and not ``_default_optional_pay``'s "pay tolls":
+    that policy is written for an offer made once, and this one is made again
+    every time it is taken. A seat that paid whenever it could afford to would
+    pay its life total down to 1 for a shuffle it cannot evaluate."""
+    game = _w3g3i_vault(set_pool, interactive=False)
+
+    assert game.players[0].life == 20
+    assert game.pending_choice_of("library_cycle_offer", 0) is None
+    assert len(game.players[0].library) == 15
+
+
+def test_lim_duls_vault_survives_a_library_shorter_than_the_look(set_pool):
+    """"Look at the top five cards" of a two-card library is two cards, and
+    the loop still ends in a shuffle. Nothing here is a draw, so CR 704.5b
+    never fires."""
+    game = _w3g3i_vault(set_pool, deck=("Black Lotus", "Sol Ring"))
+
+    assert game.confirm_library_cycle_offer(0, True)
+    game._settle()
+    assert game.players[0].life == 19
+    assert len(game.players[0].library) == 2
+
+    assert game.confirm_library_cycle_offer(0, False)
+    game._settle()
+    assert len(game.players[0].library) == 2
+    assert not game.players[0].lost
+
+
+def test_the_vault_loop_refuses_a_second_look_of_a_different_size(set_pool):
+    """One production over three sentences has to read both numbers. Quietly
+    reusing the first is how a card comes to do something it does not say."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError
+
+    with _w3g3_pytest.raises(GrammarError):
+        parse_line(
+            "Look at the top five cards of your library. As many times as you "
+            "choose, you may pay 1 life, put those cards on the bottom of your "
+            "library in any order, then look at the top three cards of your "
+            "library. Then shuffle and put the last cards you looked at this "
+            "way on top in any order."
+        )

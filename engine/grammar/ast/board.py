@@ -87,6 +87,13 @@ class Exile:
     #: reason every other parameter in this grammar is — a card printing three
     #: verse counters is this sentence, not a second one.
     counters: tuple[tuple[str, int], ...] = ()
+    #: ``…**face down**`` (CR 406.3; Gustha's Scepter). The same rider
+    #: :class:`ExileTopOfLibrary` already carries one node over, on the
+    #: sentence that exiles out of a *hand* instead of off a library. Recorded
+    #: rather than skipped for that node's reason: a face-down card in exile is
+    #: hidden from every player, so admitting the words without carrying them
+    #: would exile the card in full view of the table.
+    face_down: bool = False
 
 
 @dataclass(frozen=True)

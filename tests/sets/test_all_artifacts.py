@@ -580,28 +580,34 @@ def test_scarab_of_the_unseen_refuses_a_host_it_does_not_own(set_pool):
 # --- W2G5 declines, each naming the part it is waiting on -------------------
 
 
-def test_gusthas_scepter_is_declined_naming_four_parts(set_pool):
-    """All three of its lines refuse, and they need four separate pieces:
+def test_gusthas_scepter_was_declined_naming_four_parts_and_landed_in_w3g3(set_pool):
+    """W2G5 declined this card naming four parts. W3G3 built it; the record of
+    which of the four were real is worth more than the decline was.
 
-    1. **A face-down exile from a hand.** ``exile_chosen_card_from_hand``
-       exists (Ice Cauldron) but nothing carries "face down": the words are
-       unconsumed text, and CR 406.3 makes a face-down exiled card hidden from
-       every other player, which no zone in ``PlayerState`` distinguishes.
-    2. **A per-viewer look permission with an open-ended duration.** "You may
-       look at it **for as long as it remains exiled**" is a permission, not an
-       effect - there is no instruction kind for "this seat may see this card",
-       and the web layer has no channel that shows one seat a card in exile.
-    3. **A return *out of* the linked-exile pile chosen by its owner.**
-       ``engine/linked_exile.py`` records what was exiled with a source and
-       Safe Haven already returns *all* of it; this returns **one card the
-       activator picks**, which needs a ``PendingChoice`` over a hidden pile.
-    4. **A "when you lose control of this permanent" trigger.** No condition in
-       ``engine/oracle.py``'s table names it and no fire site announces it;
-       ``engine/control.py`` is where a control change ends, so the
-       announcement would go there beside ``end_control_change``.
+    1. **A face-down exile from a hand** was real, and half of it already
+       existed: ``engine/linked_exile.py`` has carried a ``face_down`` flag and
+       ``web/serialization.py`` has hidden those entries since Knowledge Vault,
+       so "no zone in ``PlayerState`` distinguishes" named the wrong layer —
+       CR 406.3 is answered by the *record of the exiling*, not by a zone.
+    2. **A per-viewer look permission** was real and is the one part the
+       decline sized correctly.
+    3. **A picked return out of the linked pile** was real: one new
+       ``PendingChoice`` kind, ``linked_exile_return``.
+    4. **A "when you lose control" trigger** was real, and its fire site was
+       *not* where the decline pointed. ``engine/control.py`` records a
+       contribution and never moves anything; the two events are the change of
+       hands in ``Game._sync_control`` and the leave transition in
+       ``remove_all_from_battlefield`` (CR 603.10d looks back in time, which is
+       what lets the second one fire at all).
     """
     program = compile_card_oracle(set_pool("ALL")["Gustha's Scepter"])
-    assert not program.supported
+    assert program.supported
+    assert [ability.effect_kind for ability in program.activated_abilities] == [
+        "activated_sequence", "activated_zones",
+    ]
+    assert [
+        trigger.condition.kind for trigger in program.triggered_abilities
+    ] == ["lose_control_of_source"]
 
 
 # --- W3G5: hollow lines, pickers and unclaimed text ---
@@ -678,3 +684,535 @@ def test_sol_grail_with_nothing_chosen_produces_nothing():
 
     game.activate_permanent_ability(0, "Sol Grail")
     assert sum(game.players[0].mana_pool.values()) == 0
+
+
+# --- W3G3: iterative library procedures ---
+#
+# Gustha's Scepter, the group's one landed artifact. Every part of it was a
+# *procedure* rather than an effect, and the two that took the work were the
+# ones where the pile has to be readable long after the resolution that filled
+# it: a face-down exile whose owner may look (CR 406.3 hides it from everyone,
+# its owner included, so the look is an effect and not a courtesy) and a
+# lose-control trigger with two different fire sites (CR 603.10d).
+
+import pytest
+
+from engine import Game as _W3G3Game, PlayerState as _W3G3PlayerState
+from engine.card_loader import manifest_set_path as _w3g3_set_path
+from engine.card_loader import load_cards as _w3g3_load_cards
+from engine.linked_exile import face_down_exiled_cards, linked_entries
+from engine.models import Permanent as _W3G3Permanent
+from engine.oracle import compile_card_oracle as _w3g3_compile
+
+_W3G3_LEA = {c.name: c for c in _w3g3_load_cards(_w3g3_set_path("LEA"))}
+
+
+def _w3g3_duel() -> "_W3G3Game":
+    """A duel with both seats interactive, so a prompt queues instead of being
+    answered by its default the moment it is armed."""
+    game = _W3G3Game(
+        players=[_W3G3PlayerState(name="A"), _W3G3PlayerState(name="B")]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game.interactive_seats = {0, 1}
+    game._settle()
+    return game
+
+
+def _w3g3_put(game, seat: int, card, *, ready: bool = True):
+    perm = _W3G3Permanent(card=card if not isinstance(card, str) else _W3G3_LEA[card])
+    if ready:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g3_scepter(set_pool, hand=("Black Lotus", "Healing Salve")):
+    game = _w3g3_duel()
+    scepter = _w3g3_put(game, 0, set_pool("ALL")["Gustha's Scepter"])
+    game.players[0].hand = [_W3G3_LEA[name] for name in hand]
+    return game, scepter
+
+
+def _w3g3_exile_one(game, scepter, hand_index=0):
+    """Activate the first ability and answer its pick."""
+    scepter.tapped = False
+    game.activate_permanent_ability(0, "Gustha's Scepter", permanent_index=0)
+    game._settle()
+    answered = game.confirm_exile_from_hand_choice(0, hand_index)
+    game._settle()
+    return answered
+
+
+def test_gusthas_scepter_exiles_face_down_and_only_its_owner_may_look(set_pool):
+    """"{T}: Exile a card from your hand face down. You may look at it for as
+    long as it remains exiled."
+
+    CR 406.3 hides a face-down exiled card from **every** player, its owner
+    included - Knowledge Vault's controller cannot read its own pile. So the
+    second sentence is an effect with a per-seat answer, and the two halves are
+    asserted separately: the opponent still sees a card back, and the seat that
+    exiled it does not.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+
+    assert _w3g3_exile_one(game, scepter)
+
+    assert [c.name for c in game.players[0].hand] == ["Healing Salve"]
+    assert [c.name for c in game.players[0].exile] == ["Black Lotus"]
+    entry = linked_entries(scepter)[0]
+    assert entry["face_down"] is True and entry["looker_index"] == 0
+    assert [c.name for c in face_down_exiled_cards(game, 0, 1)] == ["Black Lotus"]
+    assert face_down_exiled_cards(game, 0, 0) == []
+    # With no viewer named the pile reads as the rules describe it, which is
+    # what Knowledge Vault's own serialization asks for.
+    assert [c.name for c in face_down_exiled_cards(game, 0)] == ["Black Lotus"]
+
+
+def test_gusthas_scepter_exile_is_mandatory_where_ice_cauldrons_is_an_offer(set_pool):
+    """The bare sentence has no "may" in it, so the prompt refuses a decline.
+
+    That distinction is the whole of what stops the ability resolving having
+    moved nothing: the pick shares its prompt with Ice Cauldron's *offered*
+    exile, whose stated default is to decline, and a headless seat taking that
+    default here would tap the artifact for no effect every turn.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    game.activate_permanent_ability(0, "Gustha's Scepter", permanent_index=0)
+    game._settle()
+
+    assert not game.confirm_exile_from_hand_choice(0, None)
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is not None
+    assert game.confirm_exile_from_hand_choice(0, 1)
+    game._settle()
+    assert [c.name for c in game.players[0].exile] == ["Healing Salve"]
+
+
+def test_gusthas_scepter_returns_one_chosen_card_and_leaves_the_rest(set_pool):
+    """"{T}: Return a card you own exiled with this artifact to your hand."
+
+    *One* card and the activator says which, where Knowledge Vault's linked
+    ability empties the pile - so the record is drained by exactly one entry
+    and the cards left behind are still exiled with the artifact.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+    _w3g3_exile_one(game, scepter)
+    assert [e["card"].name for e in linked_entries(scepter)] == [
+        "Black Lotus", "Healing Salve",
+    ]
+
+    scepter.tapped = False
+    game.activate_permanent_ability(
+        0, "Gustha's Scepter", permanent_index=0, ability_index=1
+    )
+    game._settle()
+    pick = game.pending_choice_of("linked_exile_return", 0)
+    assert pick is not None
+    assert game.live_linked_exile_return_choices(pick) == [0, 1]
+
+    assert game.confirm_linked_exile_return(0, 1)
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == ["Healing Salve"]
+    assert [c.name for c in game.players[0].exile] == ["Black Lotus"]
+    assert [e["card"].name for e in linked_entries(scepter)] == ["Black Lotus"]
+
+
+def test_gusthas_scepter_offers_only_the_cards_the_chooser_owns(set_pool):
+    """"a card **you own** exiled with this artifact". The restriction only
+    ever bites once somebody else is using the artifact, which is precisely
+    when it has to: a thief must not be able to pull the previous controller's
+    cards out of exile."""
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+
+    scepter.tapped = False
+    game.activate_permanent_ability(
+        0, "Gustha's Scepter", permanent_index=0, ability_index=1
+    )
+    game._settle()
+    pick = game.pending_choice_of("linked_exile_return", 0)
+    # Seat 1 owns nothing under the artifact, so the same record offers it
+    # nothing - asserted through the engine's own candidate rule, which is the
+    # list the renderer draws and the resolver checks.
+    pick.player_index = 1
+    assert game.live_linked_exile_return_choices(pick) == []
+
+
+def test_gusthas_scepter_bins_its_pile_when_the_artifact_leaves(set_pool):
+    """"When you lose control of this artifact, put all cards exiled with this
+    artifact into their owner's graveyard."
+
+    A permanent leaving the battlefield **is** its controller losing control of
+    it, and CR 603.10d makes the trigger look back in time - so it is still
+    there to fire although the artifact has gone. Without this the cards are
+    stranded in exile for the rest of the game.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+    _w3g3_exile_one(game, scepter)
+
+    game.remove_from_battlefield(scepter)
+    game.players[0].graveyard.append(scepter.card)
+    assert game.stack, "the lose-control trigger was announced"
+    game.resolve_top_of_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Gustha's Scepter", "Black Lotus", "Healing Salve",
+    ]
+    assert game.players[0].exile == []
+
+
+def test_gusthas_scepter_bins_its_pile_when_it_changes_hands(set_pool):
+    """The other half of the same event, and the reason there are two fire
+    sites: a control change is not a zone change (CR 613 layer 2 leaves the
+    permanent on the battlefield), so the leave transition cannot see it.
+
+    The cards go to their **owner's** graveyard - seat 0's - not to the new
+    controller's.
+    """
+    game, scepter = _w3g3_scepter(set_pool, hand=("Black Lotus",))
+    _w3g3_exile_one(game, scepter)
+
+    thief = _w3g3_put(game, 1, "Grizzly Bears")
+    game.take_control(scepter, 1, source=thief)
+
+    assert game.controller_index_of(scepter) == 1
+    assert game.stack, "the change of hands announced the trigger"
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
+    assert game.players[1].graveyard == []
+    assert game.players[0].exile == []
+
+
+def test_a_face_down_exile_with_no_permanent_to_link_to_does_not_happen(set_pool):
+    """CR 406.3 needs a record to mean anything, and the record lives on the
+    exiling permanent. With nothing to link to, the exile does not happen at
+    all rather than happening in full view - the same refusal
+    ``exile_top_of_library`` already makes one handler over."""
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+    from engine.game_types import OracleExecutionContext
+
+    game = _w3g3_duel()
+    game.players[0].hand = [_W3G3_LEA["Black Lotus"]]
+    instruction = lower_ability(
+        parse_line("Exile a card from your hand face down.")
+    )[0]
+    context = OracleExecutionContext(
+        card=_W3G3_LEA["Black Lotus"], caster=game.players[0],
+        target=game.players[1], source_permanent=None,
+    )
+    game._execute_oracle_instruction(instruction, context)
+
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is None
+    assert [c.name for c in game.players[0].hand] == ["Black Lotus"]
+
+
+def test_a_face_down_rider_on_any_other_exile_refuses(set_pool):
+    """The rider is implemented by exactly one branch, so every other reading
+    of it refuses rather than dropping it. An exile that silently happened face
+    *up* is the quiet kind of wrong: every player would be reading a card the
+    card says nobody may see."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line("Exile target creature face down."))
+
+
+def _w3g3_helm(set_pool, library, x_value):
+    """Helm out, an opponent's library stacked, and its ability on the stack."""
+    game = _w3g3_duel()
+    helm = _w3g3_put(game, 0, set_pool("ALL")["Helm of Obedience"])
+    game.players[1].library = [_W3G3_LEA[name] for name in library]
+    result = game.activate_permanent_ability(
+        0, "Helm of Obedience", permanent_index=0,
+        x_value=x_value, target_player_index=1,
+    )
+    game._settle()
+    return game, helm, result
+
+
+def test_helm_of_obedience_stops_the_loop_on_the_first_creature_card(set_pool):
+    """"Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first."
+
+    A loop, not a count: the library is asked one card at a time and *what came
+    off the top* decides whether the next iteration happens. Read as a mill of
+    X it would take four cards here and leave the Lotus in the graveyard.
+    """
+    game, helm, result = _w3g3_helm(
+        set_pool, ["Lightning Bolt", "Healing Salve", "Grizzly Bears", "Black Lotus"],
+        x_value=10,
+    )
+
+    assert result.supported
+    assert [c.name for c in game.players[1].library] == ["Black Lotus"]
+    # The Bears was milled and then taken out of the graveyard by the sentence
+    # behind the loop, so what is left is the two cards in front of it.
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Lightning Bolt", "Healing Salve",
+    ]
+    assert helm not in game.players[0].battlefield
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+
+
+def test_helm_of_obedience_stops_the_loop_on_x_cards(set_pool):
+    """The other printed exit, and the reason both are fields: a loop that only
+    watched for the creature would empty the library looking for one.
+
+    Nothing is sacrificed and nothing is reanimated - the conditional behind
+    the loop reads the loop's own record, which is empty.
+    """
+    game, helm, result = _w3g3_helm(
+        set_pool, ["Lightning Bolt", "Healing Salve", "Black Lotus", "Grizzly Bears"],
+        x_value=2,
+    )
+
+    assert result.supported
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Lightning Bolt", "Healing Salve",
+    ]
+    assert [c.name for c in game.players[1].library] == ["Black Lotus", "Grizzly Bears"]
+    assert helm in game.players[0].battlefield, "nothing was sacrificed"
+    assert [p.card.name for p in game.players[0].battlefield] == ["Helm of Obedience"]
+
+
+def test_helm_of_obedience_stops_on_an_empty_library_without_a_loss(set_pool):
+    """The third exit, which the card does not print because the rules supply
+    it. CR 704.5b fires on an attempted *draw* from an empty library and a mill
+    is not a draw, so the loop simply runs out of cards."""
+    game, helm, _ = _w3g3_helm(set_pool, ["Lightning Bolt"], x_value=10)
+
+    assert game.players[1].library == []
+    assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt"]
+    assert not game.players[1].lost
+    assert helm in game.players[0].battlefield
+
+
+def test_helm_of_obedience_refuses_x_of_zero_with_nothing_paid(set_pool):
+    """"X can't be 0." A constraint on the value chosen for X (CR 601.2b), not
+    on when the ability may be activated - which is why it is enforced beside
+    the {X} payment rather than through the activation-restriction table, whose
+    every row is answered from the game state alone.
+
+    The grammar consumes the sentence on that same reader's say-so, so what is
+    claimed and what is enforced are one reading of the words.
+    """
+    game = _w3g3_duel()
+    helm = _w3g3_put(game, 0, set_pool("ALL")["Helm of Obedience"])
+    game.players[1].library = [_W3G3_LEA["Grizzly Bears"]]
+
+    result = game.activate_permanent_ability(
+        0, "Helm of Obedience", permanent_index=0, x_value=0, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert not helm.tapped, "nothing was paid"
+    assert game.players[1].graveyard == []
+
+
+def test_helm_of_obedience_keeps_the_stolen_creatures_owner(set_pool):
+    """CR 108.3: the creature is put onto the battlefield under *your* control
+    out of its owner's graveyard, so when it dies it goes back to that owner's
+    graveyard and not to the thief's. Recorded on the permanent as it arrives,
+    because by then the graveyard it came from is the only thing that knew."""
+    game, _, _ = _w3g3_helm(set_pool, ["Grizzly Bears"], x_value=5)
+    bears = next(
+        p for p in game.players[0].battlefield if p.card.name == "Grizzly Bears"
+    )
+    assert bears.metadata["owner_player_index"] == 1
+
+    game._permanent_to_graveyard(game.players[0], bears)
+    game._settle()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert "Grizzly Bears" not in [c.name for c in game.players[0].graveyard]
+
+
+def test_a_repeated_mill_refuses_a_count_other_than_one(set_pool):
+    """The loop is asked after every single card, so a wording that milled two
+    at a time would step past its own stopping card. It refuses loudly rather
+    than being read as this loop with a different number in it."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError
+
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Target opponent mills two cards, then repeats this process until "
+            "a creature card or X cards have been put into their graveyard "
+            "this way, whichever comes first."
+        )
+
+
+def test_one_of_them_refuses_with_no_loop_in_front_of_it(set_pool):
+    """"Them" names a set an earlier step of this same effect recorded. With
+    nothing in front of it the words name a record nothing writes, and an
+    unwritten record reads as empty - so the sentence would compile and put
+    nothing onto the battlefield."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(
+            parse_line("Put one of them onto the battlefield under your control.")
+        )
+
+
+#: Twelve distinct cards, so the ten the Portal takes leave two behind and a
+#: shuffle that lost or duplicated a card would show in the count.
+_W3G3_PORTAL_DECK = (
+    "Black Lotus", "Healing Salve", "Grizzly Bears", "Lightning Bolt",
+    "Ancestral Recall", "Mox Pearl", "Mox Ruby", "Mox Jet", "Mox Emerald",
+    "Mox Sapphire", "Time Walk", "Timetwister",
+)
+
+
+def _w3g3_portal(set_pool, deck=_W3G3_PORTAL_DECK, interactive=True):
+    """The Portal out, seat 0's library stacked, and its ability activated at
+    seat 1."""
+    import random
+
+    random.seed(31)
+    game = _w3g3_duel()
+    if not interactive:
+        game.interactive_seats = set()
+    portal = _w3g3_put(game, 0, set_pool("ALL")["Phyrexian Portal"])
+    game.players[0].library = [_W3G3_LEA[name] for name in deck]
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Portal", permanent_index=0, target_player_index=1
+    )
+    game._settle()
+    return game, portal, result
+
+
+def test_phyrexian_portal_divides_chooses_and_searches_across_two_seats(set_pool):
+    """The whole procedure, and the asymmetry that is the card: the **opponent**
+    divides knowing what is in the piles, and the controller chooses and
+    searches without knowing.
+
+    Each decision is armed by answering the one before it, so the three stay
+    inside one resolution (CR 608.2, CR 117.3b) and the game waits on each.
+    """
+    game, _, result = _w3g3_portal(set_pool)
+    assert result.supported
+
+    split = game.pending_choice_of("library_pile_split", 1)
+    assert split is not None, "the division is owed by the opponent"
+    assert game.waiting_prompt()
+    assert len(game.players[0].library) == 2, "the ten cards left the library"
+    assert [c.name for c in split.data["_cards"]] == list(_W3G3_PORTAL_DECK[:10])
+
+    assert game.confirm_library_pile_split(1, [0, 1, 2])
+    game._settle()
+    pick = game.pending_choice_of("pile_exile_choice", 0)
+    assert pick is not None, "the choice is owed by the controller"
+    assert [len(pile) for pile in pick.data["_piles"]] == [3, 7]
+
+    assert game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+    assert [c.name for c in game.players[0].exile] == list(_W3G3_PORTAL_DECK[:3])
+
+    search = game.pending_choice_of("pile_search", 0)
+    assert search is not None
+    assert [c.name for c in search.data["_pile"]] == list(_W3G3_PORTAL_DECK[3:10])
+
+    assert game.confirm_pile_search(0, 1)
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == ["Ancestral Recall"]
+    # Two left behind plus the six the search did not take.
+    assert len(game.players[0].library) == 8
+    assert game.pending_choices == []
+    assert not game.waiting_prompt()
+
+
+def test_phyrexian_portals_exiled_pile_is_face_down_to_everyone(set_pool):
+    """CR 406.3, and it is the reason the second decision is a decision at all:
+    the piles were divided face down and the choice was made blind, so a pile
+    that arrived in exile face up would tell the table what the choice cost.
+
+    Hidden from its **owner** too - the same reading Knowledge Vault's pile
+    gets, and the opposite of Gustha's Scepter, whose next sentence grants its
+    controller a look.
+    """
+    game, portal, _ = _w3g3_portal(set_pool)
+    game.confirm_library_pile_split(1, [0, 1])
+    game._settle()
+    game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+
+    hidden = [c.name for c in face_down_exiled_cards(game, 0, 0)]
+    assert hidden == list(_W3G3_PORTAL_DECK[:2])
+    assert [c.name for c in face_down_exiled_cards(game, 0, 1)] == hidden
+    assert all(entry["face_down"] for entry in linked_entries(portal))
+
+
+def test_phyrexian_portal_does_nothing_with_fewer_than_ten_cards(set_pool):
+    """"If your library has ten or more cards in it". Read when the instruction
+    is followed (CR 608.2c), and the whole effect is inside the branch - so a
+    short library divides nothing rather than dividing what there is."""
+    game, _, result = _w3g3_portal(set_pool, deck=_W3G3_PORTAL_DECK[:9])
+
+    assert result.supported
+    assert game.pending_choices == []
+    assert len(game.players[0].library) == 9
+    assert game.players[0].exile == []
+
+
+def test_phyrexian_portal_allows_failing_to_find(set_pool):
+    """CR 701.23b: a player may always fail to find. The rest of the pile is
+    still shuffled back in, so the only thing the decline costs is the card."""
+    game, _, _ = _w3g3_portal(set_pool)
+    game.confirm_library_pile_split(1, [0])
+    game._settle()
+    game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+
+    assert game.confirm_pile_search(0, None)
+    game._settle()
+
+    assert game.players[0].hand == []
+    assert len(game.players[0].exile) == 1
+    # Two left behind plus all nine of the searched pile.
+    assert len(game.players[0].library) == 11
+
+
+def test_phyrexian_portal_accepts_an_empty_pile(set_pool):
+    """One pile of ten and one of none is a legal division, and a real one: it
+    makes the controller choose between searching everything and searching
+    nothing."""
+    game, _, _ = _w3g3_portal(set_pool)
+
+    assert game.confirm_library_pile_split(1, [])
+    game._settle()
+    pick = game.pending_choice_of("pile_exile_choice", 0)
+    assert [len(pile) for pile in pick.data["_piles"]] == [0, 10]
+
+    assert game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+    assert game.players[0].exile == []
+    assert len(game.pending_choice_of("pile_search", 0).data["_pile"]) == 10
+
+
+def test_phyrexian_portal_finishes_itself_for_headless_seats(set_pool):
+    """Every one of the three prompts refuses other actions, so a seat that
+    never answered would freeze the game. All three take their default at arm,
+    and the stated policies are neutral-divider / exile-the-smaller /
+    take-the-first."""
+    game, _, _ = _w3g3_portal(set_pool, interactive=False)
+
+    assert game.pending_choices == []
+    assert len(game.players[0].hand) == 1
+    assert len(game.players[0].exile) == 5, "the even split, smaller half exiled"
+    assert len(game.players[0].library) == 6
+    assert not game.waiting_prompt()

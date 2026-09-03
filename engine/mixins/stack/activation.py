@@ -29,6 +29,7 @@ from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
+from ...activation_restrictions import x_zero_restriction_line
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
@@ -632,8 +633,15 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # "X can't be 0." (Aladdin's Lamp.)
-        if "x can't be 0" in ability_lower and not x_value:
+        # "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) Through the
+        # module that owns the sentence rather than spelled here: the grammar
+        # consumes the clause on that module's say-so, so a reading here of its
+        # own would be the second copy that lets the claim and the enforcement
+        # disagree about the same words.
+        if any(
+            x_zero_restriction_line(sentence)
+            for sentence in ability_lower.split(".")
+        ) and not x_value:
             details = f"{permanent.card.name}: X can't be 0"
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)

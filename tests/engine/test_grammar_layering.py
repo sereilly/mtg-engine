@@ -157,6 +157,15 @@ PARSE_LAYERS = [
     # thousand-line guard below — above `phrases`, whose shared fragments it
     # reads, and below everything that reads a whole line.
     "triggers",
+    # The printed clauses a condition is built from — one each, read to its
+    # end. Split out of `conditions` at the guard below, along the boundary
+    # that module already had in its own shape: `_parse_single_condition` is a
+    # dispatcher over the whole vocabulary, and these are the readers it hands
+    # a sentence to. The name is `sentence_clauses`' one layer up and for its
+    # reason — that module holds the clauses `parse_statement` reads *around* a
+    # body, this one the clauses `_parse_condition` reads *inside* one. Below
+    # `conditions`, which calls it and is never imported back.
+    "condition_clauses",
     "effects", "conditions",
     # The trailing clauses that share a sentence's printed subject — "…gets
     # +2/+0 **and deals 1 damage to you**", "…gains shroud **and doesn't untap
@@ -234,7 +243,15 @@ PARSE_LAYERS = [
 # the reason `lowering/_records.py` records about the two tables that left
 # it first: the table is a registry either way, and `lower.py` is dispatch.
 # Below `lower` and above `lowering`, which is exactly what it reads.
-LOWER_LAYERS = ["lowering", "statics", "by_node", "lower"]
+# `statement_dispatch` left `lower.py` when Alliances' third wave took that
+# module past the size guard with **no single branch at fault** — four groups
+# each added a few arms under the cap and the sum crossed it. It is the same
+# cut `by_node` made and for the same stated reason: `lower.py` is dispatch,
+# and the half that *grows* with the pool is the half that moves. Both halves
+# are dispatch here, so the chain of 79 type arms goes and the line wrappers
+# around it stay. Below `lower`, which re-exports `lower_statement` so the
+# name's address is unchanged, and above `by_node`, which it reads.
+LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 
 # `library` joined on the parse side when The Dark pushed `effects/cards.py`
 # past the size guard: search, look-at and the library's top split off, reusing
@@ -411,7 +428,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+# `permissions` is the sixth lowering-only family, split off `lowering/exile.py`
+# at Alliances' third wave when that module crossed the guard below. The line is
+# the CR's own: everything left in `exile` **moves an object** into or out of
+# the exile zone (CR 406), where every production in `permissions` moves nothing
+# — it grants a player permission to do something the rules alone would not
+# allow (CR 601.3, and CR 611.2a for how long), and the objects it names stay
+# where they already were. The two shared no lowering; what they shared was how
+# a pile of cards is described to a payload, which is why that went one floor
+# down to `_piles` rather than into either of them. `effects/` and `ast/` have
+# no `permissions` for `loops`' reason: the guard fired on the lowerings, and
+# `CastPermission` is one node that sits perfectly well beside the other card
+# nodes — the same asymmetry `zones`/`library` record above.
 # `loops` is the fifth lowering-only family and it split off `control_flow.py`
 # when that module reached the guard below. The line is the one that module's
 # own docstring already drew: `control_flow` is named after the *composers* —
@@ -473,10 +502,17 @@ LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "r
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
-        "library", "search", "control_changes", "prevention", "counters",
+        "search", "control_changes", "prevention", "counters",
         "tapping", "attachments",
     )
 ]
+# `library` left this list at Alliances' third wave, when the size guard below
+# fired on `ast/cards.py` itself. The note above records why it was excluded —
+# a near-empty `ast/library.py` would buy back the symmetry and cost the thing
+# symmetry is for — and that reason expired the moment the inventory grew past
+# the cap: the module is 280 lines, not near-empty, and it is cut on
+# `effects/library.py`'s own line, so a template has one home per side rather
+# than two candidates. The three other exclusions above still hold.
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:
@@ -541,7 +577,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -802,6 +838,17 @@ FAMILY_SHARED = {
     # halves of the split ask them, which is what makes this a floor rather
     # than a file that happened to be cut in half.
     "_bound_returns",
+    # `_piles` split out of `lowering/exile.py` at Alliances' third wave, when
+    # that module crossed the guard on Gustha's Scepter's face-down exile and
+    # shed its permission half to `permissions`. It holds the two leaves both
+    # halves ask: how a noun phrase over a **pile of cards** reduces to a
+    # payload a picker can test (CR 610.3's linked pile on one side, the
+    # permission that reads that same pile on the other), and which narrowings
+    # such a picker can answer at all. A floor for `_amounts`' reason exactly —
+    # a leaf two families read cannot live in either without one importing the
+    # other — and it produces no `OracleInstruction`, which is what keeps it a
+    # vocabulary rather than a third family.
+    "_piles",
 }
 
 

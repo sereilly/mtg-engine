@@ -501,6 +501,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
+    "grant_look_at_exiled_cards": "zones",
     "grant_extra_turn": "turns",
     # CR 724.1: an expedited replacement for the rest of the turn, not an effect
     # on any object - the same family as granting one.
@@ -698,6 +699,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
     "mill_target_player": "zones",
+    "look_top_cycle_and_stack": "zones",
+    "separate_library_top_into_piles": "zones",
+    "mill_until_matching": "zones",
+    "put_milled_card_onto_battlefield": "zones",
     "put_hand_cards_on_library": "zones",
     # Scry moves cards within one library (CR 701.22a) — the same family as
     # mill and draw, so no new category and GRAMMAR_CATEGORIES is unchanged.

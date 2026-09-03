@@ -59,6 +59,25 @@ class OnBattlefield:
 
 
 @dataclass(frozen=True)
+class ZoneHasCards:
+    """"If **your library has ten or more cards in it**" (Phyrexian Portal).
+
+    A count of a *zone*, not of a board, which is why it is not an
+    :class:`OnBattlefield` with a zone field: that node asks what permanents
+    exist and answers through the layer system, where this one asks how tall a
+    pile is and nothing about the cards in it matters at all.
+
+    Both the seat and the zone are read rather than assumed. Every printing of
+    this clause in the pool names its own library, and a wording naming
+    somebody else's is a question about a pile this player cannot see - so
+    admitting it without recording whose would answer about the wrong deck.
+    """
+    player: PlayerRef
+    zone: str
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class CountedNumber:
     """"If **the number** is odd" / "…is even" (Chaos Moon).
 
@@ -222,6 +241,26 @@ class ExiledThisWay:
     separates them is which earlier step recorded the set — two records, written
     by two handlers — and a node that carried the record's name as data would be
     a back-reference free to name one nothing writes.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
+class MilledThisWay:
+    """"If one or more creature cards **were put into that graveyard this
+    way**" (Helm of Obedience).
+
+    The fourth set-naming sibling of :class:`DiedThisWay`,
+    :class:`ExiledThisWay` and :class:`TappedThisWay`, and a *condition* rather
+    than an amount: the sentence asks whether the loop found one, not how many.
+    Its own node for those three's reason - what tells them apart is which
+    earlier step recorded the set, and a node carrying the record's name as
+    data would be a back-reference free to name one nothing writes.
+
+    The graveyard is not a field. "That graveyard" is the one the loop in front
+    of this sentence milled into and there is nothing else it could be; a
+    wording naming another pile would be asking about cards this effect never
+    put there, which the record cannot answer.
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 

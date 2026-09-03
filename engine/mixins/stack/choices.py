@@ -3287,9 +3287,12 @@ class PendingChoicesMixin:
         )
 
     def confirm_exile_from_hand_choice(self, player_index: int, hand_index) -> bool:
-        """Answer the pending pick. ``hand_index`` of None declines, which is
-        always an answer here: the sentence that arms this prompt says "you
-        **may**"."""
+        """Answer the pending pick. ``hand_index`` of None declines, which is an
+        answer only where the sentence made an offer: "You **may** exile a
+        nonland card from your hand" (Ice Cauldron). The bare printing — "Exile
+        a card from your hand face down" (Gustha's Scepter) — is mandatory and
+        refuses it, because a decline there is an ability that resolves having
+        moved nothing."""
         return self.resolve_pending_choice(
             "exile_from_hand_choice", player_index, hand_index=hand_index
         )
@@ -3311,7 +3314,13 @@ class PendingChoicesMixin:
         player = self.players[choice.player_index]
         live = self.live_exile_from_hand_choices(choice)
         name = choice.data.get("card_name", "Effect")
+        payload = choice.data.get("_payload") or {}
         if hand_index is None:
+            # Only an *offer* may be declined. True by default because the
+            # offered printing is the one that shipped first; the mandatory
+            # printing says so in its payload.
+            if not payload.get("optional", True):
+                return False
             self.log.append(f"{player.name} exiled no card ({name})")
             self.discard_pending_choice(choice)
             return True
@@ -3325,7 +3334,17 @@ class PendingChoicesMixin:
         player.exile.append(card)
         source = choice.data.get("_source_permanent")
         if source is not None:
-            link_exiled_card(source, card, choice.player_index)
+            # CR 406.3's rider travels on the *entry*, not on the card: two
+            # copies of one card in a deck are the same ``CardDefinition``
+            # object, so the record of the exiling is the only thing that can
+            # say which one is hidden. The *look* permission that may follow it
+            # ("You may look at it for as long as it remains exiled", Gustha's
+            # Scepter) is a sentence of its own and writes its own key onto
+            # this entry once this prompt has been answered.
+            link_exiled_card(
+                source, card, choice.player_index,
+                face_down=bool(payload.get("face_down")),
+            )
         context = choice.data.get("_context")
         if context is not None:
             context.results.setdefault("exiled_cards", []).append(card)
@@ -3343,8 +3362,369 @@ class PendingChoicesMixin:
         the permission to cast it is only worth anything to a seat that then
         spends the noted mana on it. A headless seat that took the offer would
         bury a card every time the artifact was activated.
+
+        **A mandatory exile has no decline to take**, so the policy there is the
+        one ``_default_discard`` states: the lowest-index eligible card. Which
+        cards are eligible at all is the printed phrase's business and is read
+        off the same list the interactive seat is offered, never a second copy.
         """
+        if not (choice.data.get("_payload") or {}).get("optional", True):
+            live = self.live_exile_from_hand_choices(choice)
+            if live and self._resolve_exile_from_hand_choice(choice, live[0]):
+                return
+            # Nothing eligible: the offer was never made rather than declined,
+            # which is the rule ``exile_chosen_card_from_hand`` states, and the
+            # prompt has to come off the queue or the resolution never finishes.
+            self.discard_pending_choice(choice)
+            return
         self._resolve_exile_from_hand_choice(choice, None)
+
+    # -- The two face-down piles (Phyrexian Portal) --------------------------
+
+    def confirm_library_pile_split(self, player_index: int, first_pile) -> bool:
+        """Answer the division. *first_pile* is the positions - into the ten
+        cards as they were shown - that go into the first pile; everything else
+        goes into the second. Either pile may be empty, which is a legal
+        division and a real one: it forces the controller to choose between
+        searching everything and searching nothing."""
+        return self.resolve_pending_choice(
+            "library_pile_split", player_index, first_pile=first_pile
+        )
+
+    def _resolve_library_pile_split(self, choice: PendingChoice, first_pile) -> bool:
+        cards = list(choice.data.get("_cards") or ())
+        positions = [int(i) for i in (first_pile or [])]
+        if len(set(positions)) != len(positions):
+            return False
+        if any(not 0 <= i < len(cards) for i in positions):
+            return False
+        chosen = set(positions)
+        piles = [
+            [card for i, card in enumerate(cards) if i in chosen],
+            [card for i, card in enumerate(cards) if i not in chosen],
+        ]
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} divided "
+            f"{len(cards)} cards into piles of {len(piles[0])} and {len(piles[1])}"
+        )
+        # The controller's decision, armed by answering this one - and it is a
+        # *different seat's*, which is the whole design of the card.
+        self.arm_pending_choice(
+            "pile_exile_choice", int(choice.data["owner_index"]),
+            card_name=choice.data.get("card_name", ""),
+            owner_index=int(choice.data["owner_index"]),
+            _piles=piles,
+            _source_permanent=choice.data.get("_source_permanent"),
+        )
+        return True
+
+    def _default_library_pile_split(self, choice: PendingChoice) -> None:
+        """The stated policy: **split as evenly as possible**, in the order the
+        cards came off the library.
+
+        Neutral rather than optimal, and deliberately so. The division is the
+        one decision in this card that is genuinely adversarial - a divider who
+        knows the pile can make both halves bad - and there is no valuation
+        here that would not be a guess about what the *other* seat wants. An
+        even split is the answer that neither hands the controller their pick
+        nor denies it.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        half = len(cards) // 2
+        if not self._resolve_library_pile_split(choice, list(range(half))):
+            self.discard_pending_choice(choice)
+
+    def confirm_pile_exile_choice(self, player_index: int, pile_index: int) -> bool:
+        """Answer which of the two face-down piles is exiled (0 or 1). The
+        other is the one searched."""
+        return self.resolve_pending_choice(
+            "pile_exile_choice", player_index, pile_index=pile_index
+        )
+
+    def _resolve_pile_exile_choice(self, choice: PendingChoice, pile_index) -> bool:
+        """Exile the named pile face down, and hand the other to the search.
+
+        Face down is not decoration: the piles were divided face down and this
+        choice was made blind, so a pile that arrived in exile face up would
+        tell every player at the table what the decision had cost. It goes on
+        the linked-exile record for that record's own reason - two copies of
+        one card in a deck are the same object, so the record of the exiling is
+        the only thing that can say which one is hidden.
+        """
+        from ...linked_exile import link_exiled_card
+
+        piles = list(choice.data.get("_piles") or ())
+        if pile_index not in (0, 1) or len(piles) != 2:
+            return False
+        owner = self.players[int(choice.data["owner_index"])]
+        exiled = piles[int(pile_index)]
+        kept = piles[1 - int(pile_index)]
+        source = choice.data.get("_source_permanent")
+        for card in exiled:
+            owner.exile.append(card)
+            if source is not None:
+                link_exiled_card(
+                    source, card, int(choice.data["owner_index"]), face_down=True
+                )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{owner.name} exiled a face-down pile of {len(exiled)} card(s)"
+        )
+        self.arm_pending_choice(
+            "pile_search", int(choice.data["owner_index"]),
+            card_name=choice.data.get("card_name", ""),
+            owner_index=int(choice.data["owner_index"]),
+            _pile=list(kept),
+        )
+        return True
+
+    def _default_pile_exile_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: **exile the smaller pile**, and on a tie the
+        first.
+
+        The only thing this seat knows about the piles is how many cards are in
+        each - that is what "face down" means - and of the two facts available,
+        keeping more cards to search through is the one that is never worse.
+        """
+        piles = list(choice.data.get("_piles") or ())
+        if len(piles) != 2:
+            self.discard_pending_choice(choice)
+            return
+        smaller = 0 if len(piles[0]) <= len(piles[1]) else 1
+        if not self._resolve_pile_exile_choice(choice, smaller):
+            self.discard_pending_choice(choice)
+
+    def confirm_pile_search(self, player_index: int, pile_index) -> bool:
+        """Answer the search of the kept pile. ``pile_index`` of None is
+        CR 701.23b's fail-to-find, which a search always allows."""
+        return self.resolve_pending_choice(
+            "pile_search", player_index, pile_index=pile_index
+        )
+
+    def _resolve_pile_search(self, choice: PendingChoice, pile_index) -> bool:
+        """Take one card to hand and shuffle the rest of the pile into the
+        library.
+
+        Both moves go through the CR 903.9b seams (``put_card_into_hand`` /
+        ``put_card_into_library``) rather than appending, because the rule has
+        no single fire site and this is one more place that would have
+        forgotten it - a commander found this way must reach the command zone.
+        """
+        import random
+
+        pile = list(choice.data.get("_pile") or ())
+        if pile_index is not None and not 0 <= int(pile_index) < len(pile):
+            return False
+        player = self.players[int(choice.data["owner_index"])]
+        found = pile.pop(int(pile_index)) if pile_index is not None else None
+        if found is not None:
+            self.put_card_into_hand(player, found)
+        for card in pile:
+            self.put_card_into_library(player, card)
+        random.shuffle(player.library)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            (f"{player.name} took {found.name} " if found is not None
+             else f"{player.name} found nothing and ")
+            + f"and shuffled {len(pile)} card(s) back into their library"
+        )
+        return True
+
+    def _default_pile_search(self, choice: PendingChoice) -> None:
+        """The stated policy: take the **first** card in the pile.
+
+        Lowest index is the house policy for a pick with no printed
+        restriction, and failing to find is deliberately not the default here:
+        the search is the whole reason the ability was activated, and a seat
+        that declined it would have paid a cost for a shuffle.
+        """
+        pile = list(choice.data.get("_pile") or ())
+        if not self._resolve_pile_search(choice, 0 if pile else None):
+            self.discard_pending_choice(choice)
+
+    # -- The repeated look-and-bottom offer (Lim-Dul's Vault) ----------------
+
+    def confirm_library_cycle_offer(self, player_index: int, accept: bool) -> bool:
+        """Answer one round of "as many times as you choose, you may pay N
+        life": accepting bottoms the cards just looked at, looks at the next
+        lot and asks again; declining ends the loop and does the shuffle."""
+        return self.resolve_pending_choice(
+            "library_cycle_offer", player_index, accept=bool(accept)
+        )
+
+    def _library_cycle_finish(self, choice: PendingChoice) -> None:
+        """"Then shuffle and put the last cards you looked at this way on top
+        in any order."
+
+        The order of the two halves is the whole card. The kept cards come out
+        *first*, the rest of the library is shuffled (CR 701.24), and only then
+        do they go back on top - shuffling with them still in it would lose
+        them, and stacking before shuffling would shuffle them away again.
+
+        The final ordering is chained onto this answer rather than done here:
+        ``reorder_library`` is a prompt that already exists with its own UI, AI
+        default and action, and a decision armed by answering another stays
+        inside the same resolution.
+        """
+        import random
+
+        player = self.players[choice.player_index]
+        count = min(int(choice.data.get("count", 0)), len(player.library))
+        kept = player.library[:count]
+        rest = player.library[count:]
+        random.shuffle(rest)
+        player.library = kept + rest
+        self.log.append(f"{player.name} shuffled their library")
+        if count > 1:
+            self.arm_pending_choice(
+                "reorder_library", choice.player_index,
+                target_index=choice.player_index, top_count=count,
+                may_shuffle=False,
+            )
+
+    def _resolve_library_cycle_offer(self, choice: PendingChoice, accept: bool) -> bool:
+        """One round of the loop.
+
+        An accept that cannot be paid for is a decline, not a refused answer:
+        CR 119.4 lets a player pay N life only with N or more life to pay it
+        from, and a seat that says yes without the life has simply not paid -
+        so the loop ends and the card still shuffles. Refusing the answer
+        instead would leave the prompt queued with no answer that could ever
+        clear it.
+        """
+        player = self.players[choice.player_index]
+        life_cost = int(choice.data.get("life_cost", 0))
+        count = int(choice.data.get("count", 0))
+        self.discard_pending_choice(choice)
+        if not accept or player.life < life_cost:
+            self._library_cycle_finish(choice)
+            self._release_stack_item(choice.data.get("_stack_item"))
+            return True
+        player.life -= life_cost
+        name = choice.data.get("card_name", "Effect")
+        self.log.append(f"{player.name} paid {life_cost} life ({name})")
+        # "…put those cards on the bottom of your library **in any order**".
+        # They go down as they lay: the order is the player's by rule, the
+        # cards are at the bottom of a library that is about to be shuffled,
+        # and nothing in the game can ask what it was.
+        moved = player.library[:count]
+        del player.library[:count]
+        for card in moved:
+            self.put_card_into_library(player, card, position="bottom")
+        looked = min(count, len(player.library))
+        self.log.append(
+            f"{player.name} looks at the top {looked} card(s) of their library"
+        )
+        # The next round, armed by answering this one - the ability is still
+        # resolving until the loop ends (CR 608.2).
+        self.arm_pending_choice(
+            "library_cycle_offer", choice.player_index,
+            card_name=name, count=count, life_cost=life_cost,
+        )
+        return True
+
+    def _default_library_cycle_offer(self, choice: PendingChoice) -> None:
+        """The stated policy: **decline at once**.
+
+        Not ``_default_optional_pay``'s "pay tolls" - that policy is written for
+        an offer made once, and this one is made again every time it is taken.
+        A headless seat that paid whenever it could afford to would pay its life
+        total down to 1 for a shuffle it has no way to evaluate, which is a
+        worse outcome than never having cast the spell. An unbounded optional
+        payment has no stopping rule anybody can compute for the player, so the
+        engine takes the only answer that cannot be wrong by an unbounded
+        amount.
+        """
+        self._resolve_library_cycle_offer(choice, False)
+
+    # -- One card out of a permanent's linked-exile pile ---------------------
+
+    def live_linked_exile_return_choices(self, choice: PendingChoice) -> list[int]:
+        """The positions in the source's linked-exile record this pick admits.
+
+        Positions into ``linked_entries``, not into a player's exile list: the
+        record is what CR 610.3 names, and two copies of one card in a deck are
+        the same ``CardDefinition`` object, so an index into the pile could not
+        tell one entry from another.
+
+        Re-run rather than stored, for ``live_exile_from_hand_choices``' reason:
+        the list the seat is offered and the list its answer is checked against
+        have to be one list.
+        """
+        from ...linked_exile import linked_entries
+
+        source = choice.data.get("_source_permanent")
+        chooser = choice.player_index
+        owned_only = bool(choice.data.get("owned_by_chooser"))
+        live: list[int] = []
+        for index, entry in enumerate(linked_entries(source)):
+            owner_index = int(entry.get("owner_index", -1))
+            if owned_only and owner_index != chooser:
+                continue
+            if not (0 <= owner_index < len(self.players)):
+                continue
+            # A card that has already left exile by some other route is not a
+            # card this can return (CR 608.2b: as much as possible, and no card
+            # created from nowhere).
+            if entry["card"] not in self.players[owner_index].exile:
+                continue
+            live.append(index)
+        return live
+
+    def confirm_linked_exile_return(self, player_index: int, entry_index) -> bool:
+        """Answer the pending pick with a position from
+        :meth:`live_linked_exile_return_choices`. There is no decline: "Return a
+        card you own exiled with this artifact to your hand" is mandatory, and
+        the only thing that ends it without moving a card is an empty pile."""
+        return self.resolve_pending_choice(
+            "linked_exile_return", player_index, entry_index=entry_index
+        )
+
+    def _resolve_linked_exile_return(self, choice: PendingChoice, entry_index) -> bool:
+        """Move the chosen entry's card, and drop that one entry.
+
+        Exactly one entry, where the sweep beside it drains the whole record:
+        the cards left behind are still exiled with the permanent, and its
+        lose-control trigger still names them.
+        """
+        from ...linked_exile import RECORD_KEY, linked_entries
+
+        source = choice.data.get("_source_permanent")
+        if source is None:
+            self.discard_pending_choice(choice)
+            return True
+        if entry_index not in self.live_linked_exile_return_choices(choice):
+            return False
+        held = list(linked_entries(source))
+        entry = held.pop(int(entry_index))
+        if held:
+            source.metadata[RECORD_KEY] = held
+        else:
+            source.metadata.pop(RECORD_KEY, None)
+        zone = str(choice.data.get("zone", "hand"))
+        self.leave_linked_exile(entry, zone)
+        self.log.append(
+            f"{self.players[choice.player_index].name} returned "
+            f"{entry['card'].name} to their {zone}"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_linked_exile_return(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** eligible entry.
+
+        Lowest position is the same policy ``_default_discard`` takes, and for
+        the same reason — which entries are eligible at all is the printed
+        phrase's business and is read off the list the interactive seat is
+        offered, and anything past "one of them" is AI valuation rather than
+        rules. A pile this seat owns nothing in is a prompt with no answer, so
+        it simply comes off the queue.
+        """
+        live = self.live_linked_exile_return_choices(choice)
+        if live and self._resolve_linked_exile_return(choice, live[0]):
+            return
+        self.discard_pending_choice(choice)
 
     # -- A card put onto the battlefield out of a hand -----------------------
 
@@ -6140,6 +6520,86 @@ register_choice(
     # where the offer stands.
     default_at_arm=True,
     # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "library_pile_split",
+    resolve=lambda game, choice, r: game._resolve_library_pile_split(
+        choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: game._default_library_pile_split(choice),
+    action="library_pile_split_confirm",
+    prompt_key="library_pile_split",
+    blocked_detail="divide the piles before other actions",
+    # Answering arms the controller's choice, which is a later step of this
+    # same resolution (CR 608.2).
+    suspends=True,
+    # …and a non-interactive divider answers at once, or the resolution stops
+    # on a prompt nobody owes an answer to.
+    default_at_arm=True,
+)
+
+register_choice(
+    "pile_exile_choice",
+    resolve=lambda game, choice, r: game._resolve_pile_exile_choice(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_exile_choice(choice),
+    action="pile_exile_confirm",
+    prompt_key="pile_exile_choice",
+    blocked_detail="choose a pile to exile before other actions",
+    suspends=True,
+    default_at_arm=True,
+)
+
+register_choice(
+    "pile_search",
+    resolve=lambda game, choice, r: game._resolve_pile_search(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_search(choice),
+    action="pile_search_confirm",
+    prompt_key="pile_search",
+    blocked_detail="search the pile before other actions",
+    suspends=True,
+    default_at_arm=True,
+)
+
+register_choice(
+    "library_cycle_offer",
+    resolve=lambda game, choice, r: game._resolve_library_cycle_offer(
+        choice, bool(r.get("accept"))
+    ),
+    default=lambda game, choice: game._default_library_cycle_offer(choice),
+    action="library_cycle_confirm",
+    prompt_key="library_cycle_offer",
+    blocked_detail="answer the library cycle before other actions",
+    # Answering arms either the next round or the shuffle that ends the card,
+    # so nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore takes its default the moment the
+    # offer is armed, or the resolution would stop on a prompt nobody answers.
+    default_at_arm=True,
+)
+
+register_choice(
+    "linked_exile_return",
+    resolve=lambda game, choice, r: game._resolve_linked_exile_return(
+        choice, r.get("entry_index")
+    ),
+    default=lambda game, choice: game._default_linked_exile_return(choice),
+    action="linked_exile_return_confirm",
+    prompt_key="linked_exile_return",
+    blocked_detail="choose a card to return before other actions",
+    # The prompt refuses every other action, so a seat that never answers it
+    # freezes the game. A non-interactive seat therefore takes its default the
+    # moment it is armed, exactly as the exile that filled the pile does —
+    # ``auto_resolve_pending_choices`` drains only the kinds a caller lists,
+    # and a blocking prompt left off that list is a headless run that stops.
+    default_at_arm=True,
+    # The pile is face down (CR 406.3) and only its owner may look, so the
+    # options are the chooser's alone — exactly the hand pick's reason.
     hidden_for_ai=False,
 )
 

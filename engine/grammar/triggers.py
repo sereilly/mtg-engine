@@ -909,6 +909,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # different objects (the pipeline's oldest failure mode).
         if stream.accept_phrase("the", "token", "leaves", "the", "battlefield"):
             return ast.TriggerEvent("created_token_leaves_battlefield", "when")
+        # "**When you lose control of this artifact**, …" (Gustha's Scepter).
+        # CR 603.10d's event, read on this front end too for the reason the
+        # token row above states: a condition only one of them sees is a card
+        # whose two halves watch different things. The permanent noun is
+        # consumed as a word rather than matched against a spelling, so an
+        # enchantment or a creature printing the same sentence needs no branch —
+        # and "it" is the same reference one pronoun shorter.
+        mark_control = stream.mark()
+        if stream.accept_phrase("you", "lose", "control", "of"):
+            if stream.accept_word("it"):
+                return ast.TriggerEvent("lose_control_of_source", "when")
+            if stream.accept_word("this", "the") and not (
+                stream.exhausted or stream.at_punct(",", ".")
+            ):
+                stream.advance()
+                return ast.TriggerEvent("lose_control_of_source", "when")
+        stream.reset(mark_control)
         mark = stream.mark()
         if stream.at_kind(SELF) or stream.at_word("this"):
             stream.advance()

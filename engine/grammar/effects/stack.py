@@ -460,11 +460,32 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     refused, and the card reports unsupported naming the sentence.
     """
     from ...activation_permissions import permission_clause_readable
-    from ...activation_restrictions import activation_restriction_line
+    from ...activation_restrictions import (activation_restriction_line,
+                                            x_zero_restriction_line)
 
     mark = stream.mark()
     stream.accept_punct(".", ";")
     words: list[str] = []
+    # "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) A constraint on the
+    # value chosen for X (CR 601.2b) rather than on when the ability may be
+    # activated, so it opens on a different word and is enforced by a different
+    # gate — but it is the same *kind* of sentence, a rider on the ability line
+    # whose enforcement lives outside the compiled program, and it is admitted
+    # here on the same terms: the module that enforces it says whether it can
+    # read the sentence, and a wording that module cannot read leaves the line
+    # refused.
+    if stream.at_word("x"):
+        x_mark = stream.mark()
+        probe: list[str] = []
+        while not stream.exhausted and not stream.at_punct("."):
+            probe.append(str(stream.next().text))
+        sentence = " ".join(probe).replace(" '", "'")
+        if x_zero_restriction_line(sentence):
+            stream.accept_punct(".")
+            return ast.ActivationRestriction(sentence)
+        stream.reset(x_mark)
+        stream.reset(mark)
+        return None
     if stream.accept_word("activate"):
         words.append("activate")
     elif stream.at_word("any", "only"):

@@ -262,6 +262,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # …and Ice Cauldron's hand exile, written when its prompt is answered.
     "exile_chosen_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
+    # "…until a creature card **or X cards have been put into their graveyard
+    # this way**" (Helm of Obedience). The loop records the cards it put there
+    # that its own stopping filter matched, which is what both sentences behind
+    # it read: "if one or more creature cards were put into that graveyard this
+    # way" asks whether the set is empty, and "put one of them onto the
+    # battlefield" takes from it. Nothing else can answer either, because a
+    # graveyard holds cards this effect never touched.
+    "mill_until_matching": "milled_this_way",
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
     # back-reference asks is the same one: what did this effect just exile?

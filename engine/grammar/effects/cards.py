@@ -182,7 +182,70 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("mills", "mill")
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
+    repeated = _parse_mill_repeat_tail(stream, player, count)
+    if repeated is not None:
+        return repeated
     return ast.Mill(player, count)
+
+
+def _parse_mill_repeat_tail(
+    stream: TokenStream, player: ast.PlayerRef, count: "ast.Amount"
+) -> "ast.Statement | None":
+    """``, then repeats this process until <noun> or <n> cards have been put
+    into their graveyard this way, whichever comes first`` (Helm of Obedience).
+
+    Declines without consuming on anything else, so every ordinary mill keeps
+    its own reading and its own refusal site.
+
+    The mill in front of it must be **one** card. The whole point of the
+    sentence is that the loop is asked after every single card, so a wording
+    milling two at a time would step past its own stopping card - and that
+    refuses loudly rather than being read as this loop.
+
+    Every word of both stopping conditions is required, and "whichever comes
+    first" is consumed and dropped because it states what two stopping
+    conditions on one loop already mean. A card printing only one of them is a
+    different loop, and this would rather refuse it than guess which half was
+    meant.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct(","):
+        return None
+    if not stream.accept_word("then"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("repeats", "repeat"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "process", "until"):
+        stream.reset(mark)
+        return None
+    if not (isinstance(count, ast.Fixed) and count.value == 1):
+        raise stream.error("a repeated mill mills one card at a time")
+    stream.accept_word("a", "an")
+    filter_mark = stream.mark()
+    try:
+        stop_filter = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(filter_mark)
+        raise stream.error("expected what the repeated mill stops on")
+    if not stop_filter.is_card or not stop_filter.card_types:
+        # The loop watches what is *put into a graveyard*, so the only thing it
+        # can be told to stop on is a printed card type. A phrase the record
+        # cannot answer refuses here rather than being dropped where it is
+        # tested, which would be a loop that never stopped early.
+        raise stream.error("a repeated mill stops on a printed card type")
+    stream.expect_word("or")
+    limit = parse_amount(stream)
+    for word in (
+        "cards", "have", "been", "put", "into", "their", "graveyard",
+        "this", "way",
+    ):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    for word in ("whichever", "comes", "first"):
+        stream.expect_word(word)
+    return ast.MillUntil(player, stop_filter, limit)
 
 
 def _parse_scry(stream: TokenStream) -> ast.Statement:
@@ -417,10 +480,23 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     # handler — the difference is which zone the cards are going to and the
     # preposition English wants in front of it.
     names_source = True
+    chosen = False
+    owned_by_you = False
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
+    elif stream.accept_phrase("return", "a", "card", "you", "own", "exiled", "with"):
+        # "…**a card you own** exiled with this artifact to your hand."
+        # (Gustha's Scepter.) The same linked pile with a quantifier and a
+        # restriction on it: one card, picked by the ability's controller, out
+        # of the cards *they* own. Both are required together — "you own"
+        # narrows nothing in a sweep, where every card goes to its own owner
+        # anyway, and it is the whole of what stops a player who has taken the
+        # artifact from pulling its previous controller's cards out of exile.
+        preposition = "to"
+        chosen = True
+        owned_by_you = True
     elif stream.accept_phrase("return", "the", "exiled", "card"):
         # "…**the exiled card**…" (Icy Prison). The same linked pile with no
         # possessive on it: CR 610.3 makes the two abilities linked, so "the
@@ -452,7 +528,33 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         or stream.accept_phrase("under", "their", "owner", "'s", "control")
     ):
         zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
-    return ast.PutExiledWithSource(zone)
+    return ast.PutExiledWithSource(zone, chosen=chosen, owned_by_you=owned_by_you)
+
+
+def parse_put_milled_card_onto_battlefield(
+    stream: TokenStream,
+) -> ast.Statement | None:
+    """``Put one of them onto the battlefield under your control.`` (Helm of
+    Obedience.)
+
+    Declines without consuming on anything else, because "put" opens a dozen
+    unrelated sentences and every one of them has a better refusal site than
+    this production's.
+
+    "Under your control" is required rather than defaulted: a card put onto the
+    battlefield goes under its owner's control unless the effect says otherwise
+    (CR 110.2a), and this one says otherwise about an **opponent's** card - so
+    a wording without the clause would be a different effect that handed the
+    creature back.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "one", "of", "them", "onto"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "battlefield", "under", "your", "control"):
+        stream.reset(mark)
+        return None
+    return ast.PutMilledCardOntoBattlefield()
 
 
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
@@ -490,6 +592,14 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         mode = "play"
     elif stream.accept_word("cast"):
         mode = "cast"
+    elif stream.accept_phrase("look", "at"):
+        # "You may **look at** it for as long as it remains exiled." (Gustha's
+        # Scepter.) The same CR 611.2a permission sentence about a different
+        # verb: a card in exile face down is hidden from every player (CR
+        # 406.3), so the permission to read one is an effect rather than a
+        # courtesy. "at" is consumed here because the verb is two words; the
+        # referent and the duration below are shared with the cast readings.
+        mode = "look"
     else:
         stream.reset(mark)
         return None
@@ -537,6 +647,11 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         stream.accept_phrase("cards", "exiled", "this", "way")
         or stream.accept_word("them")
         or stream.accept_phrase("that", "card")
+        # The bare pronoun, and only under "look at": a *cast* permission
+        # naming "it" would claim any "you may cast it …" sentence in the pool,
+        # where this verb has exactly one referent — the card the sentence
+        # before it exiled.
+        or (mode == "look" and stream.accept_word("it"))
     ):
         _trailing_duration()
         return ast.CastPermission(

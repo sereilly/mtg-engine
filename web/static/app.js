@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2711,6 +2711,54 @@ function getExileFromHandInfo(state = currentState) {
   return info;
 }
 
+// Phyrexian Portal, all three of its decisions. The division is owed by the
+// *opponent*, who is looking at the ten cards; the pile choice is owed by the
+// controller, who is not, and gets two numbers rather than two lists; the
+// search then shows the pile that survived.
+let portalPileSelected = new Set();
+
+function getLibraryPileSplitInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.library_pile_split;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+function getPileExileInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.pile_exile_choice;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+function getPileSearchInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.pile_search;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+// Lim-Dul's Vault: pay the life again and see the next five, or stop and take
+// the shuffle. Asked over and over - each answer arms either the next round or
+// the end of the card - so the panel is redrawn from the prompt every time
+// rather than holding a count of its own.
+function getLibraryCycleInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.library_cycle_offer;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+// Gustha's Scepter: the seat picks one of the cards it owns under the artifact
+// to take back. Mandatory - there is no Decline, because the sentence is not an
+// offer; an empty pile arms no prompt at all.
+function getLinkedExileReturnInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.linked_exile_return;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 // Eureka: the offered seat picks a card in its hand to put onto the battlefield.
 function getPutFromHandInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3365,6 +3413,11 @@ function isAnyPromptActive(state = currentState) {
   if (getFaceDownCastInfo(state)) return true;
   if (getFlipAgainInfo(state)) return true;
   if (getExileFromHandInfo(state)) return true;
+  if (getLibraryPileSplitInfo(state)) return true;
+  if (getPileExileInfo(state)) return true;
+  if (getPileSearchInfo(state)) return true;
+  if (getLibraryCycleInfo(state)) return true;
+  if (getLinkedExileReturnInfo(state)) return true;
   if (getPutFromHandInfo(state)) return true;
   if (getChooseCardsInHandInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
@@ -3384,7 +3437,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -6000,9 +6053,15 @@ function applyExileFromHandPrompt(info) {
   customOkBtn.disabled = true;
 
   title.textContent = `${info.card_name} \u2014 exile a card from your hand`;
-  body.textContent =
-    "You may exile one of these cards. You may cast it for as long as it " +
-    "remains exiled.";
+  // The offered printing ("You may exile a nonland card from your hand", Ice
+  // Cauldron) may be declined; the bare one ("Exile a card from your hand face
+  // down", Gustha's Scepter) may not, and the engine refuses a decline there -
+  // so a Decline button drawn for it would offer an answer that bounces.
+  const declinable = info.optional !== false;
+  body.textContent = declinable
+    ? "You may exile one of these cards. You may cast it for as long as it " +
+      "remains exiled."
+    : "Exile one of these cards.";
   const buttons = info.choices
     .map(
       (c) =>
@@ -6012,7 +6071,9 @@ function applyExileFromHandPrompt(info) {
     .join("");
   steps.innerHTML =
     `<div class="prompt-choice-column">${buttons}` +
-    '<button type="button" class="prompt-choice-btn" data-efh-decline="1">Decline</button>' +
+    (declinable
+      ? '<button type="button" class="prompt-choice-btn" data-efh-decline="1">Decline</button>'
+      : "") +
     "</div>";
 
   steps.querySelectorAll("[data-efh-hand]").forEach((btn) => {
@@ -6026,6 +6087,222 @@ function applyExileFromHandPrompt(info) {
   });
   steps.querySelector("[data-efh-decline]")?.addEventListener("click", async () => {
     await sendAction({ seat, action: "exile_from_hand_confirm", accept: false });
+  });
+}
+
+function applyLibraryPileSplitPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+  okBtn.classList.remove("hidden");
+
+  title.textContent = `${info.card_name} \u2014 divide into two piles`;
+  body.textContent =
+    `Toggle the cards that go into the first pile; the rest form the second. ` +
+    `${info.owner_name} will choose one pile to exile without seeing either.`;
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.cards || [])
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn` +
+          (portalPileSelected.has(c.pile_index) ? " selected" : "") +
+          `" data-portal-card="${c.pile_index}">${escapeHtml(c.card.name)}</button>`
+      )
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-portal-card]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.portalCard);
+      if (portalPileSelected.has(index)) portalPileSelected.delete(index);
+      else portalPileSelected.add(index);
+      btn.classList.toggle("selected");
+    });
+  });
+  okBtn.onclick = async () => {
+    const picks = Array.from(portalPileSelected).sort((a, b) => a - b);
+    portalPileSelected = new Set();
+    await sendAction({
+      seat,
+      action: "library_pile_split_confirm",
+      first_pile: picks,
+    });
+  };
+}
+
+function applyPileExilePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} \u2014 exile a pile`;
+  // Sizes only: the piles are face down and this seat may not look at them.
+  body.textContent =
+    "Choose a pile to exile. You cannot see either; you will search the other.";
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.sizes || [])
+      .map(
+        (size, index) =>
+          `<button type="button" class="prompt-choice-btn" data-portal-pile="${index}">` +
+          `Exile the pile of ${size} card${size === 1 ? "" : "s"}</button>`
+      )
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-portal-pile]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "pile_exile_confirm",
+        pile_index: Number(btn.dataset.portalPile),
+      });
+    });
+  });
+}
+
+function applyPileSearchPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} \u2014 search the pile`;
+  body.textContent =
+    "Take one card into your hand; the rest are shuffled into your library.";
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.cards || [])
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn" data-portal-find="${c.pile_index}">` +
+          `${escapeHtml(c.card.name)}</button>`
+      )
+      .join("") +
+    // CR 701.23b: a player may always fail to find.
+    '<button type="button" class="prompt-choice-btn" data-portal-nofind="1">' +
+    "Find nothing</button></div>";
+  steps.querySelectorAll("[data-portal-find]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "pile_search_confirm",
+        pile_index: Number(btn.dataset.portalFind),
+      });
+    });
+  });
+  steps.querySelector("[data-portal-nofind]")?.addEventListener("click", async () => {
+    await sendAction({ seat, action: "pile_search_confirm", accept: false });
+  });
+}
+
+function applyLibraryCyclePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const names = (info.cards || []).map((c) => c.name).join(", ");
+  title.textContent = `${info.card_name} \u2014 look again?`;
+  body.textContent =
+    `You are looking at: ${names || "(nothing)"}. ` +
+    `Pay ${info.life_cost} life to put them on the bottom and look at the ` +
+    "next lot, or stop and shuffle them onto the top.";
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.payable
+      ? '<button type="button" class="prompt-choice-btn" data-libcycle="1">' +
+        `Pay ${info.life_cost} life and look again</button>`
+      : "") +
+    '<button type="button" class="prompt-choice-btn" data-libcycle="0">' +
+    "Stop and shuffle</button></div>";
+  steps.querySelectorAll("[data-libcycle]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "library_cycle_confirm",
+        accept: btn.dataset.libcycle === "1",
+      });
+    });
+  });
+}
+
+function applyLinkedExileReturnPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} \u2014 return an exiled card`;
+  body.textContent = `Return one of these cards to your ${info.zone || "hand"}.`;
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    info.choices
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn" data-ler-entry="${c.entry_index}">` +
+          `${escapeHtml(c.name)}</button>`
+      )
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-ler-entry]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "linked_exile_return_confirm",
+        exile_entry_index: Number(btn.dataset.lerEntry),
+      });
+    });
   });
 }
 
@@ -8080,6 +8357,36 @@ function renderActivationPrompt() {
   const exileFromHandInfo = getExileFromHandInfo();
   if (exileFromHandInfo) {
     applyExileFromHandPrompt(exileFromHandInfo);
+    return;
+  }
+
+  const librarySplitInfo = getLibraryPileSplitInfo();
+  if (librarySplitInfo) {
+    applyLibraryPileSplitPrompt(librarySplitInfo);
+    return;
+  }
+
+  const pileExileInfo = getPileExileInfo();
+  if (pileExileInfo) {
+    applyPileExilePrompt(pileExileInfo);
+    return;
+  }
+
+  const pileSearchInfo = getPileSearchInfo();
+  if (pileSearchInfo) {
+    applyPileSearchPrompt(pileSearchInfo);
+    return;
+  }
+
+  const libraryCycleInfo = getLibraryCycleInfo();
+  if (libraryCycleInfo) {
+    applyLibraryCyclePrompt(libraryCycleInfo);
+    return;
+  }
+
+  const linkedExileReturnInfo = getLinkedExileReturnInfo();
+  if (linkedExileReturnInfo) {
+    applyLinkedExileReturnPrompt(linkedExileReturnInfo);
     return;
   }
 

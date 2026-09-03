@@ -973,8 +973,11 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Ice Cauldron: which card in this seat's hand is exiled under the artifact.
 
     The candidates come from the engine's own rule, for the reason the pick
-    below it gives. There is no ``optional`` key: the sentence that arms this
-    prompt says "you **may**", so declining is always an answer.
+    below it gives. ``optional`` is what the sentence said, and it is what
+    decides whether the board draws a Decline button: "You **may** exile a
+    nonland card from your hand" (Ice Cauldron) may be declined, and "Exile a
+    card from your hand face down" (Gustha's Scepter) may not — a seat shown a
+    Decline for the second would be offered an answer the engine refuses.
     """
     choice = choices[0]
     owner = ctx.game.players[choice.player_index]
@@ -982,8 +985,126 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
+        "optional": bool(
+            (choice.data.get("_payload") or {}).get("optional", True)
+        ),
         "choices": [
             {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
+@prompt_renderer("library_pile_split")
+def _library_pile_split(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: the *opponent* divides the ten cards.
+
+    The cards are sent in full, because this seat is looking at them - that is
+    what the sentence says, and it is the whole asymmetry of the card. The seat
+    that has to choose between the piles gets the renderer below, which sends
+    two numbers.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[int(choice.data["owner_index"])]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "owner_name": owner.name,
+        "cards": [
+            {"pile_index": index, "card": ctx.serialize_card(card)}
+            for index, card in enumerate(choice.data.get("_cards") or ())
+        ],
+    }
+
+
+@prompt_renderer("pile_exile_choice")
+def _pile_exile_choice(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: which face-down pile is exiled.
+
+    **Sizes only.** The piles are face down (CR 406.3) and this is the seat
+    that may not look at them; sending the cards "so the client can grey them
+    out" would hand the whole decision away, because a permission only the
+    client honours is a rule nothing enforces.
+    """
+    choice = choices[0]
+    piles = list(choice.data.get("_piles") or ())
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "sizes": [len(pile) for pile in piles],
+    }
+
+
+@prompt_renderer("pile_search")
+def _pile_search(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: search the pile that was not exiled.
+
+    ``optional`` is CR 701.23b - a player may always fail to find - and it is
+    what tells the client to draw the decline. The engine accepts the empty
+    answer whether or not the client offers it.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "optional": True,
+        "cards": [
+            {"pile_index": index, "card": ctx.serialize_card(card)}
+            for index, card in enumerate(choice.data.get("_pile") or ())
+        ],
+    }
+
+
+@prompt_renderer("library_cycle_offer")
+def _library_cycle_offer(ctx: PromptContext, choices: list) -> dict:
+    """Lim-Dul's Vault: pay the life again, or stop and shuffle.
+
+    The cards themselves are sent, because looking at them *is* the effect -
+    a prompt that asked "pay 1 life again?" without showing what the payment
+    already bought would be asking the player to decide blind. They come off
+    the top of the chooser's own library, which is where the loop left them.
+
+    ``payable`` is the engine's own CR 119.4 test rather than a second reading
+    of the life total, so the button the board draws and the answer the engine
+    accepts agree.
+    """
+    choice = choices[0]
+    player = ctx.game.players[choice.player_index]
+    count = min(int(choice.data.get("count", 0)), len(player.library))
+    life_cost = int(choice.data.get("life_cost", 0))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "life_cost": life_cost,
+        "payable": player.life >= life_cost,
+        "cards": [ctx.serialize_card(card) for card in player.library[:count]],
+    }
+
+
+@prompt_renderer("linked_exile_return")
+def _linked_exile_return(ctx: PromptContext, choices: list) -> dict:
+    """Gustha's Scepter: which card under the artifact comes back to this hand.
+
+    The candidates come from the engine's own rule, for the reason every card
+    picker here gives: a list built twice is a list that can be offered wider
+    than it is checked. ``entry_index`` addresses the linked-exile *record*
+    (CR 610.3) rather than a position in the exile pile, because two copies of
+    one card in a deck are the same object there.
+
+    There is no ``optional`` key and no Decline: the sentence is mandatory, and
+    the only thing that ends it without a card moving is an empty pile — which
+    is a prompt that was never armed with an answer rather than one declined.
+    """
+    from engine.linked_exile import linked_entries
+
+    choice = choices[0]
+    entries = linked_entries(choice.data.get("_source_permanent"))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "zone": choice.data.get("zone", "hand"),
+        "choices": [
+            {"entry_index": index, "name": entries[index]["card"].name}
+            for index in ctx.game.live_linked_exile_return_choices(choice)
         ],
     }
 

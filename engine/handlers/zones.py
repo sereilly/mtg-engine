@@ -2731,6 +2731,191 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("separate_library_top_into_piles")
+def separate_library_top_into_piles(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Phyrexian Portal, all three of its sentences.
+
+    Three decisions by two seats, so the handler does nothing but hand the
+    first of them to the right player: the opponent divides, knowing what is in
+    the piles, and the controller chooses and searches without knowing. Each
+    later decision is armed by answering the one before it, which keeps the
+    whole procedure inside one resolution (CR 608.2, CR 117.3b).
+
+    The ten cards come **out of the library** here and travel on the prompts.
+    They are going to exile, to a hand and back into a shuffled library, so
+    there is no arrangement of the library that could hold them meanwhile - and
+    the alternative, leaving them in place and addressing them by index, is an
+    index into a zone the next answer changes.
+    """
+    caster = context.caster
+    splitter = context.target
+    if splitter is None or splitter is caster:
+        # "Target **opponent**" - the picker enforces it, and a resolution that
+        # somehow arrived without one divides nothing rather than handing the
+        # caster their own library face down.
+        game.log.append(f"{context.card.name}: no opponent to divide the piles")
+        return True, "resolved"
+    count = resolve_amount(instruction.payload.get("count", 0), context.x_value)
+    taken = caster.library[:count]
+    if not taken:
+        game.log.append(f"{caster.name} has no cards to divide")
+        return True, "resolved"
+    del caster.library[:count]
+    game.arm_pending_choice(
+        "library_pile_split", game.players.index(splitter),
+        card_name=context.card.name if context.card is not None else "",
+        owner_index=game.players.index(caster),
+        _cards=list(taken),
+        _source_permanent=context.source_permanent,
+    )
+    return True, "resolved"
+
+
+@effect_handler("look_top_cycle_and_stack")
+def look_top_cycle_and_stack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Lim-Dul's Vault, all three of its sentences (CR 701.24).
+
+    The whole effect is one offer asked over and over, so the handler does
+    almost nothing: it announces the first look and arms the offer. Every
+    iteration after that is a prompt armed by *answering* the one before it,
+    which is how a chain of decisions stays inside one resolution (CR 608.2,
+    CR 117.3b) - the ability stays on the stack until the last answer, and the
+    shuffle that ends the card happens on the answer that declines.
+
+    Nothing is moved here. "Look at the top five cards" changes no zone; what
+    it changes is what one player knows, and the cards it names are simply the
+    top of the library at the moment each offer is answered.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    count = resolve_amount(instruction.payload.get("count", 0), context.x_value)
+    life_cost = resolve_amount(instruction.payload.get("life_cost", 0), context.x_value)
+    looked = min(count, len(caster.library))
+    game.log.append(
+        f"{caster.name} looks at the top {looked} card(s) of their library"
+    )
+    game.arm_pending_choice(
+        "library_cycle_offer", seat,
+        card_name=context.card.name if context.card is not None else "",
+        count=int(count),
+        life_cost=int(life_cost),
+    )
+    return True, "resolved"
+
+
+@effect_handler("mill_until_matching")
+def mill_until_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first." (Helm of Obedience, CR 701.13a per card.)
+
+    A loop rather than a count, and the difference is the whole card: the
+    library is asked one card at a time and *what came off the top* decides
+    whether the next iteration happens. Reading it as ``mill_target_player``
+    with an amount of X would mill X cards whatever was among them.
+
+    Three ways it ends, and all three are the card's own sentence:
+
+    * the stopping card was put into the graveyard - the loop stops **after**
+      that card, which is what makes it reachable by the sentence behind this
+      one;
+    * the printed limit is reached (X, chosen as the ability was activated);
+    * the library ran out. Not a loss: CR 704.5b fires on an attempted *draw*
+      from an empty library, and a mill is not a draw. The same rule
+      ``mill_target_player`` states one handler over.
+
+    ``milled_this_way`` records the cards this loop put there that matched the
+    stopping filter, which is what both sentences behind it read. The record is
+    written even when it is empty - an absent key is a back-reference with no
+    producer, which is a different thing from a producer that found nothing.
+    """
+    victim = context.target
+    if victim is None:
+        game.log.append(f"{context.card.name}: no player to mill")
+        return True, "resolved"
+    limit = resolve_amount(instruction.payload.get("limit", 0), context.x_value)
+    stop_filter = dict(instruction.payload.get("stop_filter") or {})
+    matched: list = []
+    milled = 0
+    while milled < limit and victim.library:
+        card = victim.library.pop(0)
+        victim.graveyard.append(card)
+        milled += 1
+        if _card_matches_filter(card, stop_filter):
+            matched.append(card)
+            break
+    context.results["milled_this_way"] = matched
+    game.log.append(
+        f"{victim.name} milled {milled} card(s) "
+        + (
+            f"and stopped on {matched[0].name}"
+            if matched
+            else "without hitting "
+            + ("a " + "/".join(stop_filter.get("type_filter") or ()) or "a card")
+        )
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_milled_card_onto_battlefield")
+def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…put one of them onto the battlefield under your control." (Helm of
+    Obedience.)
+
+    "Them" is the set the loop recorded, and reading it from the record rather
+    than from the graveyard is the whole point: the pile also holds cards this
+    effect never touched, and the card may take only the ones it put there.
+
+    The set has one member, because the loop stops on the first card its filter
+    matched - so the pick is not offered. A card that could put two matching
+    cards in at once would need a prompt here, and nothing in this engine can:
+    a mill is a direct move with no CR 614 seam of its own.
+
+    The card is taken out of the graveyard **by identity**, because two copies
+    of one card in a deck are the same ``CardDefinition`` object and
+    ``list.remove`` compares by value - it would take whichever copy was
+    nearest the bottom of the pile.
+    """
+    cards = list(context.results.get(instruction.payload.get("cards_from") or "milled_this_way") or ())
+    if not cards:
+        game.log.append(f"{context.card.name}: nothing was put there this way")
+        return True, "resolved"
+    card = cards[0]
+    owner = next(
+        (
+            player for player in game.players
+            if any(held is card for held in player.graveyard)
+        ),
+        None,
+    )
+    if owner is None:
+        # It has already left the graveyard by some other route. CR 608.2's "as
+        # much as possible" - and a card put onto the battlefield from nowhere
+        # is a card this effect created.
+        game.log.append(f"{card.name} is no longer in a graveyard")
+        return True, "resolved"
+    for index, held in enumerate(owner.graveyard):
+        if held is card:
+            del owner.graveyard[index]
+            break
+    seat = (
+        game.players.index(context.caster)
+        if instruction.payload.get("under_your_control")
+        else game.players.index(owner)
+    )
+    arrival = Permanent(card=card)
+    # CR 108.3: the owner is the player whose graveyard it came out of, and it
+    # is recorded because the controller is somebody else — without it the card
+    # would go to the thief's graveyard when it dies.
+    arrival.metadata["owner_player_index"] = game.players.index(owner)
+    game._put_permanent_onto_battlefield(seat, arrival, None)
+    game.log.append(
+        f"{game.players[seat].name} put {card.name} onto the battlefield"
+    )
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 @effect_handler("scry")
 def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """CR 701.22a: look at the top N cards of your library, put any number of
@@ -2932,6 +3117,14 @@ def exile_chosen_card_from_hand(game: Game, instruction: OracleInstruction, cont
     caster = context.caster
     seat = game.players.index(caster)
     payload = dict(instruction.payload)
+    if payload.get("face_down") and context.source_permanent is None:
+        # CR 406.3's rider needs a permanent to be recorded on, exactly as the
+        # library-top exile beside it does: with nothing to link the entry to,
+        # the card cannot be hidden, and exiling it face *up* is a different
+        # effect. So the exile does not happen at all rather than happening in
+        # full view.
+        game.log.append("the face-down exile has no permanent to be linked to")
+        return True, "resolved"
     if not exile_from_hand_candidates(game, payload, caster):
         game.log.append(
             f"{context.card.name}: {caster.name} has no card to exile"
@@ -3470,12 +3663,28 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
     an id would not do).
     """
     source = context.source_permanent
+    zone = str(instruction.payload.get("zone", "hand"))
+    if instruction.payload.get("one_of"):
+        # "Return **a card you own** exiled with this artifact to your hand."
+        # (Gustha's Scepter.) One card out of the same pile, and the ability's
+        # controller says which — so the pick *is* the effect and it goes
+        # through the pending-choice queue, exactly as the exile that filled
+        # the pile did. The record is *not* drained here: the cards left behind
+        # are still exiled with the permanent.
+        seat = game.players.index(context.caster)
+        game.arm_pending_choice(
+            "linked_exile_return", seat,
+            card_name=context.card.name if context.card is not None else "",
+            zone=zone,
+            owned_by_chooser=bool(instruction.payload.get("owned_by_chooser")),
+            _source_permanent=source,
+        )
+        return True, "resolved"
     entries = take_linked_entries(source)
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
         return True, "resolved"
-    zone = str(instruction.payload.get("zone", "hand"))
     moved: list[str] = []
     onto_battlefield = False
     for entry in entries:
@@ -3492,6 +3701,57 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         game.log.append(f"{', '.join(moved)} go to their owner's {zone}")
         if onto_battlefield:
             game._recompute_continuous_effects()
+    return True, "resolved"
+
+
+@effect_handler("grant_look_at_exiled_cards")
+def grant_look_at_exiled_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may look at it for as long as it remains exiled." (Gustha's
+    Scepter, the sentence after its face-down exile.)
+
+    A card in exile face down is hidden from **every** player, its owner
+    included (CR 406.3) — Knowledge Vault says nothing about looking and its
+    controller cannot read its own pile. So this sentence is an effect, and
+    what it changes is one seat's view of one entry.
+
+    Written onto the linked-exile entry rather than onto the card, for
+    ``link_exiled_card``'s standing reason: two copies of one card in a deck
+    are the same ``CardDefinition`` object, so the record of the exiling is the
+    only thing that can say which one this permission covers. The entries are
+    matched by **identity** against what this resolution exiled, newest first,
+    one entry per card — a value comparison would mark a different printing of
+    the same card that some earlier activation put there.
+
+    The duration needs no sweep: the permission lives on the entry, and the
+    entry is drained the moment the card leaves exile.
+    """
+    source = context.source_permanent
+    exiled = list(context.results.get(instruction.payload.get("cards_from") or "exiled_cards") or ())
+    if source is None or not exiled:
+        # Nothing was exiled (the pick found no eligible card), or the ability
+        # has no permanent to hang the record on. Either way there is nothing
+        # to grant, which is not a failure — the sentence before this one
+        # already logged why.
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    remaining = list(exiled)
+    granted: list[str] = []
+    for entry in reversed(linked_entries(source)):
+        if not remaining:
+            break
+        if entry.get("looker_index") is not None:
+            continue
+        for position, card in enumerate(remaining):
+            if entry["card"] is card:
+                entry["looker_index"] = seat
+                granted.append(card.name)
+                del remaining[position]
+                break
+    if granted:
+        game.log.append(
+            f"{game.players[seat].name} may look at {', '.join(granted)} "
+            "for as long as it remains exiled"
+        )
     return True, "resolved"
 
 

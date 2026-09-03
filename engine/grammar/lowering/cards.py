@@ -18,6 +18,7 @@ from ._common import (
     _describe_targets,
     _filter_payload,
     _is_you,
+    _restrictions_beyond,
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
@@ -591,6 +592,72 @@ def _lower_mill(
         return (OracleInstruction("mill_target_player", "", payload),)
     raise LoweringError(
         f"mill_target_player cannot mill {node.player.kind!r}", node=node
+    )
+
+
+def _lower_mill_until(node: ast.MillUntil) -> tuple[OracleInstruction, ...]:
+    """"Target opponent mills a card, then repeats this process until a
+    creature card or X cards have been put into their graveyard this way,
+    whichever comes first." (Helm of Obedience.)
+
+    Its own kind rather than ``mill_target_player`` with two extra keys: that
+    handler moves N cards in one go and never looks at them, and a loop is not
+    a count. Reading this as one would mill X cards whatever came off the top,
+    which is the same card with its whole point removed.
+
+    The miller is a *target* opponent and nothing else. "Whose graveyard" is
+    the question the record behind this sentence answers, so a wording naming a
+    seat the picker cannot offer refuses rather than defaulting to whoever the
+    resolution happened to be carrying.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"a repeated mill cannot mill {node.player.kind!r}", node=node
+        )
+    leftover = _restrictions_beyond(
+        node.stop_filter, {"card_types", "is_card", "type_match"}
+    )
+    if leftover:
+        raise LoweringError(
+            "a repeated mill cannot stop on this restriction: "
+            + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {
+        # A card-filter payload rather than a bare list of type words, because
+        # what tests it is ``_card_matches_filter`` — the one matcher that can
+        # answer of a card in a zone, where the shared permanent matcher asks
+        # ``has_type`` of a battlefield object that does not exist here.
+        "stop_filter": {"type_filter": list(node.stop_filter.card_types)},
+        "limit": _amount_payload(node.limit),
+    }
+    _describe_targets(payload, node.player)
+    return (OracleInstruction("mill_until_matching", "", payload),)
+
+
+def _lower_put_milled_card_onto_battlefield(
+    node: ast.PutMilledCardOntoBattlefield, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"…put one of them onto the battlefield under your control." (Helm of
+    Obedience.)
+
+    The producer is demanded exactly as "that much" life is: "them" names a set
+    an earlier step of this same effect recorded, and a sentence with nothing
+    in front of it that recorded one is the sentence read wrong. Without the
+    check it would compile against an empty list and put nothing onto the
+    battlefield, which is a supported card that does nothing.
+    """
+    if "milled_this_way" not in produced:
+        raise LoweringError(
+            "'one of them' with no repeated mill in this effect to have named "
+            "a set",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "put_milled_card_onto_battlefield", "",
+            {"cards_from": "milled_this_way", "under_your_control": True},
+        ),
     )
 
 

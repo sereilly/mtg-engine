@@ -84,6 +84,7 @@ from .effects import (
     _parse_distribute_counters,
     _parse_put_counter,
     _parse_put_exiled_with_source,
+    parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_put_source_into_zone,
     _parse_remove_counter,
@@ -308,6 +309,13 @@ def parse_imperative(
         moved = _parse_put_source_into_zone(stream)
         if moved is not None:
             return moved
+        # "Put one of them onto the battlefield under your control." (Helm of
+        # Obedience.) The last of the back-references and the same treatment:
+        # the counter production reads "one" as a count and then refuses with a
+        # site naming counters.
+        milled = parse_put_milled_card_onto_battlefield(stream)
+        if milled is not None:
+            return milled
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
@@ -442,14 +450,20 @@ def parse_imperative(
         # leave the counter phrase to die as unconsumed text.
         counters = _parse_entering_counters(stream)
         duration = _parse_duration(stream)
+        # "Exile a card from your hand **face down**." (Gustha's Scepter.)
+        # CR 406.3's rider, read here for the reason `ExileTopOfLibrary` reads
+        # it one production over: it is the difference between a card the whole
+        # table can read in exile and one nobody can, and a production that
+        # consumed the words without recording them would exile it face up.
+        face_down = bool(stream.accept_phrase("face", "down"))
         if further:
             return ast.Conjunction(
                 tuple(
-                    ast.Exile(each, duration, counters=counters)
+                    ast.Exile(each, duration, counters=counters, face_down=face_down)
                     for each in (subject, *further)
                 )
             )
-        return ast.Exile(subject, duration, counters=counters)
+        return ast.Exile(subject, duration, counters=counters, face_down=face_down)
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     # "Note the type of mana spent to pay this activation cost." (Jeweled
