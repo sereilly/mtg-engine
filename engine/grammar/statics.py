@@ -221,7 +221,14 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
             node=node,
         )
     who = payload.get("who")
-    if who not in ("you", "opponent", "target_opponent"):
+    # "…as long as **its controller** controls another creature" (Favorable
+    # Destiny). A fourth seat word, and the one that is a *pronoun*: it names
+    # the controller of the permanent the sentence is about rather than a seat
+    # fixed relative to the ability's own controller. CR 109.5 is why that is a
+    # real distinction and not a synonym for "you" — an Aura's controller and
+    # its host's controller part company the moment either is stolen, and this
+    # clause follows the host.
+    if who not in ("you", "opponent", "target_opponent", "controller"):
         raise LoweringError(
             f"conditional_static_holds answers 'controls' for you or an "
             f"opponent, not {who!r}",
@@ -239,7 +246,14 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
             node=node,
         )
     described = payload.get("filter") or {}
-    extra = set(described) - OBJECT_ONLY_FILTER_KEYS
+    # ``exclude_self`` on top of the object-only set, because *this* caller has
+    # a source to compare against: ``_controls_count_holds`` is handed the
+    # permanent the static is about and passes it straight to the matcher. The
+    # key is out of ``OBJECT_ONLY_FILTER_KEYS`` for the callers that have none
+    # (a forced-sacrifice prompt, a cost charger), and refusing it here as well
+    # cost Favorable Destiny's "another creature" a condition the evaluator
+    # answers in full.
+    extra = set(described) - (OBJECT_ONLY_FILTER_KEYS | {"exclude_self"})
     if extra:
         raise LoweringError(
             "subject_matches cannot test a buff condition's "
@@ -507,6 +521,19 @@ def _condition_about_the_host(condition: dict) -> dict:
         }
     if condition.get("kind") == "is_state":
         return {**condition, "subject": "attached"}
+    # Two parts of a ``controls`` clause are pronouns like ``is_state``'s, and
+    # only these two: "**its** controller" (``who: "controller"``) and
+    # "**another** creature" (``exclude_self``, CR 109.5's "other than this
+    # object"). Both are about the permanent the sentence is about — the
+    # enchanted creature — so the clause is stamped for them and for nothing
+    # else. Stamping every ``controls`` clause would quietly move "you control a
+    # snow land" onto the host's controller, which is the seat CR 109.5 says it
+    # is *not*.
+    if condition.get("kind") == "controls" and (
+        condition.get("who") == "controller"
+        or (condition.get("filter") or {}).get("exclude_self")
+    ):
+        return {**condition, "subject": "attached"}
     return condition
 
 
@@ -576,6 +603,18 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
             )
         buff = _lower_lord_effects(node, effects)
         condition = _lower_anthem_condition(node.condition, node)
+        # "**Its** controller" needs one permanent to be the "it" of, and an
+        # anthem describes a *set* — so the seat word the conditional-static
+        # path above admits has no referent here. Refused rather than allowed
+        # to fall through to the pivot's default, which is the lord itself:
+        # that would silently read the clause as "you control", the seat the
+        # word exists to distinguish itself from.
+        if condition.get("who") == "controller":
+            raise LoweringError(
+                "an anthem names a set of permanents, so 'its controller' has "
+                "no referent",
+                node=node,
+            )
         return (
             OracleInstruction(
                 LORD_BUFF_KIND,

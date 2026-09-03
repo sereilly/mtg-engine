@@ -496,3 +496,136 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G5: characteristic-defining P/T, and the statics family ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_vanilla(name: str, power: int = 2, toughness: int = 2) -> CardDefinition:
+    """A creature with no abilities, for the far side of a board question."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g5_card(name: str, type_line: str, oracle_text: str = "",
+             colors: tuple[str, ...] = ()) -> CardDefinition:
+    """An invented non-creature card, for the "would a second card work?" probe."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text=oracle_text, colors=colors, color_identity=colors,
+        keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": oracle_text},
+    )
+
+
+def test_maro_is_as_big_as_its_controllers_hand(set_pool):
+    """"Maro's power and toughness are each equal to the number of cards in your
+    hand." (CR 604.3.)
+
+    The general characteristic-defining row already read the counted noun phrase
+    through the shared noun parser, but it required a printed constant ("1 plus
+    the number of …"). Every row above it counts a *battlefield*, so a
+    constant-less count of a **zone** had nowhere to land at all. Making the
+    constant optional is the whole change: ``count_spec`` omits a zero offset,
+    so the payload is the one this sentence would always have produced.
+    """
+    pool = set_pool("MIR")
+    maro = Permanent(card=pool["Maro"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[maro],
+                    hand=[pool["Island"]] * 3, library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert (maro.effective_power, maro.effective_toughness) == (3, 3)
+
+    # Recounted continuously, not locked in (CR 604.3) — a card leaving the hand
+    # shrinks it at once, with nothing to undo.
+    game.take_card_from_hand(game.players[0], game.players[0].hand[0])
+    game._settle()
+    assert (maro.effective_power, maro.effective_toughness) == (2, 2)
+
+
+def test_maro_counts_only_its_own_controllers_hand(set_pool):
+    """"…the number of cards in **your** hand." The opponent's hand is not it."""
+    pool = set_pool("MIR")
+    maro = Permanent(card=pool["Maro"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[maro],
+                    hand=[pool["Island"]], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", hand=[pool["Island"]] * 6,
+                    library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert (maro.effective_power, maro.effective_toughness) == (1, 1)
+
+
+def test_haunting_apparition_counts_the_chosen_players_graveyard(set_pool):
+    """"Haunting Apparition's power is equal to 1 plus the number of green
+    creature cards in **the chosen player's** graveyard."
+
+    Two halves. The noun parser had no spelling for that possessive — every
+    other zone owner it reads is fixed by the sentence ("your", "an opponent's")
+    or chosen by *this* sentence ("target player's"), and this one was chosen by
+    the source as it entered (CR 614.1c) and recorded on that permanent. And
+    ``evaluate_count`` had to resolve it: the seat is read off the source, once,
+    above both the battlefield scan and the zone scan, so the same key cannot
+    mean the controller's pile in one branch and the chosen player's in the
+    other.
+    """
+    pool = set_pool("MIR")
+    apparition = Permanent(card=pool["Haunting Apparition"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[apparition], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5,
+                    graveyard=[pool["Feral Shadow"]] * 2),
+        PlayerState(name="P3", library=[pool["Island"]] * 5,
+                    graveyard=[pool["Jungle Wurm"]] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    # Seat 2's graveyard holds three green creature cards; seat 1's holds two
+    # black ones. Choosing seat 2 is what makes the count 1 + 3.
+    apparition.metadata["chosen_player_index"] = 2
+    game._settle()
+    assert apparition.effective_power == 4
+
+    apparition.metadata["chosen_player_index"] = 1
+    game._settle()
+    assert apparition.effective_power == 1, "black creature cards are not green ones"
+
+
+def test_haunting_apparition_with_no_chosen_player_is_just_the_constant(set_pool):
+    """No record is a permanent still entering — the choice is part of arriving
+    — and the printed constant alone is the honest answer for it, exactly as the
+    battlefield tally beside it answers an empty board."""
+    pool = set_pool("MIR")
+    apparition = Permanent(card=pool["Haunting Apparition"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[apparition], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5,
+                    graveyard=[pool["Jungle Wurm"]] * 4),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert apparition.effective_power == 1

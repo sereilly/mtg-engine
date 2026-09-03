@@ -418,6 +418,29 @@ def evaluate_count(
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
+    # "the number of green creature cards in **the chosen player's** graveyard"
+    # (Haunting Apparition). The seat was picked as *source* entered (CR 614.1c)
+    # and is recorded on that permanent, so it is resolved here — where the
+    # source is in hand — into the ``owner`` every branch below already reads.
+    # One resolution site rather than a branch in each: the battlefield scan
+    # takes its seat from ``game.players.index(owner)`` and the zone scan reads
+    # the pile off ``owner`` directly, so a key honoured in one of them and
+    # forgotten in the other would count the controller's own graveyard on one
+    # sentence and the chosen player's on another.
+    #
+    # No record is a source still entering — the choice is part of arriving —
+    # and an empty *count* is the honest answer for it, exactly as the
+    # battlefield tally beside this one answers an empty board. Through
+    # ``_scaled``, not a bare ``0``: the printed constant is part of the
+    # sentence's arithmetic and not part of the pile, so Haunting Apparition is
+    # 1/2 while it is still choosing rather than a 0/2 that dies on arrival.
+    if spec.get("owner") == "chosen_player":
+        chosen_seat = (
+            source.metadata.get("chosen_player_index") if source is not None else None
+        )
+        if not isinstance(chosen_seat, int) or not (0 <= chosen_seat < len(game.players)):
+            return _scaled(0, spec)
+        owner = game.players[chosen_seat]
     # "the number of Auras **attached to it**" (Rabid Wombat). Not a scan of a
     # zone: what is attached to a permanent is a record kept on that permanent,
     # which is also why the owner scope above does not apply — an opponent's

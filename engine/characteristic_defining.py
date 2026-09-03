@@ -231,8 +231,16 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     filt = parse_subject_filter(match.group("counted"), plural=True)
     if filt is None:
         return None
+    # The printed constant is optional. "**Maro's** power and toughness are each
+    # equal to the number of cards in your hand" is this sentence with no offset
+    # at all, and every row above it counts a *battlefield* — so before the
+    # "<N> plus" was made optional the only CDAs that could count a zone were
+    # the ones that happened to print a constant in front of it. Zero is the
+    # absent constant's value, and ``count_spec`` omits a zero offset, so the
+    # payload a card with no constant produces is the payload it would have had
+    # if this row had never carried one.
     try:
-        spec = count_spec(filt, None, offset=int(match.group("plus")))
+        spec = count_spec(filt, None, offset=int(match.group("plus") or 0))
     except LoweringError:
         return None
     payload: dict[str, object] = {"count_spec": spec}
@@ -501,6 +509,13 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # and toughness are each equal to 2 plus the number of Soldiers and
         # Warriors you control.**"
         #
+        # The constant is optional, which is what lets "**Maro's** power and
+        # toughness are each equal to the number of cards in your hand" reach
+        # this row at all. Every pattern above counts a battlefield, so a
+        # constant-less count of a *zone* had nowhere to land — the sentence is
+        # An-Havva Constable's with one word missing, and reading it as a
+        # different template would be a second answer to one printed count.
+        #
         # The general row, and read **last** on purpose: every pattern above is
         # a prefix or a special case of this shape, and each one already emits
         # the payload its counter branch reads. A row that claimed them would
@@ -517,7 +532,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # readings of one sentence.
         re.compile(
             rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
-            r"toughness is) equal to (?P<plus>\d+) plus the number of "
+            r"toughness is) equal to (?:(?P<plus>\d+) plus )?the number of "
             r"(?P<counted>.+)$"
         ),
         _counted_noun_phrase,
