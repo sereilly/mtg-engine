@@ -86,6 +86,9 @@ ActionKind = Literal[
     "exile_from_hand_confirm",
     "linked_exile_return_confirm",
     "library_cycle_confirm",
+    "library_pile_split_confirm",
+    "pile_exile_confirm",
+    "pile_search_confirm",
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",
     "graveyard_exile_confirm",
@@ -335,6 +338,13 @@ class GameActionRequest(BaseModel):
     # same object there — the record is the only thing that can tell one
     # exiled card from another.
     exile_entry_index: int | None = Field(default=None, ge=0)
+    # Phyrexian Portal: which of the ten looked-at cards go into the first of
+    # the two face-down piles (everything else goes into the second), and then
+    # which pile is exiled and which card the search takes out of the other.
+    # Positions into a *pile*, never into a zone: the ten cards have left the
+    # library by the time any of these is answered.
+    first_pile: list[int] | None = None
+    pile_index: int | None = Field(default=None, ge=0)
     # "Choose two cards in your hand drawn this turn" (Sylvan Library): the
     # whole answer at once, because the prompt owes a *set* and a card at a
     # time would leave a half-made choice the engine has no state for.

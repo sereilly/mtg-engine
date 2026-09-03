@@ -989,6 +989,66 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("library_pile_split")
+def _library_pile_split(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: the *opponent* divides the ten cards.
+
+    The cards are sent in full, because this seat is looking at them - that is
+    what the sentence says, and it is the whole asymmetry of the card. The seat
+    that has to choose between the piles gets the renderer below, which sends
+    two numbers.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[int(choice.data["owner_index"])]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "owner_name": owner.name,
+        "cards": [
+            {"pile_index": index, "card": ctx.serialize_card(card)}
+            for index, card in enumerate(choice.data.get("_cards") or ())
+        ],
+    }
+
+
+@prompt_renderer("pile_exile_choice")
+def _pile_exile_choice(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: which face-down pile is exiled.
+
+    **Sizes only.** The piles are face down (CR 406.3) and this is the seat
+    that may not look at them; sending the cards "so the client can grey them
+    out" would hand the whole decision away, because a permission only the
+    client honours is a rule nothing enforces.
+    """
+    choice = choices[0]
+    piles = list(choice.data.get("_piles") or ())
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "sizes": [len(pile) for pile in piles],
+    }
+
+
+@prompt_renderer("pile_search")
+def _pile_search(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Portal: search the pile that was not exiled.
+
+    ``optional`` is CR 701.23b - a player may always fail to find - and it is
+    what tells the client to draw the decline. The engine accepts the empty
+    answer whether or not the client offers it.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "optional": True,
+        "cards": [
+            {"pile_index": index, "card": ctx.serialize_card(card)}
+            for index, card in enumerate(choice.data.get("_pile") or ())
+        ],
+    }
+
+
 @prompt_renderer("library_cycle_offer")
 def _library_cycle_offer(ctx: PromptContext, choices: list) -> dict:
     """Lim-Dul's Vault: pay the life again, or stop and shuffle.

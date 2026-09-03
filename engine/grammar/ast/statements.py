@@ -118,6 +118,7 @@ from .library import (
     RevealTopToHandOrBottom,
     SearchLibrary,
     SearchPlayerLibrary,
+    SeparateLibraryTopIntoPiles,
 )
 from .cards import (
     CastPermission,
@@ -209,7 +210,7 @@ Effect = Union[
     DamageRidersUntilEndOfTurn,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, ChangeSupertype, ChangeLandType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
+    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
     ShuffleLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,

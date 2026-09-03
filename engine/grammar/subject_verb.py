@@ -59,6 +59,7 @@ from .effects import (
     _parse_mill,
     _parse_skip_step,
     parse_player_looks_at_own_library_top,
+    parse_player_separates_your_library_top,
     _parse_player_adds_mana,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
@@ -239,6 +240,17 @@ def parse_subject_verb(
             looked = parse_player_looks_at_own_library_top(stream, source_spec)
             if looked is not None:
                 return looked
+            # "Target opponent looks at the top ten cards of **your** library
+            # and separates them into two face-down piles." (Phyrexian
+            # Portal.) The same four opening words as the production above and
+            # a different card from the possessive on: somebody else is
+            # looking through the ability controller's deck. Tried second and
+            # declining without consuming, exactly as that one does.
+            separated = parse_player_separates_your_library_top(
+                stream, source_spec
+            )
+            if separated is not None:
+                return separated
         if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
             return _parse_skip_step(stream, source_spec)
         # "**That player** exiles all cards from their library." (Thought

@@ -157,6 +157,15 @@ PARSE_LAYERS = [
     # thousand-line guard below — above `phrases`, whose shared fragments it
     # reads, and below everything that reads a whole line.
     "triggers",
+    # The printed clauses a condition is built from — one each, read to its
+    # end. Split out of `conditions` at the guard below, along the boundary
+    # that module already had in its own shape: `_parse_single_condition` is a
+    # dispatcher over the whole vocabulary, and these are the readers it hands
+    # a sentence to. The name is `sentence_clauses`' one layer up and for its
+    # reason — that module holds the clauses `parse_statement` reads *around* a
+    # body, this one the clauses `_parse_condition` reads *inside* one. Below
+    # `conditions`, which calls it and is never imported back.
+    "condition_clauses",
     "effects", "conditions",
     # The trailing clauses that share a sentence's printed subject — "…gets
     # +2/+0 **and deals 1 damage to you**", "…gains shroud **and doesn't untap

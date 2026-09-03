@@ -3266,6 +3266,170 @@ class PendingChoicesMixin:
             return
         self._resolve_exile_from_hand_choice(choice, None)
 
+    # -- The two face-down piles (Phyrexian Portal) --------------------------
+
+    def confirm_library_pile_split(self, player_index: int, first_pile) -> bool:
+        """Answer the division. *first_pile* is the positions - into the ten
+        cards as they were shown - that go into the first pile; everything else
+        goes into the second. Either pile may be empty, which is a legal
+        division and a real one: it forces the controller to choose between
+        searching everything and searching nothing."""
+        return self.resolve_pending_choice(
+            "library_pile_split", player_index, first_pile=first_pile
+        )
+
+    def _resolve_library_pile_split(self, choice: PendingChoice, first_pile) -> bool:
+        cards = list(choice.data.get("_cards") or ())
+        positions = [int(i) for i in (first_pile or [])]
+        if len(set(positions)) != len(positions):
+            return False
+        if any(not 0 <= i < len(cards) for i in positions):
+            return False
+        chosen = set(positions)
+        piles = [
+            [card for i, card in enumerate(cards) if i in chosen],
+            [card for i, card in enumerate(cards) if i not in chosen],
+        ]
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} divided "
+            f"{len(cards)} cards into piles of {len(piles[0])} and {len(piles[1])}"
+        )
+        # The controller's decision, armed by answering this one - and it is a
+        # *different seat's*, which is the whole design of the card.
+        self.arm_pending_choice(
+            "pile_exile_choice", int(choice.data["owner_index"]),
+            card_name=choice.data.get("card_name", ""),
+            owner_index=int(choice.data["owner_index"]),
+            _piles=piles,
+            _source_permanent=choice.data.get("_source_permanent"),
+        )
+        return True
+
+    def _default_library_pile_split(self, choice: PendingChoice) -> None:
+        """The stated policy: **split as evenly as possible**, in the order the
+        cards came off the library.
+
+        Neutral rather than optimal, and deliberately so. The division is the
+        one decision in this card that is genuinely adversarial - a divider who
+        knows the pile can make both halves bad - and there is no valuation
+        here that would not be a guess about what the *other* seat wants. An
+        even split is the answer that neither hands the controller their pick
+        nor denies it.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        half = len(cards) // 2
+        if not self._resolve_library_pile_split(choice, list(range(half))):
+            self.discard_pending_choice(choice)
+
+    def confirm_pile_exile_choice(self, player_index: int, pile_index: int) -> bool:
+        """Answer which of the two face-down piles is exiled (0 or 1). The
+        other is the one searched."""
+        return self.resolve_pending_choice(
+            "pile_exile_choice", player_index, pile_index=pile_index
+        )
+
+    def _resolve_pile_exile_choice(self, choice: PendingChoice, pile_index) -> bool:
+        """Exile the named pile face down, and hand the other to the search.
+
+        Face down is not decoration: the piles were divided face down and this
+        choice was made blind, so a pile that arrived in exile face up would
+        tell every player at the table what the decision had cost. It goes on
+        the linked-exile record for that record's own reason - two copies of
+        one card in a deck are the same object, so the record of the exiling is
+        the only thing that can say which one is hidden.
+        """
+        from ...linked_exile import link_exiled_card
+
+        piles = list(choice.data.get("_piles") or ())
+        if pile_index not in (0, 1) or len(piles) != 2:
+            return False
+        owner = self.players[int(choice.data["owner_index"])]
+        exiled = piles[int(pile_index)]
+        kept = piles[1 - int(pile_index)]
+        source = choice.data.get("_source_permanent")
+        for card in exiled:
+            owner.exile.append(card)
+            if source is not None:
+                link_exiled_card(
+                    source, card, int(choice.data["owner_index"]), face_down=True
+                )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{owner.name} exiled a face-down pile of {len(exiled)} card(s)"
+        )
+        self.arm_pending_choice(
+            "pile_search", int(choice.data["owner_index"]),
+            card_name=choice.data.get("card_name", ""),
+            owner_index=int(choice.data["owner_index"]),
+            _pile=list(kept),
+        )
+        return True
+
+    def _default_pile_exile_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: **exile the smaller pile**, and on a tie the
+        first.
+
+        The only thing this seat knows about the piles is how many cards are in
+        each - that is what "face down" means - and of the two facts available,
+        keeping more cards to search through is the one that is never worse.
+        """
+        piles = list(choice.data.get("_piles") or ())
+        if len(piles) != 2:
+            self.discard_pending_choice(choice)
+            return
+        smaller = 0 if len(piles[0]) <= len(piles[1]) else 1
+        if not self._resolve_pile_exile_choice(choice, smaller):
+            self.discard_pending_choice(choice)
+
+    def confirm_pile_search(self, player_index: int, pile_index) -> bool:
+        """Answer the search of the kept pile. ``pile_index`` of None is
+        CR 701.23b's fail-to-find, which a search always allows."""
+        return self.resolve_pending_choice(
+            "pile_search", player_index, pile_index=pile_index
+        )
+
+    def _resolve_pile_search(self, choice: PendingChoice, pile_index) -> bool:
+        """Take one card to hand and shuffle the rest of the pile into the
+        library.
+
+        Both moves go through the CR 903.9b seams (``put_card_into_hand`` /
+        ``put_card_into_library``) rather than appending, because the rule has
+        no single fire site and this is one more place that would have
+        forgotten it - a commander found this way must reach the command zone.
+        """
+        import random
+
+        pile = list(choice.data.get("_pile") or ())
+        if pile_index is not None and not 0 <= int(pile_index) < len(pile):
+            return False
+        player = self.players[int(choice.data["owner_index"])]
+        found = pile.pop(int(pile_index)) if pile_index is not None else None
+        if found is not None:
+            self.put_card_into_hand(player, found)
+        for card in pile:
+            self.put_card_into_library(player, card)
+        random.shuffle(player.library)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            (f"{player.name} took {found.name} " if found is not None
+             else f"{player.name} found nothing and ")
+            + f"and shuffled {len(pile)} card(s) back into their library"
+        )
+        return True
+
+    def _default_pile_search(self, choice: PendingChoice) -> None:
+        """The stated policy: take the **first** card in the pile.
+
+        Lowest index is the house policy for a pick with no printed
+        restriction, and failing to find is deliberately not the default here:
+        the search is the whole reason the ability was activated, and a seat
+        that declined it would have paid a cost for a shuffle.
+        """
+        pile = list(choice.data.get("_pile") or ())
+        if not self._resolve_pile_search(choice, 0 if pile else None):
+            self.discard_pending_choice(choice)
+
     # -- The repeated look-and-bottom offer (Lim-Dul's Vault) ----------------
 
     def confirm_library_cycle_offer(self, player_index: int, accept: bool) -> bool:
@@ -6244,6 +6408,49 @@ register_choice(
     default_at_arm=True,
     # A hand is hidden (CR 400.2), so the options are the chooser's alone.
     hidden_for_ai=False,
+)
+
+register_choice(
+    "library_pile_split",
+    resolve=lambda game, choice, r: game._resolve_library_pile_split(
+        choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: game._default_library_pile_split(choice),
+    action="library_pile_split_confirm",
+    prompt_key="library_pile_split",
+    blocked_detail="divide the piles before other actions",
+    # Answering arms the controller's choice, which is a later step of this
+    # same resolution (CR 608.2).
+    suspends=True,
+    # …and a non-interactive divider answers at once, or the resolution stops
+    # on a prompt nobody owes an answer to.
+    default_at_arm=True,
+)
+
+register_choice(
+    "pile_exile_choice",
+    resolve=lambda game, choice, r: game._resolve_pile_exile_choice(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_exile_choice(choice),
+    action="pile_exile_confirm",
+    prompt_key="pile_exile_choice",
+    blocked_detail="choose a pile to exile before other actions",
+    suspends=True,
+    default_at_arm=True,
+)
+
+register_choice(
+    "pile_search",
+    resolve=lambda game, choice, r: game._resolve_pile_search(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_search(choice),
+    action="pile_search_confirm",
+    prompt_key="pile_search",
+    blocked_detail="search the pile before other actions",
+    suspends=True,
+    default_at_arm=True,
 )
 
 register_choice(

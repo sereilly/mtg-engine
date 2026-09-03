@@ -59,6 +59,25 @@ class OnBattlefield:
 
 
 @dataclass(frozen=True)
+class ZoneHasCards:
+    """"If **your library has ten or more cards in it**" (Phyrexian Portal).
+
+    A count of a *zone*, not of a board, which is why it is not an
+    :class:`OnBattlefield` with a zone field: that node asks what permanents
+    exist and answers through the layer system, where this one asks how tall a
+    pile is and nothing about the cards in it matters at all.
+
+    Both the seat and the zone are read rather than assumed. Every printing of
+    this clause in the pool names its own library, and a wording naming
+    somebody else's is a question about a pile this player cannot see - so
+    admitting it without recording whose would answer about the wrong deck.
+    """
+    player: PlayerRef
+    zone: str
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class CountedNumber:
     """"If **the number** is odd" / "…is even" (Chaos Moon).
 

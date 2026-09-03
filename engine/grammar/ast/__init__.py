@@ -92,6 +92,7 @@ from ._core import (
 from .conditions import (
     Controls,
     CountedNumber,
+    ZoneHasCards,
     EveryOf,
     IsState,
     StartedTheTurnState,
@@ -225,6 +226,7 @@ from .library import (
     RevealTopToHandOrBottom,
     SearchLibrary,
     SearchPlayerLibrary,
+    SeparateLibraryTopIntoPiles,
 )
 from .cards import (
     Draw,
@@ -395,6 +397,7 @@ __all__ = [
     "RevealedCardIs",
     "Controls",
     "CountedNumber",
+    "ZoneHasCards",
     "SacrificeExpansionPermanents",
     "DelayedSelfAction",
     "DoesntUntapWhileSourceTapped",
@@ -502,6 +505,7 @@ __all__ = [
     "Draw",
     "Discard",
     "LookTopCycleForLife",
+    "SeparateLibraryTopIntoPiles",
     "Mill",
     "MillUntil",
     "PutMilledCardOntoBattlefield",

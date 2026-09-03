@@ -2731,6 +2731,46 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("separate_library_top_into_piles")
+def separate_library_top_into_piles(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Phyrexian Portal, all three of its sentences.
+
+    Three decisions by two seats, so the handler does nothing but hand the
+    first of them to the right player: the opponent divides, knowing what is in
+    the piles, and the controller chooses and searches without knowing. Each
+    later decision is armed by answering the one before it, which keeps the
+    whole procedure inside one resolution (CR 608.2, CR 117.3b).
+
+    The ten cards come **out of the library** here and travel on the prompts.
+    They are going to exile, to a hand and back into a shuffled library, so
+    there is no arrangement of the library that could hold them meanwhile - and
+    the alternative, leaving them in place and addressing them by index, is an
+    index into a zone the next answer changes.
+    """
+    caster = context.caster
+    splitter = context.target
+    if splitter is None or splitter is caster:
+        # "Target **opponent**" - the picker enforces it, and a resolution that
+        # somehow arrived without one divides nothing rather than handing the
+        # caster their own library face down.
+        game.log.append(f"{context.card.name}: no opponent to divide the piles")
+        return True, "resolved"
+    count = resolve_amount(instruction.payload.get("count", 0), context.x_value)
+    taken = caster.library[:count]
+    if not taken:
+        game.log.append(f"{caster.name} has no cards to divide")
+        return True, "resolved"
+    del caster.library[:count]
+    game.arm_pending_choice(
+        "library_pile_split", game.players.index(splitter),
+        card_name=context.card.name if context.card is not None else "",
+        owner_index=game.players.index(caster),
+        _cards=list(taken),
+        _source_permanent=context.source_permanent,
+    )
+    return True, "resolved"
+
+
 @effect_handler("look_top_cycle_and_stack")
 def look_top_cycle_and_stack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Lim-Dul's Vault, all three of its sentences (CR 701.24).

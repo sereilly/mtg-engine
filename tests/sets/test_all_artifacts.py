@@ -990,3 +990,153 @@ def test_one_of_them_refuses_with_no_loop_in_front_of_it(set_pool):
         lower_ability(
             parse_line("Put one of them onto the battlefield under your control.")
         )
+
+
+#: Twelve distinct cards, so the ten the Portal takes leave two behind and a
+#: shuffle that lost or duplicated a card would show in the count.
+_W3G3_PORTAL_DECK = (
+    "Black Lotus", "Healing Salve", "Grizzly Bears", "Lightning Bolt",
+    "Ancestral Recall", "Mox Pearl", "Mox Ruby", "Mox Jet", "Mox Emerald",
+    "Mox Sapphire", "Time Walk", "Timetwister",
+)
+
+
+def _w3g3_portal(set_pool, deck=_W3G3_PORTAL_DECK, interactive=True):
+    """The Portal out, seat 0's library stacked, and its ability activated at
+    seat 1."""
+    import random
+
+    random.seed(31)
+    game = _w3g3_duel()
+    if not interactive:
+        game.interactive_seats = set()
+    portal = _w3g3_put(game, 0, set_pool("ALL")["Phyrexian Portal"])
+    game.players[0].library = [_W3G3_LEA[name] for name in deck]
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Portal", permanent_index=0, target_player_index=1
+    )
+    game._settle()
+    return game, portal, result
+
+
+def test_phyrexian_portal_divides_chooses_and_searches_across_two_seats(set_pool):
+    """The whole procedure, and the asymmetry that is the card: the **opponent**
+    divides knowing what is in the piles, and the controller chooses and
+    searches without knowing.
+
+    Each decision is armed by answering the one before it, so the three stay
+    inside one resolution (CR 608.2, CR 117.3b) and the game waits on each.
+    """
+    game, _, result = _w3g3_portal(set_pool)
+    assert result.supported
+
+    split = game.pending_choice_of("library_pile_split", 1)
+    assert split is not None, "the division is owed by the opponent"
+    assert game.waiting_prompt()
+    assert len(game.players[0].library) == 2, "the ten cards left the library"
+    assert [c.name for c in split.data["_cards"]] == list(_W3G3_PORTAL_DECK[:10])
+
+    assert game.confirm_library_pile_split(1, [0, 1, 2])
+    game._settle()
+    pick = game.pending_choice_of("pile_exile_choice", 0)
+    assert pick is not None, "the choice is owed by the controller"
+    assert [len(pile) for pile in pick.data["_piles"]] == [3, 7]
+
+    assert game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+    assert [c.name for c in game.players[0].exile] == list(_W3G3_PORTAL_DECK[:3])
+
+    search = game.pending_choice_of("pile_search", 0)
+    assert search is not None
+    assert [c.name for c in search.data["_pile"]] == list(_W3G3_PORTAL_DECK[3:10])
+
+    assert game.confirm_pile_search(0, 1)
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == ["Ancestral Recall"]
+    # Two left behind plus the six the search did not take.
+    assert len(game.players[0].library) == 8
+    assert game.pending_choices == []
+    assert not game.waiting_prompt()
+
+
+def test_phyrexian_portals_exiled_pile_is_face_down_to_everyone(set_pool):
+    """CR 406.3, and it is the reason the second decision is a decision at all:
+    the piles were divided face down and the choice was made blind, so a pile
+    that arrived in exile face up would tell the table what the choice cost.
+
+    Hidden from its **owner** too - the same reading Knowledge Vault's pile
+    gets, and the opposite of Gustha's Scepter, whose next sentence grants its
+    controller a look.
+    """
+    game, portal, _ = _w3g3_portal(set_pool)
+    game.confirm_library_pile_split(1, [0, 1])
+    game._settle()
+    game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+
+    hidden = [c.name for c in face_down_exiled_cards(game, 0, 0)]
+    assert hidden == list(_W3G3_PORTAL_DECK[:2])
+    assert [c.name for c in face_down_exiled_cards(game, 0, 1)] == hidden
+    assert all(entry["face_down"] for entry in linked_entries(portal))
+
+
+def test_phyrexian_portal_does_nothing_with_fewer_than_ten_cards(set_pool):
+    """"If your library has ten or more cards in it". Read when the instruction
+    is followed (CR 608.2c), and the whole effect is inside the branch - so a
+    short library divides nothing rather than dividing what there is."""
+    game, _, result = _w3g3_portal(set_pool, deck=_W3G3_PORTAL_DECK[:9])
+
+    assert result.supported
+    assert game.pending_choices == []
+    assert len(game.players[0].library) == 9
+    assert game.players[0].exile == []
+
+
+def test_phyrexian_portal_allows_failing_to_find(set_pool):
+    """CR 701.23b: a player may always fail to find. The rest of the pile is
+    still shuffled back in, so the only thing the decline costs is the card."""
+    game, _, _ = _w3g3_portal(set_pool)
+    game.confirm_library_pile_split(1, [0])
+    game._settle()
+    game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+
+    assert game.confirm_pile_search(0, None)
+    game._settle()
+
+    assert game.players[0].hand == []
+    assert len(game.players[0].exile) == 1
+    # Two left behind plus all nine of the searched pile.
+    assert len(game.players[0].library) == 11
+
+
+def test_phyrexian_portal_accepts_an_empty_pile(set_pool):
+    """One pile of ten and one of none is a legal division, and a real one: it
+    makes the controller choose between searching everything and searching
+    nothing."""
+    game, _, _ = _w3g3_portal(set_pool)
+
+    assert game.confirm_library_pile_split(1, [])
+    game._settle()
+    pick = game.pending_choice_of("pile_exile_choice", 0)
+    assert [len(pile) for pile in pick.data["_piles"]] == [0, 10]
+
+    assert game.confirm_pile_exile_choice(0, 0)
+    game._settle()
+    assert game.players[0].exile == []
+    assert len(game.pending_choice_of("pile_search", 0).data["_pile"]) == 10
+
+
+def test_phyrexian_portal_finishes_itself_for_headless_seats(set_pool):
+    """Every one of the three prompts refuses other actions, so a seat that
+    never answered would freeze the game. All three take their default at arm,
+    and the stated policies are neutral-divider / exile-the-smaller /
+    take-the-first."""
+    game, _, _ = _w3g3_portal(set_pool, interactive=False)
+
+    assert game.pending_choices == []
+    assert len(game.players[0].hand) == 1
+    assert len(game.players[0].exile) == 5, "the even split, smaller half exiled"
+    assert len(game.players[0].library) == 6
+    assert not game.waiting_prompt()

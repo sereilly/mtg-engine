@@ -490,6 +490,27 @@ def _lower_condition(
             "state": condition.state,
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.ZoneHasCards):
+        # "If your library has ten or more cards in it" (Phyrexian Portal).
+        # The seat is carried rather than defaulted: a wording naming somebody
+        # else's pile is a question about a different deck, and a condition
+        # answered about the wrong one is a gate that opens when it should not.
+        if condition.player.kind not in ("you", "target_player", "target_opponent"):
+            raise LoweringError(
+                f"no zone count reads {condition.player.kind!r}", node=condition
+            )
+        bound = condition.comparison.value
+        if not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "a zone count compares against a printed number", node=condition
+            )
+        return {
+            "kind": "zone_card_count",
+            "player": condition.player.kind,
+            "zone": condition.zone,
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
     if isinstance(condition, ast.MilledThisWay):
         # "If one or more creature cards were put into that graveyard this
         # way" (Helm of Obedience). The producer is demanded for

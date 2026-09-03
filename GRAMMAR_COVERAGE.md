@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 81.7% | 79.7% | 60.6% | 114 |
+| ALL *(measured)* | 144 | 251 | 82.1% | 80.1% | 61.0% | 115 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 284 | 126 | expected a subject |  |
+| 283 | 125 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
 | 70 | 31 | unconsumed text |  |
 | 36 | 36 | unrecognized activation cost |  |
@@ -2931,6 +2931,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile the top card of your library: Put X +1/+1 counters on this creature, where X is the exiled card's mana value.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
+- **Phyrexian Portal**
+  - `{3}: If your library has ten or more cards in it, target opponent looks at the top ten cards of your library and separates them into two face-down piles. Exile one of those piles. Search the other pile for a card, put it into your hand, then shuffle the rest of that pile into your library.`
 - **Phyrexian War Beast**
   - `When this creature leaves the battlefield, sacrifice a land and this creature deals 1 damage to you.`
 - **Piety**

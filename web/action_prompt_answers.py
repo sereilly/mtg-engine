@@ -599,6 +599,58 @@ def _action_choose_cards_in_hand_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("library_pile_split_confirm")
+def _action_library_pile_split_confirm(session, req, seat_type):
+    # Phyrexian Portal: the opponent sends the positions that go into the first
+    # pile. An empty list is a legal division - one pile of ten and one of none
+    # is a real, and often good, way to divide.
+    pending = next(
+        (c for c in session.game.pending_choices_of("library_pile_split")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no pile split pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.first_pile is None:
+        raise HTTPException(status_code=400, detail="first_pile is required")
+    if not session.game.confirm_library_pile_split(req.seat, req.first_pile):
+        raise HTTPException(status_code=400, detail="invalid division")
+
+
+@action_handler("pile_exile_confirm")
+def _action_pile_exile_confirm(session, req, seat_type):
+    # Phyrexian Portal: which face-down pile goes to exile.
+    pending = next(
+        (c for c in session.game.pending_choices_of("pile_exile_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no pile choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.pile_index is None:
+        raise HTTPException(status_code=400, detail="pile_index is required")
+    if not session.game.confirm_pile_exile_choice(req.seat, req.pile_index):
+        raise HTTPException(status_code=400, detail="invalid pile")
+
+
+@action_handler("pile_search_confirm")
+def _action_pile_search_confirm(session, req, seat_type):
+    # Phyrexian Portal: which card the search takes, or none at all
+    # (CR 701.23b's fail-to-find, sent as accept=False).
+    pending = next(
+        (c for c in session.game.pending_choices_of("pile_search")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no pile search pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    index = None if req.accept is False else req.pile_index
+    if index is None and req.accept is not False:
+        raise HTTPException(status_code=400, detail="pile_index is required")
+    if not session.game.confirm_pile_search(req.seat, index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("library_cycle_confirm")
 def _action_library_cycle_confirm(session, req, seat_type):
     # Lim-Dul's Vault: another round of "pay 1 life and look again", or stop.

@@ -476,6 +476,22 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "zone_card_count":
+        # "If your library has ten or more cards in it" (Phyrexian Portal).
+        # Read when the instruction is followed (CR 608.2c), not when the
+        # ability was activated: a library that shrank in between is the
+        # library this asks about.
+        whose = str(payload.get("player") or "you")
+        player = context.caster if whose == "you" else context.target
+        if player is None:
+            return False
+        pile = getattr(player, str(payload.get("zone") or "library"), None)
+        if pile is None:
+            return False
+        return _compare_count(
+            len(pile), str(payload.get("op", "")), payload.get("value")
+        )
+
     if kind == "milled_this_way":
         # "If one or more creature cards were put into that graveyard this
         # way." (Helm of Obedience.) The record the loop wrote, not the

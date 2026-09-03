@@ -194,6 +194,67 @@ def parse_player_looks_at_own_library_top(
     )
 
 
+def parse_player_separates_your_library_top(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.Statement | None":
+    """Phyrexian Portal, all three of its sentences.
+
+    ``<player> looks at the top N cards of your library and separates them into
+    two face-down piles. Exile one of those piles. Search the other pile for a
+    card, put it into your hand, then shuffle the rest of that pile into your
+    library.``
+
+    Declines without consuming on anything else, so
+    :func:`parse_player_looks_at_own_library_top` beside it keeps Ashnod's
+    Cylix - the two open on the same four words and differ at the possessive,
+    which is the whole point of the card: somebody else is looking through
+    *your* deck.
+
+    Every word of all three sentences is required. "Face-down" is the reason
+    the second decision is a decision (CR 406.3); "the other pile" is what the
+    second sentence left; and where the unsearched remainder goes is the
+    difference between this and a tutor that exiles nine cards.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    probe = stream.mark()
+    if not stream.accept_word("looks", "look"):
+        return None
+    if not stream.accept_phrase("at", "the", "top"):
+        stream.reset(probe)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(probe)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "library"):
+        stream.reset(probe)
+        return None
+    if not stream.accept_phrase(
+        "and", "separates", "them", "into", "two", "face-down", "piles"
+    ):
+        stream.reset(probe)
+        return None
+    if not stream.accept_punct("."):
+        raise stream.error("expected the exile sentence after the split")
+    for word in ("exile", "one", "of", "those", "piles"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the search sentence after the exile")
+    for word in ("search", "the", "other", "pile", "for", "a", "card"):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    for word in ("put", "it", "into", "your", "hand"):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    stream.expect_word("then")
+    for word in ("shuffle", "the", "rest", "of", "that", "pile", "into",
+                 "your", "library"):
+        stream.expect_word(word)
+    return ast.SeparateLibraryTopIntoPiles(count, subject)
+
+
 def parse_look_top_cycle_tail(
     stream: TokenStream, count
 ) -> "ast.Statement | None":

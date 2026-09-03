@@ -55,6 +55,33 @@ class SearchPlayerLibrary:
     to: Zone
 
 @dataclass(frozen=True)
+class SeparateLibraryTopIntoPiles:
+    """Phyrexian Portal's whole three-sentence procedure.
+
+    "Target opponent looks at the top ten cards of your library and separates
+    them into two face-down piles. Exile one of those piles. Search the other
+    pile for a card, put it into your hand, then shuffle the rest of that pile
+    into your library."
+
+    One node over all three sentences, the shape :class:`LookTopCycleForLife`
+    beside it takes: "those piles" and "the other pile" name what the first
+    sentence made, and a production that read only its own sentence would leave
+    two referents nothing binds.
+
+    Three decisions by two seats, and *which* seat makes each is the whole
+    design of the card - the opponent divides, knowing what is in the piles,
+    and you choose and search, not knowing. So the splitter is a field, and it
+    is the only reference here that could be anybody else: the library, the
+    hand the found card reaches and the exile are all the ability's controller's.
+
+    The piles are face down (CR 406.3), which is what makes the second decision
+    a real one rather than a formality.
+    """
+    count: Amount
+    splitter: PlayerRef
+
+
+@dataclass(frozen=True)
 class LookTopCycleForLife:
     """Lim-Dul's Vault's whole three-sentence effect.
 
