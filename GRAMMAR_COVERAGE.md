@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 79.7% | 77.7% | 58.6% | 111 |
+| ALL *(measured)* | 144 | 251 | 82.9% | 82.1% | 62.9% | 118 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,10 +43,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 285 | 127 | expected a subject |  |
+| 282 | 124 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
-| 72 | 33 | unconsumed text |  |
-| 36 | 36 | unrecognized activation cost |  |
+| 71 | 32 | unconsumed text |  |
+| 34 | 34 | unrecognized activation cost |  |
 | 32 | 17 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 2 | expected a keyword ability |  |
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
-| 5 | 2 | the sacrifice prompt cannot test this restriction |  |
 | 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
@@ -1155,6 +1155,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dwarven Weaponsmith**
   - `{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.`
   - `{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.`
+- **Dystopia**
+  - `At the beginning of each player's upkeep, that player sacrifices a green or white permanent of their choice.`
 - **Earthlink**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {2}.`
   - `Whenever a creature dies, that creature's controller sacrifices a land of their choice.`
@@ -1429,6 +1431,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Force of Will**
   - `Counter target spell.`
 - **Foresight**
+  - `Search your library for three cards, exile them, then shuffle.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Forethought Amulet**
   - `At the beginning of your upkeep, sacrifice this artifact unless you pay {3}.`
@@ -1679,6 +1682,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gorilla Shaman**
   - `{X}{X}{1}: Destroy target noncreature artifact with mana value X.`
 - **Gorilla War Cry**
+  - `All creatures gain menace until end of turn. (They can't be blocked except by two or more creatures.)`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Grandmother Sengir**
   - `{1}{B}, {T}: Target creature gets -1/-1 until end of turn.`
@@ -2690,6 +2694,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
 - **Nature's Wrath**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {G}.`
+  - `Whenever a player puts an Island or blue permanent onto the battlefield, that player sacrifices an Island or blue permanent of their choice.`
+  - `Whenever a player puts a Swamp or black permanent onto the battlefield, that player sacrifices a Swamp or black permanent of their choice.`
 - **Nebuchadnezzar**
   - `{X}, {T}: Choose a card name. Target opponent reveals X cards at random from their hand. Then that player discards all cards with that name revealed this way. Activate only during your turn.`
 - **Necrite**
@@ -2758,6 +2764,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Obsessive Stitcher**
   - `{T}: Draw a card, then discard a card.`
   - `{2}{U}{B}, {T}, Sacrifice this creature: Return target creature card from your graveyard to the battlefield.`
+- **Omen of Fire**
+  - `Return all Islands to their owners' hands. Each player sacrifices a Plains or a white permanent of their choice for each white permanent they control.`
 - **Onulet**
   - `When this creature dies, you gain 2 life.`
   - `When this creature dies, you gain 2 life.`
@@ -3291,6 +3299,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
+- **Royal Decree**
+  - `Whenever a Swamp, Mountain, black permanent, or red permanent becomes tapped, this enchantment deals 1 damage to that permanent's controller.`
 - **Royal Herbalist**
   - `{2}, Exile the top card of your library: You gain 1 life.`
 - **Rubinia Soulsinger**
@@ -3593,6 +3603,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Return this creature and target green or blue creature you control to their owner's hand.`
 - **Snowfall**
   - `Whenever an Island is tapped for mana, its controller may add an additional {U}. If that Island is snow, its controller may add an additional {U}{U} instead. Spend this mana only to pay cumulative upkeep costs.`
+- **Sol Grail**
+  - `{T}: Add one mana of the chosen color.`
 - **Sol Ring**
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
@@ -3993,6 +4005,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{B}: Counter target black spell unless that spell's controller pays {B} or {3}.`
 - **Thunder Wall**
   - `{U}: This creature gets +1/+1 until end of turn.`
+- **Tidal Control**
+  - `Pay 2 life or {2}: Counter target red or green spell. Any player may activate this ability.`
 - **Tidal Flats**
   - `{U}{U}: For each attacking creature without flying, its controller may pay {1}. If that player doesn't, creatures you control blocking that creature gain first strike until end of turn.`
 - **Tidal Influence**
@@ -4044,6 +4058,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tormod's Crypt**
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
+- **Tornado**
+  - `{2}{G}, Pay 3 life for each velocity counter on this enchantment: Destroy target permanent and put a velocity counter on this enchantment. Activate only once each turn.`
 - **Torture**
   - `{1}{B}: Put a -1/-1 counter on enchanted creature.`
   - `{1}{B}: Put a -1/-1 counter on enchanted creature.`
@@ -4426,6 +4442,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Flip a coin. If you win the flip, Winter Sky deals 1 damage to each creature and each player. If you lose the flip, each player draws a card.`
 - **Winter's Chill**
   - `Choose X target attacking creatures. For each of those creatures, its controller may pay {1} or {2}. If that player doesn't, destroy that creature at end of combat. If that player pays only {1}, prevent all combat damage that would be dealt to and dealt by that creature this combat.`
+- **Winter's Night**
+  - `Whenever a player taps a snow land for mana, that player adds one mana of any type that land produced. That land doesn't untap during its controller's next untap step.`
 - **Witch Hunter**
   - `{T}: This creature deals 1 damage to target player or planeswalker.`
   - `{1}{W}{W}, {T}: Return target creature an opponent controls to its owner's hand.`

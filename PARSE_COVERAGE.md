@@ -25,28 +25,11 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**11 unclaimed sentence(s) across 9 supported card(s).**
+**2 unclaimed sentence(s) across 1 supported card(s).**
 
-- **Dystopia**
-  - `at the beginning of each player's upkeep, that player sacrifices a green or white permanent of their choice`
-- **Foresight**
-  - `search your library for three cards, exile them, then shuffle`
-- **Gorilla War Cry**
-  - `all creatures gain menace until end of turn`
-- **Nature's Wrath**
-  - `whenever a player puts an island or blue permanent onto the battlefield, that player sacrifices an island or blue permanent of their choice`
-  - `whenever a player puts a swamp or black permanent onto the battlefield, that player sacrifices a swamp or black permanent of their choice`
-- **Royal Decree**
-  - `whenever a swamp, mountain, black permanent, or red permanent becomes tapped, this enchantment deals 1 damage to that permanent's controller`
-- **Sol Grail**
-  - `{t}: add one mana of the chosen color`
 - **Suffocation**
   - `cast this spell only if you were dealt damage this turn by a red instant or sorcery spell`
   - `suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn`
-- **Tidal Control**
-  - `pay 2 life or {2}: counter target red or green spell. any player may activate this ability`
-- **Tornado**
-  - `{2}{g}, pay 3 life for each velocity counter on this enchantment: destroy target permanent and put a velocity counter on this enchantment. activate only once each turn`
 
 ## Acknowledged simplifications
 

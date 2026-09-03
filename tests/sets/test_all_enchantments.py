@@ -1171,3 +1171,66 @@ def test_tidal_control_will_not_counter_a_spell_of_another_colour():
     )
     assert not refused.supported, refused.details
     assert game.players[1].life == 20, "a refused activation pays nothing"
+
+
+def test_royal_decree_reads_all_four_alternatives_of_its_printed_list():
+    """A supported enchantment whose only real line fired on nothing.
+
+    "Whenever a **Swamp, Mountain, black permanent, or red permanent** becomes
+    tapped" is a union across two axes and four members, and the condition
+    table held a single-word group. The line was not reported unsupported: the
+    grammar has its own trigger production, so the sentence lowered as a
+    **spell** instruction on an enchantment - one firing, at resolution, for
+    the wrong seat.
+
+    All four members and one non-member, because a union that dropped an
+    alternative would still pass a test that only checked one.
+    """
+    from engine.keywords import grant_keyword
+
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Royal Decree"))
+    swamp = _w3g5_put(game, 1, _w3g5_from("LEA", "Swamp"))
+    mountain = _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    black = _w3g5_put(game, 1, _w3g5_from("LEA", "Black Knight"))
+    red = _w3g5_put(game, 1, _w3g5_from("LEA", "Hill Giant"))
+    grant_keyword(red, "vigilance")  # so tapping it is a real event, not combat
+    island = _w3g5_put(game, 1, _w3g5_from("LEA", "Island"))
+
+    game.tap_land_for_mana(1, "Swamp")
+    game.resolve_stack()
+    assert game.players[1].life == 19, "a Swamp is the first member"
+
+    game.tap_land_for_mana(1, "Mountain")
+    game.resolve_stack()
+    assert game.players[1].life == 18, "a Mountain is the second"
+
+    game.become_tapped(black)
+    game.resolve_stack()
+    assert game.players[1].life == 17, "a black permanent is the third"
+
+    game.become_tapped(red)
+    game.resolve_stack()
+    assert game.players[1].life == 16, "a red permanent is the fourth"
+
+    game.tap_land_for_mana(1, "Island")
+    game.resolve_stack()
+    assert game.players[1].life == 16, (
+        "a blue land is in none of the four, and the union is a gate"
+    )
+    assert swamp.tapped and mountain.tapped and island.tapped
+
+
+def test_royal_decree_damages_the_tapped_permanents_controller_not_its_own():
+    """"…deals 1 damage to **that permanent's** controller." The seat the event
+    was about, frozen by the tap announcement (`event_subject_controller`) —
+    which on the enchantment's own Swamp is its controller and on an opponent's
+    is theirs. Read as the ability's controller it would be the same answer in
+    exactly one of those two cases, which is Psychic Venom's recorded bug."""
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Royal Decree"))
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Swamp"))
+
+    game.tap_land_for_mana(0, "Swamp")
+    game.resolve_stack()
+    assert game.players[0].life == 19 and game.players[1].life == 20

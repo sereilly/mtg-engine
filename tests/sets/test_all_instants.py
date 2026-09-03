@@ -1038,3 +1038,42 @@ def test_gorilla_war_cry_gives_menace_to_both_players_creatures():
     assert game._minimum_blockers(theirs) == 2, (
         "CR 702.111a: the grant reaches the enforcement, not just the word"
     )
+
+
+def test_suffocation_is_declined_naming_four_parts():
+    """Its cast restriction and its damage sentence are the same missing
+    record, read at two moments. Both remain unclaimed, and both would be
+    *silent* if admitted: a cast gate nothing enforces is a spell castable when
+    the card forbids it, and a recipient nothing resolves is 4 damage to
+    somebody the card never named.
+
+    1. **A per-seat record of what dealt damage to you this turn, in order.**
+       ``PlayerState.damage_taken_this_turn`` is a total and
+       ``damaged_by_sources_this_turn`` lives on *permanents*; neither can
+       answer "the **last** red instant or sorcery **spell**". The fire site
+       exists and is single (``Game._on_player_dealt_damage``), and the seat is
+       already derivable there through ``damage_events.damage_source_seat`` —
+       so what is missing is the field, its per-turn clear beside
+       ``damage_taken_this_turn``'s in ``turn_management``, and the write.
+    2. **A `cast_restrictions.py` row for "only if you were dealt damage this
+       turn by <noun phrase>".** Textual like every row in that table, and the
+       noun phrase reads with the existing card matcher once the record above
+       holds card definitions.
+    3. **A `PlayerRef` kind for "the controller of the last <noun phrase> that
+       dealt damage to you this turn".** The grammar has `that_player` (a seat
+       an event froze) and `target_player` (a seat the spell chose); this is
+       neither - it is a seat read out of a *history* at resolution, which no
+       referent in `ast/_references.py` names today.
+    4. **The `deal_damage` recipient arm behind it**, resolving that referent
+       and dealing nothing when the record is empty - which cannot happen while
+       part 2 gates the cast, but must be right on its own because CR 608.2b
+       lets the board change between announcement and resolution.
+
+    Parts 1 and 2 are what another group is most likely to build incidentally:
+    the record is the same shape several "damaged you this turn" cards want.
+    """
+    program = compile_card_oracle(_w3g5_from("ALL", "Suffocation"))
+    # It compiles supported on its delayed draw plus `SUPPORTED_SPELL_PATTERNS`;
+    # what this asserts is that neither remaining sentence produced anything.
+    kinds = [instruction.kind for instruction in program.instructions]
+    assert "deal_damage" not in kinds

@@ -90,18 +90,32 @@ def _match_subtype(stream: TokenStream, start: int) -> tuple[str, int] | None:
     return match_longest(words, 0, SUBTYPE_INDEX)
 
 
-def _at_or_color(stream: TokenStream) -> bool:
-    """Whether the stream sits on "or <colour>", the second article optional.
+def _color_alternative_offset(stream: TokenStream) -> int | None:
+    """How many tokens ahead the next "…or <colour>" alternative's colour word
+    sits, or None when there is not one there.
 
-    "or blue permanent" and "or **a** white permanent" are the same union
-    written two ways, and both have to be recognised *before* anything is
-    consumed — so the article is looked past here rather than accepted, and the
-    caller accepts it once it has committed.
+    English writes the same list four ways, and all four are one union:
+
+    * ``or blue permanent`` (Nature's Wrath),
+    * ``or **a** white permanent`` (Omen of Fire) — a repeated article,
+    * ``**,** mountain, black permanent`` — a comma with no connector,
+    * ``**, or** red permanent`` (Royal Decree) — the last item of a list,
+      which carries both.
+
+    A pure lookahead, so nothing is consumed until the caller has committed:
+    the separator is what tells this from a phrase that simply ended, and a
+    half-consumed one refuses the whole line.
     """
-    if not stream.at_word("or"):
-        return False
-    offset = 2 if stream.peek_word(1) in ("a", "an") else 1
-    return stream.peek_word(offset) in COLOR_WORDS
+    offset = 1 if stream.at_punct(",") else 0
+    if stream.peek_word(offset) == "or":
+        offset += 1
+    elif offset == 0:
+        # No separator at all: an adjacent colour word is an adjective on this
+        # noun phrase, not another member of a union.
+        return None
+    if stream.peek_word(offset) in ("a", "an"):
+        offset += 1
+    return offset if stream.peek_word(offset) in COLOR_WORDS else None
 
 
 def _match_subtype_or_plural(stream: TokenStream, start: int = 0) -> tuple[str, int] | None:
@@ -650,19 +664,35 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # permanent" and Omen of Fire "a Plains or **a** white permanent",
             # one clause apart in the same block of rules text.
             cross_colors = stream.mark()
-            if d.subtype_match != "all" and _at_or_color(stream):
+            if (
+                d.subtype_match != "all"
+                and _color_alternative_offset(stream) is not None
+            ):
                 alternatives: list[tuple[str, str]] = [
                     ("subtype", name) for name in d.subtypes
                 ]
-                while _at_or_color(stream):
-                    stream.advance()
+                # "a **Swamp, Mountain, black permanent, or red permanent**"
+                # (Royal Decree) repeats the head noun on each coloured member;
+                # "an **Island or blue permanent**" (Nature's Wrath) prints it
+                # once at the end. Both are read here — a repeated head is the
+                # phrase's head all the same, so seeing one ends the noun phrase
+                # instead of looping back for another.
+                saw_head_noun = False
+                while _color_alternative_offset(stream) is not None:
+                    stream.accept_punct(",")
+                    stream.accept_word("or")
                     stream.accept_word("a", "an")
                     alternatives.append(
                         ("color", COLOR_WORDS[str(stream.peek_word())])
                     )
                     stream.advance()
+                    if stream.accept_word("permanent", "permanents"):
+                        saw_head_noun = True
                 d.any_classes = tuple(alternatives)
                 d.subtypes = []
+                if saw_head_noun:
+                    d.saw_head = True
+                    break
                 continue
             stream.reset(cross_colors)
             following = stream.peek_word()

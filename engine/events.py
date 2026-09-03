@@ -678,6 +678,23 @@ def _becomes_tapped_filter(
     # damage its look-alike's tap deals.
     if trig.condition.payload.get("tapped_self"):
         return tapped is permanent
+    # "Whenever a **Swamp, Mountain, black permanent, or red permanent**
+    # becomes tapped" (Royal Decree). A whole noun phrase rather than a word,
+    # read through the one reader of what a printed noun phrase means -- with
+    # the trigger's own controller as observer (CR 109.5), exactly as every
+    # other subject-narrowed condition reads one. The compiler admits the
+    # phrase only when every key it produces is testable, so nothing here can
+    # be silently dropped.
+    described = trig.condition.payload.get("tapped_filter")
+    if described:
+        from .subject_filters import subject_matches
+
+        if not subject_matches(
+            game, tapped, described,
+            observer=game.players.index(_controller_of(game, permanent)),
+            source=permanent,
+        ):
+            return False
     subtype = trig.condition.payload.get("tapped_subtype")
     if subtype and not _noun_matches(tapped, str(subtype)):
         return False

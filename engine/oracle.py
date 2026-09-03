@@ -609,6 +609,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_becomes_tapped",
      r"whenever an? (?P<tapped_subtype>[a-z]+)"
      r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"),
+    # "Whenever a **Swamp, Mountain, black permanent, or red permanent**
+    # becomes tapped" (Royal Decree). A printed *noun phrase* rather than a
+    # word -- a union across CR 205.3 subtypes and CR 105 colours, which the
+    # single-word group above cannot hold and which no pair of payload keys
+    # says either (they are ANDed). So it is a `_subject` group, read by the
+    # noun parser into the same `any_classes` every other reader of that union
+    # already tests.
+    #
+    # **After** the narrow rows and not beside them: this pattern's subject
+    # spans commas and would otherwise claim their lines too. The word row
+    # cannot claim *this* line -- its `[a-z]+` stops at the first comma -- so
+    # the ordering costs nothing and keeps the commoner spellings first.
+    ("permanent_becomes_tapped",
+     r"whenever (?P<tapped_subject>an? .+?) becomes tapped"),
     # "Whenever a Mountain is tapped for mana" (Gauntlet of Might) narrows the
     # same condition to one land type; the unnarrowed "whenever a player taps a
     # land for mana" (Manabarbs, Mana Flare) follows it.
