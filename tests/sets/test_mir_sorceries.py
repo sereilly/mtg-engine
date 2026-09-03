@@ -90,3 +90,55 @@ def test_fallow_earth_tucks_a_land(set_pool):
 
     assert not game.is_on_battlefield(land)
     assert game.players[1].library[0].name == "Island"
+
+
+# --- W1G4: the zones / cards / library family ---
+
+from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
+from engine.models import Permanent as _W1G4Permanent
+
+
+def test_polymorph_reanimates_off_the_victims_own_library(set_pool):
+    """"Destroy target creature. It can't be regenerated. **Its controller**
+    reveals cards from the top of their library until they reveal a creature
+    card. The player puts that card onto the battlefield, then shuffles all
+    other cards revealed this way into their library."
+
+    Transmogrify's procedure behind a destroy instead of an exile, and three
+    words apart from it: "its controller" for "that creature's controller",
+    "the player" for "that player", and "all other cards revealed this way" for
+    "the rest". None of the three changes what the card does, so they are
+    alternatives inside the one rider rather than a second production.
+
+    The creature arrives on the *victim's* battlefield, out of the *victim's*
+    library -- the seat the destroy recorded, not the caster.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[pool["Polymorph"]],
+                         library=[pool["Island"]] * 5),
+        _W1G4PlayerState(
+            name="P2", battlefield=[_W1G4Permanent(card=pool["Femeref Scouts"])],
+            library=[pool["Island"], pool["Mountain"], pool["Viashino Warrior"],
+                     pool["Plains"]],
+        ),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        0, "Polymorph", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Scouts"]
+    assert [p.card.name for p in game.players[1].battlefield] == ["Viashino Warrior"]
+    assert game.players[0].battlefield == [], "the caster reanimates nothing"
+    assert sorted(c.name for c in game.players[1].library) == [
+        "Island", "Mountain", "Plains",
+    ], "the cards revealed on the way are shuffled back, not milled"
+    assert game.players[1].graveyard == [
+        card for card in game.players[1].graveyard if card.name == "Femeref Scouts"
+    ], "nothing revealed reached a graveyard"

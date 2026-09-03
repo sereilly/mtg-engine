@@ -103,6 +103,26 @@ def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
     return a_sorcery_could_be_cast(game, controller_index)
 
 
+def _as_an_instant(game: "Game", controller_index: int, source) -> bool:
+    """CR 602.5e / CR 304.5: the activator must have priority.
+
+    "Activate only as an instant" is not the tautology it looks like, and Lion's
+    Eye Diamond is why. CR 605.3a gives an activated *mana* ability three
+    windows -- whenever its controller has priority, whenever they are paying
+    for a spell or ability, and whenever a rule or effect asks for a mana
+    payment -- and the last two are windows in which nobody has priority. This
+    clause takes them away, which is the whole of the card: the hand is
+    discarded in response to something, never after a spell has been announced
+    and its cost is being paid.
+
+    So the question asked is CR 304.5's own -- "the player must have priority"
+    -- rather than True. A predicate that returned True would be a restriction
+    the engine merely *believes* another rule covers, which is a restriction
+    nothing checks the day the payment path grows a mana-ability window.
+    """
+    return bool(game.has_priority(controller_index))
+
+
 def _a_creature_died_this_turn(game: "Game", controller_index: int, source) -> bool:
     """"Activate only if a creature died this turn." (Caged Zombie.)
 
@@ -1181,6 +1201,11 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only as a sorcery$"),
         _as_a_sorcery,
         "this ability is sorcery-speed",
+    ),
+    ActivationRestriction(
+        re.compile(r"^activate only as an instant$"),
+        _as_an_instant,
+        "this ability may only be activated while you have priority",
     ),
     ActivationRestriction(
         # "Activate only if **enchanted land is untapped**." (Earthlore.) The

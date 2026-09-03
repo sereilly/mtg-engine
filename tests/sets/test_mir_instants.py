@@ -221,3 +221,115 @@ def test_a_tutor_puts_its_find_on_top_after_the_shuffle(set_pool):
 
     assert game.players[0].library[0].name == "Femeref Knight"
     assert len(game.players[0].library) == len(_R9_LIBRARY)
+
+
+# --- W1G4: the zones / cards / library family ---
+
+from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
+from engine.models import Permanent as _W1G4Permanent
+
+
+def _w1g4_duel(pool, *, seat0_hand=(), seat1_battlefield=(), seat1_hand=(),
+               seat1_library=("Island",) * 5):
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", hand=[pool[n] for n in seat0_hand],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(
+            name="P2",
+            battlefield=[_W1G4Permanent(card=pool[n]) for n in seat1_battlefield],
+            hand=[pool[n] for n in seat1_hand],
+            library=[pool[n] for n in seat1_library],
+        ),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_afterlife_gives_the_token_to_the_destroyed_creatures_controller(set_pool):
+    """"Destroy target creature. It can't be regenerated. **Its controller**
+    creates a 1/1 white Spirit creature token with flying."
+
+    The rider is the one Angelic Ascension prints behind an *exile*, and it
+    refused here for want of a producer -- while the destroy handler had been
+    recording exactly that seat all along, under a second name. The assertion
+    that matters is whose battlefield the Spirit lands on: reading the
+    ability's own controller would have handed it to the caster.
+    """
+    pool = set_pool("MIR")
+    game = _w1g4_duel(
+        pool, seat0_hand=("Afterlife",), seat1_battlefield=("Femeref Scouts",)
+    )
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        0, "Afterlife", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Scouts"]
+    assert game.players[0].battlefield == [], "the caster gets nothing"
+    spirits = [p for p in game.players[1].battlefield if p.card.name == "Spirit Token"]
+    assert len(spirits) == 1
+    assert spirits[0].card.colors == ("W",)
+    assert "Flying" in spirits[0].card.keywords
+
+
+def test_afterlife_creates_nothing_when_the_destroy_chose_nothing(set_pool):
+    """CR 608.2b: the rider names the object the previous step chose, so with no
+    target chosen there is no controller for the sentence to name and no token.
+
+    The gate is the producer record's absence rather than a branch in the token
+    handler, which is what keeps "does as much as it can" from inventing a seat.
+    """
+    pool = set_pool("MIR")
+    game = _w1g4_duel(pool, seat0_hand=("Afterlife",))
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Afterlife")
+    game.resolve_stack()
+
+    assert game.players[0].battlefield == []
+    assert game.players[1].battlefield == []
+
+
+def test_illumination_heals_the_countered_spells_controller_for_its_mana_value(set_pool):
+    """"Counter target artifact or enchantment spell. **Its controller** gains
+    life equal to **its mana value**."
+
+    Both halves name the countered spell, and by the time the second sentence
+    runs it is a card in a graveyard: CR 108.4 gives that no controller and
+    CR 613.1 no characteristics, so both are read off records the counter wrote
+    (CR 608.2h). The life goes to the *opponent* -- the payload used to say
+    ``recipient: "target"``, which for a counterspell is the spell.
+    """
+    pool = set_pool("MIR")
+    game = _w1g4_duel(pool, seat0_hand=("Illumination",), seat1_hand=("Mana Prism",))
+    game.start_turn(1)
+    assert game.queue_from_hand(1, "Mana Prism").supported
+    assert [item.card.name for item in game.stack] == ["Mana Prism"]
+
+    result = game.cast_from_hand(0, "Illumination", target_stack_index=0)
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Mana Prism"]
+    assert game.players[1].life == 23, "Mana Prism costs {3}"
+    assert game.players[0].life == 20, "the caster heals nobody"
+
+
+def test_illumination_gains_no_life_when_it_counters_nothing(set_pool):
+    """With nothing countered there is no spell for either possessive to name,
+    so no life is gained -- rather than the caster's own total moving, which is
+    what a recipient defaulted to "caster" would have done."""
+    pool = set_pool("MIR")
+    game = _w1g4_duel(pool, seat0_hand=("Illumination",))
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Illumination")
+    game.resolve_stack()
+
+    assert (game.players[0].life, game.players[1].life) == (20, 20)

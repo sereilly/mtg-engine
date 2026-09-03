@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 from ._common import count_from_payload, evaluate_count, resolve_amount
 from ..exiled_records import source_object
 from ..named_counters import counters_on
-from ..oracle_types import COUNTERS_REMOVED, X_FROM_COUNT_PER_RECIPIENT
+from ..oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
+                            LAST_TARGET_CONTROLLER,
+                            X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -207,7 +209,7 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         # Death Mage.) The destroy step recorded the controller before the
         # permanent left (CR 608.2h, last-known information); no record means
         # the destroy found no target, and the rider fizzles with it.
-        seat = context.results.get("last_target_controller_index")
+        seat = context.results.get(LAST_TARGET_CONTROLLER)
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no destroyed creature, no life lost")
             return True, "resolved"
@@ -378,6 +380,23 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         seat = (context.trigger_context or {}).get("event_subject_player")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded player, no life gained")
+            return True, "resolved"
+        gainer = game.players[seat]
+    elif recipient in (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER):
+        # "**Its controller** gains life equal to its mana value."
+        # (Illumination.) The controller of the object an earlier step of this
+        # same resolution acted on: a countered spell is a card in a graveyard
+        # by now, which CR 108.4 gives no controller, and a destroyed or exiled
+        # permanent is a new object CR 400.7 gives no seat. Both records are
+        # written where the object still had one (CR 608.2h); which of the two
+        # is read is decided by the lowering, from what the step in front of
+        # this one declared it produces.
+        #
+        # No record is not "the caster": the step chose nothing, so the
+        # sentence names nobody and no life is gained (CR 608.2b).
+        seat = context.results.get(recipient)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no life gained")
             return True, "resolved"
         gainer = game.players[seat]
     else:

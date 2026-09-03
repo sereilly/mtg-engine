@@ -496,3 +496,65 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G4: the zones / cards / library family ---
+
+from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
+from engine.handlers._common import apply_damage_to_creature as _w1g4_damage
+from engine.control import change_control as _w1g4_change_control
+from engine.models import Permanent as _W1G4Permanent
+
+
+def test_gravebane_zombie_goes_on_top_of_its_library_instead_of_dying(set_pool):
+    """"If this creature would die, put it on top of its owner's library
+    instead." (CR 614.)
+
+    Firestorm Phoenix's replacement one zone over, and the three consequences
+    are the ones that make it a replacement rather than a dies-trigger: the
+    graveyard stays empty, the game's "creatures died this turn" tally stays at
+    zero, and the card is the next one its owner draws.
+    """
+    pool = set_pool("MIR")
+    zombie = _W1G4Permanent(card=pool["Gravebane Zombie"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", battlefield=[zombie], library=[pool["Island"]] * 5),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    _w1g4_damage(game, zombie, 5, source=None)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(zombie)
+    assert game.players[0].graveyard == []
+    assert game.players[0].library[0].name == "Gravebane Zombie"
+    assert len(game.players[0].library) == 6
+    assert game.creatures_died_this_turn == 0, "a replaced death is not a death"
+
+
+def test_gravebane_zombie_goes_to_its_owners_library_not_its_controllers(set_pool):
+    """CR 400.3: the card goes to its **owner's** library, which is the
+    difference a stolen Zombie makes -- and the reason the interceptor asks
+    ``owner_index_of`` rather than reading the seat off the payload.
+    """
+    pool = set_pool("MIR")
+    zombie = _W1G4Permanent(card=pool["Gravebane Zombie"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", library=[pool["Island"]] * 5),
+        _W1G4PlayerState(name="P2", battlefield=[zombie], library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w1g4_change_control(zombie, 0, source="w1g4-test")
+    game._sync_control()
+    assert game.controller_index_of(zombie) == 0
+
+    _w1g4_damage(game, zombie, 5, source=None)
+    game.check_state_based_actions()
+
+    assert game.players[1].library[0].name == "Gravebane Zombie"
+    assert len(game.players[0].library) == 5

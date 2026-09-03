@@ -24,6 +24,7 @@ this one beside `_common` in its `shared` tuple.
 from __future__ import annotations
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
+                             LAST_TARGET_CONTROLLER,
                              COUNTERS_PLACED_THIS_WAY,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                              HAND_CARDS_TO_LIBRARY)
@@ -600,6 +601,28 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
 })
 
 
+#: What the bare possessive "**its** <characteristic>" reads when the step in
+#: front of it acted on a *spell* rather than on a permanent.
+#:
+#: "Destroy target artifact. You gain life equal to **its** mana value" (Divine
+#: Offering) and "Counter target artifact or enchantment spell. Its controller
+#: gains life equal to **its** mana value" (Illumination) print the same word
+#: for the same question, and the two steps answer it in two records —
+#: ``its_mana_value`` off a permanent, ``countered_spell_mana_value`` off a
+#: stack object. Two records rather than one, for the reason
+#: ``oracle_types.COUNTERED_SPELL_CONTROLLER`` gives one file over: a spell on
+#: the stack is not a permanent, it is written by a different handler at a
+#: different moment, and a card can only ever be in front of one of them.
+#:
+#: So the *pronoun* is resolved here, in the one place that already decides
+#: where a back-reference reads from, rather than by making one handler write
+#: the other's key — which would be the same number under two names, free to
+#: disagree the day either is computed differently.
+_SPELL_POSSESSIVE_RECORDS: dict[str, str] = {
+    "its_mana_value": "countered_spell_mana_value",
+}
+
+
 def _back_reference_payload(
     amount: ast.ThatMuch,
     produced: frozenset[str],
@@ -643,6 +666,11 @@ def _back_reference_payload(
         # of this same effect has to have recorded it.
         if amount.source in produced:
             return {"amount_from": amount.source}
+        # …or recorded it about a **spell**, under the key the spell's own
+        # handler writes. See ``_SPELL_POSSESSIVE_RECORDS``.
+        alias = _SPELL_POSSESSIVE_RECORDS.get(amount.source)
+        if alias is not None and alias in produced:
+            return {"amount_from": alias}
         raise LoweringError(
             f"back-reference to {amount.source!r} with no producer in this effect",
             node=amount,

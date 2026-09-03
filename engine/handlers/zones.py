@@ -21,7 +21,7 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT,
+from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, LAST_TARGET_CONTROLLER,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -2224,7 +2224,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
                 owner_index = controller_index if controller_index is not None else 0
             game.players[owner_index].exile.append(perm.card)
             game.log.append(f"{card.name} exiled {perm.card.name}")
-        # No `exiled_permanent_controller`: the key names *the* controller, and
+        # No `last_target_controller`: the key names *the* controller, and
         # a several-target exile has one per permanent. A later step reading it
         # would silently act on whichever one happened to be written last, so
         # the key is left absent and any card that needs it refuses for want of
@@ -2268,7 +2268,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if context.source_permanent is not None:
         link_exiled_card(context.source_permanent, perm.card, owner_index)
     if controller_index is not None:
-        context.results["exiled_permanent_controller"] = controller_index
+        context.results[LAST_TARGET_CONTROLLER] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
     return True, "resolved"
 

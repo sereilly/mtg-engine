@@ -15,7 +15,8 @@ this one's, and the cut needed no import in either direction because the call
 graph had already fallen apart there.
 """
 
-from ...oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
+from ...oracle_types import (LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
+                             OracleInstruction)
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter
 from .. import ast
@@ -47,7 +48,7 @@ def _lower_reveal_until(
     there is nobody to read the library of — the effect would silently fall back
     to the caster, which is the opposite player from the one the card names.
     """
-    if node.whose == "exiled_permanent_controller" and node.whose not in produced:
+    if node.whose == LAST_TARGET_CONTROLLER and node.whose not in produced:
         raise LoweringError(
             "\"that creature's controller\" with no exile before it", node=node,
         )

@@ -8,7 +8,7 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import (CHOSEN_TARGET_PERMANENTS,
+from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, LAST_TARGET_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
@@ -1099,8 +1099,8 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # recorded. No record means nothing was exiled — the referent never
     # existed, so no token either (CR 608.2b's "does as much as it can" cuts
     # both ways: there is no controller to hand a token to).
-    if payload.get("recipient") == "exiled_permanent_controller":
-        recorded = context.results.get("exiled_permanent_controller")
+    if payload.get("recipient") == LAST_TARGET_CONTROLLER:
+        recorded = context.results.get(LAST_TARGET_CONTROLLER)
         if not isinstance(recorded, int):
             game.log.append(f"{card.name}: nothing was exiled, so no token is created")
             return True, "resolved"
