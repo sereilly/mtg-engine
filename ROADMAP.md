@@ -958,6 +958,63 @@ group that owns the population no census can see.
   production. This is the group that decides whether the set can be promoted
   honestly, and its brief says so: three numbers must reach zero.
 
+### W3G1 — repeated additional costs. Merged; 125 → 128.
+
+Three cards (Taste of Paradise, Undergrowth, Bounty of the Hunt), Primitive
+Justice declined to one part with four pieces, zero hooks. ALL's grammar row
+79.7% → **81.3% parsed**. The differential moved exactly three programs of
+1,869 — including after a `statements.py` change that puts a trailing delay
+*inside* a `ForEach` rather than around it, which touches every card printing a
+delay after its effect and moved none of them.
+
+**The subsystem was one property, not a gate.** `cast_costs.py` already read
+life, discards, sacrifices and exiles — and every one of them is **mandatory**,
+which is what makes CR 601.2h's check a refusal. An *offer* is not a price: it
+never belongs in `_unpayable_additional_cost` at all, because an offer nobody
+takes costs nothing, and one taken past the pool is refused by the mana payment
+itself, which already spends nothing on the way to refusing. Three small edits
+to the casting seam rather than a new one.
+
+**What actually decided the shape was that one printed sentence offers two
+costs independently** (Primitive Justice's `{1}{R} and/or {1}{G}`), so the cost
+carries a tuple and the record a dict keyed by canonical symbols — and the
+canonicalisation has to be *one* function shared with the payment
+(`mana_payment.mana_cost_label`), or the sentence and the charge quietly name
+different offers.
+
+**Three of wave 1's four named blockers for Bounty of the Hunt were wrong, and
+its whole first half already worked.** W2G2 had shipped the enumerated bound
+complete — `_accept_target_bound` reads "one, two, or three" and names the card
+in its own comment. The iterator was not a `_parse_for_each_this_way` row (that
+reader wants `for each <word> <participle> this way`; here the noun is a PT
+token and the participle a four-word relative clause, so nothing was consumed
+at all), and the removal needed the *counted* twin of the bound removal Giant
+Oyster already had — eight lines.
+
+**The CR 603.7 choice the brief called open was closed by the card.**
+`arm_self_action_at_next_end_step` is per-*permanent* metadata swept in the
+**end** step; Bounty's ability names the **cleanup** step and its source is a
+spell already in a graveyard, so there is no permanent to hang it on.
+`create_delayed_trigger` was the only one of the two that can express it — and
+W1G5 had already written the `next_cleanup_step` opener row *and* its fire
+site, naming the card. The one missing half was `next_cleanup_step`'s absence
+from `_BOUND_OBJECT_DELAYED_EVENTS`.
+
+**A shipped card resolves as a no-op under AI play, and the round found it by
+accident.** Spoils of War (ICE) logs "no creatures were given counters" and goes
+to the graveyard every time the AI casts it; Contagion and Bounty of the Hunt
+share the shape. `ai_policy.CastAction` has no `divided_targets` field, so a
+divided spell is announced with no division at all — and
+`_cast_onto_stack` runs `division_refusal` **only** `if divided_targets is not
+None`, so CR 601.2c never gets asked and the spell is castable with no legal
+creature on any battlefield. The **damage** twin falls through to ordinary
+target resolution instead, which is why Fireball works under AI play and the
+counter family does not. Sent to its own closer branch rather than fixed in
+place: the resolution-time default cannot be chosen without the counter's
+**sign** — all counters on the caster's first creature is right for Bounty of
+the Hunt and hands Contagion's −2/−1 to its own caster — so the decision is
+`ai_valuation.py`'s, derived from the compiled program.
+
 ### Round plan — wave 1, five worktree groups
 
 Split by grammar family, ranked by the fragment census rather than the
