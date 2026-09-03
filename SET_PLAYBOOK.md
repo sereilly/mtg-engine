@@ -117,15 +117,41 @@ into a new module and left one of their imports in the old header. It fails
 loudly — 132 collection errors — so the fix is cheap; sweep every module you
 moved code out of before running the suite.
 
-**And sweep for the opposite thing too, because a split needs two scans and only
-one of them is documented.** A dead-import sweep asks "what does this module
-import and no longer use"; a missing-import scan asks "what does it use and
-never import". Only the second is a bug, and it does **not** fail at import time
-— a `NameError` in a function body waits for its line to run, so a smoke import
-of the package passes. HML's own `amounts`/`records` split shipped a module using
-two names it never imported and a package import found nothing; a full test run
-did. The dead half is not harmless either, only silent: 310 such imports have
+**A split needs three scans, and only one of them is documented anywhere else.**
+A **dead-import** sweep asks "what does this module import and no longer use";
+a **missing-name** scan asks "what does it use and never import *or define*";
+a **duplicate-definition** sweep asks "did the split copy this rather than move
+it". Only the second and third are bugs, and neither fails at import time.
+
+The missing-name scan is the one to run **before** the suite rather than after.
+A `NameError` in a function body waits for its line to run, so a smoke import
+of the package passes; at Alliances it fired three times in a single wave, once
+for **246 test failures** when a helper stayed behind while its only caller
+moved out. Run it as an AST walk over every module the split touched — collect
+each module's defined names plus its imports, subtract from the names it loads,
+and expect an empty set (string annotations under `from __future__ import
+annotations` are inert and read as false positives).
+
+The duplicate-definition sweep is the one nothing else can see. At Alliances a
+production was defined **byte-identically** in both halves of an earlier split,
+with the only caller in the new home — a copy, not a move.
+`test_no_module_defines_the_same_name_twice` looks *within* a module, so it is
+blind to this; the dead copy imports clean, tests green, and is simply never
+reached. Grep top-level `def`/`class` names across the package after any split.
+
+The dead half is not harmless either, only silent: 310 such imports have
 accumulated across `engine/` from earlier splits, which is a ROADMAP item now.
+
+**A module crossing the 1,000-line cap with no branch at fault is the
+integrator's split, and the module usually names its own seam.** Alliances
+produced two in one wave — four groups adding a few dispatch arms each took
+`lower.py` from 964 to 1,006, and two groups took `effects/cards.py` to 1,005.
+Neither is a branch to send back. Cut where the module's own docstring already
+draws a line, and prefer the half that **grows with the pool** over the half
+that has been stable: `by_node.py` recorded that principle at Fallen Empires
+("the table is a registry either way, and `lower.py` is dispatch") and it
+applies unchanged when *both* halves are dispatch. Reuse the mirror's family
+name if one exists, so the split re-forms the mirror instead of forking it.
 
 **Two branches splitting the same module in one wave is a real shape** — both of
 HML's waves produced one. Their import blocks are where they meet, and **neither
@@ -218,6 +244,16 @@ base: assert both sides start with the base byte for byte, then base +
 ours-tail + theirs-tail. The assertion is the point — a branch that edited the
 shared prefix cannot be reconstructed this way, and that is the case worth
 failing on rather than guessing through.
+
+**Alliances hit that failure mode for real, and taught the follow-up: after
+resolving one, sweep *every* block in *every* per-set file the wave touched.**
+Two groups' helpers both ended with the same line, git took it as common
+context between the two regions, and a union spliced four lines of one helper's
+body onto the other's — the four that actually put a permanent on the
+battlefield. Three tests caught it; nothing else would have. The sweep is
+mechanical: for each branch and each file, check that every non-blank line of
+the branch's block is present in the merged file. It found nothing else that
+wave, which is the result you want and cannot assume.
 
 **Two hazards specific to parallel authorship, both silent.** Git resolves
 "both branches added a function" as *two functions* rather than as a conflict,
@@ -541,6 +577,14 @@ measured set so per-card tests can land as the cards do. **Exit:**
    test asserted instruction kinds and passed while the card exiled itself — and
    the map cannot see a **text-keyed table** at all, so a round that edits one
    owes a second differential over that table.
+   **And a round that adds a defaulted field to a dataclass the snapshot reprs
+   owes the reader a filtered number.** Alliances did it twice, reporting 710
+   and 713 changed of 1,869 where ten and seven had really moved — every card
+   with an activated ability moves when `ActivatedAbilityCost` gains a field.
+   That is not noise to suppress: the full repr is what makes the narrowing
+   class visible in the first place. Strip the new field's default spelling
+   from both sides, re-compare, and report the filtered count — a round that
+   reports the raw one has told the next integrator nothing.
    It is a minute's work over 1,600 cards and it is the cheapest instrument in
    this repo, because it answers the question every other one only approximates:
    *what else did this touch?* Three of Fallen Empires' five groups ran it
@@ -642,6 +686,21 @@ measured set so per-card tests can land as the cards do. **Exit:**
 
 **Entry:** every card supported. **Exit:** one promotion commit, every gate
 green, the trackers agreeing the set ships.
+
+**Make the manifest move a textual edit, not a json round-trip.** `json.dumps`
+re-escapes the em dashes in the role descriptions, which trips
+`test_registration_preserves_everything_else_byte_for_byte` — a second failure
+on top of whatever the rehearsal is really telling you. Cut the entry's block
+out of `measured` and paste it into `sets` at the release-ordered position.
+
+**Rehearse a deliberately *wrong* insert before trusting the order guard.**
+An all-new set's position is invisible to
+`test_appending_a_set_never_changes_an_existing_original_printing` — it shares
+no oracle_id, so no card's origin moves from any position and the prefix
+comparison is green wherever the entry sits. That has now been FEM's, HML's and
+ALL's blind spot. `test_the_shipped_sets_are_in_printing_order` is the one that
+can fire; append the entry at the wrong end once and watch it, which costs a
+minute and converts an assumption into an observation.
 
 Step 1 is a **rehearsal**, and it is implementation work rather than a
 formality — budget for it. Move the manifest entry from `measured` to `sets`
@@ -1262,3 +1321,45 @@ manifest and asserted `measured` equals exactly its three fake entries —
 real ingest. Fixed to assert the invariant (the list is release-ordered; the
 fakes keep their relative order) rather than the population. Nothing drained
 from Known gaps; nothing added.
+
+**ALL — 2026-09-02 (Phases 0–6, one session; 62/144 → 144/144).** Three waves
+of five worktree groups plus three closers; pool 1,725 → 1,869 over fifteen
+sets, suite 11,547 → 12,758, grammar 88.8% → 89.2% parsed, hook reliance
+3.6% → 3.3% with **zero hooks added across 144 cards and one retired**.
+
+*The headline finding is about the instruments, not the set.* **Six
+already-shipped cards were mis-playing and every one was stronger than
+printed** — a divided spell resolving as a no-op, three dealing their whole
+amount to a face the card cannot target, two aiming the AI at its own board.
+None was visible to any instrument, because the census, `--hollow-lines` and
+`parse_coverage.py` all ask whether a line produced *something* and none asks
+whether it produced the right thing. Five of the six were found as a side
+effect of work on a different card. Phase 3's Rock Hydra step is the only
+thing that finds these, and the phase text now says the census cannot.
+
+*Phase 3's split guidance went from two scans to three*, in place: the
+dead-import sweep, the **missing-name** scan (run it *before* the suite — it
+fired three times in one wave, once for 246 failures) and a
+**duplicate-definition** sweep, which is the one no guard can see because
+`test_no_module_defines_the_same_name_twice` looks within a module and a copied
+production imports clean and is never reached.
+
+*Integration gained two rules.* A module crossing the cap **with no branch at
+fault** is the integrator's split — two happened in one wave — and the module
+usually names its own seam; cut where its docstring already draws the line and
+move the half that grows with the pool. And after resolving one per-set block
+conflict, **sweep every block in every per-set file the wave touched**: the
+convention's documented failure mode fired for real and a naive union spliced
+four lines of one group's helper onto another's.
+
+*Phase 4 gained the manifest mechanics* (textual edit, not a json round-trip)
+and the instruction to **rehearse a wrong insert** before trusting the order
+guard — an all-new set's position is invisible to the prefix comparison, now
+FEM's, HML's and ALL's blind spot. The rehearsal turned nine guards red and
+**five were the guard**, including the emptiness-premise class for the third
+consecutive set, this time written into a test's docstring.
+
+*Nothing was drained from Known gaps.* `permanents_from` stays open;
+`_cost_picker_spec`'s missing **offer** shape is now owed by two cost kinds
+(the alternative cost from W1G4 and the repeated additional cost from W3G1),
+which is the one item this set added.
