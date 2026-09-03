@@ -567,3 +567,41 @@ def test_crimson_hellkite_refuses_to_pay_x_from_the_wrong_colour(set_pool):
     )
     assert victim.damage_marked == 0
     assert not hellkite.tapped, "CR 602.2b: nothing is paid by a refused activation"
+
+
+def test_burning_palm_efreet_grounds_the_creature_it_damaged(set_pool):
+    """"{1}{R}{R}: This creature deals 2 damage to target creature with flying
+    **and that creature loses flying** until end of turn."
+
+    Vertigo prints the identical two clauses with a full stop between them and
+    has played correctly since Ice Age: the sentence loop probes the pronoun
+    rider between sentences. Joined with "and" the conjunction loop never
+    reaches it, so "that creature" fell through to the bare-noun reading and
+    the lowering refused — one printed word from a card that works.
+
+    The keyword is gone from the creature that was damaged, and the ability
+    picked its target once: both instructions carry the same description.
+    """
+    pool = set_pool("MIR")
+    efreet = _W1G3Permanent(card=pool["Burning Palm Efreet"])
+    drake = _W1G3Permanent(card=pool["Azimaet Drake"])        # 1/3 flier
+    wyvern = _W1G3Permanent(card=pool["Cerulean Wyvern"])     # 3/3 flier
+    p1 = _W1G3PlayerState(name="P1", battlefield=[efreet], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[drake, wyvern], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.activate_permanent_ability(
+        0, "Burning Palm Efreet",
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert drake.damage_marked == 2
+    assert not drake.has_keyword("flying"), (
+        f"the loss missed the creature the ability damaged: {game.log}"
+    )
+    assert wyvern.damage_marked == 0
+    assert wyvern.has_keyword("flying"), "one target, not every flier"

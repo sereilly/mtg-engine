@@ -325,6 +325,88 @@ def rebind_pump_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Stat
     return replace(statement, steps=tuple(steps))
 
 
+def _rebind_keyword_loss_subject(node, bound: "ast.TargetSpec"):
+    """*node* with every bare "that <noun>" :class:`ast.LoseKeyword` subject set
+    to *bound*.
+
+    Narrow in the same two ways :func:`_rebind_pump_subject` is, and for its
+    reason: one node type, and a noun phrase carrying **nothing but its head
+    noun**. "That creature" is a back-reference; "that creature you control" is
+    a narrowed one the clause chose for itself, and rewriting it would throw the
+    narrowing away.
+
+    The head noun must also be one the bound target could be, so a sentence that
+    chose a land and then talks about a creature keeps its own refusal.
+    """
+    if isinstance(node, ast.LoseKeyword):
+        subject = node.subject
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "that"
+            and not subject.targeted
+            and set(subject.filter.to_payload()) <= {"type_filter"}
+            and subject.filter.card_types == bound.filter.card_types
+        ):
+            return replace(node, subject=bound)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebind_keyword_loss_subject(getattr(node, field.name), bound),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_rebind_keyword_loss_subject(item, bound) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
+def rebind_keyword_loss_pronoun_to_clause_target(
+    statement: ast.Statement,
+) -> ast.Statement:
+    """"…deals 2 damage to target creature with flying **and that creature loses
+    flying** until end of turn." (Burning Palm Efreet.)
+
+    The seventh rebinder, and the only one whose antecedent is a **clause of the
+    same sentence**. Vertigo prints those two clauses with a full stop between
+    them and has played correctly since Ice Age, because the *sentence* loop
+    probes ``pronouns._parse_pronoun_grant_rider`` between sentences and that
+    production reads the previous sentence's target. Join the two with "and"
+    instead and the conjunction loop in ``statements.py`` never reaches it — so
+    "that creature" fell through to the bare-noun reading and the lowering
+    refused it, one printed word away from a card that works.
+
+    It cannot be fixed where it is found. ``pronouns`` sits *above*
+    ``statements`` in this package's layer order (`test_grammar_layering.py`),
+    so the conjunction loop may not call that production; the referent is
+    resolved here instead, where every other cross-clause pronoun is, and the
+    parser applies it to a whole line's statement.
+
+    Narrow for :func:`rebind_pump_pronoun_to_sentence_target`'s reason and
+    demonstrably so: a whole-pool differential over both manifest roles moved
+    exactly the cards that print this shape. The bound spec **stays a target** —
+    the ability announces one (CR 601.2c) and both clauses act on it, so the two
+    instructions carry the identical ``targets`` payload and the picker asks
+    once.
+    """
+    if not isinstance(statement, ast.Sequence):
+        return statement
+    announced: "ast.TargetSpec | None" = None
+    steps: list[ast.Statement] = []
+    for step in statement.steps:
+        if announced is not None:
+            step = _rebind_keyword_loss_subject(step, announced)
+        elif (found := _announced_target(step)) is not None:
+            announced = found
+        steps.append(step)
+    if all(a is b for a, b in zip(steps, statement.steps)):
+        return statement
+    return replace(statement, steps=tuple(steps))
+
+
 def _rebind_source_watching_delay(node, bound: "ast.TargetSpec"):
     """*node* with every source-watching delay's bare pronoun pointed at
     *bound*.
