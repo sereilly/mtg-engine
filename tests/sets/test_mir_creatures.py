@@ -605,3 +605,40 @@ def test_burning_palm_efreet_grounds_the_creature_it_damaged(set_pool):
     )
     assert wyvern.damage_marked == 0
     assert wyvern.has_keyword("flying"), "one target, not every flier"
+
+
+def test_abyssal_hunter_bites_the_creature_it_tapped(set_pool):
+    """"{B}, {T}: Tap target creature. This creature deals damage equal to its
+    power **to that creature**."
+
+    The same cross-clause pronoun one node type over, and the same one-word
+    difference: Tracker and Karplusan Yeti print "…equal to its power to
+    **target** creature" and have worked since Ice Age, while this card names
+    the creature the sentence in front of it chose and refused at lowering for
+    want of a producer for ``its_power``.
+
+    A second creature on the board makes the test about the *binding*: only the
+    tapped one is bitten, so the ability did not fall through to whatever the
+    resolution context was carrying.
+    """
+    pool = set_pool("MIR")
+    hunter = _W1G3Permanent(card=pool["Abyssal Hunter"])
+    victim = _W1G3Permanent(card=pool["Wild Elephant"])       # 3/3
+    bystander = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[hunter], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim, bystander], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.activate_permanent_ability(
+        0, "Abyssal Hunter",
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert victim.tapped
+    assert victim.damage_marked == hunter.effective_power > 0
+    assert not bystander.tapped
+    assert bystander.damage_marked == 0

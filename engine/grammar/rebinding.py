@@ -325,39 +325,71 @@ def rebind_pump_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Stat
     return replace(statement, steps=tuple(steps))
 
 
-def _rebind_keyword_loss_subject(node, bound: "ast.TargetSpec"):
-    """*node* with every bare "that <noun>" :class:`ast.LoseKeyword` subject set
-    to *bound*.
+def _is_clause_back_reference(spec, bound: "ast.TargetSpec") -> bool:
+    """Whether *spec* is the bare "that <noun>" naming *bound*.
 
     Narrow in the same two ways :func:`_rebind_pump_subject` is, and for its
-    reason: one node type, and a noun phrase carrying **nothing but its head
-    noun**. "That creature" is a back-reference; "that creature you control" is
-    a narrowed one the clause chose for itself, and rewriting it would throw the
-    narrowing away.
+    reason: the quantifier must be the demonstrative, and the noun phrase must
+    carry **nothing but its head noun**. "That creature" is a back-reference;
+    "that creature you control" is a narrowed one the clause chose for itself,
+    and rewriting it would throw the narrowing away.
 
-    The head noun must also be one the bound target could be, so a sentence that
-    chose a land and then talks about a creature keeps its own refusal.
+    Plus a third: the head noun must be one the bound target could be, so a
+    clause that chose a land and then talks about a creature keeps its own
+    refusal rather than being pointed at the land.
     """
+    return (
+        isinstance(spec, ast.TargetSpec)
+        and spec.quantifier == "that"
+        and not spec.targeted
+        and set(spec.filter.to_payload()) <= {"type_filter"}
+        and spec.filter.card_types == bound.filter.card_types
+    )
+
+
+def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
+    """*node* with every bare "that <noun>" back-reference set to *bound*.
+
+    Two node types, listed rather than walked: an :class:`ast.LoseKeyword`
+    subject ("…**and that creature** loses flying", Burning Palm Efreet) and an
+    :class:`ast.DealDamage` recipient ("…damage equal to its power **to that
+    creature**", Abyssal Hunter). Both are the same printed back-reference in
+    the same position, and both are the *object* of their clause — which is
+    what makes them the pronoun this resolves and not, say, the "that creature"
+    a trigger's event bound.
+
+    Not a :func:`_walk_specs` rewrite over every spec, which is what the four
+    general rebinders do. See
+    :func:`rebind_keyword_loss_pronoun_to_clause_target` for why this one is
+    narrow.
+    """
+    if isinstance(node, ast.CreateDelayedTrigger):
+        # "Choose target attacking or blocking creature … This creature deals 2
+        # damage to **that creature** at end of combat." (Dwarven Sea Clan.)
+        # The same printed words, bound by a different rule: a delayed ability
+        # fires later and CR 603.7c makes it *about* the object the creating
+        # effect chose, which `rebind_pronoun_to_delay_target` already records
+        # by **dropping** the targeting. Rewriting the recipient back into a
+        # targeted spec put a picker description on an instruction that runs at
+        # end of combat with nobody to ask — the whole-pool differential caught
+        # it on the one card in the pool that prints the shape.
+        return node
     if isinstance(node, ast.LoseKeyword):
-        subject = node.subject
-        if (
-            isinstance(subject, ast.TargetSpec)
-            and subject.quantifier == "that"
-            and not subject.targeted
-            and set(subject.filter.to_payload()) <= {"type_filter"}
-            and subject.filter.card_types == bound.filter.card_types
-        ):
+        if _is_clause_back_reference(node.subject, bound):
             return replace(node, subject=bound)
+    if isinstance(node, ast.DealDamage) and len(node.recipients) == 1:
+        if _is_clause_back_reference(node.recipients[0], bound):
+            return replace(node, recipients=(bound,))
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         changes = {
             field.name: rebound
             for field in dataclasses.fields(node)
-            for rebound in (_rebind_keyword_loss_subject(getattr(node, field.name), bound),)
+            for rebound in (_rebind_clause_bound_noun(getattr(node, field.name), bound),)
             if rebound is not getattr(node, field.name)
         }
         return replace(node, **changes) if changes else node
     if isinstance(node, (tuple, list)):
-        walked = [_rebind_keyword_loss_subject(item, bound) for item in node]
+        walked = [_rebind_clause_bound_noun(item, bound) for item in node]
         if all(a is b for a, b in zip(walked, node)):
             return node
         return type(node)(walked)
@@ -368,7 +400,9 @@ def rebind_keyword_loss_pronoun_to_clause_target(
     statement: ast.Statement,
 ) -> ast.Statement:
     """"…deals 2 damage to target creature with flying **and that creature loses
-    flying** until end of turn." (Burning Palm Efreet.)
+    flying** until end of turn." (Burning Palm Efreet); "Tap target creature.
+    This creature deals damage equal to its power **to that creature**."
+    (Abyssal Hunter.)
 
     The seventh rebinder, and the only one whose antecedent is a **clause of the
     same sentence**. Vertigo prints those two clauses with a full stop between
@@ -398,7 +432,7 @@ def rebind_keyword_loss_pronoun_to_clause_target(
     steps: list[ast.Statement] = []
     for step in statement.steps:
         if announced is not None:
-            step = _rebind_keyword_loss_subject(step, announced)
+            step = _rebind_clause_bound_noun(step, announced)
         elif (found := _announced_target(step)) is not None:
             announced = found
         steps.append(step)
