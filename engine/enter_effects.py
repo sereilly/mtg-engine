@@ -29,6 +29,7 @@ claiming it would report as understood a wording nothing implements.
 
 from __future__ import annotations
 
+from functools import lru_cache
 import re
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
@@ -207,6 +208,71 @@ ENTERS_WITH_X_PT_COUNTERS = re.compile(
     r"^this [a-z]+ enters with x "
     r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
 )
+
+
+#: The **counted** form: "This creature enters with a +1/+1 counter on it **for
+#: each creature card in your graveyard**." (Zombie Mob.) Its own pattern
+#: beside the printed-number and X forms above, for their reason: the number
+#: comes from a third place — neither the line nor the cast, but the board as
+#: the permanent enters (CR 608.2 counts when the effect happens).
+#:
+#: The noun phrase is *payload*, read by the grammar's own noun parser and
+#: turned into the count spec every other counted sentence in the engine uses.
+#: A phrase that reader cannot answer leaves the line unclaimed, so the card
+#: reports unsupported naming it rather than entering with nothing on it —
+#: which is the failure ``enters_with_x_named_counters`` records one family
+#: over.
+ENTERS_WITH_COUNTED_PT_COUNTERS = re.compile(
+    r"^this [a-z]+ enters with a "
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counter on it for each "
+    r"(?P<phrase>.+)$"
+)
+
+
+@lru_cache(maxsize=None)
+def _counted_entry_spec(phrase: str) -> "dict | None":
+    """The count spec ``for each <phrase>`` takes, or None.
+
+    Through ``parse_subject_filter`` and ``count_spec`` — the same pair
+    "gets +1/+1 for each creature card in your graveyard" already goes through
+    — so the two printed sentences count the same set. A second reader of the
+    phrase would be free to disagree with the pump about what a creature card
+    in a graveyard is, which is exactly the drift
+    ``activation_restrictions._controlled_board_phrase`` is written this way to
+    avoid.
+
+    The article is supplied here: ``parse_subject_filter`` reads a *subject*,
+    which is printed with one, and the counted phrase is not.
+    """
+    from .grammar.errors import GrammarError, LoweringError
+    from .grammar.lowering import count_spec
+    from .grammar.phrases import parse_subject_filter
+
+    try:
+        filt = parse_subject_filter(f"a {phrase}")
+    except GrammarError:
+        return None
+    if filt is None:
+        return None
+    try:
+        return count_spec(filt, None)
+    except LoweringError:
+        return None
+
+
+def enters_with_counted_pt_counters(
+    line: str, card_name: str | None = None
+) -> "tuple[str, dict] | None":
+    """``(counter kind, count spec)`` the line places, or None.
+
+    Read by the entry state and by the support gate, like its two siblings, so
+    what is placed and what is claimed cannot drift.
+    """
+    match = ENTERS_WITH_COUNTED_PT_COUNTERS.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    spec = _counted_entry_spec(match.group("phrase"))
+    return None if spec is None else (match.group("counter"), spec)
 
 
 def enters_with_x_pt_counters(line: str, card_name: str | None = None) -> str | None:
@@ -895,6 +961,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with X P/T counters"
     if enters_with_x_named_counters(normalized) is not None:
         return "enters with X named counters"
+    if enters_with_counted_pt_counters(normalized) is not None:
+        return "enters with counted P/T counters"
     if chooses_opponent_on_enter(normalized):
         return "chooses an opponent as it enters"
     if chooses_color_on_enter(normalized):

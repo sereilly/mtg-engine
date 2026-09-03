@@ -704,3 +704,53 @@ def test_jungle_patrol_will_not_eat_a_creature_that_is_not_a_wood_token(set_pool
         "Jungle Patrol", "Femeref Scouts",
     ]
     assert game.players[0].mana_pool["R"] == 0
+
+
+def test_zombie_mob_counts_the_graveyard_before_it_eats_it(set_pool):
+    """"This creature enters with a +1/+1 counter on it **for each creature card
+    in your graveyard**." / "When this creature enters, exile all creature cards
+    from your graveyard."
+
+    Two firsts on one card. The entry counters take their number from a third
+    place -- neither the printed line nor the announced X, but the board as the
+    permanent enters (CR 608.2) -- and the noun phrase goes through the same
+    ``parse_subject_filter`` + ``count_spec`` pair the printed sentence "gets
+    +1/+1 for each creature card in your graveyard" already uses, so the two
+    count the same set. The sweep is over a pile of *cards*, which the
+    battlefield sweep cannot be: CR 613.1 gives a card in a graveyard no
+    computed characteristics for ``subject_matches`` to read.
+
+    The order is the assertion. CR 614.1c applies the counters as the permanent
+    enters and the trigger resolves afterwards, so the Mob is sized by a
+    graveyard it then empties -- and the printed 2/0 is why that matters: with
+    no creature card there it enters and dies.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", hand=[pool["Zombie Mob"]],
+            graveyard=[pool["Femeref Scouts"], pool["Mana Prism"],
+                       pool["Viashino Warrior"], pool["Island"]],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(
+            name="P2", graveyard=[pool["Femeref Scouts"]],
+            library=[pool["Island"]] * 5,
+        ),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Zombie Mob").supported
+    game.resolve_stack()
+
+    mob = game.players[0].battlefield[0]
+    assert (mob.effective_power, mob.effective_toughness) == (4, 2), "2/0 plus two"
+    assert [c.name for c in game.players[0].graveyard] == ["Mana Prism", "Island"]
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Femeref Scouts", "Viashino Warrior",
+    ]
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Scouts"], (
+        "'your graveyard' is one pile"
+    )

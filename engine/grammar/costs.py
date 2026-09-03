@@ -169,6 +169,28 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
             return False
         if filt.zone_owner is not None and filt.zone_owner.kind != "you":
             return False
+    elif filt.zone == "hand":
+        # "Exile **a card from your hand**" (Cadaverous Bloom). The payer's own
+        # hand and no other: a hand is hidden (CR 400.2), so a cost naming
+        # somebody else's would ask a player to choose a card they cannot see.
+        #
+        # And it returns **here**, before the type check below, because "a
+        # card" is the whole of what this cost names and it is not the
+        # anything-goes phrase that check refuses. That argument is about a
+        # zone the payer does not choose from freely: an untyped battlefield
+        # exile would let the charger eat a land the player would never have
+        # given up. A hand exile eats a card its owner picks out of their own
+        # hand, which is what "a card" says and what the discard cost beside it
+        # has always admitted with no type printed either.
+        if not filt.is_card:
+            return False
+        if filt.zone_owner is None or filt.zone_owner.kind != "you":
+            return False
+        if _restrictions_beyond(
+            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
+        ):
+            return False
+        return chargeable_exile_payload(filt.to_payload()) is not None
     elif filt.zone != "battlefield" or filt.is_card:
         return False
     if not (filt.card_types or filt.subtypes):

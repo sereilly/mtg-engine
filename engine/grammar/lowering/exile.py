@@ -182,6 +182,46 @@ def _lower_exile(
         # ``to_payload`` cannot carry a *variable* mana-value bound, and
         # dropping the bound would widen the sweep to every mana value.
         filt = subject.filter
+        # "Exile **all creature cards from your graveyard**." (Zombie Mob.) A
+        # sweep over a pile of *cards* rather than over the battlefield, so it
+        # is its own instruction: CR 613.1 gives a card in a graveyard no
+        # computed characteristics at all, and the battlefield sweep below
+        # matches with ``subject_matches``, which asks a permanent questions a
+        # card cannot answer.
+        #
+        # The payer's own pile and no other, because that is what the pool
+        # prints and because "a graveyard" would need the handler to say which.
+        # Everything the phrase narrows by is carried through
+        # ``card_only_filter``, the reader a discard cost and a graveyard
+        # target already share — a narrowing it cannot answer refuses the line
+        # rather than exiling a wider set than the card names.
+        if filt.zone == "graveyard" and filt.is_card:
+            if filt.zone_owner is None or filt.zone_owner.kind != "you":
+                raise LoweringError(
+                    "the graveyard exile sweep reads your own pile", node=node
+                )
+            if node.counters:
+                raise LoweringError(
+                    "a graveyard exile sweep carries no counters", node=node
+                )
+            default = ast.ObjectFilter()
+            described = card_only_filter(
+                dataclasses.replace(
+                    filt, zone=default.zone, zone_owner=default.zone_owner,
+                ).to_payload()
+            )
+            if described is None:
+                raise LoweringError(
+                    "the graveyard exile sweep cannot test this restriction on "
+                    "a card in a zone",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "exile_graveyard_cards", "",
+                    {"graveyard_owner": "you", "filter": described},
+                ),
+            )
         if filt.zone != "battlefield" or filt.is_card:
             raise LoweringError("the exile sweep reads battlefield permanents", node=node)
         payload: dict[str, object] = {}

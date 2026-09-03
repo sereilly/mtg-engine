@@ -192,11 +192,11 @@ class ActivatedAbilityCost:
     #: empty filter would let the charger eat a land.
     exile_filter: dict | None = None
     #: Which zone that payment comes out of - ``"battlefield"`` (a permanent
-    #: the payer controls) or ``"graveyard"`` (a card in the payer's own).
-    #: Beside the filter rather than inside it because the two enumerate
-    #: different kinds of object, and a matcher for one cannot answer about
-    #: the other (CR 613.1: a card in a zone has no computed characteristics
-    #: at all).
+    #: the payer controls), ``"graveyard"`` (a card in the payer's own) or
+    #: ``"hand"`` (Cadaverous Bloom's "Exile a card from your hand"). Beside
+    #: the filter rather than inside it because the three enumerate different
+    #: kinds of object, and a matcher for one cannot answer about the others
+    #: (CR 613.1: a card in a zone has no computed characteristics at all).
     exile_zone: str = "battlefield"
     #: Whose zone that payment comes out of: ``"you"`` (the payer's own pile,
     #: Necropolis) or ``None`` for **any one player's** ("from a graveyard" /

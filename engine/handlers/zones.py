@@ -2519,6 +2519,49 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("exile_graveyard_cards")
+def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile all creature cards from your graveyard." (Zombie Mob.)
+
+    The sweep the battlefield one beside it cannot be: CR 613.1 gives a card in
+    a graveyard no computed characteristics at all, so what the noun phrase
+    narrows by is answered by the *card* matcher — the same reader a discard
+    cost and a graveyard target already share.
+
+    Nothing is chosen and nothing is ordered: exile is an unordered zone
+    (CR 406.2 orders no zone but the library and the graveyard), and "all" names
+    the whole matching set. The pile is read once into a list before anything
+    moves, because removing from a list while iterating it skips entries — and
+    a graveyard holds several copies of a popular card under one name, so the
+    survivors are rebuilt by *slot* rather than by value (idiom 11).
+    """
+    payload = instruction.payload
+    if payload.get("graveyard_owner") != "you":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    owner = context.caster
+    described = dict(payload.get("filter") or {})
+    taken_slots = [
+        index for index, card in enumerate(owner.graveyard)
+        if _card_matches_filter(card, described)
+    ]
+    if not taken_slots:
+        game.log.append(f"{context.card.name}: no card in that graveyard to exile")
+        return True, "resolved"
+    taken = [owner.graveyard[index] for index in taken_slots]
+    kept = [
+        card for index, card in enumerate(owner.graveyard)
+        if index not in set(taken_slots)
+    ]
+    owner.graveyard[:] = kept
+    owner.exile.extend(taken)
+    game.log.append(
+        f"{context.card.name} exiled {len(taken)} card(s) from "
+        f"{owner.name}'s graveyard"
+    )
+    return True, "resolved"
+
+
 @effect_handler("exile_cards_from_graveyard")
 def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…exile up to two target creature cards from defending player's

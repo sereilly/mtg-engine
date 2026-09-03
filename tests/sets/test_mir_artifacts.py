@@ -223,3 +223,54 @@ def test_lions_eye_diamond_is_refused_without_priority(set_pool):
     assert "priority" in result.details
     assert game.players[0].hand, "a refused activation pays nothing"
     assert game.players[0].battlefield, "…and sacrifices nothing"
+
+
+def test_cadaverous_bloom_exiles_one_card_from_hand_for_two_mana(set_pool):
+    """"Exile a card from your hand: Add {B}{B} or {G}{G}."
+
+    The mana half of this line already worked -- the alternatives are one
+    payload the mana lowering has read since Alliances. What refused was the
+    *cost*: an exile charged out of a **hand**, a third zone beside the
+    battlefield and the graveyard the payment path already enumerated.
+
+    The count is the assertion that matters. A hand repeats one immutable
+    ``CardDefinition`` per copy, so the two Islands here are the same Python
+    object; the payment goes through ``take_card_from_hand`` and eats exactly
+    one of them.
+    """
+    game, _ = _w1g4_duel(
+        set_pool,
+        seat0_battlefield=("Cadaverous Bloom",),
+        seat0_hand=("Island", "Island", "Mana Prism"),
+    )
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Cadaverous Bloom", permanent_index=0, mana_color="B"
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].hand] == ["Island", "Mana Prism"]
+    assert [c.name for c in game.players[0].exile] == ["Island"]
+    assert game.players[0].mana_pool["B"] == 2
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Cadaverous Bloom",
+    ], "the source pays nothing; the hand does"
+
+
+def test_cadaverous_bloom_is_unactivatable_with_an_empty_hand(set_pool):
+    """CR 602.2b: a cost that cannot be paid refuses the activation with
+    nothing spent. Before the hand branch existed the payment fell through to
+    the battlefield one, which exiled the Bloom itself and produced the mana
+    anyway."""
+    game, _ = _w1g4_duel(set_pool, seat0_battlefield=("Cadaverous Bloom",))
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Cadaverous Bloom", permanent_index=0, mana_color="G"
+    )
+
+    assert not result.supported
+    assert game.players[0].mana_pool["G"] == 0
+    assert game.players[0].exile == []
+    assert game.players[0].battlefield, "the Bloom is still there"
