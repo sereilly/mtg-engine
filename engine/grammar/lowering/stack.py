@@ -360,8 +360,16 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             payload["targets_source"] = True
     if filt.colors:
         if len(filt.colors) > 1:
-            raise LoweringError("no handler for a multi-colour counter filter", node=node)
-        payload["color_filter"] = filt.colors[0]
+            # "Counter target **red or green** spell." (Tidal Control.) CR 105.2
+            # gives an object one or more colours, so the printed union names
+            # every spell that is either — its own key rather than a list under
+            # `color_filter`, for the reason `any_classes` beside it has one: a
+            # reader that has learned only the single-colour key would test the
+            # list by identity and counter nothing, and a reader that took the
+            # first entry would counter half the card.
+            payload["any_colors"] = list(filt.colors)
+        else:
+            payload["color_filter"] = filt.colors[0]
     if filt.mana_value is not None:
         # Spell Blast: "counter target spell with mana value X". The handler
         # compares the X chosen on the cast against the target's mana value;

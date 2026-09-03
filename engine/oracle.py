@@ -765,8 +765,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # the two rows above rather than beside them: this pattern's subject group
     # sits after three fixed words those cannot match, so no collision, and the
     # ordering keeps the commoner spellings first.
+    #
+    # ``an?`` for the reason the tap-for-mana rows one table over carry it:
+    # English picks the article off the *next word*, and "a Swamp" and "**an**
+    # Island" are the same condition. Written "a " this row read Nature's Wrath's
+    # Swamp line and not its Island line — and the half it dropped did not
+    # report unsupported, because `parse_line` has a trigger production of its
+    # own: the sentence lowered as a **spell** instruction on an enchantment,
+    # which is an ability that fires once, on the wrong event, for the wrong
+    # seat.
     ("matching_permanent_enters",
-     r"whenever a player puts (?P<enterer_subject>a [^,]+?) onto the battlefield"),
+     r"whenever a player puts (?P<enterer_subject>an? [^,]+?) onto the battlefield"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt

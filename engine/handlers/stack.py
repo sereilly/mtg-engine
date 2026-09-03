@@ -333,6 +333,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
             return True, "resolved"
+        # "counter target **red or green** spell" (Tidal Control). The colour
+        # union, asked through the same reader the single colour is — a spell is
+        # counterable while it is *any* of the printed colours (CR 105.2), so
+        # this is an `any`, never a second `in` against a joined string.
+        any_colors = instruction.payload.get("any_colors")
+        if any_colors:
+            item_colors = game._stack_item_colors(target)
+            if not any(colour in item_colors for colour in any_colors):
+                game.log.append(
+                    f"{card.name}: {target.card.name} is not "
+                    f"{' or '.join(any_colors)}, cannot counter"
+                )
+                return True, "resolved"
         # Miscast: "counter target instant or sorcery spell" — the union the
         # payload carries is tested against the chosen spell's primary type,
         # the same shape as the colour gate above.

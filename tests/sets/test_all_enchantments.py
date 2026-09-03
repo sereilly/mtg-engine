@@ -762,46 +762,6 @@ def test_the_snow_land_tap_trigger_fires_end_to_end():
     )
 
 
-def test_winters_night_is_declined_naming_one_remaining_part(set_pool):
-    """Its condition, its narrowing and its first sentence all work now (see
-    the test above). What is left is the **second** sentence, and the blocker is
-    not the sentence - it is where this trigger resolves.
-
-    CR 605.4a keeps a triggered mana ability off the stack, so
-    ``mixins/turn_management`` resolves this event *inline*, dispatching on
-    ``trig.instruction.kind``. A two-sentence effect lowers to a ``sequence``,
-    which that dispatch has no arm for - and ``lower.py``'s ``whole_effect``
-    gate refuses the nested occurrence for exactly that reason rather than
-    emitting a kind nothing would reach. So the remaining work is two pieces:
-
-    1. **The inline fire site walking a ``sequence``.** Every other dispatcher
-       in the engine reaches an instruction through ``EFFECT_HANDLERS``; this
-       one reads the ability's whole instruction kind, so a composed effect is
-       invisible to it. ``targeting._from_instructions`` already recurses into
-       ``sequence`` steps for the picker, and this site wants the same shape.
-    2. **A referent for the trigger's own land.** "**That land** doesn't untap
-       during its controller's next untap step" names the event's subject - a
-       sixth referent for ``_lower_doesnt_untap_next_step``, beside the fifth
-       (``block_pair``, Labyrinth Minotaur) it already has and built the same
-       way: a ``subject`` value the marker's handler resolves rather than a
-       scratchpad record, because no step of this effect chose the land.
-
-    The refusal is at least accurate now. Before this round the whole line fell
-    past the trigger table into the *delayed*-ability production and refused
-    with "this delayed ability states no duration" - a message about a
-    mechanism the card does not use.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Winter's Night"])
-
-    assert not program.supported
-    assert program.reason == "unsupported triggered ability"
-
-    card = set_pool("ALL")["Winter's Night"]
-    condition, _ = trigger_condition_of_line(card.oracle_text.split(chr(10))[0], card.name)
-    assert condition is not None and condition.kind == "land_tapped_for_mana"
-    assert condition.payload == {"tapped_land_supertype": "snow"}
-
-
 def test_natures_blessing_is_declined_naming_two_parts(set_pool):
     """"{G}{W}, Discard a card: Put a +1/+1 counter on target creature **or**
     that creature gains banding, first strike, or trample. (This effect lasts
@@ -914,3 +874,159 @@ def test_w2g3_splintering_wind_reads_every_line(set_pool):
         "When this creature leaves the battlefield, it deals 1 damage to you "
         "and each creature you control.",
     ]
+
+
+# --- W3G5: hollow lines, pickers and unclaimed text ---
+#
+# The family that already *looked* done: cards the census counts as supported
+# while a sentence of theirs does nothing. Every test below is behavioural
+# rather than a compile assertion, because that is exactly the check the
+# instruments cannot make - `--hollow-lines` and `parse_coverage.py` both ask
+# whether a line produced *something*, and the population this group owns is
+# the one where it produced the wrong thing (or nothing that any dispatcher
+# reaches).
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+_W3G5_POOLS: dict = {}
+
+
+def _w3g5_from(code: str, name: str) -> CardDefinition:
+    """One card of one set, by code. The ALL pool is `measured`, so its cards
+    are placed into a driven game directly - no player can deck one."""
+    if code not in _W3G5_POOLS:
+        _W3G5_POOLS[code] = {
+            card.name: card
+            for card in load_cards(manifest_set_path(code, include_measured=True))
+        }
+    return _W3G5_POOLS[code][name]
+
+
+def _w3g5_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w3g5_put(game: Game, seat: int, card: CardDefinition) -> Permanent:
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g5_names(game: Game, seat: int) -> list[str]:
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def test_winters_night_adds_the_mana_and_holds_the_snow_land_down():
+    """Both sentences of one trigger, watched happening.
+
+    The mana half already worked in isolation (the test above builds an
+    invented card carrying only that sentence). What refused was the *pair*: a
+    two-sentence trigger lowers to a `sequence`, and the tap-for-mana seam
+    dispatched on the ability's whole instruction kind, so neither clause was
+    reachable. So this asserts the two things that were separately true and
+    never both happened - the doubled mana, and CR 502.3's restriction landing
+    on the land the event was about rather than on any other permanent.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Winter's Night"))
+    snow = _w3g5_put(game, 0, _w3g5_from("ICE", "Snow-Covered Forest"))
+    plain_forest = _w3g5_put(game, 0, _w3g5_from("LEA", "Forest"))
+
+    assert game.tap_land_for_mana(0, "Snow-Covered Forest")
+    assert game.players[0].mana_pool["G"] == 2, (
+        "the snow land's own mana, plus the trigger's one mana of the type it made"
+    )
+    assert snow.metadata.get("skip_next_untap") == 1
+    assert not plain_forest.metadata.get("skip_next_untap"), (
+        "the restriction names *that* land, not every land on the battlefield"
+    )
+
+    assert game.tap_land_for_mana(0, "Forest")
+    assert game.players[0].mana_pool["G"] == 3, "a non-snow land is not the subject"
+    assert not plain_forest.metadata.get("skip_next_untap")
+
+    game.resolve_untap_step(0)
+    assert snow.tapped, "held down through its controller's next untap step"
+    assert not plain_forest.tapped
+    game.resolve_untap_step(0)
+    assert not snow.tapped, "and one untap step only"
+
+
+def test_dystopia_takes_a_green_or_white_permanent_from_the_player_whose_upkeep_it_is():
+    """A supported card that sacrificed nothing.
+
+    Two things had to be true and only one was: the trigger condition
+    (`upkeep_each` freezing "that player") had worked since Mana Vortex, and the
+    *noun phrase* refused - `_forced_sacrifice_filter` treated any narrowing on
+    a generic "permanent" head as a narrowing the payload had lost. A colour is
+    not: `colors` is emitted unconditionally and tested by the matcher.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Dystopia"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Forest"))          # colourless land
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))   # green
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Grizzly Bears"))   # green, other seat
+
+    game.resolve_upkeep(1)
+    assert "Grizzly Bears" not in _w3g5_names(game, 1), (
+        "the player whose upkeep it is gave up their green permanent"
+    )
+    assert "Forest" in _w3g5_names(game, 1), (
+        "a colourless permanent is not in the union the card names"
+    )
+    assert "Grizzly Bears" in _w3g5_names(game, 0), (
+        "\"that player\" is the upkeep's seat, never the enchantment's controller"
+    )
+
+
+def test_natures_wrath_fires_on_the_island_half_and_takes_the_enterers_seat():
+    """The Island line of a two-line card, which fired on nothing.
+
+    `oracle.py`'s "whenever a player puts <noun> onto the battlefield" row was
+    written `a `, so it read the Swamp sentence and not the Island one - and the
+    half it dropped did not report unsupported, because `parse_line` has a
+    trigger production of its own and the sentence lowered as a *spell*
+    instruction on an enchantment. Both halves now fire, and the sacrifice lands
+    on the seat whose permanent entered.
+    """
+    card = _w3g5_from("ALL", "Nature's Wrath")
+    program = compile_card_oracle(card)
+    conditions = [t.condition.kind for t in program.triggered_abilities]
+    assert conditions.count("matching_permanent_enters") == 2, (
+        "both printed lines are triggers, not one trigger and one spell effect"
+    )
+
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, card)
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Island"))
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert "Island" not in _w3g5_names(game, 1), (
+        "an Island entering makes its controller give up an Island or blue permanent"
+    )
+    assert "Mountain" in _w3g5_names(game, 1)
+
+
+def test_natures_wrath_reads_a_blue_nonisland_permanent_as_the_other_half():
+    """The union is a real disjunction, not the subtype with a decoration.
+
+    `any_classes` is what says "an Island **or** a blue permanent"; `subtypes`
+    plus `colors` would be ANDed by every matcher and name a *blue Island*,
+    which is a set no board has.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Nature's Wrath"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Merfolk of the Pearl Trident"))
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert "Merfolk of the Pearl Trident" not in _w3g5_names(game, 1), (
+        "a blue permanent that is not an Island is in the union"
+    )

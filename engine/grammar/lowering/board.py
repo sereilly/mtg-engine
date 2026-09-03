@@ -185,7 +185,8 @@ _SACRIFICE_PAYERS: frozenset[str] = frozenset(
 
 def _per_payer_count(node: ast.Sacrifice) -> dict:
     """How many *this payer* sacrifices, as a spec the evaluator answers per
-    seat. ("…sacrifices a third of the creatures they control", Pox.)
+    seat. ("…sacrifices a third of the creatures they control", Pox; "…for each
+    white permanent they control", Omen of Fire.)
 
     The two narrowings the printed phrase carries are stripped before the count
     is built, and neither is a narrowing lost:
@@ -195,17 +196,23 @@ def _per_payer_count(node: ast.Sacrifice) -> dict:
       it the key would make ``count_spec`` refuse a phrase that says nothing.
     * **"of their choice"** is whose decision it is, not what may be chosen;
       the prompt is the decision.
+
+    The stripping runs over the counted set wherever it sits — under a
+    fraction (Pox) or as the whole amount (Omen of Fire) — because it is a fact
+    about the *phrase*, not about the arithmetic wrapped around it. Written as
+    one rewrite for that reason: two copies would be two chances for one
+    spelling to keep a key the other drops.
     """
+    def _stripped(counted: "ast.CountOf") -> "ast.CountOf":
+        return ast.CountOf(
+            dataclasses.replace(counted.filter, controller=None, their_choice=False)
+        )
+
     counted = node.count
     if isinstance(counted, ast.Half) and isinstance(counted.of, ast.CountOf):
-        counted = dataclasses.replace(
-            counted,
-            of=ast.CountOf(
-                dataclasses.replace(
-                    counted.of.filter, controller=None, their_choice=False
-                )
-            ),
-        )
+        counted = dataclasses.replace(counted, of=_stripped(counted.of))
+    elif isinstance(counted, ast.CountOf):
+        counted = _stripped(counted)
     spec = halved_count_spec(counted, node)
     if spec is None:
         raise LoweringError(

@@ -840,23 +840,6 @@ def test_martyrdom_is_declined_naming_three_parts(set_pool):
     assert not program.supported
 
 
-def test_omen_of_fire_is_declined_naming_two_parts(set_pool):
-    """Its first sentence already lowers; the second one needs two things.
-
-    1. **A sacrifice whose subject is a disjunction of two noun phrases** -
-       "a Plains **or** a white permanent of their choice". ``arm_forced_sacrifice``
-       takes one filter payload, and "Plains or white permanent" is a union no
-       single payload says; the prompt would have to offer the union and
-       CR 701.17b's shortfall rule be asked of it.
-    2. **A per-player repetition count read off that player's own board** -
-       "for each white permanent **they** control". ``X_FROM_COUNT_PER_RECIPIENT``
-       is exactly this shape and ``sacrifice_matching_permanent`` already reads
-       it, so this half is a lowering away once the union above exists.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Omen of Fire"])
-    assert not program.supported
-
-
 # --- W2G3: upkeep and counters ---
 #
 # Scars of the Veteran's effect half. W1G4 finished its pitch cost and declined
@@ -945,3 +928,81 @@ def test_w2g3_scars_of_the_veteran_keeps_its_pitch_cost(set_pool):
     card = set_pool("ALL")["Scars of the Veteran"]
     assert _w2g3_compile(card).supported
     assert _w2g3_alt_costs(card)
+
+
+# --- W3G5: hollow lines, pickers and unclaimed text ---
+#
+# The family that already *looked* done: cards the census counts as supported
+# while a sentence of theirs does nothing. Every test below is behavioural,
+# because that is the check the instruments cannot make.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+_W3G5_POOLS: dict = {}
+
+
+def _w3g5_from(code: str, name: str) -> CardDefinition:
+    """One card of one set, by code. The ALL pool is `measured`, so its cards
+    are placed into a driven game directly - no player can deck one."""
+    if code not in _W3G5_POOLS:
+        _W3G5_POOLS[code] = {
+            card.name: card
+            for card in load_cards(manifest_set_path(code, include_measured=True))
+        }
+    return _W3G5_POOLS[code][name]
+
+
+def _w3g5_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w3g5_put(game: Game, seat: int, card: CardDefinition) -> Permanent:
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g5_names(game: Game, seat: int) -> list[str]:
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def test_omen_of_fire_bounces_the_islands_and_scales_the_sacrifice_per_seat():
+    """Both sentences, and the second is the one nothing implemented.
+
+    The count is per *payer* - "for each white permanent **they** control" - so
+    the two seats owe different numbers off one resolution, which is the whole
+    reason it rides `X_FROM_COUNT_PER_RECIPIENT` rather than a printed count.
+    And what may be given up is a union across two axes ("a Plains **or** a
+    white permanent"), which `subtypes` plus `colors` would AND into a *white
+    Plains* - a set no board has.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Island"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Island"))
+    # Seat 0 owes two: two white permanents. Its Plains is colourless and is
+    # payable only because the union names the subtype as well.
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Plains"))
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Savannah Lions"))
+    _w3g5_put(game, 0, _w3g5_from("LEA", "White Knight"))
+    # Seat 1 owes one, and has a green permanent that is in neither half.
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Savannah Lions"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+
+    game.players[0].hand.append(_w3g5_from("ALL", "Omen of Fire"))
+    assert game.cast_from_hand(0, "Omen of Fire").supported
+    game.resolve_stack()
+
+    assert "Island" not in _w3g5_names(game, 0) and "Island" not in _w3g5_names(game, 1)
+    assert game.players[0].hand.count(_w3g5_from("LEA", "Island")) == 1
+    assert len(_w3g5_names(game, 0)) == 1, (
+        "two white permanents means two sacrifices, out of three eligible"
+    )
+    assert _w3g5_names(game, 1) == ["Grizzly Bears"], (
+        "one white permanent means one sacrifice, and green is in neither half"
+    )

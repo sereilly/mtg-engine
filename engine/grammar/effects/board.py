@@ -38,7 +38,7 @@ from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import (
     _accept_number, _parse_counted_sacrifice,
-    _parse_mana_payment, _parse_pay_life,
+    _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
     _parse_sacrificed_subject, _parse_that_object, _parse_zone,
 )
 
@@ -662,6 +662,21 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
         subject = dataclasses.replace(
             subject, filter=dataclasses.replace(subject.filter, other_than_source=True)
         )
+    # "…sacrifices a Plains or a white permanent of their choice **for each
+    # white permanent they control**." (Omen of Fire.) How many, counted off
+    # the payer's own board — so it is the same per-seat quantity Pox's
+    # fraction is, and it rides `Sacrifice.count` for that field's reason: a
+    # `TargetSpec.count` is an `int` and every seat asked has a different
+    # answer.
+    #
+    # Read through the shared `for each <objects>` reader rather than a second
+    # copy of it, and only over a *set* — `beyond the first` is a rampage
+    # discount that means nothing here, so a phrase carrying it hands the
+    # clause back untouched and the line refuses rather than sacrificing one
+    # permanent too few.
+    counted, beyond_first = _parse_per_each_objects(stream)
+    if counted is not None and not beyond_first:
+        return ast.Sacrifice(player, subject, count=ast.CountOf(counted))
     # "… unless you pay {W}{W}" — a pay-or-else prompt, kept fused because
     # that is the shape the upkeep dispatcher's handlers implement.
     mark = stream.mark()

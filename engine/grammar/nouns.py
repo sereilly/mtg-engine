@@ -90,6 +90,20 @@ def _match_subtype(stream: TokenStream, start: int) -> tuple[str, int] | None:
     return match_longest(words, 0, SUBTYPE_INDEX)
 
 
+def _at_or_color(stream: TokenStream) -> bool:
+    """Whether the stream sits on "or <colour>", the second article optional.
+
+    "or blue permanent" and "or **a** white permanent" are the same union
+    written two ways, and both have to be recognised *before* anything is
+    consumed — so the article is looked past here rather than accepted, and the
+    caller accepts it once it has committed.
+    """
+    if not stream.at_word("or"):
+        return False
+    offset = 2 if stream.peek_word(1) in ("a", "an") else 1
+    return stream.peek_word(offset) in COLOR_WORDS
+
+
 def _match_subtype_or_plural(stream: TokenStream, start: int = 0) -> tuple[str, int] | None:
     """:func:`_match_subtype`, and the plural spelling of one.
 
@@ -622,6 +636,35 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     d.subtypes.append(adjacent[0])
                     stream.advance(adjacent[1])
                     d.subtype_match = "all"
+            # "an **Island or blue** permanent" (Nature's Wrath), "a
+            # **Plains or a white** permanent" (Omen of Fire). The mirror of
+            # the colour branch's cross-axis probe above, one axis over: the
+            # union straddles CR 205.3 subtypes against CR 105 colours, and the
+            # head noun ("permanent") is still to come. Collected into
+            # `any_classes` for that branch's reason — `subtypes` plus `colors`
+            # is ANDed by the matcher and would describe a *blue Island*, which
+            # is not a set either card can ever mean.
+            #
+            # The second article is optional because English writes the same
+            # union both ways: Nature's Wrath prints "an Island or blue
+            # permanent" and Omen of Fire "a Plains or **a** white permanent",
+            # one clause apart in the same block of rules text.
+            cross_colors = stream.mark()
+            if d.subtype_match != "all" and _at_or_color(stream):
+                alternatives: list[tuple[str, str]] = [
+                    ("subtype", name) for name in d.subtypes
+                ]
+                while _at_or_color(stream):
+                    stream.advance()
+                    stream.accept_word("a", "an")
+                    alternatives.append(
+                        ("color", COLOR_WORDS[str(stream.peek_word())])
+                    )
+                    stream.advance()
+                d.any_classes = tuple(alternatives)
+                d.subtypes = []
+                continue
+            stream.reset(cross_colors)
             following = stream.peek_word()
             if following is not None and _singular(following) in CARD_TYPES:
                 continue

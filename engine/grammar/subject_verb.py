@@ -36,7 +36,6 @@ from .phrases import (
     _parse_mana_payment,
     parse_bound_subject,
 )
-from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_ante,
     _parse_assigns_no_combat_damage,

@@ -357,6 +357,17 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         if not (isinstance(count, ast.Fixed) and count.value == 1):
             raise stream.error("only one mana of a noted type can be added")
         return ast.AddMana((), from_noted=noted, source_text=_clause())
+    # "Add one mana of **the chosen color**." (Sol Grail.) Read before the
+    # "any … color" branch, which refuses on the article: this is not a colour
+    # the activating player names, it is the one the artifact recorded as it
+    # entered, so the two must not share a node field however alike they read.
+    # Only "one" is admitted, for `_accept_noted_mana`'s reason above — the
+    # record holds a colour and not a quantity, so a card asking for two of it
+    # would be adding a number nothing chose.
+    if stream.accept_phrase("the", "chosen", "color"):
+        if not (isinstance(count, ast.Fixed) and count.value == 1):
+            raise stream.error("only one mana of the chosen color can be added")
+        return ast.AddMana((), from_chosen_color=True, source_text=_clause())
     stream.accept_word("any")
     stream.accept_word("one")
     stream.expect_word("color")

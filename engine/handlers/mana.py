@@ -310,6 +310,34 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "Add one mana of **the chosen color**." (Sol Grail.) The colour the
+    # source recorded as it entered (CR 614.1c), read off that permanent — the
+    # same `metadata["chosen_color"]` record `_resolve_chosen_color` reads for
+    # a noun phrase, so an artifact cannot be one colour to a filter and
+    # another to its own mana ability.
+    #
+    # A source with nothing chosen adds nothing rather than guessing a colour:
+    # the choice is made as the permanent enters, so an empty record means the
+    # ability is being asked of something that never entered, and inventing a
+    # symbol there would put mana in a pool the card never produced.
+    if instruction.payload.get("from_chosen_color"):
+        color = (
+            getattr(context.source_permanent, "metadata", {}) or {}
+        ).get("chosen_color")
+        spend_only = _resolved_spend_only(
+            context, instruction.payload.get("spend_only")
+        )
+        if not color:
+            game.log.append(f"{card.name} has no chosen color and produced no mana")
+            return True, "resolved"
+        bucket = _mana_bucket(caster, spend_only)
+        bucket[color] = bucket.get(color, 0) + 1
+        game.log.append(
+            f"{card.name} produced {{{color}}} (the chosen color)"
+            f"{_restriction_suffix(spend_only)}"
+        )
+        return True, "resolved"
+
     # "Add one mana of this artifact's last noted type." (Jeweled Amulet.)
     # "Add this artifact's last noted type and amount of mana." (Ice Cauldron.)
     # The record an earlier activation of this same permanent wrote, read off

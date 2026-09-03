@@ -718,12 +718,36 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     # restriction survives is the only thing that differs between the two
     # printings — and a flag would let the creature untap a turn early.
     steps = max(1, int(instruction.payload.get("untap_steps") or 1))
+    marked = mark_skip_next_untap(
+        game,
+        (game.permanent_by_id(permanent_id) for permanent_id in recorded),
+        steps=steps,
+        seat=seat,
+    )
+    if not marked:
+        game.log.append(f"{context.card.name}: nothing was held down")
+    return True, "resolved"
+
+
+def mark_skip_next_untap(game: Game, permanents, *, steps: int = 1, seat=None) -> int:
+    """Hold *permanents* down for their next *steps* untap steps; how many were
+    marked.
+
+    Its own function because it has **two** callers and only one of them is a
+    resolution. The handler above is the ordinary one; the other is the
+    tap-for-mana seam in ``mixins/turn_management.py``, where Winter's Night's
+    "That land doesn't untap during its controller's next untap step" runs
+    *inline* inside a cost payment (CR 605.4a's moment) and so has no
+    ``OracleExecutionContext`` to reach a handler with. Two copies of this loop
+    would be two answers to how two contributions merge, which is the one part
+    of it that is not obvious.
+
+    A permanent that is None is one that left the battlefield in between: a new
+    object comes back (CR 400.7) and this effect never applied to it.
+    """
     marked = 0
-    for permanent_id in recorded:
-        permanent = game.permanent_by_id(permanent_id)
+    for permanent in permanents:
         if permanent is None:
-            # It left the battlefield between the two steps. A new object comes
-            # back (CR 400.7), and this effect never applied to it.
             continue
         # The larger of the two, never the sum: two effects each holding a
         # permanent down for one step both expire during the same untap step
@@ -753,9 +777,7 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
             f"{plural} untap step" + ("" if steps == 1 else "s")
         )
         marked += 1
-    if not marked:
-        game.log.append(f"{context.card.name}: nothing was held down")
-    return True, "resolved"
+    return marked
 
 
 @effect_handler("tap_or_untap_target")

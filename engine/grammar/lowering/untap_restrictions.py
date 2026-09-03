@@ -210,9 +210,26 @@ def _lower_doesnt_untap_next_step(
         and not subject.targeted
         and binds_block_pair(event, event_subject)
     )
+    # "Whenever a player taps a snow land for mana, … **That land** doesn't
+    # untap during its controller's next untap step." (Winter's Night.) A
+    # sixth referent, and the block pair's twin one event over: the land is the
+    # *trigger's* — the one whose tapping announced it — so it is neither
+    # chosen here nor recorded by an earlier step, and the printed "that" is
+    # again what tells it from the bound plural.
+    #
+    # The event is required rather than defaulted, exactly as the mana clause
+    # beside it in the same sentence requires it: under any other condition
+    # there is no tapped land for the marker to land on, and guessing one would
+    # hold down whichever permanent the resolution happened to be holding.
+    bound_tapped_land = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and event == "land_tapped_for_mana"
+    )
     if not bare_pronoun and not chosen and not own_source and not swept and (
         not bound_pair
-    ) and (
+    ) and not bound_tapped_land and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(
@@ -270,6 +287,23 @@ def _lower_doesnt_untap_next_step(
         }
         _describe_targets(payload, subject)
         return (OracleInstruction("skip_next_untap", "", payload),)
+    if bound_tapped_land:
+        # The trigger already required the noun ("taps a **snow land**"), so
+        # the phrase restates what was bound rather than narrowing it — and a
+        # narrowing beyond the card type would be carried and never read, which
+        # is this family's standing refusal. The land itself comes from the
+        # tap-for-mana seam, which is the only code that knows which one it was.
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the land a tap-for-mana trigger bound carries no narrowing "
+                "the marker could honour", node=node,
+            )
+        return (
+            OracleInstruction(
+                "skip_next_untap", "",
+                {"subject": "tapped_land", "untap_steps": node.count, **seated},
+            ),
+        )
     if bound_pair:
         # The trigger already required the noun, so the phrase restates what
         # was bound rather than choosing again — but a narrowing beyond the
