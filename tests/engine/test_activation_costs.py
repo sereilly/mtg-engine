@@ -229,4 +229,29 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         unpaid.append(
                             f"{card.name}: charged {charged.pay_life} life for {wanted}"
                         )
+                    # "Pay 3 life **for each velocity counter on this
+                    # enchantment**" (Tornado). The multiplier decides how much
+                    # is owed, so a charger that reads the rate and not the
+                    # counter charges the rate flat — three life for an
+                    # activation the card gives away free, and one third of the
+                    # cost on the fourth. Both directions are wrong and neither
+                    # crashes.
+                    if charged.pay_life_per_counter != cost.per_counter:
+                        unpaid.append(
+                            f"{card.name}: charged per "
+                            f"{charged.pay_life_per_counter!r} for "
+                            f"{cost.per_counter!r}"
+                        )
+                    # "Pay 2 life **or {2}**" (Tidal Control). CR 601.2h's
+                    # choice, and the failure a comparison catches is the flat
+                    # one: a reader that does not split the "or" puts the mana
+                    # into `mana` beside the life and charges both.
+                    alternative = (
+                        dict(cost.alternative_mana) if cost.alternative_mana else None
+                    )
+                    if (charged.alternative_mana or None) != alternative:
+                        unpaid.append(
+                            f"{card.name}: charged alternative "
+                            f"{charged.alternative_mana!r} for {alternative!r}"
+                        )
     assert not unpaid, "cost clauses parsed but never charged: " + "; ".join(unpaid)

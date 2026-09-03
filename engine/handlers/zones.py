@@ -3507,14 +3507,19 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     """
     caster = context.caster
     caster_index = game.players.index(caster)
+    zones = tuple(instruction.payload.get("zones") or ("graveyard", "library"))
     game.arm_pending_choice(
         "search_exile_cards", caster_index,
-        zones=tuple(instruction.payload.get("zones") or ("graveyard", "library")),
+        zones=zones,
         card_types=tuple(instruction.payload.get("card_types") or ()),
         colors=tuple(instruction.payload.get("colors") or ()),
+        # "…for **three** cards" (Foresight). A printed ceiling on the find,
+        # absent for the "any number of" spelling — the resolver refuses a
+        # longer answer and the non-interactive default trims to it.
+        maximum=instruction.payload.get("maximum"),
         _context=context,
     )
-    game.log.append(f"{caster.name} is searching their graveyard and library")
+    game.log.append(f"{caster.name} is searching their {' and '.join(zones)}")
     return True, "pending_search_exile"
 
 

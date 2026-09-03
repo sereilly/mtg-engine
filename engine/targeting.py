@@ -880,6 +880,13 @@ def _counter_spec(payload: dict) -> dict:
     color = payload.get("color_filter")
     if color:
         spec["stack_color_filter"] = color
+    any_colors = payload.get("any_colors")
+    if any_colors:
+        # "target **red or green** spell" (Tidal Control) — the colour union,
+        # handed to the picker under the key the stack enumeration already
+        # reads for Circle of Protection, so the offer and the counter cannot
+        # name different sets.
+        spec["stack_any_colors"] = list(any_colors)
     card_types = payload.get("card_types")
     if card_types:
         # Miscast: "target instant or sorcery spell" — the same union the

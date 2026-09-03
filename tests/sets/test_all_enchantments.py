@@ -762,46 +762,6 @@ def test_the_snow_land_tap_trigger_fires_end_to_end():
     )
 
 
-def test_winters_night_is_declined_naming_one_remaining_part(set_pool):
-    """Its condition, its narrowing and its first sentence all work now (see
-    the test above). What is left is the **second** sentence, and the blocker is
-    not the sentence - it is where this trigger resolves.
-
-    CR 605.4a keeps a triggered mana ability off the stack, so
-    ``mixins/turn_management`` resolves this event *inline*, dispatching on
-    ``trig.instruction.kind``. A two-sentence effect lowers to a ``sequence``,
-    which that dispatch has no arm for - and ``lower.py``'s ``whole_effect``
-    gate refuses the nested occurrence for exactly that reason rather than
-    emitting a kind nothing would reach. So the remaining work is two pieces:
-
-    1. **The inline fire site walking a ``sequence``.** Every other dispatcher
-       in the engine reaches an instruction through ``EFFECT_HANDLERS``; this
-       one reads the ability's whole instruction kind, so a composed effect is
-       invisible to it. ``targeting._from_instructions`` already recurses into
-       ``sequence`` steps for the picker, and this site wants the same shape.
-    2. **A referent for the trigger's own land.** "**That land** doesn't untap
-       during its controller's next untap step" names the event's subject - a
-       sixth referent for ``_lower_doesnt_untap_next_step``, beside the fifth
-       (``block_pair``, Labyrinth Minotaur) it already has and built the same
-       way: a ``subject`` value the marker's handler resolves rather than a
-       scratchpad record, because no step of this effect chose the land.
-
-    The refusal is at least accurate now. Before this round the whole line fell
-    past the trigger table into the *delayed*-ability production and refused
-    with "this delayed ability states no duration" - a message about a
-    mechanism the card does not use.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Winter's Night"])
-
-    assert not program.supported
-    assert program.reason == "unsupported triggered ability"
-
-    card = set_pool("ALL")["Winter's Night"]
-    condition, _ = trigger_condition_of_line(card.oracle_text.split(chr(10))[0], card.name)
-    assert condition is not None and condition.kind == "land_tapped_for_mana"
-    assert condition.payload == {"tapped_land_supertype": "snow"}
-
-
 def test_natures_blessing_is_declined_naming_two_parts(set_pool):
     """"{G}{W}, Discard a card: Put a +1/+1 counter on target creature **or**
     that creature gains banding, first strike, or trample. (This effect lasts
@@ -914,3 +874,363 @@ def test_w2g3_splintering_wind_reads_every_line(set_pool):
         "When this creature leaves the battlefield, it deals 1 damage to you "
         "and each creature you control.",
     ]
+
+
+# --- W3G5: hollow lines, pickers and unclaimed text ---
+#
+# The family that already *looked* done: cards the census counts as supported
+# while a sentence of theirs does nothing. Every test below is behavioural
+# rather than a compile assertion, because that is exactly the check the
+# instruments cannot make - `--hollow-lines` and `parse_coverage.py` both ask
+# whether a line produced *something*, and the population this group owns is
+# the one where it produced the wrong thing (or nothing that any dispatcher
+# reaches).
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+_W3G5_POOLS: dict = {}
+
+
+def _w3g5_from(code: str, name: str) -> CardDefinition:
+    """One card of one set, by code. The ALL pool is `measured`, so its cards
+    are placed into a driven game directly - no player can deck one."""
+    if code not in _W3G5_POOLS:
+        _W3G5_POOLS[code] = {
+            card.name: card
+            for card in load_cards(manifest_set_path(code, include_measured=True))
+        }
+    return _W3G5_POOLS[code][name]
+
+
+def _w3g5_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w3g5_put(game: Game, seat: int, card: CardDefinition) -> Permanent:
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g5_names(game: Game, seat: int) -> list[str]:
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def test_winters_night_adds_the_mana_and_holds_the_snow_land_down():
+    """Both sentences of one trigger, watched happening.
+
+    The mana half already worked in isolation (the test above builds an
+    invented card carrying only that sentence). What refused was the *pair*: a
+    two-sentence trigger lowers to a `sequence`, and the tap-for-mana seam
+    dispatched on the ability's whole instruction kind, so neither clause was
+    reachable. So this asserts the two things that were separately true and
+    never both happened - the doubled mana, and CR 502.3's restriction landing
+    on the land the event was about rather than on any other permanent.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Winter's Night"))
+    snow = _w3g5_put(game, 0, _w3g5_from("ICE", "Snow-Covered Forest"))
+    plain_forest = _w3g5_put(game, 0, _w3g5_from("LEA", "Forest"))
+
+    assert game.tap_land_for_mana(0, "Snow-Covered Forest")
+    assert game.players[0].mana_pool["G"] == 2, (
+        "the snow land's own mana, plus the trigger's one mana of the type it made"
+    )
+    assert snow.metadata.get("skip_next_untap") == 1
+    assert not plain_forest.metadata.get("skip_next_untap"), (
+        "the restriction names *that* land, not every land on the battlefield"
+    )
+
+    assert game.tap_land_for_mana(0, "Forest")
+    assert game.players[0].mana_pool["G"] == 3, "a non-snow land is not the subject"
+    assert not plain_forest.metadata.get("skip_next_untap")
+
+    game.resolve_untap_step(0)
+    assert snow.tapped, "held down through its controller's next untap step"
+    assert not plain_forest.tapped
+    game.resolve_untap_step(0)
+    assert not snow.tapped, "and one untap step only"
+
+
+def test_dystopia_takes_a_green_or_white_permanent_from_the_player_whose_upkeep_it_is():
+    """A supported card that sacrificed nothing.
+
+    Two things had to be true and only one was: the trigger condition
+    (`upkeep_each` freezing "that player") had worked since Mana Vortex, and the
+    *noun phrase* refused - `_forced_sacrifice_filter` treated any narrowing on
+    a generic "permanent" head as a narrowing the payload had lost. A colour is
+    not: `colors` is emitted unconditionally and tested by the matcher.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Dystopia"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Forest"))          # colourless land
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))   # green
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Grizzly Bears"))   # green, other seat
+
+    game.resolve_upkeep(1)
+    assert "Grizzly Bears" not in _w3g5_names(game, 1), (
+        "the player whose upkeep it is gave up their green permanent"
+    )
+    assert "Forest" in _w3g5_names(game, 1), (
+        "a colourless permanent is not in the union the card names"
+    )
+    assert "Grizzly Bears" in _w3g5_names(game, 0), (
+        "\"that player\" is the upkeep's seat, never the enchantment's controller"
+    )
+
+
+def test_natures_wrath_fires_on_the_island_half_and_takes_the_enterers_seat():
+    """The Island line of a two-line card, which fired on nothing.
+
+    `oracle.py`'s "whenever a player puts <noun> onto the battlefield" row was
+    written `a `, so it read the Swamp sentence and not the Island one - and the
+    half it dropped did not report unsupported, because `parse_line` has a
+    trigger production of its own and the sentence lowered as a *spell*
+    instruction on an enchantment. Both halves now fire, and the sacrifice lands
+    on the seat whose permanent entered.
+    """
+    card = _w3g5_from("ALL", "Nature's Wrath")
+    program = compile_card_oracle(card)
+    conditions = [t.condition.kind for t in program.triggered_abilities]
+    assert conditions.count("matching_permanent_enters") == 2, (
+        "both printed lines are triggers, not one trigger and one spell effect"
+    )
+
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, card)
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Island"))
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert "Island" not in _w3g5_names(game, 1), (
+        "an Island entering makes its controller give up an Island or blue permanent"
+    )
+    assert "Mountain" in _w3g5_names(game, 1)
+
+
+def test_natures_wrath_reads_a_blue_nonisland_permanent_as_the_other_half():
+    """The union is a real disjunction, not the subtype with a decoration.
+
+    `any_classes` is what says "an Island **or** a blue permanent"; `subtypes`
+    plus `colors` would be ANDed by every matcher and name a *blue Island*,
+    which is a set no board has.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Nature's Wrath"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    _w3g5_put(game, 1, _w3g5_from("LEA", "Merfolk of the Pearl Trident"))
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert "Merfolk of the Pearl Trident" not in _w3g5_names(game, 1), (
+        "a blue permanent that is not an Island is in the union"
+    )
+
+
+def test_tornado_pays_nothing_for_its_first_activation_and_three_life_for_the_next():
+    """The cost is a **rate**, and it was charged as a flat number.
+
+    "Pay 3 life for each velocity counter on this enchantment" owes nothing the
+    first time (no counters yet) and three more on every activation after,
+    because the ability's own effect adds a counter as it resolves. The
+    compiler read "pay 3 life" and stopped, so the clause's remaining words were
+    unconsumed text and the whole ability compiled to nothing at all.
+    """
+    from engine.named_counters import counters_on
+
+    game = _w3g5_duel()
+    tornado = _w3g5_put(game, 0, _w3g5_from("ALL", "Tornado"))
+    first = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    second = _w3g5_put(game, 1, _w3g5_from("LEA", "Hill Giant"))
+
+    result = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(first)]
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    assert game.players[0].life == 20, "no counters yet, so no life is owed"
+    assert counters_on(tornado, "velocity") == 1
+    assert "Grizzly Bears" not in _w3g5_names(game, 1)
+
+    # CR 602.5: "Activate only once each turn" refuses with nothing paid.
+    refused = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(second)]
+    )
+    assert not refused.supported and "once each turn" in refused.details
+    assert game.players[0].life == 20, "a refused activation pays nothing"
+    assert "Hill Giant" in _w3g5_names(game, 1)
+
+    # The *opponent's* turn: Tornado's own cumulative upkeep would sacrifice it
+    # in a game where nobody can pay {G}, and what is being measured here is the
+    # cost, not the upkeep. The per-turn tally is keyed to `game.turn`
+    # (CR 602.5's window), so the number is what has to move.
+    game.turn += 1
+    game.start_turn(1)
+    again = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(second)]
+    )
+    assert again.supported, again.details
+    game.resolve_stack()
+    assert game.players[0].life == 17, "one velocity counter, so three life"
+    assert counters_on(tornado, "velocity") == 2
+
+
+def test_tornado_refuses_when_the_scaled_life_is_more_than_the_payer_has():
+    """CR 602.5c makes an unpayable cost an *unactivatable* ability rather than
+    a free one, and the amount that must be affordable is the computed one."""
+    from engine.named_counters import add_counters
+
+    game = _w3g5_duel()
+    tornado = _w3g5_put(game, 0, _w3g5_from("ALL", "Tornado"))
+    victim = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    add_counters(tornado, "velocity", 4)
+    game.players[0].life = 11
+
+    refused = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(victim)]
+    )
+    assert not refused.supported and "cannot pay 12 life" in refused.details
+    assert game.players[0].life == 11 and "Grizzly Bears" in _w3g5_names(game, 1)
+
+
+def test_tidal_control_is_activated_by_the_opponent_and_counters_a_green_spell():
+    """The card's whole point, and none of it happened.
+
+    Three separate gaps: the cost clause "Pay 2 life **or** {2}" refused as
+    unrecognized (so the ability compiled to nothing), the colour union had no
+    payload the counter handler reads, and the reader that *did* work - "Any
+    player may activate this ability", implemented in
+    `engine/activation_permissions.py` - had nothing to widen access to. The
+    life comes off the **activator**, not the enchantment's controller.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    bear = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+
+    game.players[1].hand.append(_w3g5_from("LEA", "Giant Growth"))
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[game.permanent_id_of(bear)]
+    ).supported
+    assert [item.card.name for item in game.stack] == ["Giant Growth"]
+
+    result = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert result.supported, result.details
+    assert game.players[1].life == 18, "the activator pays, not the controller"
+    assert game.players[0].life == 20
+
+    game.resolve_stack()
+    assert bear.effective_power == 2, "the pump never happened"
+    assert [card.name for card in game.players[1].graveyard] == ["Giant Growth"]
+
+
+def test_tidal_control_spends_floating_mana_rather_than_life_when_it_can():
+    """CR 601.2h's choice between the two printed payments, made once.
+
+    The rule is "spend what is already floating, else pay the life": an
+    activation spends the pool, so mana that is not there is not a payment this
+    ability can make. What must never happen is the flat reading - the prose
+    cost reader used to put both halves of the "or" on one cost and charge two
+    life **and** {2}.
+    """
+    game = _w3g5_duel()
+    game.enforce_mana_costs = True
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    bear = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    game.players[1].hand.append(_w3g5_from("LEA", "Giant Growth"))
+    game.players[1].mana_pool["G"] = 4
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[game.permanent_id_of(bear)]
+    ).supported
+
+    result = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert result.supported, result.details
+    assert game.players[1].life == 20, "the mana was there, so no life was paid"
+    assert game.players[1].mana_pool["G"] == 1, "and exactly {2} of it was spent"
+
+
+def test_tidal_control_will_not_counter_a_spell_of_another_colour():
+    """The union is a gate, not a decoration: `any_colors` is asked of the
+    chosen spell at resolution *and* of the picker at activation, so a blue
+    spell is neither offered nor countered."""
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    game.players[1].hand.append(_w3g5_from("LEA", "Ancestral Recall"))
+    assert game.queue_from_hand(1, "Ancestral Recall", target_player_index=1).supported
+
+    refused = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert not refused.supported, refused.details
+    assert game.players[1].life == 20, "a refused activation pays nothing"
+
+
+def test_royal_decree_reads_all_four_alternatives_of_its_printed_list():
+    """A supported enchantment whose only real line fired on nothing.
+
+    "Whenever a **Swamp, Mountain, black permanent, or red permanent** becomes
+    tapped" is a union across two axes and four members, and the condition
+    table held a single-word group. The line was not reported unsupported: the
+    grammar has its own trigger production, so the sentence lowered as a
+    **spell** instruction on an enchantment - one firing, at resolution, for
+    the wrong seat.
+
+    All four members and one non-member, because a union that dropped an
+    alternative would still pass a test that only checked one.
+    """
+    from engine.keywords import grant_keyword
+
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Royal Decree"))
+    swamp = _w3g5_put(game, 1, _w3g5_from("LEA", "Swamp"))
+    mountain = _w3g5_put(game, 1, _w3g5_from("LEA", "Mountain"))
+    black = _w3g5_put(game, 1, _w3g5_from("LEA", "Black Knight"))
+    red = _w3g5_put(game, 1, _w3g5_from("LEA", "Hill Giant"))
+    grant_keyword(red, "vigilance")  # so tapping it is a real event, not combat
+    island = _w3g5_put(game, 1, _w3g5_from("LEA", "Island"))
+
+    game.tap_land_for_mana(1, "Swamp")
+    game.resolve_stack()
+    assert game.players[1].life == 19, "a Swamp is the first member"
+
+    game.tap_land_for_mana(1, "Mountain")
+    game.resolve_stack()
+    assert game.players[1].life == 18, "a Mountain is the second"
+
+    game.become_tapped(black)
+    game.resolve_stack()
+    assert game.players[1].life == 17, "a black permanent is the third"
+
+    game.become_tapped(red)
+    game.resolve_stack()
+    assert game.players[1].life == 16, "a red permanent is the fourth"
+
+    game.tap_land_for_mana(1, "Island")
+    game.resolve_stack()
+    assert game.players[1].life == 16, (
+        "a blue land is in none of the four, and the union is a gate"
+    )
+    assert swamp.tapped and mountain.tapped and island.tapped
+
+
+def test_royal_decree_damages_the_tapped_permanents_controller_not_its_own():
+    """"…deals 1 damage to **that permanent's** controller." The seat the event
+    was about, frozen by the tap announcement (`event_subject_controller`) —
+    which on the enchantment's own Swamp is its controller and on an opponent's
+    is theirs. Read as the ability's controller it would be the same answer in
+    exactly one of those two cases, which is Psychic Venom's recorded bug."""
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Royal Decree"))
+    _w3g5_put(game, 0, _w3g5_from("LEA", "Swamp"))
+
+    game.tap_land_for_mana(0, "Swamp")
+    game.resolve_stack()
+    assert game.players[0].life == 19 and game.players[1].life == 20

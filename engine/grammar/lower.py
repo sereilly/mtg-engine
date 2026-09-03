@@ -286,7 +286,16 @@ def lower_statement(
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
-        return _lower_add_mana_for_tapped_land(statement, dispatch_event)
+        # The **unfiltered** event, for `_lower_destroy`'s reason: which land
+        # "that land" names and which seat "that player" names are facts about
+        # the trigger, true of every clause under it. It read `dispatch_event`
+        # while the tap-for-mana seam dispatched on `trig.instruction.kind`
+        # alone, which made a nested occurrence genuinely unreachable — so
+        # Winter's Night, whose trigger's effect is *two* sentences and
+        # therefore lowers under a `Sequence`, refused with "None binds
+        # neither". That seam now walks a sequence's steps, so the nesting is
+        # reachable and the filtered event was the wrong question.
+        return _lower_add_mana_for_tapped_land(statement, event)
     if isinstance(statement, ast.NoteManaSpent):
         return _lower_note_mana_spent(statement)
     if isinstance(statement, ast.CreateToken):

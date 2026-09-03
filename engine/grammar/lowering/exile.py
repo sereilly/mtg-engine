@@ -695,10 +695,15 @@ def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction
             node=node,
         )
     payload: dict[str, object] = {
-        "zones": ("graveyard", "library"),
+        "zones": tuple(node.zones),
         "card_types": tuple(filt.card_types),
         "colors": tuple(filt.colors),
     }
+    if node.count is not None:
+        # "…for **three** cards" (Foresight). A ceiling and not a requirement
+        # (CR 701.23b), emitted only when printed so every payload written for
+        # the "any number of" spelling stays byte-identical.
+        payload["maximum"] = node.count
     return (OracleInstruction("search_and_exile_matching", "", payload),)
 
 

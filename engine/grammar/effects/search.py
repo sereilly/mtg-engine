@@ -111,6 +111,14 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         if not isinstance(count, ast.Fixed) or count.value < 1:
             raise stream.error("expected how many cards the search may find")
         return _parse_counted_search(stream, graveyard, count.value)
+    # "Search your library for **three cards, exile them, then shuffle**."
+    # (Foresight.) A counted search whose finds are exiled rather than placed,
+    # which is `SearchAndExile`'s shape with a printed ceiling — the two-zone
+    # spelling above reaches the same node with "any number of". Read before
+    # the singular tutor below, whose article this line does not print.
+    exiled = _accept_counted_exile_search(stream, graveyard)
+    if exiled is not None:
+        return exiled
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -316,6 +324,44 @@ def _parse_search_untap_rider(stream: TokenStream):
         return None, None
     stream.advance()
     return ast.Comparison("ge", amount), counted
+
+
+def _accept_counted_exile_search(
+    stream: TokenStream, graveyard: bool
+) -> "ast.SearchAndExile | None":
+    """``<N> cards, exile them, then shuffle`` at the cursor, or None with the
+    cursor where it was.
+
+    Only the plural-with-a-number spelling: a singular "a card" is the ordinary
+    tutor below, whose destination clause this production has none of. The
+    filter is parsed the same way every search parses one, so "three creature
+    cards" would be the same sentence with a narrowing — and the count is a
+    *ceiling*, because CR 701.23b lets a search find fewer than it names.
+    """
+    mark = stream.mark()
+    count = parse_amount(stream)
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("exile", "them"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    stream.accept_word("then")
+    if not stream.accept_word("shuffle"):
+        stream.reset(mark)
+        return None
+    zones = ("graveyard", "library") if graveyard else ("library",)
+    return ast.SearchAndExile(filt, zones=zones, count=count.value)
 
 
 def _parse_counted_search(

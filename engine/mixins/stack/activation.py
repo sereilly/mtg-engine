@@ -65,6 +65,79 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 COST_PERFORMING_KINDS: frozenset[str] = frozenset()
 
 
+#: The pool's symbols, in the order every payment path spends them.
+_POOL_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
+
+def activation_life_cost(cost, permanent) -> int:
+    """How much life activating this ability actually costs, right now.
+
+    ``ActivatedAbilityCost.pay_life`` is the printed number and is usually the
+    whole answer. Where ``pay_life_per_counter`` is set it is a **rate**:
+    "Pay 3 life for each velocity counter on this enchantment" (Tornado) owes
+    nothing on the first activation and three more on each one after, because
+    the ability's own effect adds a counter as it resolves.
+
+    CR 601.2f computes a cost as the ability is activated, so this is asked
+    twice — once by the payability gate (CR 602.5c makes an unpayable cost an
+    *unactivatable* ability rather than a free one) and once by the payment —
+    and both must get the same number, which is why it is a function rather
+    than two reads of the field.
+    """
+    per_counter = getattr(cost, "pay_life_per_counter", None)
+    if not per_counter:
+        return int(cost.pay_life)
+    if permanent is None:
+        return 0
+    from ...named_counters import counters_on
+
+    return int(cost.pay_life) * counters_on(permanent, str(per_counter))
+
+
+def _pool_covers(pool: dict, required: dict) -> bool:
+    """Whether *pool* alone pays *required*, coloured pips first.
+
+    Deliberately narrower than ``_pay_mana_cost``: it ignores restricted
+    buckets (CR 106.6) and the "spend as though it were any colour" grants.
+    Its only caller is the choice below, where a **false negative** picks the
+    other printed payment — a payment the card allows just as much — and a
+    false positive would skip a life cost for mana that could not be spent.
+    Under-reading is therefore the direction with no wrong answer in it.
+    """
+    left = {symbol: int(pool.get(symbol, 0)) for symbol in _POOL_SYMBOLS}
+    for symbol in _POOL_SYMBOLS:
+        need = int(required.get(symbol, 0))
+        if left[symbol] < need:
+            return False
+        left[symbol] -= need
+    return sum(left.values()) >= int(required.get("generic", 0))
+
+
+def activation_cost_choice(controller, cost, permanent) -> tuple[int, dict]:
+    """Which of a printed "or" is paid: ``(life owed, extra mana to charge)``.
+
+    "Pay 2 life **or {2}**" (Tidal Control) is CR 601.2h's choice between two
+    payments, made as the ability is activated. Both halves come back from one
+    call because the gate that refuses an unpayable cost (CR 602.5c) and the
+    payment itself must agree — asked twice with two rules they could pay the
+    mana and charge the life as well, which is the flat reading this replaced.
+
+    The rule is **spend what is already floating, else pay the life**: an
+    activation spends the pool (producing the mana was the player's own prior
+    action), so mana that is not there is not a payment this ability can make,
+    and the life always is. It is a default rather than an offer — putting the
+    choice to an interactive seat needs a cost-picker shape that does not exist
+    (see ROADMAP's alternative-cost note, the same gap on the cast side).
+    """
+    life = activation_life_cost(cost, permanent)
+    alternative = getattr(cost, "alternative_mana", None)
+    if not alternative or not life:
+        return life, {}
+    if _pool_covers(getattr(controller, "mana_pool", {}) or {}, alternative):
+        return 0, dict(alternative)
+    return life, {}
+
+
 class AbilityActivationMixin:
     def activate_permanent_ability(
         self,
@@ -711,10 +784,17 @@ class AbilityActivationMixin:
         # then makes an unpayable cost an *unactivatable* ability rather than a
         # free one, which is why this refuses here instead of clamping at the
         # payment below. Checked before anything is spent, like every other cost.
-        if ability.cost.pay_life and controller.life < ability.cost.pay_life:
+        # CR 601.2h's choice between two printed payments, made once here and
+        # carried to both payment sites below: asked separately they could
+        # disagree, and the disagreement that costs nothing to make is paying
+        # the mana *and* the life.
+        life_owed, alternative_mana = activation_cost_choice(
+            controller, ability.cost, permanent
+        )
+        if life_owed and controller.life < life_owed:
             details = (
                 f"{permanent.card.name}: {controller.name} cannot pay "
-                f"{ability.cost.pay_life} life with {controller.life} remaining"
+                f"{life_owed} life with {controller.life} remaining"
             )
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
@@ -1025,6 +1105,12 @@ class AbilityActivationMixin:
             )
 
         required_cost = dict(ability.cost.mana)
+        # "…**or {2}**" when the pool covered it. Folded into the ordinary
+        # payment rather than charged beside it, so every tax, reduction and
+        # restricted-bucket rule below applies to it exactly as to a printed
+        # mana cost.
+        for symbol, count in alternative_mana.items():
+            required_cost[symbol] = required_cost.get(symbol, 0) + int(count)
         # "**Pay enchanted creature's mana cost**: …" (Merseine.) The symbols
         # are the *host's* and cannot be known when the card compiles, so the
         # cost dict is built here, at the one moment there is a host to read
@@ -1357,10 +1443,10 @@ class AbilityActivationMixin:
         # priority rather than mid-cost, and every other cost payment here omits
         # it — measured, a card activated at exactly 3 life ends at life 0 and
         # lost either way.
-        if ability.cost.pay_life:
-            controller.life -= ability.cost.pay_life
+        if life_owed:
+            controller.life -= life_owed
             self.log.append(
-                f"{controller.name} paid {ability.cost.pay_life} life to activate "
+                f"{controller.name} paid {life_owed} life to activate "
                 f"{permanent.card.name}"
             )
 

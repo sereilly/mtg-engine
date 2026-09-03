@@ -106,6 +106,19 @@ def _lower_add_mana(
                 {"color": node.from_sacrificed_cost, "bonus": 0, "spend_only": None},
             ),
         )
+    if node.from_chosen_color:
+        # "Add one mana of **the chosen color**." (Sol Grail.) No symbol here
+        # either, and for `from_noted`'s reason one branch down: what is added
+        # is a record on the source — the colour chosen as it entered
+        # (CR 614.1c) — which only a resolution holding that permanent can read.
+        #
+        # Deliberately *not* lowered as ``any_color``: that key makes the
+        # activating player name a colour at activation, so an artifact told to
+        # be white would answer a green cost.
+        payload = {"from_chosen_color": True}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.from_noted:
         # "Add one mana of this artifact's last noted type." (Jeweled Amulet.)
         # No symbol at all: what is added is the record an earlier activation of

@@ -602,3 +602,79 @@ def test_gusthas_scepter_is_declined_naming_four_parts(set_pool):
     """
     program = compile_card_oracle(set_pool("ALL")["Gustha's Scepter"])
     assert not program.supported
+
+
+# --- W3G5: hollow lines, pickers and unclaimed text ---
+#
+# The family that already *looked* done: cards the census counts as supported
+# while a sentence of theirs does nothing. Every test below is behavioural,
+# because that is the check the instruments cannot make.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+_W3G5_POOLS: dict = {}
+
+
+def _w3g5_from(code: str, name: str) -> CardDefinition:
+    """One card of one set, by code. The ALL pool is `measured`, so its cards
+    are placed into a driven game directly - no player can deck one."""
+    if code not in _W3G5_POOLS:
+        _W3G5_POOLS[code] = {
+            card.name: card
+            for card in load_cards(manifest_set_path(code, include_measured=True))
+        }
+    return _W3G5_POOLS[code][name]
+
+
+def _w3g5_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w3g5_put(game: Game, seat: int, card: CardDefinition) -> Permanent:
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g5_names(game: Game, seat: int) -> list[str]:
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def test_sol_grail_produces_the_colour_it_was_told_to_be():
+    """A supported mana artifact that tapped for nothing.
+
+    Its entry line ("As this artifact enters, choose a color") was claimed by
+    `enter_effects`; its *mana* line was an ability part with no instruction at
+    all, so the artifact tapped and put nothing in the pool. The record is the
+    one `_resolve_chosen_color` reads for a noun phrase, so the artifact cannot
+    be one colour to a filter and another to its own ability.
+    """
+    game = _w3g5_duel()
+    grail = _w3g5_put(game, 0, _w3g5_from("ALL", "Sol Grail"))
+    grail.metadata["chosen_color"] = "W"
+
+    result = game.activate_permanent_ability(0, "Sol Grail")
+    assert result.supported, result.details
+    assert game.players[0].mana_pool["W"] == 1
+    assert sum(
+        count for symbol, count in game.players[0].mana_pool.items() if symbol != "W"
+    ) == 0, "the chosen colour and nothing else"
+
+
+def test_sol_grail_with_nothing_chosen_produces_nothing():
+    """The choice is made as the permanent enters (CR 614.1c), so an empty
+    record means the ability is being asked of something that never entered.
+    Inventing a symbol there would put mana in a pool the card never produced.
+    """
+    game = _w3g5_duel()
+    grail = _w3g5_put(game, 0, _w3g5_from("ALL", "Sol Grail"))
+    grail.metadata.pop("chosen_color", None)
+
+    game.activate_permanent_ability(0, "Sol Grail")
+    assert sum(game.players[0].mana_pool.values()) == 0

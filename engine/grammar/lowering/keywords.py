@@ -215,12 +215,6 @@ def _lower_gain_keyword(
                     "the team keyword grant cannot narrow by: " + ", ".join(leftover),
                     node=node,
                 )
-        elif node.subject.filter.controller is None:
-            # No controller word and no other narrowing is "all creatures",
-            # which the board-wide grant below is not — it walks one seat.
-            raise LoweringError(
-                "the team keyword grant reads one player's board", node=node
-            )
         for keyword in node.keywords:
             _check_grantable(keyword, node)
         team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
@@ -233,6 +227,18 @@ def _lower_gain_keyword(
             # player.
             team_payload["filter"] = described
             team_payload["every_seat"] = node.subject.filter.controller is None
+        elif node.subject.filter.controller is None:
+            # "**All creatures** gain menace until end of turn." (Gorilla War
+            # Cry.) No controller word and no other narrowing is every creature
+            # on the table, which is the same `every_seat` the narrowed
+            # sentence above already carries — the width is what the printed
+            # word says and nothing else about the grant changes.
+            #
+            # It used to refuse here, naming the handler: "the team keyword
+            # grant reads one player's board". That stopped being true when
+            # Stampede taught the handler the key, and a refusal that outlives
+            # its reason is a card unsupported for a mechanic the engine has.
+            team_payload["every_seat"] = True
         if blocking_bound:
             team_payload["blocking_bound_target"] = True
         team_payload["duration"] = duration

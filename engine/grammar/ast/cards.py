@@ -519,13 +519,22 @@ class PutExiledWithSource:
 class SearchAndExile:
     """``Search your graveyard and library for any number of <filter> cards,
     exile them, then shuffle.`` (Chandra, Heart of Fire's −9.)
+    ``Search your library for three cards, exile them, then shuffle.``
+    (Foresight.)
 
     Not a :class:`SearchLibrary`: that node's whole contract is *one* found
-    card put into the hand, and this one exiles any number. The zones are
-    fixed by the words read — both are expected, so a wording searching one
-    zone refuses rather than silently searching fewer places than printed.
+    card put into the hand, and this one exiles several.
+
+    The two printed shapes differ in exactly two facts, so both are fields
+    rather than a second node. :attr:`zones` is which piles are searched —
+    named rather than assumed, because a wording that searched fewer places
+    than printed would be a silently smaller effect. :attr:`count` is the
+    printed ceiling, ``None`` for "any number"; CR 701.23b lets a search find
+    fewer, so it is a maximum and never a requirement.
     """
     filter: ObjectFilter
+    zones: tuple[str, ...] = ("graveyard", "library")
+    count: int | None = None
 
 
 @dataclass(frozen=True)

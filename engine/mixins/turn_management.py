@@ -11,6 +11,21 @@ from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..trigger_utils import iter_triggered_abilities
 
+
+def _tap_trigger_steps(instruction) -> tuple:
+    """A tap-for-mana trigger's effect as the clauses that make it up.
+
+    One sentence is one instruction; two sentences are a ``sequence`` whose
+    steps are those instructions (Winter's Night). Flattened one level only,
+    because that is the shape the compiler produces for a printed paragraph —
+    a deeper nesting is a control-flow instruction (`may`, `if_then`) whose
+    branches this inline site has no priority window to run, and the arms below
+    report it rather than guessing.
+    """
+    if instruction.kind == "sequence":
+        return tuple(instruction.payload.get("steps") or ())
+    return (instruction,)
+
 def _is_free_beyond_tapping(cost) -> bool:
     """Whether *cost* is the tap symbol and nothing else.
 
@@ -545,60 +560,20 @@ class TurnManagementMixin:
             supertype = trig.condition.payload.get("tapped_land_supertype")
             if supertype and not land.has_supertype(str(supertype)):
                 continue
-            if trig.instruction.kind == "add_mana_for_tapped_land":
-                self._add_triggered_land_mana(
-                    trig.instruction, player_index, land, mana_symbol, perm
+            # "…that player adds one mana of any type that land produced.
+            # **That land doesn't untap during its controller's next untap
+            # step.**" (Winter's Night.) One trigger whose effect is two
+            # sentences, so the compiler hands it a `sequence` — and this site
+            # dispatched on `trig.instruction.kind` alone, which made every
+            # clause of such a trigger unreachable. Flattened here rather than
+            # by teaching each arm about sequences: what the arms answer is
+            # "which effect is this", and how many sentences the ability was
+            # printed in is not part of that question.
+            for step in _tap_trigger_steps(trig.instruction):
+                self._resolve_tapped_land_trigger_step(
+                    step, player_index, player, land, mana_symbol, perm
                 )
-                continue
-            # "Whenever a land is tapped for mana, return it to its owner's
-            # hand." (Storm Cauldron.) Resolved inline beside the mana above,
-            # and for Manabarbs' reason rather than CR 605.4a's: this is not a
-            # mana ability and by the rules would use the stack, but the land is
-            # tapped part-way through paying a cost (CR 601.2g) and enqueuing
-            # here would order the trigger *under* the spell being paid for.
-            #
-            # The mana has already been added, which is what the rules say
-            # happens: the mana ability resolved (CR 605.3b) and the land
-            # leaving afterwards takes nothing back.
-            if trig.instruction.kind == "return_tapped_land_to_hand":
-                self._return_tapped_land_to_hand(land, perm)
-                continue
-            # **Damage, and only damage.** This arm used to be the loop's
-            # `else`: any instruction kind it did not recognize was read for an
-            # `amount` and dealt as damage, defaulting to 1 when the payload had
-            # none. A trigger under this condition whose effect is a draw
-            # ("Whenever a Mountain is tapped for mana, that player draws a
-            # card" — an invented line, but one the grammar has always lowered)
-            # therefore dealt a point of damage instead, silently and on a card
-            # reporting itself supported.
-            #
-            # Named rather than defaulted, so a kind nobody has taught this site
-            # is skipped with a line in the log. Skipping is the safe reading
-            # here for the reason the delayed loop below already gives: this
-            # resolution happens inside a cost payment (CR 601.2g), so it cannot
-            # give a non-mana effect the priority window the stack would, and
-            # doing *nothing* visible beats doing something the card never said.
-            if trig.instruction.kind != "deal_damage":
-                self.log.append(
-                    f"{perm.card.name}: nothing here resolves "
-                    f"{trig.instruction.kind!r} inside a cost payment"
-                )
-                continue
-            # The compiled payload names its victim ``event_subject_player`` —
-            # `land_tapped_for_mana` is in `_EVENT_SUBJECT_PLAYERS` on the
-            # strength of this site — and the seat the event is about is
-            # ``player``, the one tapping. This inline resolution *is* the fire
-            # site, still holding that seat, so it executes the instruction
-            # against the seat it froze rather than reading it back out of a
-            # context it never built.
-            amount = int(trig.instruction.payload.get("amount", 1))
-            self._deal_damage_to_player(
-                player, amount, source=perm,
-                then=lambda damage: self.log.append(
-                    f"{perm.card.name} triggered: {player.name} took {damage} damage"
-                ),
-            )
-
+            continue
         # The same ability created for a turn instead of printed on a permanent
         # (CR 603.7): "Until end of turn, … whenever a player taps a Mountain
         # for mana, that player adds an additional {R}." (Chaos Moon's odd
@@ -632,6 +607,83 @@ class TurnManagementMixin:
             )
 
         return True
+
+    def _resolve_tapped_land_trigger_step(
+        self, instruction, player_index: int, player, land, mana_symbol, perm
+    ) -> None:
+        """One clause of a ``land_tapped_for_mana`` trigger, resolved inline.
+
+        Inline rather than on the stack for Manabarbs' reason rather than
+        CR 605.4a's, everywhere but the mana: none of these is a mana ability
+        and by the rules they would use the stack, but the land is tapped
+        part-way through paying a cost (CR 601.2g) and enqueuing here would
+        order the trigger *under* the spell being paid for.
+
+        **Every kind is named.** The damage arm used to be this loop's ``else``:
+        any instruction kind it did not recognize was read for an ``amount`` and
+        dealt as damage, defaulting to 1 when the payload had none — so a draw
+        under this condition dealt a point of damage on a card reporting itself
+        supported. A kind nobody has taught this site is skipped with a line in
+        the log, which is the safe reading: this resolution cannot give a
+        non-mana effect the priority window the stack would, and doing *nothing*
+        visible beats doing something the card never said.
+        """
+        kind = instruction.kind
+        if kind == "add_mana_for_tapped_land":
+            self._add_triggered_land_mana(
+                instruction, player_index, land, mana_symbol, perm
+            )
+            return
+        # "Whenever a land is tapped for mana, return it to its owner's hand."
+        # (Storm Cauldron.) The mana has already been added, which is what the
+        # rules say happens: the mana ability resolved (CR 605.3b) and the land
+        # leaving afterwards takes nothing back.
+        if kind == "return_tapped_land_to_hand":
+            self._return_tapped_land_to_hand(land, perm)
+            return
+        # "**That land** doesn't untap during its controller's next untap
+        # step." (Winter's Night.) CR 502.3's restriction on the land the event
+        # was about — which only this site knows, so the marker is written here
+        # through the same function the ordinary handler writes it with rather
+        # than through a second copy of the merge rule.
+        if kind == "skip_next_untap":
+            if instruction.payload.get("subject") != "tapped_land":
+                self.log.append(
+                    f"{perm.card.name}: nothing here resolves an untap "
+                    "restriction that does not name the tapped land"
+                )
+                return
+            from ..handlers.tapping import mark_skip_next_untap
+
+            mark_skip_next_untap(
+                self, (land,),
+                steps=max(1, int(instruction.payload.get("untap_steps") or 1)),
+                # "…its controller's next untap step" names no seat, which the
+                # untap step reads as "whichever controller's step reaches it".
+                # The seated spelling would be "your", and no card prints it
+                # under this condition.
+                seat=None,
+            )
+            return
+        if kind != "deal_damage":
+            self.log.append(
+                f"{perm.card.name}: nothing here resolves "
+                f"{kind!r} inside a cost payment"
+            )
+            return
+        # The compiled payload names its victim ``event_subject_player`` —
+        # `land_tapped_for_mana` is in `_EVENT_SUBJECT_PLAYERS` on the strength
+        # of this site — and the seat the event is about is ``player``, the one
+        # tapping. This inline resolution *is* the fire site, still holding that
+        # seat, so it executes the instruction against the seat it froze rather
+        # than reading it back out of a context it never built.
+        amount = int(instruction.payload.get("amount", 1))
+        self._deal_damage_to_player(
+            player, amount, source=perm,
+            then=lambda damage: self.log.append(
+                f"{perm.card.name} triggered: {player.name} took {damage} damage"
+            ),
+        )
 
     def _return_tapped_land_to_hand(self, land, source) -> None:
         """Storm Cauldron: the land that was just tapped for mana goes home.

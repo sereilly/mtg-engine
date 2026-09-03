@@ -35,6 +35,21 @@ _SACRIFICE_CARRIED = frozenset({"exclude_self", "their_choice"})
 _SACRIFICE_CARRIED_FIELDS = frozenset({"other_than_source", "their_choice"})
 
 
+def _names_a_set(filt: ast.ObjectFilter) -> bool:
+    """Whether the noun phrase narrows to a set on its own.
+
+    The four axes a printed noun phrase describes a permanent class with:
+    CR 205.2 card types, CR 205.3 subtypes, CR 105 colours, and the
+    cross-axis union of those (``any_classes``, "an Island or blue
+    permanent"). All four are in ``_PAYLOAD_HONOURED_FILTER_FIELDS``, which is
+    what makes them safe to ask here: a field the payload always emits and the
+    matcher always tests cannot be the narrowing that got lost.
+    """
+    return bool(
+        filt.card_types or filt.subtypes or filt.colors or filt.any_classes
+    )
+
+
 def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
     """The filter payload the forced-sacrifice prompt should list, or None when
     the noun phrase says something the prompt cannot test.
@@ -44,11 +59,20 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
 
     - a self-referential or enchanted subject ("sacrifice **this** creature",
       Sea Serpent), which is a different instruction entirely and is read below;
-    - a phrase naming neither a card type nor a subtype **that said something
-      else the payload lost**, which would let the prompt eat anything on the
-      board. A *subtype* alone is a real set and names it exactly — "two
-      Swamps" (Mold Demon) is the whole cost, and it says nothing about card
-      types because on that card it does not need to.
+    - a phrase naming none of the four ways a noun phrase can *be* a set
+      **that said something else the payload lost**, which would let the prompt
+      eat anything on the board. A *subtype* alone is a real set and names it
+      exactly — "two Swamps" (Mold Demon) is the whole cost, and it says nothing
+      about card types because on that card it does not need to. So is a
+      **colour** alone: "a green or white permanent of their choice" (Dystopia)
+      names every green-or-white permanent, and ``colors``/``any_classes`` sit
+      in ``_PAYLOAD_HONOURED_FILTER_FIELDS`` beside ``card_types`` — emitted
+      unconditionally and tested by ``permanent_matches_filter`` — so neither
+      can *be* the lost narrowing this guard is aimed at. Left out, three cards
+      printing "sacrifices a <colour> or <colour> permanent of their choice"
+      were refused for saying something the payload carries perfectly well,
+      which is the false refusal ``subtype_match`` and ``any_classes`` were each
+      added to ``_PAYLOAD_HONOURED_FILTER_FIELDS`` to end one gate over.
 
     The generic head noun is the one empty payload that is *right*: "sacrifice
     **a permanent** other than this enchantment" (Oath of Lim-Dûl) names every
@@ -67,7 +91,7 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
     # every lowering downstream does with the flag.
     if filt.chosen_by_opponent:
         return None
-    if not (filt.card_types or filt.subtypes) and _restrictions_beyond(
+    if not _names_a_set(filt) and _restrictions_beyond(
         filt, _SACRIFICE_CARRIED_FIELDS
     ):
         return None

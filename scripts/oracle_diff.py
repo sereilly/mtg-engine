@@ -19,6 +19,16 @@ the change touched *beyond* the card it was for, so the pool is always both
 manifest roles (``manifest_set_paths(include_measured=True)``), deduped by name
 with the earliest printing winning — the same pool ``parse_coverage.py`` reads.
 
+**A dataclass that gains a defaulted field moves every card that has one.**
+The programs are stored as their ``repr``, so adding
+``pay_life_per_counter=None`` to ``ActivatedAbilityCost`` reported **710 of
+1,869** changed where ten had really moved. That is not a false positive to
+suppress — the repr is what makes the narrowing class visible in the first
+place — but it does mean a round that adds a field owes the reader the filter:
+strip the new field's default spelling from both sides and re-compare, and say
+in the report what the number is *after* stripping. A round that reports the
+raw count has told the next integrator nothing.
+
 **What the map cannot see** (printed on every compare): a text-keyed table —
 ``combat_restrictions``, ``untap_restrictions`` / ``draw_step_modifiers``,
 ``cast_restrictions`` / ``activation_restrictions``, ``cost_modifiers``,
@@ -37,6 +47,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Card text is UTF-8 and a Windows console is not. `reconfigure` is called
+# rather than assumed available on a re-encoded stream, because the crash this
+# prevents is the *merge gate's* — a compare that dies on a U+2212 in one
+# moved card's payload takes the whole differential with it, and the gate then
+# reads as "the instrument is broken" rather than "read these cards". Errors
+# are replaced rather than raised for the same reason: a name this console
+# cannot spell is still a name the reader needs to see.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover - non-tty streams
+        pass
 
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402

@@ -573,6 +573,11 @@ def _search_exile(ctx: PromptContext, choices: list) -> dict:
         "zones": list(zones),
         "card_types": list(choice.data.get("card_types") or ()),
         "colors": list(choice.data.get("colors") or ()),
+        # "Search your library for **three** cards" (Foresight). None for the
+        # "any number of" spelling. The engine refuses a longer answer either
+        # way; this is what stops the UI offering a fourth pick that will be
+        # rejected whole.
+        "maximum": choice.data.get("maximum"),
         "cards": [ctx.serialize_card(card) for card in caster.library],
         "legal_indices": [
             index for index, card in enumerate(caster.library) if _matches(card)

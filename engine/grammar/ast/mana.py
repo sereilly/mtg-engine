@@ -92,6 +92,14 @@ class AddMana:
     #: same sentence about *your* lands or about a chosen player's is the same
     #: production with a different word.
     any_color_from: str | None = None
+    #: "Add one mana of **the chosen color**." (Sol Grail, Sisay's Ring's
+    #: cousins.) Not a choice made now: the colour was picked as the source
+    #: entered (CR 614.1c) and lives on that permanent, which is the same record
+    #: ``ObjectFilter.chosen_color`` reads one family over. So it is a *fixed*
+    #: production whose symbol is last-known information rather than an
+    #: ``any_color`` the activating player picks — read as the latter, a Sol
+    #: Grail told to be white would still make green on demand.
+    from_chosen_color: bool = False
     # "**an additional** {B}" (the Mana Batteries). Recorded rather than
     # consumed and dropped: the word says this clause adds on top of the one
     # before it, which is what makes the printed sentence two statements rather
