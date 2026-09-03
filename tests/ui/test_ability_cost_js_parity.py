@@ -193,6 +193,24 @@ def test_the_indexed_cost_reader_returns_the_listed_option(js_readings):
     assert not wrong, wrong
 
 
+def test_a_printed_or_between_two_payments_prices_only_the_default(js_readings):
+    """"Pay 2 life or {2}" (Tidal Control) is CR 601.2h's choice between two
+    payments, not two payments.
+
+    Named here rather than left to the pool-wide comparison above so a
+    regression says which card and which clause. The engine's side landed with
+    ``ActivatedAbilityCost.alternative_mana``; until the client learned the same
+    split it read the {2} as mana the ability *requires*, so the browser opened
+    an insufficient-mana prompt for two mana in front of an ability the engine
+    settles in life — and a player with no untapped land could not activate an
+    ability that costs them nothing but life.
+    """
+    _, js = js_readings
+    reading = js["Tidal Control"]
+    assert reading["options"] == ["Pay 2 life"], reading["options"]
+    assert reading["first"] == "Pay 2 life"
+
+
 def test_the_client_lists_every_equip_ability(js_readings):
     """An Equipment's equip line must reach the menu: the client mirrors the
     CR 702.6a rewrite the compiler applies, so the line is an option with the

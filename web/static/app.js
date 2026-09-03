@@ -8927,8 +8927,16 @@ function renderActivationPrompt() {
               const disabledAttrs = disabledReason
                 ? ` disabled title="${escapeHtml(disabledReason)}"`
                 : "";
+              // `orCost` is the other half of a printed "or" (Tidal Control's
+              // "Pay 2 life or {2}"): the button charges `cost`, and the
+              // alternative is still shown because the card offers it — the
+              // engine spends floating mana for it when there is any
+              // (CR 601.2h, `activation.activation_cost_choice`).
+              const shown = opt.orCost
+                ? `${renderSymbolsInline(opt.cost)} or ${renderSymbolsInline(opt.orCost)}`
+                : renderSymbolsInline(opt.cost);
               return `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}"${disabledAttrs}>` +
-                `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`;
+                `${shown}: ${escapeHtml(opt.text)}</button>`;
             },
           )
           .join("")}</div>`,
@@ -9120,6 +9128,32 @@ function resolveChannel(amount) {
 // accepted — printed oracle text uses U+2212, hand-typed text a hyphen.
 const LOYALTY_COST_RE = /^([+\-−]?\s*(?:\d+|[xX]))\s*:\s*(.+)$/;
 
+// "Pay 2 life **or {2}**" (Tidal Control). CR 601.2h's choice between two
+// printed payments, made as the ability is activated — so the mana half is not
+// mana this ability *requires*, and reading the cost clause whole charges both
+// halves of an "or". The engine stopped doing that when
+// `oracle._split_mana_alternative` gave `ActivatedAbilityCost` its
+// `alternative_mana` field; this is the same split, on the same clause, so the
+// menu and the auto-tap flow ask for what the engine actually charges.
+//
+// Deliberately narrower than the engine's pattern in one place: the capture
+// admits only symbols this file can price. The engine leaves the clause whole
+// when the alternative names something it cannot price ({X}, {T}), and a
+// capture stopping at the same symbols reaches that outcome by not matching.
+//
+// Anchored to the end of the clause and to a preceding life payment, exactly
+// as the engine's is: a bare "or" elsewhere in a cost clause is not this.
+//
+// Declared here rather than beside EQUIP_LINE_RE because
+// `tests/ui/test_ability_cost_js_parity.py` lifts everything between the
+// loyalty-cost declaration above and the isPlaneswalkerCard definition below
+// into its node driver — a constant declared outside both of that driver's
+// slices is a ReferenceError there. For the same reason nothing in this
+// comment may spell either slice's marker verbatim: the driver takes the
+// *first* occurrence, so a mention above the real declaration truncates the
+// slice at the comment and node parses half a function.
+const MANA_ALTERNATIVE_RE = /\bpay \w+ life\b[^,:]*?\s+or\s+((?:\{(?:\d+|[WUBRGCwubrgc])\})+)\s*$/i;
+
 function isPlaneswalkerCard(card) {
   if (!card || typeof card === "string") return false;
   if (card.is_planeswalker === true) return true;
@@ -9225,9 +9259,24 @@ function getActivatedAbilityOptions(card) {
     // parenthesised is what says it restates a rule rather than printing an
     // ability. Twenty basic and dual lands read as {T} abilities without this.
     const ci = trimmed.startsWith("(") ? -1 : activationColonIndex(trimmed);
-    const costHalf = ci < 0 ? "" : trimmed.slice(0, ci).trim();
+    let costHalf = ci < 0 ? "" : trimmed.slice(0, ci).trim();
     const effectHalf = ci < 0 ? "" : trimmed.slice(ci + 1).trim();
     if (!costHalf || !effectHalf) continue;
+    // "Pay 2 life or {2}" is one cost with a choice: `cost` is what activating
+    // charges by default and `orCost` is the payment the card offers instead.
+    // Split before anything reads either, because `cost` is what the auto-tap
+    // flow pays and what parseManaCostSymbols scans — left whole, the {2} reads
+    // as mana this ability requires, and the menu asked for two mana to pay a
+    // cost the engine settles in life.
+    let orCost = "";
+    const alternative = costHalf.match(MANA_ALTERNATIVE_RE);
+    if (alternative) {
+      const head = costHalf.slice(0, costHalf.length - alternative[1].length).replace(/\s+$/, "");
+      if (/\bor$/i.test(head)) {
+        orCost = alternative[1];
+        costHalf = head.slice(0, head.length - 2).replace(/\s+$/, "");
+      }
+    }
     const m = [null, costHalf, effectHalf];
     // Modal activated ability (Pyramids: "{2}: Choose one —" + bullets):
     // one option per bullet, sharing the cost — matching the engine, which
@@ -9247,7 +9296,7 @@ function getActivatedAbilityOptions(card) {
         continue;
       }
     }
-    options.push({ index, cost: m[1].trim(), text: m[2].trim(), line: line.trim() });
+    options.push({ index, cost: m[1].trim(), orCost, text: m[2].trim(), line: line.trim() });
     index += 1;
   }
   return options;
