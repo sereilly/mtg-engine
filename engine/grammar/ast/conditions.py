@@ -338,6 +338,34 @@ class EachShortOfThisWay:
 
 
 @dataclass(frozen=True)
+class CountersPlacedThisWay:
+    """"**For each +1/+1 counter you put on a creature this way,** remove a
+    +1/+1 counter from that creature at the beginning of the next cleanup step."
+    (Bounty of the Hunt.)
+
+    The fourth "this way" window, beside :class:`DiedThisWay`,
+    :class:`ExiledThisWay` and :class:`TappedThisWay`, and the same distinction
+    they draw: this names exactly the counters an earlier sentence of *this same
+    effect* placed, and no read of the board can answer it — a creature's +1/+1
+    counters may have come from anywhere.
+
+    It differs from those three in what it iterates. They walk a **set** of
+    objects; this walks the *counters*, so a creature given two is named twice
+    and the sentence runs twice about it. That is the printed reading — the
+    delayed ability is created once per counter (CR 603.7) — and it is what
+    makes the removal come out even with the placement.
+
+    ``counter`` is the printed kind, checked against the placement rather than
+    assumed: a card placing one kind and removing another is a sentence this
+    would otherwise run over the wrong record.
+
+    The lowering refuses it without a producer, as every back-reference in this
+    grammar is refused.
+    """
+    counter: str
+
+
+@dataclass(frozen=True)
 class EachAdditionalCostPaid:
     """"**For each additional {1}{R} you paid**, destroy another target
     artifact." (Primitive Justice, Taste of Paradise.)

@@ -199,6 +199,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # effect, and the object is the one the creating ability bound rather
     # than the ability's own source.
     "remove_all_counters_from_bound": "counters",
+    "remove_counters_from_bound": "counters",
     # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
     # ``player_gets_poison_counters`` above it. Same category: the store differs
     # and the question does not.

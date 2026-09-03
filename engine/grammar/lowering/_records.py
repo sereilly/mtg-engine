@@ -37,6 +37,7 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD,
+                      _COUNTERS_PLACED_THIS_WAY,
                       _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
 
@@ -304,6 +305,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (CR 511.2). So the counters record their recipients by id, and the tap,
     # the untap restriction and the granted ability all read that record.
     "add_named_counter_to_creatures_in_combat_with_source": _PERMANENTS_GIVEN_COUNTERS,
+    # "Distribute three +1/+1 counters among one, two, or three target
+    # creatures. **For each +1/+1 counter you put on a creature this way,**
+    # …" (Bounty of the Hunt.) The placement records one entry per counter,
+    # which is what the sentence behind it counts — the division the caster
+    # announced is on the stack item and says how many went where, and
+    # nothing on the board afterwards can say which of a creature's counters
+    # this spell put there.
+    "add_counter_to_target": _COUNTERS_PLACED_THIS_WAY,
     # "Return target white or black creature card from your graveyard to the
     # battlefield. **That creature** gains "Cumulative upkeep {2}."" (Dreams of
     # the Dead.) The permanent did not exist when the ability was activated —

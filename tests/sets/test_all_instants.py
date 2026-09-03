@@ -152,33 +152,16 @@ def test_surge_of_strength_discards_a_red_or_green_card_to_be_cast(set_pool):
 # unnoticed, and the message says what to do about it.
 
 
-def test_bounty_of_the_hunt_declines_on_two_named_parts(set_pool):
-    """Two parts, both outside this round's subsystem:
-
-    1. ~~a bounded distributed target count~~ — **landed in W2G2**: the
-       enumerated "among one, two, or three" form parses into
-       ``TargetSpec.max_count`` and the bound is enforced at announcement in
-       ``divided_damage.division_refusal``. This card's first line is no longer
-       what holds it;
-    2. **the loop iterator "for each +1/+1 counter you put on a creature this
-       way"**. ``records._parse_for_each_this_way`` reads exactly ``for each
-       <one word> <one participle> this way`` against a two-entry table
-       (``card discarded`` / ``card exiled``, plus Sacred Boon's ``damage
-       prevented``). Here the noun is a **PT token** and the participle is a
-       four-word relative clause, so nothing is consumed at all — and there is
-       no record behind it either: the distributed placement writes no
-       "counters placed this way" key for a ``ThatMuch`` to read;
-    3. **"remove a +1/+1 counter from that creature"** — the removal's subject
-       is the creature this same sentence just chose, and the only
-       counter-removal lowering reads the ability's own source. It refuses at
-       *lowering*, not at parse, which is why the sentence looks readable.
-
-    The delayed trigger the earlier decline named is **not** a missing part any
-    more: W1G5 landed "at the beginning of the next cleanup step" end to end,
-    and the tail alone ("remove … at the beginning of the next cleanup step")
-    parses today and stops only on part 3."""
+def test_bounty_of_the_hunt_no_longer_declines_on_its_counter_loop(set_pool):
+    """Was the decline. W2G2 landed part 1 (the enumerated bound) and **W3G1**
+    landed parts 2 and 3: "for each +1/+1 counter you put on a creature this
+    way" is its own iterator over a record the distributed placement now writes,
+    and "remove a +1/+1 counter from that creature" is the counted twin of the
+    bound removal Giant Oyster already had. The behavioural tests are in the
+    W3G1 block at the bottom of this file; what this keeps is the pairing the
+    decline named — the pitch cost and the effect, both read, on one card."""
     program = compile_card_oracle(set_pool("ALL")["Bounty of the Hunt"])
-    assert not program.supported
+    assert program.supported
     assert alternative_costs(set_pool("ALL")["Bounty of the Hunt"])
 
 
@@ -193,25 +176,18 @@ def test_contagion_no_longer_declines_on_the_bounded_target_count(set_pool):
     assert alternative_costs(set_pool("ALL")["Contagion"])
 
 
-def test_undergrowth_declines_on_an_optional_mana_additional_cost(set_pool):
-    """Two parts, neither of them the pitch cycle:
-
-    1. **an optional additional cost paid in mana** — "As an additional cost to
-       cast this spell, you may pay {2}{R}." ``cast_costs._COST_CLAUSES`` has no
-       mana clause at all, and it has no notion of an *optional* cost either:
-       every clause it reads is mandatory, which is what makes the CR 601.2h
-       gate a refusal rather than a choice;
-    2. **a rider that reads back whether that cost was paid** — "If this spell's
-       additional cost was paid, this effect doesn't affect combat damage that
-       would be dealt by red creatures", which needs the answer recorded on the
-       stack item the way ``sacrificed_for_cost`` already is, and a
-       ``prevent_all_combat_damage`` that can carry an exclusion filter."""
-    program = compile_card_oracle(set_pool("ALL")["Undergrowth"])
-    assert not program.supported
-    assert not additional_costs(set_pool("ALL")["Undergrowth"]), (
-        "an optional mana cost is deliberately not read: reading it as "
-        "mandatory would make the spell uncastable without {2}{R}"
-    )
+def test_undergrowth_no_longer_declines_on_its_optional_mana_cost(set_pool):
+    """Was the decline, and both named parts landed in W3G1: an optional mana
+    clause in ``cast_costs._COST_CLAUSES`` with the count carried to resolution,
+    and a prevention that can be narrowed by the damage's source. What this
+    keeps is the pairing — the cost is read *and* the effect reads it back, on
+    one card. The behaviour is in the W3G1 block at the bottom of this file and
+    in ``tests/rules/test_optional_additional_costs.py``."""
+    assert compile_card_oracle(set_pool("ALL")["Undergrowth"]).supported
+    (cost,) = additional_costs(set_pool("ALL")["Undergrowth"])
+    assert [(o.symbols, o.repeatable) for o in cost.optional_mana] == [
+        ("{2}{R}", False)
+    ], "printed without 'any number of times', so it may be taken once"
 
 
 # --- W1G5: delayed triggers ---
@@ -945,3 +921,114 @@ def test_w2g3_scars_of_the_veteran_keeps_its_pitch_cost(set_pool):
     card = set_pool("ALL")["Scars of the Veteran"]
     assert _w2g3_compile(card).supported
     assert _w2g3_alt_costs(card)
+
+
+# --- W3G1: repeated additional costs ---
+#
+# Undergrowth's optional additional cost (CR 601.2b) and the width it buys the
+# prevention (CR 615), plus Bounty of the Hunt's delayed counter removal
+# (CR 603.7 at CR 514's cleanup step). The rules-level tests for the cost
+# machinery are in ``tests/rules/test_optional_additional_costs.py``. Imports
+# are in this block, per the header's parallel-authorship convention.
+
+from engine import Game as _W3G1Game, PlayerState as _W3G1Player, load_cards as _w3g1_load
+from engine.card_loader import manifest_set_path as _w3g1_path
+from engine.models import Permanent as _W3G1Permanent
+from engine.oracle import compile_card_oracle as _w3g1_compile
+
+_W3G1_LEA = {c.name: c for c in _w3g1_load(_w3g1_path("LEA"))}
+
+
+def _w3g1_bounty_game(set_pool):
+    """Bounty of the Hunt in hand, a 2/2 and a 3/3 on the caster's board."""
+    caster = _W3G1Player(name="A", hand=[set_pool("ALL")["Bounty of the Hunt"]])
+    game = _W3G1Game(players=[caster, _W3G1Player(name="B")])
+    game.enforce_mana_costs = False
+    bear = _W3G1Permanent(card=_W3G1_LEA["Grizzly Bears"])
+    giant = _W3G1Permanent(card=_W3G1_LEA["Hill Giant"])
+    caster.battlefield.extend([bear, giant])
+    game._settle()
+    return game, bear, giant
+
+
+def test_undergrowth_prevention_narrows_only_when_its_cost_was_paid(set_pool):
+    """"Prevent all combat damage that would be dealt this turn. If this spell's
+    additional cost was paid, this effect doesn't affect combat damage that
+    would be dealt by red creatures."
+
+    Two sentences, **one** effect: the second is a rider on the first ("*this*
+    effect" names it), so it lowers to a choice between two widths rather than
+    to a second prevention that would apply alongside the first. The compiled
+    shape is the assertion, because the behavioural halves are in
+    ``tests/rules/test_optional_additional_costs.py`` where the combat setup
+    lives."""
+    (branch,) = _w3g1_compile(set_pool("ALL")["Undergrowth"]).instructions[:1]
+    assert branch.kind == "if_then"
+    assert branch.payload["condition"] == {"kind": "additional_cost_paid"}
+    (narrow,) = branch.payload["then"]
+    (wide,) = branch.payload["else"]
+    assert narrow.kind == "prevent_all_combat_damage_except_from"
+    assert narrow.payload["filter"] == {"type_filter": "creature", "color_filter": "R"}
+    assert wide.kind == "prevent_all_combat_damage"
+
+
+def test_bounty_of_the_hunt_distributes_three_counters_over_a_bounded_count(set_pool):
+    """"Distribute three +1/+1 counters among one, two, or three target
+    creatures." The enumerated bound W2G2 built for Contagion, with one more
+    term — so this half needed nothing new, which is worth pinning: a later
+    round reading the census would otherwise rebuild it."""
+    (place,) = [
+        i for i in _w3g1_compile(set_pool("ALL")["Bounty of the Hunt"]).instructions
+        if i.kind == "add_counter_to_target"
+    ] or [
+        step
+        for i in _w3g1_compile(set_pool("ALL")["Bounty of the Hunt"]).instructions
+        for step in i.payload.get("steps", ())
+        if step.kind == "add_counter_to_target"
+    ]
+    assert place.payload["count"] == 3
+    assert place.payload["targets"]["max_targets"] == 3
+    assert place.payload["targets"]["division"] == "chosen"
+
+    game, bear, giant = _w3g1_bounty_game(set_pool)
+    result = game.cast_from_hand(
+        0, "Bounty of the Hunt", target_player_index=0,
+        divided_targets=[(0, 0, 2), (0, 1, 1)],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+    assert (giant.effective_power, giant.effective_toughness) == (4, 4)
+
+
+def test_bounty_of_the_hunt_takes_the_counters_back_at_cleanup(set_pool):
+    """"For each +1/+1 counter you put on a creature this way, remove a +1/+1
+    counter from that creature at the beginning of the next cleanup step."
+
+    One delayed ability **per counter** (CR 603.7), not per creature: the loop
+    walks the counters, so the creature given two of them is iterated twice and
+    gets two of them. Counting the creatures instead would hand back one counter
+    of the two and leave the card permanently pumping.
+
+    The trailing delay is pushed *inside* the loop for the same reason it is the
+    printed reading: left wrapped around it the loop would run a turn later,
+    when the record it iterates is out of scope and "that creature" names
+    nobody."""
+    game, bear, giant = _w3g1_bounty_game(set_pool)
+    game.cast_from_hand(
+        0, "Bounty of the Hunt", target_player_index=0,
+        divided_targets=[(0, 0, 2), (0, 1, 1)],
+    )
+    game._settle()
+
+    assert [t.event for t in game.delayed_triggers] == ["next_cleanup_step"] * 3
+    assert sorted(t.bound_permanent_id for t in game.delayed_triggers) == [
+        bear.permanent_id, bear.permanent_id, giant.permanent_id,
+    ]
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)

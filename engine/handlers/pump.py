@@ -18,6 +18,7 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword, remove_keyword
+from ..oracle_types import COUNTERS_PLACED_THIS_WAY
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -932,6 +933,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
                 continue
             game.place_pt_counters(creature, kind, share)
             placed_total += share
+            # "**For each +1/+1 counter you put on a creature this way,** …"
+            # (Bounty of the Hunt.) One entry per *counter*, not per creature:
+            # a creature given two is named twice and the sentence behind this
+            # runs twice about it. Written here because this is the only step
+            # that knows the division — the caster announced it as the spell was
+            # cast, and a creature's counters afterwards say nothing about which
+            # of them this spell put there.
+            context.results.setdefault(COUNTERS_PLACED_THIS_WAY, []).extend(
+                [creature] * share
+            )
             game.log.append(
                 f"{creature.card.name} gets {share} {kind} counter(s) ({card.name})"
             )

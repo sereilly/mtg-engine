@@ -546,6 +546,22 @@ EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 TAPPED_THIS_WAY = "tapped_this_way"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
+#: What "**+1/+1 counters you put on a creature this way**" names (Bounty of the
+#: Hunt). One entry **per counter**, not per creature, because that is what the
+#: sentence counts: a creature given two of them is named twice and the loop
+#: behind this runs twice about it, creating one delayed ability per counter
+#: (CR 603.7) — which is what makes the removal come out even with the placement.
+#:
+#: Here rather than beside either reader, for ``EXILED_THIS_WAY``'s stated
+#: reason: the lowering gates the printed phrase on the marker and the handler
+#: writes the permanents, and the two are on opposite ends of the pipeline.
+#:
+#: Its own key rather than ``permanents_given_counters`` beside it: that one is
+#: the *set* a placement marked, read as a set by three of Dread Wight's
+#: sentences, and folding a per-counter list into it would make a creature with
+#: two counters two members of a set those sentences mean once.
+COUNTERS_PLACED_THIS_WAY = "counters_placed_this_way"
+
 #: What "**chosen this way**" names (Raiding Party). The permanents a
 #: resolution-time pick named, accumulated across every iteration and every
 #: seat that was asked — "then destroy all Plains that weren't chosen this way

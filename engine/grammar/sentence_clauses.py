@@ -18,7 +18,7 @@ import dataclasses
 from ..oracle_types import DREW_BY_SEAT
 from . import ast
 from .errors import GrammarError
-from .lexer import NUMBER, WORD
+from .lexer import NUMBER, PT, WORD
 from .nouns import parse_object_filter
 from .references import parse_player_ref, parse_recipient
 from .vocabulary import singular as _singular
@@ -93,6 +93,21 @@ def _parse_leading_for_each(
     # many times as the caster chose. Read beside the two counts above and
     # before the noun phrase, which has no reading for a mana symbol and would
     # fail the line on a word this clause understands.
+    # "**For each +1/+1 counter you put on a creature this way,** remove a +1/+1
+    # counter from that creature …" (Bounty of the Hunt.) The fourth "this way"
+    # window, and the only one that walks *counters* rather than objects — a
+    # creature given two is named twice. Read before the noun phrase below,
+    # which would take the counter kind for a quantified object.
+    placed = stream.mark()
+    if stream.peek() is not None and not stream.at_word("counter", "counters"):
+        kind = stream.peek()
+        if kind.kind in (PT, WORD):
+            stream.advance()
+            if stream.accept_word("counter", "counters") and stream.accept_phrase(
+                "you", "put", "on", "a", "creature", "this", "way"
+            ) and stream.accept_punct(","):
+                return ast.CountersPlacedThisWay(counter=kind.text)
+    stream.reset(placed)
     paid = stream.mark()
     symbols = accept_additional_cost_paid(stream)
     if symbols is not None and stream.accept_punct(","):
