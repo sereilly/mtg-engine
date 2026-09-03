@@ -1957,6 +1957,28 @@ def _from_targets_payload(targets) -> dict | None:
             # candidates one at a time can never see it, and the gate that
             # checks what the caster *named* is where it is answered.
             flags = {**flags, "same_controller": True}
+    elif isinstance(count, dict):
+        # "Destroy target artifact. **For each additional {1}{R} you paid**,
+        # destroy another target artifact…" (Primitive Justice). CR 601.2c fixes
+        # the number of targets as the spell is announced, and here that number
+        # is a function of the CR 601.2b payment announced one step earlier — so
+        # there is no maximum to write down, only the arithmetic. Carried whole,
+        # for the reason `x_targets` is a flag rather than a number one branch
+        # down: how many the caster may name depends on what they announce, and
+        # this spec is built from the card alone.
+        #
+        # The picker resolves it through `oracle_types.cost_target_count`, the
+        # same reader `legality.cast_target_refusal` gates the announcement
+        # with — a second arithmetic would be a picker offering a count the
+        # engine then refuses.
+        flags = {**flags, "cost_targets": count, "exact_targets": True}
+        if targets.get("distinct"):
+            # The printed "**another**" (CR 601.2c). Beside the count rather
+            # than inside the per-candidate filter for `same_controller`'s
+            # reason: it is a relation over the whole announcement, and an
+            # enumeration that looks at one candidate at a time can never see
+            # it.
+            flags = {**flags, "distinct_targets": True}
     elif count == "x":
         # "**X** target creatures" (Part Water, Winter Blast). The count is the
         # announced X, so there is no number here to be a maximum — and saying
