@@ -243,6 +243,29 @@ class ActivatedAbilityCost:
     # printed; 0 is the honest "no such cost", since CR 119.4b makes paying 0
     # life always legal and therefore never a restriction on activating.
     pay_life: int = 0
+    #: "Pay 3 life **for each velocity counter on this enchantment**"
+    #: (Tornado). The counter's printed kind, when ``pay_life`` above is a
+    #: *rate* rather than the amount owed. CR 601.2f computes a cost as the
+    #: ability is activated, and this multiplier lives on the ability's own
+    #: source — so the number is read there, at the two sites that check and
+    #: charge the payment, and never here.
+    #:
+    #: Its own field rather than a computed ``pay_life``, because a reader that
+    #: has not learned the word charges the printed rate — which for Tornado's
+    #: first activation is *more* than the card asks, and never less. A cost
+    #: charged too low is a free ability; too high is a refused one, and only
+    #: the first is silent.
+    pay_life_per_counter: str | None = None
+    #: "Pay 2 life **or {2}**" (Tidal Control). The mana that may be paid
+    #: *instead of* ``pay_life`` above, as a symbol dict like ``mana``.
+    #: CR 601.2h: the payer chooses between the printed alternatives as the
+    #: ability is activated.
+    #:
+    #: Separate from ``mana`` for the reason the AST field it comes from is
+    #: separate: folded in, the two halves of an "or" are charged *together*,
+    #: which is what the prose reader below did until this field existed —
+    #: Tidal Control asked for two life **and** {2}.
+    alternative_mana: dict[str, int] | None = None
     # CR 606.4: a loyalty ability's cost is putting on or removing loyalty
     # counters. ``loyalty`` is the signed delta ("+1" → 1, "−2" → -2, "0" → 0);
     # ``loyalty_x_sign`` is set instead for a variable cost ("−X" → -1), whose

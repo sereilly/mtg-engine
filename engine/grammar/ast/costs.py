@@ -161,9 +161,27 @@ class PayLifeCost:
     the bare ``PayLife``, which is also what the *effect* "pay 4 life" reads
     to (``ast/game.py``) — one name for a cost and for a statement, in an AST
     whose two unions are told apart by type.
+
+    ``per_counter`` is "Pay 3 life **for each velocity counter on this
+    enchantment**" (Tornado): the printed amount is a *rate*, and how much is
+    actually owed is read off the source when the ability is activated. A field
+    rather than an ``Amount`` because the multiplier is not a quantity the
+    grammar can evaluate — CR 601.2f's cost is computed at activation, and the
+    counter is on the permanent whose ability this is.
     """
 
     amount: Amount = field(default_factory=lambda: Fixed(1))
+    per_counter: str | None = None
+    #: "Pay 2 life **or {2}**" (Tidal Control). CR 601.2h lets the payer choose
+    #: between the printed alternatives as the ability is activated, so this is
+    #: one cost with a choice rather than two abilities.
+    #:
+    #: Carried on the life payment rather than in a ``mana`` cost of its own,
+    #: and that is the safety argument: a reader that has not learned the word
+    #: charges the **life** — the payment the card definitely allows — where a
+    #: flat pair of costs charges *both*, which is what the compiler's prose
+    #: reader did before this field existed.
+    alternative_mana: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)

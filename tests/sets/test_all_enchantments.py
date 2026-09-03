@@ -1030,3 +1030,144 @@ def test_natures_wrath_reads_a_blue_nonisland_permanent_as_the_other_half():
     assert "Merfolk of the Pearl Trident" not in _w3g5_names(game, 1), (
         "a blue permanent that is not an Island is in the union"
     )
+
+
+def test_tornado_pays_nothing_for_its_first_activation_and_three_life_for_the_next():
+    """The cost is a **rate**, and it was charged as a flat number.
+
+    "Pay 3 life for each velocity counter on this enchantment" owes nothing the
+    first time (no counters yet) and three more on every activation after,
+    because the ability's own effect adds a counter as it resolves. The
+    compiler read "pay 3 life" and stopped, so the clause's remaining words were
+    unconsumed text and the whole ability compiled to nothing at all.
+    """
+    from engine.named_counters import counters_on
+
+    game = _w3g5_duel()
+    tornado = _w3g5_put(game, 0, _w3g5_from("ALL", "Tornado"))
+    first = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    second = _w3g5_put(game, 1, _w3g5_from("LEA", "Hill Giant"))
+
+    result = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(first)]
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    assert game.players[0].life == 20, "no counters yet, so no life is owed"
+    assert counters_on(tornado, "velocity") == 1
+    assert "Grizzly Bears" not in _w3g5_names(game, 1)
+
+    # CR 602.5: "Activate only once each turn" refuses with nothing paid.
+    refused = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(second)]
+    )
+    assert not refused.supported and "once each turn" in refused.details
+    assert game.players[0].life == 20, "a refused activation pays nothing"
+    assert "Hill Giant" in _w3g5_names(game, 1)
+
+    # The *opponent's* turn: Tornado's own cumulative upkeep would sacrifice it
+    # in a game where nobody can pay {G}, and what is being measured here is the
+    # cost, not the upkeep. The per-turn tally is keyed to `game.turn`
+    # (CR 602.5's window), so the number is what has to move.
+    game.turn += 1
+    game.start_turn(1)
+    again = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(second)]
+    )
+    assert again.supported, again.details
+    game.resolve_stack()
+    assert game.players[0].life == 17, "one velocity counter, so three life"
+    assert counters_on(tornado, "velocity") == 2
+
+
+def test_tornado_refuses_when_the_scaled_life_is_more_than_the_payer_has():
+    """CR 602.5c makes an unpayable cost an *unactivatable* ability rather than
+    a free one, and the amount that must be affordable is the computed one."""
+    from engine.named_counters import add_counters
+
+    game = _w3g5_duel()
+    tornado = _w3g5_put(game, 0, _w3g5_from("ALL", "Tornado"))
+    victim = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    add_counters(tornado, "velocity", 4)
+    game.players[0].life = 11
+
+    refused = game.activate_permanent_ability(
+        0, "Tornado", target_permanent_ids=[game.permanent_id_of(victim)]
+    )
+    assert not refused.supported and "cannot pay 12 life" in refused.details
+    assert game.players[0].life == 11 and "Grizzly Bears" in _w3g5_names(game, 1)
+
+
+def test_tidal_control_is_activated_by_the_opponent_and_counters_a_green_spell():
+    """The card's whole point, and none of it happened.
+
+    Three separate gaps: the cost clause "Pay 2 life **or** {2}" refused as
+    unrecognized (so the ability compiled to nothing), the colour union had no
+    payload the counter handler reads, and the reader that *did* work - "Any
+    player may activate this ability", implemented in
+    `engine/activation_permissions.py` - had nothing to widen access to. The
+    life comes off the **activator**, not the enchantment's controller.
+    """
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    bear = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+
+    game.players[1].hand.append(_w3g5_from("LEA", "Giant Growth"))
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[game.permanent_id_of(bear)]
+    ).supported
+    assert [item.card.name for item in game.stack] == ["Giant Growth"]
+
+    result = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert result.supported, result.details
+    assert game.players[1].life == 18, "the activator pays, not the controller"
+    assert game.players[0].life == 20
+
+    game.resolve_stack()
+    assert bear.effective_power == 2, "the pump never happened"
+    assert [card.name for card in game.players[1].graveyard] == ["Giant Growth"]
+
+
+def test_tidal_control_spends_floating_mana_rather_than_life_when_it_can():
+    """CR 601.2h's choice between the two printed payments, made once.
+
+    The rule is "spend what is already floating, else pay the life": an
+    activation spends the pool, so mana that is not there is not a payment this
+    ability can make. What must never happen is the flat reading - the prose
+    cost reader used to put both halves of the "or" on one cost and charge two
+    life **and** {2}.
+    """
+    game = _w3g5_duel()
+    game.enforce_mana_costs = True
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    bear = _w3g5_put(game, 1, _w3g5_from("LEA", "Grizzly Bears"))
+    game.players[1].hand.append(_w3g5_from("LEA", "Giant Growth"))
+    game.players[1].mana_pool["G"] = 4
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[game.permanent_id_of(bear)]
+    ).supported
+
+    result = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert result.supported, result.details
+    assert game.players[1].life == 20, "the mana was there, so no life was paid"
+    assert game.players[1].mana_pool["G"] == 1, "and exactly {2} of it was spent"
+
+
+def test_tidal_control_will_not_counter_a_spell_of_another_colour():
+    """The union is a gate, not a decoration: `any_colors` is asked of the
+    chosen spell at resolution *and* of the picker at activation, so a blue
+    spell is neither offered nor countered."""
+    game = _w3g5_duel()
+    _w3g5_put(game, 0, _w3g5_from("ALL", "Tidal Control"))
+    game.players[1].hand.append(_w3g5_from("LEA", "Ancestral Recall"))
+    assert game.queue_from_hand(1, "Ancestral Recall", target_player_index=1).supported
+
+    refused = game.activate_permanent_ability(
+        1, "Tidal Control", source_controller_index=0, target_stack_index=0
+    )
+    assert not refused.supported, refused.details
+    assert game.players[1].life == 20, "a refused activation pays nothing"

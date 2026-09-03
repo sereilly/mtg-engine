@@ -1465,6 +1465,23 @@ def _life_payment_cost(cost_lower: str) -> int:
     return int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
 
 
+def _life_payment_per_counter(cost_lower: str) -> str | None:
+    """The counter kind a "Pay N life **for each <kind> counter on this
+    <noun>**" cost multiplies by, or None when the payment is a flat amount.
+
+    Beside :func:`_life_payment_cost` rather than folded into it because the
+    two answer different questions — how much per unit, and how many units —
+    and the grammar carries them as two fields for the same reason. Only the
+    ability's own source is read ("on **this** <noun>"), which is the one
+    permanent a cost charger has in hand.
+    """
+    match = re.search(
+        r"\bpay \w+ life for each ([a-z+/0-9-]+) counters? on this [a-z]+\b",
+        cost_lower,
+    )
+    return match.group(1) if match is not None else None
+
+
 def activation_colon_index(line: str) -> int | None:
     """The index of the colon that separates an activated ability's cost from
     its effect — or None when the line has none.
@@ -1492,6 +1509,42 @@ def activation_colon_index(line: str) -> int | None:
     return None
 
 
+_MANA_ALTERNATIVE_RE = re.compile(
+    r"\bpay \w+ life\b[^,:]*?\s+or\s+((?:\{[^}]+\})+)\s*$", re.IGNORECASE
+)
+
+
+def _split_mana_alternative(cost_part: str) -> tuple[str, dict[str, int] | None]:
+    """*cost_part* with a trailing "… or {N}" removed, and the mana it named.
+
+    "Pay 2 life **or {2}**" (Tidal Control) is one cost with a choice, and the
+    two halves have to be told apart before anything reads either: the mana scan
+    is a findall over the whole clause, so an alternative left in becomes part of
+    ``required`` and the ability charges the life **and** the mana.
+
+    Anchored to the end of the clause and to a preceding life payment, which is
+    the only printed shape — a bare "or" elsewhere in a cost clause is not this,
+    and returning the clause unchanged leaves whatever reads it next to refuse.
+    """
+    match = _MANA_ALTERNATIVE_RE.search(cost_part)
+    if match is None:
+        return cost_part, None
+    alternative: dict[str, int] = {}
+    for token in _MANA_TOKEN_RE.findall(match.group(1).upper()):
+        if token.isdigit():
+            alternative["generic"] = alternative.get("generic", 0) + int(token)
+        elif token in {"W", "U", "B", "R", "G", "C"}:
+            alternative[token] = alternative.get(token, 0) + 1
+        else:
+            # A symbol this cannot price ({X}, {T} inside the alternative) —
+            # leave the clause whole so the ability refuses rather than being
+            # charged a cost nobody can pay.
+            return cost_part, None
+    if not alternative:
+        return cost_part, None
+    return cost_part[: match.start(1)].rstrip()[: -len("or")].rstrip(), alternative
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -1500,6 +1553,12 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         return ActivatedAbilityCost(required, requires_tap)
 
     cost_part = line[:colon]
+    # "Pay 2 life **or {2}**" (Tidal Control). CR 601.2h's choice between two
+    # printed payments, split off the clause *before* the mana scan below — a
+    # scan that read the whole clause would put the alternative into `required`
+    # beside the life and charge both halves of an "or", which is exactly what
+    # this reader did until the split existed.
+    cost_part, alternative_mana = _split_mana_alternative(cost_part)
     loyalty, loyalty_x_sign = _parse_loyalty_cost(cost_part)
     if loyalty is not None or loyalty_x_sign is not None:
         # A loyalty symbol is the whole cost (CR 606.4); reading the clause
@@ -1824,6 +1883,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter=remove_counter,
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
+        pay_life_per_counter=_life_payment_per_counter(cost_lower),
+        alternative_mana=alternative_mana,
         tap_attached=_taps_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,

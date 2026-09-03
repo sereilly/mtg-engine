@@ -289,6 +289,72 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     return ast.RemoveCounterCost(counter, count)
 
 
+def _accept_per_counter(stream: TokenStream) -> str | None:
+    """``for each <kind> counter on this <noun>`` at the cursor, as the counter's
+    printed name — or None with the cursor where it was.
+
+    Only the ability's **own source** is admitted. "On this enchantment" is the
+    permanent the cost is being paid to activate, which is the one permanent a
+    cost charger has in hand; a counter on anything else would be a board read
+    the charger cannot make, and reading it as the source anyway would charge
+    the wrong number.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    counter = stream.peek_word()
+    if counter is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("on"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None or _singular(noun) not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return str(counter)
+
+
+def _accept_mana_alternative(stream: TokenStream) -> tuple[tuple[str, int], ...]:
+    """``or <mana symbols>`` at the cursor, as ``(symbol, count)`` pairs — or an
+    empty tuple with the cursor where it was.
+
+    Only a written-out run of ordinary symbols. ``{X}`` is deliberately not
+    admitted: an alternative whose size the payer announces would need the
+    announcement to reach a payment path that has none, and the empty tuple
+    keeps the words unconsumed so the ability refuses instead.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        stream.reset(mark)
+        return ()
+    pips: dict[str, int] = {}
+    while stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol.isdigit():
+            pips["generic"] = pips.get("generic", 0) + int(symbol)
+        elif symbol in ("W", "U", "B", "R", "G", "C"):
+            pips[symbol] = pips.get(symbol, 0) + 1
+        else:
+            stream.reset(mark)
+            return ()
+    if not pips:
+        stream.reset(mark)
+        return ()
+    return tuple(sorted(pips.items()))
+
+
 def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
     """Parse the cost clause left of an activated ability's colon."""
     costs: list[ast.Cost] = []
@@ -432,7 +498,23 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             if not stream.accept_word("life"):
                 stream.reset(mark)
                 raise stream.error("unrecognized activation cost")
-            costs.append(ast.PayLifeCost(amount))
+            # "Pay 3 life **for each velocity counter on this enchantment**"
+            # (Tornado). The printed number is a rate; the multiplier is a
+            # counter on this ability's own source, so it is carried as the
+            # counter's name and read at activation (CR 601.2f). Left unread
+            # the words are unconsumed text and the whole line refuses, which
+            # is how Tornado's ability compiled to nothing.
+            per_counter = _accept_per_counter(stream)
+            # "Pay 2 life **or {2}**" (Tidal Control). The printed disjunction,
+            # read here because it belongs to this payment: left unconsumed the
+            # words refuse the whole ability, and read as a second cost clause
+            # the ability would charge both halves of an "or".
+            alternative = _accept_mana_alternative(stream)
+            costs.append(
+                ast.PayLifeCost(
+                    amount, per_counter=per_counter, alternative_mana=alternative
+                )
+            )
             stream.accept_punct(",")
             continue
         if stream.at_word("tap"):
