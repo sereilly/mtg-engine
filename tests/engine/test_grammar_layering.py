@@ -621,7 +621,12 @@ def test_layers_only_import_downward(layers):
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
         # `conditions` ("if you paid the cost") and the roof read one.
-        ("ast", ("_core", "_primitives", "_references", "costs"), ("statements",)),
+        # `records` is shared beside `costs` for the same shape: it is the half
+        # of `conditions` that asks about a *record* rather than about the
+        # board, split out at the size guard, and `conditions` reads it because
+        # the `Condition` union is the roof over both halves. A floor, not a
+        # family — nothing reads back.
+        ("ast", ("_core", "_primitives", "_references", "costs", "records"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -637,6 +642,10 @@ def test_families_import_only_their_package_shared_module(package, shared, roof)
     keyed by trigger-condition kind, and a fragment several families need is not
     one family's property. `ast/` keeps `_core`, the vocabulary its nodes are
     built from, and `conditions` beside it for the reason above.
+
+    `ast/` keeps `records` there too, and it is the one entry that is a *half of
+    a family* rather than a vocabulary: `conditions` reads it because the
+    `Condition` union names both halves of the split, and nothing reads back.
 
     `roof` names the modules that sit *above* the families rather than below
     them; they are exempted here and checked by their own test. Only `ast/` has
@@ -654,6 +663,40 @@ def test_families_import_only_their_package_shared_module(package, shared, roof)
         f"a {package}/ family reached sideways instead of down:\n  "
         + "\n  ".join(violations)
     )
+
+
+def test_the_condition_union_names_every_condition_node():
+    """`ast.Condition` is a hand-maintained list, so it needs this.
+
+    It had drifted **twelve** entries behind the module it names by the time
+    Mirage split that module in two — `ZoneHasCards`, `MilledThisWay`,
+    `CouldNot` and nine more were nodes the parser produced and the union did
+    not know about. Nothing failed, because a `Union` alias is documentation at
+    runtime; what it costs is a reader who trusts it. This is the assertion that
+    turns forgetting into a failure, and it is the third of its kind in this
+    file for the reason SET_PLAYBOOK.md gives: a guard that iterates a
+    hand-maintained list needs an assertion that the list is complete.
+    """
+    import dataclasses
+    import typing
+
+    from engine.grammar.ast import Condition, conditions, records
+
+    declared = set(typing.get_args(Condition))
+    defined = {
+        value
+        for module in (conditions, records)
+        for name, value in vars(module).items()
+        if dataclasses.is_dataclass(value)
+        and getattr(value, "__module__", "") == module.__name__
+    }
+    missing = sorted(cls.__name__ for cls in defined - declared)
+    stale = sorted(
+        cls.__name__ for cls in declared - defined
+        if getattr(cls, "__module__", "").startswith("engine.grammar.ast.")
+    )
+    assert not missing, f"condition nodes missing from ast.Condition: {missing}"
+    assert not stale, f"ast.Condition names nodes that no longer exist: {stale}"
 
 
 def test_the_ast_roof_only_reaches_downward():
@@ -888,6 +931,19 @@ FAMILY_SHARED = {
     # other — and it produces no `OracleInstruction`, which is what keeps it a
     # vocabulary rather than a third family.
     "_piles",
+    # `records` split out of `ast/conditions.py` at Mirage, when three
+    # intervening-if productions took that module past the guard. The line is
+    # the one `lowering/conditions.py` had been drawing in prose card by card:
+    # a condition answered by looking at the game **now** — a board count, a
+    # zone's height, a life total, whose turn it is — against one answered by
+    # looking at a record of something already done ("if you do", "died this
+    # way", "if you've gained 3 or more life this turn"). It reuses the name
+    # `grammar/records.py` and `lowering/_records.py` already carry, so the
+    # mirror re-forms across all three layers instead of forking a fourth
+    # vocabulary. A floor rather than a family for `conditions`' own reason:
+    # `conditions` reads it — the `Condition` union is the roof over both
+    # halves and has to name all of them — and it reads nothing back.
+    "records",
 }
 
 

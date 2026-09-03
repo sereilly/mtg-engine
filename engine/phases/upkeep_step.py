@@ -772,6 +772,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         step = "upkeep"
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
+        # Imported here rather than at module scope for the reason the two
+        # copies further down state: ``handlers.control_flow`` dispatches back
+        # through ``EFFECT_HANDLERS``, so a module-level import closes a cycle.
+        from ..game_types import OracleExecutionContext
+        from ..handlers.control_flow import evaluate_condition
+
         self._process_mire_cleanups(player_index)
         # Layer 6: a keyword or a quoted ability granted "until your next
         # upkeep" (Erhnam Djinn, Gabriel Angelfire) expires now, at the start
@@ -861,6 +867,37 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     cond == "upkeep_each"
                     and trig.condition.payload.get("upkeep_scope") == "opponent"
                     and controller_seat == player_index
+                ):
+                    continue
+
+                # CR 603.4: a gated trigger whose condition is false **does
+                # not trigger**. This step had no such check anywhere — only the
+                # resolution re-check downstream — so Misers' Cage went on the
+                # stack on every opponent's upkeep and was talked out of it on
+                # the way down. That is not the same ability: one that never
+                # triggered holds no priority, cannot be countered, and nothing
+                # in response sees it. The end step has made this check since
+                # round 45 and says so in the same words; this is the upkeep's.
+                #
+                # Above the registry lookup, not inside either branch: whether
+                # an ability triggered is prior to how it is carried out, and
+                # the pay-or-consequence handlers below reach the player
+                # directly without ever building a stack object to re-check.
+                #
+                # The context carries the seat *this* firing is about, which is
+                # what lets "if **that player** has five or more cards in hand"
+                # be asked before the event exists.
+                gate = (trig.instruction.payload or {}).get("intervening_if")
+                if gate is not None and not evaluate_condition(
+                    self,
+                    OracleExecutionContext(
+                        caster=self.players[controller_seat],
+                        target=self.players[player_index],
+                        card=permanent.card,
+                        source_permanent=permanent,
+                        trigger_context={"event_subject_player": player_index},
+                    ),
+                    gate,
                 ):
                     continue
 

@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 70.6% | 64.2% | 39.1% | 173 |
+| MIR *(measured)* | 335 | 545 | 71.2% | 64.8% | 39.6% | 176 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 353 | 182 | expected a subject |  |
+| 350 | 179 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
 | 98 | 58 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
@@ -2825,6 +2825,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Exchange life totals with target opponent. Activate only during your upkeep.`
 - **Miscast**
   - `Counter target instant or sorcery spell unless its controller pays {3}.`
+- **Misers' Cage**
+  - `At the beginning of each opponent's upkeep, if that player has five or more cards in hand, this artifact deals 2 damage to that player.`
 - **Misfortune**
   - `• You put a +1/+1 counter on each creature you control and gain 4 life.`
   - `• You put a -1/-1 counter on each creature that player controls and Misfortune deals 4 damage to that player.`
@@ -3108,6 +3110,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `X target creatures gain islandwalk until end of turn. (They can't be blocked as long as defending player controls an Island.)`
 - **Patagia Golem**
   - `{3}: This creature gains flying until end of turn.`
+- **Paupers' Cage**
+  - `At the beginning of each opponent's upkeep, if that player has two or fewer cards in hand, this artifact deals 2 damage to that player.`
 - **Pavel Maliki**
   - `{B}{R}: Pavel Maliki gets +1/+0 until end of turn.`
 - **Pearl Dragon**
@@ -3394,6 +3398,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ray of Erasure**
   - `Target player mills a card.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Razor Pendulum**
+  - `At the beginning of each player's end step, if that player has 5 or less life, this artifact deals 2 damage to that player.`
 - **Read the Tides**
   - `• Draw three cards.`
   - `• Return up to two target creatures to their owners' hands.`

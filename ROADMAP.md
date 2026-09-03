@@ -1092,6 +1092,66 @@ nonblack creature", Grave Servitude on "gets +3/-1 **and is black**", Ward of
 Lights on "has protection from the chosen color. This effect doesn't remove this
 Aura."
 
+### Round 4 — a player-quantity intervening-if (CR 603.4): 206 → 209 supported
+
+Three cards, one printed shape with the threshold as data: "at the beginning of
+each &lt;player&gt;'s &lt;step&gt;, **if that player has &lt;N or more/fewer&gt;
+&lt;quantity&gt;**, this artifact deals 2 damage to that player" (Misers' Cage,
+Paupers' Cage, Razor Pendulum). The intervening-if machinery was already there
+and worked for "if that player **controls** a Forest"; what was missing was two
+condition productions and one English word.
+
+- "&lt;player&gt; has &lt;N&gt; cards in hand" is the *same question* the
+  possessive spelling already asked ("your library has ten or more cards in
+  it"), so it produces the same node and reaches the same evaluator — one
+  behaviour, two printed word orders.
+- "&lt;player&gt; has &lt;N&gt; life" is a new node, because a life total is
+  not a pile: `getattr(player, "life")` returning an int where the zone branch
+  expects a list is a near-miss that answers rather than failing.
+- **"fewer".** `parse_comparison` knew "less", "greater" and "more". Magic
+  prints "fewer" for countable nouns and "less" for life, so every printed
+  threshold over cards or creatures had been refusing. One row.
+
+**Two live CR 603.4 defects, both found by giving a card a game.**
+
+*The upkeep step never checked an intervening-if at all.* Only the resolution
+re-check downstream, so a gated upkeep trigger went on the stack and was talked
+out of it on the way down. That is not the same ability: one that never
+triggered holds no priority, cannot be countered, and nothing in response sees
+it — the end step has said exactly that since round 45. The gate now sits
+*above* the `UPKEEP_EFFECTS` lookup rather than in either branch, because
+whether an ability triggered is prior to how it is carried out, and the
+pay-or-consequence handlers reach the player without ever building a stack
+object to re-check.
+
+*The end step's gated scan enqueued without the seat.* It stamped
+`event_subject_player` on the catch-all path and not on the gated one, so a
+condition naming "that player" passed the fire-site check and failed the
+resolution re-check — Razor Pendulum fired at exactly 5 life and then logged
+that its condition was no longer true. Both the check's context and the
+enqueued event carry the same stamp now.
+
+**The grammar's size guard fired at integration, on nobody's branch**:
+`ast/conditions.py` crossed 1,000 lines. The cut is the one
+`lowering/conditions.py` had been drawing in prose card by card — a condition
+answered by looking at the game **now** (a board count, a zone's height, a life
+total, whose turn it is) against one answered by looking at a **record** of
+something already done ("if you do", "died this way", "if you've gained 3 or
+more life this turn"). The new module is `ast/records.py`, reusing the name
+`grammar/records.py` and `lowering/_records.py` already carry, so the mirror
+re-forms across all three layers instead of forking a fourth vocabulary.
+
+And the split found a stale list under it: `ast.Condition` had drifted
+**twelve** entries behind the module it names — `ZoneHasCards`, `MilledThisWay`,
+`CouldNot` and nine more were nodes the parser produced and the union did not
+know about. Nothing failed, because a `Union` alias is documentation at runtime.
+It is complete now and `test_the_condition_union_names_every_condition_node`
+keeps it so.
+
+`oracle_diff` after the round: **29 changed of 2181**, still every one a Mirage
+card — the "fewer" row moved no existing card, which is the reading to expect
+for a word that was previously a hard refusal.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

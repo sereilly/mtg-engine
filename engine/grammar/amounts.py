@@ -546,6 +546,11 @@ _COMPARISON_WORDS = {
     "less": "le",       # "2 or less"
     "greater": "ge",    # "3 or greater"
     "more": "ge",
+    # "two or **fewer** cards in hand" (Paupers' Cage). English's countable
+    # spelling of "less", and the same comparison: Magic prints "fewer" for
+    # cards and creatures and "less" for life and mana value, so a reader that
+    # knew one of them refused half the pool's thresholds.
+    "fewer": "le",
 }
 
 def parse_comparison(stream: TokenStream) -> ast.Comparison:

@@ -204,6 +204,26 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.ZoneHasCards(zone_owner, zone, comparison)
     stream.reset(zone_mark)
 
+    # "if **that player has five or more cards in hand**" (Misers' Cage,
+    # Paupers' Cage) / "if **that player has 5 or less life**" (Razor Pendulum).
+    #
+    # The hand half is the *same question* the possessive spelling above asks
+    # ("your hand has five or more cards"), so it produces the same node and
+    # reaches the same evaluator — one behaviour, two printed word orders, which
+    # is the arrangement this file keeps for every clause a card can spell two
+    # ways. Read here, before the "controls" reference below, because both
+    # openers are a player reference and this one is settled by the word after
+    # it.
+    have_mark = stream.mark()
+    counted = parse_player_ref(stream)
+    if counted is not None and stream.accept_word("has", "have"):
+        comparison = parse_comparison(stream)
+        if stream.accept_word("life"):
+            return ast.PlayerLifeIs(counted, comparison)
+        if stream.accept_word("cards", "card") and stream.accept_phrase("in", "hand"):
+            return ast.ZoneHasCards(counted, "hand", comparison)
+    stream.reset(have_mark)
+
     player = parse_player_ref(stream)
     if player is not None:
         if stream.accept_word("control", "controls"):

@@ -260,10 +260,27 @@ class EndStepMixin:
                 target=self.players[controller_index],
                 card=permanent.card,
                 source_permanent=permanent,
+                # Whose end step this firing is, stamped here as well as on the
+                # enqueued event below — a gate naming "that player" (Razor
+                # Pendulum's "if that player has 5 or less life") is asked
+                # *before* the event exists, so without it the seat resolved to
+                # nobody and the condition read false on every end step. The
+                # same key and the same value the enqueue stamps, so the check
+                # and the resolution ask about one seat.
+                trigger_context={"event_subject_player": player_index},
             )
             if not evaluate_condition(self, fire_context, gate):
                 continue
-            events.append(make_trigger_event(controller_index, permanent, trig))
+            events.append(make_trigger_event(
+                controller_index, permanent, trig,
+                # The same stamp the catch-all scan below makes, and this path
+                # was missing it: CR 603.4 checks the gate **again** as the
+                # ability resolves, so a trigger enqueued without the seat its
+                # condition names passed the first check and failed the second.
+                # Razor Pendulum's "if that player has 5 or less life" fired at
+                # 5 life and then logged that its condition was no longer true.
+                trigger_context={"event_subject_player": player_index},
+            ))
 
         # Everything else with an end-step condition. The scans above are keyed
         # to *instruction kinds*, which made this step a cascade: Gadrak's

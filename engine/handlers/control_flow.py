@@ -105,6 +105,31 @@ def _compare_count(count: int, op: str, wanted: int | None) -> bool:
     return False
 
 
+def _condition_player(game: Game, context: OracleExecutionContext, whose):
+    """The single seat a condition's ``player`` word names, or None.
+
+    Three payload words reach here — "you", a target reference, and the
+    ``event_subject_player`` the fire site froze — and one reader answers all
+    three, because a clause that fell back to the caster where the printed word
+    said "that player" asks about the wrong life total or the wrong hand and
+    says nothing about having done so. The lowering resolves the *pronoun*
+    (`lowering/conditions._condition_seat`); this resolves the *seat*.
+
+    None when the reference names nobody, which every caller reads as a
+    condition that does not hold — the same direction CR 603.4 takes for an
+    intervening-if it cannot check.
+    """
+    word = str(whose or "you")
+    if word == "you":
+        return context.caster
+    if word == "event_subject_player":
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return None
+        return game.players[seat]
+    return context.target
+
+
 def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dict) -> bool:
     """Evaluate a lowered condition payload.
 
@@ -506,12 +531,11 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
 
     if kind == "zone_card_count":
-        # "If your library has ten or more cards in it" (Phyrexian Portal).
-        # Read when the instruction is followed (CR 608.2c), not when the
-        # ability was activated: a library that shrank in between is the
-        # library this asks about.
-        whose = str(payload.get("player") or "you")
-        player = context.caster if whose == "you" else context.target
+        # "If your library has ten or more cards in it" (Phyrexian Portal); "if
+        # that player has five or more cards in hand" (Misers' Cage). Read when
+        # the instruction is followed (CR 608.2c), not when the ability was
+        # activated: a pile that changed in between is the pile this asks about.
+        player = _condition_player(game, context, payload.get("player"))
         if player is None:
             return False
         pile = getattr(player, str(payload.get("zone") or "library"), None)
@@ -519,6 +543,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         return _compare_count(
             len(pile), str(payload.get("op", "")), payload.get("value")
+        )
+
+    if kind == "player_life":
+        # "If that player has 5 or less life" (Razor Pendulum). The twin of the
+        # zone count above and the same reader for the seat, which is the whole
+        # of why it is a branch rather than a zone name: a life total is not a
+        # pile, and `getattr(player, "life")` returning an int where the branch
+        # above expects a list is the kind of near-miss that answers rather than
+        # failing.
+        player = _condition_player(game, context, payload.get("player"))
+        if player is None:
+            return False
+        return _compare_count(
+            int(player.life), str(payload.get("op", "")), payload.get("value")
         )
 
     if kind == "milled_this_way":

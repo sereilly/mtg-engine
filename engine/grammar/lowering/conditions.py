@@ -60,6 +60,33 @@ def pronoun_target_referent(instructions) -> str | None:
     return _PRONOUN_REFERENTS.get(described.get("kind"))
 
 
+def _condition_seat(condition, player, event, what: str) -> str:
+    """Which seat a condition's player reference names, as a payload word.
+
+    "…**if that player** controls a Plains" (Spiritual Sanctuary) was the card
+    that made this a function rather than a default. Left as "that_player" it
+    reached `evaluate_condition`'s fallback, which scans *every* player — so the
+    card asked "does anybody control a Plains", answered yes off the opponent's
+    board and gave the life away on a condition its own controller had met.
+    Silent in both directions and invisible from the card.
+
+    So the referent is resolved **here**, where the firing event is known, and
+    a trigger that froze no seat refuses the clause rather than guessing. Three
+    conditions ask it now — a board count, a zone count and a life total — and
+    one reader is what keeps them from disagreeing about a pronoun.
+    """
+    kind = player.kind
+    if kind != "that_player":
+        return kind
+    if event not in _EVENT_SUBJECT_PLAYERS:
+        raise LoweringError(
+            f"'that player' names no seat under this trigger, so this {what} "
+            "cannot be asked",
+            node=condition,
+        )
+    return EVENT_SUBJECT_PLAYER
+
+
 def _lower_condition(
     condition: ast.Condition,
     produced: frozenset[str] = frozenset(),
@@ -397,20 +424,7 @@ def _lower_condition(
             "op": condition.comparison.op,
         }
     if isinstance(condition, ast.Controls):
-        who = condition.who.kind
-        # "…**if that player** controls a Plains" (Spiritual Sanctuary). Left as
-        # "that_player" this reached `evaluate_condition`'s fallback, which
-        # scans *every* player — so the card asked "does anybody control a
-        # Plains", answered yes off the opponent's board and gave the life away
-        # on a condition its own controller had met. Silent in both directions
-        # and impossible to see from the card, which is why the referent is
-        # resolved here, where the event is known, rather than guessed there.
-        if who == "that_player":
-            if event not in _EVENT_SUBJECT_PLAYERS:
-                raise LoweringError(
-                    "'that player' names no seat under this trigger", node=condition
-                )
-            who = EVENT_SUBJECT_PLAYER
+        who = _condition_seat(condition, condition.who, event, "board count")
         payload = {
             "kind": "controls",
             "who": who,
@@ -491,14 +505,11 @@ def _lower_condition(
             "negated": condition.negated,
         }
     if isinstance(condition, ast.ZoneHasCards):
-        # "If your library has ten or more cards in it" (Phyrexian Portal).
-        # The seat is carried rather than defaulted: a wording naming somebody
-        # else's pile is a question about a different deck, and a condition
-        # answered about the wrong one is a gate that opens when it should not.
-        if condition.player.kind not in ("you", "target_player", "target_opponent"):
-            raise LoweringError(
-                f"no zone count reads {condition.player.kind!r}", node=condition
-            )
+        # "If your library has ten or more cards in it" (Phyrexian Portal); "if
+        # that player has five or more cards in hand" (Misers' Cage). The seat
+        # is carried rather than defaulted: a wording naming somebody else's
+        # pile is a question about a different deck, and a condition answered
+        # about the wrong one is a gate that opens when it should not.
         bound = condition.comparison.value
         if not isinstance(bound, ast.Fixed):
             raise LoweringError(
@@ -506,8 +517,25 @@ def _lower_condition(
             )
         return {
             "kind": "zone_card_count",
-            "player": condition.player.kind,
+            "player": _condition_seat(condition, condition.player, event, "zone count"),
             "zone": condition.zone,
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
+    if isinstance(condition, ast.PlayerLifeIs):
+        # "If that player has 5 or less life" (Razor Pendulum). The twin of the
+        # zone count above, and it shares the seat reader for the reason the
+        # seat reader exists: "that player" means the seat the firing event
+        # froze, and a clause that fell back to "you" would ask about the wrong
+        # life total without failing.
+        bound = condition.comparison.value
+        if not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "a life gate compares against a printed number", node=condition
+            )
+        return {
+            "kind": "player_life",
+            "player": _condition_seat(condition, condition.player, event, "life gate"),
             "op": condition.comparison.op,
             "value": bound.value,
         }
