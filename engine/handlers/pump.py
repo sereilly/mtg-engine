@@ -908,27 +908,73 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # filtered before the division is read rather than after.
         from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 
-        # Each entry is turned into a permanent once, through the seam, and
-        # carried as the object from there — an index held across the placement
-        # loop would address the wrong creature the moment anything left.
-        chosen_entries = [
-            (entry, creature)
-            for entry in (context.choices or {}).get(DIVIDED_TARGETS) or ()
-            for seat, index, _share in (divided_entry(entry),)
-            for creature in (game.permanent_at(seat, index),)
-            if creature is not None
-        ]
-        if not chosen_entries:
-            game.log.append(f"{card.name}: no creatures were given counters")
-            return True, "resolved"
-        creatures = [creature for _entry, creature in chosen_entries]
-        shares = divide(
-            how_many,
-            [entry for entry, _creature in chosen_entries],
-            division=targets.get("division", EVENLY),
-        )
+        announced = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
+        if announced:
+            # Each entry is turned into a permanent once, through the seam, and
+            # carried as the object from there — an index held across the
+            # placement loop would address the wrong creature the moment
+            # anything left.
+            chosen_entries = [
+                (entry, creature)
+                for entry in announced
+                for seat, index, _share in (divided_entry(entry),)
+                for creature in (game.permanent_at(seat, index),)
+                if creature is not None
+            ]
+            if not chosen_entries:
+                # Every announced target has left. CR 608.2b, and the spell
+                # still resolves — `illegal_targets_refusal` declines to answer
+                # "every target is illegal" for a divided spell, because a
+                # player's face reaches the stack item through the same field a
+                # permanent's seat does.
+                game.log.append(
+                    f"{card.name}: every creature it named has left "
+                    f"the battlefield (608.2b)"
+                )
+                return True, "resolved"
+            placements = [
+                (creature, share)
+                for (_entry, creature), (_seat, _index, share) in zip(
+                    chosen_entries,
+                    divide(
+                        how_many,
+                        [entry for entry, _creature in chosen_entries],
+                        division=targets.get("division", EVENLY),
+                    ),
+                )
+            ]
+        else:
+            # **No division was announced at all**, which is not the same
+            # question and used to be answered as though it were: the branch
+            # logged "no creatures were given counters" and reported itself
+            # resolved, so Spoils of War, Contagion and Bounty of the Hunt did
+            # nothing whenever the caster reached the engine through its older
+            # single-target channel — every AI cast, every scripted duel.
+            #
+            # The named target takes the whole amount, which CR 601.2d allows
+            # (one target, receiving all of it) and which is exactly what the
+            # divided *damage* twin's fall-through has always done. Announcing
+            # nothing at all is refused one step earlier now, at CR 601.2c, so
+            # what reaches here is a caster who named a target the older way.
+            #
+            # No fallback scan: a named creature that has left takes nothing
+            # (CR 608.2b), rather than the counters landing on whichever
+            # creature a scan reached first — which for a `+1/+1` distribution
+            # could be the opponent's.
+            filters = targets.get("filter") or {}
+            creature = resolve_target_permanent(
+                game, context,
+                predicate=lambda perm: (
+                    perm.is_creature and permanent_matches_filter(perm, filters)
+                ),
+                fallback_on_invalid_choice=False,
+            )
+            if creature is None:
+                game.log.append(f"{card.name}: no valid creature target")
+                return True, "resolved"
+            placements = [(creature, how_many)]
         placed_total = 0
-        for creature, (_seat, _index, share) in zip(creatures, shares):
+        for creature, share in placements:
             if share <= 0:
                 continue
             game.place_pt_counters(creature, kind, share)

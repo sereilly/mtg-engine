@@ -1853,3 +1853,93 @@ def test_hymn_of_rebirth_with_no_slot_named_still_finds_the_only_pile(set_pool):
 
 
 # --- end LeadA ---
+
+
+# --- W3-divided: the divided-target announcement ---
+#
+# CR 601.2d is announced as the spell is cast. Nothing outside the browser had
+# a field to announce it in, so every AI cast of a divided spell arrived with
+# no division: Spoils of War resolved putting no counters anywhere. It is a
+# shipped card. The tests below check *which side* the shares landed on, which
+# is the half a "did it place a counter?" assertion cannot see. Fallen Empires'
+# Dwarven Catapult is the damage-side twin of the same bug and is tested in
+# ``test_fem_sorceries.py``.
+
+def _w3d_ice_board(set_pool, name, graveyard=(), creature="Tor Giant", each=2):
+    """Seat 0 holding *name*, with *each* copies of one creature per side, and
+    *graveyard* in seat 1's graveyard (Spoils of War counts it for X)."""
+    from engine import Game
+    from engine.models import Permanent, PlayerState
+
+    pool = set_pool("ICE")
+    p0 = PlayerState(
+        name="P0", life=20, hand=[pool[name]],
+        battlefield=[Permanent(card=pool[creature]) for _ in range(each)],
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=pool[creature]) for _ in range(each)],
+        graveyard=[pool[card] for card in graveyard],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game
+
+
+def test_spoils_of_war_puts_its_counters_on_the_casters_own_creatures(set_pool):
+    """"Distribute X +1/+1 counters among any number of target creatures."
+
+    Which board is derived from the *sign* of the counter (CR 122.1a), so a
+    +1/+1 distribution goes on the caster's own side and a -2/-1 one would not.
+    The counters used to go nowhere: with no division announced the resolver
+    logged "no creatures were given counters" and reported itself resolved.
+    """
+    from engine.ai_policy import choose_divided_targets
+
+    game = _w3d_ice_board(
+        set_pool, "Spoils of War",
+        graveyard=("Balduvian Bears", "Tor Giant", "Balduvian Barbarians"),
+    )
+    spoils = set_pool("ICE")["Spoils of War"]
+    announced = choose_divided_targets(game, 0, spoils)
+    result = game.cast_from_hand(
+        0, "Spoils of War", target_player_index=1, divided_targets=announced,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert announced and all(entry[0] == 0 for entry in announced), announced
+    mine = [int(p.metadata.get("plus_counters", 0)) for p in game.players[0].battlefield]
+    theirs = [int(p.metadata.get("plus_counters", 0)) for p in game.players[1].battlefield]
+    assert sum(mine) == 3, "X is the three artifact/creature cards in that graveyard"
+    assert theirs == [0, 0], \
+        "a +1/+1 counter on the opponent's creature is the sign read backwards"
+
+
+def test_spoils_of_war_without_a_division_gives_the_named_creature_all_of_it(set_pool):
+    """A caster who named a target the engine's older way still gets an effect.
+
+    CR 601.2d allows one target taking the whole amount, and the divided
+    *damage* twin's fall-through has always resolved that way. The counter half
+    returned early instead, so a cast that named a creature through
+    ``target_permanent_index`` -- every scripted duel, every test written
+    before the division existed -- placed nothing at all.
+    """
+    game = _w3d_ice_board(
+        set_pool, "Spoils of War",
+        graveyard=("Balduvian Bears", "Tor Giant", "Balduvian Barbarians"),
+    )
+
+    result = game.cast_from_hand(
+        0, "Spoils of War", target_player_index=0, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert [
+        int(p.metadata.get("plus_counters", 0)) for p in game.players[0].battlefield
+    ] == [3, 0]
+
+
+# --- end W3-divided ---
