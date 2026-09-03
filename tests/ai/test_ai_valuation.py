@@ -358,3 +358,87 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         "Dwarven Catapult", "Fiery Justice", "Fire Covenant", "Fireball",
         "Meteor Shower", "Pyrotechnics", "Spoils of War",
     ], described
+
+
+# --- Several-target removal points at the other board ----------------------
+
+
+@pytest.mark.parametrize(
+    "verb,type_line,noun,invented",
+    [
+        ("Destroy", "Sorcery", "artifacts", "Two-Handed Sundering"),
+        ("Exile", "Sorcery", "creatures", "Twofold Banishment"),
+    ],
+)
+def test_a_several_target_removal_spell_points_at_the_opponents_board(
+    verb, type_line, noun, invented
+):
+    """``_choose_several_targets`` takes its targets from one battlefield and
+    prefers the caster's own, which is right for every *benefit* printed with
+    the template and wrong for every removal spell printed with it.
+
+    Which board a slot wants is derived from the compiled program
+    (``ai_valuation._SLOT_DISPOSITION``, keyed by instruction kind), never from
+    a card name -- so an invented card printing the template is answered the
+    same way. Both real cards in the pool that print it, Dust to Dust and Ashes
+    to Ashes, removed the AI's *own* permanents until the exile entry existed;
+    Primitive Justice is why the destroy entry does.
+    """
+    spell = _mk_card(
+        name=invented, mana_cost="{2}", type_line=type_line,
+        oracle_text=f"{verb} two target {noun}.",
+    )
+    victim = _mk_card(
+        name="Plain Thing", mana_cost="{1}",
+        type_line="Creature — Human" if noun == "creatures" else "Artifact",
+    )
+    assert compile_card_oracle(spell).supported, spell.oracle_text
+    p1 = PlayerState(
+        name="P1", hand=[spell],
+        battlefield=[Permanent(card=victim) for _ in range(2)],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=victim) for _ in range(2)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == invented
+    assert action.target_player_index == 1, (
+        "a several-target removal spell aimed at the caster's own board"
+    )
+
+
+def test_every_several_target_removal_card_in_the_pool_aims_at_an_opponent(catalog):
+    """The pool-wide half, because the entry above is a claim about which cards
+    a table reaches. A removal spell whose printed noun names no side must not
+    come back with the caster's own seat."""
+    from engine.ai_valuation import several_target_slot_sides
+
+    removal = {"destroy_target_permanent", "exile_target_permanent"}
+    checked = []
+    for card in catalog:
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        sides = several_target_slot_sides(program)
+        if not sides:
+            continue
+        instruction = None
+        for step in program.instructions:
+            for nested in (step,) + tuple(step.payload.get("steps") or ()):
+                if nested.kind in removal and isinstance(
+                    (nested.payload.get("targets") or {}).get("count"), (int, dict)
+                ):
+                    instruction = nested
+        if instruction is None:
+            continue
+        assert set(sides) == {"opponent"}, (card.name, sides)
+        checked.append(card.name)
+    # A subset rather than the exact list this file usually writes: Alliances is
+    # `measured` while this lands and `catalog` is the shipped pool, so
+    # Primitive Justice joins the class the day the set is promoted. What the
+    # assertion has to catch is a card falling *out* of it, which it still does.
+    assert {"Ashes to Ashes", "Dust to Dust"} <= set(checked), checked

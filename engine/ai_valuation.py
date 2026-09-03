@@ -604,6 +604,15 @@ _SLOT_DISPOSITION: dict[str, str] = {
     # count comes off a CR 601.2b payment and whose bare "target artifact" names
     # no side at all.
     "destroy_target_permanent": "opponent",
+    # And exile, which is the same denial one zone over. This entry is
+    # about two *shipped* cards rather than about the round that found
+    # it: Dust to Dust and Ashes to Ashes are the pool's only
+    # several-target exiles, both name a bare noun with no side in it,
+    # and both had the AI removing its own permanents. A card that
+    # exiles the caster's own ("exile two target creatures **you
+    # control**") never reaches this: the controller branch above
+    # answers first, off the printed noun phrase.
+    "exile_target_permanent": "opponent",
 }
 
 
