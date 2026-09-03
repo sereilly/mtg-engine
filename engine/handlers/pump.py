@@ -9,6 +9,7 @@ from ._common import (
     bound_permanent,
     block_pair_permanents,
     attached_host,
+    frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
     resolve_target_permanent,
@@ -1073,18 +1074,67 @@ def double_target_power_until_eot(game: Game, instruction: OracleInstruction, co
     return True, "resolved"
 
 
-@effect_handler("add_counter_to_each_you_control")
-def add_counter_to_each_you_control(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Put a +1/+1 counter on each creature you control." (Basri's
-    Solidarity.) Read through the control seam, so a borrowed creature counts
-    and a lost one does not."""
+@effect_handler("add_counter_to_each_matching")
+def add_counter_to_each_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a +1/+1 counter on **each creature you control**" (Basri's
+    Solidarity); "put a -1/-1 counter on **each creature that player
+    controls**" (Misfortune).
+
+    One handler for both, because the effect is one effect and the printed noun
+    phrase is the only difference — which is exactly what a filter payload is
+    for. It replaced ``add_counter_to_each_you_control``, a kind whose *name*
+    was the scope: a second kind beside it would have been one effect with two
+    spellings, and the alternative — passing "that player" to something called
+    ``…_you_control`` — is a name that lies.
+
+    The board is read here, as the effect resolves (CR 611.2c), through the
+    control seam so a borrowed creature counts and a lost one does not.
+
+    "**That player** controls" is not a seat any read of the board can make —
+    ``subject_matches`` refuses it outright and says why — so it is stripped
+    from the filter and asked as its own question, of the seat the announcement
+    froze (CR 700.2e for a mode an opponent chose, CR 603.10 for a trigger).
+    An unresolvable seat **ends** the effect rather than dropping the word: a
+    dropped scope on a -1/-1 sweep is not a card that does less, it is one that
+    shrinks the caster's own board.
+    """
+    from ..subject_filters import subject_matches
+
     card = context.card
     caster = context.caster
-    for perm in game.controlled_by(caster):
-        if not perm.is_creature:
+    kind = instruction.payload.get("counter", "+1/+1")
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    filters = dict(instruction.payload.get("filter") or {})
+    scoped_seat: int | None = None
+    if filters.get("controller") == "that_player":
+        scoped_seat = frozen_that_player_seat(game, context)
+        if scoped_seat is None:
+            game.log.append(f"{card.name}: no player for 'that player' to name")
+            return True, "resolved"
+        del filters["controller"]
+    observer = game.players.index(caster) if caster in game.players else None
+    source = context.source_permanent
+    touched: list[Permanent] = []
+    for perm in game.all_permanents():
+        if scoped_seat is not None and game.controller_index_of(perm) != scoped_seat:
             continue
-        game.place_plus1_counters(perm)
-    game.log.append(f"{card.name}: each creature {caster.name} controls gets a +1/+1 counter")
+        if not subject_matches(
+            game, perm, filters, observer=observer, source=source
+        ):
+            continue
+        touched.append(perm)
+    # Placed after the scan, not during it: `place_pt_counters` runs the CR 614
+    # replacements for a +1/+1 counter, and a replacement that moved a creature
+    # would renumber a battlefield this loop was still walking.
+    for perm in touched:
+        game.place_pt_counters(perm, kind, count)
+    if touched:
+        game.log.append(
+            f"{card.name}: {', '.join(p.card.name for p in touched)} "
+            f"each got {count} {kind} counter(s)"
+        )
+    else:
+        game.log.append(f"{card.name}: nothing matched, no counters placed")
     return True, "resolved"
 
 

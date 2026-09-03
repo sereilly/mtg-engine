@@ -63,6 +63,7 @@ from .cumulative_upkeep import cumulative_upkeep_triggers
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
+from .grammar.lowering._events import OPPONENT_CHOSE_MODE
 from .grammar.postmodifiers import COST_TAPPED_REFERENT
 from .grammar.vocabulary import (IMPLEMENTED_KEYWORDS,
                                  TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES)
@@ -2149,6 +2150,7 @@ def _grammar_instruction(
     activated: bool = False,
     condition_kind: str | None = None,
     spell_line_only: bool = False,
+    event: str | None = None,
 ) -> tuple[OracleInstruction, str] | None:
     """The grammar's ``(instruction, effect_kind)`` for one line, or None when
     the grammar does not claim it.
@@ -2176,7 +2178,7 @@ def _grammar_instruction(
     reaching ``_apply_spell_text``, which is the only caller that executes this
     list — so the mirror cannot fire on cast.
     """
-    compiled = compile_grammar_line(line, card_name=card_name)
+    compiled = compile_grammar_line(line, card_name=card_name, event=event)
     if not compiled.usable:
         return None
     if isinstance(compiled.node, grammar_ast.DerivedLine):
@@ -2306,6 +2308,7 @@ def _line_instruction(
     activated: bool = False,
     condition_kind: str | None = None,
     spell_line_only: bool = False,
+    event: str | None = None,
 ) -> tuple[OracleInstruction, str] | None:
     """The front ends that read one line, most general first: the grammar, then
     the name-keyed card hooks. There is no third — a line neither claims has no
@@ -2313,7 +2316,7 @@ def _line_instruction(
     found = _grammar_instruction(
         line, card_name,
         activated=activated, condition_kind=condition_kind,
-        spell_line_only=spell_line_only,
+        spell_line_only=spell_line_only, event=event,
     )
     if found is not None:
         return found
@@ -2370,7 +2373,9 @@ def _modal_head(line: str, wrapper: type) -> "grammar_ast.ModalNode | None":
     return statement if isinstance(statement, grammar_ast.ModalNode) else None
 
 
-def _mode_reading(label: str, card_name: str | None) -> tuple[OracleInstruction, str] | None:
+def _mode_reading(
+    label: str, card_name: str | None, *, event: str | None = None,
+) -> tuple[OracleInstruction, str] | None:
     """A modal bullet's ``(instruction, effect_kind)``, or None.
 
     ``effect_kind`` is "spell_pattern" for every bullet the front ends claim,
@@ -2378,8 +2383,13 @@ def _mode_reading(label: str, card_name: str | None) -> tuple[OracleInstruction,
     the label is what ``SimulationResult`` and the support report bucket the
     *card* by — so it names the reading's shape, exactly as it did when the
     legacy registry produced it.
+
+    *event* is the head's own contribution to what the bullet means: under
+    "**An opponent** chooses one —" (CR 700.2e) the mode's "that player" names
+    the chooser, a seat the sentence cannot see from inside the bullet. See
+    ``lowering/_events.OPPONENT_CHOSE_MODE``.
     """
-    found = _line_instruction(label, card_name)
+    found = _line_instruction(label, card_name, event=event)
     if found is None:
         return None
     return found[0], "spell_pattern"
@@ -2431,6 +2441,12 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
         return ()
 
     lines = oracle_text.splitlines()
+    # "**An opponent** chooses one —": the head is what makes the bullets'
+    # "that player" mean the chooser, so the mode's lowering is told which
+    # position it occupies. Computed once for the card rather than per bullet.
+    mode_event = (
+        OPPONENT_CHOSE_MODE if _modal_chooser(oracle_text) is not None else None
+    )
     for index, raw in enumerate(lines):
         if _modal_head(raw.strip(), grammar_ast.SpellEffectLine) is None:
             continue
@@ -2439,7 +2455,9 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
             continue
         options: list[ModalOption] = []
         for label in bullets:
-            instruction, effect_kind = _reading(_mode_reading(label, card_name))
+            instruction, effect_kind = _reading(
+                _mode_reading(label, card_name, event=mode_event)
+            )
             # The original casing is kept for the UI's mode picker.
             options.append(
                 ModalOption(label.rstrip("."), instruction, effect_kind, instruction is not None)

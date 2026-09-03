@@ -350,3 +350,107 @@ def test_w2g4_a_non_interactive_chooser_takes_the_first_printed_mode(set_pool):
 
     assert game.pending_choices == []
     assert [t.event for t in game.delayed_triggers] == ["next_turns_upkeep"]
+
+
+# --- W3G2: modes, counters and granted abilities ---
+#
+# Alliances prints three "An opponent chooses one —" spells (CR 700.2e) and two
+# of them refer *back* to the chooser from inside the mode they chose:
+# Misfortune's "each creature **that player** controls" and "deals 4 damage to
+# **that player**", and Fatal Lore's "**That player** draws up to three cards".
+# W2G4 built the head and the choice; what was missing was the seat those words
+# name, which is not on any board — it comes into existence when the mode is
+# chosen. `_resolve_opponent_mode_choice` freezes it under the same key a
+# trigger's fire site freezes one, so `frozen_that_player_seat`, the damage
+# recipient and the draw's seat all read one answer.
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.models import CardDefinition, Permanent  # noqa: E402
+
+
+def _w3g2_bear(name: str = "Bear") -> CardDefinition:
+    """A vanilla 2/2, so a counter's effect on P/T is the whole observation."""
+    return CardDefinition(
+        name=name, mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
+        oracle_text="", power="2", toughness="2",
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear"},
+    )
+
+
+def _w3g2_duel(set_pool, card_name: str):
+    """A duel with both seats interactive, two 2/2s each, the spell in hand.
+
+    Both seats interactive on purpose: `opponent_mode_choice` is a
+    ``default_at_arm`` kind, so a non-interactive chooser takes mode 0 before a
+    test can name a mode — which is how a "mode 1" assertion silently tests
+    mode 0.
+    """
+    p1 = PlayerState(name="P1", hand=[set_pool("ALL")[card_name]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    for seat, player in enumerate((p1, p2)):
+        for index in range(2):
+            game._put_permanent_onto_battlefield(
+                seat,
+                Permanent(card=_w3g2_bear(f"{player.name} Bear {index}")),
+                None,
+            )
+    return game, p1, p2
+
+
+def _w3g2_pt(game, player):
+    return sorted(
+        (perm.effective_power, perm.effective_toughness)
+        for perm in game.controlled_by(player)
+    )
+
+
+def test_w3g2_misfortune_first_mode_grows_the_casters_board(set_pool):
+    """CR 700.2e's kinder half. "Each creature **you** control" is the caster's
+    own board, so the chooser's seat never enters it."""
+    game, p1, p2 = _w3g2_duel(set_pool, "Misfortune")
+
+    assert game.queue_from_hand(0, "Misfortune").supported
+    assert game.confirm_opponent_mode_choice(1, 0)
+    game._settle()
+
+    assert _w3g2_pt(game, p1) == [(3, 3), (3, 3)]
+    assert _w3g2_pt(game, p2) == [(2, 2), (2, 2)]
+    assert (p1.life, p2.life) == (24, 20)
+
+
+def test_w3g2_misfortune_second_mode_shrinks_the_choosers_board(set_pool):
+    """The -1/-1 sweep and the damage both land on the seat that *chose*, and
+    neither touches the caster's own board.
+
+    This is the whole point of freezing the chooser. Read with the scope
+    dropped, "each creature that player controls" is every creature in the
+    game and the caster shrinks their own board; read with the seat guessed as
+    the resolution's default opponent it is right in a duel by coincidence.
+    """
+    game, p1, p2 = _w3g2_duel(set_pool, "Misfortune")
+
+    assert game.queue_from_hand(0, "Misfortune").supported
+    assert game.confirm_opponent_mode_choice(1, 1)
+    game._settle()
+
+    assert _w3g2_pt(game, p1) == [(2, 2), (2, 2)]
+    assert _w3g2_pt(game, p2) == [(1, 1), (1, 1)]
+    assert (p1.life, p2.life) == (20, 16)
+
+
+def test_w3g2_misfortune_freezes_the_chooser_rather_than_the_opposing_seat(set_pool):
+    """The seat is recorded on the spell as the mode is chosen, not derived at
+    resolution — which is what makes the phrase answerable with three players
+    in the game, where "an opponent" is not "the opponent"."""
+    from engine.grammar.lowering._events import EVENT_SUBJECT_PLAYER
+
+    game, _p1, _p2 = _w3g2_duel(set_pool, "Misfortune")
+    assert game.queue_from_hand(0, "Misfortune").supported
+
+    assert game.confirm_opponent_mode_choice(1, 1)
+
+    assert game.stack[-1].trigger_context[EVENT_SUBJECT_PLAYER] == 1

@@ -180,7 +180,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # its own would let one half of one sentence be gated off without the
     # other.
     "attack_as_though_no_defender_until_eot": "pump",
-    "add_counter_to_each_you_control": "pump",
+    "add_counter_to_each_matching": "pump",
     # Counter placements sized by a board count. Their own category rather than
     # "pump": a corpse counter never touches power or toughness (it is
     # regeneration fuel), so gating it behind the pump switch would tie two

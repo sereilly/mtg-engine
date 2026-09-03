@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
+from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
@@ -895,6 +896,19 @@ class PendingChoicesMixin:
             return False
         item.chosen_mode_index = mode_index
         item.chosen_modes = (ChosenMode(index=mode_index),)
+        # **Who chose** is a fact about this cast that nothing on a board can
+        # answer, and the mode's own text refers back to it: "…each creature
+        # **that player** controls", "…deals 4 damage to **that player**"
+        # (Misfortune), "**That player** draws up to three cards" (Fatal Lore).
+        # Frozen here, under the key every fire site freezes a seat under, so
+        # `handlers/_common.frozen_that_player_seat` and the damage/draw
+        # recipients read one answer rather than three. In a duel it happens to
+        # equal the resolution's default opposing seat; with three players it
+        # does not, which is why it is recorded rather than re-derived.
+        item.trigger_context = {
+            **(item.trigger_context or {}),
+            EVENT_SUBJECT_PLAYER: choice.player_index,
+        }
         self.discard_pending_choice(choice)
         self.log.append(
             f"{self.players[choice.player_index].name} chose "
