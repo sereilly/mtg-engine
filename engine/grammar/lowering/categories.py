@@ -823,6 +823,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the step behind it reads back, and the hand-over that reads it carries the
     # control family's category of its own.
     "choose_opponent": "chosen_players",
+    # "Choose target opponent." (Soldevi Sentry.) The targeted twin of the row
+    # above — CR 601.2c rather than CR 608.2c — and the same category, because
+    # what the category names is the answer the sentence produces.
+    "choose_target_player": "chosen_players",
     # "Count the number of permanents." (Chaos Moon.) Its own category for the
     # reason the chosen number and the chosen player have theirs: the count is a
     # *value* the effect records, and the sentences that read it back carry the

@@ -200,7 +200,25 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # The trigger context goes *under* the scratchpad, so a value this
     # resolution actually produced wins over one the event merely reported.
     captured = {**(context.trigger_context or {}), **(context.results or {})}
+    # "Choose target opponent. … When it regenerates this way, **that player**
+    # may draw a card." (Soldevi Sentry.) The seat an earlier step of this same
+    # resolution chose, read out of the scratchpad under the one key a chosen
+    # player is ever written to. An entry that binds a player and has none
+    # arms nothing, for the reason a bound *object* that is gone does: the
+    # ability would otherwise be about whichever seat the firing resolution
+    # happened to carry.
+    bound_seat = None
+    if payload.get("binds_player"):
+        # The literal, for the reason `choose_permanent` above spells it: the
+        # key is declared in `grammar/lowering/_events.CHOSEN_PLAYER`, and the
+        # handler layer does not import from the grammar's lowering package.
+        recorded = (context.results or {}).get("chosen_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{context.card.name} had no player to watch")
+            return True, "no player"
+        bound_seat = recorded
     arm_delayed_trigger(game, DelayedTrigger(
+        bound_player_index=bound_seat,
         controller_index=seat,
         event=payload.get("event", "creatures_attack"),
         instruction=payload.get("instruction"),

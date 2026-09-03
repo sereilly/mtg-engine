@@ -119,6 +119,38 @@ def choose_cast_this_turn(
     return True, "resolved"
 
 
+@effect_handler("choose_target_player")
+def choose_target_player(
+    game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"
+) -> tuple[bool, str]:
+    """"**Choose target opponent.**" (Soldevi Sentry.)
+
+    A sentence whose whole content is CR 601.2c's choosing of targets, over a
+    *player*. Nothing happens when it resolves — the seat was chosen when the
+    ability was activated (CR 602.2b), hours of game time before this — so what
+    the instruction does is exist: ``engine/targeting.py`` derives the picker
+    from it, which is where every other card's picker comes from.
+
+    It also **records** the seat, which is the difference from the object form
+    beside it. The sentence that names the chosen player is two sentences later
+    and is a *delayed* ability (CR 603.7), so by the time it fires this
+    resolution is over and its scratchpad is gone — the seat has to be frozen
+    into the entry, and this is where it is available.
+
+    Nothing recorded is not an error: CR 608.2b's illegal target leaves the seat
+    unset, and the step reading it back arms nothing rather than guessing.
+    """
+    key = str(instruction.payload.get("result_key") or "chosen_player")
+    context.results[key] = None
+    chosen = context.target
+    if chosen is None or chosen.lost:
+        game.log.append(f"{context.card.name}: no player was chosen")
+        return True, "no target"
+    context.results[key] = game.players.index(chosen)
+    game.log.append(f"{context.card.name} chose {chosen.name}")
+    return True, "resolved"
+
+
 @effect_handler("choose_opponent")
 def choose_opponent(
     game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"

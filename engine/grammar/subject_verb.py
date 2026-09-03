@@ -447,6 +447,33 @@ def parse_subject_verb(
                     return dataclasses.replace(
                         action, gained_by=source_spec, offered=True
                     )
+                # "**That player** may draw a card." (Soldevi Sentry.) The
+                # action's subject is elided and it is the *offer's* subject,
+                # not the ability's controller — the same binding the mana
+                # branch above makes for "…may add {R}", and the same one the
+                # copy and the control change make below it.
+                #
+                # Only the elided form is rebound, and only under "that
+                # player". CR 109.5 keeps "you" meaning the ability's
+                # controller wherever the card actually prints the word ("an
+                # opponent may sacrifice a creature **you control**"), and a
+                # bare imperative prints no word at all — which is exactly the
+                # difference `parse_optional_action` cannot see from inside the
+                # action.
+                #
+                # The other seat words are left alone because their offers are
+                # *collapsed* one layer down: "its controller may draw up to two
+                # cards" (Arcane Denial) and "each player may draw…" (Truce)
+                # lower to a per-seat draw prompt rather than to an offer with a
+                # draw inside it, and rebinding here takes the shape those
+                # collapses match on away from them.
+                if isinstance(action, ast.Draw) and (
+                    isinstance(action.player, ast.PlayerRef)
+                    and action.player.kind == "you"
+                    and isinstance(source_spec, ast.PlayerRef)
+                    and source_spec.kind == "that_player"
+                ):
+                    action = dataclasses.replace(action, player=source_spec)
                 return ast.May(source_spec, action=action)
             except GrammarError:
                 stream.reset(mark_may)

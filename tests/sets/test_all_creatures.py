@@ -1679,3 +1679,108 @@ def test_revelation_still_reads_as_a_static_line():
         "Defending player plays with their hand revealed for as long as this "
         "creature remains on the battlefield."
     )
+
+
+def _w3g4_sentry(set_pool):
+    """Soldevi Sentry on the battlefield with a library each, its ability
+    activated against seat 1 and resolved."""
+    sentry = Permanent(card=set_pool("ALL")["Soldevi Sentry"])
+    sentry.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(
+        name="P1", life=20, battlefield=[sentry],
+        library=[_w3g4_vanilla("Mine %d" % i, 1, 1) for i in range(5)],
+    )
+    p2 = PlayerState(
+        name="P2", life=20,
+        library=[_w3g4_vanilla("Theirs %d" % i, 1, 1) for i in range(5)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    result = game.activate_permanent_ability(
+        0, "Soldevi Sentry", permanent_index=0, target_player_index=1
+    )
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    return game, sentry, p1, p2
+
+
+def test_soldevi_sentry_regenerates_and_the_chosen_opponent_draws(set_pool):
+    """"{1}: Choose target opponent. Regenerate this creature. When it
+    regenerates this way, that player may draw a card."
+
+    Three sentences and one ability. The draw is a **delayed** trigger
+    (CR 603.7) and not CR 603.12's reflexive one: what it waits for is the
+    shield being *spent*, which CR 701.19c says is a different event from the
+    shield being created — so nothing happens until the creature would actually
+    be destroyed.
+    """
+    game, sentry, p1, p2 = _w3g4_sentry(set_pool)
+    assert sentry.regeneration_shield == 1
+    assert [(d.event, d.bound_player_index) for d in game.delayed_triggers] == [
+        ("source_regenerates", 1)
+    ]
+    before = len(p2.hand)
+
+    sentry.damage_marked = 99
+    game.check_state_based_actions()
+    for _ in range(3):
+        while game.stack:
+            game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices()
+
+    assert any(perm is sentry for perm in p1.battlefield), "the shield saved it"
+    assert sentry.tapped and sentry.damage_marked == 0, "CR 701.19a's alternate effect"
+    assert len(p2.hand) == before + 1, "the chosen opponent drew, not the controller"
+    assert not p1.hand, "…and 'that player' is not the ability's controller"
+    assert not game.delayed_triggers, "CR 603.7b: it fires once"
+
+
+def test_soldevi_sentrys_draw_waits_for_the_shield_to_be_spent(set_pool):
+    """CR 701.19c: activating an ability that creates a regeneration shield is
+    not regenerating. A trigger announced at activation would draw a card for
+    the opponent every time the Sentry's controller spent {1}, whether or not
+    anything ever threatened it."""
+    game, sentry, p1, p2 = _w3g4_sentry(set_pool)
+
+    assert not p2.hand
+    assert game.delayed_triggers, "armed, not fired"
+
+
+def test_soldevi_sentry_offers_an_opponent_picker(set_pool):
+    """The seat is a target chosen on activation (CR 602.2b), so the picker is
+    derived from the compiled program like every other one — and it is
+    opponents only, because "target opponent" and "target player" are different
+    abilities (CR 115.4)."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    ability = compile_card_oracle(set_pool("ALL")["Soldevi Sentry"]).activated_abilities[0]
+    spec = derive_activation_spec(ability)
+
+    assert spec is not None
+    assert spec["kind"] == "player"
+    assert spec.get("opponents_only") is True
+
+
+def test_a_chosen_player_binding_needs_a_choose_step(set_pool):
+    """"That player" has more than one producer — Lodestone Bauble's is the
+    graveyard owner its own target named — so the absence of a "choose target
+    player" step must leave that reading alone rather than refusing the line.
+    This is the negative half of the gate, on a shipped card in this same set.
+    """
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("ALL")["Lodestone Bauble"])
+
+    assert program.supported
+    armed = program.activated_abilities[0].instruction
+    delayed = [
+        step for step in armed.payload.get("steps", ())
+        if step.kind == "create_delayed_trigger"
+    ]
+    assert delayed, "the Bauble arms a delayed draw"
+    assert "binds_player" not in delayed[0].payload

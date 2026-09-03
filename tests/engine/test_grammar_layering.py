@@ -171,6 +171,14 @@ PARSE_LAYERS = [
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.
     "delayed",
+    # ``Choose <something>.`` and the sentence that binds what it chose — the
+    # target form, the keyword/land-type form, and the probe both live on.
+    # Split out of `delayed` at the guard below, along the boundary that
+    # module's own docstring drew: it explained why "Choose target <noun>."
+    # lived there "for the same reason" a delayed trigger does, and a shared
+    # reason is not a shared subject. Below `delayed`, whose delayed-trigger
+    # production its binder probe asks and which never imports it back.
+    "choices",
     # A sentence that prints no subject — the bare imperative ("Destroy target
     # creature") and the whole paragraphs that open on a noun phrase no subject
     # reader may eat. Split out of `subject_verb` at the guard below, along the

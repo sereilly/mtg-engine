@@ -83,6 +83,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # record: an unnamed seat the effect picks is written where every chosen
     # player is written, so the hand-over behind it needs no key of its own.
     "choose_opponent": CHOSEN_PLAYER,
+    # "**Choose target opponent.** … When it regenerates this way, **that
+    # player** may draw a card." (Soldevi Sentry.) The seat the *targeting*
+    # sentence chose, under the same key the resolution-time choice above
+    # writes: which step picked the player is not a difference any later
+    # sentence can see, and two keys would be two readers of "that player".
+    "choose_target_player": CHOSEN_PLAYER,
     # "…equal to half the damage dealt by **one of those** sorcery spells this
     # turn." The pick records what the chosen cast dealt, because by the time
     # this is asked the spell has resolved and left the stack — the ledger is
