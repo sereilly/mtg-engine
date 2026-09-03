@@ -43,8 +43,14 @@ class ChooseTarget:
     binds the chosen creature to follow it, because a spell whose only
     instruction is this one would target a creature, resolve, and do nothing at
     all while reporting itself supported.
+
+    *subject* is a ``PlayerRef`` for the **player** form — "Choose target
+    opponent." (Soldevi Sentry). One node for both, because the sentence is the
+    same CR 601.2c announcement either way and the difference is only what the
+    picker enumerates; two nodes would be two lowerings that each have to
+    decline the other's noun.
     """
-    subject: TargetSpec
+    subject: "TargetSpec | PlayerRef"
 
 
 @dataclass(frozen=True)

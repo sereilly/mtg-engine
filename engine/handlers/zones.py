@@ -27,6 +27,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
+from ..revealed_hands import reveal_hand_while_present
 from ..resumption import run_resumable
 from ..search_filters import search_matches
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
@@ -2553,6 +2554,42 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     caster_index = game.players.index(context.caster)
     game.arm_graveyard_exile_pick(
         caster_index, seat, dict(instruction.payload), context
+    )
+    return True, "resolved"
+
+
+@effect_handler("reveal_hand_while_source_present")
+def reveal_hand_while_source_present(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Stromgald Spy: "…you may have defending player play with their hand
+    revealed for as long as this creature remains on the battlefield."
+
+    CR 701.20a: revealing shows the cards to every player, and the hand stays a
+    hidden zone by classification (CR 400.2) — so nothing here moves a card, and
+    the whole effect is a record the per-seat serialization reads.
+
+    The record goes on the **source**, which is what implements the duration
+    with no sweep: ``engine/revealed_hands.py`` scans the battlefield for it, a
+    permanent that leaves stops being in the scan (CR 611.2b) and a returning
+    one is a new object with no record (CR 400.7).
+
+    The seat is CR 506.2's defender, frozen by the combat fire site rather than
+    read off the board: this resolves in a priority window after the
+    declaration, and an attacker that left combat in between would leave a board
+    read naming nobody.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(f"{context.card.name}: no defending player was recorded")
+        return True, "resolved"
+    reveal_hand_while_present(source, seat)
+    game.log.append(
+        f"{context.card.name}: {game.players[seat].name} plays with their hand "
+        f"revealed while {source.card.name} remains on the battlefield"
     )
     return True, "resolved"
 

@@ -180,6 +180,14 @@ PARSE_LAYERS = [
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.
     "delayed",
+    # ``Choose <something>.`` and the sentence that binds what it chose — the
+    # target form, the keyword/land-type form, and the probe both live on.
+    # Split out of `delayed` at the guard below, along the boundary that
+    # module's own docstring drew: it explained why "Choose target <noun>."
+    # lived there "for the same reason" a delayed trigger does, and a shared
+    # reason is not a shared subject. Below `delayed`, whose delayed-trigger
+    # production its binder probe asks and which never imports it back.
+    "choices",
     # A sentence that prints no subject — the bare imperative ("Destroy target
     # creature") and the whole paragraphs that open on a noun phrase no subject
     # reader may eat. Split out of `subject_verb` at the guard below, along the
@@ -309,7 +317,22 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # elaborately its sentence is printed. The words are where the work is, so a
 # near-empty `lowering/search.py` would buy back the symmetry and cost the
 # thing symmetry is for — exactly the reasoning `zones` records in reverse.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
+# `types` is the *first* family to arrive on the parse side after the lowering
+# side already had it — every asymmetry recorded here so far was written the
+# other way round, and `lowering/types.py`'s own docstring predicted this file
+# would stay unwritten ("a near-empty `effects/types.py` would buy back the
+# symmetry and cost the thing symmetry is for"). It was right when it was
+# written and wrong two sets later: the `becomes` verb's five branches are 316
+# lines on their own, and `effects/characteristics.py` had reached 985 with the
+# P/T family beside them, sharing no helper. The prediction was about a size,
+# and the size changed.
+# `exile` joined the parse side at Alliances' third wave, when two branches
+# each grew `effects/cards.py` under the guard and the sum crossed it — the
+# integrator's split, because no single branch was at fault. It reuses
+# `lowering/exile.py`'s name, which has been a lowering-only family since
+# before the parse half existed, so the mirror re-forms rather than forking:
+# the same move `prevention` and `counters` made, in the other direction.
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -428,7 +451,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
 # `permissions` is the sixth lowering-only family, split off `lowering/exile.py`
 # at Alliances' third wave when that module crossed the guard below. The line is
 # the CR's own: everything left in `exile` **moves an object** into or out of
@@ -504,6 +527,22 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "tapping", "attachments",
+        # `types` is a parse family and a lowering family with no AST module of
+        # its own: what the `becomes` verb produces is `BecomeCreature`,
+        # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,
+        # and those five already live in `ast/characteristics.py` because they
+        # are what a permanent *is*. Splitting them out would put a node in one
+        # family and both of its readers in another.
+        "types",
+        # `exile` is the same shape as `types`, one package over. The nodes the
+        # five exile productions build — `PutExiledCardIntoHand`,
+        # `ExileBoundCard`, `ExileGraveyard`, `PutExiledWithSource` — are cards
+        # in a zone, and they live in `ast/cards.py` beside every other card
+        # node because that is what they *are*. The guard fired on the readers
+        # (`effects/cards.py` at 1,005), not on the inventory, and splitting the
+        # nodes out to match would put a node in one family with both of its
+        # readers in another — exactly what `types` records.
+        "exile",
     )
 ]
 # `library` left this list at Alliances' third wave, when the size guard below

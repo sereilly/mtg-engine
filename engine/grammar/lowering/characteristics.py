@@ -13,11 +13,9 @@ what is missing instead of producing an effect that never ends.
 
 import dataclasses
 
-from ...oracle_types import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                             OracleInstruction)
+from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._events import binds_block_pair
 from ._amounts import (
     count_spec,
     _per_each_amount,
@@ -27,14 +25,12 @@ from ._amounts import (
 )
 from ._common import (
     _amount_payload,
-    _describe_several_targets,
     _describe_targets,
     _durationless_reason,
     _filter_payload,
     _is_enchanted,
     _is_source,
     _is_target,
-    _names_several_targets,
     _restrictions_beyond,
     _signed,
 )
@@ -696,7 +692,15 @@ def _lower_change_base_pt(node: ast.ChangeBasePT) -> tuple[OracleInstruction, ..
             ),
         )
 
-    # The toughness-only computed forms (Sentinel, Wall of Tombstones).
+    # The computed forms that read a **chosen creature** (Sentinel, Sworn
+    # Defender). One or both stats, each read off the same target: the quantity
+    # carries the sentence's target, so two targets would be two pickers for a
+    # card that names one.
+    read = _reads_a_target_characteristic(node)
+    if read is not None:
+        return read
+
+    # The toughness-only computed form over a count (Wall of Tombstones).
     if node.power is not None or node.toughness is None:
         raise LoweringError(
             "a computed base-P/T rewrite sets toughness alone", node=node
@@ -706,43 +710,7 @@ def _lower_change_base_pt(node: ast.ChangeBasePT) -> tuple[OracleInstruction, ..
             f"no computed base-toughness rewrite expires at {node.duration.kind}",
             node=node,
         )
-    bonus = 0
-    amount = node.toughness
-    if isinstance(amount, ast.Plus):
-        if not isinstance(amount.left, ast.Fixed):
-            raise LoweringError("the printed addend has to be a number", node=node)
-        bonus = amount.left.value
-        amount = amount.right
-
-    # "1 plus the power of target creature blocking or blocked by this
-    # creature" (Sentinel). The quantity carries the sentence's target; the
-    # in-combat relation rides the instruction as its own key, because no read
-    # of the chosen creature alone can answer it — engine/legality.py tests it
-    # at activation and the handler again at resolution.
-    if isinstance(amount, ast.PowerOfSubject):
-        spec = amount.subject
-        if spec.quantifier != "target":
-            raise LoweringError("the power read needs a chosen creature", node=node)
-        filt = spec.filter
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "in_combat_with_source"})
-        )
-        if leftover or filt.card_types != ("creature",):
-            raise LoweringError(
-                "the target-power rewrite reads a creature, optionally in "
-                "combat with the source", node=node,
-            )
-        stripped = dataclasses.replace(spec, filter=dataclasses.replace(
-            filt, in_combat_with_source=False
-        ))
-        payload = {
-            "bonus": bonus,
-            "in_combat_with_source": filt.in_combat_with_source,
-        }
-        _describe_targets(payload, stripped)
-        return (
-            OracleInstruction("set_source_base_toughness_from_target_power", "", payload),
-        )
+    bonus, amount = _split_printed_addend(node, node.toughness)
 
     # "1 plus the number of creature cards in your graveyard" (Wall of
     # Tombstones). `count_spec` is the shared reader, so the count means what
@@ -758,6 +726,113 @@ def _lower_change_base_pt(node: ast.ChangeBasePT) -> tuple[OracleInstruction, ..
     raise LoweringError(
         f"no base-toughness rewrite reads a {type(amount).__name__}", node=node
     )
+
+
+#: Which durations a base-P/T rewrite read off a chosen creature is implemented
+#: for, and the ``until_eot`` flag each becomes. ``None`` is the absent clause,
+#: which CR 611.2a makes "permanently" (Sentinel's "this effect lasts
+#: indefinitely" is reminder text for it); Sworn Defender prints the turn.
+#: A table rather than two ifs so a third duration refuses by name instead of
+#: falling into whichever branch was written first.
+_BASE_PT_READ_DURATIONS = {None: False, "until_end_of_turn": True}
+
+
+def _split_printed_addend(node, amount):
+    """``(bonus, rest)`` for "N plus <quantity>" — the printed constant in front
+    of a read quantity, and the quantity itself. ``(0, amount)`` when there is
+    no sum."""
+    if isinstance(amount, ast.Plus):
+        if not isinstance(amount.left, ast.Fixed):
+            raise LoweringError("the printed addend has to be a number", node=node)
+        return amount.left.value, amount.right
+    return 0, amount
+
+
+def _characteristic_read(node, amount):
+    """One stat's ``{"characteristic", "offset"}`` payload plus the ``TargetSpec``
+    it reads, or None when *amount* reads no chosen object.
+
+    The printed constant reaches the payload from either of the two places a
+    card puts it: in front of the phrase ("**1 plus** the power of …", Sentinel)
+    or behind it ("the toughness of … **minus 1**", Sworn Defender). Summing
+    them here is what makes those one arithmetic rather than two payload keys
+    that a handler could read one of and drop the other.
+    """
+    bonus, rest = _split_printed_addend(node, amount)
+    if not isinstance(rest, ast.CharacteristicOfTarget):
+        return None
+    return rest.subject, {
+        "characteristic": rest.characteristic,
+        "offset": bonus + rest.offset,
+    }
+
+
+def _reads_a_target_characteristic(node) -> tuple[OracleInstruction, ...] | None:
+    """Sentinel's "change this creature's base toughness to 1 plus the power of
+    target creature blocking or blocked by this creature" and Sworn Defender's
+    "this creature's power becomes the toughness of target creature blocking or
+    being blocked by this creature minus 1 …, and its toughness becomes 1 plus
+    the power of that creature …" — one instruction for both.
+
+    Returns None without complaint when neither stat reads a chosen object, so
+    the count form below keeps its own refusals.
+
+    The **in-combat relation** rides the instruction as its own key rather than
+    the filter, because no read of the chosen creature alone can answer it:
+    ``engine/legality.py`` tests it at activation and the handler again at
+    resolution (CR 608.2b). Both stats must name the same ``TargetSpec`` — the
+    parse binds the second clause's pronoun to the first clause's choice, and
+    two different specs here would mean the sentence somehow named two.
+    """
+    reads = {
+        stat: _characteristic_read(node, amount)
+        for stat, amount in (("power", node.power), ("toughness", node.toughness))
+        if amount is not None
+    }
+    named = {stat: read for stat, read in reads.items() if read is not None}
+    if not named:
+        return None
+    if len(named) != len(reads):
+        raise LoweringError(
+            "a rewrite reading a chosen creature reads it for every stat it "
+            "sets", node=node,
+        )
+    specs = [spec for spec, _ in named.values()]
+    if any(spec is not specs[0] for spec in specs[1:]):
+        raise LoweringError(
+            "both halves of this rewrite have to read the same creature",
+            node=node,
+        )
+    spec = specs[0]
+    if spec.quantifier != "target":
+        raise LoweringError(
+            "a characteristic read needs a chosen creature", node=node
+        )
+    if node.duration.kind not in _BASE_PT_READ_DURATIONS:
+        raise LoweringError(
+            f"no rewrite read off a chosen creature expires at "
+            f"{node.duration.kind}", node=node,
+        )
+    filt = spec.filter
+    leftover = _restrictions_beyond(
+        filt, frozenset({"card_types", "in_combat_with_source"})
+    )
+    if leftover or filt.card_types != ("creature",):
+        raise LoweringError(
+            "the characteristic-read rewrite reads a creature, optionally in "
+            "combat with the source", node=node,
+        )
+    stripped = dataclasses.replace(spec, filter=dataclasses.replace(
+        filt, in_combat_with_source=False
+    ))
+    payload: dict[str, object] = {
+        "in_combat_with_source": filt.in_combat_with_source,
+        "until_eot": _BASE_PT_READ_DURATIONS[node.duration.kind],
+    }
+    for stat, (_spec, read) in named.items():
+        payload[stat] = read
+    _describe_targets(payload, stripped)
+    return (OracleInstruction("set_source_base_pt_from_target", "", payload),)
 
 
 
@@ -814,125 +889,6 @@ def _lower_switch_pt(node: ast.SwitchPT) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("switch_target_pt_until_eot", "", payload),)
 
 
-
-
-def _lower_become_color(
-    node: ast.BecomeColor,
-    event: str | None = None,
-    event_subject: object | None = None,
-) -> tuple[OracleInstruction, ...]:
-    """The Lace cycle, and the five Legends colour spells beside it.
-
-    Two instructions, told apart by the *duration* rather than by the number of
-    targets: an indefinite change writes the permanent colour channel and a
-    turn-long one writes the until-end-of-turn channel the cleanup step sweeps,
-    and layer 5 reads both (`engine/layer_bridge.py`). One handler covers one
-    target or several, since a single chosen slot is a list of one.
-    """
-    if node.color in (ast.CHOSEN_COLOR, ast.CHOSEN_COLORS):
-        several = node.color == ast.CHOSEN_COLORS
-        if _is_enchanted(node.subject):
-            # "Enchanted creature becomes the color or colors of your choice."
-            # (Dream Coat.) The Aura's own host rather than a target: an Aura's
-            # activated ability acts on what it is attached to (CR 303.4), which
-            # is nothing the activator chooses. Read as a target it refused, and
-            # the ability compiled to nothing at all.
-            if node.duration.kind is not None:
-                raise LoweringError(
-                    f"no handler recolours for {node.duration.kind!r}", node=node
-                )
-            return (
-                OracleInstruction(
-                    "recolor_enchanted_chosen_color", "", {"several": several}
-                ),
-            )
-        if _is_source(node.subject):
-            # "You may have **this creature** become the color or colors of your
-            # choice." (Shyft.) The third subject the phrase is printed on, and
-            # the one nobody chooses at all: an object the sentence names
-            # outright. Its own kind rather than the Aura's, because which
-            # permanent is recoloured is the whole difference and reading the
-            # source off an ``attached_to`` that is never there would recolour
-            # nothing.
-            #
-            # No duration: "(This effect lasts indefinitely.)" is CR 611.2's
-            # default said out loud, so a printed one would be a different card.
-            if node.duration.kind is not None:
-                raise LoweringError(
-                    f"no handler recolours for {node.duration.kind!r}", node=node
-                )
-            return (
-                OracleInstruction(
-                    "recolor_self_chosen_color", "", {"several": several}
-                ),
-            )
-        if several:
-            raise LoweringError(
-                "only an Aura's own host or the source itself may be given a "
-                "set of chosen colours",
-                node=node,
-            )
-        # "Target permanent you control becomes the color of your choice."
-        # (Alchor's Tomb.) Its own kind rather than a flag on the lace kind,
-        # because the two describe different pickers: a lace targets a spell or
-        # a permanent and names its colour in the text, while this one targets
-        # whatever its printed noun phrase says and reads the colour back off
-        # the choice made when the ability was activated. The noun phrase is
-        # described here, so "you control" is enforced by the picker rather
-        # than dropped — the lace kind's fixed `spell_or_permanent` spec would
-        # have offered every permanent on the board.
-        if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
-            raise LoweringError(
-                "no handler recolours an object nobody targeted", node=node
-            )
-        if node.duration.kind is not None:
-            raise LoweringError(
-                f"no handler recolours for {node.duration.kind!r}", node=node
-            )
-        payload = {}
-        _describe_targets(payload, node.subject)
-        return (OracleInstruction("recolor_target_chosen_color", "", payload),)
-    if node.duration.kind in ("until_end_of_turn", "this_turn"):
-        if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
-            raise LoweringError(
-                "no handler recolours an object nobody targeted", node=node
-            )
-        payload: dict[str, object] = {"target_color": node.color}
-        if _names_several_targets(node.subject):
-            _describe_several_targets(payload, node.subject)
-        return (OracleInstruction("recolor_targets_until_eot", "", payload),)
-    if node.duration.kind is not None:
-        raise LoweringError(
-            f"no handler recolours for {node.duration.kind!r}", node=node
-        )
-    if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "target":
-        # "…**that creature** becomes green" (Aisling Leprechaun). Nobody chose
-        # it, so there is no target — but a block trigger *bound* it, and under
-        # one of those events the pronoun names exactly one creature. The
-        # binding travels as payload rather than as a second instruction kind:
-        # which object an effect acts on is not a different effect.
-        if (
-            binds_block_pair(event, event_subject)
-            and isinstance(node.subject, ast.TargetSpec)
-            and node.subject.quantifier == "that"
-        ):
-            return (
-                OracleInstruction(
-                    "recolor_target_from_text", "",
-                    {
-                        "target_color": node.color,
-                        SUBJECT_FROM_TRIGGER: BLOCK_PAIR_SUBJECT,
-                    },
-                ),
-            )
-        raise LoweringError("no handler for recolouring a non-targeted object", node=node)
-    # Deliberately *not* described for engine/targeting.py. The Lace cycle
-    # targets "spell or permanent" — a union of a stack object and a
-    # battlefield object that the `targets` vocabulary cannot express. Emitting
-    # the generic object shape would derive "permanent" and drop spells on the
-    # stack from the picker, so the description is omitted and legality.py
-    # keeps answering `spell_or_permanent` until the vocabulary grows.
-    return (OracleInstruction("recolor_target_from_text", "", {"target_color": node.color}),)
 
 
 def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:

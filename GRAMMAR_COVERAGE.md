@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 85.1% | 83.2% | 46.9% | 165 |
 | LEB | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
 | 2ED | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
-| ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
+| ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 87.4% | 85.1% | 49.6% | 173 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
@@ -30,8 +30,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 87.6% | 86.9% | 67.7% | 127 |
-| **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
+| ALL *(measured)* | 144 | 251 | 89.6% | 88.8% | 69.7% | 131 |
+| **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.2%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -43,10 +43,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 277 | 119 | expected a subject |  |
-| 102 | 41 | unrecognized effect verb |  |
+| 274 | 116 | expected a subject |  |
+| 101 | 40 | unrecognized effect verb |  |
 | 67 | 28 | unconsumed text |  |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 31 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 2 | expected a keyword ability |  |
@@ -67,11 +67,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
-| 2 | 2 | expected 'a' |  |
+| 2 | 1 | expected what this creature can't block, or a duration |  |
 
 ## Cards executing through the grammar
 
-2394 cards, 2866 lines.
+2394 cards, 2867 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -404,6 +404,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: This creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Beasts of Bogardan**
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
+- **Benthic Explorers**
+  - `{T}, Untap a tapped land an opponent controls: Add one mana of any type that land could produce.`
 - **Bestial Fury**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `Whenever enchanted creature becomes blocked, it gets +4/+0 and gains trample until end of turn.`
@@ -1526,6 +1528,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gangrenous Zombies**
   - `{T}, Sacrifice this creature: This creature deals 1 damage to each creature and each player. If you control a snow Swamp, this creature deals 2 damage to each creature and each player instead.`
 - **Gargantuan Gorilla**
+  - `At the beginning of your upkeep, you may sacrifice a Forest. If you sacrifice a snow Forest this way, this creature gains trample until end of turn. If you don't sacrifice a Forest, sacrifice this creature and it deals 7 damage to you.`
   - `{T}: This creature deals damage equal to its power to another target creature. That creature deals damage equal to its power to this creature.`
 - **Garruk's Harbinger**
   - `Whenever this creature deals combat damage to a player or planeswalker, look at that many cards from the top of your library. You may reveal a creature card or Garruk planeswalker card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.`
@@ -3491,6 +3494,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature dealt damage by this creature this turn dies, put that card onto the battlefield under your control at the beginning of the next end step. Sacrifice the creature when you lose control of this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put that card onto the battlefield under your control at the beginning of the next end step. Sacrifice the creature when you lose control of this creature.`
 - **Serendib Djinn**
+  - `At the beginning of your upkeep, sacrifice a land. If you sacrifice an Island this way, this creature deals 3 damage to you.`
   - `When you control no lands, sacrifice this creature.`
 - **Serendib Efreet**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
@@ -3644,6 +3648,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}. Spend this mana only to activate abilities of artifacts.`
 - **Soldevi Sage**
   - `{T}, Sacrifice two lands: Draw three cards, then discard one of them.`
+- **Soldevi Sentry**
+  - `{1}: Choose target opponent. Regenerate this creature. When it regenerates this way, that player may draw a card.`
 - **Soldevi Simulacrum**
   - `{1}: This creature gets +1/+0 until end of turn.`
 - **Soldevi Steam Beast**
@@ -3799,6 +3805,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stromgald Cabal**
   - `{T}, Pay 1 life: Counter target white spell.`
   - `{T}, Pay 1 life: Counter target white spell.`
+- **Stromgald Spy**
+  - `Whenever this creature attacks and isn't blocked, you may have defending player play with their hand revealed for as long as this creature remains on the battlefield. If you do, this creature assigns no combat damage this turn.`
 - **Stunted Growth**
   - `Target player chooses three cards from their hand and puts them on top of their library in any order.`
 - **Su-Chi**
@@ -3856,6 +3864,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
+- **Sworn Defender**
+  - `{1}: This creature's power becomes the toughness of target creature blocking or being blocked by this creature minus 1 until end of turn, and its toughness becomes 1 plus the power of that creature until end of turn.`
 - **Sylvan Library**
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`

@@ -47,6 +47,33 @@ _HANDS_LINES: dict[str, str] = {
 }
 
 
+#: Where a *granted* reveal is recorded, on the permanent that granted it:
+#: the seats whose hands it opens, as a list of indices.
+#:
+#: "…have defending player play with their hand revealed **for as long as this
+#: creature remains on the battlefield**." (Stromgald Spy.) The table above is
+#: keyed to a printed *line*, which is the whole of a static ability; this one
+#: is created by a resolution and names a seat the combat froze, so no line can
+#: say it.
+#:
+#: On the permanent rather than on a player, and that is what implements the
+#: duration: this module's scan is over the battlefield, so a source that leaves
+#: stops contributing with nothing to sweep (CR 611.2b), and a returning one is
+#: a new object with no record (CR 400.7). A per-seat flag would need a watcher
+#: to clear it, and the watcher is what the module's docstring says it does not
+#: want.
+HAND_REVEALED_SEATS = "hand_revealed_to_seats"
+
+
+def reveal_hand_while_present(source, owner_seat: int) -> None:
+    """Record that *source* opens *owner_seat*'s hand while it is on the
+    battlefield. Idempotent — a second attack re-reveals a hand already
+    revealed, which is not two effects."""
+    seats = source.metadata.setdefault(HAND_REVEALED_SEATS, [])
+    if owner_seat not in seats:
+        seats.append(owner_seat)
+
+
 def _normalized(line: str) -> str:
     return " ".join(_REMINDER.sub("", line).strip().lower().split()).rstrip(".")
 
@@ -78,6 +105,12 @@ def hand_revealed_to(game, owner_seat: int, viewer_seat: int | None) -> bool:
     two-sided one.
     """
     for controller_index, perm in game.permanents_with_controller():
+        # The granted record first: it is the cheaper question and it is not a
+        # property of the text at all (Stromgald Spy's own printed line says
+        # nothing about a hand while the creature is merely sitting there —
+        # the reveal exists because an attack resolved).
+        if owner_seat in (perm.metadata.get(HAND_REVEALED_SEATS) or ()):
+            return True
         text = perm.effective_card.oracle_text or ""
         for raw in text.splitlines():
             scope = _line_scope(raw)
@@ -88,4 +121,9 @@ def hand_revealed_to(game, owner_seat: int, viewer_seat: int | None) -> bool:
     return False
 
 
-__all__ = ["hand_revealed_to", "revealed_hands_line"]
+__all__ = [
+    "HAND_REVEALED_SEATS",
+    "hand_revealed_to",
+    "reveal_hand_while_present",
+    "revealed_hands_line",
+]

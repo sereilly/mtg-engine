@@ -85,6 +85,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # record: an unnamed seat the effect picks is written where every chosen
     # player is written, so the hand-over behind it needs no key of its own.
     "choose_opponent": CHOSEN_PLAYER,
+    # "**Choose target opponent.** … When it regenerates this way, **that
+    # player** may draw a card." (Soldevi Sentry.) The seat the *targeting*
+    # sentence chose, under the same key the resolution-time choice above
+    # writes: which step picked the player is not a difference any later
+    # sentence can see, and two keys would be two readers of "that player".
+    "choose_target_player": CHOSEN_PLAYER,
     # "…equal to half the damage dealt by **one of those** sorcery spells this
     # turn." The pick records what the chosen cast dealt, because by the time
     # this is asked the spell has resolved and left the stack — the ledger is
@@ -285,7 +291,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Swamp cannot sacrifice two, so nothing is sacrificed and the branch runs.
     # Written *before* the prompt is armed, because an interactive seat answers
     # a queued prompt long after this instruction has returned.
-    "sacrifice_matching_permanent": "sacrificed_this_way",
+    #
+    # ``sacrificed_cards`` is the second record and answers a different
+    # question: not "could the printed count be paid" but "**what** went".
+    # "If you sacrifice a **snow** Forest this way, …" (Gargantuan Gorilla,
+    # Serendib Djinn) needs the card itself, and by the time the branch runs it
+    # is in a graveyard and a different object (CR 400.7, CR 608.2h) — so the
+    # sacrifice records it as it happens. It is written *after* the prompt is
+    # answered, which is the opposite half of the note above and is why the two
+    # are separate keys rather than one: only the first is available
+    # synchronously, and only the second says what was chosen.
+    "sacrifice_matching_permanent": ("sacrificed_this_way", "sacrificed_cards"),
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots
@@ -468,6 +484,12 @@ def primary_produced(kind: str) -> str | None:
 #: the colon, and this module is the one home for "what does a step record?".
 #: It sat in `lower.py` while that file was the only reader; the table is a
 #: registry either way, and `lower.py` is dispatch.
+#: The scratchpad key an untap cost writes. Named rather than spelled twice
+#: because three files read it — the table below, the mana lowering's gate and
+#: the activation path that writes it — and the failure a third spelling
+#: produces is a gate that always refuses.
+UNTAPPED_FOR_COST = "untapped_for_cost"
+
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: "discarded_cards",
     # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
@@ -486,6 +508,13 @@ _COST_PRODUCES: dict[type, str] = {
     # anything at all, and threading ``produced`` into that branch is what
     # this row is for.
     ast.SacrificeCost: "sacrificed_for_cost",
+    # "{T}, **Untap a tapped land an opponent controls**: Add one mana of any
+    # type **that land** could produce." (Benthic Explorers.) The land the cost
+    # untapped, recorded by the activation path so the effect's back-reference
+    # has something to name — and, unlike the two rows above, this row really is
+    # a gate: the phrase is only meaningful on an ability whose own cost untaps
+    # something, and `_lower_add_mana` refuses it without this key.
+    ast.UntapPermanentCost: UNTAPPED_FOR_COST,
 }
 
 

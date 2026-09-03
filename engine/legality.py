@@ -205,7 +205,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "mark_non_wall_target_to_attack",
     "grant_flying_and_delayed_destruction",
     "set_base_pt_target_until_eot",
-    "set_source_base_toughness_from_target_power",
+    "set_source_base_pt_from_target",
     "steal_creature_while_tapped_and_weaker",
     "steal_target_linked_to_source",
     "tap_target_permanent",
@@ -1483,8 +1483,9 @@ class LegalityMixin:
         if instruction.kind == "set_base_pt_target_until_eot" and instruction.payload.get("exclude_self"):
             # Sorceress Queen: "Target creature other than this creature."
             return source_permanent is None or perm is not source_permanent
-        if instruction.kind == "set_source_base_toughness_from_target_power":
-            # Sentinel: "target creature blocking or blocked by this creature"
+        if instruction.kind == "set_source_base_pt_from_target":
+            # Sentinel: "target creature blocking or blocked by this creature";
+            # Sworn Defender: "…blocking or being blocked by this creature"
             # — the same in-combat relation the handler re-checks at resolution
             # (CR 608.2b), asked here so the ability is refused with nothing
             # paid when no such creature exists (CR 602.2b via 601.2c) and the

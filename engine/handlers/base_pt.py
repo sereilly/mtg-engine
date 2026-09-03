@@ -2,17 +2,21 @@
 
 The Legends template — "change …'s base [power and] toughness to <value>" —
 in the three shapes that resolve through ``EFFECT_HANDLERS``: a chosen
-creature's power read into the source's toughness (Sentinel), a graveyard
-count read into it (Wall of Tombstones), and a sweep over the creatures the
-damage record says hurt the source this turn (Brine Hag). The fourth printing,
+creature's characteristics read onto the source (Sentinel's toughness from a
+power, Sworn Defender's *both* stats from the other one's, crossed), a
+graveyard count read into it (Wall of Tombstones), and a sweep over the
+creatures the damage record says hurt the source this turn (Brine Hag). The
+fourth printing,
 Halfdane, is a targeted upkeep trigger and resolves through the registry in
 ``engine/phases/upkeep_effects.py``; its scheduled revert is the
 ``BASE_PT_REVERT_KEY`` stamp ``engine/pt.py`` documents.
 
-All of these are layer-7b *writes* with no expiry — "(This effect lasts
-indefinitely.)" is reminder text for CR 611.2a's "permanently" — so every one
-goes through :func:`engine.pt.set_base_pt` with no ``until_eot``, and 7c
-modifications (counters, pumps) keep applying on top of the new base.
+All of these are layer-7b writes through :func:`engine.pt.set_base_pt`, and
+7c modifications (counters, pumps) keep applying on top of the new base. Most
+have no expiry — "(This effect lasts indefinitely.)" is reminder text for
+CR 611.2a's "permanently" — and the one that does prints the words (Sworn
+Defender's "until end of turn"), which is why the duration is payload rather
+than a property of the family.
 
 Its own module rather than more of ``pump.py``: that file sits at the
 thousand-line boundary the grammar's size guard names as the stop-absorbing
@@ -35,12 +39,38 @@ if TYPE_CHECKING:
     from ..models import Permanent
 
 
-@effect_handler("set_source_base_toughness_from_target_power")
-def set_source_base_toughness_from_target_power(
+#: How a stat's ``{"characteristic", "offset"}`` payload is read off the chosen
+#: creature. Named here because the parse admits exactly these two words and the
+#: refusal for a third is written in the grammar — a table with one entry per
+#: word is what keeps the two ends agreeing about which they are.
+_CHARACTERISTIC_READERS = {
+    "power": lambda perm: perm.effective_power,
+    "toughness": lambda perm: perm.effective_toughness,
+}
+
+
+@effect_handler("set_source_base_pt_from_target")
+def set_source_base_pt_from_target(
     game: "Game", instruction: OracleInstruction, context: "OracleExecutionContext"
 ) -> tuple[bool, str]:
     """Sentinel: "{0}: Change this creature's base toughness to 1 plus the
     power of target creature blocking or blocked by this creature."
+    Sworn Defender: "{1}: This creature's power becomes the toughness of target
+    creature blocking or being blocked by this creature minus 1 until end of
+    turn, and its toughness becomes 1 plus the power of that creature until end
+    of turn."
+
+    One handler, because they are one effect with the payload changed: which
+    stats are set, which characteristic each reads, what constant it carries and
+    whether the write expires. Sworn Defender is the card that showed the
+    single-stat, single-characteristic, no-duration version was three
+    assumptions rather than one shape.
+
+    **Both stats are read before either is written.** They are read off the same
+    creature and the source is not that creature on any board this pool can
+    make — but a card that pointed the ability at itself would otherwise have
+    its second read see the first write, which is not what a single resolution
+    does (CR 608.2: the effect's values are determined as it resolves).
 
     The in-combat relation is checked here as well as at activation
     (``legality.activation_target_refusal`` asks the same question through
@@ -68,12 +98,27 @@ def set_source_base_toughness_from_target_power(
     if target is None:
         game.log.append(f"{context.card.name}: no valid creature target")
         return True, "resolved"
-    bonus = int(instruction.payload.get("bonus", 0))
-    toughness = bonus + target.effective_power
-    set_base_pt(source, None, toughness)
+    written: dict[str, int] = {}
+    for stat in ("power", "toughness"):
+        read = instruction.payload.get(stat)
+        if not read:
+            continue
+        reader = _CHARACTERISTIC_READERS.get(str(read.get("characteristic")))
+        if reader is None:
+            return False, f"no reader for {read.get('characteristic')!r}"
+        written[stat] = reader(target) + int(read.get("offset", 0))
+    if not written:
+        return False, "this rewrite sets no characteristic"
+    set_base_pt(
+        source,
+        written.get("power"),
+        written.get("toughness"),
+        until_eot=bool(instruction.payload.get("until_eot")),
+    )
     game.log.append(
-        f"{context.card.name}: base toughness becomes {toughness} "
-        f"({bonus} plus {target.card.name}'s power)"
+        f"{context.card.name}: base "
+        + " and ".join(f"{stat} becomes {value}" for stat, value in written.items())
+        + f" (read off {target.card.name})"
     )
     return True, "resolved"
 

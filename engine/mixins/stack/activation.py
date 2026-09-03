@@ -970,6 +970,48 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
+        # "{T}, **Untap a tapped land an opponent controls**: …" (Benthic
+        # Explorers). CR 602.1a: a cost is any action, and this is the one this
+        # engine charges that is performed on a permanent the payer does **not**
+        # control — so the candidates come off `all_permanents` rather than
+        # `controlled_by`, and the printed seat clause is what narrows them.
+        # Chosen through `cost_permanent_ids` like the sacrifice and tap costs
+        # above, and defaulted deterministically for a seat that names none.
+        untap_cost_permanent = None
+        if ability.cost.untap_filter is not None:
+            described = ability.cost.untap_filter
+            candidates = [
+                perm
+                for perm in self.all_permanents()
+                # Tapped by construction: untapping an untapped permanent is no
+                # payment, and the printed phrase says so too — the filter
+                # carries `tapped_only`, and this is the belt to its braces.
+                if perm.tapped and subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+            ]
+            named = next(
+                (
+                    found
+                    for pid in (cost_permanent_ids or [])
+                    for found in [self.permanent_by_id(pid)]
+                    if found is not None and any(c is found for c in candidates)
+                ),
+                None,
+            )
+            untap_cost_permanent = named or (candidates[0] if candidates else None)
+            if untap_cost_permanent is None:
+                # CR 601.2h via 602.2b: a cost that cannot be paid means the
+                # activation is refused with nothing spent, rather than an
+                # ability that costs nothing.
+                details = (
+                    f"{permanent.card.name}: no tapped "
+                    f"{filter_head_noun(described)} to untap for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # "{B}, **Put a -1/-1 counter on a creature you control**: …"
         # (Wandering Mage). The one counter-placing cost that can be *unpayable*
         # — CR 601.2h, and a payer with no creature has nowhere to put it — so
@@ -1308,6 +1350,16 @@ class AbilityActivationMixin:
                 + " to pay its cost"
             )
 
+        # …and the untap cost, paid at the same moment for the same reason
+        # (CR 601.2h). Through `become_untapped`, the one tapped→untapped
+        # transition, so anything watching for one sees this payment too.
+        if untap_cost_permanent is not None:
+            self.become_untapped(untap_cost_permanent)
+            self.log.append(
+                f"{permanent.card.name}: untapped "
+                f"{untap_cost_permanent.card.name} to pay its cost"
+            )
+
         # The activation half of "…becomes tapped **or** a player activates an
         # artifact's ability without {T} in its activation cost" (Haunting
         # Wind, Powerleech). "Without {T} in its activation cost" is exactly
@@ -1598,6 +1650,7 @@ class AbilityActivationMixin:
                         "mana_spent_for_cost": mana_spent_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
+                        "untapped_for_cost": untap_cost_permanent,
                         "discarded_for_cost": (
                             list(discard_cost_cards)
                             + (
@@ -1659,6 +1712,14 @@ class AbilityActivationMixin:
                     # back once they are cards in a graveyard.
                     "sacrificed_set_for_cost": list(sacrifice_cost_set),
                     "sacrificed_for_cost": sacrifice_cost_permanent,
+                    # …and the land an **untap** cost paid with (Benthic
+                    # Explorers), whose mana types the effect reads back. It is
+                    # still on the battlefield, unlike every other record on
+                    # this channel — but it is carried rather than re-found,
+                    # because "that land" names the one the cost untapped and a
+                    # board scan at resolution would name whichever one matches
+                    # now (CR 608.2h).
+                    "untapped_for_cost": untap_cost_permanent,
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
                     # card" (Land's Edge) is asked once the card is already in
@@ -2110,6 +2171,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
         ("tap_count", "a tap-other-permanents cost"),
+        ("untap_filter", "an untap-another-permanent cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
         ("exile_top_of_library", "a library-exile cost"),

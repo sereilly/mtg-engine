@@ -67,7 +67,10 @@ from .characteristics import (
     _parse_for_each,
     _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
+    _parse_becomes_base_pt,
     _parse_change_text,
+)
+from .types import (
     _parse_becomes,
     _parse_no_longer_supertype,
 )
@@ -100,6 +103,13 @@ from .mana import (
     _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
 )
+from .exile import (
+    _parse_exile_bound_card,
+    _parse_put_exiled_card_into_hand,
+    _parse_exile_cost_sacrifices,
+    _parse_exile_graveyard,
+    _parse_put_exiled_with_source,
+)
 from .cards import (
     _parse_draw,
     _parse_choose_cards_in_hand,
@@ -108,13 +118,9 @@ from .cards import (
     _parse_mill,
     _parse_scry,
     _parse_cast_permission,
-    _parse_exile_bound_card,
-    _parse_put_exiled_card_into_hand,
-    _parse_exile_cost_sacrifices,
-    _parse_exile_graveyard,
+    _parse_play_with_hand_revealed,
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
-    _parse_put_exiled_with_source,
     parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
@@ -205,6 +211,7 @@ __all__ = [
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
     "_parse_change_base_pt",
+    "_parse_becomes_base_pt",
     "_parse_change_text",
     "_parse_becomes",
     "_parse_no_longer_supertype",
@@ -243,6 +250,7 @@ __all__ = [
     "_parse_put_exiled_card_into_hand",
     "_parse_exile_cost_sacrifices",
     "_parse_exile_graveyard",
+    "_parse_play_with_hand_revealed",
     "_parse_reveal_hand",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_top_of_library",

@@ -808,55 +808,6 @@ def test_the_drones_snow_variant_keeps_its_supertype(set_pool):
 # unnoticed, and the message says what to do about it.
 
 
-def test_benthic_explorers_declines_on_three_named_parts(set_pool):
-    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
-    that land could produce." Three parts, and none of them is the noun phrase
-    — "a tapped land an opponent controls" parses and is testable today:
-
-    1. **an activation cost that *untaps* a permanent.** ``grammar/costs.py``
-       has a ``tap`` branch and no ``untap`` one, and ``ActivatedAbilityCost``
-       has no field for it. ``tap_filter``/``tap_count`` is the opposite
-       direction and its payment path taps — reusing it would tap the
-       opponent's land rather than untapping it. Also the first cost in this
-       engine paid with a permanent **an opponent controls**: every existing
-       chosen cost enumerates ``controlled_by(payer)``.
-    2. **a record of which permanent that cost untapped.** "That land" is a
-       back-reference to the payment, and unlike every other cost record the
-       object is *still on the battlefield* — so it is not last-known
-       information, but there is no ``CHOICE_KEYS`` channel carrying it and no
-       producer key for a lowering to gate on.
-    3. **"one mana of any type that land could produce".** ``effects/mana.py``
-       reads "any **color**" (and Fellwar Stone's "that a land an opponent
-       controls could produce", which names a *class* of lands, not one). This
-       prints "any **type**", which includes {C} — CR 106.1b — and names the
-       land part 2 would have recorded. It refuses at ``expected 'color'``.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Benthic Explorers"])
-    assert not program.supported
-
-    from engine.grammar import compile_line
-
-    cost_half = compile_line(
-        "{T}, Untap a tapped land an opponent controls: Add {U}.",
-        card_name="Benthic Explorers",
-    )
-    assert not cost_half.parsed, "part 1: no untap branch in the cost clause"
-
-    effect_half = compile_line(
-        "{T}: Add one mana of any type that land could produce.",
-        card_name="Benthic Explorers",
-    )
-    assert not effect_half.parsed, "part 3: 'any type' is not 'any color'"
-
-    # The noun phrase itself is *not* a blocker, which is what keeps this
-    # decline three parts rather than four.
-    from engine.grammar import subject_filter_payload
-
-    assert subject_filter_payload("a tapped land an opponent controls") == {
-        "type_filter": "land", "tapped_only": True, "controller": "opponent",
-    }
-
-
 # --- W2G5: damage, prevention and zones ---
 #
 # One creature landed and one declined. Phelddagrif's three abilities are the
@@ -954,37 +905,6 @@ def test_gargantuan_gorillas_bite_line_lowers_with_the_word_another(set_pool):
     assert lowered[1].payload["permanents_from"] == "damaged_permanents", (
         "the second clause reads what the first one bit"
     )
-
-
-def test_gargantuan_gorilla_is_declined_naming_three_parts(set_pool):
-    """The {T} line above lowers; the upkeep trigger does not, and the creature
-    gate is "every trigger", so the card stays unsupported. Three parts, and two
-    of the paragraph's three sentences already parse on their own:
-
-    1. **A restated action after "If you don't".** The pool's every other
-       printing is the bare "If you don't,"; this one writes the offer out
-       ("If you don't **sacrifice a Forest**, ..."). Today those words are read
-       as the *first action of the else-branch*, so the branch would sacrifice a
-       Forest and then the Gorilla - a silent mis-play rather than a refusal,
-       which is why this decline is written down rather than left to the
-       compile. The fix is to consume the restatement only when it equals the
-       offer's own action; ``parse_subject_verb`` reads exactly one clause and
-       stops at the comma, which is the reader that shape needs.
-    2. **A record of *which* permanent a forced sacrifice ate.** "If you
-       sacrifice a **snow** Forest this way" asks about the answer to a prompt.
-       ``arm_forced_sacrifice`` already takes a ``record`` that appends the
-       sacrificed cards (Transmute Artifact reads it), but
-       ``sacrifice_matching_permanent`` passes none - it records only the
-       boolean "could this be paid".
-    3. **A condition testing a narrowing against that record.** "a snow Forest"
-       is a supertype question about a card that is in a graveyard by the time
-       it is asked (CR 608.2h), and no condition kind reads a sacrifice record.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Gargantuan Gorilla"])
-
-    assert not program.supported
-    assert program.reason == "unsupported triggered ability"
-    assert [t.supported for t in program.triggered_abilities] == [False]
 
 
 # --- W2G3: upkeep and counters ---
@@ -1326,3 +1246,541 @@ def test_w2g3_every_group_card_compiles_with_every_line_read(set_pool):
         assert claimed >= len(lines), (name, lines)
         for trigger in program.triggered_abilities:
             assert trigger.supported, (name, trigger.source_line)
+
+
+# --- W3G4: creature singletons ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+
+
+def _w3g4_vanilla(name: str, power: int, toughness: int) -> CardDefinition:
+    """A creature with no text, so the only thing under test is the number the
+    card being tested reads off it."""
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w3g4_blocked_by(set_pool, name: str, attacker_pt: tuple[int, int]):
+    """*name* (P2's) blocking an attacker of *attacker_pt* (P1's).
+
+    The relation the ability's noun phrase names is "blocking or being blocked
+    by this creature", which nothing on a board at rest can be, so every test
+    below has to reach the declare-blockers step rather than assert about a
+    compiled program.
+    """
+    subject = Permanent(card=set_pool("ALL")[name])
+    attacker = Permanent(card=_w3g4_vanilla("Attacker", *attacker_pt))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[subject], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    for perm in (subject, attacker):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: [0]})[0]
+    return game, subject, attacker
+
+
+@pytest.mark.parametrize("attacker_pt,expected", [((4, 6), (5, 5)), ((1, 1), (0, 2))])
+def test_sworn_defender_crosses_the_blocked_creature_s_stats(
+    set_pool, attacker_pt, expected
+):
+    """"{1}: This creature's power becomes the toughness of target creature
+    blocking or being blocked by this creature minus 1 until end of turn, and
+    its toughness becomes 1 plus the power of that creature until end of turn."
+
+    CR 613.4b, layer 7b, with the two stats **crossed**: power from the other
+    creature's toughness and toughness from its power. Parametrized because the
+    card is only interesting when the two numbers differ — a 4/4 attacker would
+    make a reading that dropped the crossing pass.
+    """
+    game, defender, _attacker = _w3g4_blocked_by(set_pool, "Sworn Defender", attacker_pt)
+
+    result = game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert (defender.effective_power, defender.effective_toughness) == expected
+
+
+def test_sworn_defender_s_rewrite_ends_with_the_turn(set_pool):
+    """Both clauses print "until end of turn", where Sentinel's twin prints no
+    duration at all. The word is payload on one instruction, so the two cards
+    differ only in that flag — and this is the half that would silently outlive
+    its turn if the flag were dropped."""
+    game, defender, _attacker = _w3g4_blocked_by(set_pool, "Sworn Defender", (4, 6))
+    game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+    assert (defender.effective_power, defender.effective_toughness) == (5, 5)
+
+    game.resolve_cleanup_step(0)
+
+    assert (defender.effective_power, defender.effective_toughness) == (1, 3), (
+        "the printed base P/T comes back at cleanup (CR 514.2)"
+    )
+
+
+def test_sworn_defender_is_refused_out_of_combat(set_pool):
+    """CR 602.2b via 601.2c: the printed target is a creature "blocking or being
+    blocked by this creature", so with nobody in combat with it the mandatory
+    target cannot be filled and the activation is refused with nothing paid —
+    the same gate Sentinel goes through, which is the point of the two cards
+    sharing one instruction kind."""
+    defender = Permanent(card=set_pool("ALL")["Sworn Defender"])
+    bystander = Permanent(card=_w3g4_vanilla("Bystander", 6, 6))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bystander]),
+        PlayerState(name="P2", battlefield=[defender]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert (defender.effective_power, defender.effective_toughness) == (1, 3)
+
+
+def _w3g4_land(name: str) -> CardDefinition:
+    """A Forest, a snow Forest or an Island, printed as the type line says.
+
+    Invented rather than taken from the pool because Alliances' own snow lands
+    are the *covered* ones ("Snow-Covered Forest"), and what the Gorilla asks
+    about is the supertype — so a card carrying it under a different name is
+    what proves the branch reads CR 205.4a and not a card name.
+    """
+    lines = {
+        "Forest": "Basic Land — Forest",
+        "Snow Forest": "Basic Snow Land — Forest",
+        "Island": "Basic Land — Island",
+    }
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=lines[name],
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": lines[name]},
+    )
+
+
+def _w3g4_upkeep(set_pool, name: str, lands, *, interactive=()):
+    """*name* on the battlefield with *lands* under it, taken through its
+    controller's upkeep.
+
+    ``interactive`` names the seats that are *asked* rather than defaulted; with
+    none — the AI simulator, every scripted duel — the queued choices are
+    drained to their defaults, which is the headless path.
+    """
+    subject = Permanent(card=set_pool("ALL")[name])
+    subject.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[subject] + [Permanent(card=_w3g4_land(l)) for l in lands],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    game.start_turn(0)
+    if not interactive:
+        game.auto_resolve_pending_choices()
+        game._settle()
+    return game, subject, p1
+
+
+def test_gargantuan_gorilla_sacrifices_a_forest_without_gaining_trample(set_pool):
+    """"At the beginning of your upkeep, you may sacrifice a Forest. If you
+    sacrifice a snow Forest this way, this creature gains trample until end of
+    turn."
+
+    The narrowing is the card: the offer is "a Forest" and the branch asks
+    whether the one that went was **snow** (CR 205.4a). With an ordinary Forest
+    the sacrifice happens and the trample does not — a reading that folded the
+    branch onto "if you do" would grant it here.
+    """
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Forest"])
+
+    assert [c.name for c in p1.graveyard] == ["Forest"]
+    assert not gorilla.has_keyword("trample")
+    assert p1.life == 20, "a Forest was sacrificed, so the penalty branch is off"
+
+
+def test_gargantuan_gorilla_gains_trample_for_a_snow_forest(set_pool):
+    """The same board with the supertype printed. The branch reads the
+    *sacrificed card*, which is in a graveyard by the time it is asked
+    (CR 608.2h) — so this is what proves the record is written as the sacrifice
+    happens rather than recovered from a board it has left."""
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Snow Forest"])
+
+    assert [c.name for c in p1.graveyard] == ["Snow Forest"]
+    assert gorilla.has_keyword("trample")
+
+
+def test_gargantuan_gorilla_eats_itself_with_no_forest(set_pool):
+    """"If you don't sacrifice a Forest, sacrifice this creature and it deals 7
+    damage to you." An offer with nothing legal to take is never made, so the
+    decline branch runs — and the Island is not a Forest, so it stays."""
+    game, gorilla, p1 = _w3g4_upkeep(set_pool, "Gargantuan Gorilla", ["Island"])
+
+    assert [c.name for c in p1.graveyard] == ["Gargantuan Gorilla"]
+    assert p1.life == 13
+    assert [p.card.name for p in p1.battlefield] == ["Island"]
+
+
+def test_gargantuan_gorilla_lets_the_controller_choose_which_forest(set_pool):
+    """Two decisions in one resolution — whether to sacrifice, and which — and
+    the game waits for both (CR 117.3b), because the branch that reads what went
+    is still to run."""
+    game, gorilla, p1 = _w3g4_upkeep(
+        set_pool, "Gargantuan Gorilla", ["Forest", "Snow Forest"], interactive=(0,)
+    )
+
+    assert game.waiting_prompt() is not None
+    assert game.confirm_optional_pay(0, "Gargantuan Gorilla", accept=True)
+    prompt = game.pending_sacrifice_state()
+    assert prompt is not None and sorted(prompt["valid_indices"]) == [1, 2]
+    assert not p1.graveyard, "nothing goes until the seat says which"
+
+    assert game.confirm_sacrifice(0, [2])
+
+    assert [c.name for c in p1.graveyard] == ["Snow Forest"]
+    assert gorilla.has_keyword("trample"), (
+        "the branch runs after the prompt is answered, not before it"
+    )
+
+
+def test_a_narrowed_this_way_rider_needs_a_sacrifice_in_front_of_it():
+    """A back-reference names its producer or refuses. Without a sacrifice
+    earlier in the same effect the record is never written, the branch could
+    never run, and the card would report itself supported anyway."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(parse_line(
+            "Draw a card. If you sacrifice a Forest this way, you gain 2 life."
+        ))
+
+
+def _w3g4_explorers(set_pool, opponent_lands, *, tapped=True, mine=()):
+    """Benthic Explorers ready to activate, with *opponent_lands* on seat 1.
+
+    ``mine`` puts tapped lands on the activator's own side, which is the case
+    the printed seat clause rules out — every other chosen cost in this engine
+    enumerates the payer's own permanents, so "an opponent controls" is only
+    read if something reads it.
+    """
+    explorers = Permanent(card=set_pool("ALL")["Benthic Explorers"])
+    explorers.metadata["summoning_sickness_turn"] = -99
+    own = [Permanent(card=_w3g4_basic(name)) for name in mine]
+    theirs = [Permanent(card=_w3g4_basic(name)) for name in opponent_lands]
+    p1 = PlayerState(name="P1", battlefield=[explorers] + own)
+    p2 = PlayerState(name="P2", battlefield=theirs)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    # After the untap step, which would otherwise untap the activator's own
+    # lands and take the "your own land is not a payment" case away.
+    for perm in own:
+        perm.tapped = True
+    for perm in theirs:
+        perm.tapped = tapped
+    return game, p1, explorers, own, theirs
+
+
+def _w3g4_basic(name: str) -> CardDefinition:
+    """A basic land, printed with the mana ability its type gives it, plus one
+    land that makes only {C} — which is what separates "any **type**" (CR 106.1b:
+    six types, colourless among them) from "any colour"."""
+    printed = {
+        "Mountain": ("Basic Land — Mountain", ("R",)),
+        "Forest": ("Basic Land — Forest", ("G",)),
+        "Island": ("Basic Land — Island", ("U",)),
+        "Wastes": ("Basic Land", ("C",)),
+    }[name]
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=printed[0],
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=printed[1],
+        raw={"name": name, "type_line": printed[0]},
+    )
+
+
+@pytest.mark.parametrize("land,symbol", [
+    ("Mountain", "R"), ("Forest", "G"),
+    # CR 106.1b: colourless is a mana *type*, so "any type that land could
+    # produce" reaches a land that makes only {C} — where Fellwar Stone's "any
+    # **color**" one branch away in the same handler does not.
+    ("Wastes", "C"),
+])
+def test_benthic_explorers_untaps_a_land_and_makes_its_mana(set_pool, land, symbol):
+    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
+    that land could produce."
+
+    Both halves in one activation: the cost really untaps the opponent's land
+    (CR 602.1a — a cost is any action, on anyone's permanent), and the effect
+    reads *that* land rather than the board.
+    """
+    game, p1, explorers, _mine, theirs = _w3g4_explorers(set_pool, [land])
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert result.supported, result.details
+    assert theirs[0].tapped is False, "the cost untapped the opponent's land"
+    assert explorers.tapped is True, "…and {T} tapped the Explorers"
+    assert p1.mana_pool[symbol] == 1
+
+
+def test_benthic_explorers_cannot_be_activated_with_nothing_to_untap(set_pool):
+    """CR 601.2h via 602.2b: a cost that cannot be paid refuses the activation
+    with nothing spent — so the Explorers is still untapped afterwards, rather
+    than having tapped for an ability that produced no mana."""
+    game, p1, explorers, _mine, theirs = _w3g4_explorers(
+        set_pool, ["Mountain"], tapped=False
+    )
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert not result.supported
+    assert explorers.tapped is False
+    assert not any(p1.mana_pool.values())
+
+
+def test_benthic_explorers_will_not_untap_your_own_land(set_pool):
+    """"an opponent controls" is a seat question (CR 109.5), and the only chosen
+    cost in this engine paid off somebody else's board — so the enumerator runs
+    over every permanent and the printed clause is what narrows it. A charger
+    that had reused the tap cost's ``controlled_by(payer)`` list would find this
+    Mountain and untap it."""
+    game, p1, explorers, mine, _theirs = _w3g4_explorers(
+        set_pool, [], mine=("Mountain",)
+    )
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert not result.supported
+    assert mine[0].tapped is True, "your own tapped land is not a legal payment"
+
+
+def test_the_type_read_needs_an_untap_cost_to_read(set_pool):
+    """"That land" is a back-reference to the ability's own cost. On an ability
+    whose cost untaps nothing the words name no land, so the line refuses rather
+    than compiling into a handler that would add nothing."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(
+            "{T}: Add one mana of any type that land could produce."
+        ))
+
+
+def _w3g4_unblocked(set_pool, name: str):
+    """*name* attacking seat 1 with nothing declared to block it, its trigger
+    resolved and the offer accepted."""
+    subject = Permanent(card=set_pool("ALL")[name])
+    subject.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[subject], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game._fire_unblocked_attack_triggers()
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    while game.stack:
+        game.resolve_top_of_stack()
+    return game, subject
+
+
+def test_stromgald_spy_reveals_the_defenders_hand_and_deals_no_damage(set_pool):
+    """"Whenever this creature attacks and isn't blocked, you may have defending
+    player play with their hand revealed for as long as this creature remains on
+    the battlefield. If you do, this creature assigns no combat damage this
+    turn."
+
+    Both halves, because the second is what the first is paid for: a reading
+    that revealed the hand and kept the damage would be a strictly better card.
+    """
+    from engine.revealed_hands import hand_revealed_to
+
+    game, spy = _w3g4_unblocked(set_pool, "Stromgald Spy")
+
+    assert hand_revealed_to(game, 1, 0), "the defender's hand is open"
+    assert not hand_revealed_to(game, 0, 1), "and the Spy's controller's is not"
+    assert spy.metadata.get("assigns_no_combat_damage_until_eot") is True
+
+
+def test_stromgald_spys_reveal_ends_when_it_leaves(set_pool):
+    """CR 611.2b, and the whole reason the record lives on the *permanent*: the
+    effect is derived by a scan over the battlefield, so a source that leaves
+    stops contributing with nothing to sweep — and CR 400.7 makes a returning
+    one a new object that contributes nothing either."""
+    from engine.revealed_hands import hand_revealed_to
+
+    game, spy = _w3g4_unblocked(set_pool, "Stromgald Spy")
+    assert hand_revealed_to(game, 1, 0)
+
+    game.remove_from_battlefield(spy)
+
+    assert not hand_revealed_to(game, 1, 0)
+
+
+def test_a_revealed_hand_needs_a_duration_and_a_frozen_seat():
+    """Two refusals the production and the lowering owe.
+
+    Without a duration the sentence is Revelation's *static*, which
+    ``engine/revealed_hands.py`` claims off the printed line — a production that
+    took it would take the table's line away and give it back to nobody. And
+    "defending player" outside an event that froze one names nobody at all.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(GrammarError):
+        parse_line("Defending player plays with their hand revealed.")
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(parse_line(
+            "When this creature enters, you may have defending player play "
+            "with their hand revealed for as long as this creature remains on "
+            "the battlefield."
+        ))
+
+
+def test_revelation_still_reads_as_a_static_line():
+    """The production above must not claim the *static* spelling. Revelation is
+    not in this pool, so the guard is on the module that owns the line."""
+    from engine.revealed_hands import revealed_hands_line
+
+    assert revealed_hands_line("Players play with their hands revealed.")
+    assert not revealed_hands_line(
+        "Defending player plays with their hand revealed for as long as this "
+        "creature remains on the battlefield."
+    )
+
+
+def _w3g4_sentry(set_pool):
+    """Soldevi Sentry on the battlefield with a library each, its ability
+    activated against seat 1 and resolved."""
+    sentry = Permanent(card=set_pool("ALL")["Soldevi Sentry"])
+    sentry.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(
+        name="P1", life=20, battlefield=[sentry],
+        library=[_w3g4_vanilla("Mine %d" % i, 1, 1) for i in range(5)],
+    )
+    p2 = PlayerState(
+        name="P2", life=20,
+        library=[_w3g4_vanilla("Theirs %d" % i, 1, 1) for i in range(5)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    result = game.activate_permanent_ability(
+        0, "Soldevi Sentry", permanent_index=0, target_player_index=1
+    )
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    return game, sentry, p1, p2
+
+
+def test_soldevi_sentry_regenerates_and_the_chosen_opponent_draws(set_pool):
+    """"{1}: Choose target opponent. Regenerate this creature. When it
+    regenerates this way, that player may draw a card."
+
+    Three sentences and one ability. The draw is a **delayed** trigger
+    (CR 603.7) and not CR 603.12's reflexive one: what it waits for is the
+    shield being *spent*, which CR 701.19c says is a different event from the
+    shield being created — so nothing happens until the creature would actually
+    be destroyed.
+    """
+    game, sentry, p1, p2 = _w3g4_sentry(set_pool)
+    assert sentry.regeneration_shield == 1
+    assert [(d.event, d.bound_player_index) for d in game.delayed_triggers] == [
+        ("source_regenerates", 1)
+    ]
+    before = len(p2.hand)
+
+    sentry.damage_marked = 99
+    game.check_state_based_actions()
+    for _ in range(3):
+        while game.stack:
+            game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices()
+
+    assert any(perm is sentry for perm in p1.battlefield), "the shield saved it"
+    assert sentry.tapped and sentry.damage_marked == 0, "CR 701.19a's alternate effect"
+    assert len(p2.hand) == before + 1, "the chosen opponent drew, not the controller"
+    assert not p1.hand, "…and 'that player' is not the ability's controller"
+    assert not game.delayed_triggers, "CR 603.7b: it fires once"
+
+
+def test_soldevi_sentrys_draw_waits_for_the_shield_to_be_spent(set_pool):
+    """CR 701.19c: activating an ability that creates a regeneration shield is
+    not regenerating. A trigger announced at activation would draw a card for
+    the opponent every time the Sentry's controller spent {1}, whether or not
+    anything ever threatened it."""
+    game, sentry, p1, p2 = _w3g4_sentry(set_pool)
+
+    assert not p2.hand
+    assert game.delayed_triggers, "armed, not fired"
+
+
+def test_soldevi_sentry_offers_an_opponent_picker(set_pool):
+    """The seat is a target chosen on activation (CR 602.2b), so the picker is
+    derived from the compiled program like every other one — and it is
+    opponents only, because "target opponent" and "target player" are different
+    abilities (CR 115.4)."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    ability = compile_card_oracle(set_pool("ALL")["Soldevi Sentry"]).activated_abilities[0]
+    spec = derive_activation_spec(ability)
+
+    assert spec is not None
+    assert spec["kind"] == "player"
+    assert spec.get("opponents_only") is True
+
+
+def test_a_chosen_player_binding_needs_a_choose_step(set_pool):
+    """"That player" has more than one producer — Lodestone Bauble's is the
+    graveyard owner its own target named — so the absence of a "choose target
+    player" step must leave that reading alone rather than refusing the line.
+    This is the negative half of the gate, on a shipped card in this same set.
+    """
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("ALL")["Lodestone Bauble"])
+
+    assert program.supported
+    armed = program.activated_abilities[0].instruction
+    delayed = [
+        step for step in armed.payload.get("steps", ())
+        if step.kind == "create_delayed_trigger"
+    ]
+    assert delayed, "the Bauble arms a delayed draw"
+    assert "binds_player" not in delayed[0].payload

@@ -21,8 +21,7 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (_accept_self_reference, _parse_duration, _parse_mana_payment,
-                       _parse_zone)
+from ..phrases import _parse_duration, _parse_mana_payment
 from ..readers import accept_source_reference
 
 
@@ -311,6 +310,36 @@ def _parse_reveal_hand(
     return None
 
 
+def _parse_play_with_hand_revealed(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.PlayWithHandRevealed | None":
+    """``<player> play with their hand revealed <duration>`` (Stromgald Spy).
+
+    CR 701.20a's reveal with a duration on it, and the duration is required:
+    without one the sentence is Revelation's *static* ("Players play with their
+    hands revealed"), which ``engine/revealed_hands.py`` claims off the printed
+    line and this production must not take away from it. A production that
+    parsed the line and left the lowering to raise would do exactly that —
+    parsed-but-unlowered is still parsed, and the derivation tables are reached
+    only where the grammar refuses in full.
+
+    Refuses without consuming, so "plays" keeps every other reading it has.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("play", "plays"):
+        return None
+    if not stream.accept_phrase("with", "their", "hand", "revealed"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind is None:
+        stream.reset(mark)
+        return None
+    return ast.PlayWithHandRevealed(subject, duration)
+
+
 def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     """``<player> reveals their hand. You choose a <filter> card from it.
     That player discards that card.`` (Duress.)
@@ -360,177 +389,6 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
         )
     stream.reset(mark)
     return None
-
-
-def _parse_put_exiled_card_into_hand(
-    stream: TokenStream,
-) -> "ast.PutExiledCardIntoHand | None":
-    """``Put that card into your hand.`` (Necropotence.)
-
-    Refuses without consuming, like every other "put" production beside it, so
-    the counter reading keeps its own refusal site. "That card" is the one an
-    earlier step of this same effect exiled; lowering demands the producer.
-    """
-    mark = stream.mark()
-    stream.expect_word("put")
-    if not stream.accept_phrase("that", "card", "into"):
-        stream.reset(mark)
-        return None
-    zone = _parse_zone(stream)
-    if zone.name != "hand" or zone.owner is None:
-        stream.reset(mark)
-        return None
-    return ast.PutExiledCardIntoHand(zone.owner)
-
-
-def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":
-    """``Exile that card from your graveyard.`` (Necropotence.)
-
-    Refuses without consuming, like the other exile productions beside it, so
-    an ordinary exile keeps its own refusal. The zone is required: "exile that
-    card" alone names an object that could be anywhere, and this handler looks
-    in exactly one place.
-    """
-    mark = stream.mark()
-    stream.expect_word("exile")
-    if not stream.accept_phrase("that", "card"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("from"):
-        stream.reset(mark)
-        return None
-    zone = _parse_zone(stream)
-    return ast.ExileBoundCard(zone)
-
-
-def _parse_exile_cost_sacrifices(stream: TokenStream) -> ast.Statement | None:
-    """``Exile this <noun> and those <noun> cards.`` (Sword of the Ages.)
-
-    Returns None quietly on anything else, like the two exile productions
-    beside it, so an ordinary exile keeps its own refusal.
-
-    Both halves are required. "Exile this artifact" alone is the source leaving
-    the battlefield — a sentence the ordinary production already reads, and a
-    different effect from this one, which reaches into a graveyard for a set the
-    cost put there. Reading only the first half and stopping is what the
-    ordinary production would do, so this is tried in front of it.
-    """
-    mark = stream.mark()
-    stream.expect_word("exile")
-    if not stream.accept_word("this"):
-        stream.reset(mark)
-        return None
-    if stream.peek_word() is None:
-        stream.reset(mark)
-        return None
-    stream.advance()   # the source's own noun ("artifact")
-    if not stream.accept_phrase("and", "those"):
-        stream.reset(mark)
-        return None
-    if stream.peek_word() is None:
-        stream.reset(mark)
-        return None
-    stream.advance()   # the sacrificed set's noun ("creature")
-    if not stream.accept_word("cards", "card"):
-        stream.reset(mark)
-        return None
-    return ast.ExileCostSacrifices()
-
-
-def _parse_exile_graveyard(stream: TokenStream) -> ast.Statement | None:
-    """``Exile target player's graveyard.`` (Tormod's Crypt.)
-
-    Returns None quietly on anything else, so the ordinary permanent exile keeps
-    its own errors. The possessive and the zone noun are both expected: "exile
-    target player" is not a sentence, and consuming the player and stopping
-    would leave a production that exiles whatever the next reader assumes.
-    """
-    mark = stream.mark()
-    stream.expect_word("exile")
-    player = parse_player_ref(stream)
-    if (
-        isinstance(player, ast.PlayerRef)
-        and player.kind in ("target_player", "target_opponent")
-        and stream.accept_word("'s")
-        and stream.accept_word("graveyard")
-    ):
-        return ast.ExileGraveyard(player)
-    stream.reset(mark)
-    return None
-
-
-def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
-    """``Put all cards exiled with this artifact into their owner's hand.``
-    (Knowledge Vault's ``{0}`` ability; its leaves-the-battlefield trigger says
-    "exiled with **it** … into their owner's graveyard".)
-
-    Returns None with the cursor untouched on anything else, because every
-    other "put …" in the pool is counters or a card from a named zone, and this
-    production has to be tried before them without being able to shadow them.
-
-    The self-reference is required and consumed in full: "cards exiled with
-    *this artifact*" is CR 610.3's linked pile, and a wording naming another
-    permanent would be a different pile this cannot find.
-    """
-    mark = stream.mark()
-    # Two printed verbs for one effect. Knowledge Vault says "**Put all cards**
-    # exiled with this artifact **into** their owner's hand"; Safe Haven says
-    # "**Return each card** exiled with this land **to** the battlefield under
-    # its owner's control". Same linked pile (CR 610.3), same drain, same
-    # handler — the difference is which zone the cards are going to and the
-    # preposition English wants in front of it.
-    names_source = True
-    chosen = False
-    owned_by_you = False
-    if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
-        preposition = "into"
-    elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
-        preposition = "to"
-    elif stream.accept_phrase("return", "a", "card", "you", "own", "exiled", "with"):
-        # "…**a card you own** exiled with this artifact to your hand."
-        # (Gustha's Scepter.) The same linked pile with a quantifier and a
-        # restriction on it: one card, picked by the ability's controller, out
-        # of the cards *they* own. Both are required together — "you own"
-        # narrows nothing in a sweep, where every card goes to its own owner
-        # anyway, and it is the whole of what stops a player who has taken the
-        # artifact from pulling its previous controller's cards out of exile.
-        preposition = "to"
-        chosen = True
-        owned_by_you = True
-    elif stream.accept_phrase("return", "the", "exiled", "card"):
-        # "…**the exiled card**…" (Icy Prison). The same linked pile with no
-        # possessive on it: CR 610.3 makes the two abilities linked, so "the
-        # exiled card" is the one *this* permanent's other ability exiled and
-        # can be nothing else. The definite article is doing the work the
-        # phrase "exiled with this enchantment" does above, which is why the
-        # self-reference below is not required here rather than optional —
-        # there is no wording of this spelling that could name another pile.
-        preposition = "to"
-        names_source = False
-    else:
-        stream.reset(mark)
-        return None
-    if names_source and not (
-        stream.accept_word("it") or _accept_self_reference(stream)
-    ):
-        stream.reset(mark)
-        return None
-    stream.expect_word(preposition)
-    zone = _parse_zone(stream)
-    # "…**under its owner's control**" (CR 400.3 spelled out, because a
-    # battlefield has no possessive of its own to carry it). Read as the zone's
-    # owner rather than dropped: the lowering *requires* an owner reference —
-    # a linked pile goes to each card's own owner — so silently losing the
-    # clause would refuse the line, and consuming it without recording it would
-    # let a wording naming one player through.
-    if zone.owner is None and zone.name == "battlefield" and (
-        stream.accept_phrase("under", "its", "owner", "'s", "control")
-        or stream.accept_phrase("under", "their", "owner", "'s", "control")
-    ):
-        zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
-    return ast.PutExiledWithSource(zone, chosen=chosen, owned_by_you=owned_by_you)
-
-
 def parse_put_milled_card_onto_battlefield(
     stream: TokenStream,
 ) -> ast.Statement | None:

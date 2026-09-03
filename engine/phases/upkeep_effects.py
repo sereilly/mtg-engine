@@ -709,35 +709,6 @@ class UpkeepEffectsMixin:
             f"{', '.join(perm.card.name for perm in ceded)}"
         )
 
-    @upkeep_effect("upkeep_self", "upkeep_sacrifice_land_conditional_damage")
-    def _on__upkeep_self__upkeep_sacrifice_land_conditional_damage(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        permanent = ctx.permanent
-        trig = ctx.trig
-        trigger_targets = ctx.trigger_targets
-        # Serendib Djinn: "Sacrifice a land. If you sacrifice an
-        # Island this way, this creature deals 3 damage to you."
-        # The controller chooses which land (CR 701.21a) through
-        # the upkeep trigger-target channel; AI/headless play
-        # falls back to the first land.
-        land_type = str(trig.instruction.payload.get("land_type", "")).lower()
-        damage_amt = int(trig.instruction.payload.get("damage", 0))
-        chosen_land = self._resolve_upkeep_trigger_target(
-            permanent.card.name,
-            trigger_targets,
-            self._upkeep_land_sacrifice_candidates(controller),
-        )
-        removed = self._force_sacrifice_first_land(controller, permanent, chosen_land)
-        if removed is not None:
-            was_matching_type = removed.has_type(land_type)
-            if was_matching_type:
-                self._deal_damage_to_player(
-                    controller, damage_amt, source=permanent,
-                    then=lambda dealt: self.log.append(
-                        f"{permanent.card.name} dealt {dealt} damage to {controller.name}"
-                    ),
-                )
-
     @upkeep_effect("upkeep_self", "set_source_base_pt_from_target_until_next_upkeep")
     def _on__upkeep_self__set_source_base_pt_from_target_until_next_upkeep(self, ctx: UpkeepContext) -> None:
         """Halfdane: "…change Halfdane's base power and toughness to the power

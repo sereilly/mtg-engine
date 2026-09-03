@@ -16,8 +16,8 @@ from .amounts import parse_equal_to
 from .errors import GrammarError
 from .paragraphs import (_parse_reassign_blockers_between_attackers,
                          _parse_cast_from_exiled_with)
-from .delayed import (_parse_choose_target, _parse_choose_then_gain,
-                      _parse_create_delayed_trigger, delay_binds_an_object,
+from .choices import _parse_choose_target, _parse_choose_then_gain
+from .delayed import (_parse_create_delayed_trigger, delay_binds_an_object,
                       fold_flip_stakes, parse_trailing_delay,
                       resolve_that_turn)
 from .references import parse_player_ref

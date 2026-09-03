@@ -200,7 +200,25 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # The trigger context goes *under* the scratchpad, so a value this
     # resolution actually produced wins over one the event merely reported.
     captured = {**(context.trigger_context or {}), **(context.results or {})}
+    # "Choose target opponent. … When it regenerates this way, **that player**
+    # may draw a card." (Soldevi Sentry.) The seat an earlier step of this same
+    # resolution chose, read out of the scratchpad under the one key a chosen
+    # player is ever written to. An entry that binds a player and has none
+    # arms nothing, for the reason a bound *object* that is gone does: the
+    # ability would otherwise be about whichever seat the firing resolution
+    # happened to carry.
+    bound_seat = None
+    if payload.get("binds_player"):
+        # The literal, for the reason `choose_permanent` above spells it: the
+        # key is declared in `grammar/lowering/_events.CHOSEN_PLAYER`, and the
+        # handler layer does not import from the grammar's lowering package.
+        recorded = (context.results or {}).get("chosen_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{context.card.name} had no player to watch")
+            return True, "no player"
+        bound_seat = recorded
     arm_delayed_trigger(game, DelayedTrigger(
+        bound_player_index=bound_seat,
         controller_index=seat,
         event=payload.get("event", "creatures_attack"),
         instruction=payload.get("instruction"),
@@ -1816,6 +1834,14 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             filter=described,
             exclude=exclude,
             reason=context.card.name,
+            # "If you sacrifice a **snow** Forest this way, …" (Gargantuan
+            # Gorilla). What went, recorded as it goes — the branch that reads
+            # it runs after this, and by then the permanent is a card in a
+            # graveyard and a different object (CR 400.7, CR 608.2h). The
+            # scratchpad is the resolution's own, so a step of some other
+            # effect cannot see it, and `_run`'s `run_resumable` is what carries
+            # the reading step across an interactive seat's prompt.
+            record=context.results,
         )
     context.results["sacrificed_this_way"] = could_pay
     return True, "resolved"

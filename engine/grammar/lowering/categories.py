@@ -136,7 +136,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The CR 613.4b rewrite template (Sentinel, Wall of Tombstones, Halfdane,
     # Brine Hag). The same category as the setters above: a one-shot layer-7b
     # write, however its value is computed and however long it lasts.
-    "set_source_base_toughness_from_target_power": "pump",
+    "set_source_base_pt_from_target": "pump",
     "set_source_base_toughness_from_count": "pump",
     "set_source_base_pt_from_target_until_next_upkeep": "pump",
     "set_base_pt_of_creatures_that_damaged_source": "pump",
@@ -455,6 +455,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (CR 701.20) — a zone becoming public, the same family as the paragraph
     # below it, so GRAMMAR_CATEGORIES is unchanged.
     "reveal_hand": "zones",
+    # "…play with their hand revealed for as long as this creature remains on
+    # the battlefield." (Stromgald Spy.) CR 701.20a's reveal made continuous —
+    # the same zone becoming public, so the same category.
+    "reveal_hand_while_source_present": "zones",
     "reveal_hand_and_choose": "zones",
     # CR 701.16, the reveal on its own (Amnesia, Rag Man). The same category as
     # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is
@@ -826,6 +830,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the step behind it reads back, and the hand-over that reads it carries the
     # control family's category of its own.
     "choose_opponent": "chosen_players",
+    # "Choose target opponent." (Soldevi Sentry.) The targeted twin of the row
+    # above — CR 601.2c rather than CR 608.2c — and the same category, because
+    # what the category names is the answer the sentence produces.
+    "choose_target_player": "chosen_players",
     # "Count the number of permanents." (Chaos Moon.) Its own category for the
     # reason the chosen number and the chosen player have theirs: the count is a
     # *value* the effect records, and the sentences that read it back carry the

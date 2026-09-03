@@ -115,10 +115,10 @@ from .characteristics import (
     _lower_pump,
     _lower_change_base_pt,
     _lower_set_base_pt,
-    _lower_become_color,
     _lower_change_text,
 )
 from .types import (
+    _lower_become_color,
     _lower_become_creature,
     _lower_change_land_type,
     _lower_change_supertype,
@@ -258,6 +258,7 @@ from .library import (
     _lower_look_top_pick,
     _lower_exile_graveyard,
     _lower_discard_revealed_unless_pay_life,
+    _lower_play_with_hand_revealed,
     _lower_reveal_hand,
     _lower_reveal_random_from_hand,
     _lower_reveal_hand_and_choose,
@@ -472,6 +473,7 @@ __all__ = [
     "_lower_fight",
     "_lower_exile_graveyard",
     "_lower_discard_revealed_unless_pay_life",
+    "_lower_play_with_hand_revealed",
     "_lower_reveal_hand",
     "_lower_reveal_random_from_hand",
     "_lower_reveal_hand_and_choose",

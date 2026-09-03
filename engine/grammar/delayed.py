@@ -23,14 +23,10 @@ from __future__ import annotations
 import dataclasses
 
 from . import ast
-from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .conditions import _parse_condition
 from .nouns import parse_object_filter
-from .effects.characteristics import _parse_keywords
-from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
-from .phrases import (BASIC_LAND_WORDS, _parse_duration,
-                      parse_bound_subject, parse_subject_filter_at)
+from .phrases import parse_bound_subject, parse_subject_filter_at
 from .rebinding import rebind_pronoun_to_delay_target
 from .readers import accept_source_reference
 from .references import parse_recipient, parse_target_spec
@@ -517,11 +513,34 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         return None
 
     if stream.accept_word("when"):
+        # "When **it regenerates this way,** that player may draw a card."
+        # (Soldevi Sentry.) A delayed ability (CR 603.7) and not CR 603.12's
+        # reflexive one: the regeneration it waits for is the *shield* being
+        # spent, which happens the next time the creature would be destroyed —
+        # later than this resolution, where a reflexive trigger's event has to
+        # have happened during it.
+        #
+        # "This turn" is not printed and is not needed: CR 701.19a scopes the
+        # shield itself to the turn, so an ability waiting on it cannot outlive
+        # one either, and `end_of_turn` is the shield's own window rather than
+        # an assumption.
+        #
+        # `watches` is the source, which is what makes "it" mean the permanent
+        # whose ability armed this rather than whichever creature regenerates
+        # next. It binds no *object* — the sentence behind it names a **player**,
+        # which is `binds_player` one layer down.
+        #
+        # Read first among the "when" openers: the ones below it all start from
+        # a bound-object noun phrase, and "it" is not one they read.
+        if stream.accept_phrase("it", "regenerates", "this", "way"):
+            event, once, duration, watches = (
+                "source_regenerates", True, "end_of_turn", "source",
+            )
         # "…when **target creature you control** attacks and isn't blocked, …"
         # (Delif's Cone, Delif's Cube). Read before the bound-subject openers
         # below: this one *chooses* its object where those name one the effect
         # already holds, and it declines without consuming.
-        targeted = _parse_targeted_combat_delay(stream)
+        targeted = _parse_targeted_combat_delay(stream) if event is None else None
         if targeted is not None:
             event, target = targeted
             binds = True
@@ -741,100 +760,6 @@ def fold_flip_stakes(stream: TokenStream, effect, parse_statement):
     return ast.Sequence((effect, ast.Conditional(condition, consequence)))
 
 
-def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":
-    """``Choose target creature.`` — a sentence whose whole content is
-    CR 601.2c's choosing of targets (Reincarnation, Glyph of Life).
-
-    **It is only a sentence when the next one binds what it chose.** A spell
-    whose only instruction chose a target and then did nothing would report
-    itself supported while doing nothing at all, which is the failure this
-    engine refuses loudly everywhere else. So the following sentence is parsed
-    as a probe and the tokens handed straight back: if it is not a delayed
-    triggered ability about "that <noun>", this production declines and the
-    line fails on whatever it really says.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("choose"):
-        stream.reset(mark)
-        return None
-    # Through `parse_target_spec` rather than "target" plus a noun phrase, so
-    # the counted spelling — "Choose **X target** attacking creatures"
-    # (Winter's Chill) — is the same production with the same quantifier
-    # machinery every other counted target phrase in the grammar uses. The word
-    # "target" is still required (the `targeted` check below): CR 115.1b makes
-    # an untargeted "choose" a *resolution* choice, and reading one as the other
-    # would raise a cast-time picker for a decision the card makes later.
-    try:
-        chosen = parse_target_spec(stream)
-    except GrammarError:
-        # "Choose **one or more** —" (Sublime Epiphany) opens with the same
-        # word and a quantifier this reader half-recognizes; the modal head is
-        # a different production, so the refusal is handed straight back rather
-        # than becoming this one's.
-        stream.reset(mark)
-        return None
-    if chosen is None or not chosen.targeted:
-        stream.reset(mark)
-        return None
-    after_filter = stream.mark()
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    delayed = _parse_create_delayed_trigger(stream, parse_statement)
-    binds = delayed is not None and delayed.binds_target
-    if not binds:
-        # …or a shield the following sentence hangs on what was chosen
-        # (Silhouette). The probe asks the same question either way — does the
-        # next sentence bind this choice — and a second binder is a second
-        # answer to it, not a second production of this one.
-        binds = _parse_bound_targeting_prevention(stream) is not None
-    if not binds:
-        # …or a loop over the set this sentence just named — "**For each of
-        # those creatures,** its controller may pay …" (Winter's Chill). The
-        # third answer to the one question, and the only one a *several*-target
-        # choice can give: a set of creatures is bound by a sentence that
-        # repeats over it, not by one that says "that creature".
-        binds = bool(stream.accept_phrase("for", "each", "of", "those"))
-    if not binds:
-        # …or one of two more answers, both read off the *parsed* next
-        # sentence rather than off its opening words. Dwarven Sea Clan prints
-        # the delay **after** the effect ("This creature deals 2 damage to that
-        # creature **at end of combat**"), which ``statements.parse_statement``
-        # reads through its own trailing-delay clause (Hazezon Tamar's) and the
-        # openers above do not. Retribution names **one member** of the set this
-        # sentence just chose ("That player chooses and sacrifices **one of
-        # those creatures**"). A loop announces itself in four tokens and
-        # neither of these does, so the probe has to be the statement itself.
-        #
-        # Parsed **once** and asked both questions. Two probes over one sentence
-        # would parse it twice and, worse, the second would start from wherever
-        # the first left the cursor — which is how two independently correct
-        # binder probes become one that reads the wrong sentence.
-        probe = stream.mark()
-        try:
-            following = parse_statement(stream, top_level=True)
-        except GrammarError:
-            following = None
-        stream.reset(probe)
-        binds = bool(
-            (
-                isinstance(following, ast.CreateDelayedTrigger)
-                and following.binds_target
-            )
-            or (following is not None and _names_a_chosen_member(following))
-        )
-    stream.reset(after_filter)
-    if not binds:
-        stream.reset(mark)
-        return None
-    return ast.ChooseTarget(chosen)
-
-
-# ---------------------------------------------------------------------------
-# "Choose …. <subject> gains that ability …" — the other two-sentence shape
-# ---------------------------------------------------------------------------
-
-
 def resolve_that_turn(node):
     """*node* with every ``until_end_of_that_turn`` duration made an ordinary
     end of turn, or None when it holds none.
@@ -867,116 +792,3 @@ def resolve_that_turn(node):
             for new, old in zip(rebuilt_items, node)
         )
     return None
-
-
-def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
-    """``Choose <A>, <B>, or <C>. <subject> gains that ability <duration>.``
-    (Gabriel Angelfire)
-    ``Choose a basic land type. <subject> gains landwalk of the chosen type
-    <duration>.`` (Giant Slug)
-
-    Two sentences, one effect, and it is the *second* one that says what the
-    choice was for — which is why this is a fusion rather than two productions.
-    A "choose" sentence alone performs nothing and would report a card
-    supported while doing nothing at all; that is the same reason
-    :func:`_parse_choose_target` lives in this module rather than beside the
-    effects it precedes.
-
-    Both spellings lower to the ``choose_one`` the *one*-sentence form already
-    produces ("gains your choice of flying, first strike, trample, or rampage 3
-    until end of turn"), so nothing downstream learns a second shape. The two
-    differ only in what the options are made of: printed keywords, or the five
-    basic land types turned into landwalks by the binding sentence. That is why
-    the domain and the binding phrase are read as a pair — "choose a basic land
-    type" followed by anything but "landwalk of the chosen type" is a card this
-    does not read, and declining leaves whatever refusal the line already had.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("choose"):
-        stream.reset(mark)
-        return None
-    # "a **basic** land type" (Giant Slug) and "a land type" (Illusionary
-    # Presence) are the same sentence over two domains, and the difference is
-    # exactly CR 205.3i's: five types the rules fix, against every land subtype
-    # printed. So the domain is read off the words rather than assumed — reading
-    # the wider phrase as the narrower one would offer five options where the
-    # card offers eighteen, and the vocabulary catalog is where the wider answer
-    # already lives.
-    land_choice = bool(stream.accept_phrase("a", "basic", "land", "type"))
-    any_land_choice = not land_choice and bool(
-        stream.accept_phrase("a", "land", "type")
-    )
-    if land_choice or any_land_choice:
-        options: tuple[str, ...] = (
-            BASIC_LAND_WORDS if land_choice else tuple(sorted(LAND_TYPES))
-        )
-    else:
-        try:
-            options = _parse_keywords(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-        # A single option is not a choice. "Choose flying." with a binding
-        # sentence behind it is a wording no card prints, and admitting it
-        # would put a one-option prompt in front of the player.
-        if len(options) < 2:
-            stream.reset(mark)
-            return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    # ``parse_recipient`` rather than ``parse_target_spec``: both cards name
-    # the source, and one of them does it by printing its own name — which the
-    # lexer has collapsed into a SELF token that only this reader knows.
-    subject = parse_recipient(stream)
-    if not isinstance(subject, ast.TargetSpec) or not stream.accept_word("gains", "gain"):
-        stream.reset(mark)
-        return None
-    if land_choice or any_land_choice:
-        # "**snow** landwalk of the chosen type" (Barbarian Guides). CR 702.14a
-        # lets a landwalk's type be "the card type land plus any combination of
-        # land types, card types, and/or supertypes", and `engine/landwalk.py`
-        # already reads a supertype sitting in front of the family word — so the
-        # printed qualifier is payload here rather than a second production.
-        qualifier = ""
-        prefix_mark = stream.mark()
-        word = stream.peek_word()
-        if word is not None and word in TYPE_LINE_SUPERTYPES:
-            stream.advance()
-            qualifier = f"{word} "
-        if not stream.accept_phrase("landwalk", "of", "the", "chosen", "type"):
-            stream.reset(prefix_mark)
-            stream.reset(mark)
-            return None
-        # CR 702.14a spells the family as "[type]walk", so the chosen type and
-        # the granted ability are the same word carrying a suffix — payload,
-        # never five productions.
-        keywords = tuple(f"{qualifier}{option}walk" for option in options)
-    else:
-        if not stream.accept_phrase("that", "ability"):
-            stream.reset(mark)
-            return None
-        keywords = options
-    return ast.GainKeyword(
-        subject, keywords, _parse_duration(stream), choose_one=True
-    )
-
-
-def _names_a_chosen_member(node) -> bool:
-    """Whether *node* names one member of a set an earlier sentence chose.
-
-    A walk over the dataclass rather than a check on the top-level statement,
-    for :func:`_names_a_bound_object`'s reason: the reference can be nested
-    inside an offer, a sequence or a toll, and a statement class added later is
-    covered by default instead of silently answering False.
-    """
-    if isinstance(node, ast.TargetSpec) and node.quantifier == "one_of_those":
-        return True
-    if dataclasses.is_dataclass(node) and not isinstance(node, type):
-        return any(
-            _names_a_chosen_member(getattr(node, field.name))
-            for field in dataclasses.fields(node)
-        )
-    if isinstance(node, (tuple, list)):
-        return any(_names_a_chosen_member(item) for item in node)
-    return False

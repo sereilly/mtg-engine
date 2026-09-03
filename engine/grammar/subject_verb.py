@@ -40,8 +40,10 @@ from .effects import (
     _parse_ante,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
+    _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
     _parse_no_longer_supertype,
+    _parse_play_with_hand_revealed,
     _parse_can_be_targeted_as_though,
     _parse_damage,
     _parse_discard,
@@ -225,6 +227,17 @@ def parse_subject_verb(
             if bought_off is not None:
                 return bought_off
             return _parse_discard(stream, source_spec)
+        # "…have **defending player play with their hand revealed** for as long
+        # as this creature remains on the battlefield." (Stromgald Spy.) The
+        # causative "you may have <player> <verb>" above has already taken its
+        # subject and left the uninflected verb, which is why both spellings
+        # are read. Non-consuming on refusal: "play" opens sentences this has no
+        # business claiming — a land, a subgame, an additional turn — and one it
+        # cannot finish keeps its own refusal.
+        if token.text in ("plays", "play") and isinstance(source_spec, ast.PlayerRef):
+            revealed = _parse_play_with_hand_revealed(stream, source_spec)
+            if revealed is not None:
+                return revealed
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
         # "**Target player** looks at the top three cards of their library…"
@@ -446,6 +459,33 @@ def parse_subject_verb(
                     return dataclasses.replace(
                         action, gained_by=source_spec, offered=True
                     )
+                # "**That player** may draw a card." (Soldevi Sentry.) The
+                # action's subject is elided and it is the *offer's* subject,
+                # not the ability's controller — the same binding the mana
+                # branch above makes for "…may add {R}", and the same one the
+                # copy and the control change make below it.
+                #
+                # Only the elided form is rebound, and only under "that
+                # player". CR 109.5 keeps "you" meaning the ability's
+                # controller wherever the card actually prints the word ("an
+                # opponent may sacrifice a creature **you control**"), and a
+                # bare imperative prints no word at all — which is exactly the
+                # difference `parse_optional_action` cannot see from inside the
+                # action.
+                #
+                # The other seat words are left alone because their offers are
+                # *collapsed* one layer down: "its controller may draw up to two
+                # cards" (Arcane Denial) and "each player may draw…" (Truce)
+                # lower to a per-seat draw prompt rather than to an offer with a
+                # draw inside it, and rebinding here takes the shape those
+                # collapses match on away from them.
+                if isinstance(action, ast.Draw) and (
+                    isinstance(action.player, ast.PlayerRef)
+                    and action.player.kind == "you"
+                    and isinstance(source_spec, ast.PlayerRef)
+                    and source_spec.kind == "that_player"
+                ):
+                    action = dataclasses.replace(action, player=source_spec)
                 return ast.May(source_spec, action=action)
             except GrammarError:
                 stream.reset(mark_may)
@@ -459,6 +499,17 @@ def parse_subject_verb(
                 return no_damage
         if token.text in ("becomes", "become"):
             return _parse_becomes(stream, source_spec)
+        # "This creature**'s power becomes** the toughness of target creature
+        # …" (Sworn Defender). CR 613.4b's rewrite in the possessive voice,
+        # where the verb belongs to a *characteristic* of the subject rather
+        # than to the subject itself — so the dispatcher's own token is the
+        # possessive marker and not a verb at all. Non-consuming on refusal:
+        # "'s" opens sentences this has no business claiming, and one it cannot
+        # finish keeps the "unrecognized effect verb" it already had.
+        if token.text == "'s":
+            rewritten = _parse_becomes_base_pt(stream, source_spec)
+            if rewritten is not None:
+                return rewritten
         # "Target snow land **is no longer snow**." (Arcum's Weathervane.)
         # Non-consuming on refusal: "is" opens sentences this has no business
         # claiming, so anything it cannot finish keeps its own refusal.

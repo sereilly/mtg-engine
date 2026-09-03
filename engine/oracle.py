@@ -1417,6 +1417,46 @@ def _chargeable_tap_cost(cost_lower: str) -> tuple[int, dict] | None:
     return count, described
 
 
+#: "**Untap a tapped land an opponent controls**" (Benthic Explorers). One
+#: comma-separated cost segment, whole, and delimiting only — what the noun
+#: phrase names is read by the noun parser below, which is the split
+#: :func:`_chargeable_tap_cost` makes above and for its reason: a regex
+#: approximating the noun parser is a second reader of one clause, and the
+#: direction the two drift in is a cost charged more widely than the card
+#: prints.
+_UNTAP_COST_RE = re.compile(r"^untap (an? .+)$")
+
+
+def _chargeable_untap_cost(cost_lower: str) -> dict | None:
+    """The filter an "Untap a <noun phrase>" cost charges, or None.
+
+    Gated on what ``subject_filters.subject_matches`` can test, because that is
+    what the charger enumerates with: a phrase reaching past it would be
+    *dropped* by the matcher rather than refused, and the cost would then be
+    payable off a wider set of permanents than the card names.
+
+    The "tapped" half of the phrase is required by the grammar's own production
+    and re-read here rather than assumed — untapping an untapped permanent is
+    no payment, and the two readers of this clause have to agree about that as
+    much as about the noun.
+    """
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import untestable_filter_keys
+
+    for segment in cost_lower.split(","):
+        match = _UNTAP_COST_RE.match(segment.strip())
+        if match is None:
+            continue
+        filt = parse_subject_filter(match.group(1))
+        if filt is None or filt.tapped is not True:
+            return None
+        described = filt.to_payload()
+        if untestable_filter_keys(described):
+            return None
+        return described
+    return None
+
+
 #: "**Tap enchanted land**: Target blocking creature gets +1/+2 until end of
 #: turn." (Earthlore.) One comma-separated cost segment, whole — anchored for
 #: the reason every pattern in `activation_restrictions.py` is: a rule matching
@@ -1913,6 +1953,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         tap_attached=_taps_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,
+        untap_filter=_chargeable_untap_cost(cost_lower),
     )
 
 

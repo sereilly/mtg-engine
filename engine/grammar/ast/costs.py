@@ -109,6 +109,28 @@ class PutCounterCost:
 
 
 @dataclass(frozen=True)
+class UntapPermanentCost:
+    """``Untap a tapped land an opponent controls`` (Benthic Explorers) — an
+    activation cost that *unt*aps rather than taps, and one somebody else's
+    permanent pays.
+
+    CR 602.1a: a cost can be any action, and nothing says it has to be an action
+    on your own board. That is what separates this from
+    :class:`TapPermanentsCost`, which is not just the same verb inverted: every
+    other chosen cost in this grammar is paid out of the payer's own
+    permanents, so the *seat* the printed noun phrase names is the whole of what
+    the charger has to be told. The phrase rides along as a filter for exactly
+    that reason.
+
+    "A **tapped** land" is printed and carried, even though untapping an
+    untapped permanent is no payment: dropping it would make the cost payable
+    with a land that is already untapped, which is a cost that costs nothing.
+    """
+    subject: "ObjectFilter"
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class TapPermanentsCost:
     """"Tap two untapped Spirits you control" (Shacklegeist).
 

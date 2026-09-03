@@ -14,7 +14,8 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from .conditions import _lower_condition
-from ._events import CREATED_TOKEN
+from ._events import (_EVENT_SUBJECT_PLAYERS, CHOSEN_PLAYER,
+                      CREATED_TOKEN)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _REST_OF_TURN,
@@ -634,6 +635,19 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
     picker comes from — the alternative is a second reading of the oracle text.
     """
     payload: dict[str, object] = {}
+    if isinstance(node.subject, ast.PlayerRef):
+        # "Choose target opponent." (Soldevi Sentry.) The player form, and a
+        # different instruction rather than the same one over a different noun:
+        # the object form's handler resolves a *permanent*, and it also records
+        # nothing — where this one writes the chosen seat under the one key
+        # "that player" is ever read from, because the sentence naming that seat
+        # is a delayed ability created two sentences later and by then the
+        # resolution that chose is over.
+        _describe_targets(payload, node.subject)
+        if "targets" not in payload:
+            raise LoweringError("this 'choose' names no player", node=node)
+        payload["result_key"] = CHOSEN_PLAYER
+        return (OracleInstruction("choose_target_player", "", payload),)
     if _names_several_targets(node.subject):
         # "Choose **X target attacking creatures**." (Winter's Chill.) A *set*,
         # and a different instruction rather than the same one with a count:
@@ -687,6 +701,31 @@ def _lower_waive_shroud(node: "ast.WaiveShroud") -> tuple[OracleInstruction, ...
     return (OracleInstruction("waive_shroud_for_target_player", "", payload),)
 
 
+def _names_a_chosen_player(statement) -> bool:
+    """Whether *statement* — a delayed ability's effect — says "that player".
+
+    A walk over the node's own fields rather than a list of the statements that
+    can carry a ``PlayerRef``: the union grows, and a list of shapes goes stale
+    the way a list of fire sites does. What it is looking for is one printed
+    reference, and the reference is the same object wherever it sits.
+    """
+    seen: list = [statement]
+    while seen:
+        node = seen.pop()
+        if isinstance(node, ast.PlayerRef):
+            if node.kind == "that_player":
+                return True
+            continue
+        if isinstance(node, (list, tuple)):
+            seen.extend(node)
+            continue
+        fields = getattr(node, "__dataclass_fields__", None)
+        if fields is None:
+            continue
+        seen.extend(getattr(node, name) for name in fields)
+    return False
+
+
 def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
@@ -732,6 +771,31 @@ def _lower_create_delayed_trigger(
         "duration": node.duration,
         "binds_target": node.binds_target,
     }
+    # "Choose target opponent. … When it regenerates this way, **that player**
+    # may draw a card." (Soldevi Sentry.) CR 603.7c for a chosen *seat*: the
+    # ability is about the player an earlier step of this same resolution
+    # picked, and by the time it fires that resolution is over — so the seat is
+    # frozen into the entry rather than re-read.
+    #
+    # Gated on a producer, and **without refusing** when there is none — which
+    # is the one place this differs from every other back-reference here. "That
+    # player" has other producers: Lodestone Bauble's is the graveyard owner its
+    # own target named, read off the resolution rather than out of the
+    # scratchpad. So the absence of a chosen player does not mean the words name
+    # nobody; it means they name somebody else, and the entry keeps the reading
+    # it already had.
+    #
+    # …and gated first on the *event*, because an event that freezes a player of
+    # its own already answers "that player" — "whenever a player taps a Mountain
+    # for mana, **that player** adds an additional {R}" (Chaos Moon) is the
+    # tapper, not anyone this effect chose, and reading it as a chosen seat
+    # would refuse a card that has no "choose" sentence to satisfy the gate.
+    if (
+        CHOSEN_PLAYER in produced
+        and node.event not in _EVENT_SUBJECT_PLAYERS
+        and _names_a_chosen_player(node.effect)
+    ):
+        payload["binds_player"] = True
     # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
     # the battlefield". Which object the ability watches, when the opener names
     # one the effect already holds rather than one it targeted — the arming

@@ -37,6 +37,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from .delayed_triggers import fire_delayed_triggers
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
     from .models import Permanent
@@ -172,6 +174,18 @@ def regeneration_replaces_destruction(game: "Game", permanent: "Permanent") -> b
     if permanent.regeneration_shield > 0:
         permanent.regeneration_shield -= 1
         _apply(game, permanent, f"{permanent.card.name} regenerated")
+        # "When it regenerates this way, that player may draw a card."
+        # (Soldevi Sentry.) CR 603.7's delayed ability, announced here because
+        # this is the one place a *shield* is spent — and only here: CR 701.19c
+        # is explicit that creating a shield is not regenerating, so an
+        # announcement at the activation would fire on a creature that never
+        # came close to dying.
+        #
+        # The **shield** branch alone, not the static one above it: an ability
+        # that regenerates its source every time (Clergy of the Holy Nimbus)
+        # spends nothing, so there is no "this way" for the delayed ability to
+        # be the consequence of.
+        fire_delayed_triggers(game, "source_regenerates", subject=permanent)
         return True
     return False
 

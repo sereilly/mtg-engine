@@ -20,6 +20,7 @@ from ._common import (
     _targets_payload,
 )
 from ._events import _RECORDED_PERMANENTS
+from ._records import UNTAPPED_FOR_COST
 
 
 def _lower_add_mana(
@@ -262,6 +263,22 @@ def _lower_add_mana(
         "any_color": True,
         "any_color_count": amount,
     }
+    if node.any_type_from is not None:
+        if UNTAPPED_FOR_COST not in produced:
+            raise LoweringError(
+                "'that land' names the land this ability's cost untapped, and "
+                "this ability's cost untaps nothing",
+                node=node,
+            )
+        # "…of any type **that land** could produce" (Benthic Explorers). A
+        # back-reference to what this ability's *cost* untapped, so it is
+        # refused on an ability whose cost untaps nothing — the words would
+        # name no land, the handler would add nothing, and the card would
+        # report itself supported. The gate is the cost, which the effect
+        # lowering cannot see; ``engine/oracle.py`` asks it where both halves
+        # of the ability are in hand.
+        payload["any_type_from"] = node.any_type_from
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.any_color_from is not None:
         # "…that a land an opponent controls could produce" (Fellwar Stone).
         # Which board narrows the choice, carried so the handler and the colour

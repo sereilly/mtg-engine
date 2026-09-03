@@ -198,6 +198,14 @@ DELAYED_EVENTS: dict[str, str] = {
     # enumeration half that exists so a site can resolve an entry where it
     # stands instead of enqueuing it.
     "land_tapped_for_mana": "the tap-for-mana seam in mixins/turn_management.py",
+    # "When it regenerates this way, that player may draw a card." (Soldevi
+    # Sentry.) The shield being *spent*, which is CR 701.19a's replacement
+    # actually applying — not the shield being created, which CR 701.19c says
+    # is a different thing entirely ("neither activating an ability that
+    # creates a regeneration shield nor casting a spell that creates one is the
+    # same as regenerating a permanent"). ``engine/regeneration.py`` is the one
+    # place either happens, which is why the announcement is there.
+    "source_regenerates": "the shield branch of engine/regeneration.py",
 }
 
 
@@ -260,6 +268,19 @@ class DelayedTrigger:
     #: not about one particular permanent (Basri Ket's attack trigger, a phase
     #: step).
     bound_permanent_id: int | None = None
+    #: CR 603.7c's *other* half: the **player** the creating ability chose.
+    #: "Choose target opponent. … When it regenerates this way, **that player**
+    #: may draw a card." (Soldevi Sentry.)
+    #:
+    #: Its own field beside the permanent id rather than a key in ``captured``,
+    #: because it is not last-known information: a seat cannot change zones or
+    #: stop existing, and every reader of "that player" in this engine already
+    #: goes through the stack item's ``target_player_index``. Carried here and
+    #: handed to that field when the ability fires, so the delayed effect reads
+    #: the chosen seat the same way an ordinary targeted ability does — the
+    #: alternative was a branch in ``_offered_seats`` for a key only this card
+    #: writes.
+    bound_player_index: int | None = None
     #: CR 608.2h, the value half: what the creating effect knew and the
     #: delayed ability refers to — "that spell's mana value". Merged *under*
     #: the firing event's own context, so an event that measures the same key
@@ -406,6 +427,11 @@ class DelayedTrigger:
             "instruction": self.instruction,
             "effect_kind": "triggered_delayed",
             "ability_text": self.source_name,
+            # CR 603.7c for a chosen *player*: the ability is about the seat the
+            # creating ability targeted, handed over on the field every "that
+            # player" in this engine already reads. None on every other entry,
+            # which leaves the stack item exactly as it was.
+            "target_player_index": self.bound_player_index,
             "trigger_context": context,
         }
 

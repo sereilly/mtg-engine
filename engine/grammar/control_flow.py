@@ -27,6 +27,7 @@ from dataclasses import replace
 
 from . import ast
 from .errors import GrammarError
+from .nouns import parse_object_filter
 from .rebinding import (rebind_pronoun_to_condition_target,
                         rebind_pronoun_to_delay_target)
 from .statements import parse_statement
@@ -96,6 +97,61 @@ def _choice_step_index(steps: list[ast.Statement]) -> int | None:
             continue
         return None
     return None
+
+
+def _sacrifice_noun(statement) -> "ast.ObjectFilter | None":
+    """The noun phrase a ``Sacrifice`` statement names, or None for anything
+    else. The step a "…sacrifice a <noun> this way" rider is measured against."""
+    if isinstance(statement, ast.Sacrifice) and isinstance(
+        statement.subject, ast.TargetSpec
+    ):
+        return statement.subject.filter
+    return None
+
+
+def _accept_restated_sacrifice(
+    stream: TokenStream, offered: "ast.ObjectFilter | None"
+) -> "tuple[bool, ast.ObjectFilter | None] | None":
+    """``sacrifice <noun phrase> [this way]`` — the rider with its verb spelled
+    out instead of said as "do".
+
+    "If you **sacrifice a snow Forest this way**, …" (Gargantuan Gorilla) and
+    "If you **sacrifice an Island this way**, …" (Serendib Djinn) are the
+    "if you do" rider with the action restated and *narrowed*. The narrowing is
+    the whole point: the sacrifice happened, and the branch runs only if what
+    went matches the tighter phrase.
+
+    Returns ``(narrowed, filter)``, or None with the cursor untouched.
+    ``narrowed`` is False when the phrase merely repeats what the step in front
+    of it already said — a plain "if you do" written out longhand, which is how
+    "If you **don't sacrifice a Forest**" (Gargantuan Gorilla again) is the
+    ordinary decline branch rather than a condition nothing records.
+
+    Any *other* phrase is carried as a filter and tested against what actually
+    went. It is deliberately **not** checked for being a subset of the offer's:
+    the two are written in different vocabularies — Serendib Djinn offers "a
+    land" (a card type) and asks about "an Island" (a subtype) — so a
+    syntactic subset test refuses the real card while buying nothing. A phrase
+    that is genuinely wider reads literally and is right anyway; one that is
+    disjoint is never true, which is also what the card would say.
+    """
+    if offered is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("sacrifice", "sacrifices"):
+        return None
+    stream.accept_word("a", "an")
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # "…this way" is optional because the decline branch cannot print it:
+    # nothing was sacrificed, so there is no "way" to point at.
+    stream.accept_phrase("this", "way")
+    if named == offered:
+        return False, None
+    return True, named
 
 
 def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
@@ -199,6 +255,14 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     # is not the person of the verb — reading one off the other is what made the
     # pronoun spelling refuse a sentence it had already read the subject of.
     singular = third_person and not stream.at_word("do", "don't")
+    # The noun phrase the step in front of this rider sacrifices, if it does —
+    # what a rider that spells its verb out is measured against. Read off the
+    # already-unwrapped target, so an offer inside a where-clause, a delay or a
+    # previous conditional is seen the same way the fold below sees it.
+    offered = _sacrifice_noun(
+        target.action if isinstance(target, ast.May) else target
+    )
+    narrowed = None
     if stream.accept_word("does" if singular else "do"):
         declined = False
     elif (
@@ -206,9 +270,25 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         or stream.accept_phrase("does" if singular else "do", "not")
     ):
         declined = True
+        # "If you don't **sacrifice a Forest**, …" (Gargantuan Gorilla) — the
+        # decline branch with its verb written out. Only the *unnarrowed*
+        # restatement reads: nothing was sacrificed, so a tighter phrase would
+        # describe a set that cannot exist, and the words are put back rather
+        # than dropped.
+        restated = _accept_restated_sacrifice(stream, offered)
+        if restated is not None and restated[0]:
+            stream.reset(mark)
+            return False
     else:
-        stream.reset(mark)
-        return False
+        # "If you **sacrifice a snow Forest this way**, …" — the affirmative
+        # rider with its verb written out, which is the only form the narrowing
+        # can be printed in at all: "if you do" has nowhere to put it.
+        restated = _accept_restated_sacrifice(stream, offered)
+        if restated is None:
+            stream.reset(mark)
+            return False
+        declined = False
+        narrowed = restated[1]
     # "If a player does **either**, destroy this enchantment." (Worms of the
     # Earth.) The word points back at the two alternatives the offer printed, so
     # it is admitted only over an offer that really has two — over a single
@@ -291,15 +371,28 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         if declined:
             stream.reset(mark)
             return False
-        steps.append(ast.Conditional(ast.ItHappened(), branch))
+        steps.append(ast.Conditional(
+            ast.SacrificedThisWay(narrowed) if narrowed is not None
+            else ast.ItHappened(),
+            branch,
+        ))
         return True
 
     may = target
+    # A narrowed affirmative rider is a *conditional inside* the accept branch,
+    # not the accept branch itself: the offer can be taken and the branch still
+    # not run, because what the player gave up may not have matched the tighter
+    # phrase. Folded onto ``then`` unconditionally, Gargantuan Gorilla would
+    # gain trample for any Forest.
+    accepted = (
+        ast.Conditional(ast.SacrificedThisWay(narrowed), branch)
+        if narrowed is not None else branch
+    )
     folded = ast.May(
         actor=may.actor,
         cost=may.cost,
         action=may.action,
-        then=branch if not declined else may.then,
+        then=accepted if not declined else may.then,
         otherwise=branch if declined else may.otherwise,
     )
     rebuilt = ast.WhereX(folded, definition) if definition is not None else folded

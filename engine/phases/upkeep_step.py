@@ -558,12 +558,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if perm.is_creature and perm is not source
         ]
 
-    def _upkeep_land_sacrifice_candidates(self, controller) -> list[Permanent]:
-        """Legal choices for Serendib Djinn's upkeep "sacrifice a land": every
-        land its controller controls (you choose which of your own permanents a
-        sacrifice takes, CR 701.21a)."""
-        return [perm for perm in self.controlled_by(controller) if perm.card.primary_type == "land"]
-
     def _resolve_upkeep_trigger_target(
         self, card_name: str, trigger_targets: dict | None, candidates: list[Permanent]
     ) -> Permanent | None:
@@ -638,12 +632,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # and handing both over is what let the base-P/T copy exclude its own
         # source without the table growing a second shape.
         targeted_kinds = {
-            "upkeep_sacrifice_land_conditional_damage": (
-                "upkeep_sacrifice_land",
-                "land",
-                lambda name: f"{name}: choose a land to sacrifice.",
-                lambda controller, source: self._upkeep_land_sacrifice_candidates(controller),
-            ),
             "set_source_base_pt_from_target_until_next_upkeep": (
                 "upkeep_copy_base_pt",
                 "creature",
@@ -691,9 +679,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
 
     def _force_sacrifice_first_land(self, controller, source, chosen: Permanent | None = None) -> Permanent | None:
         """Sacrifice a land on *controller*'s battlefield to *source*'s upkeep
-        effect, logging it. Returns the sacrificed land so callers can branch on
-        its type (Serendib Djinn's "if it was an Island" damage), or None if the
-        player controls no land.
+        effect, logging it. Returns the sacrificed land, or None if the player
+        controls no land.
+
+        One caller left — the pay-or-tap-and-sacrifice upkeep, where an
+        *opponent* does the choosing and this engine simplifies that to the
+        first land. Serendib Djinn used to be the other, and is now an ordinary
+        stack trigger whose sacrifice goes through the standing forced-sacrifice
+        prompt like every other one.
 
         ``chosen`` is the land its controller picked (CR 701.21a: you choose
         which of your own permanents a sacrifice takes). Without one — AI /
