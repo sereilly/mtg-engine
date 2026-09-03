@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 70.1% | 62.4% | 37.4% | 167 |
+| MIR *(measured)* | 335 | 545 | 70.6% | 64.2% | 39.1% | 173 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 356 | 185 | expected a subject |  |
+| 353 | 182 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
 | 98 | 58 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
@@ -58,7 +58,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
-| 6 | 6 | no handler phases out this subject |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -67,6 +66,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | expected 'put' |  |
+| 3 | 3 | engine/lord_buffs.py carries no such restriction on the buffed creatures, so _recalculate_lord_buffs would drop it |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
 
@@ -915,6 +915,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, defending player gets a poison counter. (A player with ten or more poison counters loses the game.)`
 - **Crypt Lurker**
   - `When this creature enters, you may sacrifice a creature or discard a creature card. If you do, draw a card.`
+- **Crystal Golem**
+  - `At the beginning of your end step, this creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Crystal Rod**
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
@@ -1581,6 +1583,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Frantic Inventory**
   - `Draw a card, then draw cards equal to the number of cards named Frantic Inventory in your graveyard.`
+- **Frenetic Efreet**
+  - `{0}: Flip a coin. If you win the flip, this creature phases out. If you lose the flip, sacrifice this creature. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Freyalise Supplicant**
   - `{T}, Sacrifice a red or white creature: This creature deals damage to any target equal to half the sacrificed creature's power, rounded down.`
 - **Freyalise's Charm**
@@ -2843,6 +2847,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put up to three target cards from an opponent's graveyard on top of their library in any order.`
 - **Mist Dragon**
   - `{0}: This creature gains flying. (This effect lasts indefinitely.)`
+  - `{3}{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
 - **Mold Demon**
@@ -4189,6 +4194,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When enchanted creature dies, that creature's controller chooses a creature that this card could enchant. If the player does, return this card to the battlefield under your control attached to that creature. If they don't, return this card to the battlefield under your control as a non-Aura enchantment. It loses "enchant creature" and gains "At the beginning of that player's upkeep, this enchantment deals 1 damage to that player."`
 - **Tangle Kelp**
   - `When this Aura enters, tap enchanted creature.`
+- **Taniwha**
+  - `At the beginning of your upkeep, all lands you control phase out. (They phase in before you untap during your next untap step.)`
 - **Tarpan**
   - `When this creature dies, you gain 1 life.`
   - `When this creature dies, you gain 1 life.`
@@ -4205,6 +4212,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
+- **Teferi's Imp**
+  - `Whenever this creature phases out, discard a card.`
+  - `Whenever this creature phases in, draw a card.`
 - **Teferi's Isle**
   - `{T}: Add {U}{U}.`
 - **Teferi's Protege**
@@ -4596,6 +4606,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
   - `{B}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
   - `{B}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
+- **Vaporous Djinn**
+  - `At the beginning of your upkeep, this creature phases out unless you pay {U}{U}. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Varchild's Crusader**
   - `{0}: This creature can't be blocked this turn except by Walls. Sacrifice this creature at the beginning of the next end step.`
 - **Veldt**
@@ -4758,6 +4770,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
+- **Warping Wurm**
+  - `At the beginning of your upkeep, this creature phases out unless you pay {2}{G}{U}.`
+  - `Whenever this creature phases in, put a +1/+1 counter on it.`
 - **Watcher of the Spheres**
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Water Wurm**

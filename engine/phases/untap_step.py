@@ -268,9 +268,20 @@ class UntapStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
-        # CR 702.26e: phased-out permanents this player controls phase in as
-        # the untap step begins, before anything untaps.
-        self.phase_in_for(player_index)
+        constraints = self._untap_constraints()
+        # CR 702.26a's phasing event: before the active player untaps anything,
+        # this player's phased-in permanents *with phasing* phase out and their
+        # phased-out ones phase in, simultaneously.
+        #
+        # Guarded by the skip because CR 702.26m says so — "if an effect causes
+        # a player to skip their untap step, the phasing event simply doesn't
+        # occur that turn" — which is why the constraints are read one line
+        # above rather than below the phase-in this replaced. Reading them first
+        # also decides the one ordering question the rule leaves open: a Stasis
+        # that phases in during this event does not retroactively skip the step
+        # it arrived in.
+        if constraints["skip_all_source"] is None:
+            self.resolve_phasing_for(player_index)
         self._advance_summoning_sickness(player_index)
         # Record untapped lands at the beginning of the turn — i.e. *before* the
         # untap step untaps anything (Power Surge: X = "the number of untapped lands
@@ -288,7 +299,6 @@ class UntapStepMixin:
         )
         # Island Sanctuary protection lasts until the player's next turn begins
         player.island_sanctuary_protected = False
-        constraints = self._untap_constraints()
 
         if constraints["skip_all_source"] is not None:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")

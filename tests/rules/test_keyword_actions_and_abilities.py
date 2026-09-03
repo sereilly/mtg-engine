@@ -7,7 +7,9 @@ engine really implements rather than one it merely mentions:
 * **Mill** — Carrion Grub, Teferi's Tutelage, Thieves' Guild Enforcer.
 * **Enchant** — every Aura's attachment restriction, derived from the printed
   ``Enchant <subject>`` line rather than from a per-card registration.
-* **Phasing** — Teferi, Master of Time's −3 and Teferi, Timeless Voyager's −8.
+* **Phasing** — Teferi, Master of Time's −3 and Teferi, Timeless Voyager's −8,
+  and since Mirage the CR 702.26a **keyword** itself: the untap step's
+  alternation, which is what a permanent printing the word does every turn.
 
 Exert (CR 701.43) is deliberately absent: the engine cites it twice, but only
 as the keyworded name for "doesn't untap during its controller's next untap
@@ -216,6 +218,125 @@ def test_702_26d_a_permanent_phases_in_at_its_controllers_untap_step(set_pool):
 
     assert victim not in p2.phased_out
     assert game.is_on_battlefield(victim)
+
+
+def _phasing_creature(name: str = "Phaser", power: int = 2, toughness: int = 2):
+    """A creature with phasing, carrying it the way a printed card does.
+
+    Both channels — the ingested ``keywords`` field and the printed line —
+    because a real card has both and layer 6 seeds itself from either.
+    """
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text="Phasing", colors=(), color_identity=(),
+        keywords=("Phasing",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _phasing_game(*extra):
+    phaser = Permanent(card=_phasing_creature())
+    p1 = PlayerState(
+        name="P1", battlefield=[phaser, *extra], library=[_creature("L1")] * 8
+    )
+    p2 = PlayerState(name="P2", library=[_creature("L2")] * 8)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, p1, phaser
+
+
+@pytest.mark.cr("702.26a")
+def test_702_26a_a_permanent_with_phasing_phases_out_at_its_own_untap_step():
+    """"During each player's untap step, before the active player untaps
+    permanents, all phased-in permanents with phasing that player controls
+    phase out." """
+    game, p1, phaser = _phasing_game()
+
+    game.start_turn(0)
+
+    assert not game.is_on_battlefield(phaser)
+    assert phaser in p1.phased_out
+
+
+@pytest.mark.cr("702.26a")
+def test_702_26a_it_phases_back_in_at_the_next_one():
+    """The other half of the same event, and the reason the two are one method:
+    they are simultaneous, so what has just phased out must not be swept back
+    in by the half that runs beside it."""
+    game, p1, phaser = _phasing_game()
+
+    game.start_turn(0)
+    assert phaser in p1.phased_out
+    game.start_turn(1)
+    assert phaser in p1.phased_out, "an opponent's untap step is not this one"
+    game.start_turn(0)
+
+    assert game.is_on_battlefield(phaser)
+    assert p1.phased_out == []
+
+
+@pytest.mark.cr("702.26a")
+def test_702_26a_the_alternation_repeats():
+    """Out, in, out — the third untap step phases it back out, because by then
+    it is a phased-in permanent with phasing again. A flag set once at the first
+    phase-out would stop here."""
+    game, _p1, phaser = _phasing_game()
+
+    game.start_turn(0)
+    game.start_turn(1)
+    game.start_turn(0)
+    game.start_turn(1)
+    game.start_turn(0)
+
+    assert not game.is_on_battlefield(phaser)
+
+
+@pytest.mark.cr("702.26g")
+def test_702_26g_an_attached_aura_phases_out_with_its_host():
+    """"When a permanent phases out, any Auras … attached to that permanent
+    phase out at the same time", and phase back in with it rather than on their
+    own account."""
+    from engine.auras import attach_aura
+
+    aura_card = CardDefinition(
+        name="Test Aura", mana_cost="", cmc=0.0,
+        type_line="Enchantment — Aura", oracle_text="Enchant creature",
+        colors=(), color_identity=(), keywords=(), produced_mana=(), raw={},
+    )
+    aura = Permanent(card=aura_card)
+    game, p1, phaser = _phasing_game(aura)
+    attach_aura(aura, phaser)
+
+    game.start_turn(0)
+    assert aura in p1.phased_out and phaser in p1.phased_out
+
+    game.start_turn(1)
+    game.start_turn(0)
+    assert game.is_on_battlefield(aura) and game.is_on_battlefield(phaser)
+
+
+@pytest.mark.cr("702.26m", "702.26a")
+def test_702_26m_a_skipped_untap_step_skips_the_phasing_event():
+    """"If an effect causes a player to skip their untap step, the phasing
+    event simply doesn't occur that turn."
+
+    Driven through a real Stasis-shaped static rather than by calling the
+    method, because what the rule governs is the *step*: the phasing event is
+    inside it, so skipping the step has to skip the event without anyone
+    writing that down twice.
+    """
+    stasis = CardDefinition(
+        name="Test Stasis", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text="Players skip their untap steps.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(), raw={},
+    )
+    game, _p1, phaser = _phasing_game(Permanent(card=stasis))
+
+    game.start_turn(0)
+
+    assert game.is_on_battlefield(phaser)
 
 
 # ---------------------------------------------------------------------------

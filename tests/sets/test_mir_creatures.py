@@ -149,3 +149,122 @@ def test_flanking_kills_an_x_1_blocker(set_pool):
     game._settle()
 
     assert weed not in game.players[1].battlefield
+
+
+# --- Round 2: phasing (CR 702.26) ---
+
+def _r2_game(set_pool, *names, hand=(), extra_battlefield=()):
+    """One seat's board built from Mirage cards, with a real library.
+
+    Non-interactive, so a prompt an ability arms is visible on
+    ``game.pending_choices`` rather than answered for us — which is how the
+    discard half of Teferi's Imp is checked below.
+    """
+    pool = set_pool("MIR")
+    island = pool["Island"]
+    mine = [Permanent(card=pool[name]) for name in names]
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=mine + list(extra_battlefield),
+            hand=[pool[name] for name in hand], library=[island] * 12,
+        ),
+        PlayerState(name="P2", library=[island] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, mine
+
+
+def test_sandbar_crocodile_alternates_on_its_own_untap_steps(set_pool):
+    """The keyword alone, on the card whose whole text is the keyword.
+
+    CR 702.26a's event runs at *each player's* untap step over the permanents
+    **that player** controls, so the opponent's turn leaves it alone.
+    """
+    game, (croc,) = _r2_game(set_pool, "Sandbar Crocodile")
+
+    game.start_turn(0)
+    assert not game.is_on_battlefield(croc)
+    game.start_next_turn()
+    assert not game.is_on_battlefield(croc)
+    game.start_next_turn()
+    assert game.is_on_battlefield(croc)
+
+
+def test_teferis_imp_discards_when_it_phases_out(set_pool):
+    """"Whenever this creature phases out, discard a card."
+
+    Announced *before* the permanent leaves the battlefield, which is the whole
+    of why this works: the trigger scan reads battlefields, and a permanent that
+    has already phased out is on none — so an announcement after the move would
+    have watched the Imp's own departure and missed it.
+    """
+    game, (imp,) = _r2_game(set_pool, "Teferi's Imp", hand=["Island"] * 3)
+
+    game.start_turn(0)
+    game.resolve_stack()
+
+    assert not game.is_on_battlefield(imp)
+    assert [choice.kind for choice in game.pending_choices] == ["discard"]
+
+
+def test_teferis_imp_draws_when_it_phases_in(set_pool):
+    """The mirror trigger, announced from the other seam."""
+    game, (imp,) = _r2_game(set_pool, "Teferi's Imp")
+
+    game.start_turn(0)      # phases out
+    game.resolve_stack()
+    game.pending_choices.clear()
+    game.start_next_turn()  # the opponent's; nothing of ours phases
+    before = len(game.players[0].hand)
+    game.start_next_turn()  # ours again: phases in, then the draw step
+    game.resolve_stack()
+
+    assert game.is_on_battlefield(imp)
+    assert len(game.players[0].hand) == before + 2, "the trigger's card and the draw step's"
+
+
+def test_taniwha_phases_out_only_its_controllers_lands(set_pool):
+    """"At the beginning of your upkeep, all lands you control phase out."
+
+    A sweep over a printed noun phrase, so "you control" is payload asked
+    through the same matcher the picker would use. Read on the turn Taniwha
+    itself phases *in*: on the alternate turn Taniwha is phased out, its upkeep
+    trigger does not exist to fire, and the lands stay — which is the card, not
+    a gap.
+    """
+    forest = set_pool("MIR")["Forest"]
+    mine = [Permanent(card=forest) for _ in range(2)]
+    theirs = [Permanent(card=forest) for _ in range(2)]
+    game, (taniwha,) = _r2_game(set_pool, "Taniwha", extra_battlefield=mine)
+    game.players[1].battlefield.extend(theirs)
+
+    game.start_turn(0)      # Taniwha phases out; no upkeep trigger
+    game.resolve_stack()
+    assert all(game.is_on_battlefield(land) for land in mine)
+
+    game.start_next_turn()
+    game.start_next_turn()  # ours again: phases in, then the upkeep fires
+    game.resolve_stack()
+
+    assert not any(game.is_on_battlefield(land) for land in mine)
+    assert all(game.is_on_battlefield(land) for land in theirs)
+
+
+def test_crystal_golem_phases_itself_out_at_its_end_step(set_pool):
+    """"At the beginning of your end step, this creature phases out."
+
+    The source-subject shape, which is the commonest printed phase-out in the
+    set and the one the target branch could not read: the sentence names no
+    target, so there was nothing to describe.
+    """
+    game, (golem,) = _r2_game(set_pool, "Crystal Golem")
+
+    game.start_turn(0)
+    game.resolve_stack()
+    assert game.is_on_battlefield(golem), "no phasing keyword, so the untap step leaves it"
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert not game.is_on_battlefield(golem)

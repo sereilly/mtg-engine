@@ -978,6 +978,69 @@ with_keywords`) and Barbed Foliage ("it **loses** flanking until end of turn" �
 `remove_ability_line` has no duration channel, deliberately, because nothing in
 the pool had needed one).
 
+### Round 2 — phasing (CR 702.26): 194 → 204 supported
+
+**The census said "subsystem" and the truth was "keyword".** `Game.phase_out_permanent`,
+`phase_in_for`, the per-seat `phased_out` holding list and a CR 702.26 call at
+the top of the untap step all arrived with M21's Teferi planeswalkers. What was
+missing was CR 702.26a — the *alternation*, which is the whole of what the
+keyword does — plus the ways a card says the word.
+
+`Game.resolve_phasing_for(seat)` is that rule, and it is one method rather than
+two calls because 702.26a makes the halves **simultaneous**: both sets are read
+off the board before either is applied, so what has just phased out is not swept
+straight back in and what has just arrived does not leave again. The outgoing
+half reads the keyword off layer 6 and the incoming half reads the holding list,
+which is what makes a permanent phased out by a one-shot (Reality Ripple) come
+back exactly once while one *with* phasing alternates forever.
+
+**CR 702.26m came free and had been wrong.** "If an effect causes a player to
+skip their untap step, the phasing event simply doesn't occur that turn" — the
+old call sat above the skip check, so a Teferi'd creature phased in through a
+Stasis. Reading the untap constraints one line earlier fixes it and settles the
+ordering question the rule leaves open: a Stasis that phases *in* during the
+event does not retroactively skip the step it arrived in.
+
+**`oracle.UNSUPPORTED_KEYWORDS` is now empty, and that is the state to keep.**
+Phasing was its last entry. That table outranks every line gate and is the only
+refusal in the engine that names no clause — Legends' rampage sat in it with the
+behaviour built and tested and seven cards unsupported — so an empty one is
+worth saying out loud in the comment beside it.
+
+What the round bought, and how: four cards from the keyword alone (Merfolk
+Raiders, Sandbar Crocodile, Teferi's Drake, Teferi's Isle); two more from two
+new phase-out subjects — the ability's own source (`phase_out_self`: Mist
+Dragon, Crystal Golem, Vaporous Djinn, Warping Wurm, Frenetic Efreet) and a
+sweep over a printed noun phrase (`phase_out_matching`: Taniwha's "all lands you
+control"); and Teferi's Imp from the two `phases_in` / `phases_out` trigger
+conditions, announced from the two seams that *move* a permanent rather than
+from the untap step — the untap step is one of several ways to phase, and a
+trigger wired there would miss Reality Ripple and every activated phase-out in
+the set. The phase-out announcement fires **before** the permanent leaves,
+because the trigger scan reads battlefields and a permanent that has phased out
+is on none.
+
+**Two defects in already-supported cards, both found by giving one a game.**
+Reality Ripple ("Target **artifact, creature, or land** phases out") compiled
+supported, claimed every sentence and derived a correct picker — and then
+declined two of its three types at resolution, because the handler took
+`resolve_target_permanent`'s default predicate, `is_creature`. It logged "no
+valid target" and the spell resolved having done nothing. The fix reads the
+printed noun phrase through the same `subject_matches` the picker enumerated
+with, which also newly enforces Teferi, Master of Time's "creature you don't
+control" at resolution rather than only at announcement. And the land support
+gate did not classify keyword lines at all, so Teferi's Isle reported "no static
+ability of this land is implemented: Phasing" — the creature front end's
+`_is_supported_keyword_line` now answers for both.
+
+`oracle_diff` after the round: **21 changed of 2181**, every one a Mirage card
+(the eleven from round 1 and ten more here). Still open in this family: Dream
+Fighter (a conjoined subject, "this creature **and that creature** phase out"),
+Spatial Binding ("can't phase out"), and the three cards that *grant* phasing —
+Cloak of Invisibility (two effects on one Aura line), Teferi's Curse ("Enchant
+artifact **or** creature") and Shimmer (a chosen land type). None is a phasing
+gap any more; each is now blocked on something else.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

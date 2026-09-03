@@ -3023,13 +3023,82 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
 def phase_out_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target creature you don't control phases out." (Teferi, Master of
     Time's −3.) CR 702.26: not a zone change — the machinery is
-    Game.phase_out_permanent, and the creature returns at its controller's
-    next untap step."""
-    target_perm = resolve_target_permanent(game, context)
-    if target_perm is None or not target_perm.is_creature:
-        game.log.append(f"{context.card.name}: no valid creature target")
+    Game.phase_out_permanent, and the object returns at its controller's next
+    untap step.
+
+    **Not "creature" — whatever the printed noun phrase said.** The predicate
+    used to be the resolver's default, ``is_creature``, and Reality Ripple
+    ("Target **artifact, creature, or land** phases out") compiled supported,
+    offered all three to the picker and then silently did nothing to two of
+    them: the handler declined a target the engine had already accepted, logged
+    "no valid target" and let the spell resolve. Asked through the same
+    ``subject_matches`` the picker enumerated with — with the caster as observer
+    (CR 109.5), so Teferi, Master of Time's "creature **you don't control**" is
+    tested here too rather than only at announcement.
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
     game.phase_out_permanent(target_perm)
+    return True, "resolved"
+
+
+@effect_handler("phase_out_self")
+def phase_out_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This creature phases out." (Mist Dragon, Crystal Golem, Vaporous Djinn,
+    Warping Wurm, Frenetic Efreet.)
+
+    The ability's own source, which is a different question from a target: the
+    sentence names nothing to pick, so there is nothing to describe and nothing
+    to re-check at resolution. A source that has already left the battlefield
+    phases out nothing, which is what ``phase_out_permanent`` reports by
+    returning False (CR 702.26 acts on a permanent, and there is none).
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: not on the battlefield to phase out")
+        return True, "resolved"
+    game.phase_out_permanent(source)
+    return True, "resolved"
+
+
+@effect_handler("phase_out_matching")
+def phase_out_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"All lands you control phase out." (Taniwha.)
+
+    A sweep over the printed noun phrase, asked through ``subject_matches`` with
+    the ability's controller as observer (CR 109.5) so "you control" means the
+    same seat here as it does in the picker. The set is fixed before anything
+    moves: phasing an Aura out drags its host's other attachments with it
+    (CR 702.26g), so a sweep that re-read the board between permanents would
+    trip over what its own earlier steps removed.
+    """
+    from ..subject_filters import subject_matches
+
+    described = instruction.payload.get("filter") or {}
+    observer = game.players.index(context.caster)
+    victims = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        )
+    ]
+    for perm in victims:
+        if game.is_on_battlefield(perm):
+            game.phase_out_permanent(perm)
+    game.log.append(f"{context.card.name}: {len(victims)} permanent(s) phased out")
     return True, "resolved"
 
 

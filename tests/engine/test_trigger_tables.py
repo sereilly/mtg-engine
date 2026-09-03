@@ -213,6 +213,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature becomes the target of a spell or ability "
         "an opponent controls",
     ),
+    # CR 702.26's two events (Teferi's Imp, Warping Wurm). One example per
+    # printed noun would be three each; the creature spelling is the one the
+    # pool prints and the other two rows are the same production widened, which
+    # is what the shadowing guard is checking here.
+    "phases_out": "whenever this creature phases out",
+    "phases_in": "whenever this creature phases in",
     # when
     "enters_battlefield": "when this creature enters the battlefield",
     "leaves_battlefield": "when this creature leaves the battlefield",

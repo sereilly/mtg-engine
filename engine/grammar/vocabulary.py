@@ -120,6 +120,12 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # every reader of the registry — the filter, the removal gate, the grant
     # gate — has a Mirage card behind it.
     "flanking",
+    # CR 702.26: phasing. A static ability that modifies the untap step, so
+    # unlike flanking and rampage above it the *word* is the whole of it —
+    # `Game.resolve_phasing_for` reads it off layer 6 at each player's untap
+    # step, which is what lets Teferi's Curse and Shimmer grant it through the
+    # ordinary channels with nothing else to build.
+    "phasing",
 })
 
 

@@ -583,6 +583,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "phase_out_target": "zones",
     "grant_team_assign_unblocked_until_eot": "pump",
     "phase_out_opponent_creatures": "zones",
+    # CR 702.26's other two printed subjects (Mirage): the ability's own source
+    # ("This creature phases out") and a sweep over a printed noun phrase ("All
+    # lands you control phase out").
+    "phase_out_self": "zones",
+    "phase_out_matching": "zones",
     # Ending the game (CR 104). Their own category rather than "life": nothing
     # about a life total is involved, and the three outcomes share one set of
     # handlers in engine/handlers/life_and_game.py.

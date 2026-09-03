@@ -116,9 +116,14 @@ __all__ = [
 # the behaviour built and tested. `tests/engine/test_keyword_registry.py`
 # compiles a card carrying each implemented keyword *in its ingested field* for
 # exactly that reason.
-UNSUPPORTED_KEYWORDS = {
-    "Phasing",
-}
+#
+# **Empty since Mirage**, when phasing — its last entry — was implemented
+# (CR 702.26, `Game.resolve_phasing_for`). Empty is the state to prefer: a
+# keyword the engine does not model refuses at the line gate anyway, naming the
+# clause, and this set is the only refusal that names nothing. Adding a word
+# here again is a decision to refuse a card *before* reading it, and it needs
+# the reason written down beside the word.
+UNSUPPORTED_KEYWORDS: set[str] = set()
 
 # Substrings that veto a card before any line is read. Empty, and kept empty
 # deliberately: a blanket refusal on a *phrase* is the pre-grammar shape — it
@@ -538,6 +543,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # them would have missed the other ten.
     ("permanent_becomes_untapped",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes untapped"),
+    # "Whenever this creature phases out" / "…phases in" (Teferi's Imp, Warping
+    # Wurm). CR 702.26's event, announced from the two seams that move a
+    # permanent between the battlefield and its controller's holding list
+    # (`Game.phase_out_permanent` / `phase_in_for`) rather than from the untap
+    # step — the untap step is only one of the ways a permanent phases, and a
+    # trigger wired there would miss Reality Ripple and every activated
+    # phase-out in Mirage.
+    ("phases_out",
+     r"whenever this (?:creature|artifact|enchantment|land|permanent) phases out"),
+    ("phases_in",
+     r"whenever this (?:creature|artifact|enchantment|land|permanent) phases in"),
     # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
     # type and the controller scope are named groups, so the restriction
     # arrives as condition-payload data and one dispatcher
@@ -3885,6 +3901,14 @@ def _unread_land_text(
         # here only when the rewrite refused it — a cost this engine cannot
         # charge. Then it is genuinely unread and naming it is the point.
         if keyword_line_triggers(normalize_creature_line(line)):
+            continue
+        # …and a plain keyword line, which a land can print too: Teferi's Isle
+        # has phasing (CR 702.26). The creature front end classifies these and
+        # this one did not, so a land whose only extra text is a keyword the
+        # engine implements was reported as carrying an unread static. Through
+        # the same `IMPLEMENTED_KEYWORDS` reader the creature gate uses, so what
+        # is admitted here and what is admitted there cannot drift.
+        if _is_supported_keyword_line(line):
             continue
         # Through the same collapse every other static reader uses: a land that
         # names itself ("Tapped Land enters tapped") is saying "this permanent",

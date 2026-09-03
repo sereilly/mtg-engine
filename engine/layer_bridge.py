@@ -228,6 +228,11 @@ _TEXT_KEYWORDS = (
     # flanker's own "without flanking" filter asks. The substring scan is safe
     # here on the same test — no narrower keyword's name contains this word.
     "flanking",
+    # …and "phasing", which a card can carry as a printed line alone: Teferi's
+    # Curse grants it as a keyword and Shimmer as a board-wide static, and the
+    # untap step reads the word off this set. Same substring test as the two
+    # above — no narrower keyword's name contains it.
+    "phasing",
     # "hexproof" is deliberately absent: this is a substring scan, and bare
     # hexproof is a *stronger* keyword than "hexproof from <colour>" — matching
     # the word inside the phrase would upgrade Sporeweb Weaver's blue-only

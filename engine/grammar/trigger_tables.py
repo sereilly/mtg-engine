@@ -81,6 +81,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("permanent_becomes_untapped", ("this", "creature", "becomes", "untapped")),
     ("permanent_becomes_untapped", ("this", "artifact", "becomes", "untapped")),
     ("permanent_becomes_untapped", ("this", "permanent", "becomes", "untapped")),
+    # CR 702.26's two events (Teferi's Imp, Warping Wurm). One row per printed
+    # noun, exactly as the untap rows above: the noun is not payload here, it
+    # is the self-reference, and every spelling a Mirage card prints is listed.
+    ("phases_out", ("this", "creature", "phases", "out")),
+    ("phases_out", ("this", "artifact", "phases", "out")),
+    ("phases_out", ("this", "permanent", "phases", "out")),
+    ("phases_in", ("this", "creature", "phases", "in")),
+    ("phases_in", ("this", "artifact", "phases", "in")),
+    ("phases_in", ("this", "permanent", "phases", "in")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
     # Longest first: the bare phrase below is a strict prefix of this one, so

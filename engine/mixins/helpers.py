@@ -536,6 +536,20 @@ class GameHelpersMixin:
             for aura in list(permanent.metadata.get("attached_auras") or [])
             if self.is_on_battlefield(aura)
         ]
+        # Announced **before** the permanent leaves, because the ability is its
+        # own: `iter_triggered_abilities` scans battlefields, and a permanent
+        # that has already phased out is on none — so Teferi's Imp's "whenever
+        # this creature phases out" would watch its own departure and miss it.
+        # The trigger goes on the stack while the source is still there and
+        # resolves after it is gone, which is CR 603.6's ordinary shape for an
+        # ability that watches its own object leave.
+        #
+        # CR 702.26g's indirect half is not announced: "abilities that trigger
+        # when a permanent becomes attached or unattached … don't trigger when
+        # that permanent phases in or out" (702.26j), and an Aura dragged along
+        # by its host did not phase out on its own account. Only the permanent
+        # the caller named did.
+        self._announce_phasing("phases_out", [permanent])
         self.remove_all_from_battlefield(moving)
         for perm in moving:
             perm.metadata["phased_out"] = True
@@ -544,27 +558,97 @@ class GameHelpersMixin:
         self._recompute_continuous_effects()
         return True
 
-    def phase_in_for(self, seat: int) -> None:
-        """CR 702.26e: phased-out permanents *seat* controls phase in as its
-        untap step begins — the same object, no new permanent_id, no
-        enters-the-battlefield anything. A ``phase_in_blocked`` marker
-        (Teferi, Timeless Voyager's rider) holds a permanent out until its
-        countdown expires."""
+    def resolve_phasing_for(self, seat: int) -> None:
+        """CR 702.26a's phasing event, both halves, at *seat*'s untap step.
+
+        "During each player's untap step, before the active player untaps
+        permanents, all phased-in permanents with phasing that player controls
+        'phase out.' **Simultaneously**, all phased-out permanents that had
+        phased out under that player's control 'phase in.'"
+
+        The simultaneity is why this is one method rather than two calls in a
+        row: a permanent that phases out here must not be swept straight back
+        in by the other half, and one that phases in must not phase out again
+        the moment it arrives. So both sets are read off the board before
+        either is applied — which is also the whole of CR 702.26a's alternation,
+        with no per-permanent flag to keep in step.
+
+        The keyword is the only input to the outgoing half, so a permanent that
+        *gained* phasing (Teferi's Curse, Shimmer) leaves on the next untap step
+        and one that lost it stays. The incoming half reads the holding list
+        instead, which is what makes a permanent phased out by a one-shot effect
+        (Reality Ripple) come back exactly once.
+        """
+        player = self.players[seat]
+        leaving = [
+            perm for perm in self.controlled_by(seat)
+            if self._has_keyword(perm, "phasing")
+            and not perm.metadata.get("cant_phase_out")
+        ]
+        arriving = list(player.phased_out)
+        self.phase_in_for(seat, permanents=arriving)
+        for perm in leaving:
+            self.phase_out_permanent(perm)
+
+    def phase_in_for(self, seat: int, *, permanents: list[Permanent] | None = None) -> None:
+        """CR 702.26c: phased-out permanents *seat* controls phase in — the same
+        object, no new permanent_id, no enters-the-battlefield anything. A
+        ``phase_in_blocked`` marker (Teferi, Timeless Voyager's rider) holds a
+        permanent out until its countdown expires.
+
+        *permanents* is the set the phasing event already read (see
+        :meth:`resolve_phasing_for`); absent, it is whatever is held right now.
+        Matched **by identity**, because two copies of one card in a holding
+        list are equal by value and a membership test would phase in the wrong
+        one — the same reason the control seam bans ``.remove()`` on a
+        battlefield.
+        """
         player = self.players[seat]
         if not player.phased_out:
             return
+        chosen = (
+            None if permanents is None else {id(perm) for perm in permanents}
+        )
         staying: list[Permanent] = []
+        returning: list[Permanent] = []
         for perm in player.phased_out:
             block = perm.metadata.get("phase_in_blocked")
-            if isinstance(block, dict) and int(block.get("turn_ends_remaining", 0)) > 0:
+            if (chosen is not None and id(perm) not in chosen) or (
+                isinstance(block, dict) and int(block.get("turn_ends_remaining", 0)) > 0
+            ):
                 staying.append(perm)
                 continue
             perm.metadata.pop("phased_out", None)
             perm.metadata.pop("phase_in_blocked", None)
             player.battlefield.append(perm)
+            returning.append(perm)
             self.log.append(f"{perm.card.name} phased in")
         player.phased_out = staying
         self._recompute_continuous_effects()
+        self._announce_phasing("phases_in", returning)
+
+    def _announce_phasing(self, kind: str, permanents: list[Permanent]) -> None:
+        """CR 603.2's "whenever this permanent phases in / out" triggers.
+
+        One announcement per permanent, from the two seams that move one — so a
+        card watching the event is fired by the untap step's alternation, by a
+        one-shot phase-out and by anything else that reaches those two methods,
+        without any of them knowing the trigger exists. That is the arrangement
+        `tests/engine/test_trigger_dispatchers.py` exists to force: a condition
+        parsed by both front ends and announced by nothing is a card that
+        compiles supported and does nothing.
+        """
+        from ..events import emit
+
+        for perm in permanents:
+            # A permanent that has just phased *out* is on no battlefield, so
+            # the control seam cannot answer — `base_controller_index` is the
+            # seat it entered under and is never rewritten, which is the same
+            # fallback `mixins/effects.py` uses for a source that has left.
+            seat = self.controller_index_of(perm)
+            if seat is None:
+                seat = perm.metadata.get("base_controller_index")
+            emit(self, kind, subject=perm, source_seat=seat)
 
     # -- the two zones CR 903.9b intercepts ---------------------------------
     #

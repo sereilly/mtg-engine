@@ -391,6 +391,46 @@ def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
                 },
             ),
         )
+    # "**This creature** phases out." (Mist Dragon's activated ability, Crystal
+    # Golem's end-step trigger, Vaporous Djinn's and Warping Wurm's upkeep, and
+    # the win half of Frenetic Efreet's coin flip.) The commonest printed shape
+    # in Mirage and the one the target branch above could not read: the sentence
+    # names no target at all, so there was nothing for `_describe_targets` to
+    # describe.
+    if _is_source(subject):
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        return (OracleInstruction("phase_out_self", "", {}),)
+    # "**All lands you control** phase out." (Taniwha.) A sweep over a printed
+    # noun phrase, so the noun phrase is payload and a card printing a different
+    # one needs no code here.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+    ):
+        from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+        described = _filter_payload(subject.filter)
+        # Idiom 2 again: a restriction the matcher cannot test is one the
+        # handler would drop, and a dropped narrowing on a *sweep* phases out
+        # strictly more of the board than the card prints — here, everyone's
+        # lands rather than the controller's.
+        leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+        if leftover:
+            raise LoweringError(
+                "the phase-out sweep cannot narrow by: " + ", ".join(sorted(leftover)),
+                node=node,
+            )
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        return (
+            OracleInstruction("phase_out_matching", "", {"filter": described}),
+        )
     raise LoweringError("no handler phases out this subject", node=node)
 
 
