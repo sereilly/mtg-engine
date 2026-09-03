@@ -112,7 +112,7 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """
     if filt.is_source:
         return True
-    if not (filt.card_types or filt.subtypes):
+    if not (filt.card_types or filt.subtypes or filt.named):
         # An *unnamed* cost — one whose noun phrase pins neither a card type nor
         # a subtype — would let the charger eat anything on the board, including
         # a land. This is the one narrowing the key set cannot express, because
@@ -126,6 +126,13 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
         # already collect, which is the two-readers-disagree failure this
         # function exists to prevent, in the direction that costs a card its
         # support rather than its narrowing.
+        #
+        # …and so does a **name**: "Sacrifice a token named Wood" (Jungle
+        # Patrol) pins the object harder than any type would (CR 201.2), and
+        # ``named`` is a key ``subject_matches`` tests like any other. The
+        # question this branch asks is "does the phrase name what may be eaten?"
+        # — a name is the strongest yes there is, and the ``token_only`` beside
+        # it narrows further still.
         return False
     # ``controller`` travels beside it, for the reason the comment on the
     # charger gives: a sacrifice is paid from the payer's own battlefield, so

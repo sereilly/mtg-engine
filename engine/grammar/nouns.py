@@ -500,6 +500,39 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             stream.advance()
             continue
 
+        # "any number of **tokens** created with this creature" (Tetravus),
+        # "Sacrifice a **token** named Wood" (Jungle Patrol). Not a card type
+        # and not a generic noun: CR 111.1 makes "token" a fact about the
+        # object, so it is a restriction the same way "nontoken" is one, and it
+        # must not fall through to a head noun that restricts nothing.
+        #
+        # **Above the supertype branch, because Scryfall's supertype list
+        # contains "Token".** That list is fetched data (a token's printed line
+        # really does read "Token Creature — Wall"), and CR 205.4a's supertypes
+        # are basic, legendary, ongoing, snow and world — so the word arriving
+        # here as a supertype was the data disagreeing with the rules. It cost
+        # Jungle Patrol its whole second ability: the singular "token" was eaten
+        # as an adjective, the phrase then had no head noun, and the line
+        # refused with "expected what to sacrifice as a cost". Only the plural
+        # reached this branch, which is why "any number of tokens" worked and
+        # "a token" did not.
+        if word in ("token", "tokens"):
+            d.token_only = True
+            stream.advance()
+            # "a token **creature**" prints the fact as an adjective in front of
+            # a head noun, where "sacrifice a token" prints it *as* the head.
+            # Both are read: a following noun keeps the loop going, so the head
+            # is still the type word, and nothing else changes.
+            following = stream.peek_word()
+            if following is not None and (
+                _singular(following) in CARD_TYPES
+                or _singular(following) in _GENERIC_NOUNS
+                or _match_subtype(stream, 0) is not None
+            ):
+                continue
+            d.saw_head = True
+            break
+
         if word in SUPERTYPES:
             d.supertypes.append(word)
             stream.advance()
@@ -722,17 +755,6 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 d.token_only = True
                 stream.advance()
             d.is_card = _accept_card_noun(stream)
-            d.saw_head = True
-            break
-
-        # "any number of **tokens** created with this creature" (Tetravus). Not
-        # a card type and not a generic noun: CR 111.1 makes "token" a fact
-        # about the object, so it is a restriction the same way "nontoken" is
-        # one, and it must not fall through to a head noun that restricts
-        # nothing.
-        if word in ("token", "tokens"):
-            d.token_only = True
-            stream.advance()
             d.saw_head = True
             break
 

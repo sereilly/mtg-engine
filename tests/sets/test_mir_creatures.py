@@ -631,3 +631,76 @@ def test_mtenda_griffin_refuses_a_card_that_is_not_a_griffin(set_pool, slot):
     assert not result.supported
     assert len(game.players[0].graveyard) == 3
     assert game.players[0].battlefield, "a refused activation pays nothing"
+
+
+def test_jungle_patrol_sacrifices_its_own_wood_token_for_red_mana(set_pool):
+    """"{1}{G}, {T}: Create a 0/1 green Wall creature token with defender named
+    Wood." / "**Sacrifice a token named Wood**: Add {R}."
+
+    The second ability was lost to a word in fetched data. Scryfall lists
+    "Token" among the supertypes -- a token's printed line really does read
+    "Token Creature - Wall" -- so the noun parser ate the singular as an
+    adjective and the phrase was left with no head noun, refusing with "expected
+    what to sacrifice as a cost". Only the plural ("any number of tokens") ever
+    reached CR 111.1's branch. The word is now read there first, and the
+    printed *name* is what pins the cost.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", battlefield=[_W1G4Permanent(card=pool["Jungle Patrol"])],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=0
+    ).supported
+    game.resolve_stack()
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Jungle Patrol", "Wood",
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=1
+    )
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[0].battlefield] == ["Jungle Patrol"]
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_jungle_patrol_will_not_eat_a_creature_that_is_not_a_wood_token(set_pool):
+    """The name is the narrowing, and a dropped one would let the ability eat
+    any creature on the board for {R} -- a strictly better card with nothing on
+    the board to show it. CR 602.2b: an unpayable cost refuses the activation
+    with nothing spent."""
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1",
+            battlefield=[
+                _W1G4Permanent(card=pool["Jungle Patrol"]),
+                _W1G4Permanent(card=pool["Femeref Scouts"]),
+            ],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=1
+    )
+
+    assert not result.supported
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Jungle Patrol", "Femeref Scouts",
+    ]
+    assert game.players[0].mana_pool["R"] == 0
