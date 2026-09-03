@@ -56,6 +56,7 @@ from engine import card_hooks, load_cards  # noqa: E402
 from set_argument import add_set_argument, resolve_set  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
+from engine.grammar.lowering._events import OPPONENT_CHOSE_MODE  # noqa: E402
 from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
@@ -666,6 +667,7 @@ def _rule_match(
     card_name: str | None = None,
     trigger_prefix: str | None = None,
     cost_prefix: str | None = None,
+    event: str | None = None,
 ):
     """What parses *clause*, or (None, "unsupported").
 
@@ -706,16 +708,28 @@ def _rule_match(
     ``_grammar_instruction``), so reading it that way here is mirroring it, not
     excusing it — and the probe re-parses through the same path, so deleting a
     word from the clause still has to change the parse.
+
+    *event* is the same idea for a clause whose meaning depends on the
+    **position** it occupies rather than on words printed before it. A mode of
+    "An opponent chooses one —" binds "that player" to the chooser (CR 700.2e),
+    and the compiler tells the grammar so through the same parameter; a reader
+    that did not would be compiling a different card from the one the engine
+    compiles. Fatal Lore's mode read without it refuses at its third sentence
+    and reports two implemented sentences as unclaimed.
     """
-    compiled = compile_grammar_line(clause, card_name=card_name)
+    compiled = compile_grammar_line(clause, card_name=card_name, event=event)
     if compiled.usable:
         return _grammar_instruction(compiled), "grammar"
     if trigger_prefix:
-        in_trigger = compile_grammar_line(f"{trigger_prefix}, {clause}", card_name=card_name)
+        in_trigger = compile_grammar_line(
+            f"{trigger_prefix}, {clause}", card_name=card_name, event=event
+        )
         if in_trigger.usable:
             return _grammar_instruction(in_trigger), "grammar (read with its trigger)"
     if cost_prefix:
-        in_cost = compile_grammar_line(f"{cost_prefix}: {clause}", card_name=card_name)
+        in_cost = compile_grammar_line(
+            f"{cost_prefix}: {clause}", card_name=card_name, event=event
+        )
         if in_cost.usable:
             return _grammar_instruction(in_cost), "grammar (read with its cost)"
     return None, "unsupported"
@@ -727,10 +741,13 @@ def _probe(
     card_name: str | None = None,
     trigger_prefix: str | None = None,
     cost_prefix: str | None = None,
+    event: str | None = None,
 ) -> tuple[str, ...]:
     """Words in *clause* whose deletion leaves the parse identical — i.e.
     words the parser demonstrably ignored."""
-    base_instr, _ = _rule_match(clause, activated, card_name, trigger_prefix, cost_prefix)
+    base_instr, _ = _rule_match(
+        clause, activated, card_name, trigger_prefix, cost_prefix, event
+    )
     if base_instr is None:
         return ()
     words = clause.split()
@@ -739,7 +756,9 @@ def _probe(
         if word.lower().strip(".,;:'\"") in _PROBE_STOPWORDS:
             continue
         shorter = " ".join(words[:i] + words[i + 1:])
-        instr, _ = _rule_match(shorter, activated, card_name, trigger_prefix, cost_prefix)
+        instr, _ = _rule_match(
+            shorter, activated, card_name, trigger_prefix, cost_prefix, event
+        )
         if instr is not None and instr == base_instr:
             ignored.append(word)
     return tuple(ignored)
@@ -852,6 +871,10 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
     # sits on a DIFFERENT oracle line than the rule's anchor — Siren's Call's
     # delayed-destroy line rides on the attack-forcing rule's handler).
     seen_kinds: set[str] = set()
+    # The position this card's modal bullets occupy, when its head hands the
+    # choice to somebody else (CR 700.2e). None for every other card, which is
+    # what keeps every existing claim byte-identical.
+    mode_event = OPPONENT_CHOSE_MODE if program.mode_chooser is not None else None
 
     def claim_sentence(
         sentence: str,
@@ -859,6 +882,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         owner_kind: str | None = None,
         trigger_prefix: str | None = None,
         cost_prefix: str | None = None,
+        event: str | None = None,
     ) -> None:
         # A trailing sentence the owning rule's HANDLER implements (declared
         # in HANDLER_CLAIMS) is claimed by that handler.
@@ -868,14 +892,14 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             coverage.claims.append((sentence, f"handler ← {owner_kind}"))
             return
         instruction, _ = _rule_match(
-            sentence, activated, card.name, trigger_prefix, cost_prefix
+            sentence, activated, card.name, trigger_prefix, cost_prefix, event
         )
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((sentence, f"parse rule → {instruction.kind}"))
             if run_probe:
                 ignored = _probe(
-                    sentence, activated, card.name, trigger_prefix, cost_prefix
+                    sentence, activated, card.name, trigger_prefix, cost_prefix, event
                 )
                 if ignored:
                     coverage.probe_findings.append((sentence, ignored))
@@ -911,13 +935,14 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         activated: bool,
         trigger_prefix: str | None = None,
         cost_prefix: str | None = None,
+        event: str | None = None,
     ) -> None:
         clause = clause.strip(" .")
         if not clause:
             return
         sents = _sentences(clause)
         instruction, kind = _rule_match(
-            clause, activated, card.name, trigger_prefix, cost_prefix
+            clause, activated, card.name, trigger_prefix, cost_prefix, event
         )
         if instruction is not None and len(sents) > 1:
             # A rule matched the whole clause — but a substring-anchored rule
@@ -932,7 +957,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             # decides whether the trailing sentences mattered.
             def _same(text: str) -> bool:
                 instr, _ = _rule_match(
-                    text, activated, card.name, trigger_prefix, cost_prefix
+                    text, activated, card.name, trigger_prefix, cost_prefix, event
                 )
                 return instr is not None and instr == instruction
 
@@ -955,7 +980,8 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             coverage.claims.append((claimed_text, f"parse rule → {instruction.kind}"))
             if run_probe:
                 ignored = _probe(
-                    claimed_text, activated, card.name, trigger_prefix, cost_prefix
+                    claimed_text, activated, card.name, trigger_prefix, cost_prefix,
+                    event,
                 )
                 if ignored:
                     coverage.probe_findings.append((claimed_text, ignored))
@@ -963,7 +989,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 claim_sentence(
                     sentence, activated,
                     owner_kind=instruction.kind, trigger_prefix=trigger_prefix,
-                    cost_prefix=cost_prefix,
+                    cost_prefix=cost_prefix, event=event,
                 )
             return
         if instruction is not None:
@@ -971,7 +997,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             coverage.claims.append((clause, f"parse rule → {instruction.kind}"))
             if run_probe:
                 ignored = _probe(
-                    clause, activated, card.name, trigger_prefix, cost_prefix
+                    clause, activated, card.name, trigger_prefix, cost_prefix, event
                 )
                 if ignored:
                     coverage.probe_findings.append((clause, ignored))
@@ -996,7 +1022,19 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         if line.startswith("•"):
             # A modal spell bullet — parse_modal_options feeds each through the
             # rule registry exactly like a spell clause.
-            claim_clause(normalized.lstrip("• "), activated=False)
+            #
+            # …and, when the head names somebody other than the controller as
+            # the chooser (CR 700.2e), with the same *position* the compiler
+            # gives it. A mode of "An opponent chooses one —" binds "that
+            # player" to that chooser, so read without it the bullet is a
+            # different sentence: Fatal Lore's refuses at its third and two
+            # sentences the engine implements are reported unclaimed. Taken
+            # from the compiled program rather than re-detected here, for the
+            # reason this whole file exists — a second reader of the head
+            # would be free to disagree with the first.
+            claim_clause(
+                normalized.lstrip("• "), activated=False, event=mode_event,
+            )
             continue
         if _is_supported_keyword_line(line):
             coverage.claims.append((normalized, "keyword table"))

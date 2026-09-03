@@ -1396,6 +1396,144 @@ three — a round that "fixed three" would have changed two working programs —
 and Floodwater Dam's refusal was not about X at all but a `card_types` demand
 its own untap twin does not make.
 
+### W3G2 - modes, counters and granted abilities. 125 -> 129 (4 of 4).
+
+Fatal Lore, Misfortune, Nature's Blessing and Martyrdom, **zero hooks**, and
+the whole-pool differential moved exactly five programs of 1,869 - the four
+plus Basri's Solidarity, which rode a kind rename. ALL's grammar row 79.7% ->
+**80.5%** parsed, 77.7% -> 78.9% lowered, 58.6% -> 59.8% executed, with no
+shipped set's floor touched. Parse coverage came back to where it started (11
+unclaimed on 9 measured cards) after the instrument was corrected - see below.
+
+**CR 700.2e gives a spell a seat no board can answer, and two of these cards
+refer back to it.** W2G4 built the head and the mode choice; what nothing had
+was a home for the player the head names. Misfortune's second mode says it
+twice ("each creature **that player** controls", "deals 4 damage to **that
+player**") and Fatal Lore's says it once. The engine already has exactly one
+answer to "which seat does 'that player' name" - the seat a fire site *froze*,
+under `EVENT_SUBJECT_PLAYER`, read by `frozen_that_player_seat`, by the damage
+recipient and by the gain-life lowering - so the mode choice freezes one the
+same way rather than inventing a channel. `lowering/_events.OPPONENT_CHOSE_MODE`
+joins `_EVENT_SUBJECT_PLAYERS`; it is not a trigger condition and never reaches
+`emit`, because that table is about the events that froze a seat and a mode
+choice is one. `lower_ability` and `compile_line` gained an `event=` naming the
+**position** a line occupies, which a trigger reads off its own node and an
+effect line could not state.
+
+**Four refusal sites, and three of them were a layer off.** "no handler for
+-1/-1 counters" had a second gap immediately behind it ("counters on a scope no
+handler sweeps") and a third behind that; "no draw handler offers a ceiling"
+named a handler that already exists (Arcane Denial's `draw_up_to_cards`, whose
+drawer comes off a *record*); "granted ability in quotes" was about the
+sentence printed **after** the closing quote, not about the quote. Only
+Nature's Blessing's "unconsumed text" pointed at its own gap.
+
+**The load-bearing refusal was one the census never quoted.** `engine/oracle.py`
+refused any "An opponent chooses one -" card whose mode targets, on the correct
+reasoning that CR 601.2c announces targets after CR 601.2b picks the mode and
+here the two steps belong to different players. **And it was blind in the one
+direction that mattered**: it asked `"targets" in payload` at the top level, and
+Fatal Lore's mode is a `sequence` whose *step* targets - so it never fired on
+the only card in the pool it was written for, and fixing the draw made the card
+report supported with a mode nobody could name a target for. The gate is
+deleted and the announcement shape built: `arm_modal_mode_targets` asks the
+caster for the mode's targets the moment the chooser answers, a prompt armed by
+the answer to another prompt. Both `blocks_every_seat`, so nobody has priority
+between CR 601.2i and the targets being named - the spell being on the stack by
+then is a departure from the rules' internal order that nothing can observe.
+
+**A picker with an unanswerable narrowing must offer nothing, and this was the
+fourth seat test.** "target creature **that player** controls" is
+`defending_player_only`'s exact shape one record over - relative to something
+the announcement froze rather than to whoever is choosing - so it is a second
+flag/seat pair rather than a reuse, because they read two different records.
+Unnarrowed the picker offers every creature in the game.
+
+**One latent hole in a shipped handler, and no shipped card printing it.**
+`destroy_target_permanent`'s several-target branch tests its filter with
+`subject_matches`, which **refuses** `controller: "that_player"` rather than
+ignoring it - so the branch would have rejected every target, destroyed nothing
+and logged itself resolved. The singular branch, the sweep above it and all
+three tapping handlers already strip the key and ask the frozen seat; this one
+did not. Feline Sovereign (M21) prints the phrase but with one target, so it
+takes the singular branch and was never wrong. Swept the whole pool for the
+shape after the fix.
+
+**Two counter facts that were one kind's name.**
+`add_counter_to_each_you_control` had its scope in its name and its P/T pair
+hard-coded, so "each creature **that player** controls" had nowhere to go and
+"-1/-1 on each" had no reader at all. One kind now
+(`add_counter_to_each_matching`) whose printed noun phrase is a filter payload,
+because the width is the only difference between the two sentences.
+
+**The keyword list's connective was being normalised away.** `_parse_keywords`
+consumed "and" and "or" identically, so "gains banding, first strike, **or**
+trample" would have granted all three. No card in the pool printed the shape,
+which is the whole point: it was one word away from a silent wrong answer, and
+the card that prints it is the one that found it. The comma branch now reads
+"and" as well as "or" - which the comment above it already claimed and the code
+did not, leaving an "and" list of three one item short.
+
+**An indefinite grant to a chosen object was one payload entry.** CR 611.2b: no
+printed duration means it lasts as long as the object, and the *source* branch
+of `_lower_gain_keyword` already said so with a `None` duration that
+`KEYWORD_GRANT_DURATIONS` documents and no sweep looks at. The target branch
+refused it. (`grant_banding_to_target`'s log line was hard-coded to "until end
+of turn" and would have said so over a grant that outlives the turn.)
+
+**"Only you may activate this ability" is a permission, not a restriction**, and
+`engine/activation_permissions.py`'s `_PERMISSION_SHAPE` already *matched* it -
+so Martyrdom was refused for a permission with no row, exactly as that module
+intends. What the row needed was the seat: "you" is CR 109.5's controller of the
+ability's **source**, and the source is a spell that granted the ability and
+then left. Read off the permanent's controller the sentence would be no rule at
+all (CR 602.1a already says that) and an opponent who stole the creature would
+inherit the ability the card forbids them. `grant_ability_line` records the
+granting seat on every granted line now. The sentence itself folds into the
+quoted text, because what reaches the battlefield is that string and a clause
+left outside it belongs to a spell in a graveyard.
+
+**The sixth pronoun rebinder, and the first whose antecedent is a sibling.**
+"Put a +1/+1 counter on **target creature** or **that creature** gains ..." -
+the alternatives of a `OneOf` are two readings of one action, so the ability
+announces its target once and either branch acts on it. The bound spec stays a
+*target*, which is `rebind_pump_pronoun_to_sentence_target`'s choice and the
+opposite of the delayed one's.
+
+**A statement-level "or" was claimed in the one position where the trade is
+free.** `_parse_optional_action` reads it behind "you may" and its docstring
+records why it was not claimed at large. `_parse_statement_alternatives` sits
+*after* `parse_statement` has succeeded with the cursor on a word that is
+neither a full stop nor a semicolon - which is the state the line fails in
+three lines further down, so it can only claim text that is being refused
+today.
+
+**`parse_coverage.py` was reading a different card from the compiler**, one
+layer deeper than the readers CLAUDE.md names. Its `_rule_match` re-parses a
+clause in isolation, and a *mode* of an opponent-chosen head is a clause whose
+meaning depends on the position it occupies: read without the chooser event,
+Fatal Lore's bullet refuses at its third sentence and two sentences the engine
+implements are reported unclaimed. The fix is the one `trigger_prefix` already
+makes for the same reason ("reading it that way here is mirroring the compiler,
+not excusing it") - `_rule_match` and `_probe` take the event, and the bullet
+branch reads it off the compiled program rather than re-detecting the head.
+
+**Declines: none.** All four cards landed.
+
+**One thing the wave-3 base commit carried in, fixed here because it blocks
+every group's first assertion:** `engine/grammar/subject_verb.py` imported
+`NUMBER_WORDS` and neither used nor re-exported it after W2G4's `imperatives`
+split, so `tests/engine/test_import_hygiene.py` was red on `fb458f76`.
+
+**Two non-append edits to other groups' test blocks**, both recorded in place
+where the integrator's "both sides are pure appends" assertion will fire:
+W2G5's Nature's Blessing and Martyrdom decline tests are **deleted**, because a
+decline test whose subject now works asserts something false and cannot be kept
+in any form. Both decline lists were right about their parts - Martyrdom's part
+3 named `activation_restrictions.py` where the answer was
+`activation_permissions.py`, which is a decline list working as intended: it
+pointed at the question and the next reader corrected the address.
+
 ### Wave 2 integration: two branches split one module, and both moved the same function
 
 `postmodifiers.py` was split **twice in one wave** — W2G4 extracting `zones`,
