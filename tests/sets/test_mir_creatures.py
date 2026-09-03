@@ -391,3 +391,48 @@ def test_raging_spirit_becomes_colorless_until_end_of_turn(set_pool):
 
     game.resolve_cleanup_step(0)
     assert permanent_effective_colors(spirit) == {"R"}
+
+
+# --- Round 8: a ceiling on how many creatures may block (CR 509.1b) ---
+
+def _r8_attack(set_pool, name: str, blockers: int):
+    attacker = Permanent(card=set_pool("MIR")[name])
+    blocking = [Permanent(card=_r1_vanilla(f"Guard {i}", 2, 2)) for i in range(blockers)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=blocking),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    return game
+
+
+def test_stalking_tiger_may_be_blocked_by_one(set_pool):
+    """"This creature can't be blocked by more than one creature." The legal
+    declaration still is one."""
+    game = _r8_attack(set_pool, "Stalking Tiger", 1)
+
+    assert game.declare_blockers(1, {0: 0})[0]
+
+
+def test_stalking_tiger_refuses_a_double_block(set_pool):
+    """The ceiling to the menace floor beside it, and the same reading of
+    CR 509.1b/509.1c: a restriction on the finished declaration rather than on
+    any single blocker pair, so it is checked over the whole assignment.
+
+    The pattern also has to sit **above** the general "can't be blocked by
+    <noun>" row, which reads any bare noun phrase and would have consumed "more
+    than one creature" as one — producing a filter matching nothing, so the
+    restriction would go inert and the Tiger would be blockable by anything.
+    """
+    game = _r8_attack(set_pool, "Stalking Tiger", 2)
+
+    ok, message = game.declare_blockers(1, {0: 0, 1: 0})
+
+    assert not ok
+    assert "more than 1" in message

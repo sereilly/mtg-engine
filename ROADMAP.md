@@ -1244,6 +1244,25 @@ had already been caught once in the same file.
 
 `oracle_diff`: **4 changed of 2181**, all Mirage.
 
+### Round 8 — a ceiling on how many creatures may block (CR 509.1b): 222 → 223
+
+One card, one row, and it is here because the row is a template rather than a
+card: "This creature can't be blocked by more than one creature" (Stalking
+Tiger) is the **ceiling** to the floor `cant_be_blocked_by_fewer_than` already
+carried, and Magic prints it on dozens of creatures. Its own kind rather than a
+signed number on the existing one, because CR 509.1b makes every restriction
+apply — a card printing both wants the tighter of each end, and one field
+carrying a signed value could not say which end a number bounded. Checked over
+the finished assignment beside the floor, because a count is a restriction on
+the declaration and not on any single blocker pair (CR 509.1c).
+
+**Order is the only thing that separates it from the general row.** "…can't be
+blocked by &lt;noun&gt;" reads any bare noun phrase, and it matched "more than
+one creature" as one — which produces a filter matching nothing, so the
+restriction goes inert and the Tiger becomes blockable by *anything*. That is
+the widening direction, so the specific row goes above the general one and its
+test says so.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

@@ -304,6 +304,30 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # produce `cant_be_blocked_by` and one enforcement site asks
     # `subject_matches` about the blocker.
     (
+        # "This creature can't be blocked by **more than one** creature."
+        # (Stalking Tiger.) The ceiling to the floor above, and its own kind for
+        # that reason: CR 509.1b makes every restriction apply, so a card
+        # printing both would want the tighter of each and one kind carrying a
+        # signed number could not say which end a value bounded.
+        #
+        # The number is payload like every number in this file, so "more than
+        # two" is the same restriction. Checked over the finished assignment at
+        # the same site the floor is, because it is a restriction on the
+        # declaration as a whole rather than on any single blocker pair.
+        #
+        # **Above the general "can't be blocked by <noun>" row**, which reads
+        # any bare noun phrase and would consume "more than one creature" as
+        # one — producing a filter matching nothing, so the restriction would go
+        # inert and the creature would be blockable by anything. Order is the
+        # only thing that separates them, because the general row's whole point
+        # is that it does not enumerate what a blocker may be.
+        re.compile(
+            r"^this creature can't be blocked by more than "
+            r"(?P<count>\w+) creatures?$"
+        ),
+        "cant_be_blocked_by_more_than",
+    ),
+    (
         # "…can't be blocked by **Walls**" (Invisibility's mirror), "…by
         # **artifact creatures**" (Argothian Pixies), "…by **red** creatures"
         # (Elder Spawn), "…by creatures with **power 3 or greater**" (Amrou

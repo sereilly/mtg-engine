@@ -205,6 +205,31 @@ class DeclareBlockersStepMixin:
         for assigned_attackers in assignments.values():
             for attacker_idx in assigned_attackers:
                 menace_blocker_counts[attacker_idx] = menace_blocker_counts.get(attacker_idx, 0) + 1
+        # …and how many **may** block at once (Stalking Tiger). The same loop
+        # and the same reading of CR 509.1c: a ceiling is a restriction on the
+        # finished declaration, not on any single blocker pair, so it is checked
+        # here beside the floor rather than in `_can_block_attacker`. A
+        # Camouflage resolution takes the same out the floor does — those blocks
+        # simply do not happen.
+        for attacker_idx, count in menace_blocker_counts.items():
+            attacker = resolved_attackers[attacker_idx]
+            maximum = self._maximum_blockers(attacker)
+            if maximum is None or count <= maximum:
+                continue
+            reason = f"can't be blocked by more than {maximum} creature(s)"
+            if _camouflage_resolution:
+                for blocker_idx in list(assignments):
+                    remaining = [a for a in assignments[blocker_idx] if a != attacker_idx]
+                    if remaining:
+                        assignments[blocker_idx] = remaining
+                    else:
+                        del assignments[blocker_idx]
+                self.log.append(
+                    f"{attacker.card.name} {reason}; those blocks do not happen"
+                )
+                continue
+            return False, f"{attacker.card.name} {reason}"
+
         for attacker_idx, count in menace_blocker_counts.items():
             attacker = resolved_attackers[attacker_idx]
             minimum = self._minimum_blockers(attacker)
@@ -606,6 +631,25 @@ class DeclareBlockersStepMixin:
                 continue
             minimum = max(minimum, int(restriction.payload.get("count", 1)))
         return minimum
+
+    def _maximum_blockers(self, attacker: Permanent) -> int | None:
+        """How many creatures may block *attacker* at once, or None if any may.
+
+        "This creature can't be blocked by more than one creature." (Stalking
+        Tiger.) The ceiling to :meth:`_minimum_blockers`' floor, and the
+        **smallest** ceiling wins for the same CR 509.1b reason the largest
+        minimum does: every restriction applies, so obeying only the loosest
+        would let a declaration break the tighter one.
+        """
+        caps = [
+            int(restriction.payload.get("count", 1))
+            for restriction in (
+                *compile_card_oracle(attacker.effective_card).instructions,
+                *attached_combat_restrictions(attacker),
+            )
+            if restriction.kind == "cant_be_blocked_by_more_than"
+        ]
+        return min(caps) if caps else None
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
