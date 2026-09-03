@@ -1539,6 +1539,39 @@ def redirect_next_damage_to_source_until_eot(
         ),
         fallback_players=(),
     )
+    # "…dealt to **target creature, planeswalker, or player**" (Martyrdom's
+    # granted ability). CR 115.4's union, and the one recipient this handler had
+    # no branch for: the record hangs off *whatever* the damage would be dealt
+    # to, and ``engine/damage_redirects`` has carried a player there since it
+    # was written (CR 615.1's wording puts a player and a permanent on the same
+    # footing). Which of the two was chosen is read the way every other
+    # any-target effect reads it — a permanent when one was named, and the
+    # resolution's player otherwise — rather than by a second convention.
+    if protected is None and (
+        (payload.get("targets") or {}).get("quantifier") == "any_target"
+    ):
+        player = context.target
+        if player is None or getattr(player, "lost", False):
+            game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+            return True, "resolved"
+        amount = resolve_amount(payload.get("amount", 0), context.x_value)
+        if amount <= 0:
+            game.log.append(f"{card_name}: no damage to move")
+            return True, "resolved"
+        add_redirect(
+            player,
+            DamageRedirect(
+                new_recipient=taker,
+                amount=amount,
+                uses=None,
+                source_name=card_name or None,
+            ),
+        )
+        game.log.append(
+            f"{card_name}: the next {amount} damage that would be dealt to "
+            f"{player.name} this turn is dealt to {taker.card.name} instead"
+        )
+        return True, "resolved"
     if protected is None:
         game.log.append(f"{card_name}: its target is gone, nothing is redirected")
         return True, "resolved"

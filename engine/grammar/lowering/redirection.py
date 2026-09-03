@@ -410,9 +410,15 @@ def _lower_next_damage_redirect(
             node=node,
         )
     spec = node.to
+    # "…dealt to **target creature, planeswalker, or player**" (Martyrdom's
+    # granted ability) — CR 115.4's union, which the reference reader gives the
+    # same quantifier as the modern "any target" spelling. Admitted beside the
+    # narrowed object because a redirect record already lives on "a player *or*
+    # a permanent" (``engine/damage_redirects``: CR 615.1's sibling wording),
+    # so the union costs the handler one branch and the record nothing.
     if (
         not isinstance(spec, ast.TargetSpec)
-        or spec.quantifier != "target"
+        or spec.quantifier not in ("target", "any_target")
         or _names_several_targets(spec)
     ):
         raise LoweringError(

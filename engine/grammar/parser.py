@@ -34,6 +34,7 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
+import dataclasses
 import re
 from dataclasses import replace
 
@@ -353,6 +354,57 @@ def _sentence_ended_on_a_quote(stream: TokenStream) -> bool:
     return previous is not None and previous.kind == QUOTE
 
 
+def _attach_granted_ability_permission(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold a trailing "who may activate" sentence into the ability the step
+    before it granted, and say whether one was found.
+
+    "Until end of turn, target creature you control gains "{0}: …" **Only you
+    may activate this ability.**" (Martyrdom.) The permission is about the
+    granted ability, not about the spell: what reaches the battlefield is the
+    quoted line, and `engine/keywords.py` records exactly that string for
+    `Permanent.effective_card` to fold in and the compiler to read. A clause
+    left outside it belongs to a spell that is in its owner's graveyard by the
+    time anyone activates — read there it would restrict nothing.
+
+    So the sentence is appended to the quoted text, which is the same rewrite
+    `oracle.expand_equip_lines` makes one layer up and for the same reason:
+    every reader of what the creature now says has to see the same sentence.
+    `engine/activation_permissions.py` is asked first, so a permission that
+    module does not implement leaves the line refused rather than consumed and
+    dropped.
+
+    Only a grant with **one** quoted ability is claimed. A sentence naming
+    "this ability" after two of them names one of the two and the card would
+    have to say which; nothing prints that, and guessing is what this refuses.
+    """
+    from ..activation_permissions import permission_clause_readable
+
+    if not steps or not isinstance(steps[-1], ast.GainAbilityText):
+        return False
+    grant = steps[-1]
+    if len(grant.abilities) != 1:
+        return False
+    mark = stream.mark()
+    stream.accept_punct(".", ";")
+    if not stream.at_word("any", "only"):
+        stream.reset(mark)
+        return False
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_punct("."):
+        words.append(str(stream.next().text))
+    sentence = " ".join(words).replace(" '", "'")
+    if not permission_clause_readable(sentence):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps[-1] = dataclasses.replace(
+        grant, abilities=(f"{grant.abilities[0]}. {sentence.capitalize()}",)
+    )
+    return True
+
+
 def _parse_statement_alternatives(
     stream: TokenStream, first: ast.Statement, first_at: int
 ) -> ast.Statement:
@@ -542,6 +594,16 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             controller_token = _parse_its_controller_creates_rider(stream, steps)
             if controller_token is not None:
                 steps.append(controller_token)
+                continue
+            # "…gains "<ability>." **Only you may activate this ability.**"
+            # (Martyrdom.) A sentence about the *granted* ability, printed
+            # outside the quotes because the quotes hold what the creature
+            # gains and this says who may use it — so it folds into the quoted
+            # text rather than becoming a step. Read before the trailing
+            # restriction below, which would consume the same sentence and
+            # record it on a **spell**: the spell is in a graveyard by the time
+            # anybody activates, so the clause would be enforced by nobody.
+            if _attach_granted_ability_permission(stream, steps):
                 continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line

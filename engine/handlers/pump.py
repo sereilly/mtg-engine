@@ -1340,6 +1340,9 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
     from ..keywords import grant_ability_line, normalized_ability_line
 
     lifetime = grant_lifetime(game, instruction, context)
+    caster_seat = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
     texts = tuple(instruction.payload.get("abilities") or ())
     if instruction.payload.get("only_if_absent"):
         # "If it doesn't have "<ability>," it gains that ability." (Musician.)
@@ -1355,11 +1358,23 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
         texts = tuple(
             text for text in texts if normalized_ability_line(text) not in present
         )
+    # **Whose grant this is** (CR 109.5), recorded on every granted line rather
+    # than only on the seated durations `grant_lifetime` answers for. A granted
+    # ability can name its granter — "Only you may activate this ability"
+    # (Martyrdom) — and by the time anyone asks, the spell that said "you" is a
+    # card in a graveyard with no controller (CR 108.4) and the creature may be
+    # under somebody else's control, which is exactly the case the sentence is
+    # printed for. `_check_duration` accepts a seat beside any duration and the
+    # sweeps ignore one they did not ask for, so this costs the existing grants
+    # a key and nothing else.
+    granting = dict(lifetime)
+    if caster_seat is not None:
+        granting.setdefault("seat", caster_seat)
     for text in texts:
         line = text.strip()
         if not line:
             continue
-        grant_ability_line(permanent, line[:1].upper() + line[1:], **lifetime)
+        grant_ability_line(permanent, line[:1].upper() + line[1:], **granting)
     if texts:
         lasting = DURATION_WORDS.get(lifetime["duration"], "")
         game.log.append(
