@@ -496,3 +496,74 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game as _W1G3Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def _w1g3_tap_all(game, player, lands, color):
+    for land in lands:
+        assert game.tap_land_for_mana(
+            0, land.card.name, color,
+            permanent_index=player.battlefield.index(land),
+        )
+
+
+def _w1g3_hellkite_board(set_pool, land_name, land_count):
+    pool = set_pool("MIR")
+    hellkite = _W1G3Permanent(card=pool["Crimson Hellkite"])
+    lands = [_W1G3Permanent(card=pool[land_name]) for _ in range(land_count)]
+    victim = _W1G3Permanent(card=pool["Wild Elephant"])       # 3/3
+    p1 = _W1G3PlayerState(name="P1", battlefield=[hellkite, *lands],
+                          library=[pool[land_name]] * 10, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim],
+                          library=[pool[land_name]] * 10, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _w1g3_tap_all(game, p1, lands, "R" if land_name == "Mountain" else "G")
+    return game, hellkite, victim
+
+
+def test_crimson_hellkite_spends_red_mana_on_x(set_pool):
+    """"{X}, {T}: This creature deals X damage to target creature. **Spend only
+    red mana on X.**"
+
+    The whole line refused to parse before this round, so the ability did not
+    exist. Two halves land together, because a restriction the grammar consumes
+    and nothing charges is an ability that works more often than the card
+    allows: the sentence is claimed, and the X pips are charged as {R}.
+    """
+    game, hellkite, victim = _w1g3_hellkite_board(set_pool, "Mountain", 2)
+
+    result = game.activate_permanent_ability(
+        0, "Crimson Hellkite", x_value=2,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert victim.damage_marked == 2
+    assert hellkite.tapped
+
+
+def test_crimson_hellkite_refuses_to_pay_x_from_the_wrong_colour(set_pool):
+    """The other direction, without which the test above passes for an ability
+    that charges X as generic mana — which is every colour at once."""
+    game, hellkite, victim = _w1g3_hellkite_board(set_pool, "Forest", 2)
+
+    result = game.activate_permanent_ability(
+        0, "Crimson Hellkite", x_value=2,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not result.supported, (
+        "two Forests paid an X the card says only red mana may pay "
+        f"— log: {game.log}"
+    )
+    assert victim.damage_marked == 0
+    assert not hellkite.tapped, "CR 602.2b: nothing is paid by a refused activation"

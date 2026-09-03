@@ -159,3 +159,39 @@ def test_tropical_storm_reads_the_other_printed_word_order(set_pool):
     assert mine[0].damage_marked == 0
     assert yours[0].damage_marked == 0
     assert yours[1].damage_marked == 2
+
+
+def test_reign_of_chaos_asks_for_a_land_by_its_printed_subtype(set_pool):
+    """"Destroy target **Plains** and target white creature."
+
+    Two independent target roles, which the picker has read since Fumarole —
+    the only thing refusing this card was the *name* of the first slot, because
+    "Plains" is a subtype and the role namer read card types alone. The land is
+    destroyed by the slot that names it and the untargeted Island is not, which
+    is what proves the slot kept its filter rather than becoming "any land".
+    """
+    pool = set_pool("MIR")
+    plains = _W1G3Permanent(card=pool["Plains"])
+    island = _W1G3Permanent(card=pool["Island"])
+    knight = _W1G3Permanent(card=pool["Zhalfirin Commander"])   # white
+    zombie = _W1G3Permanent(card=pool["Cadaverous Knight"])     # black
+    game = Game(players=[
+        _W1G3PlayerState(name="P1", hand=[pool["Reign of Chaos"]],
+                         library=[pool["Island"]] * 5),
+        _W1G3PlayerState(name="P2", battlefield=[plains, island, knight, zombie],
+                         library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.cast_from_hand(
+        0, "Reign of Chaos", mode_index=0,
+        target_permanent_ids=[plains.permanent_id, knight.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert not game.is_on_battlefield(plains)
+    assert not game.is_on_battlefield(knight)
+    assert game.is_on_battlefield(island)
+    assert game.is_on_battlefield(zombie)

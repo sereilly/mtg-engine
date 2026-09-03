@@ -441,6 +441,49 @@ def _parse_cost_x_definition(stream: TokenStream) -> ast.ActivationRestriction |
     return ast.ActivationRestriction(sentence)
 
 
+def _parse_x_spend_restriction(stream: TokenStream) -> ast.ActivationRestriction | None:
+    """A trailing "Spend only red mana on X." sentence (Crimson Hellkite).
+
+    The third rider in this family, and the same arrangement as the two beside
+    it: the sentence constrains the ability's **cost**, not its effect, so the
+    grammar accounts for the tokens and ``mixins/stack/activation.py`` — which
+    reads the raw ``ability.source_line`` — is what charges the colour.
+
+    Read through ``oracle_types.x_spend_colors_from_text``, the same function
+    the enforcement calls, rather than by matching the words here. That is the
+    rule the two siblings state: a copy of the phrase in the grammar is free to
+    drift from the code that acts on it, and a drifted copy consumes a
+    restriction nobody applies — which on an {X} cost is the caster paying the
+    colour they happen to have.
+    """
+    from ...oracle_types import x_spend_colors_from_text
+
+    mark = stream.mark()
+    stream.accept_punct(".", ";")
+    if not stream.at_word("spend"):
+        stream.reset(mark)
+        return None
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_punct("."):
+        words.append(str(stream.next().text))
+    sentence = " ".join(words).replace(" '", "'")
+    colours = x_spend_colors_from_text(sentence)
+    if len(colours) != 1:
+        # No colour read at all, or the "black **and/or** red" pair. The pair is
+        # refused rather than charged as its first colour: splitting X between
+        # two colours is the activator's CR 601.2h choice, and the machinery
+        # that makes it (``casting._x_color_allocations``) is on the spell path
+        # only. Charging the first colour alone would make the ability
+        # *unpayable* from a pool the card allows — a restriction wrong in the
+        # other direction, and still a restriction the card does not print.
+        # No card in the pool prints the pair on an activated ability; the day
+        # one does, it reports unsupported naming this sentence.
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    return ast.ActivationRestriction(sentence)
+
+
 def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestriction | None:
     """A trailing "Activate only …" / "Any player may activate this ability."
     sentence on an activated ability.

@@ -69,6 +69,7 @@ from .rebinding import (bind_recorded_card,
 from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
+    _parse_x_spend_restriction,
     _parse_cost_x_definition,
     _parse_damage_rider_sentence,
     _parse_unpaid_penalty_sentence,
@@ -624,6 +625,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # arrangement, same reason, and enforcement likewise stays on the
             # raw text (engine/cost_x_definitions.py).
             if _parse_cost_x_definition(stream) is not None:
+                continue
+            # A trailing "Spend only red mana on X." (Crimson Hellkite) belongs
+            # to the cost too — the third of the same family, consumed here and
+            # charged by the activation path off the raw text.
+            if _parse_x_spend_restriction(stream) is not None:
                 continue
 
         sentence_at = stream.pos

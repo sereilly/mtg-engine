@@ -160,6 +160,22 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     prevention_colors = tuple(
         instruction.payload.get("prevention_colors") or ()
     ) or ((prevention_color,) if prevention_color else ())
+    if instruction.payload.get("prevention_color_chosen"):
+        # "…a source of your choice **of the chosen color**" (Prismatic
+        # Circle). The colour is not in the sentence: it is what this permanent
+        # recorded as it entered (CR 614.1c), read here rather than at damage
+        # time because CR 615.9 rechecks the *source* against a property the
+        # shield already holds — and the property was fixed when this ability
+        # resolved.
+        #
+        # Nothing recorded arms nothing, the reading
+        # ``prevention._resolved_chosen_color`` takes of the same phrase on the
+        # static side: a shield naming no colour would answer to every source,
+        # which is the widest possible reading of a sentence that names one.
+        recorded = (
+            getattr(context.source_permanent, "metadata", {}) or {}
+        ).get("chosen_color")
+        prevention_colors = (str(recorded),) if recorded else ()
     # Circle of Protection: Artifacts — the same Circle keyed on a card type.
     # Its own branch rather than a widened colour one: `make_color_shield` sets
     # the colour field, and a shield holding a card type in it would be

@@ -277,3 +277,87 @@ def test_a_union_clause_reduces_to_its_nouns(set_pool):
     assert enchant_clause_nouns("creature card in a graveyard") == (
         "creature card in a graveyard",
     )
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game as _W1G3Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def test_prismatic_circle_shields_against_the_colour_it_chose(set_pool):
+    """"{1}: The next time a source of your choice **of the chosen color**
+    would deal damage to you this turn, prevent that damage."
+
+    Reported *supported* before this round while compiling to no instruction at
+    all: the Circle branch reads a colour **word**, and this card prints the
+    colour as a back-reference to what it recorded on entering (CR 614.1c). So
+    the whole ability was a hollow line — the worst shape a card can have,
+    because nothing was missing to report.
+
+    Both directions, because a shield that fires on everything passes the
+    positive half: a blue source is stopped and a black one is not.
+    """
+    from tests.helpers import _damage_dealt
+
+    pool = set_pool("MIR")
+    circle = _W1G3Permanent(card=pool["Prismatic Circle"])
+    drake = _W1G3Permanent(card=pool["Azimaet Drake"])        # blue
+    zombie = _W1G3Permanent(card=pool["Cadaverous Knight"])   # black
+    p1 = _W1G3PlayerState(name="P1", battlefield=[circle], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[drake, zombie], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    circle.metadata["chosen_color"] = "U"
+
+    result = game.activate_permanent_ability(0, "Prismatic Circle")
+    assert result.supported, result.details
+
+    assert _damage_dealt(game, p1, 4, source=zombie) == 4, "a black source"
+    assert _damage_dealt(game, p1, 4, source=drake) == 0, "the chosen colour"
+
+
+def test_prismatic_circle_arms_nothing_when_no_colour_was_recorded(set_pool):
+    """A shield that recorded no property answers to *every* source, which is
+    the widest possible reading of a sentence naming one colour.
+
+    The static half of the same phrase (``prevention._resolved_chosen_color``)
+    already refuses that way; this is the one-shot half held to it.
+    """
+    from tests.helpers import _damage_dealt
+
+    pool = set_pool("MIR")
+    circle = _W1G3Permanent(card=pool["Prismatic Circle"])
+    drake = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[circle], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[drake], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.activate_permanent_ability(0, "Prismatic Circle")
+
+    assert _damage_dealt(game, p1, 4, source=drake) == 4
+
+
+def test_prismatic_circle_records_a_colour_when_it_enters(set_pool):
+    """The ability is only as good as the record it reads, so the entry half is
+    checked in the same game rather than assumed from the fixture above."""
+    pool = set_pool("MIR")
+    drake = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(name="P1", hand=[pool["Prismatic Circle"]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[drake], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    assert game.cast_from_hand(0, "Prismatic Circle").supported
+    game.resolve_stack()
+
+    circle = next(p for p in game.controlled_by(0)
+                  if p.card.name == "Prismatic Circle")
+    assert circle.metadata.get("chosen_color") == "U", (
+        "the only nontoken permanent an opponent controls is blue"
+    )

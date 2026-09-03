@@ -184,6 +184,39 @@ def _lower_prevent_damage(
                     node=node,
                 )
             return (OracleInstruction("grant_whole_prevention_shield", "", {}),)
+        # "…a source of your choice **of the chosen color**" (Prismatic
+        # Circle). The colour axis with the value deferred: what the shield
+        # records is not in the sentence, it is what the permanent chose as it
+        # entered (CR 614.1c), so the handler reads it off the source at
+        # resolution and arms nothing when nothing was recorded — the reading
+        # ``prevention._resolved_chosen_color`` already takes for the static
+        # half of the same phrase.
+        #
+        # Read before the axis check below, which sees neither a colour nor a
+        # card type and would call this shield unnarrowed.
+        if node.from_filter.chosen_color:
+            if _restrictions_beyond(
+                node.from_filter, frozenset({"chosen_color"})
+            ):
+                raise LoweringError(
+                    "a chosen-colour shield records no second property",
+                    node=node,
+                )
+            if not _is_you(recipient):
+                raise LoweringError(
+                    "colour-scoped shields only protect their controller",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "grant_prevention_shield", "",
+                    {
+                        "amount": 1,
+                        "protection_kind": "color",
+                        "prevention_color_chosen": True,
+                    },
+                ),
+            )
         # Exactly one *axis* — a shield records one property and CR 615.9
         # rechecks that property — but the colour axis may name several values
         # ("a black **or red** source of your choice", Greater Realm of

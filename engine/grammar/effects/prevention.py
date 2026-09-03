@@ -339,7 +339,23 @@ def _parse_source_of_choice_effect(
     if not stream.accept_word("source"):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("of", "your", "choice", "would", "deal", "damage", "to"):
+    if not stream.accept_phrase("of", "your", "choice"):
+        stream.reset(mark)
+        return None
+    # "a source of your choice **of the chosen color**" (Prismatic Circle). The
+    # same Circle narrowing read one branch above, with the colour deferred to
+    # what the permanent recorded as it entered (CR 614.1c) instead of printed
+    # in the sentence — so it is read here, after "of your choice", because
+    # that is where this card prints it and the branch above reads a colour
+    # *word*, which "the chosen color" is not.
+    #
+    # Refused alongside a printed colour rather than folded in: "a red source
+    # of your choice of the chosen color" names two properties, and a shield
+    # records one (CR 615.9 rechecks *the* recorded property).
+    chosen_color = bool(stream.accept_phrase("of", "the", "chosen", "color"))
+    if chosen_color and (colours or card_type):
+        raise stream.error("a shield records one source property, not two")
+    if not stream.accept_phrase("would", "deal", "damage", "to"):
         stream.reset(mark)
         return None
     recipient = parse_recipient(stream)
@@ -381,7 +397,7 @@ def _parse_source_of_choice_effect(
                 rounding = "up"
             elif not stream.accept_word("down"):
                 raise stream.error("expected 'up' or 'down' after 'rounded'")
-        if colours or card_type:
+        if colours or card_type or chosen_color:
             # A shield that records a property *and* halves is a card nobody has
             # printed; refusing names the gap rather than dropping one half.
             raise stream.error("no shield both narrows its source and halves")
@@ -398,6 +414,12 @@ def _parse_source_of_choice_effect(
         filt = ast.ObjectFilter(colors=tuple(colours))
     elif card_type:
         filt = ast.ObjectFilter(card_types=(card_type,))
+    elif chosen_color:
+        # Not a member of ``colors``: the colour is not in the sentence at all,
+        # and folding it in would need a sentinel every ``colors`` reader would
+        # then have to know about — the argument ``ObjectFilter.chosen_color``
+        # already carries for the noun-phrase side.
+        filt = ast.ObjectFilter(chosen_color=True)
     else:
         filt = ast.ObjectFilter()
     return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
