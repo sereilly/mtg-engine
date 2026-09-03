@@ -47,6 +47,29 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("for", "as", "long", "as", "this", "creature", "remains", "tapped")),
     ("while_source_tapped",
      ("for", "as", "long", "as", "this", "permanent", "remains", "tapped")),
+    # "for as long as this creature remains **on the battlefield**" (Stromgald
+    # Spy). The other linked duration, and linked the same way: nothing
+    # schedules its removal, because the effect is contributed while the source
+    # is in the scan and simply stops being contributed when it is not
+    # (CR 611.2b, and CR 400.7 makes a returning permanent a new object that
+    # contributes nothing). Its own kind rather than the tapped one's: an
+    # opponent who taps the source breaks that link and not this one.
+    #
+    # The value has been in the grammar since Scarwood Bandits, read inline by
+    # the control-change production because it was the only sentence printing
+    # the words. A second sentence now prints them, which is what moves the
+    # phrase into the one duration table — and the entry makes it available to
+    # every production, which is safe because a lowering handed a duration it
+    # has no sweep for refuses by name rather than dropping the words.
+    ("while_source_on_battlefield",
+     ("for", "as", "long", "as", "this", "artifact", "remains", "on", "the",
+      "battlefield")),
+    ("while_source_on_battlefield",
+     ("for", "as", "long", "as", "this", "creature", "remains", "on", "the",
+      "battlefield")),
+    ("while_source_on_battlefield",
+     ("for", "as", "long", "as", "this", "permanent", "remains", "on", "the",
+      "battlefield")),
     ("until_end_of_turn", ("until", "end", "of", "turn")),
     ("until_end_of_combat", ("until", "end", "of", "combat")),
     ("until_your_next_turn", ("until", "your", "next", "turn")),

@@ -248,6 +248,36 @@ def _parse_reveal_hand(
     return None
 
 
+def _parse_play_with_hand_revealed(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.PlayWithHandRevealed | None":
+    """``<player> play with their hand revealed <duration>`` (Stromgald Spy).
+
+    CR 701.20a's reveal with a duration on it, and the duration is required:
+    without one the sentence is Revelation's *static* ("Players play with their
+    hands revealed"), which ``engine/revealed_hands.py`` claims off the printed
+    line and this production must not take away from it. A production that
+    parsed the line and left the lowering to raise would do exactly that —
+    parsed-but-unlowered is still parsed, and the derivation tables are reached
+    only where the grammar refuses in full.
+
+    Refuses without consuming, so "plays" keeps every other reading it has.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("play", "plays"):
+        return None
+    if not stream.accept_phrase("with", "their", "hand", "revealed"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind is None:
+        stream.reset(mark)
+        return None
+    return ast.PlayWithHandRevealed(subject, duration)
+
+
 def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     """``<player> reveals their hand. You choose a <filter> card from it.
     That player discards that card.`` (Duress.)

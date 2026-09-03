@@ -30,6 +30,7 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
@@ -713,4 +714,47 @@ def _lower_graveyard_pick_onto_battlefield(
                 "battlefield_owner": record,
             },
         ),
+    )
+
+
+def _lower_play_with_hand_revealed(
+    node: "ast.PlayWithHandRevealed", event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """Stromgald Spy: "…have **defending player play with their hand revealed
+    for as long as this creature remains on the battlefield**."
+
+    Two refusals, both by name.
+
+    The **duration** must be the linked one. That is the whole of what makes the
+    effect implementable without a sweep: the record goes on the source and
+    ``engine/revealed_hands.py`` scans the battlefield for it, so a permanent
+    that leaves stops contributing (CR 611.2b) and a returning one is a new
+    object with no record (CR 400.7). Any other duration would need something
+    to end it, and nothing does.
+
+    The **seat** must be one an event froze. "Defending player" is CR 506.2's,
+    stamped by the combat fire sites, and outside those events nothing recorded
+    it — an effect that silently revealed nobody's hand rather than one somebody
+    declined.
+    """
+    if node.duration.kind != "while_source_on_battlefield":
+        raise LoweringError(
+            "a hand is revealed for as long as the source is on the "
+            f"battlefield, not {node.duration.kind or 'indefinitely'}",
+            node=node,
+        )
+    if node.player.kind != "defending_player":
+        raise LoweringError(
+            f"no seat record names {node.player.kind!r} for a revealed hand",
+            node=node,
+        )
+    if event not in _DEFENDING_PLAYER_EVENTS:
+        raise LoweringError(
+            '"defending player" names a seat this event did not record',
+            node=node,
+        )
+    return (
+        OracleInstruction("reveal_hand_while_source_present", "", {
+            "player": node.player.kind,
+        }),
     )

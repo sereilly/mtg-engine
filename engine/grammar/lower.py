@@ -107,6 +107,7 @@ from .lowering import (
     _lower_lose_keyword,
     _lower_gain_life,
     _lower_discard_revealed_unless_pay_life,
+    _lower_play_with_hand_revealed,
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
     _lower_mill,
@@ -281,6 +282,13 @@ def lower_statement(
         # is attached to is a fact about the trigger, true of every clause under
         # it, and Mind Whip's tap sits inside a `may`'s otherwise branch.
         return _lower_tap(statement, event, produced)
+    if isinstance(statement, ast.PlayWithHandRevealed):
+        # The raw `event`, not `dispatch_event`: "defending player" is a fact
+        # about the *trigger* — which seat the fire site froze — rather than
+        # about where in the sentence the clause sits, and Stromgald Spy prints
+        # it inside a "you may have …" offer, where `dispatch_event` is already
+        # None. The same reading the delayed block-pair destroy takes above.
+        return _lower_play_with_hand_revealed(statement, event)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):

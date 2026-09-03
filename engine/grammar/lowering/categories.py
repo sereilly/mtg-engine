@@ -453,6 +453,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (CR 701.20) — a zone becoming public, the same family as the paragraph
     # below it, so GRAMMAR_CATEGORIES is unchanged.
     "reveal_hand": "zones",
+    # "…play with their hand revealed for as long as this creature remains on
+    # the battlefield." (Stromgald Spy.) CR 701.20a's reveal made continuous —
+    # the same zone becoming public, so the same category.
+    "reveal_hand_while_source_present": "zones",
     "reveal_hand_and_choose": "zones",
     # CR 701.16, the reveal on its own (Amnesia, Rag Man). The same category as
     # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is

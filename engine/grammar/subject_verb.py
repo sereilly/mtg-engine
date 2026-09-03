@@ -43,6 +43,7 @@ from .effects import (
     _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
     _parse_no_longer_supertype,
+    _parse_play_with_hand_revealed,
     _parse_can_be_targeted_as_though,
     _parse_damage,
     _parse_discard,
@@ -225,6 +226,17 @@ def parse_subject_verb(
             if bought_off is not None:
                 return bought_off
             return _parse_discard(stream, source_spec)
+        # "…have **defending player play with their hand revealed** for as long
+        # as this creature remains on the battlefield." (Stromgald Spy.) The
+        # causative "you may have <player> <verb>" above has already taken its
+        # subject and left the uninflected verb, which is why both spellings
+        # are read. Non-consuming on refusal: "play" opens sentences this has no
+        # business claiming — a land, a subgame, an additional turn — and one it
+        # cannot finish keeps its own refusal.
+        if token.text in ("plays", "play") and isinstance(source_spec, ast.PlayerRef):
+            revealed = _parse_play_with_hand_revealed(stream, source_spec)
+            if revealed is not None:
+                return revealed
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
         # "**Target player** looks at the top three cards of their library…"

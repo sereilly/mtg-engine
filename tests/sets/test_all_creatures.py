@@ -1590,3 +1590,92 @@ def test_the_type_read_needs_an_untap_cost_to_read(set_pool):
         lower_ability(parse_line(
             "{T}: Add one mana of any type that land could produce."
         ))
+
+
+def _w3g4_unblocked(set_pool, name: str):
+    """*name* attacking seat 1 with nothing declared to block it, its trigger
+    resolved and the offer accepted."""
+    subject = Permanent(card=set_pool("ALL")[name])
+    subject.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[subject], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game._fire_unblocked_attack_triggers()
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    while game.stack:
+        game.resolve_top_of_stack()
+    return game, subject
+
+
+def test_stromgald_spy_reveals_the_defenders_hand_and_deals_no_damage(set_pool):
+    """"Whenever this creature attacks and isn't blocked, you may have defending
+    player play with their hand revealed for as long as this creature remains on
+    the battlefield. If you do, this creature assigns no combat damage this
+    turn."
+
+    Both halves, because the second is what the first is paid for: a reading
+    that revealed the hand and kept the damage would be a strictly better card.
+    """
+    from engine.revealed_hands import hand_revealed_to
+
+    game, spy = _w3g4_unblocked(set_pool, "Stromgald Spy")
+
+    assert hand_revealed_to(game, 1, 0), "the defender's hand is open"
+    assert not hand_revealed_to(game, 0, 1), "and the Spy's controller's is not"
+    assert spy.metadata.get("assigns_no_combat_damage_until_eot") is True
+
+
+def test_stromgald_spys_reveal_ends_when_it_leaves(set_pool):
+    """CR 611.2b, and the whole reason the record lives on the *permanent*: the
+    effect is derived by a scan over the battlefield, so a source that leaves
+    stops contributing with nothing to sweep — and CR 400.7 makes a returning
+    one a new object that contributes nothing either."""
+    from engine.revealed_hands import hand_revealed_to
+
+    game, spy = _w3g4_unblocked(set_pool, "Stromgald Spy")
+    assert hand_revealed_to(game, 1, 0)
+
+    game.remove_from_battlefield(spy)
+
+    assert not hand_revealed_to(game, 1, 0)
+
+
+def test_a_revealed_hand_needs_a_duration_and_a_frozen_seat():
+    """Two refusals the production and the lowering owe.
+
+    Without a duration the sentence is Revelation's *static*, which
+    ``engine/revealed_hands.py`` claims off the printed line — a production that
+    took it would take the table's line away and give it back to nobody. And
+    "defending player" outside an event that froze one names nobody at all.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(GrammarError):
+        parse_line("Defending player plays with their hand revealed.")
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(parse_line(
+            "When this creature enters, you may have defending player play "
+            "with their hand revealed for as long as this creature remains on "
+            "the battlefield."
+        ))
+
+
+def test_revelation_still_reads_as_a_static_line():
+    """The production above must not claim the *static* spelling. Revelation is
+    not in this pool, so the guard is on the module that owns the line."""
+    from engine.revealed_hands import revealed_hands_line
+
+    assert revealed_hands_line("Players play with their hands revealed.")
+    assert not revealed_hands_line(
+        "Defending player plays with their hand revealed for as long as this "
+        "creature remains on the battlefield."
+    )

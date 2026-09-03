@@ -17,6 +17,7 @@ from .costs import ManaCost
 from ._core import (
     Amount,
     Comparison,
+    Duration,
     Fixed,
     ObjectFilter,
     PlayerRef,
@@ -932,3 +933,26 @@ class PutIteratedCardOnLibrary:
     printing "on the bottom" is the same production.
     """
     position: str = "top"
+
+
+@dataclass(frozen=True)
+class PlayWithHandRevealed:
+    """``<player> play with their hand revealed <duration>`` (Stromgald Spy).
+
+    CR 701.20a's reveal made continuous. Nothing moves and the hand stays a
+    hidden zone by classification (CR 400.2, which says so even when every card
+    in one happens to be revealed) — the whole effect is who may see what.
+
+    Beside :class:`RevealHand` and not a flag on it: that node is the one-shot
+    action a resolution performs, this one is a continuous effect with a
+    duration, and the two are answered by different halves of the engine. A
+    reveal that lasted "for as long as" would have to be swept; this one is
+    *derived*, from a record on the source that stops being in the scan when the
+    source leaves.
+
+    ``player`` is the printed reference, not a resolved seat: "defending player"
+    is CR 506.2's, frozen by the combat fire site, and only the handler is in a
+    position to read it.
+    """
+    player: PlayerRef
+    duration: "Duration" = field(default_factory=lambda: Duration())
