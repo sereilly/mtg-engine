@@ -1924,6 +1924,12 @@ class PermanentStateMixin:
         # creature in or out with nothing to add back or subtract (CR 613.5).
         if any(not target_perm.has_keyword(word) for word in filt.with_keywords):
             return False
+        # "Creatures **without flying** have reach." (Chaosphere.) The same
+        # layer-6 question negated, through the same accessor -- so a creature
+        # given flying leaves the anthem on the next read and one that lost it
+        # joins, with nothing to add back or subtract (CR 613.5).
+        if any(target_perm.has_keyword(word) for word in filt.without_keywords):
+            return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:

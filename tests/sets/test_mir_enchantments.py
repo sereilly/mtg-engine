@@ -277,3 +277,140 @@ def test_a_union_clause_reduces_to_its_nouns(set_pool):
     assert enchant_clause_nouns("creature card in a graveyard") == (
         "creature card in a graveyard",
     )
+
+
+# --- W1G1: the combat family ---
+#
+# Chaosphere is the enchantment half of the combat group: one card, two
+# board-wide lines, and neither of them a restriction printed on the creature it
+# restricts.
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w1g1e_creature(name: str, power: int, toughness: int, keywords=()) -> CardDefinition:
+    """A creature whose only text is the keyword line, if any."""
+    text = "\n".join(word.capitalize() for word in keywords)
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=text, colors=(), color_identity=(),
+        keywords=tuple(word.capitalize() for word in keywords), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w1g1e_nosick(perm: Permanent) -> Permanent:
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g1e_combat(mine, theirs) -> Game:
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def test_chaosphere_compiles_both_of_its_lines(set_pool):
+    """Neither line is printed on the creature it affects.
+
+    "Creatures with flying can block only creatures with flying" is the
+    self-scoped block restriction printed about the *board*, which makes it a
+    different rule with a different enforcement site -- one kind read by both
+    loops would ground every blocker in the game the moment a Chaosphere was in
+    play. "Creatures without flying have reach" is the anthem with its subject
+    narrowed by a keyword the creature must *not* have, which
+    ``LordBuffFilter`` had no field for.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Chaosphere"])
+    assert program.supported, program.reason
+    kinds = {i.kind for i in program.instructions}
+    assert kinds == {"subject_can_block_only", "lord_buff"}
+
+
+def test_chaosphere_grounds_a_flier_that_wants_to_block_a_ground_creature(set_pool):
+    """CR 509.1b, and the reason this is a board scan: the restriction belongs
+    to an enchantment that is neither attacking nor blocking, and the sentence
+    says "creatures" -- so it reaches both seats, its own controller's included.
+    """
+    sphere = Permanent(card=set_pool("MIR")["Chaosphere"])
+    flier_attacker = _w1g1e_nosick(
+        Permanent(card=_w1g1e_creature("Skyraider", 2, 2, ("flying",)))
+    )
+    ground_attacker = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Footman", 2, 2)))
+    flier_blocker = _w1g1e_nosick(
+        Permanent(card=_w1g1e_creature("Skyguard", 2, 2, ("flying",)))
+    )
+    game = _w1g1e_combat(
+        [flier_attacker, ground_attacker], [sphere, flier_blocker]
+    )
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+
+    assert game._can_block_attacker(flier_blocker, flier_attacker)
+    assert not game._can_block_attacker(flier_blocker, ground_attacker)
+
+
+def test_chaosphere_gives_the_ground_reach_and_not_the_sky(set_pool):
+    """The anthem's negated narrowing, which is the half that makes the card
+    playable rather than purely punitive. Dropped, every creature would get
+    reach -- the fliers the sentence excludes included, which is not what the
+    card says and, on this card, not even a difference anyone could see in
+    combat. The keyword read is what shows it."""
+    sphere = Permanent(card=set_pool("MIR")["Chaosphere"])
+    ground = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Footman", 2, 2)))
+    flier = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Skyguard", 2, 2, ("flying",))))
+    game = _w1g1e_combat([], [sphere, ground, flier])
+
+    assert game._has_keyword(ground, "reach")
+    assert not game._has_keyword(flier, "reach")
+
+
+def test_chaospheres_reach_lets_the_ground_block_a_flier(set_pool):
+    """And the two lines together, which is the card: a ground creature may
+    block a flier, and a flier may not block it back."""
+    sphere = Permanent(card=set_pool("MIR")["Chaosphere"])
+    flier_attacker = _w1g1e_nosick(
+        Permanent(card=_w1g1e_creature("Skyraider", 2, 2, ("flying",)))
+    )
+    ground_blocker = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Footman", 2, 2)))
+    game = _w1g1e_combat([flier_attacker], [sphere, ground_blocker])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+
+    assert game._can_block_attacker(ground_blocker, flier_attacker)
+    # The map is blocker slot -> attacker slot, and the Chaosphere sits at slot
+    # 0 of its controller's battlefield.
+    assert game.declare_blockers(1, {1: 0})[0]
+
+
+def test_without_the_chaosphere_neither_half_applies(set_pool):
+    """The control. Both halves are derived from a permanent on the
+    battlefield, so removing it removes both with nothing to undo."""
+    flier_attacker = _w1g1e_nosick(
+        Permanent(card=_w1g1e_creature("Skyraider", 2, 2, ("flying",)))
+    )
+    ground_attacker = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Footman", 2, 2)))
+    flier_blocker = _w1g1e_nosick(
+        Permanent(card=_w1g1e_creature("Skyguard", 2, 2, ("flying",)))
+    )
+    ground_blocker = _w1g1e_nosick(Permanent(card=_w1g1e_creature("Pikeman", 2, 2)))
+    game = _w1g1e_combat(
+        [flier_attacker, ground_attacker], [flier_blocker, ground_blocker]
+    )
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+
+    assert game._can_block_attacker(flier_blocker, ground_attacker)
+    assert not game._has_keyword(ground_blocker, "reach")
+    assert not game._can_block_attacker(ground_blocker, flier_attacker)

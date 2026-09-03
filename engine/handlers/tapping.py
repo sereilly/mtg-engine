@@ -513,20 +513,20 @@ def _tap_several_targets(
     source = context.source_permanent
     caster_index = game.players.index(context.caster)
 
+    from ..subject_filters import subject_matches
+
     def eligible(perm) -> bool:
-        if not permanent_matches_filter(perm, filters):
-            return False
-        # "other" and "you control" are outside permanent_matches_filter's
-        # vocabulary — it answers about a permanent alone and these two need the
-        # source and the board — so they are asked here, the same split
-        # add_counter_to_target makes.
-        if filters.get("exclude_self") and perm is source:
-            return False
-        if filters.get("controller") == "you" and not game.controls(caster_index, perm):
-            return False
-        if filters.get("controller") == "not_you" and game.controls(caster_index, perm):
-            return False
-        return True
+        # Through ``subject_matches``, not the pure matcher plus a hand-written
+        # seat pair. Those two covered "other" and "you control" and nothing
+        # else the object alone cannot answer — so a *layer* question was
+        # carried by the payload and tested by nobody, and "Tap up to three
+        # target creatures **without flying**" (Wave Elemental) would have
+        # tapped anything at all. CR 109.5's observer is the ability's
+        # controller and the source is its own permanent, both of which this
+        # handler already holds.
+        return subject_matches(
+            game, perm, filters, observer=caster_index, source=source
+        )
 
     chosen = resolve_target_permanents(game, context, predicate=eligible)[:maximum]
     for perm in chosen:

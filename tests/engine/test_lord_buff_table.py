@@ -176,17 +176,18 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
         ("Other Goblins get +1/+1 as long as you control a Mountain.",
          "an unmodelled condition would become permanent if dropped"),
         # "Creatures **with** flying get +1/+1" stood here until Serra Aviary
-        # printed it and ``LordBuffFilter.with_keywords`` learned to carry it.
-        # These two rows are what is left of that question, and they are the
-        # sharper pair: the restriction is refused for a word the consumer
-        # cannot ask about ("protection" is a category, not an ability
-        # ``has_keyword`` answers), and for the negation, which the filter has
-        # no field for at all. A word dropped from either would be an anthem
-        # reaching a set the card does not name.
+        # printed it and ``LordBuffFilter.with_keywords`` learned to carry it,
+        # and "**without** flying" stood beside it until Chaosphere printed
+        # that and ``without_keywords`` did the same. What is left of the
+        # question is the sharper row: a word the consumer cannot *ask* about.
+        # "Protection" is a category, not an ability ``has_keyword`` answers, so
+        # a filter carrying it would match nothing and the anthem would reach
+        # nobody -- which is the direction a table must refuse rather than
+        # derive.
         ("Creatures with protection get +1/+1.",
          "has_keyword cannot answer a category word"),
-        ("Creatures without flying get +1/+1.",
-         "no negated keyword restriction on the buffed set"),
+        ("Creatures without protection get +1/+1.",
+         "the negation cannot answer a category word either"),
     ],
 )
 def test_an_unimplemented_shape_refuses_rather_than_partly_matching(line, why):

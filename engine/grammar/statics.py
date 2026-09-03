@@ -61,6 +61,10 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # decides whether the table can express it — the same round trip and
         # not a probe, for the reason this function's docstring gives.
         with_keywords=filt.with_keywords,
+        # "Creatures **without** flying have reach." (Chaosphere.) The negated
+        # twin, carried for the reason above it: what decides whether the table
+        # can express a restriction is the round trip, never a probe.
+        without_keywords=filt.without_keywords,
     )
 
 
@@ -75,6 +79,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "with_plus1_counter": lord.with_plus1_counter,
         "named": lord.named,
         "with_keywords": lord.with_keywords,
+        "without_keywords": lord.without_keywords,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

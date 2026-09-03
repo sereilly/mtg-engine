@@ -81,6 +81,7 @@ class CombatRestriction:
 #   creatures_that_attacked_last_turn_cant_attack
 #                                   phases/declare_attackers_step.can_attack
 #   can_block_only_with_keyword     phases/declare_blockers_step
+#   subject_can_block_only          phases/declare_blockers_step (a board scan)
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
@@ -522,6 +523,27 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "can_block_only_with_keyword",
     ),
+    (
+        # "**Creatures with flying** can block only creatures with flying."
+        # (Chaosphere.) The row above printed about the *board* instead of
+        # about one creature, which makes it a different rule and not that
+        # row's payload: that one is read off the blocker's own program, and
+        # this has to be found by scanning every permanent -- a single kind read
+        # by both loops would ground every blocker in the game the moment one
+        # Chaosphere was in play.
+        #
+        # Both noun phrases are payload, read by the one noun reader on this
+        # page: a card printing "creatures with shadow can block only creatures
+        # with shadow" is this rule, not a new one. Placed **after** the
+        # self-scoped row, per this file's ordering rule -- that one's sentence
+        # begins "this creature" and could not reach here, but a general row
+        # ending in `.+` above it would have claimed the specific one.
+        re.compile(
+            r"^(?P<block_only_subject>creatures[^:]*?) can block only "
+            r"(?P<block_only_allowed>.+)$"
+        ),
+        "subject_can_block_only",
+    ),
 )
 
 
@@ -835,6 +857,19 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["subject"] = described
+        # "**Creatures with flying** can block only **creatures with
+        # flying**." Both halves read here for the reason every other noun on
+        # this page is read here: the regex ends in `.+`, and a phrase admitted
+        # unread would be a restriction the gate accepts and the enforcement
+        # applies to the wrong set -- in this direction, to *every* blocker.
+        block_only_subject = payload.pop("block_only_subject", None)
+        if block_only_subject is not None:
+            subject = _printed_noun(block_only_subject)
+            allowed = _printed_noun(payload.pop("block_only_allowed", ""))
+            if subject is None or allowed is None:
+                return None
+            payload["subject"] = subject
+            payload["allowed"] = allowed
         without_keyword = payload.pop("without_keyword", None)
         if without_keyword is not None:
             if without_keyword not in IMPLEMENTED_KEYWORDS:

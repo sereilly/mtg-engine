@@ -922,6 +922,59 @@ class DeclareBlockersStepMixin:
         ):
             return False
 
+        # "Creatures with flying can block only creatures with flying."
+        # (Chaosphere.) The restriction above printed about the board, so it is
+        # found by scanning every permanent rather than read off the blocker —
+        # the source is a World Enchantment nobody is attacking or blocking, and
+        # the sentence says "creatures", so it reaches both seats' creatures
+        # including its own controller's.
+        #
+        # Both halves through ``subject_matches``, with **no** observer: neither
+        # noun phrase names a seat, and passing one would let a future "creatures
+        # you control" printing silently mean the wrong board. CR 509.1b keeps
+        # every such restriction cumulative, so each one is asked separately.
+        for permanent in self.all_permanents():
+            for restriction in compile_card_oracle(
+                permanent.effective_card
+            ).instructions:
+                if restriction.kind != "subject_can_block_only":
+                    continue
+                if not subject_matches(
+                    self, blocker, restriction.payload.get("subject") or {}
+                ):
+                    continue
+                if not subject_matches(
+                    self, attacker, restriction.payload.get("allowed") or {}
+                ):
+                    return False
+
+        # "Creatures with flying can block only creatures with flying."
+        # (Chaosphere.) The restriction above printed about the board, so it is
+        # found by scanning every permanent rather than read off the blocker —
+        # its source is a World Enchantment nobody is attacking or blocking, and
+        # the sentence says "creatures", so it reaches both seats' creatures
+        # including its own controller's.
+        #
+        # Both halves through ``subject_matches`` with **no** observer: neither
+        # noun phrase names a seat, and supplying one would let a future
+        # "creatures you control" printing quietly mean the wrong board. CR
+        # 509.1b keeps every such restriction cumulative, so each is asked
+        # separately and satisfying one answers only that one.
+        for permanent in self.all_permanents():
+            for restriction in compile_card_oracle(
+                permanent.effective_card
+            ).instructions:
+                if restriction.kind != "subject_can_block_only":
+                    continue
+                if not subject_matches(
+                    self, blocker, restriction.payload.get("subject") or {}
+                ):
+                    continue
+                if not subject_matches(
+                    self, attacker, restriction.payload.get("allowed") or {}
+                ):
+                    return False
+
         # Landwalk (CR 702.14): the attacker can't be blocked if the defending
         # player controls a land of the matching basic type. The blocker is one of
         # the defending player's creatures, so its controller is the defender.

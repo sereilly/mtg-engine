@@ -326,6 +326,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     blocking_only = bool(instruction.payload.get("blocking_only"))
     subtypes = tuple(instruction.payload.get("subtypes") or ())
     exclude_types = tuple(instruction.payload.get("exclude_types") or ())
+    with_keywords = tuple(instruction.payload.get("with_keywords") or ())
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
@@ -377,6 +378,16 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # became an artifact after the spell was cast but before it
             # resolved (CR 611.2c fixes the set at resolution, which is now).
             if exclude_types and any(perm.has_type(name) for name in exclude_types):
+                continue
+            # "…all attacking creatures **with flanking**" (Telim'Tor). Asked of
+            # layer 6 (CR 613.1f) rather than of the printed keyword list, the
+            # same reader ``subject_matches`` uses -- so a creature an Aura
+            # granted flanking is in the set, which is the whole reason
+            # `keywords.LINE_DERIVED_KEYWORDS` puts the word back when it grants
+            # the line.
+            if with_keywords and not all(
+                game._has_keyword(perm, word) for word in with_keywords
+            ):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")

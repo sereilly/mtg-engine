@@ -922,3 +922,99 @@ def test_a_card_name_stops_at_a_list_separator(set_pool):
     assert cost.sacrifice_also_filter == {
         "type_filter": "creature", "named": "breathstealer",
     }
+
+
+# --- Wave Elemental and Telim'Tor: a keyword narrowing on a multi-target ---
+
+
+def test_wave_elemental_taps_the_ground_and_not_the_sky(set_pool):
+    """"Tap up to three target creatures **without flying**."
+
+    The several-target arm gated on a hand-listed three fields written against
+    a handler that asked the *pure* matcher, so a layer-6 question refused --
+    one the sweep arm directly above it has answered since it was written. Both
+    ask ``subject_matches`` now and both gate on what it can test.
+    """
+    elemental = _w1g1_nosick(Permanent(card=set_pool("MIR")["Wave Elemental"]))
+    ground = [
+        Permanent(card=_w1g1_vanilla(f"Footman{i}", 2, 2)) for i in range(3)
+    ]
+    flier = Permanent(
+        card=CardDefinition(
+            name="Skyguard", mana_cost="", cmc=0.0, type_line="Creature - Test",
+            oracle_text="Flying", colors=(), color_identity=(),
+            keywords=("Flying",), produced_mana=(),
+            raw={"name": "Skyguard", "type_line": "Creature - Test",
+                 "power": "2", "toughness": "2"},
+        )
+    )
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[elemental]),
+        PlayerState(name="P2", battlefield=[*ground, flier]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Wave Elemental", permanent_index=0, target_player_index=1,
+        target_permanent_ids=[
+            ground[0].permanent_id, ground[1].permanent_id, flier.permanent_id
+        ],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert [perm.tapped for perm in ground] == [True, True, False]
+    assert not flier.tapped, "the printed narrowing must not be dropped"
+
+
+def test_telim_tor_pumps_only_the_flankers(set_pool):
+    """"Whenever Telim'Tor attacks, all attacking creatures **with flanking**
+    get +1/+1 until end of turn."
+
+    The one card round 1 named and did not buy: the global buff's narrowing
+    vocabulary is hand-listed, and a keyword was not on the list. Asked of layer
+    6 (CR 613.1f), so a creature an Aura gave flanking is in the set -- which is
+    the whole reason ``keywords.LINE_DERIVED_KEYWORDS`` puts the word back when
+    it grants the line.
+    """
+    pool = set_pool("MIR")
+    telim = _w1g1_nosick(Permanent(card=pool["Telim'Tor"]))
+    askari = _w1g1_nosick(Permanent(card=pool["Searing Spear Askari"]))
+    plain = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Footman", 2, 2)))
+    game = _w1g1_game([telim, askari, plain], [])
+
+    before = {
+        perm.card.name: (perm.effective_power, perm.effective_toughness)
+        for perm in (telim, askari, plain)
+    }
+    assert game.declare_attackers(0, [0, 1, 2])[0]
+    game.resolve_stack()
+    game._settle()
+
+    assert (telim.effective_power, telim.effective_toughness) == (
+        before["Telim'Tor"][0] + 1, before["Telim'Tor"][1] + 1,
+    )
+    assert (askari.effective_power, askari.effective_toughness) == (
+        before["Searing Spear Askari"][0] + 1,
+        before["Searing Spear Askari"][1] + 1,
+    )
+    assert (plain.effective_power, plain.effective_toughness) == before["Footman"]
+
+
+def test_a_keyword_the_engine_does_not_implement_refuses_the_anthem(set_pool):
+    """The gate that comes with the narrowing. ``_has_keyword`` answers no for
+    a word no behaviour is registered under, so a filter naming one is not
+    refused anywhere -- it is silently inert, and an inert *positive* filter
+    matches nothing at all. That is a buff the card reports as supported and
+    which reaches nobody, so the line refuses instead."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Creatures with shadow get +1/+1 until end of turn.", card_name="Test"
+    )
+    assert result.parsed and not result.lowered
+    assert "shadow" in result.failure_reason
