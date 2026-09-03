@@ -223,6 +223,11 @@ _TEXT_KEYWORDS = (
     # A substring scan is safe here for the reason it is not for hexproof:
     # there is no narrower keyword whose name contains this one.
     "rampage",
+    # …and "flanking", for the same two reasons: it is what a *granted* line
+    # (Agility) puts back into the ability set, and it is what the next
+    # flanker's own "without flanking" filter asks. The substring scan is safe
+    # here on the same test — no narrower keyword's name contains this word.
+    "flanking",
     # "hexproof" is deliberately absent: this is a substring scan, and bare
     # hexproof is a *stronger* keyword than "hexproof from <colour>" — matching
     # the word inside the phrase would upgrade Sporeweb Weaver's blue-only

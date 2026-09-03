@@ -885,6 +885,104 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Mirage (MIR) — in progress
+
+**Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
+Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
+places it between Alliances (1996-06-10) and Fifth Edition (1997-03-24) —
+printing-order index 13, an insert rather than an append. Every card is
+`layout: normal` and every printed type is one the engine already ships
+(131 Creature, 64 Instant, 41 Enchantment, 37 Sorcery, 23 Artifact, 20 Basic
+Land, 12 Legendary Creature, 10 Artifact Creature, 6 World Enchantment, 6 Land,
+1 Legendary Land), so **Phase 2's first sweep is empty**: no new layout and no
+new card type gates the promotion. The whole of the set's machinery cost is
+keywords and text.
+
+**The censuses, all five, read at ingest rather than at the gate:**
+
+| Instrument | Reading |
+| --- | --- |
+| `support_report --set MIR` | 151 unsupported |
+| `--refusals` | 168 refused lines over 164 distinct sentences — **1.02** |
+| `--fragments` | "at the beginning of" 32 cards, "until end of turn" 19, phasing's reminder text 7 |
+| `--hollow-lines` | 5 supported cards, 8 instruction-less parts |
+| `parse_coverage --set MIR` | 19 cards, 25 unclaimed sentences |
+| `picker_sweep --set MIR` | 4 findings (Dazzling Beauty, Soul Rend, Telim'Tor's Edict, Early Harvest) |
+
+**1.02 for the sixth consecutive set, and for the sixth consecutive set it is
+the wrong number to plan from.** The sentence census says no production here
+buys two cards. The *keyword* census says two words buy twenty-four:
+
+- **Flanking (CR 702.24) — 10 cards, one ability.** Femeref Knight, Mtenda
+  Herder, Sidar Jabari, Zhalfirin Commander, Zhalfirin Knight, Cadaverous
+  Knight, Burning Shield Askari, Searing Spear Askari, Telim'Tor, Jolrael's
+  Centaur. Nine of the ten refuse with **every line grammar-clean** — the
+  refusal is the reminder-text line gate, not a production — so the whole
+  bucket is invisible to the refusal rollup's site column.
+- **Phasing (CR 702.25) — 7 keyword cards plus 12 more that print the action.**
+  And this one is the opposite of what the census implies: **the subsystem is
+  already here.** `Game.phase_out_permanent` / `phase_in_for` / the per-seat
+  `phased_out` list / the CR 702.26e call at the top of the untap step all
+  arrived with M21's Teferi planeswalkers. What is missing is the *keyword* —
+  the alternation CR 702.25b describes, where a permanent with phasing phases
+  out and back in on successive untap steps — plus the ways a card grants it
+  (Cloak of Invisibility, Teferi's Curse, Shimmer), one trigger ("whenever this
+  creature phases out", Teferi's Imp) and one restriction ("can't phase out",
+  Spatial Binding). `"Phasing"` also sits in `oracle.UNSUPPORTED_KEYWORDS`,
+  which outranks every line gate — Legends' rampage lesson, and the reason the
+  registry diff alone would have sent this round off to build what exists.
+
+### Round 1 — flanking (CR 702.25): 184 → 194 supported
+
+Ten cards for one keyword, and the change was a *deletion* as much as an
+addition. `engine/flanking.py` is the rewrite `rampage.py` and
+`cumulative_upkeep.py` established — CR 702.25a defines flanking rather than
+describing it, so the printed keyword line becomes the trigger it already is
+and the existing becomes-blocked dispatcher fires it. The "without flanking"
+half is the ordinary `blocker_filter` payload every printed "becomes blocked by
+a &lt;noun&gt;" produces, which is also what makes it fire once per blocking
+creature (CR 509.3d) rather than once for the block.
+
+**The engine had already implemented flanking, inline, and its own docstring
+named this round as the one that would remove it.** `_apply_flanking` ran at
+*declaration*, and it said so: "Flanking stays because CR 702.25a is a
+triggered ability the engine has no *card* for … moving it would be inventing a
+card's worth of work with nothing to verify it against." Mirage prints ten. The
+inline version had rampage's three old defects — the -1/-1 landed before anyone
+could respond, one instance was applied however many the creature had
+(CR 702.25b), and the block map was walked by battlefield index, which a
+removal renumbers. Two CR-cited tests were asserting the wrong moment and now
+assert the right one; two more were added for the stack window and for two
+instances.
+
+**Flanking is the first keyword that needs the word *and* the line, and one
+card in the set proved it.** `keywords.LINE_DERIVED_KEYWORDS` exists because
+layer 6's ability set holds words, not triggers, so a grant of rampage grants
+the printed *line*. Flanking has to do that too — and Agility ("Enchanted
+creature gets +1/+1 and **has flanking**") showed that the word matters
+independently, because the *next* flanker's "without flanking" filter asks it.
+Both halves travel together for free once the line is granted:
+`layer_bridge._TEXT_KEYWORDS` seeds layer 6 from the compiled keyword lines, so
+the appended line puts the word back. The Aura path needed the same rule the
+one-shot path already had (`aura_granted_line_derived_lines`), derived per read
+like every other half of `auras.py`, so detaching takes the ability away with
+nothing to undo. **This was a live gap for rampage too** — an Aura granting
+rampage would have granted the word and no ability — with no card behind it
+until now.
+
+`oracle_diff` after the round: **11 changed of 2181**, every one a Mirage card
+that prints the word. Two cards the round did *not* buy, both now refusing for
+the right reason and both cheap follow-ups: Telim'Tor ("all attacking creatures
+**with** flanking get +1/+1" — `the global buff cannot narrow by:
+with_keywords`) and Barbed Foliage ("it **loses** flanking until end of turn" —
+`remove_ability_line` has no duration channel, deliberately, because nothing in
+the pool had needed one).
+
+Everything after those two is the long tail, ranked by refusal site: `expected a
+subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
+then singletons. Rounds are planned from `--refusals`, and each is written up
+below as it lands.
+
 ## Alliances (ALL) — shipped
 
 **Final: 144/144 supported, hollow lines 0, unclaimed parse sentences 0, picker

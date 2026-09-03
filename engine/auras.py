@@ -1414,6 +1414,39 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
     return tuple(grants)
 
 
+def aura_granted_line_derived_lines(oracle_text: str) -> tuple[str, ...]:
+    """The printed **lines** an Aura's keyword grant has to be turned into.
+
+    A keyword grant is normally one word into CR 613 layer 6's ability set, and
+    every reader of "does it have flying?" looks there. That is no use for a
+    keyword the CR *defines* as an ability rather than describing one: the
+    compiler built rampage and flanking out of a printed line before layer 6
+    existed for this permanent, so a word in the ability set grants the word and
+    not the trigger. Agility is the card that shows it — "Enchanted creature
+    gets +1/+1 and **has flanking**" made its host count as a flanker for the
+    next flanker's filter and gave it no ability at all.
+
+    So the grant of such a keyword is a grant of the *line*, exactly as
+    ``keywords.LINE_DERIVED_KEYWORDS`` already says for the one-shot path
+    (`handlers/pump._grant_one_keyword`) — this is that same rule on the
+    continuous path, derived per read like every other half of this file so
+    detaching the Aura takes the ability away with nothing to undo. The word
+    comes back for free: ``layer_bridge._TEXT_KEYWORDS`` scans the compiled
+    keyword lines, so the appended line puts "flanking" back in the ability set
+    and both halves travel together.
+
+    Capitalised because it is folded into the permanent's *printed* rules text,
+    which the UI shows; the compiler lowercases it again.
+    """
+    from .keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
+
+    return tuple(
+        keyword.capitalize()
+        for keyword in aura_keyword_grants(oracle_text)
+        if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS
+    )
+
+
 def aura_keyword_removals(oracle_text: str) -> tuple[str, ...]:
     """Keyword abilities an Aura **takes away** from the permanent it enchants.
 

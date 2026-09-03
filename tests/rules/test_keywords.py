@@ -824,26 +824,83 @@ def test_702_23b_rampage_bonus_wears_off_end_of_turn():
 # ---------------------------------------------------------------------------
 
 
+_FLANKING_REMINDER = (
+    "Flanking (Whenever a creature without flanking blocks this creature, "
+    "the blocking creature gets -1/-1 until end of turn.)"
+)
+
+
+def _mk_flanker(name: str, power: int = 2, toughness: int = 2, instances: int = 1):
+    """A creature with flanking, carrying it the way a printed card does.
+
+    Both channels, because a real card has both and each answers a different
+    question: the ingested ``keywords`` field is what layer 6 seeds the *word*
+    from (which is what another flanker's "without flanking" filter asks), and
+    the printed **line** is what the compiler turns into CR 702.25a's triggered
+    ability (`engine/flanking.py`). A fixture carrying only the field has the
+    word and no ability, which is exactly the shape a granted flanking must not
+    have — see `test_702_25a_a_granted_line_carries_both_halves`.
+    """
+    line = ", ".join(["Flanking"] * instances)
+    return _mk_creature(
+        name, power, toughness,
+        keywords=tuple(["Flanking"] * instances),
+        oracle_text=(_FLANKING_REMINDER if instances == 1 else line),
+    )
+
+
+def _blocked_by_flanker(game, assignments):
+    """Declare the block and let the flanking triggers resolve.
+
+    The resolution step is the point of these tests rather than boilerplate.
+    CR 702.25a defines flanking as a **triggered** ability, so it goes on the
+    stack and does nothing until it resolves — which is what the engine used to
+    get wrong: it applied the -1/-1 inline as blockers were declared, where
+    nothing could respond to it and CR 702.25b's second instance was never
+    counted.
+    """
+    ok, msg = game.declare_blockers(1, assignments)
+    assert ok, msg
+    game.resolve_stack()
+    game._settle()
+
+
 @pytest.mark.cr("702.25a")
 def test_702_25a_flanking_gives_blocker_minus_one_minus_one():
-    flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
+    flanker = Permanent(card=_mk_flanker("Knight"))
     blocker = Permanent(card=_mk_creature("Footman", 2, 2))
     game, _, p2 = _game([flanker], [blocker])
     _to_declare_blockers(game, [0])
-    game.declare_blockers(1, {0: 0})
+    _blocked_by_flanker(game, {0: 0})
 
     survivor = next(p for p in p2.battlefield if p.card.name == "Footman")
     assert survivor.effective_power == 1
     assert survivor.effective_toughness == 1
 
 
+@pytest.mark.cr("702.25a")
+def test_702_25a_flanking_waits_on_the_stack():
+    """The half an inline application could not have: between the block and the
+    resolution the blocker is untouched, which is the window CR 702.25a's
+    triggered ability gives both players."""
+    flanker = Permanent(card=_mk_flanker("Knight"))
+    blocker = Permanent(card=_mk_creature("Footman", 2, 2))
+    game, _, p2 = _game([flanker], [blocker])
+    _to_declare_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    assert len(game.stack) == 1
+    survivor = next(p for p in p2.battlefield if p.card.name == "Footman")
+    assert (survivor.effective_power, survivor.effective_toughness) == (2, 2)
+
+
 @pytest.mark.cr("702.25a", "704.5f")
 def test_702_25a_flanking_kills_an_x_1_blocker_outright():
-    flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
+    flanker = Permanent(card=_mk_flanker("Knight"))
     weakling = Permanent(card=_mk_creature("Goblin", 1, 1))
     game, _, p2 = _game([flanker], [weakling])
     _to_declare_blockers(game, [0])
-    game.declare_blockers(1, {0: 0})
+    _blocked_by_flanker(game, {0: 0})
 
     # -1/-1 drops the 1/1 to 0 toughness -> dies to state-based actions.
     assert all(p.card.name != "Goblin" for p in p2.battlefield)
@@ -851,15 +908,51 @@ def test_702_25a_flanking_kills_an_x_1_blocker_outright():
 
 @pytest.mark.cr("702.25a")
 def test_702_25a_flanking_does_not_debuff_another_flanker():
-    flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
-    other = Permanent(card=_mk_creature("Rival", 2, 2, keywords=("Flanking",)))
+    flanker = Permanent(card=_mk_flanker("Knight"))
+    other = Permanent(card=_mk_flanker("Rival"))
     game, _, p2 = _game([flanker], [other])
     _to_declare_blockers(game, [0])
-    game.declare_blockers(1, {0: 0})
+    _blocked_by_flanker(game, {0: 0})
 
     survivor = next(p for p in p2.battlefield if p.card.name == "Rival")
     assert survivor.effective_power == 2
     assert survivor.effective_toughness == 2
+
+
+@pytest.mark.cr("702.25a", "509.3d")
+def test_702_25a_flanking_fires_once_per_blocking_creature():
+    """"Whenever this creature becomes blocked **by a creature** without
+    flanking" is CR 509.3d's per-creature wording, so a double block is two
+    abilities and each shrinks its own blocker."""
+    flanker = Permanent(card=_mk_flanker("Knight"))
+    first = Permanent(card=_mk_creature("Footman", 3, 3))
+    second = Permanent(card=_mk_creature("Squire", 3, 3))
+    game, _, _p2 = _game([flanker], [first, second])
+    _to_declare_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0, 1: 0})[0]
+    assert len(game.stack) == 2
+    game.resolve_stack()
+    game._settle()
+
+    assert (first.effective_power, first.effective_toughness) == (2, 2)
+    assert (second.effective_power, second.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("702.25b")
+def test_702_25b_two_instances_of_flanking_each_trigger():
+    """"If a creature has multiple instances of flanking, each triggers
+    separately" — two abilities, and the second shrinks a creature the first
+    already shrank, so the blocker ends at -2/-2."""
+    flanker = Permanent(card=_mk_flanker("Knight", instances=2))
+    blocker = Permanent(card=_mk_creature("Footman", 3, 3))
+    game, _, _p2 = _game([flanker], [blocker])
+    _to_declare_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0]
+    assert len(game.stack) == 2
+    game.resolve_stack()
+    game._settle()
+
+    assert (blocker.effective_power, blocker.effective_toughness) == (1, 1)
 
 
 # ---------------------------------------------------------------------------

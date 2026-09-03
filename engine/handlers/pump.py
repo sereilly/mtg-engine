@@ -442,6 +442,39 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("pump_block_pair")
+def pump_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**the blocking creature** gets -1/-1 until end of turn." (CR 702.25a's
+    definition of flanking, built by ``engine/flanking.py``.)
+
+    The P/T twin of ``grant_keyword_to_block_pair`` below, and it reads the pair
+    the same way — through ``block_pair_permanents``, the one function that
+    knows the two fire sites bind "that creature" differently. Reaching for the
+    stack item's target instead would name the flanker itself on the *blocks*
+    half of a block trigger, which is the bug that function exists to stop.
+
+    CR 702.25b's several instances are several abilities, so each resolution
+    applies its own -1/-1: the second one shrinks a creature the first has
+    already shrunk, which is what makes two instances -2/-2 rather than -1/-1
+    computed twice from the printed number.
+    """
+    power = int(instruction.payload.get("power", 0))
+    toughness = int(instruction.payload.get("toughness", 0))
+    until = str(instruction.payload.get("duration") or "end_of_turn")
+    pumped = 0
+    for perm in block_pair_permanents(game, context):
+        apply_temp_pt_boost(perm, power, toughness, until=until)
+        game.log.append(
+            f"{context.card.name} gives {perm.card.name} "
+            f"{power:+d}/{toughness:+d} until " + until.replace("_", " ")
+        )
+        pumped += 1
+    if not pumped:
+        game.log.append(f"{context.card.name}: no creature in the block pair")
+        return True, "no target"
+    return True, "resolved"
+
+
 @effect_handler("grant_keyword_to_block_pair")
 def grant_keyword_to_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…**that creature** gains first strike until end of turn." (Goblin

@@ -326,7 +326,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/phases/combat_damage_step.py": 16,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
-    "engine/phases/declare_blockers_step.py": 17,
+    "engine/phases/declare_blockers_step.py": 15,
     "engine/phases/untap_step.py": 1,
     "engine/phases/upkeep_step.py": 3,
     # web/actions.py's four sites moved with their handlers when the dispatch

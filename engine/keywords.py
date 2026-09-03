@@ -79,12 +79,23 @@ GRANTED_ABILITY_LINES = "granted_ability_lines"
 # printed card is never rewritten.
 REMOVED_ABILITY_LINES = "removed_ability_lines"
 
-#: Which keyword words that applies to. One entry today, and the membership test
-#: is not "does it have a number": it is "does the compiler build this keyword's
-#: behaviour out of the printed line". Prowess and lifelink also have behaviour
-#: the layer system does not store, but `has_keyword` is what reads them, so a
-#: layer-6 grant reaches them. Rampage's reader is `compile_card_oracle`.
-LINE_DERIVED_KEYWORDS = frozenset({"rampage"})
+#: Which keyword words that applies to. The membership test is not "does it have
+#: a number": it is "does the compiler build this keyword's behaviour out of the
+#: printed line". Prowess and lifelink also have behaviour the layer system does
+#: not store, but `has_keyword` is what reads them, so a layer-6 grant reaches
+#: them. Rampage's reader is `compile_card_oracle`, and so is flanking's
+#: (CR 702.25a defines it as a triggered ability — `engine/flanking.py`).
+#:
+#: **Granting the line gives the word back, which flanking is the first keyword
+#: to need.** Layer 6's ability set is seeded from the compiled *keyword lines*
+#: as well as from the ingested field (`layer_bridge._TEXT_KEYWORDS`), so a
+#: granted "Flanking" line is folded into the effective card, compiles to a
+#: keyword line, and lands back in the word set — which is what lets Agility's
+#: enchanted creature both trigger and count as "with flanking" for the next
+#: flanker's filter. Cumulative upkeep is deliberately absent: no card in the
+#: pool grants or removes it, and a row here with nothing behind it is a claim
+#: nothing checks.
+LINE_DERIVED_KEYWORDS = frozenset({"rampage", "flanking"})
 
 
 def keyword_ability_name(keyword: str) -> str:

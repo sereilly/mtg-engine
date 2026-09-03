@@ -60,6 +60,7 @@ from .modal_triggers import (MODAL_INSTRUCTION_KIND,
                              modal_trigger_mode_is_derivable,
                              modal_trigger_targeting_refusal)
 from .cumulative_upkeep import cumulative_upkeep_triggers
+from .flanking import flanking_triggers
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
@@ -3929,12 +3930,13 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
     """The triggered abilities a *keyword line* is, for every keyword whose
     rules text the CR defines as one.
 
-    Two today — rampage (CR 702.23a) and cumulative upkeep (CR 702.24a) — and
-    both are the rewrite ``engine/equipment.py`` established for equip, one
-    layer earlier because the grammar has no production for "for each creature
-    blocking it beyond the first" or for an escalating upkeep. From here the
-    ordinary dispatchers fire them: the becomes-blocked step and the upkeep
-    step, neither of which knows the word.
+    Three today — rampage (CR 702.23a), cumulative upkeep (CR 702.24a) and
+    flanking (CR 702.25a) — and all are the rewrite ``engine/equipment.py``
+    established for equip, one layer earlier because the grammar has no
+    production for "for each creature blocking it beyond the first", for an
+    escalating upkeep, or for a sentence no card outside a reminder prints.
+    From here the ordinary dispatchers fire them: the becomes-blocked step and
+    the upkeep step, neither of which knows the word.
 
     **One reader because there are two front ends.** A creature's lines and a
     non-creature permanent's are parsed by different loops, and cumulative
@@ -3948,6 +3950,7 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
     return (
         *rampage_triggers(normalized_line),
         *cumulative_upkeep_triggers(normalized_line),
+        *flanking_triggers(normalized_line),
     )
 
 

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**347 / 612 tracked rules covered (56%)** — 1901 tests, 0 unannotated.
+**347 / 612 tracked rules covered (56%)** — 1904 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -628,7 +628,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(58 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
-- [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
+- [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(10 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
 
 ### 510. Combat Damage Step
@@ -889,7 +889,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(25 tests, subrules ab)*
-- [x] **702.25** Flanking *(3 tests, subrules a)*
+- [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*

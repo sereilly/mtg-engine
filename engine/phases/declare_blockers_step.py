@@ -23,7 +23,6 @@ from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
-from ..pt import add_pt_modifier
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
 from ..turn_state import record_block_involvement
@@ -432,7 +431,6 @@ class DeclareBlockersStepMixin:
         self._fire_delayed_block_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._fire_delayed_block_pair_triggers(controller_index, assignments)
-        self._apply_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:
@@ -1723,57 +1721,15 @@ class DeclareBlockersStepMixin:
                     },
                 )
 
-    def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
-        """Apply an "until end of turn" P/T change that the cleanup step reverts."""
-        add_pt_modifier(permanent, power, toughness, until="end_of_turn")
-
-    def _apply_flanking(self, controller_index: int) -> None:
-        """Resolve Flanking (CR 702.25) on declared blocks: each blocking
-        creature without flanking gets -1/-1 until end of turn.
-
-        **Rampage used to be resolved here too**, and it is not any more. CR
-        702.23a defines it as a triggered ability, so it now compiles to one
-        (``engine/rampage.py``) and goes on the stack through the
-        becomes-blocked dispatcher above like every other trigger — which is
-        what buys 702.23b's "calculated only once per combat, when the
-        triggered ability resolves". Applied inline here it was calculated at
-        declaration, read only the first of several instances (702.23c), and
-        missed band-propagated blocks. Flanking stays because CR 702.25a is a
-        triggered ability the engine has no *card* for: the keyword is not in
-        `IMPLEMENTED_KEYWORDS`, so nothing in the pool reaches it, and moving
-        it would be inventing a card's worth of work with nothing to verify it
-        against.
-        """
-        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
-            return
-        attacker_controller = self.players[self.active_player_index]
-        if controller_index < 0 or controller_index >= len(self.players):
-            return
-        defender = self.players[controller_index]
-
-        # Scoped to attackers aimed at this defender (CR 802.4a) — flanking acts
-        # on the block just declared against controller_index specifically.
-        for attacker_idx, defending_idx in self.combat_attackers.items():
-            if defending_idx != controller_index:
-                continue
-            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
-                continue
-            attacker = attacker_controller.battlefield[attacker_idx]
-            blocker_indices = self._combat_blockers_for_attacker(attacker_idx)
-            if not blocker_indices:
-                continue
-
-            # CR 702.25a: Flanking — each non-flanking blocker gets -1/-1 per instance.
-            if self._has_keyword(attacker, "flanking"):
-                for blocker_idx in blocker_indices:
-                    if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
-                        continue
-                    blocker = defender.battlefield[blocker_idx]
-                    if self._has_keyword(blocker, "flanking"):
-                        continue
-                    self._apply_temporary_buff(blocker, -1, -1)
-                    self.log.append(
-                        f"{blocker.card.name} gets -1/-1 from {attacker.card.name}'s flanking"
-                    )
-        # Flanking may drop a blocker's toughness to 0; clean it up now.
-        self.check_state_based_actions()
+    # `_apply_temporary_buff` and `_apply_flanking` were here, and both are
+    # gone for one reason. CR 702.25a defines flanking as a triggered ability,
+    # so it now compiles to one (`engine/flanking.py`) and reaches the stack
+    # through the becomes-blocked dispatcher above — exactly the move rampage
+    # made a set earlier, and for the same three defects: applied inline it
+    # happened at *declaration* rather than on resolution (so nothing could be
+    # responded to and CR 509.3f's fixed set was read too early), it applied one
+    # -1/-1 however many instances the creature had (CR 702.25b), and it walked
+    # the block map by battlefield index, which a removal renumbers. The old
+    # docstring said flanking stayed because "the engine has no *card* for" it;
+    # Mirage prints ten, plus an Aura that grants it and an enchantment that
+    # takes it away, so the reason expired.

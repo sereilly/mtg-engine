@@ -112,6 +112,14 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # once — `keywords.keyword_ability_name` is what strips a printed quality
     # back to it, exactly as it strips protection's colour.
     "bands with other",
+    # CR 702.25: flanking. Like rampage two entries up, the CR *defines* it as a
+    # triggered ability rather than describing one, so the behaviour is a
+    # compile-time rewrite (`engine/flanking.py`) and this set holds the word.
+    # The word is not decoration for it: Telim'Tor buffs "attacking creatures
+    # **with** flanking", Barbed Foliage takes it away and Agility grants it, so
+    # every reader of the registry — the filter, the removal gate, the grant
+    # gate — has a Mirage card behind it.
+    "flanking",
 })
 
 
