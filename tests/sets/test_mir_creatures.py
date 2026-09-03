@@ -642,3 +642,68 @@ def test_abyssal_hunter_bites_the_creature_it_tapped(set_pool):
     assert victim.damage_marked == hunter.effective_power > 0
     assert not bystander.tapped
     assert bystander.damage_marked == 0
+
+
+def test_floodgate_sacrifices_itself_the_moment_it_has_flying(set_pool):
+    """"When this creature has flying, sacrifice it." (CR 603.8.)
+
+    The fifth state trigger in the state-based sweep and the keyword twin of
+    Phyrexian Devourer's power threshold — swept rather than fired from a call
+    site, because a keyword can arrive from an Aura, an Equipment, a board-wide
+    static or a layer effect ending, and a list of those sites goes stale.
+    """
+    pool = set_pool("MIR")
+    gate = _W1G3Permanent(card=pool["Floodgate"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[gate], life=20)
+    p2 = _W1G3PlayerState(name="P2", life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game._settle()
+    assert game.is_on_battlefield(gate), "a Wall without flying stays"
+
+    from engine.keywords import grant_keyword
+
+    grant_keyword(gate, "flying", duration="end_of_turn")
+    game._settle()
+
+    assert not game.is_on_battlefield(gate), (
+        f"the state trigger never fired: {game.log}"
+    )
+
+
+def test_floodgate_counts_islands_when_it_leaves(set_pool):
+    """"When this creature leaves the battlefield, it deals damage to each
+    nonblue creature without flying equal to **half the number of Islands you
+    control, rounded down**."
+
+    A *counted* sweep, which both sweep lowerings refused outright ("a creature
+    sweep cannot carry a computed damage amount"). The refusal was about the
+    amount reaching the handler — and `x_from_count` is substituted into the
+    resolution's X at the single dispatch point, before any handler runs, so a
+    sweep asking for "x" gets the number exactly as a single recipient does.
+
+    The three creatures separate the three narrowings: blue is spared, a flier
+    is spared, and the ground non-blue creature takes half of five Islands.
+    """
+    pool = set_pool("MIR")
+    gate = _W1G3Permanent(card=pool["Floodgate"])
+    islands = [_W1G3Permanent(card=pool["Island"]) for _ in range(5)]
+    ground = _W1G3Permanent(card=pool["Zhalfirin Commander"])   # white, no flying
+    flier = _W1G3Permanent(card=pool["Cerulean Wyvern"])        # blue flier
+    blue_ground = _W1G3Permanent(card=pool["Wall of Corpses"])  # black wall
+    p1 = _W1G3PlayerState(name="P1", battlefield=[gate, *islands], life=20)
+    p2 = _W1G3PlayerState(
+        name="P2", battlefield=[ground, flier, blue_ground], life=20
+    )
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.sacrifice_permanent(gate)
+    game._settle()
+
+    assert ground.damage_marked == 2, f"half of five Islands: {game.log}"
+    assert flier.damage_marked == 0, "flying is spared"
+    assert blue_ground.damage_marked == 2, "black is not blue"

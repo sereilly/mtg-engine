@@ -903,6 +903,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # printing any other number is payload rather than a second row.
     ("source_power_at_least",
      r"whenever this creature's power is (?P<power_count>[a-z0-9]+) or greater"),
+    # "**When** this creature has flying, sacrifice it." (Floodgate.) CR 603.8
+    # again, reading a *keyword* off the source where the row above reads a
+    # power — and read through the layers for that row's reason, so a keyword
+    # granted in layer 6 counts exactly as a printed one does (CR 613.1).
+    #
+    # The keyword is delimited here and carried as payload, so a card printed
+    # with another one is a card this row already reads. In the whenever table
+    # under the "when" the card prints, like every state trigger above it: a
+    # kind lives in one table, and this is the one both printed words reach.
+    ("source_has_keyword",
+     r"whenever this creature has (?P<keyword_name>[a-z]+)"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
     # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
     # *fails to be paid* at one identifiable moment, so this is announced from

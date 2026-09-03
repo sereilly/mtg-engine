@@ -34,6 +34,7 @@ from ._amounts import (
 )
 from ._sweeps import (
     lower_described_set_damage,
+    lower_counted_sweep_damage,
     lower_each_matching_damage,
     refuse_unswept_multiplier,
 )
@@ -139,14 +140,25 @@ def _lower_halved_damage(
     whole = _lower_damage(
         dataclasses.replace(node, amount=node.amount.of), event, produced
     )
-    if len(whole) != 1 or whole[0].kind != "deal_damage":
+    if len(whole) != 1:
         raise LoweringError("no handler halves this damage amount", node=node)
     payload = dict(whole[0].payload)
     counted = payload.get(X_FROM_COUNT)
     if isinstance(counted, dict):
+        # The rounding rides *inside the count*, so it is applied by the count
+        # evaluator at the single dispatch point before any handler sees the
+        # number — which is why this branch does not care which kind the
+        # quantity underneath lowered to. Floodgate's is a sweep
+        # (`deal_damage_each_matching`), and it halves exactly as Eternal
+        # Flame's single recipient does.
         payload[X_FROM_COUNT] = {**counted, "half": node.amount.rounding}
-    else:
-        payload["amount_half"] = node.amount.rounding
+        return (dataclasses.replace(whole[0], payload=payload),)
+    if whole[0].kind != "deal_damage":
+        # An announced X halves at the *point of use* instead, on a payload key
+        # only `deal_damage` reads — so every other shape would deal the
+        # unhalved amount on a card reporting itself supported.
+        raise LoweringError("no handler halves this damage amount", node=node)
+    payload["amount_half"] = node.amount.rounding
     return (dataclasses.replace(whole[0], payload=payload),)
 
 
@@ -262,6 +274,18 @@ def _lower_damage_shape(
     if isinstance(node.amount, ast.Half):
         return _lower_halved_damage(node, event, produced)
     if isinstance(node.amount, ast.CountOf):
+        # "…deals damage to **each nonblue creature without flying** equal to
+        # half the number of Islands you control" (Floodgate). A described set
+        # (CR 611.2c) rather than a chosen recipient, so it goes to the sweep
+        # family — `_lower_counted_damage` builds one `deal_damage` and has no
+        # branch for a set nobody picks.
+        if (
+            len(node.recipients) == 1
+            and isinstance(node.recipients[0], ast.TargetSpec)
+            and node.recipients[0].quantifier in ("each", "all")
+            and not node.recipients[0].targeted
+        ):
+            return lower_counted_sweep_damage(node, node.recipients[0])
         return _lower_counted_damage(node, event)
     # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
     # the half above). A characteristic of what the cost ate rather than a count

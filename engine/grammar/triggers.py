@@ -43,7 +43,8 @@ from .trigger_subjects import (
     _parse_named_subject_tap_event,
 )
 from .vocabulary import (
-    CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS, ORDINAL_WORDS,
+    CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, KEYWORD_ABILITIES, NUMBER_WORDS,
+    ORDINAL_WORDS,
 )
 from .trigger_tables import (
     _WHENEVER_EVENTS,
@@ -369,6 +370,24 @@ def _parse_state_trigger_event(
             if stream.accept_phrase("or", "greater"):
                 return ast.TriggerEvent("source_power_at_least", word)
     stream.reset(power_mark)
+
+    # "When **this creature has flying**, sacrifice it." (Floodgate.) The
+    # keyword twin of the power threshold above, in the same family and read
+    # here for the same reason: both front ends see the whole line, and a
+    # condition only one of them reads leaves the other refusing the effect.
+    #
+    # The keyword is consumed and dropped, exactly as the threshold above is:
+    # `engine/oracle.py`'s table is the front end that supplies the condition
+    # and its payload to the dispatcher, and a copy carried here would be free
+    # to disagree with it. It is *checked* against the vocabulary rather than
+    # skipped, so "has three heads" refuses the line instead of claiming it.
+    keyword_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_word("has"):
+        word_token = stream.peek_word()
+        if word_token and word_token in KEYWORD_ABILITIES:
+            stream.advance()
+            return ast.TriggerEvent("source_has_keyword", word)
+    stream.reset(keyword_mark)
 
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):
