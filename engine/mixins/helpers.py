@@ -832,6 +832,20 @@ class GameHelpersMixin:
             # the controller the permanent last had; the owner is looked up
             # separately precisely because the two differ under Control Magic.
             player.creatures_died_under_your_control_this_turn += 1
+            # "…for each creature put into **your graveyard** from the
+            # battlefield this turn" (Asmira, Holy Avenger). CR 400.3's seat,
+            # not CR 109.5's: the card goes to its *owner's* graveyard, which is
+            # a different player from the one above whenever the permanent was
+            # stolen. Counted for a token too — CR 111.7 puts it into the
+            # graveyard and only then does the state-based action make it cease
+            # to exist, so the sentence is true of it even though nothing is
+            # there to find afterwards, which is why this is a tally and not a
+            # read of the pile.
+            owner_seat = self.owner_index_of(permanent)
+            grave_owner = (
+                self.players[owner_seat] if owner_seat is not None else player
+            )
+            grave_owner.creatures_put_into_your_graveyard_this_turn += 1
             if next(matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"dies"},

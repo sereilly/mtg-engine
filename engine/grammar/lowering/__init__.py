@@ -131,9 +131,9 @@ from .keywords import (
     _lower_lose_keyword,
 )
 from .counter_removal import _lower_remove_counter
+from ._counter_stores import _lower_player_gets_counters
 from .counters import (
     _fused_tap_enchanted_then_counters,
-    _lower_player_gets_counters,
     _lower_put_counter,
 )
 from .loops import (

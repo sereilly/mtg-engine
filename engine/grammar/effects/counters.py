@@ -16,12 +16,13 @@ import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount
-from ..records import _parse_for_each_this_way
+from ..records import _parse_for_each_history, _parse_for_each_this_way
 from ..errors import GrammarError
 from ..lexer import PT
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES
+from ..nouns import parse_object_filter
 from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
                        is_pt_counter, parse_pair_ordinal_subject)
 
@@ -235,6 +236,15 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     # multiplication this node cannot carry, and reading the clause while
     # dropping the printed count would place one where the card says two.
     counted = _parse_for_each_this_way(stream)
+    if counted is None:
+        # "…**for each 1 damage dealt to you this turn**." (Discordant Spirit.)
+        # A count like the clause above and over the same shape of number — one
+        # counter per unit — but read out of the turn's damage ledger instead of
+        # out of this resolution's scratchpad. Beside it rather than inside it
+        # for that reason: "this way" names what the sentence in front of it did
+        # and this names what the turn did, so one reader answering both would
+        # have to guess which record was meant.
+        counted = _parse_for_each_history(stream, parse_object_filter)
     if counted is None:
         return placement
     if up_to or not isinstance(count, ast.Fixed) or count.value != 1:

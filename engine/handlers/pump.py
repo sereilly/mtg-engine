@@ -704,7 +704,17 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
         # "Put **X** +0/+1 counters on this creature" (Necropolis): the count
         # may be the where-clause's X, resolved through the same
         # `context.x_value` every other amount reads.
-        count = resolve_amount(raw_count, context.x_value)
+        #
+        # …and that X may be *defined* by a count taken at resolution rather
+        # than announced with a cast: "put a +1/+1 counter on this creature
+        # **for each 1 damage dealt to you this turn**" (Discordant Spirit).
+        # The same `x_from_count` channel the pump handlers at the top of this
+        # file read, so one printed clause is one number wherever it is spent.
+        x_value = context.x_value
+        x_count = instruction.payload.get("x_from_count")
+        if x_count is not None:
+            x_value = count_from_payload(game, context, x_count)
+        count = resolve_amount(raw_count, x_value)
     if count <= 0:
         return True, "resolved"
     # Which CR 122.1a pair. Absent on every payload written before Necropolis,

@@ -496,3 +496,186 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G2: end-step counters gated and counted by a turn's history ---
+#
+# Three creatures whose whole ability is one end-step trigger that puts a
+# counter on itself, and whose refusals were three different halves of the same
+# sentence: an intervening-if the parser could not read (Wall of Resistance), an
+# intervening-if the parser *could* read and nothing evaluated (Discordant
+# Spirit), and a "for each" whose set is a per-seat turn history (Asmira).
+#
+# Every one of them compiles into the end step's catch-all scan, which is
+# exactly why each test drives a real turn: a trigger that reports supported and
+# fires nowhere looks identical to one that works, from the compiled program.
+
+from engine import Game, PlayerState
+from engine.handlers._common import apply_damage_to_creature
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w1g2_vanilla(name: str) -> CardDefinition:
+    """A 2/2 with no text, for a death that is only a death."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _w1g2_board(set_pool, name, *, mine=(), theirs=()):
+    """*name* on seat 0's battlefield, turn 0 begun, nobody interactive."""
+    subject = Permanent(card=set_pool("MIR")[name])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[subject] + [Permanent(card=_w1g2_vanilla(n)) for n in mine],
+        ),
+        PlayerState(
+            name="P2",
+            battlefield=[Permanent(card=_w1g2_vanilla(n)) for n in theirs],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game, subject
+
+
+def _w1g2_kill(game, seat: int, permanent) -> None:
+    """Put *permanent* into its owner's graveyard from the battlefield."""
+    game._permanent_to_graveyard(game.players[seat], permanent)
+    game.remove_from_battlefield(permanent)
+
+
+def test_wall_of_resistance_takes_no_counter_without_damage(set_pool):
+    """"At the beginning of each end step, **if this creature was dealt damage
+    this turn**, put a +0/+1 counter on it."
+
+    CR 603.4: an intervening-if whose condition is false is not a trigger at
+    all. The passive voice is the whole of what was missing — the grammar knew
+    "if this creature **dealt** damage to a player this turn" (Whirling Dervish)
+    and not the other end of the same event.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Wall of Resistance"])
+    assert program.supported, program.reason
+
+    game, wall = _w1g2_board(set_pool, "Wall of Resistance")
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert wall.effective_toughness == 3, game.log
+
+
+def test_wall_of_resistance_takes_a_counter_after_damage(set_pool):
+    """The condition reads the record the damage seam already stamps on every
+    recipient — the same one the noun phrase "a creature that has been dealt
+    damage this turn" (Giant Shark) reads — rather than ``damage_marked``, which
+    regeneration and a toughness rewrite each wipe while the damage stays
+    dealt."""
+    game, wall = _w1g2_board(set_pool, "Wall of Resistance")
+    apply_damage_to_creature(game, wall, 1, None)
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert wall.effective_toughness == 4, game.log
+
+
+def test_wall_of_resistance_fires_on_every_players_end_step(set_pool):
+    """"**each** end step", not "your end step" — CR 513.1 gives every turn one,
+    and the end step's two condition kinds are what tell the scopes apart."""
+    game, wall = _w1g2_board(set_pool, "Wall of Resistance")
+    apply_damage_to_creature(game, wall, 1, None)
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert wall.effective_toughness == 4, game.log
+
+
+def test_discordant_spirit_counts_the_damage_dealt_to_you(set_pool):
+    """"At the beginning of each end step, if it's an opponent's turn, put a
+    +1/+1 counter on this creature **for each 1 damage dealt to you this
+    turn**."
+
+    The count is the turn's damage ledger, not a life total: a life total is the
+    turn's *net*, so a player dealt 3 who then gained 3 has still been dealt 3.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Discordant Spirit"])
+    assert program.supported, program.reason
+
+    game, spirit = _w1g2_board(set_pool, "Discordant Spirit")
+    game.start_next_turn()
+    assert game.active_player_index == 1
+    game._deal_damage_to_player(game.players[0], 3, None)
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert (spirit.effective_power, spirit.effective_toughness) == (5, 5), game.log
+
+
+def test_discordant_spirit_is_silent_on_its_controllers_turn(set_pool):
+    """"**if it's an opponent's turn**" — the half nothing evaluated.
+
+    The clause lowered to ``{"kind": "your_turn"}`` before this round, which
+    only ``static_bonuses.conditional_static_holds`` answered; reaching
+    ``evaluate_condition`` it fell through to False. That is the direction that
+    hides, because a trigger which never fires looks exactly like one whose
+    condition was correctly false — so this is the assertion that says the gate
+    is a gate and not a permanent no.
+    """
+    game, spirit = _w1g2_board(set_pool, "Discordant Spirit")
+    game._deal_damage_to_player(game.players[0], 3, None)
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert (spirit.effective_power, spirit.effective_toughness) == (2, 2), game.log
+
+
+def test_asmira_counts_only_deaths_into_her_controllers_graveyard(set_pool):
+    """"…put a +1/+1 counter on ~ for each creature put into **your graveyard**
+    from the battlefield this turn."
+
+    CR 400.3's seat, not CR 109.5's: the tally is kept for the *owner* of what
+    died, so an opponent's creature dying is not one of Asmira's counters — the
+    game-wide ``creatures_died_this_turn`` the short spelling reads would have
+    given her three here.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Asmira, Holy Avenger"])
+    assert program.supported, program.reason
+
+    game, asmira = _w1g2_board(
+        set_pool, "Asmira, Holy Avenger", mine=("Mine A", "Mine B"), theirs=("Theirs",)
+    )
+    for permanent in list(game.players[0].battlefield[1:]):
+        _w1g2_kill(game, 0, permanent)
+    _w1g2_kill(game, 1, game.players[1].battlefield[0])
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert (asmira.effective_power, asmira.effective_toughness) == (4, 5), game.log
+
+
+def test_asmiras_tally_resets_with_the_turn(set_pool):
+    """"**This turn**" is the window, and a per-turn counter that never resets is
+    a bug that shows up only on turn two."""
+    game, asmira = _w1g2_board(set_pool, "Asmira, Holy Avenger", mine=("Mine A",))
+    _w1g2_kill(game, 0, game.players[0].battlefield[1])
+    game.resolve_end_step(0)
+    game.resolve_stack()
+    assert asmira.effective_power == 3, game.log
+
+    game.start_next_turn()
+    assert game.players[0].creatures_put_into_your_graveyard_this_turn == 0
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert asmira.effective_power == 3, game.log

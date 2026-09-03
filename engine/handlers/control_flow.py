@@ -824,6 +824,23 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return controller_seat in seats
         return any(seat != controller_seat for seat in seats)
 
+    if kind == "your_turn":
+        # "At the beginning of each end step, **if it's an opponent's turn**, …"
+        # (Discordant Spirit.) Whose turn it is, asked as a CR 603.4
+        # intervening-if. The lowering has produced this payload since Vibrating
+        # Sphere and only ``static_bonuses.conditional_static_holds`` answered
+        # it — so a *trigger* gated on the clause would have reached this
+        # function, fallen through to the ``return False`` below and never
+        # fired. One lowered condition, two front ends, one of them silent.
+        #
+        # The seat is the ability's controller (CR 109.5), which is
+        # ``context.caster`` for a triggered ability as much as for a spell, and
+        # the comparison is the one that other reader makes.
+        if context.caster not in game.players:
+            return False
+        mine = game.active_player_index == game.players.index(context.caster)
+        return (not mine) if payload.get("negated") else mine
+
     if kind == "life_gained_this_turn":
         # Per player, because the counter is: "you" is the ability's
         # controller, which is context.caster for a triggered ability too.

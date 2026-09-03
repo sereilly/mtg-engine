@@ -616,7 +616,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -931,6 +931,21 @@ FAMILY_SHARED = {
     # other — and it produces no `OracleInstruction`, which is what keeps it a
     # vocabulary rather than a third family.
     "_piles",
+    # `_counter_stores` split out of `lowering/counters.py` at Mirage, the
+    # second time that module crossed the guard. The line is the one
+    # `counter_removal` drew when it left the same file — what the *payload*
+    # asks for — read one axis over: a CR 122.1a placement asks which object and
+    # how many and leaves the kind as data, while these two ask **which store
+    # tracks this kind** and nothing about an object's characteristics. Loyalty
+    # is CR 306.5b's life total and price of an ability; poison is CR 122.1f's
+    # counter on a *player*, which CR 122.1's own first sentence separates from
+    # a counter on an object and which this engine keeps on a different field
+    # entirely. Both refuse by name when no store answers, which is the shared
+    # shape that makes them one leaf rather than two leftovers. A floor for
+    # `_bound_returns`' reason exactly: the loyalty half is reached from inside
+    # `counters._lower_put_counter`, so `counters` reads it and it reads nothing
+    # back.
+    "_counter_stores",
     # `records` split out of `ast/conditions.py` at Mirage, when three
     # intervening-if productions took that module past the guard. The line is
     # the one `lowering/conditions.py` had been drawing in prose card by card:
