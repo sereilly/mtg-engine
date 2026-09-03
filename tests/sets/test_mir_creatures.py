@@ -496,3 +496,221 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G1: the combat family ---
+#
+# Cards whose refusal sat in a combat gate rather than in a production: the two
+# printed *restriction* tables (`engine/combat_restrictions.py`,
+# `engine/activation_restrictions.py`), the block relations, and the flanking
+# leftovers round 1 named. Each section below names the card and the layer that
+# was missing.
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w1g1_vanilla(
+    name: str, power: int, toughness: int, text: str = "", subtype: str = "Test"
+) -> CardDefinition:
+    """A creature carrying only its numbers.
+
+    Invented rather than pulled from the pool: every test below is about a
+    relation between two creatures, and a pool creature would bring its own
+    printed line along with the answer.
+    """
+    type_line = f"Creature - {subtype}"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w1g1_nosick(perm: Permanent) -> Permanent:
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g1_game(mine, theirs, active: int = 0) -> Game:
+    """A two-seat game stopped at the declare-attackers step of *active*'s turn."""
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(active)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    return game
+
+
+# --- Shauku, Endbringer: a restriction qualified by the *shared* zone ---
+
+
+def test_shauku_alone_on_the_battlefield_may_attack(set_pool):
+    """"Shauku can't attack **if there's another creature on the
+    battlefield**."
+
+    The qualifier is what makes the card playable at all, and reading "another"
+    as an article would have grounded it permanently -- so the empty-board case
+    is the one that proves the word survived the parse.
+    """
+    shauku = _w1g1_nosick(Permanent(card=set_pool("MIR")["Shauku, Endbringer"]))
+    game = _w1g1_game([shauku], [])
+
+    assert game.can_attack(shauku, 1)
+    assert game.declare_attackers(0, [0])[0]
+
+
+@pytest.mark.parametrize("side", ["mine", "theirs"])
+def test_shauku_is_grounded_by_any_other_creature(set_pool, side):
+    """CR 403.1 makes the battlefield one shared zone, so the clause is not a
+    question about either player's board -- an opponent's creature stops Shauku
+    exactly as its own controller's does. That is the reading the seat-scoped
+    "as long as ... controls" qualifier could not have expressed."""
+    shauku = _w1g1_nosick(Permanent(card=set_pool("MIR")["Shauku, Endbringer"]))
+    other = Permanent(card=_w1g1_vanilla("Bystander", 1, 1))
+    game = _w1g1_game(
+        [shauku, other] if side == "mine" else [shauku],
+        [] if side == "mine" else [other],
+    )
+
+    assert not game.can_attack(shauku, 1)
+    ok, reason = game.declare_attackers(0, [0])
+    assert not ok and "Shauku" in reason
+
+
+def test_shauku_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Shauku, Endbringer"])
+    assert program.supported, program.reason
+    condition = next(
+        i.payload["condition"] for i in program.instructions
+        if i.kind == "cant_attack"
+    )
+    # "Another" reaches the matcher as the key every other reader of a noun
+    # phrase already tests, rather than as a spelling only this table knows.
+    assert condition["subject"]["exclude_self"] is True
+    assert condition["who"] == "anyone"
+
+
+# --- Ekundu Cyclops: a CR 508.1d requirement conditional on the declaration ---
+
+
+def test_ekundu_cyclops_may_attack_alone(set_pool):
+    """"**If a creature you control attacks**, this creature also attacks if
+    able."
+
+    "Also" is what says the condition names another creature. Read as including
+    the Cyclops itself the requirement would be self-satisfying, which is a
+    different card -- so the lone declaration is legal and nothing forces it.
+    """
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+
+    assert game.declare_attackers(0, [0])[0]
+
+
+def test_ekundu_cyclops_must_join_a_declaration(set_pool):
+    """The requirement is about the *set*, not about the creature: a Bear
+    attacking alone is an illegal declaration while the Cyclops could attack,
+    which is why this cannot live in the per-creature ``_must_attack_if_able``
+    predicate."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+
+    ok, reason = game.declare_attackers(0, [1])
+    assert not ok and "Ekundu Cyclops" in reason
+
+    game = _w1g1_game(
+        [_w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"])),
+         _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))], [],
+    )
+    assert game.declare_attackers(0, [0, 1])[0]
+
+
+def test_ekundu_cyclops_is_not_required_when_it_cannot_attack(set_pool):
+    """CR 508.1d obeys a requirement only so far as it is able: a tapped
+    Cyclops cannot attack, so the Bear's declaration stands."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+    # After the untap step, or CR 502.1 would have undone it.
+    cyclops.tapped = True
+
+    assert game.declare_attackers(0, [1])[0]
+
+
+def test_ekundu_cyclops_is_not_required_by_an_opponents_attack(set_pool):
+    """"A creature **you control**" is CR 109.5's seat -- the controller of the
+    printed line, not whoever happens to be attacking. The Cyclops's own
+    controller declaring nobody leaves it free."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    raider = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Raider", 2, 2)))
+    game = _w1g1_game([raider], [cyclops], active=0)
+
+    assert game.declare_attackers(0, [0])[0]
+
+
+# --- Sawback Manticore: a CR 602.5 clause about the source's combat role ---
+
+
+def test_sawback_manticore_refuses_while_out_of_combat(set_pool):
+    """"Activate only **if this creature is attacking or blocking**."
+
+    The distinction from the phase clause beside it (Jade Statue's "only during
+    combat") is the whole point: a Manticore sitting at home during somebody
+    else's combat is in the combat phase and is in neither role. Driven with a
+    legal target on the board, so the refusal that fires is this one rather
+    than the target gate.
+    """
+    manticore = _w1g1_nosick(Permanent(card=set_pool("MIR")["Sawback Manticore"]))
+    raider = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Raider", 4, 4)))
+    game = _w1g1_game([raider], [manticore], active=0)
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+
+    result = game.activate_permanent_ability(
+        1, "Sawback Manticore", permanent_index=0,
+        target_player_index=0, target_permanent_index=0, ability_index=1,
+    )
+    assert not result.supported
+    assert "not attacking or blocking" in result.details
+
+
+def test_sawback_manticore_pings_while_attacking(set_pool):
+    """And the same ability, once the source is in a role. The second
+    activation is refused by the "and only once each turn" conjunct, which
+    ``_conjuncts`` splits off -- proof that admitting the new clause did not
+    swallow the one beside it.
+    """
+    manticore = _w1g1_nosick(Permanent(card=set_pool("MIR")["Sawback Manticore"]))
+    wall = Permanent(card=_w1g1_vanilla("Blocker", 4, 4))
+    game = _w1g1_game([manticore], [wall])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    def ping():
+        return game.activate_permanent_ability(
+            0, "Sawback Manticore", permanent_index=0,
+            target_player_index=1, target_permanent_index=0, ability_index=1,
+        )
+
+    result = ping()
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    assert any("dealt 2 damage to Blocker" in line for line in game.log)
+
+    assert "only once each turn" in ping().details
