@@ -593,6 +593,14 @@ _COUNTERS_PLACED_THIS_WAY = COUNTERS_PLACED_THIS_WAY
 #: that can name it: the permanent did not exist when the ability was
 #: activated, so nothing on the stack or on the board points at it.
 _REANIMATED_PERMANENTS = "reanimated_permanents"
+#: "Take an extra turn after this one. At the beginning of **that turn's** end
+#: step, you lose the game." (Final Fortune.) The turn the step before it
+#: queued, recorded so the delay behind it has a producer to name: "that turn"
+#: with nothing in front of it that made one is a back-reference to nothing, and
+#: the delayed ability it would arm answers to an event that only ever happens
+#: on somebody's extra turn — inert rather than wrong, which is the failure this
+#: whole registry exists to refuse.
+EXTRA_TURN_GRANTED = "extra_turn_granted"
 
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,

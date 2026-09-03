@@ -23,6 +23,7 @@ from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
 from ..models import Permanent
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
+from ..phasing_locks import expire_phase_out_locks
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
@@ -797,6 +798,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for perm in self.all_permanents():
             clear_granted_keywords(perm, "your_next_upkeep", seat=player_index)
             clear_granted_ability_lines(perm, "your_next_upkeep", seat=player_index)
+            # "**Until your next upkeep**, target permanent can't phase out."
+            # (Spatial Binding.) The same moment and the same seat rule as the
+            # two grant sweeps above — and *before* CR 702.26a's phasing event,
+            # which the untap step ran one step earlier this turn, so the lock
+            # covers the whole window the card names and no more.
+            expire_phase_out_locks(perm, "your_next_upkeep", seat=player_index)
             # "Until **your** next upkeep, target noncreature artifact becomes
             # an artifact creature…" (Xenic Poltergeist) — the same moment and
             # the same reasoning as the sweep above: it expires at the

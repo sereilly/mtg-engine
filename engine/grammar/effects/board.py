@@ -27,6 +27,7 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
+from ..readers import _parse_entering_counters
 from ..records import _parse_for_each_this_way
 
 from ..errors import GrammarError
@@ -160,6 +161,16 @@ def _parse_return(
     if destination.name == "battlefield" and stream.accept_word("tapped"):
         entering_tapped = True
 
+    # "…to the battlefield **with a +1/+1 counter on it**." (Sand Golem.)
+    # CR 121.2 puts the counters on as part of the move, so the phrase belongs
+    # to the return exactly as "tapped" above does — and through the same
+    # reader the exile uses, so one printed phrase has one meaning. Battlefield
+    # only, for that rider's reason: a card in a hand carries no counters, and
+    # consuming the words into nothing is the bug this grammar refuses.
+    entering_counters: tuple[tuple[str, int], ...] = ()
+    if destination.name == "battlefield":
+        entering_counters = _parse_entering_counters(stream)
+
     # "…to the battlefield **under the control of that creature's owner**."
     # (Reincarnation.) CR 110.2 makes the spell's controller the default, so
     # the phrase is only ever read here — consumed, because a dropped "under
@@ -239,6 +250,7 @@ def _parse_return(
             each_from = ast.Zone(each.filter.zone, each.filter.zone_owner)
         return ast.ReturnToZone(
             each, destination, each_from, entering_tapped=entering_tapped,
+            entering_counters=entering_counters,
             under_control_of=under_control_of, repetitions=repetitions,
             actor=actor,
             attached_to=attached_to, losing_subtypes=losing_subtypes,

@@ -277,3 +277,116 @@ def test_a_union_clause_reduces_to_its_nouns(set_pool):
     assert enchant_clause_nouns("creature card in a graveyard") == (
         "creature card in a graveyard",
     )
+
+
+# --- W1G2: a phase-out lock with a sweep behind it (CR 702.26) ---
+#
+# Spatial Binding is the set's one *restriction* on phasing, and the read it
+# needs was already in the engine with nothing writing it: `resolve_phasing_for`
+# has asked `metadata["cant_phase_out"]` since phasing landed, and no card, test
+# or handler had ever set it. So the round is as much about the second reader as
+# the first — CR 702.26a's alternation is only one of the ways a permanent
+# phases out, and a lock enforced there alone is one an activated ability walks
+# straight past.
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.phasing_locks import phase_out_forbidden
+
+
+def _w1g2_binding_board(set_pool):
+    """Spatial Binding on seat 0, a creature with phasing on seat 1."""
+    binding = Permanent(card=set_pool("MIR")["Spatial Binding"])
+    drake = Permanent(card=set_pool("MIR")["Teferi's Drake"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[binding], life=20),
+        PlayerState(name="P2", battlefield=[drake], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game, binding, drake
+
+
+def _w1g2_bind(game):
+    result = game.activate_permanent_ability(
+        0, "Spatial Binding", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+
+def test_spatial_binding_compiles_and_charges_its_life(set_pool):
+    """"**Pay 1 life**: Until your next upkeep, target permanent can't phase
+    out."
+
+    The cost is CR 118.8's and the activation path already charged it; what
+    refused was the effect, on "expected 'be'" — the `can't` production is the
+    combat one, and it reads "can't **be** blocked/regenerated".
+    """
+    program = compile_card_oracle(set_pool("MIR")["Spatial Binding"])
+    assert program.supported, program.reason
+
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    assert game.players[0].life == 19, game.log
+    assert phase_out_forbidden(drake), game.log
+
+
+def test_a_phasing_creature_phases_out_without_the_lock(set_pool):
+    """The baseline the assertion below is only meaningful against: CR 702.26a's
+    alternation happens at the creature's controller's untap step."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+
+    game.start_next_turn()
+
+    assert drake.metadata.get("phased_out") is True, game.log
+
+
+def test_spatial_binding_stops_the_untap_steps_alternation(set_pool):
+    """CR 702.26a's event reads the board before it applies either half, so a
+    locked permanent has to be kept out of the *set* rather than skipped
+    afterwards — one excluded after the sets were taken would still have counted
+    as leaving."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    game.start_next_turn()
+
+    assert drake.metadata.get("phased_out") is None, game.log
+
+
+def test_spatial_binding_stops_a_one_shot_phase_out_too(set_pool):
+    """The reader that did not exist.
+
+    Reality Ripple, Mist Dragon, Vaporous Djinn and Taniwha all phase a
+    permanent out without waiting for an untap step, so a lock enforced only at
+    the alternation is one the target's controller escapes by activating an
+    ability. Asked at ``Game.phase_out_permanent`` — the one transition every
+    phase-out passes through.
+    """
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    assert game.phase_out_permanent(drake) is False
+    assert drake.metadata.get("phased_out") is None, game.log
+
+
+def test_the_lock_ends_at_its_controllers_next_upkeep(set_pool):
+    """"Until **your** next upkeep" is CR 109.5's seat — the Binding's
+    controller, not the locked permanent's — so an opponent's upkeep passes
+    without lifting it and the creature phases out on the untap step after the
+    sweep."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    game.start_next_turn()          # P2's turn: the lock holds
+    assert phase_out_forbidden(drake), game.log
+    game.start_next_turn()          # P1's upkeep sweeps it
+    assert not phase_out_forbidden(drake), game.log
+    game.start_next_turn()          # P2's untap step: it phases out again
+
+    assert drake.metadata.get("phased_out") is True, game.log

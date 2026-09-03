@@ -1616,13 +1616,28 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
             game.log.append(f"{card.name} returned from the graveyard to hand")
         return True, "resolved"
     tapped = bool(instruction.payload.get("tapped"))
+    arrived = Permanent(card=card, tapped=tapped)
     game._put_permanent_onto_battlefield(
-        game.players.index(caster), Permanent(card=card, tapped=tapped), None
+        game.players.index(caster), arrived, None
     )
     game.log.append(
         f"{card.name} returned from the graveyard to the battlefield"
         + (" tapped" if tapped else "")
     )
+    # "…**with a +1/+1 counter on it**." (Sand Golem.) CR 121.2 puts the
+    # counters on as the permanent arrives, so they go on *this* object rather
+    # than on whatever a later step might find — the permanent is new
+    # (CR 400.7) and no target names it.
+    #
+    # Through the placement seams rather than by poking metadata, so the P/T
+    # pair reaches layer 7d and the CR 704.5q sweep can find it: a counter
+    # placed by hand is a counter nothing can take off.
+    for kind, count in (instruction.payload.get("counters") or {}).items():
+        if str(kind) == "+1/+1":
+            game.place_plus1_counters(arrived, int(count))
+        else:
+            game.place_pt_counters(arrived, str(kind), int(count))
+        game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
     return True, "resolved"
 
 
@@ -3051,6 +3066,51 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
     game.phase_out_permanent(target_perm)
+    return True, "resolved"
+
+
+@effect_handler("forbid_phase_out")
+def forbid_phase_out(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until your next upkeep, target permanent **can't phase out**."
+    (Spatial Binding, CR 702.26.)
+
+    The restriction beside ``phase_out_target``'s action, recorded on the chosen
+    permanent by ``engine/phasing_locks.py`` — which is where the sweep that
+    ends it is named, and which both phase-out paths ask.
+
+    "**Your** next upkeep" is the ability's controller (CR 109.5), not the
+    permanent's, so the seat is frozen here and compared at the sweep. Reading
+    it off the target would let a Binding on an opponent's permanent expire on
+    the wrong turn.
+
+    The printed noun phrase is re-tested at resolution through the same
+    ``subject_matches`` the picker enumerated with, which is Reality Ripple's
+    lesson in this same file: a handler taking the resolver's default predicate
+    declines targets the engine already accepted.
+    """
+    from ..phasing_locks import forbid_phase_out as record_lock
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster) if context.caster in game.players else None
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    record_lock(
+        target_perm,
+        duration=str(instruction.payload.get("duration") or "end_of_turn"),
+        seat=observer,
+    )
+    game.log.append(
+        f"{target_perm.card.name} can't phase out ({context.card.name})"
+    )
     return True, "resolved"
 
 

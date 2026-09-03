@@ -584,6 +584,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "source_bites_target": "damage",
     "prepare_then_interact": "damage",
     "phase_out_target": "zones",
+    # "Until your next upkeep, target permanent **can't phase out**." (Spatial
+    # Binding.) Beside the phasing actions rather than with the combat
+    # restrictions: what it forbids is a CR 702.26 event, not a declaration.
+    "forbid_phase_out": "zones",
     "grant_team_assign_unblocked_until_eot": "pump",
     "phase_out_opponent_creatures": "zones",
     # CR 702.26's other two printed subjects (Mirage): the ability's own source

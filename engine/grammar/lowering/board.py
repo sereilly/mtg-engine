@@ -434,6 +434,50 @@ def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
     raise LoweringError("no handler phases out this subject", node=node)
 
 
+#: The printed durations a phase-out lock can carry, mapped to the key the
+#: record is filed under. Held to ``engine/phasing_locks.LOCK_DURATIONS`` by
+#: ``tests/engine/test_phasing_locks.py``: a duration admitted here with no
+#: sweep behind it would be a restriction that outlives what the card said,
+#: which is the same rule ``keywords.KEYWORD_GRANT_DURATIONS`` states one
+#: channel over.
+#: One row, because the pool prints one window — see that frozenset for why a
+#: second is a card's arrival rather than a line here.
+_PHASE_OUT_LOCK_DURATIONS: dict[str, str] = {
+    "until_your_next_upkeep": "your_next_upkeep",
+}
+
+
+def _lower_cant_phase_out(node: ast.CantPhaseOut) -> tuple[OracleInstruction, ...]:
+    """"Until your next upkeep, target permanent **can't phase out**."
+    (Spatial Binding, CR 702.26.)
+
+    A lock recorded on the chosen permanent rather than a continuous effect,
+    because what it modifies is not a characteristic: nothing about the
+    permanent changes, and the only observable moment is a phasing event a turn
+    or more later — the shape ``untap_restrictions`` takes for CR 502.3 one step
+    over.
+
+    The duration is required. ``engine/phasing_locks.py`` files the record under
+    the sweep that ends it, so a printed window with no sweep refuses here
+    rather than being recorded and never lifted.
+    """
+    duration = _PHASE_OUT_LOCK_DURATIONS.get(node.duration.kind or "")
+    if duration is None:
+        raise LoweringError(
+            "a phase-out lock needs a printed duration a sweep ends", node=node
+        )
+    if not _is_target(node.subject):
+        # Every other subject is a sentence nobody prints, and reading one as
+        # the target would lock whatever the resolution happened to be holding.
+        raise LoweringError(
+            "the phase-out lock is placed on a chosen permanent", node=node
+        )
+    assert isinstance(node.subject, ast.TargetSpec)
+    payload: dict[str, object] = {"duration": duration}
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("forbid_phase_out", "", payload),)
+
+
 def _lower_sacrifice_expansion_permanents(
     node: ast.SacrificeExpansionPermanents,
 ) -> tuple[OracleInstruction, ...]:

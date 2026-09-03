@@ -139,6 +139,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # `next_end_step` row above, and the two upkeep rows below, for why that is
     # a separate event and not a second spelling.
     "controllers_next_end_step": "the end step",
+    # "Take an extra turn after this one. At the beginning of **that turn's**
+    # end step, you lose the game." (Final Fortune.) Not the two rows above and
+    # not a narrowing of either: "that turn" is the turn the *same effect* just
+    # queued (CR 500.7 inserts it directly after this one), so the ability
+    # names neither the next end step there is nor the controller's next one —
+    # it names the end step of an extra turn that does not exist yet.
+    #
+    # Seated, because an extra turn belongs to whoever was granted it, and
+    # guarded by ``EVENTS_AFTER_THIS_TURN`` below, because the card's main line
+    # is casting it *during* an extra turn: without that guard the second Final
+    # Fortune of a chain would lose the game at the end of the turn it was cast
+    # in rather than at the end of the one it bought.
+    "granted_extra_turns_end_step": "the end step",
     # "At the beginning of your next upkeep, …" (Hazezon Tamar, Giant Slug).
     # The controller's own upkeep, however many turns away it is — so unlike
     # the "this turn" rows it survives the turn and is removed only by firing.
@@ -240,6 +253,18 @@ UNTIL_IT_TRIGGERS = "until_it_triggers"
 #: announce ``bound_permanent_leaves_or_untaps`` call for the same moment.
 WHILE_SOURCE_TAPPED = "while_source_tapped"
 
+#: Events whose printed words name a turn **after** the one the ability was
+#: created in, so an entry must not answer to the announcement made in its own
+#: turn. One row, and it is Final Fortune's main line rather than an edge case:
+#: the card is cast to chain into another copy, so the second is cast *during*
+#: an extra turn — the very turn whose end step the fire site is about to
+#: announce — and without this guard it would end the game a turn early.
+#:
+#: A set here rather than a flag on the entry, for :data:`DELAYED_EVENTS`'
+#: reason: which turn a printed phrase names is a fact about the *event*, and a
+#: per-entry flag would have a default whose safe value differs per card.
+EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({"granted_extra_turns_end_step"})
+
 
 # ``eq=False`` so two entries compare by **identity**. Two copies of Reincarnation
 # resolved against the same creature arm two abilities with every field equal;
@@ -324,6 +349,12 @@ class DelayedTrigger:
     #: CR 603.7b. True for "when …", False for "whenever … this turn".
     once: bool = True
     duration: str = END_OF_TURN
+    #: Which turn the ability was created in, for the one event whose printed
+    #: words name a turn that does not exist yet — see
+    #: :data:`EVENTS_AFTER_THIS_TURN`. Stamped by the arming handler for every
+    #: entry, because a fact about when an ability was created cannot be
+    #: recovered afterwards and no entry is harmed by carrying it.
+    armed_turn: int | None = None
     # Basri Ket's two spellings, which predate the bound-object model and are
     # read only by the declare-attackers site: one trigger for the whole attack
     # with a count, and "nontoken" as its own word rather than a filter payload.
@@ -370,6 +401,15 @@ class DelayedTrigger:
         from .subject_filters import subject_matches
 
         if self.event != event:
+            return False
+        if (
+            event in EVENTS_AFTER_THIS_TURN
+            and self.armed_turn is not None
+            and getattr(game, "turn", None) == self.armed_turn
+        ):
+            # The ability names a turn the creating effect had only just
+            # queued, so the announcement made in the turn it was armed in is
+            # not the one it is waiting for.
             return False
         watched = self.watched_id
         if watched is not None and subject is not None:
@@ -443,6 +483,12 @@ def arm_delayed_trigger(game: "Game", trigger: DelayedTrigger) -> DelayedTrigger
         # entry list is the one place an event with no fire site would sit
         # silently forever, so it is loud here too.
         raise ValueError(f"no fire site announces delayed event {trigger.event!r}")
+    # When the ability was created, stamped here rather than at each arming site
+    # for the reason every other frozen fact in this file is: one place, so a
+    # new arming path cannot forget it. Read only by
+    # :data:`EVENTS_AFTER_THIS_TURN`, and left alone when the caller set it.
+    if trigger.armed_turn is None:
+        trigger.armed_turn = getattr(game, "turn", None)
     game.delayed_triggers.append(trigger)
     return trigger
 

@@ -33,6 +33,7 @@ from .stream import TokenStream
 from .phrases import (
     _accept_mana_alternatives,
     _parse_can_attack_as_though,
+    _parse_duration,
     _parse_mana_payment,
     parse_bound_subject,
 )
@@ -556,6 +557,28 @@ def parse_subject_verb(
             if waived is not None:
                 return waived
         if token.text in ("can't", "cannot"):
+            # "…**can't phase out**" (Spatial Binding, CR 702.26). Read ahead of
+            # the combat dispatcher below, which is the `can't` production for
+            # attacking and blocking and refuses everything else with "expected
+            # 'be'" — a refusal naming a word this sentence never prints.
+            #
+            # Beside the `phases out` branch above rather than inside it, for
+            # the reason `auras.py` keeps a keyword removal separate from a
+            # keyword grant: an action and the restriction forbidding it are
+            # opposite contributions, and one production reading both is one
+            # place for the negation to be dropped. Non-consuming on refusal, so
+            # every other `can't` sentence keeps the refusal it has today.
+            phase_mark = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("phase", "out"):
+                # The trailing spelling. The *fronted* one — Spatial Binding's
+                # "Until your next upkeep, target permanent can't phase out" —
+                # arrives through `sentence_clauses._distribute_duration`, which
+                # fills the node's `duration` field after the fact; that is why
+                # the field is a `Duration` node with an empty default rather
+                # than the string the lock itself is keyed by.
+                return ast.CantPhaseOut(source_spec, _parse_duration(stream))
+            stream.reset(phase_mark)
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap
         # step." (Frost Breath.) The verb is checked before dispatching, not

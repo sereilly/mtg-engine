@@ -744,12 +744,27 @@ def _lower_create_delayed_trigger(
     """
     from ...delayed_triggers import DELAYED_EVENTS
 
+    from ._events import EXTRA_TURN_GRANTED
+
     if node.event not in DELAYED_EVENTS:
         raise LoweringError(
             f"no fire site announces the delayed event {node.event!r}", node=node
         )
     if not effect:
         raise LoweringError("this delayed ability has no effect", node=node)
+    if node.event == "granted_extra_turns_end_step" and (
+        EXTRA_TURN_GRANTED not in produced
+    ):
+        # "At the beginning of **that turn's** end step" (Final Fortune). A
+        # back-reference, and this registry's standing rule for one: with no
+        # earlier step of the same effect queuing a turn, the words name
+        # nothing — and the ability they would arm answers to an event that
+        # only happens on somebody's extra turn, so it would sit on the waiting
+        # list for the rest of the game while the card compiled clean.
+        raise LoweringError(
+            "\"that turn\" needs an earlier step of this effect that granted "
+            "an extra turn", node=node,
+        )
     if node.duration is None:
         # The opener printed no window and no leading duration supplied one. A
         # repeating ability with no duration is CR 603.7b's other reading —

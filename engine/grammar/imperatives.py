@@ -36,7 +36,11 @@ from .references import parse_recipient
 from .stream import TokenStream
 from .upkeep import parse_upkeep_paragraph
 from .phrases import _parse_duration, _parse_pay_life
-from .vocabulary import NUMBER_WORDS
+# ``_parse_entering_counters`` moved down to `readers` when a *return*
+# started printing the same phrase (Sand Golem): `effects` sits below this
+# module in the parse layering and may not reach up for it. Re-exported
+# under the name this module used, so nothing else here changed.
+from .readers import _parse_entering_counters
 from .effects import (
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
@@ -98,53 +102,6 @@ from .effects import (
     _parse_switch_pt,
     _parse_tap_untap,
 )
-
-
-def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]:
-    """``with two scream counters on it`` — counters an object carries into a zone.
-
-    "Exile All Hallow's Eve **with two scream counters on it**." The counters
-    are put on as part of the move (CR 121.2), so they are a property of the
-    exiling rather than a second sentence, and reading them here is what stops
-    the phrase being shed as unconsumed text — the whole card is those counters
-    coming back off one per upkeep.
-
-    The counter word and the number are both payload. Nothing about "scream"
-    reaches this production: any word followed by "counter"/"counters" is a
-    counter of that name (CR 122.1), which is the same open vocabulary
-    ``engine/named_counters.py`` stores.
-
-    Returns an empty tuple with the cursor untouched when the phrase is not
-    there, so an exile that prints no counters is unaffected and a "with" this
-    production cannot finish falls back to whatever else the line says.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("with"):
-        return ()
-    if stream.accept_word("a", "an"):
-        count = 1
-    else:
-        word = stream.peek_word()
-        count = NUMBER_WORDS.get(word) if word is not None else None
-        if count is None:
-            stream.reset(mark)
-            return ()
-        stream.advance()
-    name = stream.peek_word()
-    if name is None or name in ("counter", "counters"):
-        stream.reset(mark)
-        return ()
-    stream.advance()
-    if not (stream.accept_word("counters") or stream.accept_word("counter")):
-        stream.reset(mark)
-        return ()
-    # "on it" is required, not optional: the phrase names *which* object the
-    # counters go on, and an exile that dropped it would be reading a sentence
-    # nobody printed.
-    if not stream.accept_phrase("on", "it"):
-        stream.reset(mark)
-        return ()
-    return ((name, count),)
 
 
 

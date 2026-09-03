@@ -572,6 +572,14 @@ def end_the_turn(game: Game, instruction: OracleInstruction, context: OracleExec
     return True, "resolved"
 
 
+#: The scratchpad key an extra-turn grant records itself under. Spelled again in
+#: ``grammar/lowering/_events.py`` rather than imported across the seam — a
+#: handler importing the grammar closes an import cycle — and held to it by
+#: ``lowering/_records._PRODUCES``, which is the same arrangement
+#: ``zones.REANIMATED_PERMANENTS`` has.
+EXTRA_TURN_GRANTED = "extra_turn_granted"
+
+
 @effect_handler("grant_extra_turn")
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -585,6 +593,11 @@ def grant_extra_turn(game: Game, instruction: OracleInstruction, context: Oracle
         f"{caster.name} gained an extra turn" if count == 1
         else f"{caster.name} gained {count} extra turns"
     )
+    # "…At the beginning of **that turn's** end step, you lose the game."
+    # (Final Fortune.) The sentence behind this one refers back to the turn
+    # this step queued, and the scratchpad is where a back-reference in this
+    # engine finds its producer.
+    context.results[EXTRA_TURN_GRANTED] = count
     return True, "resolved"
 
 

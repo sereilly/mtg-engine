@@ -679,3 +679,48 @@ def test_asmiras_tally_resets_with_the_turn(set_pool):
     game.resolve_stack()
 
     assert asmira.effective_power == 3, game.log
+
+
+# --- W1G2: counters carried into a zone by the move that makes the permanent ---
+
+
+def test_sand_golem_returns_with_a_counter_at_the_next_end_step(set_pool):
+    """"When a spell or ability an opponent controls causes you to discard this
+    card, return this card from your graveyard to the battlefield **with a
+    +1/+1 counter on it** at the beginning of the next end step."
+
+    Every other half of the sentence already worked — the discard trigger, the
+    self-return, the delayed end-step ability. What refused was the counter
+    phrase, and only because ``_parse_entering_counters`` read the counter's
+    name as a *word*: "scream" is one and "+1/+1" is a ``PT`` token, so the one
+    kind the pool prints most was the one kind that reader could not see.
+
+    CR 121.2 puts the counters on as part of the move, which is why they ride
+    the return rather than becoming a second instruction: the permanent does not
+    exist until the return runs, and nothing behind it could name the object.
+    """
+    # Stupor is the set's own discard spell, so the whole test stays inside the
+    # MIR pool the fixture hands it.
+    golem = set_pool("MIR")["Sand Golem"]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[golem], life=20),
+        PlayerState(name="P2", hand=[set_pool("MIR")["Stupor"]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+
+    assert compile_card_oracle(golem).supported
+    assert game.cast_from_hand(1, "Stupor", target_player_index=0).supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert [c.name for c in game.players[0].graveyard] == ["Sand Golem"], game.log
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    returned = game.players[0].battlefield
+    assert [p.card.name for p in returned] == ["Sand Golem"], game.log
+    # 3/3 printed, so the counter is the whole of the difference.
+    assert (returned[0].effective_power, returned[0].effective_toughness) == (4, 4), game.log

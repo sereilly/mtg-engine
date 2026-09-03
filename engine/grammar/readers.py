@@ -23,9 +23,9 @@ here, one layer further down, where nothing can recurse at all.
 from __future__ import annotations
 
 from . import ast
-from .lexer import SELF
+from .lexer import PT, SELF, WORD
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, KEYWORD_INDEX,
+from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
                          match_longest, singular as _singular)
 
 # "this <self-word>" refers to the ability's own source.
@@ -171,3 +171,70 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     if not keywords:
         raise stream.error("expected a keyword ability")
     return tuple(keywords)
+
+
+def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]:
+    """``with two scream counters on it`` — counters an object carries into a zone.
+
+    "Exile All Hallow's Eve **with two scream counters on it**." The counters
+    are put on as part of the move (CR 121.2), so they are a property of the
+    exiling rather than a second sentence, and reading them here is what stops
+    the phrase being shed as unconsumed text — the whole card is those counters
+    coming back off one per upkeep.
+
+    The counter word and the number are both payload. Nothing about "scream"
+    reaches this production: any word followed by "counter"/"counters" is a
+    counter of that name (CR 122.1), which is the same open vocabulary
+    ``engine/named_counters.py`` stores.
+
+    Returns an empty tuple with the cursor untouched when the phrase is not
+    there, so an exile that prints no counters is unaffected and a "with" this
+    production cannot finish falls back to whatever else the line says.
+
+    **Here rather than in `imperatives`**, where the exile production that first
+    needed it lives. Sand Golem prints the same phrase after a *return* — "…to
+    the battlefield **with a +1/+1 counter on it**" — and `effects/board.py`
+    reads that sentence from below `imperatives` in the parse layering, so it
+    cannot reach up for the reader. This module's own rule settles where it
+    goes: a small printed reader shared upward, about no filter and no relation.
+    One reader for the two verbs, because CR 121.2 puts the counters on as part
+    of either move and a second copy is how the two come to read different
+    words.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("with"):
+        return ()
+    if stream.accept_word("a", "an"):
+        count = 1
+    else:
+        word = stream.peek_word()
+        count = NUMBER_WORDS.get(word) if word is not None else None
+        if count is None:
+            stream.reset(mark)
+            return ()
+        stream.advance()
+    # The counter's name, which is a **word** for a card-invented kind ("scream")
+    # and a `PT` token for a CR 122.1a pair ("+1/+1", Sand Golem). Both are read
+    # here rather than through `phrases._expect_counter_kind`, which this module
+    # sits below: what the two spellings have in common is that they are the one
+    # token in front of "counter", and telling them apart is the lexer's job
+    # already done.
+    token = stream.peek()
+    if token is None or token.kind not in (WORD, PT):
+        stream.reset(mark)
+        return ()
+    name = token.text
+    if name in ("counter", "counters"):
+        stream.reset(mark)
+        return ()
+    stream.advance()
+    if not (stream.accept_word("counters") or stream.accept_word("counter")):
+        stream.reset(mark)
+        return ()
+    # "on it" is required, not optional: the phrase names *which* object the
+    # counters go on, and an exile that dropped it would be reading a sentence
+    # nobody printed.
+    if not stream.accept_phrase("on", "it"):
+        stream.reset(mark)
+        return ()
+    return ((name, count),)
