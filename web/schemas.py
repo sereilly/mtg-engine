@@ -389,6 +389,20 @@ class GameActionRequest(BaseModel):
     # shared field could not say which price a click was answering.
     alternative_cost: bool | None = None
     alternative_cost_hand_index: int | None = None
+    # CR 601.2b's *optional* additional cost, and how many times each offer was
+    # taken: ``{"{1}{R}": 2}``. Its own field beside the two above for their
+    # reason — CR 118.9d keeps every price in force on one cast, so a shared
+    # field could not say which one a click was answering — and a **map**
+    # because one printed sentence may offer two costs independently ("you may
+    # pay {1}{R} and/or {1}{G} any number of times", Primitive Justice).
+    #
+    # Absent declines every offer, which is what "may" means and the only
+    # default that cannot charge a player for a price they did not accept. No
+    # picker emits it yet: `_cost_picker_spec` models a *mandatory* cost, and an
+    # optional one needs an offer shape ("cast for {3}{G}, or for {3}{G} plus
+    # {1}{G}?") that does not exist — the same Phase 4 item W1G4 recorded for
+    # the alternative cost above.
+    optional_cost_payments: dict[str, int] | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.
