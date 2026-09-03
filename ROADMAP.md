@@ -801,10 +801,22 @@ equals exactly its test entries — the emptiness-premise class from the Ice Age
 promotion, found from the other side. The release-line note below still
 applies to the rest of the core-set line.
 
-**The next work set is Alliances (ALL).** It appends (released 1996-06-10,
-after HML's 1995-10-01 — and everything after ALL appends too), it closes the
+**The next work set is Alliances (ALL).** It **inserts at index 12** (released
+1996-06-10, after HML's 1995-10-01 and before 5ED's 1997-03-24), it closes the
 Ice Age block, and for the first time the leverage instruments agree with the
 refusal census at ingest-estimate time rather than contradicting it later:
+
+**That "index 12" corrects this paragraph's own first draft**, which read "it
+appends" — true when it was written and false the same day, because 5ED shipped
+between the census and the first round. And the correction is invisible to the
+guard built for it: ALL shares **zero** oracle_ids with 5ED or M21, so no card's
+`original_printing` moves from any position, and
+`test_appending_a_set_never_changes_an_existing_original_printing` is green with
+the set anywhere. FEM's and HML's blind spot for the third time. The assertion
+that can see it is
+`test_manifest_roles.test_the_shipped_sets_are_in_printing_order`, which
+compares the `released` dates the entries already carry — the invariant rather
+than a symptom of it.
 
 - The fragment census over its refused lines has real groups — **"at the
   beginning of" (17 cards)**, "of your library" (13), "until end of turn" (13),
