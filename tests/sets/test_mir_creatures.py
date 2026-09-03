@@ -436,3 +436,46 @@ def test_stalking_tiger_refuses_a_double_block(set_pool):
 
     assert not ok
     assert "more than 1" in message
+
+
+# --- Round 10: the block relation, spelled out (CR 509.1a) ---
+
+def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
+    """"{B}, Sacrifice this creature: Destroy target creature **this creature is
+    blocking**."
+
+    The same relation Goblin Snowman prints as "target creature **it's
+    blocking**", written out — and the lexer collapses a card's own name to the
+    self-reference, so under a self-scoped ability the two are one referent. The
+    parser knew only the pronoun, so the spelled-out form failed the line on
+    unconsumed text.
+    """
+    pool = set_pool("MIR")
+    wall = Permanent(card=pool["Wall of Corpses"])
+    attacker = Permanent(card=_r1_vanilla("Raider", 3, 3))
+    bystander = Permanent(card=_r1_vanilla("Bystander", 3, 3))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, bystander]),
+        PlayerState(name="P2", battlefield=[wall], library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+
+    result = game.activate_permanent_ability(
+        1, "Wall of Corpses", permanent_index=0,
+        target_player_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(attacker)
+    assert game.is_on_battlefield(bystander), "the relation narrowed the target"

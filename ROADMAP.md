@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (226/335 supported, still `measured`)
+## Mirage (MIR) — in progress (227/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1293,14 +1293,36 @@ rather than falling through to the shared shuffle below it.
 
 `oracle_diff`: **3 changed of 2181**, the three tutors.
 
-### Where the set stands — nine rounds in
+### Round 10 — the block relation, spelled out: 226 → 227 supported
 
-**226/335 supported (67.5%), from 184/335 (54.9%) at ingest.** Every gate is
+One card and one token run: "Destroy target creature **this creature is
+blocking**" (Wall of Corpses) is the relation Goblin Snowman prints as "target
+creature **it's blocking**", written out. The lexer collapses a card's own name
+to the self-reference, so under a self-scoped ability the two are one referent
+and one already-implemented payload key; the parser knew only the pronoun, so
+the spelled-out form failed the line on unconsumed text.
+
+**The round's other half was written and reverted, and the reverting is the
+point.** Urborg Panther's mirror sentence ("Destroy target creature **blocking
+it**") refuses because `blocking_source` is deliberately not emitted as a
+payload key. Making it emitted and testable — the symmetry the AST's own
+comment argues for, since `subject_matches` takes the source exactly as it does
+for `blocked_by_source` — turned out to buy **nothing**: the pronoun there
+parses as `blocking_bound_target`, a different field, so the Panther still
+refused, while three shipped Wurms gained a redundant key inside a count spec
+that already carried it outside. A change with no card behind it and three
+cards perturbed is the shape this repo refuses, so it went back. Urborg Panther
+needs the *pronoun* rebound — "it" under an ability that targets nothing
+earlier names the source — which is a round of its own.
+
+### Where the set stands — ten rounds in
+
+**227/335 supported (67.8%), from 184/335 (54.9%) at ingest.** Every gate is
 green, the trackers are current, and each round is its own commit with its own
 `oracle_diff` reading. The set is **not finished** and is still `measured`;
 Phase 4 has not been attempted.
 
-**The remaining 109 cards have no more big rocks in them, and the census says so
+**The remaining 108 cards have no more big rocks in them, and the census says so
 in a way it did not at ingest.** Nine in ten are blocked by **exactly one
 refused line**, and the refused lines that remain sit one-to-one over their
 distinct sentences — 1.01, and this time the fragment census agrees: the two readings

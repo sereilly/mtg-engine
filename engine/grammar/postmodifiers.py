@@ -266,6 +266,18 @@ def _parse_postmodifiers(
         if stream.accept_phrase("it", "'s", "blocking"):
             d.blocked_by_source = True
             continue
+        # "target creature **this creature is blocking**" (Wall of Corpses).
+        # The same relation the pronoun spelling above names, written out — the
+        # lexer collapses a card's own name to SELF, so "this creature" here is
+        # the same referent "it" is under a self-scoped ability. Beside it and
+        # not folded into it, because the two are different token runs and the
+        # `accept_phrase` above consumes nothing when it fails.
+        spelled_out = stream.mark()
+        if stream.accept_word("this") and stream.accept_word(*_SELF_NOUNS):
+            if stream.accept_word("is") and stream.accept_word("blocking"):
+                d.blocked_by_source = True
+                continue
+        stream.reset(spelled_out)
         # "…all Merfolk **tapped this turn to pay for its abilities**"
         # (Vodalian War Machine). Every word is required. "Tapped this turn" on
         # its own is a strictly larger set — a creature tapped to attack is in
