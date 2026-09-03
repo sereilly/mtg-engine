@@ -338,6 +338,44 @@ class EachShortOfThisWay:
 
 
 @dataclass(frozen=True)
+class EachAdditionalCostPaid:
+    """"**For each additional {1}{R} you paid**, destroy another target
+    artifact." (Primitive Justice, Taste of Paradise.)
+
+    :class:`EachLifeLost`'s third sibling and a *count* for its reason — the
+    loop has no objects, only a number. What makes it its own node rather than
+    a field on that one is where the number comes from: this is an announcement
+    the **caster** made as the spell was cast (CR 601.2b), carried on the stack
+    item because the mana pool it was paid out of is empty by the time the
+    spell resolves (CR 500.4). Neither the board nor the firing event can
+    answer it.
+
+    *symbols* is which offer, because a single sentence may print two of them
+    independently ("{1}{R} and/or {1}{G}") and the two counts are read back
+    separately. Carried **as printed** and turned into the recorded key by one
+    function (``lowering/loops.optional_cost_key``), so the sentence that spends
+    the count and the payment that made it name the same offer.
+    """
+    symbols: str
+
+
+@dataclass(frozen=True)
+class AdditionalCostWasPaid:
+    """"**If this spell's additional cost was paid**, …" (Undergrowth.)
+
+    The boolean half of :class:`EachAdditionalCostPaid`: CR 601.2b's optional
+    additional cost asked about at all rather than counted. A condition of its
+    own rather than a comparison against that count, because the sentence is
+    about *the* additional cost — the card prints one and does not name it — and
+    a node carrying no symbols is what says so.
+
+    Lowering resolves "the" to the one offer the card prints and refuses when
+    there is more than one, which is the only reading a bare "this spell's
+    additional cost" has.
+    """
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 
@@ -849,7 +887,8 @@ Condition = Union[
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
-    LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
+    LifeGainedThisTurn, PaidCost, AdditionalCostWasPaid,
+    RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,
     OnBattlefield,

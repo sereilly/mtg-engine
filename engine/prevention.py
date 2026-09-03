@@ -84,6 +84,11 @@ COMBAT_BLANKET = 10  # "Prevent all combat damage that would be dealt this turn"
 # unscoped one and before every consumable shield, for the same reason: it has
 # no charges, so applying it costs its recipient nothing.
 COMBAT_BLANKET_SCOPED = 11
+# The same blanket with a **source** description cut out of it (Undergrowth with
+# its additional cost paid). Beside the two above and before every consumable,
+# for their reason: it has no charges, so applying it costs its recipient
+# nothing.
+COMBAT_BLANKET_EXCEPT = 12
 COMBAT_SHIELD = 20  # "…dealt to and dealt by that creature this turn"
 # "Prevent all damage that would be dealt to this creature by artifact
 # sources." (Argothian Treefolk.) A permanent's own blanket shield against a
@@ -607,6 +612,37 @@ def _applies_scoped_combat(game, event: dict) -> bool:
     return False
 
 
+def _applies_all_combat_except(game, event: dict) -> bool:
+    """Undergrowth with its cost paid: every combat damage event **but** the
+    ones whose source the printed noun phrase names.
+
+    The source is re-matched at the moment damage would be dealt rather than
+    captured when the spell resolved, exactly as ``_applies_scoped_combat``
+    re-matches its recipients: a creature that turned red since, or entered
+    since, is one the sentence exempts.
+
+    A source that is not a permanent — a spell, an ability — cannot be matched
+    and is therefore not exempt, which is the right way round: this is a
+    *combat* damage shield, and combat damage is only ever dealt by a permanent.
+    """
+    if not event.get("combat"):
+        return False
+    records = getattr(game, "combat_damage_prevented_except_from", ()) or ()
+    if not records:
+        return False
+    from .subject_filters import subject_matches
+    from .models import Permanent
+
+    source = event.get("source")
+    for entry in records:
+        if isinstance(source, Permanent) and subject_matches(
+            game, source, entry.get("filter") or {}, observer=entry.get("seat"),
+        ):
+            continue  # the sentence lets this source's damage through
+        return True
+    return False
+
+
 def _applies_combat_to_and_by(game, event: dict) -> bool:
     """Whether either end of this damage event is shielded.
 
@@ -648,6 +684,19 @@ def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None
     Dogs you control." A turn-wide record like the blanket above rather than a
     shield each Dog holds, so it is never used up and it covers Dogs that were
     not on the battlefield when it resolved."""
+    return PreventionOutcome(prevented=event["amount"])
+
+
+@prevention_effect(COMBAT_BLANKET_EXCEPT, applies=_applies_all_combat_except)
+def _prevent_all_combat_damage_except_from(game, event: dict) -> PreventionOutcome | None:
+    """Undergrowth, cost paid: "Prevent all combat damage that would be dealt
+    this turn… this effect doesn't affect combat damage that would be dealt by
+    red creatures."
+
+    The blanket above with a hole in it. A turn-wide record rather than a shield
+    for that one's reason — nothing is used up — and the hole is described by
+    the source, so it covers a creature that becomes red after this resolves and
+    exempts one that stops being red."""
     return PreventionOutcome(prevented=event["amount"])
 
 

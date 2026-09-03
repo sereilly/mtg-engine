@@ -37,6 +37,14 @@ class SimulationResult:
 #                    stack spell's CardDefinition
 CHOICE_KEYS = (
     "new_color", "old_color", "divided_targets", "chosen_source",
+    # "For each additional {1}{R} you paid, …" (Primitive Justice, Taste of
+    # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
+    # An *offer* the caster took, counted — not an object a cost ate like the
+    # channels below, but the same shape and here for the same reason: the mana
+    # pool empties at the end of the step (CR 500.4) and the announcement is the
+    # only record that the price was paid at all. Keyed by the cost's canonical
+    # spelling: ``{"{1}{R}": 2}``.
+    "additional_costs_paid",
     # What a printed additional cost ate on the way to the stack (CR 601.2b) —
     # not a choice about the *effect*, but the same shape: something decided
     # while casting that the resolution has to be able to read back. It is a

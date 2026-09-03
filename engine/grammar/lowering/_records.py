@@ -25,6 +25,7 @@ what a step of that kind always writes when it does.
 from __future__ import annotations
 
 from .. import ast
+from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
@@ -522,3 +523,37 @@ def counts_prevented_damage(node) -> bool:
         isinstance(count, ast.ThatMuch)
         and count.source == PREVENTION_SHIELD_RECORD
     )
+
+
+def optional_cost_key(symbols: str) -> str:
+    """The canonical spelling a CR 601.2b optional additional cost is recorded
+    and read back under.
+
+    Here rather than in either family that needs it — ``loops`` lowers "for each
+    additional {1}{R} you paid" and ``game`` lowers "plus an additional 3 life
+    for each …" — because a fragment two families need cannot live in one of
+    them. And here rather than in ``_common`` because it is the same question
+    this module already answers: what a step wrote down and how a later sentence
+    names it. The step in this case is the *cast* (CR 601.2b), and the record is
+    on the stack item's choices rather than in the resolution scratchpad,
+    because the mana pool that paid the cost empties at the end of that step
+    (CR 500.4).
+
+    Through the same two functions ``cast_costs`` spells its offers with
+    (``mana_cost_from_symbols`` then ``mana_cost_label``), so the sentence that
+    spends the count and the payment that made it name the offer identically
+    however the card printed it. Two readers would be two answers, and the quiet
+    one is a loop that never runs.
+
+    Raises when the printed run holds a symbol no payment can spend ({X}, a
+    hybrid): the same refusal ``cast_costs`` makes of the offer itself, so a
+    sentence cannot read back a cost that side declined to charge.
+    """
+    from ...mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    parsed = mana_cost_from_symbols(symbols)
+    if not parsed:
+        raise LoweringError(
+            f"no payment spends {symbols!r}, so nothing records paying it"
+        )
+    return mana_cost_label(parsed)

@@ -44,6 +44,7 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering.loops import (
+    _lower_for_each_cost_paid,
     _lower_for_each_life_lost,
     _lower_for_each_matching,
     _lower_for_each_player,
@@ -661,6 +662,12 @@ def lower_statement(
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
             return _lower_for_each_life_lost(statement, repeated(), event)
+        # "For each **additional {1}{R} you paid**" (Primitive Justice, Taste
+        # of Paradise) — the seventh iterator, and the first whose number comes
+        # off the *cast* (CR 601.2b) rather than off the board, the firing
+        # event or an earlier step of this same resolution.
+        if isinstance(statement.iterator, ast.EachAdditionalCostPaid):
+            return _lower_for_each_cost_paid(statement, repeated())
         # "For each **card less than two a player draws this way**" (Truce) —
         # the sixth iterator: a per-seat shortfall against a record an earlier
         # step of this same effect wrote, so it is refused without that

@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from ..oracle_types import EXILED_THIS_WAY
 from . import ast
-from .lexer import NUMBER, SELF, WORD
+from .lexer import MANA, NUMBER, SELF, WORD
 from .readers import accept_source_reference
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES
+from .vocabulary import CARD_TYPES, NUMBER_WORDS
 
 
 def accept_damage_dealt_this_turn(
@@ -338,3 +338,97 @@ def accept_as_many_as(
         stream.reset(mark)
         return None
     return ast.ThatMuch(key)
+
+
+def accept_additional_cost_paid(stream: "TokenStream") -> str | None:
+    """``additional {1}{G} you paid`` — the printed symbols, or None with the
+    cursor unmoved.
+
+    "For each **additional {1}{R} you paid**, destroy another target artifact"
+    (Primitive Justice); "…plus an **additional 3 life for each additional
+    {1}{G} you paid**" (Taste of Paradise). A quantity that refers to a
+    *payment*, which is why it is here beside the sacrificed- and
+    exiled-for-cost readers rather than in ``amounts``: CR 601.2b's optional
+    additional cost was announced and paid before the spell was ever on the
+    stack, and by resolution the pool that paid it is empty (CR 500.4).
+
+    A named function rather than an inline branch for
+    :func:`accept_sacrificed_for_cost`'s reason, and the same reason twice over
+    here: two front ends read the phrase — the leading "for each" iterator and
+    the trailing life-gain multiplier — and two copies of a phrase that names a
+    payment channel is how the two come to name different ones.
+
+    The symbols are captured **as printed** and interpreted by nobody here.
+    ``lowering/loops.optional_cost_key`` turns them into the canonical key
+    through ``mana_payment``, which is the same pair of functions the payment
+    recorded them under — so one reader decides what "{1}{R}" means and the
+    parse cannot disagree with the charge. The leading "for each" is the
+    caller's word to consume; this reads from "additional".
+    """
+    mark = stream.mark()
+    if not stream.accept_word("additional"):
+        return None
+    symbols = ""
+    while stream.at_kind(MANA):
+        symbols += stream.next().text
+    if not symbols or not stream.accept_phrase("you", "paid"):
+        stream.reset(mark)
+        return None
+    return symbols
+
+
+def accept_plus_per_cost_paid(
+    stream: "TokenStream", base: "ast.Amount", unit: str
+) -> "ast.Plus | None":
+    """``plus an additional 3 life for each additional {1}{G} you paid`` — the
+    whole quantity, or None with the cursor unmoved.
+
+    Taste of Paradise's amount. One life gain (CR 119.3), not a base gain and a
+    loop beside it: a replacement watching "if you would gain life" sees one
+    event of 3 + 3N, and lowering this as two effects would show it two.
+
+    Built out of the nodes that already exist for exactly this — a
+    :class:`ast.Plus` of the printed base and a :class:`ast.Times` of the
+    per-payment step — so no lowering has to learn a fourth shape of
+    arithmetic. What is new is only the leaf being multiplied.
+
+    *unit* is the printed noun the second number counts ("life"), taken as an
+    argument rather than written in: the arithmetic is what this reads, and a
+    card printing the same shape over cards or damage would want the same
+    production with one word changed.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("plus", "an", "additional"):
+        return None
+    step = _accept_printed_number(stream)
+    if (
+        step is None
+        or not stream.accept_word(unit)
+        or not stream.accept_phrase("for", "each")
+    ):
+        stream.reset(mark)
+        return None
+    symbols = accept_additional_cost_paid(stream)
+    if symbols is None:
+        stream.reset(mark)
+        return None
+    return ast.Plus(base, ast.Times(step, ast.AdditionalCostPaidCount(symbols)))
+
+
+def _accept_printed_number(stream: "TokenStream") -> int | None:
+    """A printed count, as a digit token or as a word. Nothing consumed when the
+    next token is neither.
+
+    ``amounts`` holds the general number parser and sits *above* this module, so
+    the two readings are spelled out here rather than imported down through the
+    layer order. Both are read because a card may print either and reading only
+    one would refuse the sentence on its spelling.
+    """
+    digit = stream.accept_kind(NUMBER)
+    if digit is not None:
+        return int(digit.text)
+    word = stream.peek_word()
+    if word in NUMBER_WORDS:
+        stream.advance()
+        return int(NUMBER_WORDS[word])
+    return None

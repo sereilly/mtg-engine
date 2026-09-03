@@ -516,6 +516,15 @@ def _lower_condition(
         return {"kind": DAMAGED_BY_SOURCE_DIED}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
+    if isinstance(condition, ast.AdditionalCostWasPaid):
+        # "**If this spell's additional cost was paid**, …" (Undergrowth.) No
+        # symbols in the payload: the card prints "the" additional cost and
+        # names none, so the evaluator asks whether *any* offer was taken. A
+        # card printing two offers and then asking about "the" one would be a
+        # sentence with no referent, and the reading that guessed which is the
+        # one that silently answers about the wrong price — so this stays the
+        # unqualified question and the counted form beside it carries symbols.
+        return {"kind": "additional_cost_paid"}
     if isinstance(condition, ast.ReturnedToHandThisTurn):
         return {"kind": "returned_to_hand_this_turn"}
     if isinstance(condition, ast.HadPlus1Counter):

@@ -72,6 +72,7 @@ class EndOfCombatStepMixin:
         expire_combat_delayed_triggers(self)
         self.combat_damage_prevented_until_eot = False
         self.combat_damage_prevented_for = []
+        self.combat_damage_prevented_except_from = []
         for player in self.players:
             # CR 615.3: a shield whose duration is this combat expires here.
             # Which shields those are is data on the shield, so this sweep does

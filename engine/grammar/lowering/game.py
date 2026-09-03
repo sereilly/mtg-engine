@@ -13,6 +13,7 @@ from ...oracle_types import (OracleInstruction, X_FROM_COUNT,
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ._records import optional_cost_key
 from ._amounts import count_spec, halved_count_spec, x_offset_amount
 from ._common import (
     _amount_payload,
@@ -220,6 +221,47 @@ def _lower_gain_life(
     # added there would belong to the count and change the creature too.
     # `_amount_payload` is deliberately not taught the shape — it feeds fifty
     # callers, several of which compare its result to a number.
+    # "You gain 3 life **plus an additional 3 life for each additional {1}{G}
+    # you paid**." (Taste of Paradise.) One gain (CR 119.3) whose amount scales
+    # with a CR 601.2b payment: the printed base, plus a per-payment step times
+    # however many times the caster took the offer. Two instructions would show
+    # a life-gain replacement two events where the card prints one.
+    #
+    # Read before `x_offset_amount` below, which reads the other shape a `Plus`
+    # can be (an X with a constant on it) and would refuse this one.
+    if (
+        isinstance(node.amount, ast.Plus)
+        and isinstance(node.amount.right, ast.Times)
+        and isinstance(node.amount.right.of, ast.AdditionalCostPaidCount)
+    ):
+        base = _amount_payload(node.amount.left)
+        if not isinstance(base, int):
+            raise LoweringError(
+                "a payment-scaled life gain starts from a printed number",
+                node=node,
+            )
+        if node.player.kind != "you" or node.capped_by or node.per_each is not None:
+            # "You" is the only gainer any card prints this on, and a cap or a
+            # second multiplier on top would be arithmetic the handler does not
+            # do — refused rather than dropped, which is the direction that
+            # gains less than the card says instead of more.
+            raise LoweringError(
+                "a payment-scaled life gain is the caster's own, uncapped",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {
+                    "amount": base,
+                    "recipient": "caster",
+                    "plus_per_cost_paid": {
+                        "cost": optional_cost_key(node.amount.right.of.symbols),
+                        "each": node.amount.right.factor,
+                    },
+                },
+            ),
+        )
     offset = x_offset_amount(node.amount)
     payload: dict[str, object] = {
         "amount": offset if offset is not None else _amount_payload(node.amount),

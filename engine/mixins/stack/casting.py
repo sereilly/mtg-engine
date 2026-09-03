@@ -21,7 +21,7 @@ from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...alternative_costs import AlternativeCost, alternative_costs
-from ...cast_costs import AdditionalCost, additional_costs
+from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing, global_cast_ban
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
@@ -47,6 +47,82 @@ from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from ...targeting import (derive_cast_spec, enchant_subject_keyword_exclusion,
                           enchant_subject_seat, spec_roles, targets_mana_value_x)
+
+def _optional_cost_offers(
+    costs: "tuple[AdditionalCost, ...]",
+) -> dict[str, OptionalManaCost]:
+    """Every CR 601.2b optional mana offer *costs* prints, by its canonical
+    spelling.
+
+    One dict for the whole cast rather than a walk per question, because the
+    read-back at resolution is keyed the same way: "for each additional {1}{R}
+    you paid" names the offer by its symbols, and two sentences of one card must
+    not disagree about which offer that is.
+    """
+    return {
+        offer.symbols: offer
+        for cost in costs
+        for offer in cost.optional_mana
+    }
+
+
+def _optional_cost_announcement(
+    card: CardDefinition,
+    costs: "tuple[AdditionalCost, ...]",
+    announced: dict[str, int] | None,
+) -> tuple[dict[str, int], str | None]:
+    """How many times each optional additional cost is being paid, or a refusal.
+
+    CR 601.2b: the caster announces this as the spell is cast, before targets
+    and long before payment, and the announcement is *checked* here — an
+    announcement naming an offer the card does not print, or taking a
+    non-repeating offer twice, is an illegal proposal that CR 601.2e rewinds
+    rather than a payment to clamp. Nothing has been spent at this point, so a
+    refusal costs the caster exactly nothing.
+
+    An absent or empty announcement declines every offer, which is what
+    *optional* means and the only default that cannot charge a player for a
+    price they did not accept.
+    """
+    offers = _optional_cost_offers(costs)
+    taken: dict[str, int] = {}
+    for symbols, times in (announced or {}).items():
+        count = int(times or 0)
+        if count <= 0:
+            continue
+        offer = offers.get(str(symbols))
+        if offer is None:
+            printed = ", ".join(sorted(offers)) or "none"
+            return {}, (
+                f"{card.name} prints no additional cost of {symbols} "
+                f"(it offers: {printed}) (CR 601.2b)"
+            )
+        if count > 1 and not offer.repeatable:
+            return {}, (
+                f"{card.name}'s additional cost of {offer.symbols} may be paid "
+                f"once, not {count} times (CR 601.2b)"
+            )
+        taken[offer.symbols] = count
+    return taken, None
+
+
+def _optional_cost_totals(
+    costs: "tuple[AdditionalCost, ...]", taken: dict[str, int]
+) -> "list[tuple[OptionalManaCost, int]]":
+    """The offers actually taken, paired with how many times.
+
+    Read back off the printed offers rather than off the announcement's keys, so
+    the mana charged is the mana the *card* prints — a caller that sent a
+    canonical-looking key nothing prints was already refused above, and this
+    keeps the charge and the record derived from one list.
+    """
+    offers = _optional_cost_offers(costs)
+    return [
+        (offers[symbols], times)
+        for symbols, times in taken.items()
+        if symbols in offers
+    ]
+
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -255,6 +331,13 @@ class SpellCastingMixin:
         # paid the mana cost the caller said they were replacing.
         alternative_cost: bool | None = None,
         alternative_cost_hand_index: int | None = None,
+        # CR 601.2b's *optional* additional cost, and how many times each offer
+        # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
+        # the reason every other cost choice here is — 601.2b is one step, and a
+        # queued prompt would put the spell on the stack before its price was
+        # known. Absent means the offers were declined, which is what an
+        # *optional* cost means and the only default that cannot overcharge.
+        optional_cost_payments: dict[str, int] | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -275,6 +358,7 @@ class SpellCastingMixin:
             cost_hand_index=cost_hand_index,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
+            optional_cost_payments=optional_cost_payments,
         )
         if not queued.supported:
             return queued
@@ -446,6 +530,13 @@ class SpellCastingMixin:
         # it would cast every Force of Will for a life and a card.
         alternative_cost: bool | None = None,
         alternative_cost_hand_index: int | None = None,
+        # CR 601.2b's *optional* additional cost, and how many times each offer
+        # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
+        # the reason every other cost choice here is — 601.2b is one step, and a
+        # queued prompt would put the spell on the stack before its price was
+        # known. Absent means the offers were declined, which is what an
+        # *optional* cost means and the only default that cannot overcharge.
+        optional_cost_payments: dict[str, int] | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # Casting from the hand is a rule; casting from anywhere else is an
@@ -690,6 +781,29 @@ class SpellCastingMixin:
             cost for cost in additional_costs(card)
             if cost.from_zone is None or cost.from_zone == from_zone
         )
+
+        # CR 601.2b's optional additional costs, announced now and folded into
+        # the mana below. **Not** part of `_unpayable_additional_cost`: an offer
+        # is not a price, so declining one cannot make a spell uncastable, and
+        # taking one past what the pool holds is refused by the mana payment
+        # itself — which is where CR 601.2h puts an unpayable mana cost, and
+        # which spends nothing on the way to refusing.
+        optional_paid, optional_denial = _optional_cost_announcement(
+            card, cast_costs, optional_cost_payments,
+        )
+        if optional_denial is not None:
+            self.log.append(optional_denial)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, optional_denial,
+            )
+        for offer, times in _optional_cost_totals(cast_costs, optional_paid):
+            for symbol, count in offer.cost.items():
+                if symbol == "generic":
+                    extra_generic_tax += count * times
+                else:
+                    extra_pip_tax[symbol] = (
+                        extra_pip_tax.get(symbol, 0) + count * times
+                    )
 
         # Resolve the named discard **here**, while `cost_hand_index` still
         # indexes the hand the caster was looking at. The spell leaves that hand
@@ -1074,6 +1188,14 @@ class SpellCastingMixin:
                         # battlefield by now, so this is last-known information
                         # (CR 608.2h) held on the stack item rather than a
                         # second lookup that could not succeed.
+                        # How many times each CR 601.2b optional additional
+                        # cost was taken. The pool is empty by resolution
+                        # (CR 500.4) and the spell is on the stack, so nothing
+                        # in the game state can answer "for each additional
+                        # {1}{R} you paid" — this is where the announcement
+                        # survives, beside the other costs' spoils and for the
+                        # same reason.
+                        "additional_costs_paid": optional_paid,
                         "sacrificed_for_cost": sacrificed_for_cost,
                         # …and what an *exile* cost ate, on the channel the
                         # activation path already records it on. Last-known

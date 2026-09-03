@@ -36,6 +36,35 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class OptionalManaCost:
+    """One "you may pay {1}{R}" an additional-cost sentence offers (CR 601.2b).
+
+    Its own object rather than a field on :class:`AdditionalCost` because a
+    single printed sentence offers **several** of them independently — Primitive
+    Justice's "you may pay {1}{R} and/or {1}{G} any number of times" is two
+    offers, each paid however many times the caster likes, and the effect reads
+    the two counts apart. One field could hold one count; two cards in this set
+    need two.
+
+    ``symbols`` is the canonical spelling ``mana_cost_label`` produces, so the
+    key a resolution reads back by ("for each additional **{1}{R}** you paid")
+    is the same string however the card printed it. ``repeatable`` is CR 601.2b's
+    "any number of times": without it the offer may be taken once.
+    """
+
+    symbols: str
+    repeatable: bool = False
+
+    @property
+    def cost(self) -> dict[str, int]:
+        """What one payment of this offer costs, as the symbol dict every
+        payment in this engine speaks."""
+        from .mana_payment import mana_cost_from_symbols
+
+        return mana_cost_from_symbols(self.symbols) or {}
+
+
+@dataclass(frozen=True)
 class AdditionalCost:
     """One printed additional cost.
 
@@ -82,6 +111,19 @@ class AdditionalCost:
     #: rather than a sentinel in ``pay_life``, because every reader of that
     #: field is arithmetic and a string in it would be charged as garbage.
     pay_life_x: bool = False
+    #: "…, **you may pay {1}{R} and/or {1}{G} any number of times**."
+    #: (Primitive Justice, Taste of Paradise, Undergrowth.) CR 601.2b's
+    #: *optional* additional cost, and the only one in this file that is
+    #: optional at all — every field above it is a price the cast pays or is
+    #: refused for. So it is never part of ``_unpayable_additional_cost``: an
+    #: offer nobody takes costs nothing, and an offer taken past what the pool
+    #: can pay is refused by the mana payment itself, which is where CR 601.2h
+    #: puts an unpayable mana cost.
+    #:
+    #: A tuple because one sentence may offer several independently, and how
+    #: many times each was taken is what the resolution reads back — see
+    #: ``game_types.ADDITIONAL_COSTS_PAID``.
+    optional_mana: tuple[OptionalManaCost, ...] = ()
     #: The zone this cost applies to, when the sentence naming it also names a
     #: zone. Demonic Embrace costs {1}{B}{B} from the hand and {1}{B}{B} plus 3
     #: life plus a card from the graveyard — the *same card*, so the cost cannot
@@ -104,6 +146,11 @@ class AdditionalCost:
 
     def describe(self) -> str:
         parts = []
+        for offer in self.optional_mana:
+            parts.append(
+                f"you may pay {offer.symbols}"
+                + (" any number of times" if offer.repeatable else "")
+            )
         if self.sacrifice_filter is not None:
             parts.append(f"sacrifice a {filter_head_noun(self.sacrifice_filter)}")
         if self.exile_filter is not None:
@@ -163,6 +210,22 @@ _SELF_PERMISSION_COSTS = re.compile(
 #: runs after X is announced and before any mana is spent, which is where
 #: CR 601.2h puts it.
 _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
+    # "…, **you may pay {1}{R} and/or {1}{G} any number of times**." (Primitive
+    # Justice.) CR 601.2b's optional additional cost. First in the table because
+    # it is the one clause whose text begins with a word another row could
+    # claim, and because it is the only *optional* one — every row below it is a
+    # price, and reading this as one would refuse the cast of a caster who
+    # simply declined the offer.
+    #
+    # The whole run of symbols is captured together: ``_read_cost_clauses``
+    # splits its sentence on ", " and " and ", and "and/or" contains neither, so
+    # a two-offer sentence arrives here intact and is split by the reader below.
+    (
+        re.compile(
+            r"^you may pay (?P<mana>\{.+?\})(?P<repeated> any number of times)?$"
+        ),
+        "optional_mana",
+    ),
     (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
     # "discard a card", and its **narrowed** spelling: "discard a red or green
@@ -210,6 +273,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (),
         "sacrifice_filter": None, "exile_filter": None,
+        "optional_mana": (),
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
@@ -219,7 +283,18 @@ def _read_cost_clauses(costs: str) -> dict | None:
             found = pattern.match(clause)
             if found is None:
                 continue
-            if field == "pay_life_x":
+            if field == "optional_mana":
+                offers = _optional_mana_offers(
+                    found.group("mana"), repeatable=bool(found.group("repeated")),
+                )
+                if offers is None:
+                    # A symbol the payment cannot spend ({X}, a hybrid) or a
+                    # second offer of the same cost, which would give the
+                    # read-back one key for two counts. Refused whole, this
+                    # function's rule everywhere else.
+                    return None
+                fields["optional_mana"] = fields["optional_mana"] + offers
+            elif field == "pay_life_x":
                 fields["pay_life_x"] = True
             elif field == "pay_life":
                 fields["pay_life"] += int(found.group(1))
@@ -252,6 +327,47 @@ def _read_cost_clauses(costs: str) -> dict | None:
         else:
             return None
     return fields
+
+
+def _optional_mana_offers(
+    printed: str, *, repeatable: bool
+) -> tuple[OptionalManaCost, ...] | None:
+    """The offers ``{1}{R} and/or {1}{G}`` names, or None.
+
+    "and/or" is the only conjunction the pool prints here, and it is read as
+    *independent* offers rather than as one cost: Primitive Justice's caster may
+    pay {1}{R} twice and {1}{G} not at all, and the two counts are read back
+    separately. A conjunction this does not know refuses the sentence, which
+    leaves the card unsupported rather than castable for a cost nobody charged.
+
+    Each run goes through ``mana_cost_from_symbols`` — the one reader that turns
+    printed symbols into a payment — and is spelled back out by
+    ``mana_cost_label``, so the key the effect reads back by is canonical rather
+    than however this card happened to print it.
+
+    Two offers of the *same* cost refuse: they would share one read-back key and
+    one count, so the second would silently double the first.
+    """
+    from .mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    runs = [run.strip() for run in re.split(r"\s*and/or\s*", printed.strip())]
+    offers: list[OptionalManaCost] = []
+    for run in runs:
+        if not run:
+            return None
+        if re.fullmatch(r"(?:\{[^{}]+\})+", run) is None:
+            # Anything but a bare run of symbols — a word left over from a
+            # conjunction this does not read, most likely. Refused rather than
+            # charged as the part that matched.
+            return None
+        symbols = mana_cost_from_symbols(run)
+        if not symbols:
+            return None
+        label = mana_cost_label(symbols)
+        if any(offer.symbols == label for offer in offers):
+            return None
+        offers.append(OptionalManaCost(label, repeatable=repeatable))
+    return tuple(offers) or None
 
 
 def _chargeable_object(phrase: str, action: str) -> dict | None:
@@ -361,6 +477,7 @@ def cast_cost_claims_line(line: str) -> bool:
 
 __all__ = [
     "AdditionalCost",
+    "OptionalManaCost",
     "additional_cost_for_line",
     "additional_costs",
     "cast_cost_claims_line",

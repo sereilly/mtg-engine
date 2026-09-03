@@ -114,6 +114,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
     """
     kind = payload.get("kind")
 
+    if kind == "additional_cost_paid":
+        # "**If this spell's additional cost was paid**, …" (Undergrowth.)
+        # CR 601.2b's optional additional cost, asked at resolution about an
+        # announcement made while the spell was being cast. The mana pool that
+        # paid it emptied at the end of that step (CR 500.4), so the count the
+        # casting path recorded on the stack item is the only record there is —
+        # and a resolution with no record answers False, which is what
+        # declining the offer means.
+        paid = (context.choices or {}).get("additional_costs_paid") or {}
+        wanted = payload.get("symbols")
+        if wanted is None:
+            return any(int(times or 0) > 0 for times in paid.values())
+        return int(paid.get(str(wanted), 0) or 0) > 0
+
     if kind == "all_of":
         # Every part, and an empty list is False rather than the vacuous True
         # `all([])` would give: a conjunction that lowered to nothing is a
@@ -1714,8 +1728,20 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # "**For each player,** …" (Lim-Dûl's Hex) — a loop over *seats*. Read
     # beside the counted form and before the two object branches for the same
     # reason: neither of them has a board to scan for this.
+    # "For each **additional {1}{R} you paid**" (Primitive Justice, Taste of
+    # Paradise) — a number again, off the *cast* rather than off an event or the
+    # scratchpad. CR 601.2b's optional additional cost was announced before this
+    # spell was ever on the stack, and the pool that paid it emptied at the end
+    # of that step (CR 500.4), so the announcement on the stack item's choices
+    # is the only thing that can answer. Read beside the two counted forms
+    # above, before either branch that wants a board to scan.
+    repeat_cost = filters.get("repeat_from_cost")
     seat_set = filters.get("players")
-    if repeat_key is not None:
+    if repeat_cost is not None:
+        paid = (context.choices or {}).get("additional_costs_paid") or {}
+        times = int(paid.get(str(repeat_cost), 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif repeat_key is not None:
         times = int((context.trigger_context or {}).get(repeat_key, 0) or 0)
         matched = [_A_REPETITION] * max(0, times)
     elif repeat_record is not None:

@@ -433,6 +433,18 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         life_gain = max(0, int(context.results.get(source_key, 0)))
     else:
         life_gain = resolve_amount(instruction.payload.get("amount", 0), x_value)
+    # "…**plus an additional 3 life for each additional {1}{G} you paid**"
+    # (Taste of Paradise). CR 601.2b's optional additional cost, taken however
+    # many times the caster announced — added to the printed base rather than
+    # multiplying it, because the card prints a base gain the offer only tops
+    # up. The pool that paid it emptied at the end of that step (CR 500.4), so
+    # the count on the stack item's choices is the only record; none means the
+    # offer was declined, which gains the printed base and nothing more.
+    scaled = instruction.payload.get("plus_per_cost_paid")
+    if scaled is not None:
+        paid = (context.choices or {}).get("additional_costs_paid") or {}
+        times = int(paid.get(str(scaled.get("cost")), 0) or 0)
+        life_gain += max(0, times) * int(scaled.get("each", 0))
     # "…for each creature you control with flying" (Aven Gagglemaster): the
     # gain is multiplied by a battlefield count of the gainer's own permanents,
     # keywords asked of layer 6 so a granted flying counts.

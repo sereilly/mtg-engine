@@ -320,6 +320,17 @@ class PreventDamage:
     # shield of one size, chosen when the target is known. Two fields rather
     # than a nested node, because either alone is meaningless — the lowering
     # refuses unless both are present.
+    # "…**If this spell's additional cost was paid, this effect doesn't affect
+    # combat damage that would be dealt by red creatures.**" (Undergrowth.) The
+    # printed noun phrase whose damage this prevention leaves alone — but only
+    # when CR 601.2b's optional additional cost was taken, which is what makes
+    # it a field on the prevention rather than a second effect: the card prints
+    # one prevention with two widths, and reading it as two would let both
+    # apply.
+    #
+    # None is the ordinary prevention, which is every other card that prints
+    # one.
+    unaffected_if_cost_paid: "ObjectFilter | None" = None
     alternate_amount: "Amount | None" = None
     alternate_subject: "ObjectFilter | None" = None
 

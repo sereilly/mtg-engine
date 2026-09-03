@@ -569,3 +569,49 @@ def _attach_counter_cap(stream: TokenStream, steps: list[ast.Statement]) -> bool
         return False
     steps[-1] = dataclasses.replace(last, cap=cap)
     return True
+
+
+def _attach_unaffected_when_cost_paid(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "If this spell's additional cost was paid, this effect doesn't
+    affect combat damage that would be dealt by red creatures." into the
+    prevention before it (Undergrowth).
+
+    A rider rather than a step, and for the reason the whole family exists: on
+    its own the sentence names nothing. "**This** effect" is the prevention the
+    previous sentence created, and the only thing that can be narrowed is that
+    prevention — a second statement would be a second effect, and two blanket
+    preventions both applying is the card doing nothing it prints.
+
+    Attaches only to a prevention that has not already been narrowed. A card
+    printing this twice is saying something the grammar cannot place, and
+    consuming the sentence anyway is the dropped-rider bug the full-consumption
+    invariant exists to prevent — so the near-miss rewinds and the line fails
+    loudly.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.PreventDamage):
+        return False
+    if last.unaffected_if_cost_paid is not None:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "this", "spell", "'s", "additional", "cost", "was", "paid"
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "this", "effect", "doesn't", "affect", "combat", "damage",
+        "that", "would", "be", "dealt", "by",
+    ):
+        stream.reset(mark)
+        return False
+    try:
+        excluded = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps[-1] = replace(last, unaffected_if_cost_paid=excluded)
+    return True

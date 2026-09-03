@@ -26,6 +26,7 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
+from ._records import optional_cost_key
 
 
 def _lower_for_each_player(
@@ -138,5 +139,38 @@ def _lower_for_each_life_lost(
         OracleInstruction(
             "for_each", "",
             {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
+        ),
+    )
+
+
+def _lower_for_each_cost_paid(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each additional {1}{R} you paid,** destroy another target
+    artifact." (Primitive Justice, Taste of Paradise.)
+
+    :func:`_lower_for_each_life_lost`'s twin, one channel over: a loop whose
+    iterator is a number, read off what the *caster announced* as the spell was
+    cast (CR 601.2b) rather than off a firing event. It is on the stack item's
+    choices because the pool that paid it is empty by resolution (CR 500.4).
+
+    No event gate, deliberately, where the life-lost loop has one: this number
+    is recorded by the casting path for every spell that prints an optional
+    additional cost, so there is no trigger it could be missing from. What
+    there *is* to refuse is a body that lowered to nothing — an empty loop is a
+    sentence that reports supported and does not run, this file's standing rule.
+    """
+    if not inner:
+        raise LoweringError("a per-payment loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                "iterator": {
+                    "repeat_from_cost": optional_cost_key(node.iterator.symbols)
+                },
+                "effect": inner,
+            },
         ),
     )

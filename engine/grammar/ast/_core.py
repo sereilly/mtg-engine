@@ -269,6 +269,28 @@ class BoardCount:
 
 
 @dataclass(frozen=True)
+class AdditionalCostPaidCount:
+    """``the number of additional {1}{G} you paid`` — how many times a CR 601.2b
+    optional additional cost was taken.
+
+    A quantity that is neither a board count nor a history: the caster
+    announced it as the spell was cast, and the mana pool that paid it emptied
+    at the end of that step (CR 500.4), so the announcement carried on the stack
+    item is the only thing that can answer. That is why it is its own leaf
+    rather than a :class:`BoardCount` name — nothing about the board or the
+    turn's record moves this number.
+
+    ``symbols`` is the printed cost exactly as the card spells it. Lowering
+    turns it into the canonical key the payment recorded under, through the one
+    function that answers that for both halves of the read-back.
+
+    Every lowering written before it exists refuses it by default, which is the
+    union's standing guarantee for a new quantity.
+    """
+    symbols: str = ""
+
+
+@dataclass(frozen=True)
 class Plus:
     """``1 plus the number of creature cards in your graveyard`` (Wall of
     Tombstones), ``1 plus the power of target creature …`` (Sentinel) — a sum
@@ -373,7 +395,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

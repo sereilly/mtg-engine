@@ -138,6 +138,14 @@ class Game(
     # narrower card. Same lifetime as the flag above, cleared in the same two
     # places.
     combat_damage_prevented_for: list = field(default_factory=list)
+    #: "Prevent all combat damage that would be dealt this turn. If this
+    #: spell's additional cost was paid, this effect doesn't affect combat
+    #: damage that would be dealt by red creatures." (Undergrowth.) The blanket
+    #: above with a hole in it, described by the *source* rather than by the
+    #: recipient — which is why it is a record beside the flag and the
+    #: recipient-keyed list rather than a field on either: a bool cannot carry a
+    #: noun phrase, and this one is about who deals the damage.
+    combat_damage_prevented_except_from: list = field(default_factory=list)
     combat_attackers: dict[int, int] = field(default_factory=dict)
     # CR 508.1b: attackers sent at a planeswalker rather than at its controller.
     # Maps attacker battlefield idx (active player's seat) -> the attacked
