@@ -499,6 +499,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
+    "grant_look_at_exiled_cards": "zones",
     "grant_extra_turn": "turns",
     # CR 724.1: an expedited replacement for the rest of the turn, not an effect
     # on any object - the same family as granting one.

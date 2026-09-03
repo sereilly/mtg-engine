@@ -411,7 +411,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+# `permissions` is the sixth lowering-only family, split off `lowering/exile.py`
+# at Alliances' third wave when that module crossed the guard below. The line is
+# the CR's own: everything left in `exile` **moves an object** into or out of
+# the exile zone (CR 406), where every production in `permissions` moves nothing
+# — it grants a player permission to do something the rules alone would not
+# allow (CR 601.3, and CR 611.2a for how long), and the objects it names stay
+# where they already were. The two shared no lowering; what they shared was how
+# a pile of cards is described to a payload, which is why that went one floor
+# down to `_piles` rather than into either of them. `effects/` and `ast/` have
+# no `permissions` for `loops`' reason: the guard fired on the lowerings, and
+# `CastPermission` is one node that sits perfectly well beside the other card
+# nodes — the same asymmetry `zones`/`library` record above.
 # `loops` is the fifth lowering-only family and it split off `control_flow.py`
 # when that module reached the guard below. The line is the one that module's
 # own docstring already drew: `control_flow` is named after the *composers* —
@@ -541,7 +553,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -802,6 +814,17 @@ FAMILY_SHARED = {
     # halves of the split ask them, which is what makes this a floor rather
     # than a file that happened to be cut in half.
     "_bound_returns",
+    # `_piles` split out of `lowering/exile.py` at Alliances' third wave, when
+    # that module crossed the guard on Gustha's Scepter's face-down exile and
+    # shed its permission half to `permissions`. It holds the two leaves both
+    # halves ask: how a noun phrase over a **pile of cards** reduces to a
+    # payload a picker can test (CR 610.3's linked pile on one side, the
+    # permission that reads that same pile on the other), and which narrowings
+    # such a picker can answer at all. A floor for `_amounts`' reason exactly —
+    # a leaf two families read cannot live in either without one importing the
+    # other — and it produces no `OracleInstruction`, which is what keeps it a
+    # vocabulary rather than a third family.
+    "_piles",
 }
 
 

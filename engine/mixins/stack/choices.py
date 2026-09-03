@@ -3174,9 +3174,12 @@ class PendingChoicesMixin:
         )
 
     def confirm_exile_from_hand_choice(self, player_index: int, hand_index) -> bool:
-        """Answer the pending pick. ``hand_index`` of None declines, which is
-        always an answer here: the sentence that arms this prompt says "you
-        **may**"."""
+        """Answer the pending pick. ``hand_index`` of None declines, which is an
+        answer only where the sentence made an offer: "You **may** exile a
+        nonland card from your hand" (Ice Cauldron). The bare printing — "Exile
+        a card from your hand face down" (Gustha's Scepter) — is mandatory and
+        refuses it, because a decline there is an ability that resolves having
+        moved nothing."""
         return self.resolve_pending_choice(
             "exile_from_hand_choice", player_index, hand_index=hand_index
         )
@@ -3198,7 +3201,13 @@ class PendingChoicesMixin:
         player = self.players[choice.player_index]
         live = self.live_exile_from_hand_choices(choice)
         name = choice.data.get("card_name", "Effect")
+        payload = choice.data.get("_payload") or {}
         if hand_index is None:
+            # Only an *offer* may be declined. True by default because the
+            # offered printing is the one that shipped first; the mandatory
+            # printing says so in its payload.
+            if not payload.get("optional", True):
+                return False
             self.log.append(f"{player.name} exiled no card ({name})")
             self.discard_pending_choice(choice)
             return True
@@ -3212,7 +3221,17 @@ class PendingChoicesMixin:
         player.exile.append(card)
         source = choice.data.get("_source_permanent")
         if source is not None:
-            link_exiled_card(source, card, choice.player_index)
+            # CR 406.3's rider travels on the *entry*, not on the card: two
+            # copies of one card in a deck are the same ``CardDefinition``
+            # object, so the record of the exiling is the only thing that can
+            # say which one is hidden. The *look* permission that may follow it
+            # ("You may look at it for as long as it remains exiled", Gustha's
+            # Scepter) is a sentence of its own and writes its own key onto
+            # this entry once this prompt has been answered.
+            link_exiled_card(
+                source, card, choice.player_index,
+                face_down=bool(payload.get("face_down")),
+            )
         context = choice.data.get("_context")
         if context is not None:
             context.results.setdefault("exiled_cards", []).append(card)
@@ -3230,8 +3249,110 @@ class PendingChoicesMixin:
         the permission to cast it is only worth anything to a seat that then
         spends the noted mana on it. A headless seat that took the offer would
         bury a card every time the artifact was activated.
+
+        **A mandatory exile has no decline to take**, so the policy there is the
+        one ``_default_discard`` states: the lowest-index eligible card. Which
+        cards are eligible at all is the printed phrase's business and is read
+        off the same list the interactive seat is offered, never a second copy.
         """
+        if not (choice.data.get("_payload") or {}).get("optional", True):
+            live = self.live_exile_from_hand_choices(choice)
+            if live and self._resolve_exile_from_hand_choice(choice, live[0]):
+                return
+            # Nothing eligible: the offer was never made rather than declined,
+            # which is the rule ``exile_chosen_card_from_hand`` states, and the
+            # prompt has to come off the queue or the resolution never finishes.
+            self.discard_pending_choice(choice)
+            return
         self._resolve_exile_from_hand_choice(choice, None)
+
+    # -- One card out of a permanent's linked-exile pile ---------------------
+
+    def live_linked_exile_return_choices(self, choice: PendingChoice) -> list[int]:
+        """The positions in the source's linked-exile record this pick admits.
+
+        Positions into ``linked_entries``, not into a player's exile list: the
+        record is what CR 610.3 names, and two copies of one card in a deck are
+        the same ``CardDefinition`` object, so an index into the pile could not
+        tell one entry from another.
+
+        Re-run rather than stored, for ``live_exile_from_hand_choices``' reason:
+        the list the seat is offered and the list its answer is checked against
+        have to be one list.
+        """
+        from ...linked_exile import linked_entries
+
+        source = choice.data.get("_source_permanent")
+        chooser = choice.player_index
+        owned_only = bool(choice.data.get("owned_by_chooser"))
+        live: list[int] = []
+        for index, entry in enumerate(linked_entries(source)):
+            owner_index = int(entry.get("owner_index", -1))
+            if owned_only and owner_index != chooser:
+                continue
+            if not (0 <= owner_index < len(self.players)):
+                continue
+            # A card that has already left exile by some other route is not a
+            # card this can return (CR 608.2b: as much as possible, and no card
+            # created from nowhere).
+            if entry["card"] not in self.players[owner_index].exile:
+                continue
+            live.append(index)
+        return live
+
+    def confirm_linked_exile_return(self, player_index: int, entry_index) -> bool:
+        """Answer the pending pick with a position from
+        :meth:`live_linked_exile_return_choices`. There is no decline: "Return a
+        card you own exiled with this artifact to your hand" is mandatory, and
+        the only thing that ends it without moving a card is an empty pile."""
+        return self.resolve_pending_choice(
+            "linked_exile_return", player_index, entry_index=entry_index
+        )
+
+    def _resolve_linked_exile_return(self, choice: PendingChoice, entry_index) -> bool:
+        """Move the chosen entry's card, and drop that one entry.
+
+        Exactly one entry, where the sweep beside it drains the whole record:
+        the cards left behind are still exiled with the permanent, and its
+        lose-control trigger still names them.
+        """
+        from ...linked_exile import RECORD_KEY, linked_entries
+
+        source = choice.data.get("_source_permanent")
+        if source is None:
+            self.discard_pending_choice(choice)
+            return True
+        if entry_index not in self.live_linked_exile_return_choices(choice):
+            return False
+        held = list(linked_entries(source))
+        entry = held.pop(int(entry_index))
+        if held:
+            source.metadata[RECORD_KEY] = held
+        else:
+            source.metadata.pop(RECORD_KEY, None)
+        zone = str(choice.data.get("zone", "hand"))
+        self.leave_linked_exile(entry, zone)
+        self.log.append(
+            f"{self.players[choice.player_index].name} returned "
+            f"{entry['card'].name} to their {zone}"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_linked_exile_return(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** eligible entry.
+
+        Lowest position is the same policy ``_default_discard`` takes, and for
+        the same reason — which entries are eligible at all is the printed
+        phrase's business and is read off the list the interactive seat is
+        offered, and anything past "one of them" is AI valuation rather than
+        rules. A pile this seat owns nothing in is a prompt with no answer, so
+        it simply comes off the queue.
+        """
+        live = self.live_linked_exile_return_choices(choice)
+        if live and self._resolve_linked_exile_return(choice, live[0]):
+            return
+        self.discard_pending_choice(choice)
 
     # -- A card put onto the battlefield out of a hand -----------------------
 
@@ -6027,6 +6148,20 @@ register_choice(
     # where the offer stands.
     default_at_arm=True,
     # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "linked_exile_return",
+    resolve=lambda game, choice, r: game._resolve_linked_exile_return(
+        choice, r.get("entry_index")
+    ),
+    default=lambda game, choice: game._default_linked_exile_return(choice),
+    action="linked_exile_return_confirm",
+    prompt_key="linked_exile_return",
+    blocked_detail="choose a card to return before other actions",
+    # The pile is face down (CR 406.3) and only its owner may look, so the
+    # options are the chooser's alone — exactly the hand pick's reason.
     hidden_for_ai=False,
 )
 

@@ -489,6 +489,24 @@ class GameHelpersMixin:
                 )
                 if slot is not None:
                     self._renumber_combat_after_removal({holding: [slot]})
+            # "When you lose control of this artifact, …" (Gustha's Scepter).
+            # This is the *other* half of CR 603.10d's event and the only place
+            # in the engine a permanent changes hands, exactly as the CR 506.4
+            # combat removal above is: the seat that loses it is the one it is
+            # being taken from, and it is frozen here rather than read at
+            # resolution because by then the permanent is somebody else's.
+            #
+            # The zone-change half fires from the leave transition below;
+            # neither can see the other's event, which is why both exist.
+            from ..trigger_utils import make_trigger_event, matching_triggers
+
+            for trig in matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"lose_control_of_source"},
+            ):
+                self._enqueue_triggered_batch(
+                    [make_trigger_event(holding, permanent, trig)]
+                )
             self.players[holding].battlefield = [
                 p for p in self.players[holding].battlefield if p is not permanent
             ]
@@ -1385,8 +1403,18 @@ class GameHelpersMixin:
             seat = self.controller_index_of(perm)
             if seat is None:
                 continue
+            # Both kinds from one scan, because a permanent leaving the
+            # battlefield **is** its controller losing control of it: the
+            # object ceases to exist and nobody controls the new one (CR
+            # 400.7). CR 603.10a and 603.10d both make these look back in
+            # time, so the ability is still there to trigger although the
+            # permanent has gone — which is the whole of why Gustha's Scepter's
+            # exiled cards reach a graveyard instead of being stranded in exile
+            # when the artifact is destroyed. The *other* way to lose control
+            # is a change of hands, and that fires from `_sync_control`.
             for trig in matching_triggers(
-                perm.effective_card, condition_kinds={"leaves_battlefield"}
+                perm.effective_card,
+                condition_kinds={"leaves_battlefield", "lose_control_of_source"},
             ):
                 leaving.append((perm, make_trigger_event(seat, perm, trig)))
             # "When enchanted creature leaves the battlefield, its controller

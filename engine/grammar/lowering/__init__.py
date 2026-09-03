@@ -166,19 +166,23 @@ from .exile import (
     _lower_for_each_exiled,
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
-    # The linked-exile half, moved here whole out of `.library` when that
-    # module crossed the thousand-line guard. The same names, so this package's
-    # flat re-export is unchanged and no caller learns where the split fell —
-    # a move that renamed anything would be a rename wearing a move's clothes.
-    _SEARCH_EXILE_HONOURED,
-    _lower_cast_from_exiled_with,
-    _lower_cast_permission,
     _lower_exile_graveyard_until_leaves,
     _lower_exile_top_of_library,
     _lower_exile_entire_library,
     _lower_put_exiled_with_source,
     _lower_search_and_exile,
     _lower_transmute_by_sacrifice,
+)
+# The linked-exile half came here whole out of `.library` when that module
+# crossed the thousand-line guard, and its *permission* half left again for
+# `.permissions` when `.exile` crossed the same guard at Alliances. The names
+# never changed on either move, so this package's flat re-export is unchanged
+# and no caller learns where a split fell — a move that renamed anything would
+# be a rename wearing a move's clothes.
+from ._piles import _SEARCH_EXILE_HONOURED
+from .permissions import (
+    _lower_cast_from_exiled_with,
+    _lower_cast_permission,
 )
 from .attachments import (
     _lower_attach,

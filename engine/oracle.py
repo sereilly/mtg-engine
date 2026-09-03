@@ -908,6 +908,16 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("attached_creature_leaves_battlefield",
      r"when(?:ever)? (?:equipped|enchanted) creature leaves(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
+    # "**When you lose control of this artifact**, put all cards exiled with
+    # this artifact into their owner's graveyard." (Gustha's Scepter.) A CR
+    # 603.10d event — it looks back in time, so the ability exists to trigger
+    # even though the permanent is already gone by the time anyone asks. Its
+    # own kind rather than a spelling of `leaves_battlefield`: a control change
+    # is not a zone change (the permanent is still on the battlefield, under
+    # somebody else), and every other card in the pool that prints these words
+    # prints them as a *rider* on its own control-gaining sentence, which the
+    # rider parser reads and this row must not claim.
+    ("lose_control_of_source",      r"when you lose control of (?:this|it|the) ?.*"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     # CR 701.26a's event with the one-shot trigger word (Blight: "**When**
     # enchanted land becomes tapped, destroy it"). Here for the reason

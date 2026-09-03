@@ -772,8 +772,14 @@ def _exile_payload(
 
     Exile is a public zone, but a card put there **face down** (CR 406.3) is
     hidden from every player, its owner included: Knowledge Vault's ``{2}, {T}``
-    says nothing about looking. So the hiding is not per viewer, and the
-    ``<hidden>`` placeholder is the same one a concealed hand uses.
+    says nothing about looking. The ``<hidden>`` placeholder is the same one a
+    concealed hand uses.
+
+    The hiding *is* per viewer, but only because a card can say so — Gustha's
+    Scepter's "you may look at it for as long as it remains exiled" grants one
+    seat a look at a card the rest of the table cannot see, and the record
+    carries which seat. Absent such a permission every viewer gets the same
+    answer, Knowledge Vault included.
 
     Which cards those are is read from the linked-exile record
     (engine/linked_exile.py) rather than from a flag on the card, because two
@@ -785,7 +791,7 @@ def _exile_payload(
     from engine.linked_exile import face_down_exiled_cards
 
     owed: dict[int, int] = {}
-    for card in face_down_exiled_cards(game, seat):
+    for card in face_down_exiled_cards(game, seat, viewer_seat):
         owed[id(card)] = owed.get(id(card), 0) + 1
     payload: list = []
     for card in player.exile:

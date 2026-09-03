@@ -968,8 +968,11 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Ice Cauldron: which card in this seat's hand is exiled under the artifact.
 
     The candidates come from the engine's own rule, for the reason the pick
-    below it gives. There is no ``optional`` key: the sentence that arms this
-    prompt says "you **may**", so declining is always an answer.
+    below it gives. ``optional`` is what the sentence said, and it is what
+    decides whether the board draws a Decline button: "You **may** exile a
+    nonland card from your hand" (Ice Cauldron) may be declined, and "Exile a
+    card from your hand face down" (Gustha's Scepter) may not — a seat shown a
+    Decline for the second would be offered an answer the engine refuses.
     """
     choice = choices[0]
     owner = ctx.game.players[choice.player_index]
@@ -977,8 +980,40 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
+        "optional": bool(
+            (choice.data.get("_payload") or {}).get("optional", True)
+        ),
         "choices": [
             {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
+@prompt_renderer("linked_exile_return")
+def _linked_exile_return(ctx: PromptContext, choices: list) -> dict:
+    """Gustha's Scepter: which card under the artifact comes back to this hand.
+
+    The candidates come from the engine's own rule, for the reason every card
+    picker here gives: a list built twice is a list that can be offered wider
+    than it is checked. ``entry_index`` addresses the linked-exile *record*
+    (CR 610.3) rather than a position in the exile pile, because two copies of
+    one card in a deck are the same object there.
+
+    There is no ``optional`` key and no Decline: the sentence is mandatory, and
+    the only thing that ends it without a card moving is an empty pile — which
+    is a prompt that was never armed with an answer rather than one declined.
+    """
+    from engine.linked_exile import linked_entries
+
+    choice = choices[0]
+    entries = linked_entries(choice.data.get("_source_permanent"))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "zone": choice.data.get("zone", "hand"),
+        "choices": [
+            {"entry_index": index, "name": entries[index]["card"].name}
+            for index in ctx.game.live_linked_exile_return_choices(choice)
         ],
     }
 

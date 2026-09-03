@@ -56,6 +56,7 @@ def link_exiled_card(
     to: str | None = None,
     ends_on: Iterable[str] = (),
     face_down: bool = False,
+    looker_index: int | None = None,
     tapped: bool = False,
     counters: dict[str, int] | None = None,
     attach_to_returned: bool = False,
@@ -77,6 +78,14 @@ def link_exiled_card(
         entry["to"] = to
     if face_down:
         entry["face_down"] = True
+    # "You may look at it for as long as it remains exiled." (Gustha's
+    # Scepter.) A face-down exiled card is hidden from **every** player, its
+    # owner included (CR 406.3), so a card whose next sentence grants its
+    # controller a look has to record who that is. Beside ``face_down`` rather
+    # than replacing it: the card is still face down to everyone else, which is
+    # the whole point of the ability.
+    if looker_index is not None:
+        entry["looker_index"] = int(looker_index)
     if tapped:
         entry["tapped"] = True
     if counters:
@@ -124,8 +133,18 @@ def take_linked_entries(
     return taken
 
 
-def face_down_exiled_cards(game, owner_index: int) -> list["CardDefinition"]:
-    """The cards in seat *owner_index*'s exile that are face down (CR 406.3).
+def face_down_exiled_cards(
+    game, owner_index: int, viewer_index: int | None = None
+) -> list["CardDefinition"]:
+    """The cards in seat *owner_index*'s exile that are face down (CR 406.3) —
+    face down **to** *viewer_index*, when one is named.
+
+    The viewer matters because a look permission is per seat: Gustha's Scepter
+    exiles a card face down and then says "you may look at it for as long as it
+    remains exiled", so the same card is hidden from the table and readable by
+    the seat that exiled it. ``viewer_index=None`` is the pile as the rules
+    describe it with no permission applied, which is what a caller asking
+    "which of these are face down at all" wants.
 
     Derived from the same record rather than stored beside it, because a card
     in exile has no identity of its own to hang a flag on: two copies of one
@@ -139,6 +158,14 @@ def face_down_exiled_cards(game, owner_index: int) -> list["CardDefinition"]:
     hidden: list["CardDefinition"] = []
     for permanent in game.all_permanents():
         for entry in linked_entries(permanent):
-            if entry.get("face_down") and int(entry.get("owner_index", -1)) == owner_index:
-                hidden.append(entry["card"])
+            if not entry.get("face_down"):
+                continue
+            if int(entry.get("owner_index", -1)) != owner_index:
+                continue
+            if (
+                viewer_index is not None
+                and entry.get("looker_index") == viewer_index
+            ):
+                continue
+            hidden.append(entry["card"])
     return hidden

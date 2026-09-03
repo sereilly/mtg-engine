@@ -511,8 +511,20 @@ class PutExiledWithSource:
 
     That is why *zone* is a payload field and not part of a kind name: a second
     card printing the same sentence with a different destination needs no code.
+
+    ``chosen`` is the other printed quantity: "Return **a card you own** exiled
+    with this artifact to your hand" (Gustha's Scepter) moves *one* card and
+    the ability's controller says which. It is a field rather than a second
+    node because everything else about the sentence is this one — the same
+    linked pile, the same destinations, the same self-reference — and the
+    difference the card states is how many cards move. ``owned_by_you`` is the
+    restriction printed beside it, and it is only meaningful when one card is
+    picked: a sweep of the whole pile sends every card to its own owner and so
+    cannot be narrowed by whose it is.
     """
     zone: Zone
+    chosen: bool = False
+    owned_by_you: bool = False
 
 
 @dataclass(frozen=True)
@@ -646,8 +658,15 @@ class CastPermission:
     "this turn", are the same end-of-turn scope); ``target_card`` legitimately
     has none, which CR 611.2a reads as lasting — bounded by the card staying
     in its zone (CR 400.7).
+
+    ``mode="look"`` is the same sentence about a different verb: "You may
+    **look at** it for as long as it remains exiled" (Gustha's Scepter). It is
+    a mode rather than a node of its own because the sentence is word-for-word
+    this one bar the verb — subject, referent and every duration spelling are
+    read by the same code — and the lowering routes the verb to its own
+    instruction kind, so a look permission can never reach a cast one.
     """
-    mode: str  # "play" | "cast"
+    mode: str  # "play" | "cast" | "look"
     what: str  # "exiled_this_way" | "target_card" | "spells_from_hand"
     target: TargetSpec | None = None
     until_end_of_turn: bool = False

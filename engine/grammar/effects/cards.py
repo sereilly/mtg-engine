@@ -417,10 +417,23 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     # handler — the difference is which zone the cards are going to and the
     # preposition English wants in front of it.
     names_source = True
+    chosen = False
+    owned_by_you = False
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
+    elif stream.accept_phrase("return", "a", "card", "you", "own", "exiled", "with"):
+        # "…**a card you own** exiled with this artifact to your hand."
+        # (Gustha's Scepter.) The same linked pile with a quantifier and a
+        # restriction on it: one card, picked by the ability's controller, out
+        # of the cards *they* own. Both are required together — "you own"
+        # narrows nothing in a sweep, where every card goes to its own owner
+        # anyway, and it is the whole of what stops a player who has taken the
+        # artifact from pulling its previous controller's cards out of exile.
+        preposition = "to"
+        chosen = True
+        owned_by_you = True
     elif stream.accept_phrase("return", "the", "exiled", "card"):
         # "…**the exiled card**…" (Icy Prison). The same linked pile with no
         # possessive on it: CR 610.3 makes the two abilities linked, so "the
@@ -452,7 +465,7 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         or stream.accept_phrase("under", "their", "owner", "'s", "control")
     ):
         zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
-    return ast.PutExiledWithSource(zone)
+    return ast.PutExiledWithSource(zone, chosen=chosen, owned_by_you=owned_by_you)
 
 
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
@@ -490,6 +503,14 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         mode = "play"
     elif stream.accept_word("cast"):
         mode = "cast"
+    elif stream.accept_phrase("look", "at"):
+        # "You may **look at** it for as long as it remains exiled." (Gustha's
+        # Scepter.) The same CR 611.2a permission sentence about a different
+        # verb: a card in exile face down is hidden from every player (CR
+        # 406.3), so the permission to read one is an effect rather than a
+        # courtesy. "at" is consumed here because the verb is two words; the
+        # referent and the duration below are shared with the cast readings.
+        mode = "look"
     else:
         stream.reset(mark)
         return None
@@ -537,6 +558,11 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         stream.accept_phrase("cards", "exiled", "this", "way")
         or stream.accept_word("them")
         or stream.accept_phrase("that", "card")
+        # The bare pronoun, and only under "look at": a *cast* permission
+        # naming "it" would claim any "you may cast it …" sentence in the pool,
+        # where this verb has exactly one referent — the card the sentence
+        # before it exiled.
+        or (mode == "look" and stream.accept_word("it"))
     ):
         _trailing_duration()
         return ast.CastPermission(

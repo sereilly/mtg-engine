@@ -2932,6 +2932,14 @@ def exile_chosen_card_from_hand(game: Game, instruction: OracleInstruction, cont
     caster = context.caster
     seat = game.players.index(caster)
     payload = dict(instruction.payload)
+    if payload.get("face_down") and context.source_permanent is None:
+        # CR 406.3's rider needs a permanent to be recorded on, exactly as the
+        # library-top exile beside it does: with nothing to link the entry to,
+        # the card cannot be hidden, and exiling it face *up* is a different
+        # effect. So the exile does not happen at all rather than happening in
+        # full view.
+        game.log.append("the face-down exile has no permanent to be linked to")
+        return True, "resolved"
     if not exile_from_hand_candidates(game, payload, caster):
         game.log.append(
             f"{context.card.name}: {caster.name} has no card to exile"
@@ -3470,12 +3478,28 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
     an id would not do).
     """
     source = context.source_permanent
+    zone = str(instruction.payload.get("zone", "hand"))
+    if instruction.payload.get("one_of"):
+        # "Return **a card you own** exiled with this artifact to your hand."
+        # (Gustha's Scepter.) One card out of the same pile, and the ability's
+        # controller says which — so the pick *is* the effect and it goes
+        # through the pending-choice queue, exactly as the exile that filled
+        # the pile did. The record is *not* drained here: the cards left behind
+        # are still exiled with the permanent.
+        seat = game.players.index(context.caster)
+        game.arm_pending_choice(
+            "linked_exile_return", seat,
+            card_name=context.card.name if context.card is not None else "",
+            zone=zone,
+            owned_by_chooser=bool(instruction.payload.get("owned_by_chooser")),
+            _source_permanent=source,
+        )
+        return True, "resolved"
     entries = take_linked_entries(source)
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
         return True, "resolved"
-    zone = str(instruction.payload.get("zone", "hand"))
     moved: list[str] = []
     onto_battlefield = False
     for entry in entries:
@@ -3492,6 +3516,57 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         game.log.append(f"{', '.join(moved)} go to their owner's {zone}")
         if onto_battlefield:
             game._recompute_continuous_effects()
+    return True, "resolved"
+
+
+@effect_handler("grant_look_at_exiled_cards")
+def grant_look_at_exiled_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may look at it for as long as it remains exiled." (Gustha's
+    Scepter, the sentence after its face-down exile.)
+
+    A card in exile face down is hidden from **every** player, its owner
+    included (CR 406.3) — Knowledge Vault says nothing about looking and its
+    controller cannot read its own pile. So this sentence is an effect, and
+    what it changes is one seat's view of one entry.
+
+    Written onto the linked-exile entry rather than onto the card, for
+    ``link_exiled_card``'s standing reason: two copies of one card in a deck
+    are the same ``CardDefinition`` object, so the record of the exiling is the
+    only thing that can say which one this permission covers. The entries are
+    matched by **identity** against what this resolution exiled, newest first,
+    one entry per card — a value comparison would mark a different printing of
+    the same card that some earlier activation put there.
+
+    The duration needs no sweep: the permission lives on the entry, and the
+    entry is drained the moment the card leaves exile.
+    """
+    source = context.source_permanent
+    exiled = list(context.results.get(instruction.payload.get("cards_from") or "exiled_cards") or ())
+    if source is None or not exiled:
+        # Nothing was exiled (the pick found no eligible card), or the ability
+        # has no permanent to hang the record on. Either way there is nothing
+        # to grant, which is not a failure — the sentence before this one
+        # already logged why.
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    remaining = list(exiled)
+    granted: list[str] = []
+    for entry in reversed(linked_entries(source)):
+        if not remaining:
+            break
+        if entry.get("looker_index") is not None:
+            continue
+        for position, card in enumerate(remaining):
+            if entry["card"] is card:
+                entry["looker_index"] = seat
+                granted.append(card.name)
+                del remaining[position]
+                break
+    if granted:
+        game.log.append(
+            f"{game.players[seat].name} may look at {', '.join(granted)} "
+            "for as long as it remains exiled"
+        )
     return True, "resolved"
 
 

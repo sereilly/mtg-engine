@@ -229,6 +229,27 @@ def _lower_unless_player_pays(
 _SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
+#: Instruction kinds that arm a prompt of their own and whose *decline* is the
+#: answer the surrounding offer already collected. "You may exile a nonland
+#: card from your hand" (Ice Cauldron) is one decision printed once; the pick
+#: that follows it may still be declined, because the seat is answering the
+#: "may". The same instruction printed **bare** — "Exile a card from your hand
+#: face down" (Gustha's Scepter) — is mandatory, and its prompt has to refuse a
+#: decline or the ability quietly does nothing.
+#:
+#: A set rather than a default, for the reason ``repeat_offer_round`` marks the
+#: step it repeats one module over: the wrapper is the only node that knows the
+#: sentence said "may", so the wrapper is where the mark belongs.
+OFFERED_PROMPT_KINDS = frozenset({"exile_chosen_card_from_hand"})
+
+
+def _offered(step: OracleInstruction) -> OracleInstruction:
+    """*step* as an **offered** action — see :data:`OFFERED_PROMPT_KINDS`."""
+    if step.kind not in OFFERED_PROMPT_KINDS:
+        return step
+    return OracleInstruction(step.kind, step.value, {**step.payload, "optional": True})
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -284,6 +305,7 @@ def _lower_may(
     # rewrite of the argument.
     inner_event = None if node.actor.kind in _SEAT_SET_ACTORS else event
     action = lower_statement(node.action, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.action else ()
+    action = tuple(_offered(step) for step in action)
     # "If you do" is the rest of *this* resolution, so it can read what the
     # action just recorded: Niambi's "return another target creature you
     # control…, if you do, you gain life equal to that creature's mana value"

@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2711,6 +2711,16 @@ function getExileFromHandInfo(state = currentState) {
   return info;
 }
 
+// Gustha's Scepter: the seat picks one of the cards it owns under the artifact
+// to take back. Mandatory - there is no Decline, because the sentence is not an
+// offer; an empty pile arms no prompt at all.
+function getLinkedExileReturnInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.linked_exile_return;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 // Eureka: the offered seat picks a card in its hand to put onto the battlefield.
 function getPutFromHandInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3365,6 +3375,7 @@ function isAnyPromptActive(state = currentState) {
   if (getFaceDownCastInfo(state)) return true;
   if (getFlipAgainInfo(state)) return true;
   if (getExileFromHandInfo(state)) return true;
+  if (getLinkedExileReturnInfo(state)) return true;
   if (getPutFromHandInfo(state)) return true;
   if (getChooseCardsInHandInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
@@ -3384,7 +3395,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -6000,9 +6011,15 @@ function applyExileFromHandPrompt(info) {
   customOkBtn.disabled = true;
 
   title.textContent = `${info.card_name} \u2014 exile a card from your hand`;
-  body.textContent =
-    "You may exile one of these cards. You may cast it for as long as it " +
-    "remains exiled.";
+  // The offered printing ("You may exile a nonland card from your hand", Ice
+  // Cauldron) may be declined; the bare one ("Exile a card from your hand face
+  // down", Gustha's Scepter) may not, and the engine refuses a decline there -
+  // so a Decline button drawn for it would offer an answer that bounces.
+  const declinable = info.optional !== false;
+  body.textContent = declinable
+    ? "You may exile one of these cards. You may cast it for as long as it " +
+      "remains exiled."
+    : "Exile one of these cards.";
   const buttons = info.choices
     .map(
       (c) =>
@@ -6012,7 +6029,9 @@ function applyExileFromHandPrompt(info) {
     .join("");
   steps.innerHTML =
     `<div class="prompt-choice-column">${buttons}` +
-    '<button type="button" class="prompt-choice-btn" data-efh-decline="1">Decline</button>' +
+    (declinable
+      ? '<button type="button" class="prompt-choice-btn" data-efh-decline="1">Decline</button>'
+      : "") +
     "</div>";
 
   steps.querySelectorAll("[data-efh-hand]").forEach((btn) => {
@@ -6026,6 +6045,45 @@ function applyExileFromHandPrompt(info) {
   });
   steps.querySelector("[data-efh-decline]")?.addEventListener("click", async () => {
     await sendAction({ seat, action: "exile_from_hand_confirm", accept: false });
+  });
+}
+
+function applyLinkedExileReturnPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} \u2014 return an exiled card`;
+  body.textContent = `Return one of these cards to your ${info.zone || "hand"}.`;
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    info.choices
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn" data-ler-entry="${c.entry_index}">` +
+          `${escapeHtml(c.name)}</button>`
+      )
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-ler-entry]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "linked_exile_return_confirm",
+        exile_entry_index: Number(btn.dataset.lerEntry),
+      });
+    });
   });
 }
 
@@ -8008,6 +8066,12 @@ function renderActivationPrompt() {
   const exileFromHandInfo = getExileFromHandInfo();
   if (exileFromHandInfo) {
     applyExileFromHandPrompt(exileFromHandInfo);
+    return;
+  }
+
+  const linkedExileReturnInfo = getLinkedExileReturnInfo();
+  if (linkedExileReturnInfo) {
+    applyLinkedExileReturnPrompt(linkedExileReturnInfo);
     return;
   }
 

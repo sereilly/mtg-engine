@@ -84,6 +84,7 @@ ActionKind = Literal[
     "face_down_cast_confirm",
     "flip_again_confirm",
     "exile_from_hand_confirm",
+    "linked_exile_return_confirm",
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",
     "graveyard_exile_confirm",
@@ -327,6 +328,12 @@ class GameActionRequest(BaseModel):
     # picked. Its own field rather than `hand_index`, because the zone is
     # not the answering seat's and not a hand.
     graveyard_index: int | None = Field(default=None, ge=0)
+    # Gustha's Scepter: which entry in a permanent's linked-exile record
+    # (CR 610.3) the seat is taking back. Its own field rather than an index
+    # into the exile *pile*, because two copies of one card in a deck are the
+    # same object there — the record is the only thing that can tell one
+    # exiled card from another.
+    exile_entry_index: int | None = Field(default=None, ge=0)
     # "Choose two cards in your hand drawn this turn" (Sylvan Library): the
     # whole answer at once, because the prompt owes a *set* and a card at a
     # time would leave a half-made choice the engine has no state for.

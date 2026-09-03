@@ -599,6 +599,25 @@ def _action_choose_cards_in_hand_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("linked_exile_return_confirm")
+def _action_linked_exile_return_confirm(session, req, seat_type):
+    # Gustha's Scepter: the seat picks which of the cards it owns under the
+    # artifact comes back to its hand. The engine re-checks the pick against
+    # the same candidate rule the prompt was drawn from, and there is no
+    # decline — the sentence is mandatory.
+    pending = next(
+        (c for c in session.game.pending_choices_of("linked_exile_return")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no exile return pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.exile_entry_index is None:
+        raise HTTPException(status_code=400, detail="exile_entry_index is required")
+    if not session.game.confirm_linked_exile_return(req.seat, req.exile_entry_index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("graveyard_exile_confirm")
 def _action_graveyard_exile_confirm(session, req, seat_type):
     # Rysorian Badger: the seat picks which cards in the defending player's

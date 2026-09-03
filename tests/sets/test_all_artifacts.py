@@ -580,25 +580,272 @@ def test_scarab_of_the_unseen_refuses_a_host_it_does_not_own(set_pool):
 # --- W2G5 declines, each naming the part it is waiting on -------------------
 
 
-def test_gusthas_scepter_is_declined_naming_four_parts(set_pool):
-    """All three of its lines refuse, and they need four separate pieces:
+def test_gusthas_scepter_was_declined_naming_four_parts_and_landed_in_w3g3(set_pool):
+    """W2G5 declined this card naming four parts. W3G3 built it; the record of
+    which of the four were real is worth more than the decline was.
 
-    1. **A face-down exile from a hand.** ``exile_chosen_card_from_hand``
-       exists (Ice Cauldron) but nothing carries "face down": the words are
-       unconsumed text, and CR 406.3 makes a face-down exiled card hidden from
-       every other player, which no zone in ``PlayerState`` distinguishes.
-    2. **A per-viewer look permission with an open-ended duration.** "You may
-       look at it **for as long as it remains exiled**" is a permission, not an
-       effect - there is no instruction kind for "this seat may see this card",
-       and the web layer has no channel that shows one seat a card in exile.
-    3. **A return *out of* the linked-exile pile chosen by its owner.**
-       ``engine/linked_exile.py`` records what was exiled with a source and
-       Safe Haven already returns *all* of it; this returns **one card the
-       activator picks**, which needs a ``PendingChoice`` over a hidden pile.
-    4. **A "when you lose control of this permanent" trigger.** No condition in
-       ``engine/oracle.py``'s table names it and no fire site announces it;
-       ``engine/control.py`` is where a control change ends, so the
-       announcement would go there beside ``end_control_change``.
+    1. **A face-down exile from a hand** was real, and half of it already
+       existed: ``engine/linked_exile.py`` has carried a ``face_down`` flag and
+       ``web/serialization.py`` has hidden those entries since Knowledge Vault,
+       so "no zone in ``PlayerState`` distinguishes" named the wrong layer —
+       CR 406.3 is answered by the *record of the exiling*, not by a zone.
+    2. **A per-viewer look permission** was real and is the one part the
+       decline sized correctly.
+    3. **A picked return out of the linked pile** was real: one new
+       ``PendingChoice`` kind, ``linked_exile_return``.
+    4. **A "when you lose control" trigger** was real, and its fire site was
+       *not* where the decline pointed. ``engine/control.py`` records a
+       contribution and never moves anything; the two events are the change of
+       hands in ``Game._sync_control`` and the leave transition in
+       ``remove_all_from_battlefield`` (CR 603.10d looks back in time, which is
+       what lets the second one fire at all).
     """
     program = compile_card_oracle(set_pool("ALL")["Gustha's Scepter"])
-    assert not program.supported
+    assert program.supported
+    assert [ability.effect_kind for ability in program.activated_abilities] == [
+        "activated_sequence", "activated_zones",
+    ]
+    assert [
+        trigger.condition.kind for trigger in program.triggered_abilities
+    ] == ["lose_control_of_source"]
+
+
+# --- W3G3: iterative library procedures ---
+#
+# Gustha's Scepter, the group's one landed artifact. Every part of it was a
+# *procedure* rather than an effect, and the two that took the work were the
+# ones where the pile has to be readable long after the resolution that filled
+# it: a face-down exile whose owner may look (CR 406.3 hides it from everyone,
+# its owner included, so the look is an effect and not a courtesy) and a
+# lose-control trigger with two different fire sites (CR 603.10d).
+
+import pytest
+
+from engine import Game as _W3G3Game, PlayerState as _W3G3PlayerState
+from engine.card_loader import manifest_set_path as _w3g3_set_path
+from engine.card_loader import load_cards as _w3g3_load_cards
+from engine.linked_exile import face_down_exiled_cards, linked_entries
+from engine.models import Permanent as _W3G3Permanent
+from engine.oracle import compile_card_oracle as _w3g3_compile
+
+_W3G3_LEA = {c.name: c for c in _w3g3_load_cards(_w3g3_set_path("LEA"))}
+
+
+def _w3g3_duel() -> "_W3G3Game":
+    """A duel with both seats interactive, so a prompt queues instead of being
+    answered by its default the moment it is armed."""
+    game = _W3G3Game(
+        players=[_W3G3PlayerState(name="A"), _W3G3PlayerState(name="B")]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game.interactive_seats = {0, 1}
+    game._settle()
+    return game
+
+
+def _w3g3_put(game, seat: int, card, *, ready: bool = True):
+    perm = _W3G3Permanent(card=card if not isinstance(card, str) else _W3G3_LEA[card])
+    if ready:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w3g3_scepter(set_pool, hand=("Black Lotus", "Healing Salve")):
+    game = _w3g3_duel()
+    scepter = _w3g3_put(game, 0, set_pool("ALL")["Gustha's Scepter"])
+    game.players[0].hand = [_W3G3_LEA[name] for name in hand]
+    return game, scepter
+
+
+def _w3g3_exile_one(game, scepter, hand_index=0):
+    """Activate the first ability and answer its pick."""
+    scepter.tapped = False
+    game.activate_permanent_ability(0, "Gustha's Scepter", permanent_index=0)
+    game._settle()
+    answered = game.confirm_exile_from_hand_choice(0, hand_index)
+    game._settle()
+    return answered
+
+
+def test_gusthas_scepter_exiles_face_down_and_only_its_owner_may_look(set_pool):
+    """"{T}: Exile a card from your hand face down. You may look at it for as
+    long as it remains exiled."
+
+    CR 406.3 hides a face-down exiled card from **every** player, its owner
+    included - Knowledge Vault's controller cannot read its own pile. So the
+    second sentence is an effect with a per-seat answer, and the two halves are
+    asserted separately: the opponent still sees a card back, and the seat that
+    exiled it does not.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+
+    assert _w3g3_exile_one(game, scepter)
+
+    assert [c.name for c in game.players[0].hand] == ["Healing Salve"]
+    assert [c.name for c in game.players[0].exile] == ["Black Lotus"]
+    entry = linked_entries(scepter)[0]
+    assert entry["face_down"] is True and entry["looker_index"] == 0
+    assert [c.name for c in face_down_exiled_cards(game, 0, 1)] == ["Black Lotus"]
+    assert face_down_exiled_cards(game, 0, 0) == []
+    # With no viewer named the pile reads as the rules describe it, which is
+    # what Knowledge Vault's own serialization asks for.
+    assert [c.name for c in face_down_exiled_cards(game, 0)] == ["Black Lotus"]
+
+
+def test_gusthas_scepter_exile_is_mandatory_where_ice_cauldrons_is_an_offer(set_pool):
+    """The bare sentence has no "may" in it, so the prompt refuses a decline.
+
+    That distinction is the whole of what stops the ability resolving having
+    moved nothing: the pick shares its prompt with Ice Cauldron's *offered*
+    exile, whose stated default is to decline, and a headless seat taking that
+    default here would tap the artifact for no effect every turn.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    game.activate_permanent_ability(0, "Gustha's Scepter", permanent_index=0)
+    game._settle()
+
+    assert not game.confirm_exile_from_hand_choice(0, None)
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is not None
+    assert game.confirm_exile_from_hand_choice(0, 1)
+    game._settle()
+    assert [c.name for c in game.players[0].exile] == ["Healing Salve"]
+
+
+def test_gusthas_scepter_returns_one_chosen_card_and_leaves_the_rest(set_pool):
+    """"{T}: Return a card you own exiled with this artifact to your hand."
+
+    *One* card and the activator says which, where Knowledge Vault's linked
+    ability empties the pile - so the record is drained by exactly one entry
+    and the cards left behind are still exiled with the artifact.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+    _w3g3_exile_one(game, scepter)
+    assert [e["card"].name for e in linked_entries(scepter)] == [
+        "Black Lotus", "Healing Salve",
+    ]
+
+    scepter.tapped = False
+    game.activate_permanent_ability(
+        0, "Gustha's Scepter", permanent_index=0, ability_index=1
+    )
+    game._settle()
+    pick = game.pending_choice_of("linked_exile_return", 0)
+    assert pick is not None
+    assert game.live_linked_exile_return_choices(pick) == [0, 1]
+
+    assert game.confirm_linked_exile_return(0, 1)
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == ["Healing Salve"]
+    assert [c.name for c in game.players[0].exile] == ["Black Lotus"]
+    assert [e["card"].name for e in linked_entries(scepter)] == ["Black Lotus"]
+
+
+def test_gusthas_scepter_offers_only_the_cards_the_chooser_owns(set_pool):
+    """"a card **you own** exiled with this artifact". The restriction only
+    ever bites once somebody else is using the artifact, which is precisely
+    when it has to: a thief must not be able to pull the previous controller's
+    cards out of exile."""
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+
+    scepter.tapped = False
+    game.activate_permanent_ability(
+        0, "Gustha's Scepter", permanent_index=0, ability_index=1
+    )
+    game._settle()
+    pick = game.pending_choice_of("linked_exile_return", 0)
+    # Seat 1 owns nothing under the artifact, so the same record offers it
+    # nothing - asserted through the engine's own candidate rule, which is the
+    # list the renderer draws and the resolver checks.
+    pick.player_index = 1
+    assert game.live_linked_exile_return_choices(pick) == []
+
+
+def test_gusthas_scepter_bins_its_pile_when_the_artifact_leaves(set_pool):
+    """"When you lose control of this artifact, put all cards exiled with this
+    artifact into their owner's graveyard."
+
+    A permanent leaving the battlefield **is** its controller losing control of
+    it, and CR 603.10d makes the trigger look back in time - so it is still
+    there to fire although the artifact has gone. Without this the cards are
+    stranded in exile for the rest of the game.
+    """
+    game, scepter = _w3g3_scepter(set_pool)
+    _w3g3_exile_one(game, scepter)
+    _w3g3_exile_one(game, scepter)
+
+    game.remove_from_battlefield(scepter)
+    game.players[0].graveyard.append(scepter.card)
+    assert game.stack, "the lose-control trigger was announced"
+    game.resolve_top_of_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Gustha's Scepter", "Black Lotus", "Healing Salve",
+    ]
+    assert game.players[0].exile == []
+
+
+def test_gusthas_scepter_bins_its_pile_when_it_changes_hands(set_pool):
+    """The other half of the same event, and the reason there are two fire
+    sites: a control change is not a zone change (CR 613 layer 2 leaves the
+    permanent on the battlefield), so the leave transition cannot see it.
+
+    The cards go to their **owner's** graveyard - seat 0's - not to the new
+    controller's.
+    """
+    game, scepter = _w3g3_scepter(set_pool, hand=("Black Lotus",))
+    _w3g3_exile_one(game, scepter)
+
+    thief = _w3g3_put(game, 1, "Grizzly Bears")
+    game.take_control(scepter, 1, source=thief)
+
+    assert game.controller_index_of(scepter) == 1
+    assert game.stack, "the change of hands announced the trigger"
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
+    assert game.players[1].graveyard == []
+    assert game.players[0].exile == []
+
+
+def test_a_face_down_exile_with_no_permanent_to_link_to_does_not_happen(set_pool):
+    """CR 406.3 needs a record to mean anything, and the record lives on the
+    exiling permanent. With nothing to link to, the exile does not happen at
+    all rather than happening in full view - the same refusal
+    ``exile_top_of_library`` already makes one handler over."""
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+    from engine.game_types import OracleExecutionContext
+
+    game = _w3g3_duel()
+    game.players[0].hand = [_W3G3_LEA["Black Lotus"]]
+    instruction = lower_ability(
+        parse_line("Exile a card from your hand face down.")
+    )[0]
+    context = OracleExecutionContext(
+        card=_W3G3_LEA["Black Lotus"], caster=game.players[0],
+        target=game.players[1], source_permanent=None,
+    )
+    game._execute_oracle_instruction(instruction, context)
+
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is None
+    assert [c.name for c in game.players[0].hand] == ["Black Lotus"]
+
+
+def test_a_face_down_rider_on_any_other_exile_refuses(set_pool):
+    """The rider is implemented by exactly one branch, so every other reading
+    of it refuses rather than dropping it. An exile that silently happened face
+    *up* is the quiet kind of wrong: every player would be reading a card the
+    card says nobody may see."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line("Exile target creature face down."))
