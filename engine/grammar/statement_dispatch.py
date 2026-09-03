@@ -65,6 +65,7 @@ from .lowering import (
     _fused_prepare_then_interact,
     _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
+    _fused_cost_repeated_destroys,
     _lower_fight,
     _lower_destroy,
     _lower_discard,
@@ -749,6 +750,15 @@ def lower_statement(
             fused = fuse(statement.steps)
             if fused is not None:
                 return fused
+        # The one fuser that needs the recursion back, for
+        # `_lower_repeat_process`'s reason: its clauses may carry a rider ("…,
+        # and you gain 1 life") which is an arbitrary statement, and a lowering
+        # family cannot reach this dispatcher. Beside the others rather than in
+        # the loop above, because the loop's rows all take the steps and nothing
+        # else.
+        fused = _fused_cost_repeated_destroys(statement.steps, lower_statement)
+        if fused is not None:
+            return fused
         _refuse_unfused_distinctness(statement.steps)
         # The narrowing travels with the kind, as it does everywhere else it is
         # threaded: a trigger's noun phrase is as true of the second sentence of

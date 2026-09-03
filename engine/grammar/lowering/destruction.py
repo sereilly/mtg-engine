@@ -15,6 +15,7 @@ than assumed — so this is a family boundary and not a size cut.
 import dataclasses
 
 from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
+                             COST_TARGET_BASE, COST_TARGET_PER,
                              OracleInstruction)
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
@@ -22,9 +23,10 @@ from ...subject_filters import (
 from .. import ast
 from ..errors import LoweringError
 from ._common import (describe_independent_target_roles, _describe_several_targets,
-                      _describe_targets, _filter_payload, _full_mana_payload,
-                      _is_source, _names_several_targets, _restrictions_beyond,
+                      _describe_targets, _filter_payload, _is_source, _is_target,
+                      _names_several_targets, _restrictions_beyond,
                       is_mana_value_x)
+from ._records import optional_cost_key
 from ._events import (_RECORDED_PERMANENTS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent,
                       CHOSEN_PERMANENT, _BOUND_OBJECT_DELAYED_EVENTS)
@@ -470,6 +472,187 @@ def _lower_destroy(
     return (OracleInstruction("destroy_target_permanent", "", payload),)
 
 
+
+#: The filter keys ``destroy_target_permanent``'s several-target branch tests in
+#: full, and therefore the only ones a fused announcement may narrow by. The
+#: same set the ``_names_several_targets`` branch of :func:`_lower_destroy`
+#: states inline, named once because two readings of "what may a list of destroy
+#: targets be narrowed by" is one reading too many -- and the direction the
+#: second one drifts is a narrowing dropped from a sweep, which destroys
+#: permanents the card does not name.
+_SEVERAL_DESTROY_NARROWINGS = frozenset({
+    "card_types", "supertypes", "subtypes", "colors", "controller",
+    "other_than_source",
+})
+
+
+def _repeated_destroy_clause(
+    step: ast.Statement,
+) -> tuple[str, ast.Destroy, tuple[ast.Statement, ...]] | None:
+    """Split "**for each additional {1}{R} you paid,** destroy another target
+    artifact[, and <rider>]" into (offer, the destroy, the riders).
+
+    None for any other step, which is how the fuser below declines a sentence it
+    does not recognise instead of half-reading one.
+    """
+    if not isinstance(step, ast.ForEach):
+        return None
+    if not isinstance(step.iterator, ast.EachAdditionalCostPaid):
+        return None
+    body = step.effect
+    riders: tuple[ast.Statement, ...] = ()
+    if isinstance(body, ast.Sequence):
+        if not body.steps:
+            return None
+        body, riders = body.steps[0], body.steps[1:]
+    if not isinstance(body, ast.Destroy):
+        return None
+    return step.iterator.symbols, body, riders
+
+
+def _fused_cost_repeated_destroys(
+    steps: tuple[ast.Statement, ...],
+    lower_statement,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Destroy target artifact. **For each additional {1}{R} you paid, destroy
+    another target artifact. For each additional {1}{G} you paid, destroy
+    another target artifact, and you gain 1 life.**" (Primitive Justice.)
+
+    One announcement, not three. CR 601.2b announces the optional additional
+    costs and CR 601.2c then fixes the number of targets -- so by the time the
+    caster is asked what to destroy, the spell wants exactly
+    ``1 + n({1}{R}) + n({1}{G})`` artifacts, and the printed "**another**" makes
+    them distinct (CR 601.2c: "the same target can't be chosen multiple times
+    for any one instance of the word 'target'"). That is a *list*, which
+    ``destroy_target_permanent`` has resolved since Avalanche; what is new here
+    is only where its length comes from.
+
+    Fusing rather than a slot per clause, for :func:`_fused_two_target_pump`'s
+    reason one family over: three targeted destroys lowered as three steps all
+    resolve through ``_one_choice``, which reads the *first* entry of the target
+    list -- so the card would compile supported and destroy one artifact three
+    times. ``_refuse_unfused_distinctness`` refuses exactly that, and says in
+    its own docstring that a shape which grows a fused lowering is claimed above
+    it and never reaches it. This is that shape.
+
+    **The riders keep their loop and move behind the destroy.** "…, and you gain
+    1 life" happens once per {1}{G} paid, so it stays inside a ``for_each`` over
+    that offer; what it loses is its position *between* the destroys. Nothing
+    can observe the difference: no player receives priority inside a resolution
+    (CR 117.3b) and state-based actions are not checked until it ends
+    (CR 704.3), so the only ordering a spell's own steps can expose is one step
+    reading what an earlier one did -- and a life gain reads no artifact.
+
+    **Destroy only**, though the shape is the verb's to share: this is a several
+    -target announcement, and only a handler that resolves a *list* may be given
+    one (``_describe_several_targets`` states the rule and
+    ``_names_several_targets`` enforces it everywhere else). A second verb is one
+    branch here the day its handler reads a list; admitting one now would fuse
+    three targets onto a handler that reads the first.
+
+    Refuses rather than declines where the sentence is *nearly* this shape,
+    because a decline falls through to the unfused refusal and the card is then
+    reported unsupported for the wrong reason:
+
+    * a first clause printing "another" has no prior choice to differ from;
+    * a repeated clause that does **not** print it names a target CR 601.2c
+      would let collide with the first, which is the silent double destroy;
+    * clauses whose noun phrases differ are two announcements rather than one
+      list -- one filter cannot describe both, and the picker would offer
+      whichever noun the fuse happened to keep.
+    """
+    if len(steps) < 2:
+        return None
+    first, rest = steps[0], steps[1:]
+    if not isinstance(first, ast.Destroy) or first.delay or first.also_targets:
+        return None
+    if not _is_target(first.subject):
+        return None
+    repeats = [_repeated_destroy_clause(step) for step in rest]
+    if any(found is None for found in repeats):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        raise LoweringError(
+            'the first clause of a sentence cannot name "another" target',
+            node=first,
+        )
+    per_offer: dict[str, int] = {}
+    riders: list[OracleInstruction] = []
+    for offer, destroy, tail in repeats:
+        if destroy.delay or destroy.also_targets or not _is_target(destroy.subject):
+            return None
+        assert isinstance(destroy.subject, ast.TargetSpec)
+        if not destroy.subject.distinct_from_prior:
+            raise LoweringError(
+                "a destroy repeated per additional payment names a *new* target "
+                'only when it prints "another"', node=destroy,
+            )
+        if (
+            destroy.subject.filter != first.subject.filter
+            or destroy.no_regen != first.no_regen
+        ):
+            raise LoweringError(
+                "the clauses of one target announcement must name one noun "
+                "phrase", node=destroy,
+            )
+        key = optional_cost_key(offer)
+        if key in per_offer:
+            # Two clauses reading back one offer would each add to the count
+            # while the picker showed one number. ``cast_costs`` refuses the
+            # same collision on the announcing side, for the same reason: one
+            # key, one count, and no way to say which clause spent it.
+            raise LoweringError(
+                "one additional cost cannot size two target clauses",
+                node=destroy,
+            )
+        per_offer[key] = 1
+        if tail:
+            riders.append(
+                OracleInstruction(
+                    "for_each", "",
+                    {
+                        "iterator": {"repeat_from_cost": key},
+                        "effect": lower_statement(
+                            ast.Sequence(tail) if len(tail) > 1 else tail[0],
+                            frozenset(), whole_effect=False,
+                        ),
+                    },
+                )
+            )
+    filt = first.subject.filter
+    leftovers = _restrictions_beyond(filt, _SEVERAL_DESTROY_NARROWINGS)
+    if leftovers:
+        raise LoweringError(
+            "the several-target destroy cannot narrow by: " + ", ".join(leftovers),
+            node=first,
+        )
+    described = _filter_payload(filt)
+    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the several-target destroy cannot test this restriction", node=first
+        )
+    payload: dict[str, object] = dict(described)
+    if first.no_regen:
+        payload["bypass_regeneration"] = True
+    payload["targets"] = {
+        "quantifier": first.subject.quantifier,
+        "kind": "object",
+        "filter": _filter_payload(filt),
+        # The size of the announcement as the *arithmetic*, not as a number:
+        # what the caster paid is unknown until they announce it, and the
+        # picker, the cast gate and the AI all resolve it through one reader
+        # (``oracle_types.cost_target_count``).
+        "count": {COST_TARGET_BASE: 1, COST_TARGET_PER: per_offer},
+        # The printed "another" (CR 601.2c), carried rather than folded into the
+        # filter for ``_fused_two_target_pump``'s reason: it is a relation
+        # between slots, not a property of one permanent, so
+        # ``permanent_matches_filter`` could never test it.
+        "distinct": True,
+    }
+    return (OracleInstruction("destroy_target_permanent", "", payload), *riders)
+
+
 def _lower_destroy_of_their_choice(
     node: ast.Destroy, spec: ast.TargetSpec, event: str | None
 ) -> tuple[OracleInstruction, ...]:
@@ -713,98 +896,6 @@ def _lower_activated_delayed_destroy(
             **({"binds_target": True} if inner.kind == "destroy_bound_permanent" else {}),
         }),
     )
-
-
-def _lower_destroy_unless_pay(
-    node: ast.DestroyUnlessPay, event: str | None = None
-) -> tuple[OracleInstruction, ...]:
-    """"At the beginning of your upkeep, destroy this creature unless you pay
-    {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to
-    you." (Cosmic Horror.)
-
-    Fused, like the sacrifice twin above and for the same reason: the upkeep
-    dispatcher is keyed on (trigger condition, instruction kind) pairs whose
-    handlers run the whole pay-or-consequence prompt. The event is threaded
-    down here rather than inferred, exactly as `_lower_damage_unless_pay` does
-    it — the handler takes its seat and its mana from the upkeep context, so
-    under any other trigger there is nothing to dispatch to and the line must
-    refuse rather than compile into a card that does nothing.
-    """
-    if not _is_source(node.subject):
-        raise LoweringError(
-            "the pay-or-destroy prompt destroys the ability's own source", node=node
-        )
-    if event != "upkeep_self":
-        raise LoweringError(
-            f"no handler pairs {event!r} with a pay-or-destroy prompt", node=node
-        )
-    payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
-    if node.damage_if_destroyed is not None:
-        payload["damage_if_destroyed"] = node.damage_if_destroyed
-    # "…{1} for each music counter on it" — the same `per_counter` key
-    # `engine/cumulative_upkeep.scaled_cost` already reads, so the escalation is
-    # one implementation rather than a second multiplier beside it.
-    if node.per_counter is not None:
-        payload["per_counter"] = node.per_counter
-    return (OracleInstruction("upkeep_pay_or_destroy_self", "", payload),)
-
-
-def _lower_destroy_each_unless_paid(
-    node: ast.DestroyEachUnlessPaid,
-) -> tuple[OracleInstruction, ...]:
-    """"For each land, destroy that land unless any player pays 1 life."
-    (Cleansing.)
-
-    One instruction rather than a sweep plus a rider: the offer is made about
-    one permanent at a time, so the loop and the buyout are the same effect and
-    nothing but the handler can hold the record of which members were bought.
-
-    The noun phrase is gated by ``object_only_filter`` for the reason the
-    forced-sacrifice prompt is: the loop walks every battlefield with no
-    observer seat and no source to compare against, so a narrowing the matcher
-    could only answer relative to one of those would be dropped — and a dropped
-    narrowing on a sweep takes the board rather than doing less.
-
-    **"…that dealt damage to this creature this turn" is the one exception, and
-    it is an exception because it is not a narrowing of the sweep — it *is* the
-    set.** "When this creature dies, … for each creature that dealt damage to
-    this creature this turn, destroy that creature unless its controller pays 2
-    life." (Giant Albatross.) A relation to the ability's own source, which
-    ``to_payload`` has no key for (``_common.CONDITIONALLY_EMITTED_FIELDS``
-    names it so that every lowering but the one written for it refuses the
-    phrase); it is lifted off the filter here and carried as its own payload
-    key, exactly as Brine Hag's base-P/T rewrite carries the same relation. The
-    handler reads the record the damage seam kept on the victim
-    (``damaged_by_sources_this_turn``) rather than scanning a battlefield, which
-    is the only reading available at all: this trigger fires on a death, so by
-    resolution the source is a card in a graveyard (CR 603.10, idiom 6).
-    """
-    filt = node.filter
-    from_damage_record = filt.dealt_damage_to_source_this_turn
-    if from_damage_record:
-        filt = dataclasses.replace(filt, dealt_damage_to_source_this_turn=False)
-    described = object_only_filter(_filter_payload(filt))
-    if described is None:
-        raise LoweringError(
-            "the per-permanent buyout cannot test this restriction", node=node
-        )
-    if node.payer not in ("any_player", "controller"):
-        raise LoweringError(
-            f"no buyout is offered to {node.payer!r}", node=node
-        )
-    payload: dict[str, object] = {
-        "filter": dict(described), "life": int(node.life),
-    }
-    if node.payer != "any_player":
-        # Absent still means "any player", so Cleansing's payload stays
-        # byte-identical and the handler's APNAP round is what an absent key
-        # keeps meaning.
-        payload["payer"] = node.payer
-    if from_damage_record:
-        payload["from_damage_record"] = True
-    if node.no_regen:
-        payload["bypass_regeneration"] = True
-    return (OracleInstruction("destroy_each_unless_life_paid", "", payload),)
 
 
 def _lower_for_each_destroyed(
