@@ -1157,7 +1157,16 @@ card reaches either change: every other several-target destroy in the pool is a
 sweep or announces its count off an X. After it: `refused_casts` empty,
 `interaction_count` 383 → 412.
 
-**Verification.** 12,599 passed / 0 failed. `support_report.py --set ALL`
+**And the entry beside it found two shipped cards.** `_SLOT_DISPOSITION` had no
+row for `exile_target_permanent`, so Dust to Dust (DRK, 5ED) and Ashes to Ashes
+— the pool's only two several-target exiles, both printing a bare noun with no
+side in it — fell to the same single-seat fallback and had the AI exiling **its
+own** two artifacts and its own two creatures, every time it drew either. No
+instrument could see it: both compile supported, carry no hollow line, claim
+every sentence and derive a correct picker. Fixed with the row and pinned two
+ways (an invented card, and a pool sweep naming the two real ones).
+
+**Verification.** 12,602 passed / 0 failed. `support_report.py --set ALL`
 **144/144, 0 unsupported**; `--hollow-lines` 0; `picker_sweep.py --set ALL` 0
 findings; `parse_coverage.py --set ALL` unchanged at 2 unclaimed sentences on 1
 card (Suffocation). The whole-pool differential moved **exactly one program of
