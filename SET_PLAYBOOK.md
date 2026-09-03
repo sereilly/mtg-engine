@@ -288,12 +288,37 @@ its scope now measured.** Both new producers matched the reader they fed —
 Joven's Ferrets writes a *list* under a key whose reader iterates, and W2G1's
 sacrifice writes the *scalar* shape — so nothing raised and nothing forced the
 decision. Which is the item's own point restated: it is safe by which cards
-exist, and two more cards existing did not change that. The current spread is
-**17 producer sites** across `lowering/` and **13 reader sites** across
-`handlers/`, with exactly one reader normalising. The next set that adds a
+exist, and two more cards existing did not change that. The next set that adds a
 producer feeding a reader of the *other* shape is the one that pays for it;
 whoever takes it should take it as the arity decision rather than as a bug fix,
 because the bug will present as a single raised exception on a single card.
+
+**Alliances grew it again without settling it, and the growth is the argument
+for taking it.** The spread went from 17 producers / 13 readers to **20
+producers across `lowering/` and 20 reader sites across eight files in
+`handlers/`** (combat, control_changes, damage, destruction, permanent_choices,
+prevention, pump, tapping), still with **exactly one** reader normalising, in
+`pump.py`, whose own comment calls itself "the *local* half of a wider question".
+Three sets have now paid interest on this and none has paid the principal. The
+readers are no longer a short list somebody can hold in their head while adding
+a producer, which is the condition under which "safe by which cards exist"
+stops being safe.
+
+**Added at ALL's Phase 6: an optional cost has no picker, and two cost kinds now
+want the same one.** `web/_cost_picker_spec` models a **mandatory** additional
+cost — "you will pay {1}{R}" — and both of the optional kinds this engine has
+grown need an *offer* shape instead: "cast for {1}{R}, or plus {1}{R}, or plus
+{1}{G}?", with a per-offer counter, because one printed sentence can offer two
+independently (Primitive Justice's `{1}{R} **and/or** {1}{G} any number of
+times"). W1G4 recorded it for CR 118.9's alternative cost and W3G1 hit it again
+for CR 601.2b's repeated additional cost. Nothing is broken: the only
+announcement today's client can make is the no-offers one, which is the cast the
+existing picker already gets right, so every affected card is playable at its
+printed default and unplayable at any other. **Phase 3 of the next set that
+prints either kind clears it**, as four parts — the offer prompt, a payability
+ceiling per offer computed from pool and board, a several-target collection
+whose maximum is recomputed from the answer through
+`oracle_types.cost_target_count`, and sending the map on the cast action.
 
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
