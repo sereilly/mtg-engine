@@ -12,6 +12,66 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **171**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**25 unclaimed sentence(s) across 19 supported card(s).**
+
+- **Afiya Grove**
+  - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
+  - `when this enchantment has no +1/+1 counters on it, sacrifice it`
+- **Aleatory**
+  - `cast this spell only during combat after blockers are declared`
+- **Dazzling Beauty**
+  - `target unblocked attacking creature becomes blocked`
+- **Energy Vortex**
+  - `at the beginning of the chosen player's upkeep, this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment`
+  - `{x}: put x vortex counters on this enchantment. activate only during your upkeep`
+- **Forsaken Wastes**
+  - `players can't gain life`
+  - `whenever this enchantment becomes the target of a spell, that spell's controller loses 5 life`
+- **Grim Feast**
+  - `whenever a creature is put into an opponent's graveyard from the battlefield, you gain life equal to its toughness`
+- **Kaervek's Torch**
+  - `as long as kaervek's torch is on the stack, spells that target it cost {2} more to cast`
+- **Lure of Prey**
+  - `cast this spell only if an opponent cast a creature spell this turn`
+- **Malignant Growth**
+  - `at the beginning of each opponent's draw step, that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way`
+- **Mangara's Equity**
+  - `as this enchantment enters, choose black or red`
+  - `whenever a creature of the chosen color deals damage to you or a white creature you control, this enchantment deals that much damage to that creature`
+- **Phyrexian Purge**
+  - `this spell costs 3 life more to cast for each target`
+- **Phyrexian Tribute**
+  - `as an additional cost to cast this spell, sacrifice two creatures`
+- **Prismatic Circle**
+  - `{1}: the next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage`
+- **Roots of Life**
+  - `as this enchantment enters, choose island or swamp`
+- **Soul Echo**
+  - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
+- **Soul Rend**
+  - `a creature destroyed this way can't be regenerated`
+- **Telim'Tor's Edict**
+  - `exile target permanent you own or control`
+- **Tombstone Stairwell**
+  - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
+  - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`
+  - `when this enchantment leaves the battlefield, destroy all tokens created with this enchantment. they can't be regenerated`
+- **Torrent of Lava**
+  - `as long as torrent of lava is on the stack, each creature has "{t}: prevent the next 1 damage that would be dealt to this creature by torrent of lava this turn."`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

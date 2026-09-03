@@ -967,7 +967,16 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # Vito reaches. A kind lives in one table, because the shadowing guard's
     # canonical examples are keyed by kind and an example can only be a wording
     # of one trigger word.
-    ("becomes_target",              r"when (?:this|.+) becomes the target"),
+    # "becomes_target" was here, spelled "when (?:this|.+) becomes the target",
+    # with no dispatcher and — until Mirage — no card. Skulking Ghost prints the
+    # "when" wording ("When this creature becomes the target of a spell or
+    # ability, sacrifice it"), which this row swallowed into a kind nothing
+    # announces: the card compiled supported and never sacrificed itself.
+    # CR 603.1 makes the two trigger words one ability, so the row is gone and
+    # the "when" fallback carries the line to `self_becomes_target` in the
+    # whenever table, which has the filter and the fire site
+    # (`_announce_target_triggers`). Same fix, and the same reason, as the
+    # `you_gain_life` row above.
     # "When you remove the last intervention counter from this enchantment, …"
     # (Divine Intervention.) The counter word is payload, like the threshold
     # trigger above it. Announced from the same state-based sweep and for the

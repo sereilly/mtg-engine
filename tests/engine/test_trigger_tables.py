@@ -227,7 +227,6 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # token's.
     "created_token_leaves_battlefield": "when the token leaves the battlefield",
     "dies": "when this creature dies",
-    "becomes_target": "when this creature becomes the target of a spell",
     # Legends' two, added at its promotion. Both are announced away from a call
     # site — the first from the record `named_counters.remove_counters` writes
     # (removal has four sites), the second from the discard seam, which is the

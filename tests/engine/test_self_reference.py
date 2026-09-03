@@ -83,6 +83,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     Hazduhr instead"). That is the read this ratchet exists to force, and it is
     the whole yield of the HML ingest — four cards whose lines would otherwise
     have refused at a name no reader knew.
+
+    Mirage added two more of the same case, read the same way: Hivis of the
+    Scale gains control "for as long as you control Hivis and Hivis remains
+    tapped", and Purraj of Urborg puts a counter "on Purraj". Both are the
+    legend naming itself; neither first word ("Hivis", "Purraj") is a word the
+    game uses to describe objects.
     """
     changed = {
         card.name
@@ -99,4 +105,6 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Hazduhr the Abbot",
         "Rashka the Slayer",
         "Veldrane of Sengir",
+        "Hivis of the Scale",
+        "Purraj of Urborg",
     }
