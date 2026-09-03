@@ -782,11 +782,20 @@ mean by it:
 | Set | Cards | New to pool | New & unsupported | New per unit work | Lines/distinct | Blocked by exactly one line |
 | --- | --: | --: | --: | --: | --: | --: |
 | 5ED *(shipped since)* | 434 | **0** | 0 | — | — | — |
+| ALL *(shipped since)* | 144 | 144 | 82 | 1.4 | 1.02 | 61 of 82 |
 | 6ED | 335 | 152 | 53 | 2.6 | **1.00** | 48 of 53 |
-| ALL | 144 | 144 | 82 | 1.4 | 1.02 | 61 of 82 |
 
-(TMP/MIR/VIS/WTH were not re-fetched — none is a near-term candidate and their
-pre-ICE rows all read ~1.7–2.2 new-per-unit with no repeated sentence.)
+**This table is now out of date in the way it always goes out of date, and the
+row that matters is missing.** MIR/VIS/WTH were skipped here on the grounds
+that "none is a near-term candidate"; Alliances shipping makes **Mirage the
+next set by release order** (1996-10-08, 335 printings, 313 new to the pool),
+and its row has never been measured against a modern compiler — its last
+reading is pre-ICE. So **Phase 1 opens with the census, not with the ingest**:
+fetch MIR, VIS and WTH to a scratch directory (never `cards/`), measure with
+`support_report.refusals_report`, and read the fragment census beside the
+sentence one. Five consecutive sets have had the sentence census read 1.00–1.02
+— "no leverage" — and been wrong every time; the fragment census is what found
+Alliances' land cycle and Homelands' untap-denial family.
 
 **Fifth Edition shipped 2026-09-02, the day of this census.** Its post-ICE row
 read 58 new cards, and those 58 were exactly its FEM and HML reprints (29
@@ -855,7 +864,7 @@ clause and three already compiled. Read both beside the **picker sweep** (run
 at Phase 1 it turns a promotion-gate finding into a work-list entry; at HML it
 found a shipped Aura no player could cast).
 
-**Three structural gaps bound everything after Innistrad**, and the first is a
+**Two structural gaps bound everything after Innistrad**, and the first is a
 hard wall rather than a backlog. `card_loader.REQUIRED_FIELDS` demands a
 top-level `mana_cost`, which a transform card does not have, so a double-faced
 card raises `ValueError` on *load*. `_load_faces` populates
@@ -864,9 +873,17 @@ colour-identity derivation — the compiler has never seen a second face. That i
 CR 709/710/712/714/715/720, 45 rules, none implemented; it already costs Origins
 5 cards and M19 one. Second, keyword abilities stand at **28** of CR 702's 192
 (`vocabulary.IMPLEMENTED_KEYWORDS`; cumulative upkeep was the twenty-eighth).
-Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` implements
-*additional* costs well, and the phrase appears in the engine only in comments —
-which blocks the buyback/flashback/evoke/madness family wholesale.
+**The third gap is closed.** "Alternative costs (CR 118.9) do not exist —
+the phrase appears in the engine only in comments" was true until Alliances,
+whose pitch cycle paid for it: `engine/alternative_costs.py` reads the
+"You may &lt;clauses&gt; rather than pay this spell's mana cost" template, and five
+cards cast through it (Force of Will, Pyrokinesis, Contagion, Bounty of the
+Hunt, Scars of the Veteran). The buyback/flashback/evoke/madness family is no
+longer blocked *wholesale*; each still needs its own keyword, which is the
+second gap above. What the subsystem still lacks is a **client picker** — the
+engine charges an alternative or repeated cost correctly and the browser can
+only announce the default — recorded as a named four-part item in
+SET_PLAYBOOK.md's Known gaps.
 
 ## Alliances (ALL) — shipped
 
