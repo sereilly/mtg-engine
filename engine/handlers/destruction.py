@@ -577,11 +577,33 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             game.players.index(context.caster) if context.caster in game.players
             else None
         )
+        # "up to two target creatures **that player** controls" (Fatal Lore).
+        # `subject_matches` refuses this key outright and says why — it names a
+        # seat the *announcement* picked, not one a board read can make — and a
+        # refusal here is not a narrowing dropped, it is **every** target
+        # rejected: the branch would destroy nothing and log itself resolved.
+        # Stripped and asked as its own question, exactly as the singular branch
+        # below and the sweep above already do.
+        that_player_seat: int | None = None
+        if filters.get("controller") == "that_player":
+            that_player_seat = frozen_that_player_seat(game, context)
+            if that_player_seat is None:
+                game.log.append(
+                    f"{card.name}: no player for 'that player' to name"
+                )
+                return True, "resolved"
+            filters = {k: v for k, v in filters.items() if k != "controller"}
         chosen = resolve_target_permanents(
             game, context,
-            predicate=lambda perm: subject_matches(
-                game, perm, filters,
-                observer=observer, source=source_permanent,
+            predicate=lambda perm: (
+                (
+                    that_player_seat is None
+                    or game.controller_index_of(perm) == that_player_seat
+                )
+                and subject_matches(
+                    game, perm, filters,
+                    observer=observer, source=source_permanent,
+                )
             ),
         )
         died: list[Permanent] = []

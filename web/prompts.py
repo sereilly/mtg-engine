@@ -1210,9 +1210,10 @@ def _opponent_mode_choice(ctx: PromptContext, choices: list) -> dict:
 
     The labels and nothing else. Its twin above carries each mode's candidates
     because the seat that picks the mode also picks its target in the same
-    announcement (CR 601.2c); here those are two different players, which the
-    compiler refuses outright - so a mode reaching this prompt never targets and
-    there is nothing to offer beside the label.
+    announcement (CR 601.2c); here those are two different players, so the
+    targets are asked for *after* this answer, through
+    ``modal_mode_targets`` below, and there is nothing to offer beside the
+    label.
     """
     choice = choices[0]
     data = choice.data
@@ -1222,6 +1223,39 @@ def _opponent_mode_choice(ctx: PromptContext, choices: list) -> dict:
         "modes": [
             {"index": index, "label": label}
             for index, label in enumerate(data.get("labels") or [])
+        ],
+    }
+
+
+@prompt_renderer("modal_mode_targets")
+def _modal_mode_targets(ctx: PromptContext, choices: list) -> dict:
+    """The targets of the mode an opponent chose (Fatal Lore), offered to the
+    **caster** — the other half of ``opponent_mode_choice`` above.
+
+    Rendered from the list the engine froze when it armed the prompt rather
+    than from a live board read: targets are chosen once, at announcement
+    (CR 601.2c), and the answer is checked against that same list. A renderer
+    that re-enumerated would offer a permanent the engine would then refuse.
+
+    ``max_targets`` is sent for ``permanent_set_choice``'s reason — the client
+    cannot derive a ceiling that is smaller than the candidate list, and "up to
+    two" is what the card printed.
+    """
+    choice = choices[0]
+    data = choice.data
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data.get("card_name", ""),
+        "mode_label": data.get("mode_label", ""),
+        "max_targets": int(data.get("max_targets", 1)),
+        "candidates": [
+            {
+                "seat": entry["seat"],
+                "index": entry["permanent_index"],
+                "id": entry["permanent_id"],
+                "name": entry["name"],
+            }
+            for entry in (data.get("targets") or ())
         ],
     }
 

@@ -821,10 +821,10 @@ def _action_opponent_mode_choice_confirm(session, req, seat_type):
     # puts the choice inside the announcement - so this arrives while the spell
     # is already on the stack and nobody has had priority.
     #
-    # A mode index and nothing else. The compiler refuses a card whose
-    # opponent-chosen mode also names the caster's targets, because there is no
-    # announcement shape for a target chosen after somebody else picks the mode
-    # - so unlike `mode_choice_confirm` above there is never a target to send.
+    # A mode index and nothing else — unlike `mode_choice_confirm` above, which
+    # carries the mode's target because there the same seat picks both. Here
+    # they are two players, so the caster's targets arrive afterwards through
+    # `modal_mode_targets_confirm` below (CR 601.2c after CR 601.2b).
     if req.hand_index is None:
         raise HTTPException(status_code=400, detail="hand_index (mode index) is required")
     if not session.game.resolve_pending_choice(
@@ -834,6 +834,30 @@ def _action_opponent_mode_choice_confirm(session, req, seat_type):
             status_code=400,
             detail="no opponent mode choice is pending for you, or that mode is not offered",
         )
+
+@action_handler("modal_mode_targets_confirm")
+def _action_modal_mode_targets_confirm(session, req, seat_type):
+    # The other half of the prompt above (Fatal Lore). CR 601.2c names the
+    # targets *after* CR 601.2b picks the mode, and on this card those two steps
+    # belong to different players — so the caster answers here, once the
+    # opponent's mode is known, still inside the announcement nobody has had
+    # priority in.
+    #
+    # By stable id and as a list: "up to two" is a ceiling, and an empty list is
+    # a legal answer. The engine re-checks every id against the list it offered,
+    # so a client cannot widen the announcement by sending more.
+    pending = next(
+        (c for c in session.game.pending_choices_of("modal_mode_targets")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no modal targets pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_modal_mode_targets(
+        req.seat, req.target_permanent_ids or []
+    ):
+        raise HTTPException(status_code=400, detail="invalid target selection")
 
 @action_handler("loyalty_recipient_confirm")
 def _action_loyalty_recipient_confirm(session, req, seat_type):

@@ -1505,21 +1505,65 @@ def test_700_2e_a_non_interactive_chooser_answers_where_the_offer_stands():
     assert game.stack[-1].chosen_mode_index == 0
 
 
-@pytest.mark.cr("700.2e", "601.2c")
-def test_700_2e_a_mode_that_also_names_the_casters_targets_is_refused():
-    """601.2c announces targets after 601.2b picks the mode, and both are the
-    caster's steps — but here the mode is somebody else's, so the caster would
-    have to name a target before knowing which mode it was for. There is no
-    announcement shape for that, and admitting it would resolve a targeted mode
-    with no target at all."""
+@pytest.mark.cr("700.2e", "601.2c", "601.2i")
+def test_700_2e_a_mode_that_targets_asks_the_caster_after_the_mode_is_known():
+    """CR 601.2c announces targets after CR 601.2b picks the mode, and here the
+    two steps belong to different players — so the caster cannot name a target
+    while casting: they do not yet know which mode they would be naming it for.
+
+    The announcement shape is the mode prompt *followed by* a target prompt on
+    the caster, both inside CR 601.2i's window: neither player has priority
+    between them, so the whole thing is still one uninterruptible moment. This
+    used to be refused at compile time instead.
+    """
     lore = _mk_card(
         "Opponent Chooses Targeted Test",
         "Sorcery",
         "An opponent chooses one —\n• You draw a card.\n"
         "• Destroy target creature.",
     )
+    victim = _mk_card("Targeted Bear", "Creature — Bear", "")
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0, 1}
+    game._put_permanent_onto_battlefield(1, Permanent(card=victim), None)
+    bear = list(game.controlled_by(p2))[0]
 
-    program = compile_card_oracle(lore)
+    assert compile_card_oracle(lore).supported
+    assert game.queue_from_hand(0, "Opponent Chooses Targeted Test").supported
+    # The chooser answers first, and only then is the caster asked.
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("opponent_mode_choice", 1)
+    ]
+    assert game.confirm_opponent_mode_choice(1, 1)
 
-    assert not program.supported
-    assert "cannot also name the caster's targets" in program.reason
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("modal_mode_targets", 0)
+    ]
+    assert game.confirm_modal_mode_targets(0, [bear.permanent_id])
+    game._settle()
+
+    assert list(game.controlled_by(p2)) == []
+
+
+@pytest.mark.cr("700.2e", "601.2c")
+def test_700_2e_a_mode_that_names_no_target_arms_no_target_prompt():
+    """The prompt is armed off the *chosen* mode, so picking the untargeted one
+    leaves nothing to answer — which is every mode of the two shipped cards
+    that print this head and never target.
+    """
+    lore = _mk_card(
+        "Opponent Chooses Untargeted Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n"
+        "• Destroy target creature.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0, 1}
+
+    assert game.queue_from_hand(0, "Opponent Chooses Untargeted Test").supported
+    assert game.confirm_opponent_mode_choice(1, 0)
+
+    assert game.pending_choices == []

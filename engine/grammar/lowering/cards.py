@@ -22,6 +22,8 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
+    _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
 
@@ -436,6 +438,29 @@ def _lower_draw(
                 OracleInstruction(
                     "each_player_draws_up_to_cards", "",
                     {"amount": _amount_payload(node.count), "actor": node.player.kind},
+                ),
+            )
+        # "**That player** draws up to three cards." (Fatal Lore, inside the
+        # mode an opponent chose.) One seat rather than a set, which is
+        # `draw_up_to_cards` — the kind Arcane Denial already uses, reading its
+        # drawer off a *record* rather than off `context.target`, and
+        # `EVENT_SUBJECT_PLAYER` is that record for every phrase whose seat an
+        # announcement froze. So the sentence needs no handler of its own: the
+        # ceiling prompt, the seat lookup and the CR 614 draw are all already
+        # behind that kind.
+        #
+        # Gated on the event, exactly as the mill and the damage readings of the
+        # same two words are: with nothing frozen, "that player" names whoever
+        # the resolution happened to be carrying, which is a choice the card
+        # never offers.
+        if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+            return (
+                OracleInstruction(
+                    "draw_up_to_cards", "",
+                    {
+                        "amount": _amount_payload(node.count),
+                        "drawer_seat_record": EVENT_SUBJECT_PLAYER,
+                    },
                 ),
             )
         # Every other drawer still refuses: read as an amount they would draw

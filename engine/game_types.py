@@ -131,8 +131,12 @@ class ChosenMode:
 
     index: int
     target_player_index: int | None = None
-    target_permanent_index: int | None = None
-    target_permanent_id: int | None = None
+    # A list when the mode names several targets ("up to two target creatures",
+    # Fatal Lore) — the same shape, and for the same reason, that `StackItem`
+    # carries below: several chosen objects may sit on two battlefields, which
+    # one seat index cannot say.
+    target_permanent_index: int | list[int] | None = None
+    target_permanent_id: int | list[int | None] | None = None
     # Resolved against the stack at cast time, exactly as the item's own
     # ``target_stack_item`` is: a stack index is a position in a list that
     # anything resolving in response renumbers.
