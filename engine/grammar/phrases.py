@@ -476,6 +476,16 @@ def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     # only the block-pair lowerings do.
     ordinal = _accept_pair_ordinal(stream)
     noun = stream.peek_word()
+    # "**That permanent** doesn't untap during its controller's untap step…"
+    # (Amber Prison, after "Tap target artifact, creature, or land"). The
+    # generic noun is the restatement with *no* narrowing in it, which is what
+    # a sentence back-referencing a choice across three card types has to
+    # print — "that artifact" would name one of them. It carries no card type
+    # for exactly that reason, and a lowering that reads the field sees the
+    # empty tuple the phrase means rather than a word it would have to test.
+    if noun == "permanent":
+        stream.advance()
+        return ast.TargetSpec(ordinal or "that", ast.ObjectFilter())
     if noun is None or noun not in CARD_TYPES:
         stream.reset(mark)
         return None

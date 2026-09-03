@@ -17,6 +17,7 @@ from ...restricted_mana import ACTIVATE, PaymentPurpose
 from ...activation_restrictions import (
     activation_denial,
     activations_allowed_each_turn,
+    global_activation_ban,
     at_activation_limit,
     printed_activation_caps,
     mark_activated_this_turn,
@@ -587,6 +588,25 @@ class AbilityActivationMixin:
         # were substring tests: everything the chain did not list was silently
         # unenforced, which is how Caged Zombie drained two life on an empty
         # graveyard while reporting supported.
+        # "Activated abilities of creatures can't be activated." (Cursed
+        # Totem.) The *board* half of CR 602.5, read before any cost is paid
+        # and before the per-line clauses below: this one is not printed on the
+        # ability at all, so `activation_denial` — which is handed one line and
+        # rightly asks only about it — cannot see it.
+        #
+        # No mana-ability exception. CR 605 makes a mana ability an activated
+        # ability like any other and the sentence names none, which is the
+        # whole of what this card does to a Bird of Paradise. The Aura clause
+        # further down prints its exception out loud and keeps it.
+        banned_by = global_activation_ban(self, permanent)
+        if banned_by is not None:
+            details = (
+                f"{permanent.card.name}'s activated abilities can't be "
+                f"activated ({banned_by})"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         denial = activation_denial(self, controller_index, permanent, ability.source_line or "")
         if denial is not None:
             details = f"{permanent.card.name}: {denial}"
