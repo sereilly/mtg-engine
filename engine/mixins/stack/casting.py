@@ -270,6 +270,44 @@ def _divided_total(payload: dict, x_value: int | None) -> int:
 
 
 
+def _named_divided_targets(
+    card: CardDefinition, from_zone: str, target_player_index,
+    target_permanent_index, target_permanent_ids,
+) -> int:
+    """How many targets a divided spell's caster named *outside* the division.
+
+    CR 601.2d asks for a division "among one or more targets", and the division
+    list is not the only way to name one: every scripted duel, most of this
+    engine's own tests and the four "any target" burn spells still announce
+    through ``target_permanent_index`` / ``target_player_index``, which is a
+    lawful one-target announcement (that target takes the whole amount). So the
+    floor in :func:`division_refusal` refuses a caster who named *nothing*
+    rather than one who named a target the older way.
+
+    **Whether a seat is a target at all is the spec's answer, not this
+    function's.** "…among any number of **target creatures**" (Fire Covenant,
+    Pyrokinesis) and "…among all creatures target opponent controls" (Dwarven
+    Catapult) name no player, so a `target_player_index` on one of those is the
+    seat every cast carries rather than a target — read through the same
+    ``creatures_only`` / ``land_filter`` narrowing ``legality._enumerate_targets``
+    consults before it offers a face, so the gate and the picker cannot
+    disagree about what a legal target is.
+    """
+    named = len([pid for pid in (target_permanent_ids or []) if isinstance(pid, int)])
+    if isinstance(target_permanent_index, list):
+        named += len([i for i in target_permanent_index if isinstance(i, int)])
+    elif isinstance(target_permanent_index, int):
+        named += 1
+    if named or target_player_index is None:
+        return named
+    spec = derive_cast_spec(
+        card, compile_card_oracle(card), from_zone=from_zone
+    ) or {}
+    if spec.get("creatures_only") or spec.get("land_filter"):
+        return 0
+    return 1
+
+
 def _x_mana_actually_spent(
     allocation: dict[str, int], cost: dict[str, int]
 ) -> dict[str, int]:
@@ -1058,13 +1096,27 @@ class SpellCastingMixin:
         # Below the X resolution because a division of X cannot be measured
         # until X is a number — the same ordering CR 601.2 puts them in, and the
         # same lesson Fire Covenant's "pay X life" taught the cost gate below.
-        if divided_targets is not None:
-            found = divided_description(compile_card_oracle(card).instructions)
-            refusal = None if found is None else division_refusal(
+        #
+        # **Asked of every divided spell, not only of one that announced a
+        # division.** The gate used to run under `if divided_targets is not
+        # None`, so a caster who announced *nothing* — no division, no target —
+        # walked past it: Contagion and Bounty of the Hunt were castable with
+        # both battlefields empty, and Spoils of War, shipped, with them.
+        # CR 601.2d divides "among one or more targets", so that is an illegal
+        # proposal, and the refusal has to be here rather than at resolution
+        # because CR 601.2e returns the game to before a proposal and a
+        # resolution-time answer would already have spent the mana.
+        found = divided_description(compile_card_oracle(card).instructions)
+        if found is not None:
+            refusal = division_refusal(
                 _divided_total(found[0], resolved_x_value),
-                divided_targets,
+                divided_targets or (),
                 division=found[1].get("division", EVENLY),
                 max_targets=found[1].get("max_targets"),
+                named_targets=_named_divided_targets(
+                    card, from_zone, target_player_index,
+                    target_permanent_index, target_permanent_ids,
+                ),
             )
             if refusal is not None:
                 self.log.append(f"{card.name}: {refusal}")

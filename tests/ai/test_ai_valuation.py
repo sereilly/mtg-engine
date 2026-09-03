@@ -285,3 +285,76 @@ def test_a_mana_ability_is_never_activated_for_its_own_sake(all_cards):
         action = choose_activation_action(game, 0)
 
         assert action is None, f"{permanent_name} was tapped for mana with nothing to spend it on"
+
+
+# --- W3-divided: which board a divided spell's shares land on ---
+
+
+def test_a_divided_spells_side_is_read_off_the_counter_it_places(
+    catalog_by_name, set_pool,
+):
+    """CR 601.2d's division is announced as the spell is cast, so the AI has to
+    know *whose* creatures it is dividing among before anything resolves.
+
+    Contagion and Bounty of the Hunt compile to one instruction kind
+    (``add_counter_to_target``) whose migration category, ``counters``, says
+    "your own board" for both -- which is right for a +1/+1 and backwards for a
+    -2/-1. Only the sign of the counter (CR 122.1a) tells them apart, so that is
+    what ``divided_shape`` reads, and an invented card pins it: the derivation
+    has to reach a name the engine has never seen.
+    """
+    from engine.ai_valuation import divided_shape
+
+    invented = _mk_card(
+        "Grudge of the Fen", "{2}{B}", "Sorcery",
+        "Distribute two -1/-1 counters among one or two target creatures.",
+    )
+    assert divided_shape(compile_card_oracle(invented)).side == "opponent"
+
+    named = dict(catalog_by_name)
+    named.update(set_pool("ALL"))
+    sides = {
+        name: divided_shape(compile_card_oracle(named[name])).side
+        for name in (
+            "Spoils of War", "Bounty of the Hunt", "Contagion",
+            "Pyrokinesis", "Fireball", "Dwarven Catapult",
+        )
+    }
+    assert sides == {
+        "Spoils of War": "you",
+        "Bounty of the Hunt": "you",
+        "Contagion": "opponent",
+        "Pyrokinesis": "opponent",
+        "Fireball": "opponent",
+        "Dwarven Catapult": "opponent",
+    }
+
+
+def test_every_divided_card_in_the_pool_is_described(catalog):
+    """The sweep behind the derivation: every card whose compiled program
+    divides something gets a side, so none of them is announced by a policy with
+    no opinion about which board it is aiming at -- and ``divided_shape``
+    answers None for every card that divides nothing, which is what keeps
+    ``choose_divided_targets`` inert for the rest of the pool.
+
+    Over the *shipped* pool, which is what ``catalog`` is: Alliances is still
+    ``measured``, and its three divided cards are pinned by name above and
+    exercised in ``tests/sets/test_all_instants.py``.
+    """
+    from engine.ai_valuation import divided_shape
+    from engine.divided_damage import divided_description
+
+    described = []
+    for card in catalog:
+        program = compile_card_oracle(card)
+        shape = divided_shape(program)
+        assert (shape is not None) is (
+            divided_description(program.instructions) is not None
+        ), card.name
+        if shape is not None:
+            assert shape.side is not None, f"{card.name} divides with no side"
+            described.append(card.name)
+    assert sorted(described) == [
+        "Dwarven Catapult", "Fiery Justice", "Fire Covenant", "Fireball",
+        "Meteor Shower", "Pyrotechnics", "Spoils of War",
+    ], described

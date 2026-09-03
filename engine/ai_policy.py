@@ -11,6 +11,7 @@ from .ai_valuation import (
     castable_commanders,
     counters_a_spell,
     destroyed_permanent_filter,
+    divided_shape,
     is_mana_ability,
     mana_ability_amount,
     returns_creature_to_hand,
@@ -69,6 +70,15 @@ class CastAction:
     # cost. False on every candidate this policy builds from a payable mana
     # cost, which is all of them but one shape — see `_alternative_cost_cast`.
     alternative_cost: bool = False
+    # CR 601.2d's announcement, for a spell that divides damage or counters
+    # among its targets: ``(seat, permanent index or None[, share])`` per
+    # target, the same list the browser's division prompt sends. The field did
+    # not exist, so **every** divided spell the AI cast announced no division at
+    # all — Spoils of War, Contagion and Bounty of the Hunt resolved putting no
+    # counters anywhere, and Pyrokinesis, Fire Covenant and Dwarven Catapult,
+    # which name only creatures, dealt their damage to a player's face. See
+    # `choose_divided_targets`.
+    divided_targets: list[tuple] | None = None
 
 
 @dataclass(frozen=True)
@@ -197,11 +207,25 @@ def _cast_candidate(
     target = _choose_target_for_spell(card, player_index, game, x_value)
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
+    divided_targets: list[tuple] | None = None
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
             return None  # Aura spells require a legal target (Rule 115.1b)
         target, target_permanent_index = aura_choice
+    elif (divided := choose_divided_targets(game, player_index, card, x_value)) is not None:
+        # CR 601.2d, and it is the *whole* target choice for a divided spell —
+        # asked before the two choosers below rather than beside them, because
+        # Contagion and Bounty of the Hunt print a target count and so reach
+        # `_choose_several_targets`, which would put a second, unrelated list of
+        # targets on the same cast. The division is what the handler reads.
+        if not divided:
+            # No lawful announcement exists (CR 601.2d wants one target or
+            # more). Skipped rather than cast: the cast gate refuses it, and a
+            # seat that re-proposes a refused card every turn is what
+            # `simulate_ai_games.py`'s `refused_casts` counts.
+            return None
+        divided_targets = list(divided)
     else:
         roles = _choose_role_targets(game, player_index, card)
         if roles is not None:
@@ -255,6 +279,7 @@ def _cast_candidate(
         target_permanent_ids=target_permanent_ids,
         from_zone=from_zone,
         alternative_cost=alternative_cost,
+        divided_targets=divided_targets,
     )
 
 
@@ -789,6 +814,13 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
         x_value = _pick_x_value(game, player, card)
         if x_value == 0:
             continue
+        # CR 601.2d, for the same reason `_cast_candidate` asks it: Pyrokinesis
+        # and Contagion are instants with an alternative cost, so this is the
+        # chooser that offers them during combat — and a divided spell proposed
+        # with no division is refused at announcement.
+        divided = choose_divided_targets(game, player_index, card, x_value)
+        if divided is not None and not divided:
+            continue
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs:
@@ -815,6 +847,7 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
             land_tap_indices=tap_indices,
             score=score,
             hand_index=hand_index,
+            divided_targets=list(divided) if divided else None,
         )
         if _is_better_cast(candidate, best):
             best = candidate
@@ -1286,6 +1319,122 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index
     return None
+
+
+def _even_shares(total: int, count: int) -> list[int]:
+    """*total* split *count* ways, remainder to the earliest.
+
+    CR 601.2d wants every target to receive at least one, so the remainder is
+    spread rather than dropped — the same starting division
+    ``evenStartingDivision`` offers a human in the browser, which is where this
+    arithmetic already lived.
+    """
+    base, left = divmod(total, count)
+    return [base + (1 if index < left else 0) for index in range(count)]
+
+
+def choose_divided_targets(
+    game: Game, caster_index: int, card: CardDefinition, x_value: int | None = None
+):
+    """CR 601.2d's announcement for a divided spell: which targets, and each
+    one's share.
+
+    Returns None when *card* divides nothing — every other card in the pool —
+    and ``()`` when it divides and no legal announcement exists, which is a
+    refusal rather than an absence, the same way ``_choose_role_targets``
+    answers: CR 601.2d needs one target or more, and the cast gate refuses a
+    spell announced with none, so proposing it would be a turn spent on an
+    action the game then rejects.
+
+    **Which board the shares land on is derived, never named**:
+    ``ai_valuation.divided_shape`` reads the sign of the counter the compiled
+    program places, so Bounty of the Hunt's ``+1/+1`` goes on the caster's own
+    creatures and Contagion's ``-2/-1`` on the opponent's, and a card printed
+    tomorrow with either template is aimed correctly the day it is ingested.
+
+    Three stated policies sit on top of that, and only the first is forced:
+
+    * **Damage concentrates.** A share is measured against a toughness, so four
+      damage split one apiece kills nothing; the whole total goes on the first
+      candidate the enumeration offers, which is a player's face where the
+      printed noun admits one. That is exactly what the engine's older
+      single-target path already did for Fireball, so the four "any target"
+      burn spells keep the play they had and gain only a lawful announcement.
+    * **Counters spread**, as far as the total and the printed target count
+      allow — every counter placed is a counter either way, and Contagion and
+      Bounty of the Hunt print a target count precisely because spreading is
+      the point of them.
+    * **A whole-board division takes the whole board** — "…among all creatures
+      target opponent controls" (Dwarven Catapult) chooses nothing, so every
+      candidate on the named side is announced and the even split does the rest.
+    """
+    program = compile_card_oracle(card)
+    shape = divided_shape(program)
+    if shape is None:
+        return None
+    spec = game.cast_target_spec(caster_index, card)
+    if spec.get("kind") != "divided":
+        # A modal or otherwise re-derived spec that does not describe the
+        # division. Nothing to announce, and the cast gate reads the same spec.
+        return None
+    total = _divided_announcement_total(spec, x_value)
+    candidates = [
+        entry for entry in (spec.get("valid_targets") or ())
+        if _divided_candidate_seat(entry) is not None
+    ]
+    wanted = [
+        entry for entry in candidates
+        if shape.side is None
+        or (_divided_candidate_seat(entry) == caster_index) == (shape.side == "you")
+    ] or candidates
+    if not wanted or total <= 0:
+        # No legal target, or nothing to divide (Spoils of War with an empty
+        # opponent graveyard defines X as 0). Either way there is no lawful
+        # announcement, and CR 601.2e would return the game to before the cast.
+        return ()
+    if shape.whole_board:
+        chosen = wanted
+    elif shape.thresholded:
+        chosen = wanted[:1]
+    else:
+        maximum = spec.get("max_targets")
+        room = total if not isinstance(maximum, int) else min(maximum, total)
+        chosen = wanted[:max(1, room)]
+    shares = _even_shares(total, len(chosen))
+    announced = spec.get("division") == "chosen"
+    return [
+        # A two-tuple where the card divides *evenly*: CR 601.2d asks for an
+        # announcement only from a caster who chooses the division, and
+        # `division_refusal` refuses shares announced for a spell that does not.
+        (entry["seat"], entry.get("index")) if not announced
+        else (entry["seat"], entry.get("index"), share)
+        for entry, share in zip(chosen, shares)
+    ]
+
+
+def _divided_candidate_seat(entry) -> int | None:
+    """The seat one enumerated divided target sits on, or None if the entry is
+    neither a permanent nor a player's face."""
+    if not isinstance(entry, dict) or entry.get("kind") not in ("permanent", "player"):
+        return None
+    seat = entry.get("seat")
+    return seat if isinstance(seat, int) else None
+
+
+def _divided_announcement_total(spec: dict, x_value: int | None) -> int:
+    """How much a divided spell has to divide, once X is known.
+
+    The browser's ``dividedDivisionTotal`` in the terms this side speaks: the
+    printed amount where the card prints one, the game's number where the card
+    defines its own X (CR 107.3c — Spoils of War counts a graveyard, and the
+    caster never announces it), and otherwise whatever X the policy picked.
+    """
+    bonus = int(spec.get("division_x_bonus") or 0)
+    if isinstance(spec.get("division_total"), int):
+        return spec["division_total"] + bonus
+    if isinstance(spec.get("defined_x"), int):
+        return spec["defined_x"] + bonus
+    return int(x_value or 0) + bonus
 
 
 def _choose_role_targets(

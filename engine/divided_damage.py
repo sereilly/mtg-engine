@@ -70,6 +70,7 @@ def announced_division(entries) -> list[int] | None:
 
 def division_refusal(
     total: int, entries, *, division: str, max_targets: int | None = None,
+    named_targets: int = 0,
 ) -> str | None:
     """Why *entries*' announced division is illegal, or None (CR 601.2d).
 
@@ -94,9 +95,22 @@ def division_refusal(
     the amounts below: an even split over too many targets is the same illegal
     proposal, and the fallback that excuses an absent division must not excuse
     an over-long list.
+
+    An absent *target list* **is** a refusal, and that is the one thing an
+    absent division is not. CR 601.2d divides "among **one or more** targets",
+    so a divided spell proposed with no target at all is an illegal proposal and
+    CR 601.2e returns the game to the moment before it — where it used to be
+    cast, for its full cost, into a resolution with nothing to divide among.
+    *named_targets* is how many targets the caller named through the engine's
+    older single-target channel (``target_permanent_index``, or a player's face
+    for a spell whose printed noun admits one). That channel still announces a
+    lawful division — one target taking the whole amount — so it is counted
+    rather than refused; naming nothing at all is what this rejects.
     """
     if not entries:
-        return None
+        return None if named_targets else (
+            "a divided spell must have at least one target (CR 601.2d)"
+        )
     if max_targets is not None and len(entries) > max_targets:
         return (
             f"this spell has at most {max_targets} targets "
@@ -133,8 +147,8 @@ def divide(total: int, entries, *, division: str) -> list[tuple[int, int | None,
     ]
 
 
-def divided_description(instructions) -> tuple[dict, dict] | None:
-    """``(payload, targets description)`` of a program's divided step, or None.
+def divided_instruction(instructions):
+    """The one instruction in *instructions* whose targets are divided, or None.
 
     Walks a ``sequence`` (Fiery Justice divides its damage in step 0 and gives
     life in step 1), because the division belongs to the *card* and the caster
@@ -143,21 +157,36 @@ def divided_description(instructions) -> tuple[dict, dict] | None:
     Here rather than in the casting path so the announcement gate and the
     handler read the same description — a gate that found the division a
     different way is a gate that can pass an announcement the handler then
-    divides differently.
+    divides differently. The AI reads it too, for the *kind*: which board a
+    divided effect wants is a question about what the instruction does, and a
+    second walk to find it would be a second answer to "which step divides".
     """
     for instruction in instructions:
         if instruction.kind == "sequence":
-            found = divided_description(instruction.payload.get("steps") or ())
+            found = divided_instruction(instruction.payload.get("steps") or ())
             if found is not None:
                 return found
             continue
         targets = instruction.payload.get("targets")
         if isinstance(targets, dict) and targets.get("kind") == "divided":
-            return instruction.payload, targets
+            return instruction
     return None
+
+
+def divided_description(instructions) -> tuple[dict, dict] | None:
+    """``(payload, targets description)`` of a program's divided step, or None.
+
+    :func:`divided_instruction`'s answer, unpacked for the two callers that want
+    the payload and the description rather than the instruction itself.
+    """
+    instruction = divided_instruction(instructions)
+    if instruction is None:
+        return None
+    return instruction.payload, instruction.payload["targets"]
 
 
 __all__ = [
     "CHOSEN", "DIVIDED_TARGETS", "EVENLY", "announced_division", "divide",
-    "divided_description", "divided_entry", "division_refusal",
+    "divided_description", "divided_entry", "divided_instruction",
+    "division_refusal",
 ]

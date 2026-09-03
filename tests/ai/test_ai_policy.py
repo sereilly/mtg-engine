@@ -399,3 +399,52 @@ def test_the_policy_still_offers_an_ability_a_permission_only_widens(catalog_by_
 
     assert action is not None
     assert action.permanent_name == efreet.card.name
+
+
+# --- W3-divided: the AI announces the division it is about to need ---
+
+
+def test_the_cast_action_carries_the_division_it_announced(set_pool):
+    """CR 601.2d is part of announcing the spell, so it has to be on the action
+    the executors forward -- and ``CastAction`` had no field for it.
+
+    Every divided spell the AI cast therefore arrived with no division at all:
+    Contagion resolved putting no counters anywhere, and the executors had
+    nothing to drop because nothing was ever chosen. The field is checked here
+    rather than only through a resolution, because an executor that forgets to
+    forward it is the same bug one layer down.
+    """
+    pool = set_pool("ALL")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Contagion"]],
+        battlefield=[Permanent(card=pool["Gorilla Chieftain"])],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=pool["Gorilla Chieftain"])],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Contagion", action
+    assert action.divided_targets == [(1, 0, 2)], action.divided_targets
+
+
+def test_a_divided_spell_with_no_legal_target_is_not_proposed(set_pool):
+    """The other half of the same change, and the one the playbook warns about:
+    a floor that refuses the cast without a policy that announces one would just
+    move the failure to ``refused_casts`` -- a seat proposing the same card
+    every turn and being declined every turn.
+
+    With no creature anywhere, Contagion has no lawful announcement (CR 601.2d
+    divides among one target or more), so it is never offered.
+    """
+    pool = set_pool("ALL")
+    p1 = PlayerState(name="P1", hand=[pool["Contagion"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert choose_cast_action(game, 0) is None

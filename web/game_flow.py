@@ -153,6 +153,9 @@ def _ai_step(session: Session) -> bool:
                 # mana cost cannot be paid, so dropping it here would turn every
                 # such cast into an "insufficient mana" refusal.
                 alternative_cost=cast_action.alternative_cost,
+                # CR 601.2d, forwarded for the same reason: the division is part
+                # of the announcement, and a cast that drops it is refused.
+                divided_targets=cast_action.divided_targets,
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
@@ -178,6 +181,9 @@ def _ai_step(session: Session) -> bool:
                 # mana cost cannot be paid, so dropping it here would turn every
                 # such cast into an "insufficient mana" refusal.
                 alternative_cost=cast_action.alternative_cost,
+                # CR 601.2d, forwarded for the same reason: the division is part
+                # of the announcement, and a cast that drops it is refused.
+                divided_targets=cast_action.divided_targets,
             )
             _auto_resolve_ai_pending(session)
 
@@ -214,6 +220,12 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
             card_to_cast.name,
             target_player_index=instant_action.target_player_index,
             x_value=instant_action.x_value,
+            # CR 601.2d. This executor forwards less of the announcement than
+            # the main-phase one does (a chosen permanent never reaches it,
+            # which is a gap of its own), but a divided spell dropped here is
+            # not merely aimed badly — it is refused at announcement, so the
+            # seat would offer the same instant every combat and do nothing.
+            divided_targets=instant_action.divided_targets,
         )
         if result.supported:
             game.note_priority_action_taken(seat)
