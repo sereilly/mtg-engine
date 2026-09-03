@@ -47,7 +47,7 @@ prints.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 
@@ -281,4 +281,74 @@ def cast_by_index(game, index: int):
     casts = ledger(game).casts
     if 0 <= index < len(casts):
         return casts[index]
+    return None
+
+
+def casts_that_damaged_seat(game, seat: int) -> list[CastEntry]:
+    """The casts that dealt damage to *seat* this turn, oldest first.
+
+    "The **last** red instant or sorcery spell that dealt damage to you this
+    turn" (Suffocation) is two of this file's existing facts joined, not a new
+    record: ``DamageEntry.recipient_seat`` is who was hit and
+    ``DamageEntry.source_cast`` is which cast hit them, and the entries are
+    appended in the order the damage happened. So "last" is the end of this
+    list and needs no timestamp.
+
+    The join runs through :attr:`DamageLedger.casts` rather than returning the
+    ``source_cast`` objects directly, because that list is what says the object
+    was a **spell somebody cast**. ``_source_cast`` matches a resolving object
+    whose ``card`` *is* the damage's source, and a triggered ability whose
+    source permanent has left the battlefield reaches its handler with the
+    permanent's card as the source — which would pass that test while being no
+    spell at all.
+    """
+    record = ledger(game)
+    by_item = {id(cast.item): cast for cast in record.casts}
+    hits: list[CastEntry] = []
+    for entry in record.entries:
+        if entry.recipient_seat != seat or entry.source_cast is None:
+            continue
+        cast = by_item.get(id(entry.source_cast))
+        if cast is not None:
+            hits.append(cast)
+    return hits
+
+
+def _cast_as_it_was(game, cast: CastEntry):
+    """*cast*'s card, carrying the colour the **spell** was (CR 105.2).
+
+    A spell on the stack can be recoloured (Chaoslace, Purelace) and the card
+    underneath cannot say so, so "a **red** instant or sorcery spell" asked of
+    the printed face would miss a Chaoslaced one and find a Purelaced Lightning
+    Bolt. ``_stack_item_colors`` is the engine's one answer to "what colour is
+    that spell", and the ``StackItem`` this entry keeps is exactly what it
+    reads — so the override is folded onto the card here and the *one* card
+    matcher answers the whole phrase, rather than a colour arm being spelled a
+    second time beside it.
+    """
+    colours = tuple(game._stack_item_colors(cast.item))
+    if colours == tuple(getattr(cast.card, "colors", ()) or ()):
+        return cast.card
+    return replace(cast.card, colors=colours)
+
+
+def last_cast_that_damaged_seat(game, seat: int, described: dict) -> CastEntry | None:
+    """The last cast matching *described* that dealt damage to *seat* this turn.
+
+    *described* is a noun-phrase payload the **card** matcher can answer
+    (``subject_filters.card_only_filter`` is the gate its two callers pass it
+    through): a spell is not a permanent, so CR 613.1 leaves the printed face
+    as the whole of what there is to ask, and this is the same reader a discard
+    cost's "a red or green card" goes through.
+
+    One function for two questions — ``cast_restrictions`` asks whether there
+    *was* one and the damage handler asks *whose* it was — because a gate and
+    the effect it admits disagreeing about which spell the sentence names is
+    the failure both of them exist to prevent.
+    """
+    from .handlers._common import _card_matches_filter
+
+    for cast in reversed(casts_that_damaged_seat(game, seat)):
+        if _card_matches_filter(_cast_as_it_was(game, cast), described):
+            return cast
     return None

@@ -63,6 +63,7 @@ from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
+                                      cast_damage_source_line,
                                       global_cast_ban_line)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
@@ -255,6 +256,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # scan; the claim asks the reader that answers it, for the reason above.
     ("cast_restrictions.py (board absence)",
      lambda s: cast_absence_line(s) is not None),
+    # The same half of CR 601.3 asked about a *window* rather than a board —
+    # "Cast this spell only if you were dealt damage this turn by a red instant
+    # or sorcery spell" (Suffocation). Its own channel because it is its own
+    # row and its own reader; the claim asks the reader that answers it, for
+    # the reason above.
+    ("cast_restrictions.py (damage-source window)",
+     lambda s: cast_damage_source_line(s) is not None),
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by

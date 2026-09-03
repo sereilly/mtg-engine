@@ -128,6 +128,14 @@
   ]
  },
  {
+  "card": "Bounty of the Hunt",
+  "clause": "distribute three +1/+1 counters among one, two, or three target creatures. for each +1/+1 counter you put on a creature this way, remove a +1/+1 counter from that creature at the beginning of the next cleanup step",
+  "ignored": [
+   "or",
+   "target"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -161,6 +169,13 @@
   "clause": "you may have it assign no combat damage this turn. if you do, defending player discards a card at random",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Contagion",
+  "clause": "distribute two -2/-1 counters among one or two target creatures",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -253,6 +268,13 @@
   "clause": "target dwarf creature gains mountainwalk until end of turn",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Dystopia",
+  "clause": "that player sacrifices a green or white permanent of their choice",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -449,11 +471,25 @@
   ]
  },
  {
+  "card": "Gorilla War Cry",
+  "clause": "all creatures gain menace until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Greater Werewolf",
   "clause": "put a -0/-2 counter on each creature blocking or blocked by this creature",
   "ignored": [
    "each",
    "creature"
+  ]
+ },
+ {
+  "card": "Hail Storm",
+  "clause": "hail storm deals 2 damage to each attacking creature and 1 damage to you and each creature you control",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -564,6 +600,13 @@
   ]
  },
  {
+  "card": "Kjeldoran Home Guard",
+  "clause": "if this creature attacked or blocked this combat, put a -0/-1 counter on this creature and create a 0/1 white deserter creature token",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Land's Edge",
   "clause": "if the discarded card was a land card, this enchantment deals 2 damage to target player or planeswalker",
   "ignored": [
@@ -621,6 +664,21 @@
   ]
  },
  {
+  "card": "Misfortune",
+  "clause": "you put a +1/+1 counter on each creature you control and gain 4 life",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Misfortune",
+  "clause": "you put a -1/-1 counter on each creature that player controls and misfortune deals 4 damage to that player",
+  "ignored": [
+   "each",
+   "misfortune"
+  ]
+ },
+ {
   "card": "Mishra's Factory",
   "clause": "target assembly-worker creature gets +1/+1 until end of turn",
   "ignored": [
@@ -642,8 +700,22 @@
   ]
  },
  {
+  "card": "Nature's Chosen",
+  "clause": "untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Nevinyrral's Disk",
   "clause": "destroy all artifacts, creatures, and enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Omen of Fire",
+  "clause": "return all islands to their owners' hands. each player sacrifices a plains or a white permanent of their choice for each white permanent they control",
   "ignored": [
    "all"
   ]
@@ -677,6 +749,20 @@
   ]
  },
  {
+  "card": "Phantasmal Sphere",
+  "clause": "put a +1/+1 counter on this creature, then sacrifice this creature unless you pay {1} for each +1/+1 counter on it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Phantasmal Sphere",
+  "clause": "target opponent creates an x/x blue orb creature token with flying, where x is the number of +1/+1 counters on this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Power Leak",
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
   "ignored": [
@@ -688,6 +774,13 @@
   "clause": "pyroclasm deals 2 damage to each creature",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Pyrokinesis",
+  "clause": "pyrokinesis deals 4 damage divided as you choose among any number of target creatures",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -731,6 +824,13 @@
   ]
  },
  {
+  "card": "Rogue Skycaptain",
+  "clause": "put a wage counter on this creature. you may pay {2} for each wage counter on it. if you don't, remove all wage counters from this creature and an opponent gains control of it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Runesword",
   "clause": "target attacking creature gets +2/+0 until end of turn. when that creature leaves the battlefield this turn, sacrifice this artifact. if the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. if a creature dealt damage by the targeted creature would die this turn, exile that creature instead",
   "ignored": [
@@ -756,6 +856,20 @@
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Scarab of the Unseen",
+  "clause": "return all auras attached to target permanent you own to their owners' hands. draw a card at the beginning of the next turn's upkeep",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Scars of the Veteran",
+  "clause": "prevent the next 7 damage that would be dealt to any target this turn. if it's a creature, put a +0/+1 counter on it for each 1 damage prevented this way at the beginning of the next end step",
+  "ignored": [
+   "1"
   ]
  },
  {
@@ -844,6 +958,13 @@
   ]
  },
  {
+  "card": "Spiny Starfish",
+  "clause": "if this creature regenerated this turn, create a 0/1 blue starfish creature token for each time it regenerated this turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Spitting Slug",
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [
@@ -881,6 +1002,28 @@
   ]
  },
  {
+  "card": "Stromgald Spy",
+  "clause": "you may have defending player play with their hand revealed for as long as this creature remains on the battlefield. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Suffocation",
+  "clause": "suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
+  "card": "Sworn Defender",
+  "clause": "this creature's power becomes the toughness of target creature blocking or being blocked by this creature minus 1 until end of turn, and its toughness becomes 1 plus the power of that creature until end of turn",
+  "ignored": [
+   "being",
+   "creature"
+  ]
+ },
+ {
   "card": "Sylvan Library",
   "clause": "you may draw two additional cards. if you do, choose two cards in your hand drawn this turn. for each of those cards, pay 4 life or put the card on top of your library",
   "ignored": [
@@ -892,6 +1035,13 @@
   "clause": "gain control of all creatures blocking this creature for as long as you control this creature",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Tidal Control",
+  "clause": "counter target red or green spell",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -1034,6 +1184,13 @@
   "ignored": [
    "card,",
    "card,"
+  ]
+ },
+ {
+  "card": "Wandering Mage",
+  "clause": "prevent the next 1 damage that would be dealt to target cleric or wizard creature this turn",
+  "ignored": [
+   "creature"
   ]
  },
  {

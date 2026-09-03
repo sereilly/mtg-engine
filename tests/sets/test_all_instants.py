@@ -1123,45 +1123,6 @@ def test_gorilla_war_cry_gives_menace_to_both_players_creatures():
     )
 
 
-def test_suffocation_is_declined_naming_four_parts():
-    """Its cast restriction and its damage sentence are the same missing
-    record, read at two moments. Both remain unclaimed, and both would be
-    *silent* if admitted: a cast gate nothing enforces is a spell castable when
-    the card forbids it, and a recipient nothing resolves is 4 damage to
-    somebody the card never named.
-
-    1. **A per-seat record of what dealt damage to you this turn, in order.**
-       ``PlayerState.damage_taken_this_turn`` is a total and
-       ``damaged_by_sources_this_turn`` lives on *permanents*; neither can
-       answer "the **last** red instant or sorcery **spell**". The fire site
-       exists and is single (``Game._on_player_dealt_damage``), and the seat is
-       already derivable there through ``damage_events.damage_source_seat`` —
-       so what is missing is the field, its per-turn clear beside
-       ``damage_taken_this_turn``'s in ``turn_management``, and the write.
-    2. **A `cast_restrictions.py` row for "only if you were dealt damage this
-       turn by <noun phrase>".** Textual like every row in that table, and the
-       noun phrase reads with the existing card matcher once the record above
-       holds card definitions.
-    3. **A `PlayerRef` kind for "the controller of the last <noun phrase> that
-       dealt damage to you this turn".** The grammar has `that_player` (a seat
-       an event froze) and `target_player` (a seat the spell chose); this is
-       neither - it is a seat read out of a *history* at resolution, which no
-       referent in `ast/_references.py` names today.
-    4. **The `deal_damage` recipient arm behind it**, resolving that referent
-       and dealing nothing when the record is empty - which cannot happen while
-       part 2 gates the cast, but must be right on its own because CR 608.2b
-       lets the board change between announcement and resolution.
-
-    Parts 1 and 2 are what another group is most likely to build incidentally:
-    the record is the same shape several "damaged you this turn" cards want.
-    """
-    program = compile_card_oracle(_w3g5_from("ALL", "Suffocation"))
-    # It compiles supported on its delayed draw plus `SUPPORTED_SPELL_PATTERNS`;
-    # what this asserts is that neither remaining sentence produced anything.
-    kinds = [instruction.kind for instruction in program.instructions]
-    assert "deal_damage" not in kinds
-
-
 # --- W3G2: modes, counters and granted abilities ---
 #
 # Martyrdom grants a whole printed ability (CR 113.3) and then says who may use
@@ -1614,3 +1575,185 @@ def test_a_divided_spell_naming_no_target_at_all_is_refused(set_pool):
     assert (game.players[0].life, game.players[1].life) == (20, 20)
     assert not game.stack
 # --- end W3-divided ---
+
+
+# --- W3-gate: the promotion blockers ---
+#
+# Suffocation was declined by W3G5 naming four missing parts, and two of them
+# were already built. ``engine/damage_ledger.py`` has kept every damage event of
+# the turn beside the cast that dealt it since Backdraft, and
+# ``subject_filters.card_only_filter`` + ``handlers/_common._card_matches_filter``
+# are the printed-face matcher a spell needs (CR 613.1 gives a spell no computed
+# characteristics). So the card is a *reader* of two existing records plus the
+# grammar that points at them, which is why it landed at the gate rather than
+# needing a round.
+
+from engine import Game as _w3gate_game_cls  # noqa: E402
+from engine.cast_restrictions import (  # noqa: E402
+    cast_damage_source_line as _w3gate_damage_window,
+)
+from engine.grammar import parse_line as _w3gate_parse_line  # noqa: E402
+from engine.models import Permanent as _w3gate_permanent_cls  # noqa: E402
+from engine.models import PlayerState as _w3gate_player_cls  # noqa: E402
+
+
+def _w3gate_table(seats: int = 2):
+    game = _w3gate_game_cls(
+        players=[_w3gate_player_cls(name=f"P{i}") for i in range(seats)]
+    )
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w3gate_bolt(game, set_pool, caster: int, victim: int, card: str = "Lightning Bolt"):
+    """*caster* resolves one damage spell at *victim*'s face."""
+    game.players[caster].hand.append(set_pool("LEA")[card])
+    assert game.cast_from_hand(caster, card, target_player_index=victim).supported
+    game.resolve_stack()
+
+
+def test_suffocation_is_refused_until_a_red_instant_or_sorcery_damaged_you(set_pool):
+    """CR 601.3: the printed gate, enforced — and enforced on the right events.
+
+    The failure this closes is the silent one the set has now found four times:
+    a printed restriction nobody checks is a spell castable when the card
+    forbids it. Three refusals and one acceptance, because the clause narrows on
+    three separate axes and dropping any of them widens the card:
+
+    * nothing has dealt damage at all;
+    * a **blue** instant did (colour, CR 105.2);
+    * a **red permanent** did (a source that is no spell at all, CR 111 —
+      "instant or sorcery **spell**" is what the ledger's cast record answers
+      and a board read never could).
+    """
+    game = _w3gate_table()
+    game.players[0].hand.append(set_pool("ALL")["Suffocation"])
+    refused = game.cast_from_hand(0, "Suffocation")
+    assert not refused.supported
+    assert "were dealt damage this turn by a red instant or sorcery spell" in (
+        refused.details
+    )
+
+    # A blue instant, dealing damage to the same face.
+    _w3gate_bolt(game, set_pool, caster=1, victim=0, card="Psionic Blast")
+    assert game.players[0].life < 20, "the blue instant really did hit P0"
+    assert not game.cast_from_hand(0, "Suffocation").supported
+
+    # A red *permanent*: right colour, and not a spell.
+    giant = _w3gate_permanent_cls(card=set_pool("LEA")["Hill Giant"])
+    giant.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(1, giant, None)
+    assert "R" in giant.card.colors
+    game._deal_damage_to_player(game.players[0], 2, source=giant)
+    assert not game.cast_from_hand(0, "Suffocation").supported
+
+    # And now the event the card names.
+    before = game.players[1].life
+    _w3gate_bolt(game, set_pool, caster=1, victim=0)
+    allowed = game.cast_from_hand(0, "Suffocation")
+    assert allowed.supported, allowed.details
+    game.resolve_stack()
+    assert game.players[1].life == before - 4, (
+        "4 damage to the controller of the spell that dealt it, not to a face "
+        "the resolution context happened to carry"
+    )
+
+
+def test_suffocation_reads_the_last_red_spell_not_the_first(set_pool):
+    """"The **last** red instant or sorcery spell that dealt damage to you" is
+    an ordering question, and only a record kept in event order can answer it.
+
+    Three seats, because in a duel every wrong answer is the same seat: P1 and
+    P2 each land a red spell on P0, and the card names P2.
+    """
+    game = _w3gate_table(3)
+    _w3gate_bolt(game, set_pool, caster=1, victim=0)
+    game.players[2].hand.append(set_pool("LEA")["Fireball"])
+    assert game.cast_from_hand(
+        2, "Fireball", target_player_index=0, x_value=2
+    ).supported
+    game.resolve_stack()
+    lives = [player.life for player in game.players]
+
+    game.players[0].hand.append(set_pool("ALL")["Suffocation"])
+    assert game.cast_from_hand(0, "Suffocation").supported
+    game.resolve_stack()
+
+    assert [player.life for player in game.players] == [
+        lives[0], lives[1], lives[2] - 4,
+    ], "the last red spell's controller, not the first one's"
+
+
+def test_the_damage_window_is_this_turn_and_nothing_older(set_pool):
+    """The ledger's lifetime *is* the clause's: "this turn" is one window, and a
+    record outliving it would let the card be cast off last turn's board."""
+    game = _w3gate_table()
+    _w3gate_bolt(game, set_pool, caster=1, victim=0)
+    game.players[0].hand.append(set_pool("ALL")["Suffocation"])
+    assert game.cast_from_hand(0, "Suffocation").supported
+    game.resolve_stack()
+
+    game.start_turn(1)
+    game.players[0].hand.append(set_pool("ALL")["Suffocation"])
+    assert not game.cast_from_hand(0, "Suffocation").supported
+
+
+def test_suffocation_deals_nothing_when_the_record_names_nobody(set_pool):
+    """CR 608.2b: the cast gate and the effect are asked at different moments.
+
+    The gate makes an empty record unreachable from a hand, so this empties it
+    between announcement and resolution — the window the rule opens — and the
+    spell must resolve having dealt nothing rather than falling through to a
+    face the resolution context happened to carry. Written because the branch
+    is otherwise unreachable and therefore untested, which is how a fall-through
+    survives.
+    """
+    game = _w3gate_table()
+    _w3gate_bolt(game, set_pool, caster=1, victim=0)
+    lives = [player.life for player in game.players]
+    game.players[0].hand.append(set_pool("ALL")["Suffocation"])
+    # `queue_from_hand` runs the same CR 601.3 gate and stops at CR 601.2i, so
+    # the spell is on the stack with the gate already satisfied — which is the
+    # only place the window this test needs exists.
+    assert game.queue_from_hand(0, "Suffocation").supported
+    assert [item.card.name for item in game.stack] == ["Suffocation"]
+
+    game.damage_ledger.clear()
+    game.resolve_stack()
+
+    assert [player.life for player in game.players] == lives
+    assert any("no damage dealt" in line for line in game.log)
+    assert [card.name for card in game.players[0].graveyard] == ["Suffocation"]
+
+
+def test_the_window_and_its_referent_are_payload_not_a_card_name(set_pool):
+    """Alliances ships at zero name-keyed hooks, and this is the proof for the
+    two readers Suffocation needed.
+
+    Both halves of the card are one printed noun phrase read twice — once by the
+    cast gate and once by the damage recipient — so an invented printing naming
+    a *blue* source, or an artifact one, works with no code at all. A hook would
+    have bought exactly one card.
+    """
+    invented = (
+        "cast this spell only if you were dealt damage this turn by "
+        "a blue instant or sorcery spell"
+    )
+    read = _w3gate_damage_window(invented)
+    assert read is not None
+    assert read[0] == {"type_filter": ["instant", "sorcery"], "color_filter": "U"}
+
+    node = _w3gate_parse_line(
+        "This spell deals 4 damage to the controller of the last blue instant "
+        "or sorcery spell that dealt damage to you this turn."
+    )
+    recipient = node.statement.recipients[0]
+    assert recipient.kind == "last_damager_controller"
+    assert recipient.last_damager.colors == ("U",)
+
+    # And the shipped card still reads through the same two readers.
+    printed = [
+        line.lower().rstrip(".")
+        for line in set_pool("ALL")["Suffocation"].oracle_text.splitlines()
+    ]
+    assert _w3gate_damage_window(printed[0])[0]["color_filter"] == "R"

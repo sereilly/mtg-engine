@@ -707,6 +707,13 @@ CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 #: producer gate vacuous while the handler read an empty record.
 ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
 
+#: The ``deal_damage`` recipient meaning "the controller of the last <noun
+#: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody
+#: chose and no event froze: it is read at resolution out of
+#: ``engine/damage_ledger.py``, and the phrase that says which entry rides
+#: beside it on the payload's ``last_damager_filter`` key.
+LAST_DAMAGER_CONTROLLER = "last_damager_controller"
+
 
 #: The seat "counter target spell" records: the player who controlled the spell
 #: it countered. "**Its controller** may draw up to two cards at the beginning

@@ -312,6 +312,87 @@ def cast_absence_line(line: str) -> "tuple[dict, str] | None":
     return payload, board
 
 
+#: "Cast this spell only if **you were dealt damage this turn by a red instant
+#: or sorcery spell**." (Suffocation.) The third condition row, and the first
+#: whose question is about a *window* rather than about a board: the two above
+#: scan permanents that are there now, and this one asks what already happened.
+#:
+#: It needs no record of its own. ``engine/damage_ledger.py`` has kept every
+#: damage event of the turn beside the cast that dealt it since Backdraft, and
+#: joining "who was hit" to "which cast hit them" is the whole of the question —
+#: so this row is a reader, not a new history. The noun phrase is payload for
+#: :func:`cast_condition_line`'s reason: a card printed about a *blue* instant
+#: or sorcery spell, or about an artifact source, is this restriction with one
+#: word changed and needs no second row.
+_DAMAGED_BY_RE = re.compile(
+    r"^cast this spell only if you were dealt damage this turn by (?P<source>.+)$"
+)
+
+
+@lru_cache(maxsize=None)
+def cast_damage_source_line(line: str) -> "tuple[dict, str] | None":
+    """``(filter payload, the printed noun phrase)`` for the damage-source row.
+
+    Through **the grammar's noun parser** and then through
+    ``subject_filters.card_only_filter``, which is the gate here rather than
+    ``untestable_filter_keys``: what this restriction asks about is a *spell*,
+    and a spell is not a permanent — CR 613.1 gives it no computed
+    characteristics, so the printed face is the whole of what is testable and
+    the permanent matcher's keys would promise answers nobody can give.
+
+    A phrase reaching outside that set leaves the line unclaimed rather than
+    admitted with the narrowing dropped, which is the direction every row in
+    this file refuses in: a restriction quietly widened is a spell castable when
+    the card forbids it.
+
+    "**a**"/"**an**" and nothing else, exactly as :func:`cast_condition_line`
+    reads its article — "no red spell" and "two or more" are different
+    conditions, and reading either as presence lifts the restriction on a turn
+    the card does not name.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import card_only_filter
+
+    match = _DAMAGED_BY_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    described = match.group("source")
+    article, _, rest = described.partition(" ")
+    if article not in ("a", "an") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        parsed = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = parsed.to_payload()
+    if not payload:
+        return None
+    testable = card_only_filter(payload)
+    if not testable:
+        return None
+    return testable, described
+
+
+def _was_dealt_damage_by(game: "Game", caster_index: int, payload: dict) -> bool:
+    """Whether a spell the phrase names has dealt *caster_index* damage this turn.
+
+    The same reader the damage handler's recipient arm uses
+    (``damage_ledger.last_cast_that_damaged_seat``), so the gate and the effect
+    it admits cannot disagree about which spell the sentence names — a
+    disagreement would either refuse a cast the effect would have resolved or
+    admit one it then does nothing for.
+    """
+    from .damage_ledger import last_cast_that_damaged_seat
+
+    return last_cast_that_damaged_seat(game, caster_index, payload) is not None
+
+
 def _nothing_matches(game: "Game", caster_index: int, payload: dict) -> bool:
     """Whether *no* permanent anywhere matches the phrase.
 
@@ -364,6 +445,19 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
         payload, board = absent
         if not _nothing_matches(game, caster_index, payload):
             return f"can only be cast if no {board} are on the battlefield"
+    # Per line for the reason the two loops above are: the phrase ends with
+    # its sentence, and a window read out of the middle of a longer one would
+    # be a restriction the card does not print.
+    for line in oracle_text_lower.split("\n"):
+        damaged = cast_damage_source_line(line)
+        if damaged is None:
+            continue
+        payload, described = damaged
+        if not _was_dealt_damage_by(game, caster_index, payload):
+            return (
+                "can only be cast if you were dealt damage this turn by "
+                f"{described}"
+            )
     return None
 
 

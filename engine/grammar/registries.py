@@ -29,7 +29,9 @@ from __future__ import annotations
 
 from ..auras import aura_continuous_claim
 from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
-                                 cast_condition_line, global_cast_ban_line)
+                                 cast_condition_line,
+                                 cast_damage_source_line,
+                                 global_cast_ban_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
@@ -89,6 +91,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # it, so a board the matcher cannot test leaves the line unclaimed rather
     # than admitted with the restriction dropped.
     if cast_absence_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same half of CR 601.3 asked about a
+    # *window* instead of a board: "Cast this spell only if you were dealt
+    # damage this turn by a red instant or sorcery spell." (Suffocation.) Its
+    # own row and its own reader, which joins the turn's damage ledger to the
+    # casts in it — so the claim asks the reader that answers it, and a phrase
+    # the card matcher cannot test leaves the line unclaimed rather than
+    # admitted with the restriction dropped.
+    if cast_damage_source_line(normalized) is not None:
         return "cast_restrictions"
 
     # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature
