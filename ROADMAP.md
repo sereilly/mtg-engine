@@ -801,7 +801,15 @@ equals exactly its test entries — the emptiness-premise class from the Ice Age
 promotion, found from the other side. The release-line note below still
 applies to the rest of the core-set line.
 
-**The next work set is Alliances (ALL).** It **inserts at index 12** (released
+**Alliances shipped 2026-09-02** — the section below is its ingest estimate,
+kept because its predictions were graded in the retrospective. **The next work
+set is Mirage (MIR), then Visions and Weatherlight, and only then 6ED**, whose
+152 new cards are their reprints: a core set ingested before its sources
+arrives carrying cards nothing supports with their origins mis-stamped. Re-run
+the census table above before choosing — the last three re-fetches were all
+stale by the time they were read.
+
+**Alliances (ALL), as estimated at ingest.** It **inserted at index 12** (released
 1996-06-10, after HML's 1995-10-01 and before 5ED's 1997-03-24), it closes the
 Ice Age block, and for the first time the leverage instruments agree with the
 refusal census at ingest-estimate time rather than contradicting it later:
@@ -860,7 +868,100 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and the phrase appears in the engine only in comments —
 which blocks the buyback/flashback/evoke/madness family wholesale.
 
-## Alliances (ALL) — in progress
+## Alliances (ALL) — shipped
+
+**Final: 144/144 supported, hollow lines 0, unclaimed parse sentences 0, picker
+findings 0**, and the manifest entry moved from `measured` to `sets` at
+printing-order index 12 — between Homelands and Fifth Edition. The pool went
+1,725 → **1,869** unique cards over fifteen sets. Ingest census was 62/144
+(43.1%). Three waves of five worktree groups plus three closers; grammar
+88.8% → **89.2%** parsed with every existing set's floor rising, hook reliance
+3.6% → **3.3%** of supported cards. The suite went 11,547 → **12,758** tests.
+
+**Zero name-keyed hooks across all 144 cards, and one retired.** The first set
+to reach 100% without a single entry in `card_hooks.py` — 82 cards implemented
+across three waves, none of them by name — while Serendib Djinn's bespoke
+`upkeep_sacrifice_land_conditional_damage` became a general sequence, which is
+what let Gargantuan Gorilla's near-identical paragraph work for free.
+
+**Six already-shipped cards were mis-playing, and every one was *stronger* than
+printed rather than broken.** That is the finding to carry. Spoils of War (ICE)
+resolved as a silent no-op under AI play; Pyrokinesis, Fire Covenant (ICE) and
+Dwarven Catapult (FEM) print "among … target **creatures**" and dealt their
+whole amount **to a player's face**; Dust to Dust (DRK/5ED) and Ashes to Ashes
+made the AI exile its *own* permanents. None was visible to any instrument: all
+six compile supported, carry no hollow line, claim every printed sentence and
+derive a correct picker. **The census, `--hollow-lines` and `parse_coverage.py`
+all ask whether a line produced *something*; none asks whether it produced the
+right thing**, and a card that is too strong crashes nothing and misses nothing.
+Every one was found by giving a behaviour a game — five of the six as a side
+effect of work on a *different* card.
+
+**The wave-3 groups found their own subject that way too.** W3G5's ten
+mis-playing Alliances cards were found by compiling its eleven cards and
+printing their instructions side by side — a read no instrument makes — and two
+of them (Nature's Wrath, Royal Decree) had their triggers lowered into the
+card's *spell* instructions, so they fired never and were invisible to
+`--hollow-lines` **and** to `--refusals` because they produced no ability part
+at all. Only `parse_coverage.py` saw them, and only as "unclaimed text".
+
+**Two modules crossed the 1,000-line cap with no branch at fault**, both
+integrator splits: `lower.py` at 1,006 (four groups, a handful of dispatch arms
+each) and `effects/cards.py` at 1,005 (two groups). `statement_dispatch.py` took
+`lower_statement`'s 79 arms on `by_node.py`'s recorded principle — both halves
+are dispatch, so the half that *grows per card* is the half that moves — and
+`effects/exile.py` reused `lowering/exile.py`'s name so the mirror re-formed.
+Groups took five more splits in-branch.
+
+**The missing-name scan is now the thing to run before the suite, not after.**
+It fired three times in one wave — 246 test failures the first time, when
+`_guard_is_the_arms_own_precondition` stayed behind while its only caller moved.
+The package imported clean every time. `test_import_hygiene.py` sees the *dead*
+half of that hazard and structurally cannot see this one.
+
+**A module split needs three scans, not two.** The wave-2 post-merge sweep found
+`_parse_entering_counters` defined **byte-identically** in both halves of an
+earlier split, with the only caller in the new home — W3G4's split had copied
+rather than moved it. No guard can see that:
+`test_no_module_defines_the_same_name_twice` looks *within* a module, and the
+dead copy imports clean, tests green and is simply never reached.
+
+**The per-set block convention hit its documented failure mode, and the
+documented recovery is what saved it.** `test_all_artifacts.py` came back as two
+conflict regions because two groups' `_put` helpers end with the same line, and
+a naive union spliced four lines of one helper's body onto the other's. Three
+tests caught it; reconstruction from the merge base with "both sides are pure
+appends" asserted byte-for-byte fixed it. **Sweep every block after resolving
+one**, not just the file that failed.
+
+**The promotion rehearsal turned nine guards red and five were the guard.** The
+`land_tapped_for_mana` fire-site guard kept its own list of the kinds that site
+runs and reported two verified-working cards as undispatched; the
+combat-restriction guard was missing a table-only kind; the divided-card
+inventory's docstring said "Alliances is still `measured`" — the
+emptiness-premise class for the **third** consecutive set, this time from
+inside a test's prose. Only two were real, and both existed *because* the set
+now ships: Suffocation's defining line did nothing and its cast restriction was
+unenforced, and Tidal Control's client read a different activation cost than the
+engine charged.
+
+**Two of Suffocation's four declined parts were already built**, in
+`engine/damage_ledger.py`, written two sets earlier for Backdraft: every damage
+event of the turn is already recorded at the one `deal_damage` seam with its
+recipient seat, source seat and source cast. The decline had been written from
+`PlayerState` outward and never looked at the ledger. **A decline names where
+its author looked, not where the mechanism is.**
+
+**The differential needs a filter when a dataclass gains a defaulted field.**
+Two rounds added one and reported 710 and 713 changed of 1,869 where ten and
+seven had really moved. The repr is what makes the narrowing class visible, so
+this is not noise to suppress — but a round that reports the raw count has told
+the next integrator nothing. Now recorded in `scripts/oracle_diff.py`, along
+with a fix for the compare crashing outright on a U+2212 in a moved card's
+payload under a Windows console.
+
+### The rounds, as they ran
+
 
 **Census at ingest (2026-09-02): 144 cards, 62 supported (43.1%), 82
 unsupported over 105 refused lines.** All 144 new to the pool, every one
