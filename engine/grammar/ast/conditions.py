@@ -338,6 +338,72 @@ class EachShortOfThisWay:
 
 
 @dataclass(frozen=True)
+class CountersPlacedThisWay:
+    """"**For each +1/+1 counter you put on a creature this way,** remove a
+    +1/+1 counter from that creature at the beginning of the next cleanup step."
+    (Bounty of the Hunt.)
+
+    The fourth "this way" window, beside :class:`DiedThisWay`,
+    :class:`ExiledThisWay` and :class:`TappedThisWay`, and the same distinction
+    they draw: this names exactly the counters an earlier sentence of *this same
+    effect* placed, and no read of the board can answer it — a creature's +1/+1
+    counters may have come from anywhere.
+
+    It differs from those three in what it iterates. They walk a **set** of
+    objects; this walks the *counters*, so a creature given two is named twice
+    and the sentence runs twice about it. That is the printed reading — the
+    delayed ability is created once per counter (CR 603.7) — and it is what
+    makes the removal come out even with the placement.
+
+    ``counter`` is the printed kind, checked against the placement rather than
+    assumed: a card placing one kind and removing another is a sentence this
+    would otherwise run over the wrong record.
+
+    The lowering refuses it without a producer, as every back-reference in this
+    grammar is refused.
+    """
+    counter: str
+
+
+@dataclass(frozen=True)
+class EachAdditionalCostPaid:
+    """"**For each additional {1}{R} you paid**, destroy another target
+    artifact." (Primitive Justice, Taste of Paradise.)
+
+    :class:`EachLifeLost`'s third sibling and a *count* for its reason — the
+    loop has no objects, only a number. What makes it its own node rather than
+    a field on that one is where the number comes from: this is an announcement
+    the **caster** made as the spell was cast (CR 601.2b), carried on the stack
+    item because the mana pool it was paid out of is empty by the time the
+    spell resolves (CR 500.4). Neither the board nor the firing event can
+    answer it.
+
+    *symbols* is which offer, because a single sentence may print two of them
+    independently ("{1}{R} and/or {1}{G}") and the two counts are read back
+    separately. Carried **as printed** and turned into the recorded key by one
+    function (``lowering/loops.optional_cost_key``), so the sentence that spends
+    the count and the payment that made it name the same offer.
+    """
+    symbols: str
+
+
+@dataclass(frozen=True)
+class AdditionalCostWasPaid:
+    """"**If this spell's additional cost was paid**, …" (Undergrowth.)
+
+    The boolean half of :class:`EachAdditionalCostPaid`: CR 601.2b's optional
+    additional cost asked about at all rather than counted. A condition of its
+    own rather than a comparison against that count, because the sentence is
+    about *the* additional cost — the card prints one and does not name it — and
+    a node carrying no symbols is what says so.
+
+    Lowering resolves "the" to the one offer the card prints and refuses when
+    there is more than one, which is the only reading a bare "this spell's
+    additional cost" has.
+    """
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 
@@ -849,7 +915,8 @@ Condition = Union[
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
-    LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
+    LifeGainedThisTurn, PaidCost, AdditionalCostWasPaid,
+    RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,
     OnBattlefield,

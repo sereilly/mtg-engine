@@ -283,6 +283,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Lady Evangela), or damage sent somewhere else instead (Shimian Night
     # Stalker — the bucket Jade Monolith's hook already declares).
     "prevent_all_combat_damage": "activated_prevent",
+    # Its narrowed twin (Undergrowth with its additional cost paid) has **no**
+    # row, and deliberately: these tables label an activated or a triggered
+    # ability, and that kind is only ever produced by a *spell* — nothing
+    # would reach a row for it, which is what the dead-entry guard says.
     "prevent_damage_by_target_until_eot": "activated_prevent",
     "redirect_damage_from_target_until_eot": "activated_prevent",
     # …and the counted twin, which moves a *pool of points* onto the

@@ -78,6 +78,7 @@ class CleanupStepMixin:
 
         self.combat_damage_prevented_until_eot = False
         self.combat_damage_prevented_for = []
+        self.combat_damage_prevented_except_from = []
         # CR 603.7b: a delayed trigger scoped to "this turn" that has not fired
         # (or has fired all it will) expires with the turn. Which entries those
         # are is the entry's own ``duration``, read by one sweep in

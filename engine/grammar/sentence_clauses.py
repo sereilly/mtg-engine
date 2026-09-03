@@ -18,12 +18,13 @@ import dataclasses
 from ..oracle_types import DREW_BY_SEAT
 from . import ast
 from .errors import GrammarError
-from .lexer import NUMBER, WORD
+from .lexer import NUMBER, PT, WORD
 from .nouns import parse_object_filter
 from .references import parse_player_ref, parse_recipient
 from .vocabulary import singular as _singular
 from .stream import TokenStream
 from .phrases import _accept_number, _accept_self_reference, _parse_mana_payment
+from .records import accept_additional_cost_paid
 from .effects import (_accept_life_alternative, _parse_discard, _parse_gain_control,
                       _parse_mill, _parse_put_counter, _parse_linked_untap_restriction)
 
@@ -85,6 +86,33 @@ def _parse_leading_for_each(
             return None
         return ast.EachLifeLost(per=number)
     stream.reset(life_lost)
+    # "**For each additional {1}{R} you paid,** destroy another target artifact."
+    # (Primitive Justice, Taste of Paradise.) The third count-shaped iterator,
+    # and the only one whose number comes from the *cast* rather than from the
+    # board or the firing event — CR 601.2b's optional additional cost, taken as
+    # many times as the caster chose. Read beside the two counts above and
+    # before the noun phrase, which has no reading for a mana symbol and would
+    # fail the line on a word this clause understands.
+    # "**For each +1/+1 counter you put on a creature this way,** remove a +1/+1
+    # counter from that creature …" (Bounty of the Hunt.) The fourth "this way"
+    # window, and the only one that walks *counters* rather than objects — a
+    # creature given two is named twice. Read before the noun phrase below,
+    # which would take the counter kind for a quantified object.
+    placed = stream.mark()
+    if stream.peek() is not None and not stream.at_word("counter", "counters"):
+        kind = stream.peek()
+        if kind.kind in (PT, WORD):
+            stream.advance()
+            if stream.accept_word("counter", "counters") and stream.accept_phrase(
+                "you", "put", "on", "a", "creature", "this", "way"
+            ) and stream.accept_punct(","):
+                return ast.CountersPlacedThisWay(counter=kind.text)
+    stream.reset(placed)
+    paid = stream.mark()
+    symbols = accept_additional_cost_paid(stream)
+    if symbols is not None and stream.accept_punct(","):
+        return ast.EachAdditionalCostPaid(symbols=symbols)
+    stream.reset(paid)
     # "**For each card less than two a player draws this way,** that player
     # gains 2 life." (Truce.) A count that is a *shortfall*, one per seat.
     # Read beside the count above and before the noun phrase below, which would

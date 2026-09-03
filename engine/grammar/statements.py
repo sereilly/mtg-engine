@@ -153,14 +153,29 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     # is what lets `delay_binds_an_object` below see the "that creature" it now
     # contains.
     statement = fold_flip_stakes(stream, statement, parse_statement)
-    delayed = ast.CreateDelayedTrigger(
-        event=event, effect=statement,
-        once=once, duration=duration,
-        # A permission, not the answer — see ``delay_binds_an_object``.
-        binds_target=delay_binds_an_object(binds, statement),
-        subject=None, agent=None,
-        watches=watches,
-    )
+
+    def _delay(effect: ast.Statement) -> ast.CreateDelayedTrigger:
+        return ast.CreateDelayedTrigger(
+            event=event, effect=effect,
+            once=once, duration=duration,
+            # A permission, not the answer — see ``delay_binds_an_object``.
+            binds_target=delay_binds_an_object(binds, effect),
+            subject=None, agent=None,
+            watches=watches,
+        )
+
+    # "**For each** +1/+1 counter you put on a creature this way, remove a +1/+1
+    # counter from that creature **at the beginning of the next cleanup step**."
+    # (Bounty of the Hunt.) The delay is printed after the loop but modifies the
+    # verb *inside* it, so the ability is created once per member (CR 603.7) and
+    # each one is about that member — which is also the only reading that can
+    # work here: left wrapped around the loop, the loop would run a turn later,
+    # by which time the record it iterates is long out of scope and "that
+    # creature" names nobody.
+    if isinstance(statement, ast.ForEach):
+        delayed = dataclasses.replace(statement, effect=_delay(statement.effect))
+    else:
+        delayed = _delay(statement)
     return _accept_conjunct_after_delay(stream, delayed)
 
 

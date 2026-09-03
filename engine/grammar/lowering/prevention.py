@@ -16,6 +16,7 @@ this name so the mirror re-forms instead of forking.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ...subject_filters import object_only_filter
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ._events import _RECORDED_PERMANENTS
 from ._common import (
@@ -664,7 +665,46 @@ def _lower_prevent_all(
         raise LoweringError(
             "the combat-damage flag lasts exactly this turn", node=node
         )
-    return (OracleInstruction("prevent_all_combat_damage", "", {}),)
+    blanket = OracleInstruction("prevent_all_combat_damage", "", {})
+    if node.unaffected_if_cost_paid is None:
+        return (blanket,)
+    # "…**If this spell's additional cost was paid, this effect doesn't affect
+    # combat damage that would be dealt by red creatures.**" (Undergrowth.) One
+    # printed prevention with two widths, decided by whether CR 601.2b's
+    # optional additional cost was taken — so it lowers to the choice between
+    # them rather than to two effects, which would both apply.
+    #
+    # The narrowing is a *source* description, which is the one thing the
+    # blanket flag cannot carry (it is a bool), so the narrow arm gets its own
+    # record and its own interceptor. Held to a filter the matcher can actually
+    # test: a narrowing nothing tests would be silently dropped, and dropping
+    # this one lets the damage the card lets through be prevented after all.
+    excluded = node.unaffected_if_cost_paid
+    if not isinstance(excluded, ast.ObjectFilter):
+        raise LoweringError(
+            "the exempted sources are a printed description, not a choice",
+            node=node,
+        )
+    described = object_only_filter(_filter_payload(excluded))
+    if described is None:
+        raise LoweringError(
+            "the exempted sources name a narrowing nothing can test", node=node
+        )
+    return (
+        OracleInstruction(
+            "if_then", "",
+            {
+                "condition": {"kind": "additional_cost_paid"},
+                "then": (
+                    OracleInstruction(
+                        "prevent_all_combat_damage_except_from", "",
+                        {"filter": described},
+                    ),
+                ),
+                "else": (blanket,),
+            },
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

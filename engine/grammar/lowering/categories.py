@@ -199,6 +199,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # effect, and the object is the one the creating ability bound rather
     # than the ability's own source.
     "remove_all_counters_from_bound": "counters",
+    "remove_counters_from_bound": "counters",
     # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
     # ``player_gets_poison_counters`` above it. Same category: the store differs
     # and the question does not.
@@ -322,6 +323,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.
     "prevent_all_combat_damage_to_matching": "prevention",
+    "prevent_all_combat_damage_except_from": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
     # The negation of both families (Whippoorwill): no shield and no redirect

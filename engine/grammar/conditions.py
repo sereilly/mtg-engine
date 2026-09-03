@@ -113,6 +113,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return grave
     stream.reset(mark)
 
+    # "**this spell's additional cost was paid**" (Undergrowth) — CR 601.2b's
+    # optional additional cost, asked about rather than counted. Read here at
+    # the top because it is settled by seven fixed words and consumes nothing
+    # when they are not there.
+    if stream.accept_phrase(
+        "this", "spell", "'s", "additional", "cost", "was", "paid"
+    ):
+        return ast.AdditionalCostWasPaid()
+    stream.reset(mark)
+
     # "you win the flip" / "you lose the flip" (CR 705.2). Read before the
     # player reference below, which would consume the "you" and then reset — and
     # read as a *back-reference* rather than a board state, because the answer is

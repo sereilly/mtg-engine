@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 79.7% | 77.7% | 58.6% | 111 |
+| ALL *(measured)* | 144 | 251 | 81.3% | 78.9% | 59.8% | 114 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 285 | 127 | expected a subject |  |
+| 282 | 124 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
-| 72 | 33 | unconsumed text |  |
+| 71 | 32 | unconsumed text |  |
 | 36 | 36 | unrecognized activation cost |  |
 | 32 | 17 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -513,6 +513,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of storage counters from this land: Add {B} for each storage counter removed this way.`
   - `At the beginning of your upkeep, if this land is tapped, put a storage counter on it.`
   - `{T}, Remove any number of storage counters from this land: Add {B} for each storage counter removed this way.`
+- **Bounty of the Hunt**
+  - `Distribute three +1/+1 counters among one, two, or three target creatures. For each +1/+1 counter you put on a creature this way, remove a +1/+1 counter from that creature at the beginning of the next cleanup step.`
 - **Braingeyser**
   - `Target player draws X cards.`
   - `Target player draws X cards.`
@@ -3845,6 +3847,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tarpan**
   - `When this creature dies, you gain 1 life.`
   - `When this creature dies, you gain 1 life.`
+- **Taste of Paradise**
+  - `You gain 3 life plus an additional 3 life for each additional {1}{G} you paid.`
 - **Tavern Swindler**
   - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
 - **Tawnos's Coffin**
@@ -4142,6 +4146,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U} or {B}. This land deals 1 damage to you.`
   - `{T}: Add {C}.`
   - `{T}: Add {U} or {B}. This land deals 1 damage to you.`
+- **Undergrowth**
+  - `Prevent all combat damage that would be dealt this turn. If this spell's additional cost was paid, this effect doesn't affect combat damage that would be dealt by red creatures.`
 - **Underworld Dreams**
   - `Whenever an opponent draws a card, this enchantment deals 1 damage to that player.`
 - **Unleash Fury**

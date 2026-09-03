@@ -169,18 +169,26 @@ def _lower_remove_counter(
         and node.subject.quantifier == "that"
         and event in _BOUND_OBJECT_DELAYED_EVENTS
     ):
-        if not isinstance(node.count, ast.AllOf):
-            # "All" is a number nobody knows until the permanent is looked at,
-            # and it is the only count this pair of handlers has. A fixed
-            # removal from a bound object would need its own handler; refusing
-            # leaves the line's refusal rather than emptying what the card meant
-            # to decrement.
+        if isinstance(node.count, ast.AllOf):
+            return (
+                OracleInstruction(
+                    "remove_all_counters_from_bound", "", {"counter": node.counter}
+                ),
+            )
+        # "…remove **a** +1/+1 counter from that creature." (Bounty of the
+        # Hunt.) The counted twin of the emptying removal above, and its own
+        # kind for that one's reason: "all" is a number nobody knows until the
+        # permanent is looked at, and lowering a printed count onto that handler
+        # would empty a permanent the card says to decrement by one.
+        amount = _amount_payload(node.count)
+        if not isinstance(amount, int) or amount <= 0:
             raise LoweringError(
-                "the bound counter removal takes all of them", node=node
+                "the counted bound removal takes a printed number", node=node
             )
         return (
             OracleInstruction(
-                "remove_all_counters_from_bound", "", {"counter": node.counter}
+                "remove_counters_from_bound", "",
+                {"counter": node.counter, "amount": amount},
             ),
         )
     if not _is_source(node.subject):

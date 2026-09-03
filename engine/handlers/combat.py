@@ -515,6 +515,36 @@ def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("prevent_all_combat_damage_except_from")
+def prevent_all_combat_damage_except_from(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Prevent all combat damage that would be dealt this turn. If this
+    spell's additional cost was paid, this effect doesn't affect combat damage
+    that would be dealt by red creatures." (Undergrowth, cost paid.)
+
+    :func:`prevent_all_combat_damage`'s narrowed twin: the same turn-wide
+    blanket with a hole in it, described by the damage's *source*. A record
+    rather than a second flag because the hole is a printed noun phrase, and
+    ``engine/prevention.py`` re-matches it when damage would be dealt — so a red
+    creature that enters after this resolves is exempt too, which is what the
+    sentence says.
+
+    The seat is captured for the matcher's sake (a "you control" narrowing would
+    need one), exactly as the recipient-scoped record beside it captures it, and
+    for the same reason: the effect is the ability's controller's (CR 109.5)
+    even if the board changes hands afterwards.
+    """
+    described = dict(instruction.payload.get("filter") or {})
+    seat = game.players.index(context.caster)
+    game.combat_damage_prevented_except_from.append(
+        {"filter": described, "seat": seat}
+    )
+    game.log.append(
+        f"{context.card.name}: combat damage is prevented this turn except from "
+        f"matching sources"
+    )
+    return True, "resolved"
+
+
 @effect_handler("prevent_all_combat_damage_to_matching")
 def prevent_all_combat_damage_to_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Prevent all combat damage that would be dealt this turn to Dogs you

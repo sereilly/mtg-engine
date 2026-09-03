@@ -28,56 +28,17 @@ from __future__ import annotations
 # --- W1G4: alternative and repeated costs ---
 #
 # Alliances' two *repeated* additional-cost sorceries (CR 601.2b/601.2f: a cost
-# paid "any number of times", with the effect scaling off how many). Both are
-# declined this round, and each decline names the parts rather than the card.
+# paid "any number of times", with the effect scaling off how many). Both were
+# declined in wave 1, each decline naming its parts. **W3G1 built parts 1-5**,
+# so the two decline tests that stood here are gone rather than edited: Taste of
+# Paradise is supported and has a real test in the W3G1 block below, and
+# Primitive Justice's decline shrank to one part and is restated there beside
+# it. A decline test for a card that now works is a test asserting the engine
+# has not improved.
+#
 # The rules-level work this group did land is CR 118.9 alternative costs, whose
 # cards are all instants — see ``tests/sets/test_all_instants.py`` and
 # ``tests/rules/test_alternative_costs.py``.
-
-from engine.cast_costs import additional_costs
-from engine.oracle import compile_card_oracle
-
-
-def test_taste_of_paradise_declines_on_a_repeated_additional_cost(set_pool):
-    """"As an additional cost to cast this spell, you may pay {1}{G} **any
-    number of times**." Four named parts, and the first three are shared with
-    Primitive Justice below:
-
-    1. **a mana clause in ``cast_costs._COST_CLAUSES``** — the table reads life,
-       discards, sacrifices and exiles, and no mana at all;
-    2. **an optional cost** — every clause the table reads is mandatory, which
-       is what makes CR 601.2h's gate a refusal rather than an offer;
-    3. **a repeat count announced at CR 601.2b** and carried on the stack item,
-       so the resolution can read how many times it was paid — the channel
-       ``sacrificed_for_cost`` already demonstrates, one payment kind over;
-    4. **an amount that counts that repeat** — "3 life plus an additional 3 life
-       for each additional {1}{G} you paid" is ``lowering/_amounts.py``'s
-       question (CR 107.3) asked of a cost rather than of a board.
-
-    Note what is *not* missing: nothing here needs a card hook. Every part is a
-    template five cards across four sets would print the same way."""
-    taste = set_pool("ALL")["Taste of Paradise"]
-    assert not compile_card_oracle(taste).supported
-    assert not additional_costs(taste), (
-        "reading an optional repeated cost as a mandatory single one would "
-        "make the spell cost {3}{G} plus {1}{G} and never scale"
-    )
-
-
-def test_primitive_justice_declines_on_the_same_parts_plus_a_target_count(set_pool):
-    """Parts 1-3 of Taste of Paradise, and then two of its own:
-
-    5. **two repeat counts on one spell** — "you may pay {1}{R} and/or {1}{G}
-       any number of times" is two independent counters, which a single repeat
-       count cannot say;
-    6. **a target count that depends on those counts** — "For each additional
-       {1}{R} you paid, destroy another target artifact". CR 601.2c fixes the
-       number of targets at announcement, so the count has to be known before
-       the targets are named, which is the ordering CR 601.2b/601.2c already
-       has and no card in the pool has needed yet."""
-    justice = set_pool("ALL")["Primitive Justice"]
-    assert not compile_card_oracle(justice).supported
-    assert not additional_costs(justice)
 
 
 # --- W2G2: costs ---
@@ -350,3 +311,96 @@ def test_w2g4_a_non_interactive_chooser_takes_the_first_printed_mode(set_pool):
 
     assert game.pending_choices == []
     assert [t.event for t in game.delayed_triggers] == ["next_turns_upkeep"]
+
+
+# --- W3G1: repeated additional costs ---
+#
+# CR 601.2b's *optional* additional cost, which no card in the pool had printed
+# before this set: "you may pay {1}{G} **any number of times**". The rules-level
+# tests are in ``tests/rules/test_optional_additional_costs.py``; these two are
+# about the cards. Imports are in this block, per the header's
+# parallel-authorship convention.
+
+from engine import Game as _W3G1Game, PlayerState as _W3G1Player
+from engine.cast_costs import additional_costs as _w3g1_costs
+from engine.oracle import compile_card_oracle as _w3g1_compile
+
+
+def _w3g1_taste_game(set_pool, green: int):
+    caster = _W3G1Player(name="A", hand=[set_pool("ALL")["Taste of Paradise"]])
+    game = _W3G1Game(players=[caster, _W3G1Player(name="B")])
+    game.enforce_mana_costs = True
+    caster.mana_pool["G"] = green
+    game._settle()
+    return game, caster
+
+
+def test_taste_of_paradise_scales_its_one_life_gain_with_the_payments(set_pool):
+    """"You gain 3 life plus an additional 3 life for each additional {1}{G} you
+    paid."
+
+    **One** life gain, not a base gain and a loop beside it: CR 119.3 makes this
+    a single event, and a replacement watching "if you would gain life" must see
+    3 + 3N once rather than N + 1 separate gains. So the amount is
+    ``Plus(Fixed, Times(step, AdditionalCostPaidCount))`` and the handler does
+    the arithmetic — the shape the existing amount nodes already had, with one
+    new leaf under them."""
+    (gain,) = [
+        i for i in _w3g1_compile(set_pool("ALL")["Taste of Paradise"]).instructions
+        if i.kind == "target_gains_life"
+    ]
+    assert gain.payload["amount"] == 3
+    assert gain.payload["plus_per_cost_paid"] == {"cost": "{1}{G}", "each": 3}
+
+    for times, expected in ((0, 23), (1, 26), (2, 29)):
+        game, caster = _w3g1_taste_game(set_pool, green=4 + 2 * times)
+        result = game.cast_from_hand(
+            0, "Taste of Paradise",
+            optional_cost_payments={"{1}{G}": times} if times else None,
+        )
+        game._settle()
+        assert result.supported, result.details
+        assert caster.life == expected, times
+        assert sum(caster.mana_pool.values()) == 0, (
+            "every offer taken has to come out of the pool; a count read back "
+            "but not charged is a free spell"
+        )
+
+
+def test_primitive_justice_declines_on_a_target_per_repetition(set_pool):
+    """The cost half now works — "you may pay {1}{R} **and/or** {1}{G} any
+    number of times" reads as two independent offers and both counts survive to
+    resolution — and the effect half does not. W1G4's parts 1-5 are done; what
+    is left is one part, and it is the hard one:
+
+    **a target slot per clause, with the slot count fixed by the announcement.**
+    "Destroy target artifact. For each additional {1}{R} you paid, destroy
+    another target artifact." CR 601.2c fixes the number of targets when the
+    spell is announced, so the spell wants 1 + n(R) + n(G) *distinct* artifact
+    targets — a count that only CR 601.2b's payment, one step earlier, can
+    supply. Four concrete pieces:
+
+    1. **a ``min_targets``/``max_targets`` pair the picker derives from the
+       announced payment**, where ``targeting.derive_cast_spec`` today derives
+       both from the printed line alone;
+    2. **a per-clause target slot in the resolution**, which is exactly what
+       ``_refuse_unfused_distinctness`` refuses for want of: every handler but
+       ``_fused_two_target_pump`` and ``target_bites_target`` resolves through
+       ``_one_choice`` and would read the *first* chosen permanent for each
+       clause, so three destroys would kill one artifact three times;
+    3. **an index into that slot list for a ``for_each`` body**, since the loop
+       repeats one instruction and ``_A_REPETITION`` deliberately binds nothing
+       — the iteration would have to name "the i-th target of this spell";
+    4. **a web cost picker for the announcement**, which W1G4 already recorded
+       as missing for a different reason (an *offer* shape, "cast for {1}{R} or
+       for {1}{R} plus {1}{R}?", where ``_cost_picker_spec`` models a mandatory
+       cost). Without it a human can announce no payment at all.
+
+    None of the four is a card hook: every one is a template. Recorded here as
+    the assertions that will fail the day it lands, which is the point."""
+    justice = set_pool("ALL")["Primitive Justice"]
+    (cost,) = _w3g1_costs(justice)
+    assert [(o.symbols, o.repeatable) for o in cost.optional_mana] == [
+        ("{1}{R}", True), ("{1}{G}", True),
+    ], "the cost half landed this round; the decline below is the effect half"
+    assert not _w3g1_compile(justice).supported

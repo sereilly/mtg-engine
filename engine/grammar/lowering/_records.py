@@ -25,6 +25,7 @@ what a step of that kind always writes when it does.
 from __future__ import annotations
 
 from .. import ast
+from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
@@ -36,6 +37,7 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD,
+                      _COUNTERS_PLACED_THIS_WAY,
                       _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
 
@@ -303,6 +305,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (CR 511.2). So the counters record their recipients by id, and the tap,
     # the untap restriction and the granted ability all read that record.
     "add_named_counter_to_creatures_in_combat_with_source": _PERMANENTS_GIVEN_COUNTERS,
+    # "Distribute three +1/+1 counters among one, two, or three target
+    # creatures. **For each +1/+1 counter you put on a creature this way,**
+    # …" (Bounty of the Hunt.) The placement records one entry per counter,
+    # which is what the sentence behind it counts — the division the caster
+    # announced is on the stack item and says how many went where, and
+    # nothing on the board afterwards can say which of a creature's counters
+    # this spell put there.
+    "add_counter_to_target": _COUNTERS_PLACED_THIS_WAY,
     # "Return target white or black creature card from your graveyard to the
     # battlefield. **That creature** gains "Cumulative upkeep {2}."" (Dreams of
     # the Dead.) The permanent did not exist when the ability was activated —
@@ -522,3 +532,37 @@ def counts_prevented_damage(node) -> bool:
         isinstance(count, ast.ThatMuch)
         and count.source == PREVENTION_SHIELD_RECORD
     )
+
+
+def optional_cost_key(symbols: str) -> str:
+    """The canonical spelling a CR 601.2b optional additional cost is recorded
+    and read back under.
+
+    Here rather than in either family that needs it — ``loops`` lowers "for each
+    additional {1}{R} you paid" and ``game`` lowers "plus an additional 3 life
+    for each …" — because a fragment two families need cannot live in one of
+    them. And here rather than in ``_common`` because it is the same question
+    this module already answers: what a step wrote down and how a later sentence
+    names it. The step in this case is the *cast* (CR 601.2b), and the record is
+    on the stack item's choices rather than in the resolution scratchpad,
+    because the mana pool that paid the cost empties at the end of that step
+    (CR 500.4).
+
+    Through the same two functions ``cast_costs`` spells its offers with
+    (``mana_cost_from_symbols`` then ``mana_cost_label``), so the sentence that
+    spends the count and the payment that made it name the offer identically
+    however the card printed it. Two readers would be two answers, and the quiet
+    one is a loop that never runs.
+
+    Raises when the printed run holds a symbol no payment can spend ({X}, a
+    hybrid): the same refusal ``cast_costs`` makes of the offer itself, so a
+    sentence cannot read back a cost that side declined to charge.
+    """
+    from ...mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    parsed = mana_cost_from_symbols(symbols)
+    if not parsed:
+        raise LoweringError(
+            f"no payment spends {symbols!r}, so nothing records paying it"
+        )
+    return mana_cost_label(parsed)

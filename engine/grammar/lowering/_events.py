@@ -24,6 +24,7 @@ this one beside `_common` in its `shared` tuple.
 from __future__ import annotations
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
+                             COUNTERS_PLACED_THIS_WAY,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                              HAND_CARDS_TO_LIBRARY)
 from ...tokens import CREATED_TOKEN_RESULT_KEY
@@ -320,6 +321,12 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # exactly as the two rows above it are: the step says when, and the sentence
     # behind it says what the ability is about.
     "controllers_draw_step",
+    # "…remove a +1/+1 counter from **that creature** at the beginning of the
+    # next cleanup step." (Bounty of the Hunt.) A *step* event that names an
+    # object, exactly as the three rows above it are: the step says when, and
+    # the sentence behind it says what the ability is about. CR 514 gives every
+    # turn one cleanup step, so the step itself names nobody.
+    "next_cleanup_step",
 })
 
 #: The payload key the delayed machinery stamps that object's id under.
@@ -547,6 +554,14 @@ _UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
 #: in the same step the trigger resolves in (CR 511.2), so by the next sentence
 #: there may be no combat left to read.
 _PERMANENTS_GIVEN_COUNTERS = "permanents_given_counters"
+
+#: "Distribute three +1/+1 counters among one, two, or three target creatures.
+#: **For each +1/+1 counter you put on a creature this way,** …" (Bounty of the
+#: Hunt.) Re-exported from ``oracle_types`` under this module's private spelling,
+#: the way every other record name here is: the handler that writes it and the
+#: lowering that gates on it sit at opposite ends of the pipeline, so the string
+#: lives in the module neither imports from.
+_COUNTERS_PLACED_THIS_WAY = COUNTERS_PLACED_THIS_WAY
 
 #: "Return target … creature card from your graveyard to the battlefield.
 #: **That creature** gains "Cumulative upkeep {2}."" (Dreams of the Dead.) The

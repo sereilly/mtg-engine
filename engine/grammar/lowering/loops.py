@@ -26,6 +26,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
+from ._events import _COUNTERS_PLACED_THIS_WAY
+from ._records import optional_cost_key
 
 
 def _lower_for_each_player(
@@ -138,5 +140,79 @@ def _lower_for_each_life_lost(
         OracleInstruction(
             "for_each", "",
             {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
+        ),
+    )
+
+
+def _lower_for_each_counters_placed(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each +1/+1 counter you put on a creature this way,** remove a
+    +1/+1 counter from that creature at the beginning of the next cleanup step."
+    (Bounty of the Hunt.)
+
+    A loop over the *counters* an earlier step of this same resolution placed,
+    one iteration per counter — so a creature given two of them is iterated
+    twice and gets two delayed abilities, which is what makes the removal come
+    out even with the placement.
+
+    Refused without the producer, exactly as the three object-shaped "this way"
+    windows are: with no earlier placement the words name nothing, and an empty
+    loop is a sentence that reports supported and does not run. The printed
+    counter kind is not checked against the record here — the record holds
+    permanents, not kinds — so the check is that the *same resolution* placed
+    counters at all, which is the producer, plus the body, which names the kind
+    itself and removes that one.
+    """
+    if _COUNTERS_PLACED_THIS_WAY not in produced:
+        raise LoweringError(
+            "'counters put on a creature this way' needs a step of this effect "
+            "that put some there",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-counter loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                "iterator": {"produced_by": _COUNTERS_PLACED_THIS_WAY},
+                "effect": inner,
+            },
+        ),
+    )
+
+
+def _lower_for_each_cost_paid(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each additional {1}{R} you paid,** destroy another target
+    artifact." (Primitive Justice, Taste of Paradise.)
+
+    :func:`_lower_for_each_life_lost`'s twin, one channel over: a loop whose
+    iterator is a number, read off what the *caster announced* as the spell was
+    cast (CR 601.2b) rather than off a firing event. It is on the stack item's
+    choices because the pool that paid it is empty by resolution (CR 500.4).
+
+    No event gate, deliberately, where the life-lost loop has one: this number
+    is recorded by the casting path for every spell that prints an optional
+    additional cost, so there is no trigger it could be missing from. What
+    there *is* to refuse is a body that lowered to nothing — an empty loop is a
+    sentence that reports supported and does not run, this file's standing rule.
+    """
+    if not inner:
+        raise LoweringError("a per-payment loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                "iterator": {
+                    "repeat_from_cost": optional_cost_key(node.iterator.symbols)
+                },
+                "effect": inner,
+            },
         ),
     )
