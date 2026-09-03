@@ -4252,6 +4252,11 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         rest_order=payload.get("rest_order", "any"),
         rest_destination=payload.get("rest_destination", "library_bottom"),
         pick_destination=payload.get("pick_destination", "hand"),
+        # "Put **two** of them into your hand" (Ancestral Memories): how many
+        # picks are still owed. One is every other card in the family, and the
+        # answer path re-arms the prompt while more are owed — see
+        # `_resolve_look_top_pick`.
+        remaining=max(1, int(payload.get("pick_count", 1))),
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"

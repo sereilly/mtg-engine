@@ -500,6 +500,8 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
 # --- W1G4: the zones / cards / library family ---
 
+import pytest as _w1g4_pytest
+
 from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
 from engine.handlers._common import apply_damage_to_creature as _w1g4_damage
 from engine.control import change_control as _w1g4_change_control
@@ -558,3 +560,74 @@ def test_gravebane_zombie_goes_to_its_owners_library_not_its_controllers(set_poo
 
     assert game.players[1].library[0].name == "Gravebane Zombie"
     assert len(game.players[0].library) == 5
+
+
+def _w1g4_griffin_board(set_pool, graveyard):
+    """Mtenda Griffin on seat 0's battlefield, with a graveyard to fish in.
+
+    ``current_step`` is stamped rather than stepped to: the ability's "Activate
+    only during your upkeep" clause reads exactly that, and the round is about
+    the *target*, not about the turn structure.
+    """
+    pool = set_pool("MIR")
+    griffin = _W1G4Permanent(card=pool["Mtenda Griffin"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", battlefield=[griffin],
+            graveyard=[pool[n] for n in graveyard],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.current_step = "upkeep"
+    return game, griffin
+
+
+def test_mtenda_griffin_returns_a_griffin_card_and_bounces_itself(set_pool):
+    """"{W}, {T}: Return this creature to its owner's hand **and return target
+    Griffin card from your graveyard to your hand**."
+
+    The subtype was refused by the graveyard family's blanket "no return
+    handler honours this restriction" -- the same gate the reanimation's colour
+    was lifted out of a set earlier. It travels as ``graveyard_subtypes`` and is
+    tested by the one predicate the picker, the cast gate and the handler share,
+    so the card is offered exactly what it may take.
+    """
+    game, _ = _w1g4_griffin_board(
+        set_pool, ("Femeref Scouts", "Mtenda Griffin", "Viashino Warrior")
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=1
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Mtenda Griffin", "Mtenda Griffin",
+    ], "the permanent and the graveyard card, one each"
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Femeref Scouts", "Viashino Warrior",
+    ], "exactly one card left the graveyard"
+    assert game.players[0].battlefield == []
+
+
+@_w1g4_pytest.mark.parametrize("slot", [0, 2])
+def test_mtenda_griffin_refuses_a_card_that_is_not_a_griffin(set_pool, slot):
+    """The narrowing in the direction that matters: a dropped subtype would
+    have let the ability fish any creature card out, which is a strictly better
+    card than the one printed and nothing on the board would show it."""
+    game, _ = _w1g4_griffin_board(
+        set_pool, ("Femeref Scouts", "Mtenda Griffin", "Viashino Warrior")
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=slot
+    )
+
+    assert not result.supported
+    assert len(game.players[0].graveyard) == 3
+    assert game.players[0].battlefield, "a refused activation pays nothing"

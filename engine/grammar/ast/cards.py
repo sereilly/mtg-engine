@@ -229,8 +229,9 @@ class RevealHandAndChoose:
     discard of a card nobody chose.
 
     *fate* is what happens to the chosen card, because that is the only thing
-    the family varies (Kitesail Freebooter exiles it instead of discarding it),
-    and it decides which handler ending runs.
+    the family varies (Kitesail Freebooter exiles it instead of discarding it,
+    Painful Memories puts it on top of that player's library), and it decides
+    which handler ending runs.
     """
     player: PlayerRef
     filter: ObjectFilter

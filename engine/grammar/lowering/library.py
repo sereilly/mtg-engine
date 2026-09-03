@@ -645,6 +645,25 @@ def _lower_look_top_pick(
         if not isinstance(amount, int) or amount <= 0:
             raise LoweringError("the look-top pick takes a fixed count", node=node)
         payload["amount"] = amount
+    # "Put **two** of them into your hand" (Ancestral Memories). Emitted only
+    # when the card prints a number other than one, so every payload written
+    # before this is byte-identical.
+    picks = _amount_payload(node.pick_count)
+    if not isinstance(picks, int) or picks <= 0:
+        raise LoweringError("the look-top pick takes a fixed pick count", node=node)
+    if picks > 1:
+        # Several picks are a *chain* of one-card prompts (see
+        # ``_resolve_look_top_pick``), and the chain only knows how to put a
+        # card in a hand: "puts one of them back on top of their library"
+        # (Ashnod's Cylix) names a single card by construction, and taking
+        # several to one library position is a shape no card prints. Refused
+        # rather than collapsed, so a card that ever prints it fails loudly.
+        if node.pick_destination != "hand" or node.optional:
+            raise LoweringError(
+                "several picks are taken into a hand, and not optionally",
+                node=node,
+            )
+        payload["pick_count"] = picks
     if node.filters:
         described = [chargeable_card_filter(filt) for filt in node.filters]
         if any(entry is None for entry in described):

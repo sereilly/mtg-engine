@@ -71,14 +71,24 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     stays byte-identical. Two copies of this is how "up to two target artifact
     cards" ends up returning a creature.
     """
+    # "Return target **Griffin** card from your graveyard to your hand."
+    # (Mtenda Griffin.) A printed subtype, carried the way the reanimation's
+    # colours are: its own additive key, tested by the same
+    # ``graveyard_card_matches`` the picker and the cast gate ask, so a payload
+    # written before this is byte-identical. Only the targeted graveyard-to-hand
+    # branch lifts it out of ``_reads_no_return_restriction``; every other
+    # caller here still refuses a subtype at that gate, so the key is absent for
+    # all of them.
+    subtypes = {"graveyard_subtypes": list(filt.subtypes)} if filt.subtypes else {}
     if len(filt.card_types) > 1:
         return {
             "any_card": False,
             "card_type": None,
             "card_types": list(filt.card_types),
+            **subtypes,
         }
     card_type = filt.card_types[0] if filt.card_types else None
-    return {"any_card": card_type is None, "card_type": card_type}
+    return {"any_card": card_type is None, "card_type": card_type, **subtypes}
 
 
 def _returns_itself_to_the_battlefield(node: "ast.ReturnToZone", subject) -> bool:

@@ -1134,6 +1134,41 @@ class PendingChoicesMixin:
         if keep_index not in self.live_look_top_candidates(choice):
             return False
         kept = caster.library[keep_index]
+        # "Put **two** of them into your hand and the rest into your graveyard."
+        # (Ancestral Memories.) A chain of one-card prompts rather than one
+        # multi-select, for `_rearm_revealed_hand_pick`'s reason exactly: taking
+        # a card renumbers the pile behind it, so a set of indices answered all
+        # at once against the pile as it *was* addresses the wrong cards. Only
+        # the taken card leaves; the rest stay where they are and the next
+        # prompt looks at one fewer.
+        remaining = int(choice.data.get("remaining", 1))
+        if remaining > 1 and top_count > 1:
+            caster.library.pop(keep_index)
+            self.put_card_into_hand(caster, kept)
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{caster.name} put {kept.name} into their hand "
+                f"({remaining - 1} more to take)"
+            )
+            # The keys are listed rather than the whole ``data`` dict passed
+            # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
+            # stamps its own bookkeeping into ``data`` (which stack object is
+            # waiting, which seat caused the prompt), and handing those back as
+            # arguments would re-arm the next link with a stale stamp.
+            self.arm_pending_choice(
+                "look_top_pick", choice.player_index,
+                top_count=top_count - 1,
+                amount=choice.data.get("amount", top_count - 1),
+                card_name=choice.data.get("card_name", ""),
+                filter=dict(choice.data.get("filter") or {}),
+                filters=tuple(choice.data.get("filters") or ()),
+                optional=bool(choice.data.get("optional")),
+                rest_order=choice.data.get("rest_order", "any"),
+                rest_destination=choice.data.get("rest_destination", "library_bottom"),
+                pick_destination=choice.data.get("pick_destination", "hand"),
+                remaining=remaining - 1,
+            )
+            return True
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
         # Where the *kept* card goes, read the same way the rest's destination
@@ -1771,6 +1806,24 @@ class PendingChoicesMixin:
         fate = str(choice.data.get("fate", "discard"))
         if fate == "discard":
             return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+        if fate == "library_top":
+            # "Put that card on top of that player's library." (Painful
+            # Memories.) Both seams, and both for the reason they exist: a hand
+            # holds the *same object* for every copy of a card, so the removal
+            # goes through `take_card_from_hand` or it deletes every copy; and
+            # CR 903.9b can divert a card headed for a library, so the arrival
+            # goes through `put_card_into_library`.
+            victim = self.players[victim_index]
+            if not 0 <= hand_index < len(victim.hand):
+                return False
+            card = victim.hand[hand_index]
+            if not self.take_card_from_hand(victim, card):
+                return False
+            self.put_card_into_library(victim, card, position="top")
+            self.log.append(
+                f"{card.name} went on top of {victim.name}'s library"
+            )
+            return True
         if fate != "exile_until_source_leaves":
             return False
         # "Exile that card until this creature leaves the battlefield."

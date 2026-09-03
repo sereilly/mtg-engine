@@ -142,3 +142,102 @@ def test_polymorph_reanimates_off_the_victims_own_library(set_pool):
     assert game.players[1].graveyard == [
         card for card in game.players[1].graveyard if card.name == "Femeref Scouts"
     ], "nothing revealed reached a graveyard"
+
+
+def _w1g4_look_board(set_pool, spell, *, library, seat1_hand=(), interactive=(0,)):
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[pool[spell]],
+                         library=[pool[n] for n in library]),
+        _W1G4PlayerState(name="P2", hand=[pool[n] for n in seat1_hand],
+                         library=[pool["Mountain"]] * 4),
+    ])
+    game.interactive_seats = set(interactive)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, pool
+
+
+_W1G4_SEVEN = (
+    "Femeref Scouts", "Viashino Warrior", "Mana Prism", "Fire Diamond",
+    "Island", "Mountain", "Plains", "Swamp", "Forest",
+)
+
+
+def test_ancestral_memories_takes_two_and_bins_the_other_five(set_pool):
+    """"Look at the top seven cards of your library. Put **two** of them into
+    your hand and the rest into your graveyard."
+
+    Two firsts for this template: a pick count other than one -- the word "one"
+    was a literal in the production, so the only card in the pool that takes two
+    refused on the number it printed -- and "the rest **into your graveyard**"
+    as a destination for the whole remainder, where Waker of Waves prints that
+    fate for a single named card.
+
+    The two picks are a *chain* of one-card prompts, because taking a card
+    renumbers the pile behind it. The assertions are about counts as much as
+    names: seven leave the library, two reach the hand, five reach the
+    graveyard, and the spell itself resolves only once the last prompt is
+    answered (CR 608.2).
+    """
+    game, _ = _w1g4_look_board(set_pool, "Ancestral Memories", library=_W1G4_SEVEN)
+
+    assert game.cast_from_hand(0, "Ancestral Memories").supported
+    assert game.waiting_prompt() is not None, "the resolution waits (CR 117.3b)"
+
+    assert game.confirm_look_top_pick(0, 2), "Mana Prism"
+    assert [c.name for c in game.players[0].hand] == ["Mana Prism"]
+    assert game.waiting_prompt() is not None, "one pick still owed"
+
+    assert game.confirm_look_top_pick(0, 0), "Femeref Scouts, after the renumber"
+
+    assert [c.name for c in game.players[0].hand] == ["Mana Prism", "Femeref Scouts"]
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Viashino Warrior", "Fire Diamond", "Island", "Mountain", "Plains",
+        "Ancestral Memories",
+    ], "five looked-at cards, then the spell itself"
+    assert [c.name for c in game.players[0].library] == ["Swamp", "Forest"]
+    assert game.pending_choices == []
+
+
+def test_ancestral_memories_drains_both_picks_for_a_non_interactive_seat(set_pool):
+    """The AI path takes the same two cards through the same chain -- a default
+    that answered once would leave the second prompt queued and the spell
+    resolving forever."""
+    game, _ = _w1g4_look_board(
+        set_pool, "Ancestral Memories", library=_W1G4_SEVEN, interactive=()
+    )
+
+    game.cast_from_hand(0, "Ancestral Memories")
+    game.auto_resolve_pending_choices()
+
+    assert len(game.players[0].hand) == 2
+    assert len(game.players[0].library) == 2
+    assert game.pending_choices == []
+
+
+def test_painful_memories_tucks_the_chosen_card_and_takes_only_one_copy(set_pool):
+    """"Look at target opponent's hand and choose a card from it. Put that card
+    on top of that player's library."
+
+    Mind Warp's template with the other printed ending, so ``fate`` grows a
+    third value rather than the family a second node. The count assertion is
+    the one that matters here: a hand repeats the *same* ``CardDefinition``
+    object for every copy, so a removal spelled as an identity filter takes all
+    of them -- the tuck goes through ``take_card_from_hand`` and moves exactly
+    one.
+    """
+    game, pool = _w1g4_look_board(
+        set_pool, "Painful Memories", library=("Island",) * 5,
+        seat1_hand=("Island", "Mana Prism", "Island"),
+    )
+
+    assert game.cast_from_hand(0, "Painful Memories", target_player_index=1).supported
+    assert game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=0)
+
+    assert [c.name for c in game.players[1].hand] == ["Mana Prism", "Island"], (
+        "one Island moved, not both"
+    )
+    assert game.players[1].library[0].name == "Island"
+    assert len(game.players[1].library) == 5
+    assert game.players[1].graveyard == [], "a tuck is not a discard"

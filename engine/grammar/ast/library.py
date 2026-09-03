@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from ._core import (
     Amount,
+    Fixed,
     ObjectFilter,
     PlayerRef,
     Zone,
@@ -225,6 +226,13 @@ class LookTopPickToHand:
     #: reason — the sentence states it, and a default would be a guess about
     #: the one thing the card is for.
     pick_destination: str = "hand"
+    #: How many of the looked-at cards are taken. "Put **two** of them into
+    #: your hand and the rest into your graveyard" (Ancestral Memories) is the
+    #: only printed number other than one so far, and it is a field for
+    #: ``rest_destination``'s reason: the sentence states it, and a card taking
+    #: one where it prints two is a strictly smaller card with nothing to
+    #: notice the difference.
+    pick_count: Amount = field(default_factory=lambda: Fixed(1))
     #: Who looks. None is the effect's own controller, which every card in this
     #: family printed until Ashnod's Cylix — "**Target player** looks at the
     #: top three cards of **their** library". The looker and the library are

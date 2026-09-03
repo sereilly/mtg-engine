@@ -785,6 +785,16 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     colors = spec.get("graveyard_colors")
     if colors and not any(color in card.colors for color in colors):
         return False
+    # "target **Griffin** card" (Mtenda Griffin). Off the printed type line,
+    # which for a card outside the battlefield is the whole of what there is
+    # (CR 613.1) -- the same reader ``card_matches_filter`` uses for the
+    # identical phrase in a hand. OR'd across alternatives, because "Djinn or
+    # Efreet" is one phrase wherever it is printed.
+    wanted_subtypes = tuple(spec.get("graveyard_subtypes") or ())
+    if wanted_subtypes:
+        held = printed_shape(card)[1]
+        if not any(word in held for word in wanted_subtypes):
+            return False
     # "up to four target **basic** land cards from a player's graveyard"
     # (Lodestone Bauble). Read off the printed type line, which for a card in a
     # graveyard is the whole of what there is (CR 613.1) — the same reader and
