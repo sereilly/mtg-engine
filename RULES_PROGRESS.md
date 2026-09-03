@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**347 / 612 tracked rules covered (56%)** — 1886 tests, 0 unannotated.
+**347 / 612 tracked rules covered (56%)** — 1897 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(160 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(169 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -806,7 +806,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 615. Prevention Effects
 
-- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(16 tests, subrules a)*
+- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(18 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
 - [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(5 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
