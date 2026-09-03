@@ -59,6 +59,7 @@ from .static_lines import (_looks_static, _parse_leading_static_condition_line,
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .rebinding import (bind_recorded_card,
+                        rebind_alternative_pronoun_to_choice_target,
                         rebind_attachment_pronoun_to_sentence_target,
                         rebind_delayed_pronoun_to_sentence_target,
                         rebind_pump_pronoun_to_sentence_target,
@@ -352,6 +353,54 @@ def _sentence_ended_on_a_quote(stream: TokenStream) -> bool:
     return previous is not None and previous.kind == QUOTE
 
 
+def _parse_statement_alternatives(
+    stream: TokenStream, first: ast.Statement, first_at: int
+) -> ast.Statement:
+    """*first*, or an :class:`ast.OneOf` if the sentence goes on with "**or**".
+
+    "Put a +1/+1 counter on target creature **or** that creature gains banding,
+    first strike, or trample." (Nature's Blessing.) One action with two ways to
+    take it, the controller choosing which as the effect is applied
+    (CR 608.2d) — not a `Sequence`, which does both, and not a modal spell's
+    bulleted "Choose one —", which is chosen as the spell is cast (CR 601.2b).
+
+    ``statements._parse_optional_action`` already reads this shape behind "you
+    may" (Crypt Lurker) and its docstring records why it was written there and
+    not at large: a statement-level "or" is rare, and putting a production in
+    front of every sentence in the game on the strength of one card is a bad
+    trade. What makes this position safe is not the count of cards but *where
+    it sits*: the statement has already been parsed and the cursor is on a word
+    that is neither a full stop nor a semicolon, which is the state the line
+    fails in three lines further down. So this can only claim text that is
+    being refused today.
+
+    An alternative that does not parse is left alone — the cursor rewinds and
+    the "unconsumed text" refusal below stands, naming the same offset it names
+    now.
+    """
+    if not stream.at_word("or"):
+        return first
+    options: list[ast.Statement] = [first]
+    spans: list[tuple[int, int]] = [(first_at, stream.pos)]
+    while stream.at_word("or"):
+        mark = stream.mark()
+        stream.advance()
+        start = stream.pos
+        try:
+            options.append(parse_statement(stream, top_level=False))
+        except GrammarError:
+            stream.reset(mark)
+            break
+        spans.append((start, stream.pos))
+    if len(options) == 1:
+        return first
+    return rebind_alternative_pronoun_to_choice_target(
+        ast.OneOf(
+            tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
+        )
+    )
+
+
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     """Parse the remaining tokens as one or more sentences, joining them into a
     ``Sequence``. A rider sentence folds into the effect it modifies instead of
@@ -506,6 +555,7 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_cost_x_definition(stream) is not None:
                 continue
 
+        sentence_at = stream.pos
         statement = parse_statement(stream)
         # "Destroy this enchantment **if it has five or more hunger counters on
         # it**." (Fasting.) The trailing spelling of the "if <condition>,
@@ -529,6 +579,7 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 stream.reset(if_mark)
             else:
                 statement = ast.Conditional(condition, statement)
+        statement = _parse_statement_alternatives(stream, statement, sentence_at)
         steps.append(statement)
         if (
             not stream.exhausted

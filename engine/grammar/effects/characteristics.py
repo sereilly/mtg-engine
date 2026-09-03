@@ -25,7 +25,7 @@ from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
 
 from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
                        _parse_duration, _parse_for_each, _parse_keywords,
-                       _parse_per_each_objects)
+                       _parse_per_each_objects, parse_keyword_list)
 from ..where_x import parse_where_x_definition
 
 
@@ -108,7 +108,8 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         # read here as well as in the bare `gains` production, because the pump
         # conjunction is where the card actually prints it.
         choose_one = bool(stream.accept_phrase("your", "choice", "of"))
-        keywords = _parse_keywords(stream)
+        keywords, disjunctive = parse_keyword_list(stream)
+        choose_one = choose_one or disjunctive
         keyword_duration = _parse_duration(stream)
         if choose_one and len(keywords) < 2:
             raise stream.error("a choice of keywords needs more than one")
@@ -241,13 +242,16 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             subject, abilities, _parse_duration(stream), self_name=self_name
         )
 
-    # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift).
-    # CR 609.3: the choice is made as the effect resolves, and the keyword list
-    # behind it reads exactly like a conjunction — so the alternatives are
-    # marked here rather than inferred later, where "and" and "or" have already
-    # become the same tuple.
+    # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift), and
+    # "gains banding, first strike, **or** trample" (Nature's Blessing) — the
+    # same card with the four words the older printing does not spell out.
+    # CR 608.2d: a choice an effect offers that was not made as the spell was
+    # cast is announced while the effect is applied. So the alternatives are
+    # marked *here*, where the connective is still in the stream: by the time a
+    # lowering sees the list, "and" and "or" have become the same tuple.
     choose_one = bool(stream.accept_phrase("your", "choice", "of"))
-    keywords = _parse_keywords(stream)
+    keywords, disjunctive = parse_keyword_list(stream)
+    choose_one = choose_one or disjunctive
     duration = _parse_duration(stream)
     if choose_one and len(keywords) < 2:
         raise stream.error("a choice of keywords needs more than one")
@@ -462,9 +466,9 @@ def _parse_has(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     if stream.at_word("base"):
         stream.reset(mark)
         return _parse_has_base_pt(stream, subject)
-    keywords = _parse_keywords(stream)
+    keywords, disjunctive = parse_keyword_list(stream)
     duration = _parse_duration(stream)
-    return ast.GainKeyword(subject, keywords, duration)
+    return ast.GainKeyword(subject, keywords, duration, choose_one=disjunctive)
 
 
 def _parse_has_base_pt(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:

@@ -97,6 +97,29 @@ def _at_keyword_item(stream: TokenStream) -> bool:
 
 
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
+    """The keyword list alone, for the readers that do not care how it was
+    joined — a condition asking whether a creature *has* one, a delayed grant's
+    fixed option list. A **grant** does care and calls
+    :func:`parse_keyword_list`."""
+    return parse_keyword_list(stream)[0]
+
+
+def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
+    """The keyword list, and whether the card joined it with "**or**".
+
+    "gains flying and first strike" grants both; "gains banding, first strike,
+    **or** trample" (Nature's Blessing) grants one of the three, chosen as the
+    effect resolves (CR 608.2d). One word apart and two different cards, so the
+    joining word is *read* rather than normalised away — which it was, and the
+    "or" spelling silently granted every keyword in the list. Nothing in the
+    pool printed one, so nothing was broken; it was the shape one word away from
+    being broken, and Nature's Blessing is the card that prints it.
+
+    Only the boolean travels, not the joins themselves: a mixed list ("A, B, or
+    C") punctuates its inner joins with commas alone, so "was any join an
+    'or'?" is the whole of what the connectives say. A list that genuinely mixed
+    the two words is not English anybody prints.
+    """
     # "all **landwalk** abilities" (Hammerheim) — a card naming a keyword
     # *family* rather than listing its members. CR 702.14a makes landwalk a
     # family of "[type]walk" abilities, so the phrase means every member and the
@@ -113,16 +136,20 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
         family = stream.peek_word()
         if family in KEYWORD_FAMILIES and stream.peek_word(1) in ("ability", "abilities"):
             stream.advance(2)
-            return KEYWORD_FAMILIES[str(family)]
+            return KEYWORD_FAMILIES[str(family)], False
     stream.reset(family_mark)
 
     keywords: list[str] = []
+    disjunctive = False
     while True:
         banded = _accept_bands_with_other(stream)
         if banded is not None:
             name = banded
             keywords.append(name)
-            if stream.accept_word("and") or stream.accept_word("or"):
+            if stream.accept_word("and"):
+                continue
+            if stream.accept_word("or"):
+                disjunctive = True
                 continue
             break
         matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
@@ -179,17 +206,31 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
         # ("gains haste **and** "{0}: Untap this creature."", Touch of Vitae)
         # was refused the same way.
         joined = stream.mark()
-        if stream.accept_word("and") or stream.accept_word("or"):
+        if stream.accept_word("and"):
             if _at_keyword_item(stream):
+                continue
+            stream.reset(joined)
+        elif stream.accept_word("or"):
+            if _at_keyword_item(stream):
+                disjunctive = True
                 continue
             stream.reset(joined)
         comma = stream.mark()
         if stream.accept_punct(","):
-            stream.accept_word("or")
+            # The last item of a list carries the joining word after the comma:
+            # "banding, first strike, **or** trample" and its "and" twin. Both
+            # are read, because which one it is decides whether the card grants
+            # one keyword or all of them — and reading only "or" left an "and"
+            # list ending one item short, with the tail unconsumed and the whole
+            # line refused.
+            if stream.accept_word("or"):
+                disjunctive = True
+            else:
+                stream.accept_word("and")
             if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is not None:
                 continue
             stream.reset(comma)
         break
     if not keywords:
         raise stream.error("expected a keyword ability")
-    return tuple(keywords)
+    return tuple(keywords), disjunctive

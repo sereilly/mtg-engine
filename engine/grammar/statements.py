@@ -25,7 +25,8 @@ from .stream import TokenStream
 from .conditions import _parse_condition
 from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
-from .rebinding import rebind_pronoun_to_condition_target
+from .rebinding import (rebind_alternative_pronoun_to_choice_target,
+                        rebind_pronoun_to_condition_target)
 from .phrases import _parse_duration, _parse_mana_payment
 from .effects import (_parse_untap_chosen_by_paying,
                       _parse_for_each_destroy_unless_paid,
@@ -734,7 +735,11 @@ def _parse_optional_action(stream: TokenStream) -> ast.Statement:
         start = stream.pos
         options.append(parse_statement(stream, top_level=False))
         spans.append((start, stream.pos))
-    return ast.OneOf(tuple(options), tuple(stream.text_between(a, b) for a, b in spans))
+    return rebind_alternative_pronoun_to_choice_target(
+        ast.OneOf(
+            tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
+        )
+    )
 
 
 def _parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken | None":

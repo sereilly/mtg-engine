@@ -435,6 +435,73 @@ def _names_a_target(node) -> bool:
     return False
 
 
+def _rebind_bound_noun(node, bound: "ast.TargetSpec"):
+    """*node* with every bare "that <noun>" spec replaced by *bound*.
+
+    Narrow in the same two ways :func:`_rebind_pump_subject` is, and for its
+    reason: the quantifier must be the demonstrative, and the noun phrase must
+    carry **nothing but its head noun**. "That creature" is a back-reference;
+    "that creature you control" is a narrowed one the sentence chose for
+    itself, and rewriting it would throw the narrowing away.
+    """
+    if (
+        isinstance(node, ast.TargetSpec)
+        and node.quantifier == "that"
+        and not node.targeted
+        and node.filter.to_payload() == bound.filter.to_payload()
+    ):
+        return bound
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebind_bound_noun(getattr(node, field.name), bound),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_rebind_bound_noun(item, bound) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
+def rebind_alternative_pronoun_to_choice_target(node: "ast.OneOf") -> "ast.OneOf":
+    """"Put a +1/+1 counter on **target creature** or **that creature** gains
+    banding, first strike, or trample." (Nature's Blessing.)
+
+    The sixth rebinder, and the only one whose antecedent is in a *sibling
+    alternative*. The alternatives of an :class:`ast.OneOf` are two readings of
+    one action (CR 608.2d), so the ability announces its targets once
+    (CR 601.2c) and whichever alternative the controller takes acts on them —
+    which is exactly what a second targeted spec would break, by asking the
+    picker for a target the card never offered. The bound spec therefore stays
+    a *target*, the same choice :func:`rebind_pump_pronoun_to_sentence_target`
+    makes and the opposite of :func:`rebind_pronoun_to_delay_target`'s.
+
+    Without it the later alternative's subject is a demonstrative nothing
+    binds, and the keyword grant behind it refuses with "unsupported
+    keyword-grant subject" — a refusal naming the subject rather than the
+    binding, which is the shape a reader mistakes for a missing production.
+
+    Only alternatives *after* the one that announced the target are rewritten:
+    a demonstrative in front of its antecedent names something earlier in the
+    line, which is a different question and has its own rebinders above.
+    """
+    announced: "ast.TargetSpec | None" = None
+    options: list = []
+    for option in node.options:
+        if announced is not None:
+            option = _rebind_bound_noun(option, announced)
+        elif (found := _announced_target(option)) is not None:
+            announced = found
+        options.append(option)
+    if all(a is b for a, b in zip(options, node.options)):
+        return node
+    return replace(node, options=tuple(options))
+
+
 #: The intervening-if conditions that name a card for a "that card" behind them.
 #: A table rather than a shape test, because the question a reader has is "which
 #: conditions carry a card?" — and because a second one would be a row here.
