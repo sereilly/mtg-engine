@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
+from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
@@ -895,11 +896,31 @@ class PendingChoicesMixin:
             return False
         item.chosen_mode_index = mode_index
         item.chosen_modes = (ChosenMode(index=mode_index),)
+        # **Who chose** is a fact about this cast that nothing on a board can
+        # answer, and the mode's own text refers back to it: "…each creature
+        # **that player** controls", "…deals 4 damage to **that player**"
+        # (Misfortune), "**That player** draws up to three cards" (Fatal Lore).
+        # Frozen here, under the key every fire site freezes a seat under, so
+        # `handlers/_common.frozen_that_player_seat` and the damage/draw
+        # recipients read one answer rather than three. In a duel it happens to
+        # equal the resolution's default opposing seat; with three players it
+        # does not, which is why it is recorded rather than re-derived.
+        item.trigger_context = {
+            **(item.trigger_context or {}),
+            EVENT_SUBJECT_PLAYER: choice.player_index,
+        }
         self.discard_pending_choice(choice)
         self.log.append(
             f"{self.players[choice.player_index].name} chose "
             f"{labels[mode_index]!r} for {choice.data.get('card_name')}"
         )
+        # CR 601.2c comes after 601.2b, and on these three cards the two steps
+        # belong to different players — so the caster names the mode's targets
+        # here, knowing at last which mode they are naming them for. Armed by
+        # the answer, the way a chain of decisions inside one announcement is
+        # (CR 601.2i: nobody has priority until the cast is finished, and both
+        # prompts block every seat).
+        self.arm_modal_mode_targets(item, choice.player_index)
         return True
 
     def _default_opponent_mode_choice(self, choice) -> None:
@@ -911,6 +932,83 @@ class PendingChoicesMixin:
         caster, so there is nobody else to ask.
         """
         if not self._resolve_opponent_mode_choice(choice, 0):
+            self.discard_pending_choice(choice)
+
+    def confirm_modal_mode_targets(self, player_index: int, permanent_ids: list) -> bool:
+        """Name the targets of the mode an opponent chose. An empty list is a
+        legal answer wherever the mode says "up to"."""
+        return self.resolve_pending_choice(
+            "modal_mode_targets", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_modal_mode_targets(self, choice, permanent_ids) -> bool:
+        """Record the caster's targets onto the mode already on the stack.
+
+        Checked against the list that was **offered**, never against the board:
+        targets are chosen once, at announcement (CR 601.2c), so a permanent
+        that became legal a moment later is not a legal answer — the rule
+        ``_resolve_trigger_target`` states one screen up and for the same
+        reason.
+
+        Validated whole before anything is recorded, which is the two
+        list-shaped pickers' rule: one bad id rejects the answer and leaves the
+        prompt queued, so a malformed request cannot record half an
+        announcement.
+        """
+        from dataclasses import replace as _replace
+
+        item = choice.data.get("_item")
+        if item is None or not item.chosen_modes:
+            return False
+        offered = {
+            entry["permanent_id"]: entry
+            for entry in (choice.data.get("targets") or ())
+        }
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        if len(ids) > int(choice.data.get("max_targets", 1)):
+            return False
+        if any(pid not in offered for pid in ids):
+            return False
+        mode = item.chosen_modes[0]
+        seats = {offered[pid]["seat"] for pid in ids}
+        item.chosen_modes = (
+            _replace(
+                mode,
+                target_permanent_id=list(ids),
+                target_permanent_index=[offered[pid]["permanent_index"] for pid in ids],
+                # One seat when every target sits on one battlefield, which is
+                # every card in the pool that reaches here; several leaves the
+                # mode's seat alone and the ids do the addressing, which is what
+                # `StackItem` records about its own pair.
+                target_player_index=(
+                    next(iter(seats)) if len(seats) == 1 else mode.target_player_index
+                ),
+            ),
+        )
+        self.discard_pending_choice(choice)
+        names = ", ".join(offered[pid]["name"] for pid in ids) if ids else "nothing"
+        self.log.append(
+            f"{self.players[choice.player_index].name} targets {names} "
+            f"({choice.data.get('card_name')})"
+        )
+        return True
+
+    def _default_modal_mode_targets(self, choice) -> None:
+        """The offered candidates in board order, up to the printed ceiling.
+
+        A stated policy rather than a valuation, and the same one
+        ``_default_permanent_set_choice`` states: seed-determinism is what AI
+        and headless play need, and a card that should choose cleverly wants a
+        weight in ``engine/ai_valuation.py`` rather than a branch here. There is
+        no *side* to decide — the printed noun phrase already narrowed the
+        candidates to one player's board — so board order is the whole policy.
+        """
+        offered = list(choice.data.get("targets") or ())
+        ceiling = int(choice.data.get("max_targets", 1))
+        ids = [entry["permanent_id"] for entry in offered[:ceiling]]
+        if not self._resolve_modal_mode_targets(choice, ids):
             self.discard_pending_choice(choice)
 
     def confirm_look_top_pick(self, player_index: int, keep_index: int) -> bool:
@@ -6269,6 +6367,29 @@ register_choice(
     prompt_key="body_choice",
     blocked_detail="choose the entering creature's body before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "modal_mode_targets",
+    resolve=lambda game, choice, r: game._resolve_modal_mode_targets(
+        choice, r.get("permanent_ids")
+    ),
+    default=lambda game, choice: game._default_modal_mode_targets(choice),
+    action="modal_mode_targets_confirm",
+    prompt_key="modal_mode_targets",
+    blocked_detail=(
+        "name the targets for the mode your opponent chose before other actions"
+    ),
+    # The other half of `opponent_mode_choice` below, and every flag on it is
+    # here for that flag's own reason: this is still inside CR 601.2i's
+    # announcement, so nobody acts until it is answered, and a non-interactive
+    # caster takes the stated default where the offer stands rather than
+    # holding the cast open forever.
+    blocks_every_seat=True,
+    default_at_arm=True,
+    # A spell's targets are announced in the open (CR 601.2c).
+    spectator_visible=True,
+    hidden_for_ai=False,
 )
 
 register_choice(

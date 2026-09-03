@@ -112,6 +112,48 @@ def _attached_controller_only(game: "Game", seat: int, permanent: "Permanent") -
     return controller is not None and seat == controller
 
 
+#: The clause :func:`_granting_seat_only` looks for on a granted line, spelled
+#: once because the row's pattern and the record scan are two readers of it.
+_GRANTING_SEAT_CLAUSE = "only you may activate this ability"
+
+
+def _granting_seat_only(game: "Game", seat: int, permanent: "Permanent") -> bool:
+    """"Only **you** may activate this ability." (Martyrdom.)
+
+    "You" is CR 109.5's controller of the *ability's source* — and on the one
+    card in the pool that prints this clause the source is a **spell**, which
+    granted the ability to a creature and then left. So the seat cannot be read
+    off the permanent: Martyrdom's creature is one you control when the spell
+    resolves, and the whole reason the sentence is printed is that control can
+    change afterwards. Read off the permanent's controller it would be no rule
+    at all — CR 602.1a already says exactly that — and an opponent who took the
+    creature would inherit the ability the card forbids them.
+
+    So the seat travels with the grant: ``keywords.grant_ability_line`` records
+    the granting seat on the entry, and this reads it back off the entry whose
+    line carries the clause. A permanent holding two such grants from two seats
+    admits both, which is each grant working as printed rather than a tie
+    broken here.
+
+    Printed on a card rather than granted, "you" *is* the permanent's
+    controller, and that fallback is what the branch below says. No card in the
+    pool prints it that way; the branch exists so the answer does not depend on
+    a record's absence meaning something else.
+    """
+    from .keywords import GRANTED_ABILITY_LINES
+
+    granting_seats = {
+        entry.get("seat")
+        for entry in (permanent.metadata.get(GRANTED_ABILITY_LINES) or [])
+        if _GRANTING_SEAT_CLAUSE in str(entry.get("line") or "").lower()
+        and isinstance(entry.get("seat"), int)
+    }
+    if not granting_seats:
+        controller = game.controller_index_of(permanent)
+        return controller is not None and seat == controller
+    return seat in granting_seats
+
+
 ACTIVATION_PERMISSIONS: tuple[ActivationPermission, ...] = (
     ActivationPermission(
         pattern=re.compile(r"^any player may activate this ability$"),
@@ -130,6 +172,11 @@ ACTIVATION_PERMISSIONS: tuple[ActivationPermission, ...] = (
         pattern=re.compile(r"^only your opponents may activate this ability$"),
         may_activate=_opponents_only,
         denial="only your opponents may activate this ability",
+    ),
+    ActivationPermission(
+        pattern=re.compile(r"^only you may activate this ability$"),
+        may_activate=_granting_seat_only,
+        denial="only the player who granted this ability may activate it",
     ),
     ActivationPermission(
         # CR 301.5f puts "equipped" and "enchanted" on the same footing, so both

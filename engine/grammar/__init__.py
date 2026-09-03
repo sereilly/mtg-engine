@@ -248,12 +248,18 @@ class CompiledLine:
         return self.parse_error or self.lowering_error
 
 
-def compile_line(line: str, *, card_name: str | None = None) -> CompiledLine:
+def compile_line(
+    line: str, *, card_name: str | None = None, event: str | None = None,
+) -> CompiledLine:
     """Parse and lower one oracle line. Never raises — failures are data.
 
     Callers integrating with the legacy compiler check :attr:`CompiledLine.usable`;
     the coverage script reads the finer-grained flags to tell "the grammar could
     not read this" apart from "the grammar read it but nothing executes it yet".
+
+    *event* is the position the line occupies, for the one caller whose lines
+    have one that the line itself cannot state: a modal bullet under
+    "**An opponent** chooses one —" (CR 700.2e). See :func:`lower_ability`.
     """
     try:
         node = parse_line(line, card_name=card_name)
@@ -278,7 +284,7 @@ def compile_line(line: str, *, card_name: str | None = None) -> CompiledLine:
         return CompiledLine(line=line, node=node)
 
     try:
-        instructions = lower_ability(node)
+        instructions = lower_ability(node, event=event)
     except LoweringError as error:
         return CompiledLine(line=line, node=node, lowering_error=error.reason)
 

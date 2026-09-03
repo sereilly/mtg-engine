@@ -472,3 +472,203 @@ def test_foresights_default_takes_the_printed_number_rather_than_the_library():
     game._apply_choice_default(game.pending_choices[0])
     assert len(game.players[0].exile) == 3
     assert len(game.players[0].library) == 3
+
+
+# --- W3G2: modes, counters and granted abilities ---
+#
+# Alliances prints three "An opponent chooses one —" spells (CR 700.2e) and two
+# of them refer *back* to the chooser from inside the mode they chose:
+# Misfortune's "each creature **that player** controls" and "deals 4 damage to
+# **that player**", and Fatal Lore's "**That player** draws up to three cards".
+# W2G4 built the head and the choice; what was missing was the seat those words
+# name, which is not on any board — it comes into existence when the mode is
+# chosen. `_resolve_opponent_mode_choice` freezes it under the same key a
+# trigger's fire site freezes one, so `frozen_that_player_seat`, the damage
+# recipient and the draw's seat all read one answer.
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.models import CardDefinition, Permanent  # noqa: E402
+
+
+def _w3g2_bear(name: str = "Bear") -> CardDefinition:
+    """A vanilla 2/2, so a counter's effect on P/T is the whole observation."""
+    return CardDefinition(
+        name=name, mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
+        oracle_text="", power="2", toughness="2",
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear"},
+    )
+
+
+def _w3g2_duel(set_pool, card_name: str):
+    """A duel with both seats interactive, two 2/2s each, the spell in hand.
+
+    Both seats interactive on purpose: `opponent_mode_choice` is a
+    ``default_at_arm`` kind, so a non-interactive chooser takes mode 0 before a
+    test can name a mode — which is how a "mode 1" assertion silently tests
+    mode 0.
+    """
+    p1 = PlayerState(name="P1", hand=[set_pool("ALL")[card_name]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    for seat, player in enumerate((p1, p2)):
+        for index in range(2):
+            game._put_permanent_onto_battlefield(
+                seat,
+                Permanent(card=_w3g2_bear(f"{player.name} Bear {index}")),
+                None,
+            )
+    return game, p1, p2
+
+
+def _w3g2_pt(game, player):
+    return sorted(
+        (perm.effective_power, perm.effective_toughness)
+        for perm in game.controlled_by(player)
+    )
+
+
+def test_w3g2_misfortune_first_mode_grows_the_casters_board(set_pool):
+    """CR 700.2e's kinder half. "Each creature **you** control" is the caster's
+    own board, so the chooser's seat never enters it."""
+    game, p1, p2 = _w3g2_duel(set_pool, "Misfortune")
+
+    assert game.queue_from_hand(0, "Misfortune").supported
+    assert game.confirm_opponent_mode_choice(1, 0)
+    game._settle()
+
+    assert _w3g2_pt(game, p1) == [(3, 3), (3, 3)]
+    assert _w3g2_pt(game, p2) == [(2, 2), (2, 2)]
+    assert (p1.life, p2.life) == (24, 20)
+
+
+def test_w3g2_misfortune_second_mode_shrinks_the_choosers_board(set_pool):
+    """The -1/-1 sweep and the damage both land on the seat that *chose*, and
+    neither touches the caster's own board.
+
+    This is the whole point of freezing the chooser. Read with the scope
+    dropped, "each creature that player controls" is every creature in the
+    game and the caster shrinks their own board; read with the seat guessed as
+    the resolution's default opponent it is right in a duel by coincidence.
+    """
+    game, p1, p2 = _w3g2_duel(set_pool, "Misfortune")
+
+    assert game.queue_from_hand(0, "Misfortune").supported
+    assert game.confirm_opponent_mode_choice(1, 1)
+    game._settle()
+
+    assert _w3g2_pt(game, p1) == [(2, 2), (2, 2)]
+    assert _w3g2_pt(game, p2) == [(1, 1), (1, 1)]
+    assert (p1.life, p2.life) == (20, 16)
+
+
+def test_w3g2_misfortune_freezes_the_chooser_rather_than_the_opposing_seat(set_pool):
+    """The seat is recorded on the spell as the mode is chosen, not derived at
+    resolution — which is what makes the phrase answerable with three players
+    in the game, where "an opponent" is not "the opponent"."""
+    from engine.grammar.lowering._events import EVENT_SUBJECT_PLAYER
+
+    game, _p1, _p2 = _w3g2_duel(set_pool, "Misfortune")
+    assert game.queue_from_hand(0, "Misfortune").supported
+
+    assert game.confirm_opponent_mode_choice(1, 1)
+
+    assert game.stack[-1].trigger_context[EVENT_SUBJECT_PLAYER] == 1
+
+
+def test_w3g2_fatal_lore_offers_only_the_choosers_creatures(set_pool):
+    """"up to two target creatures **that player** controls" — the seat came
+    into existence when the mode was chosen, so nothing but the answer to that
+    prompt can narrow this picker. Unnarrowed it offers every creature in the
+    game, which is the one thing a picker must never do."""
+    game, p1, _p2 = _w3g2_duel(set_pool, "Fatal Lore")
+
+    assert game.queue_from_hand(0, "Fatal Lore").supported
+    assert game.confirm_opponent_mode_choice(1, 1)
+
+    choice = game.pending_choices[0]
+    assert (choice.kind, choice.player_index) == ("modal_mode_targets", 0)
+    assert {entry["seat"] for entry in choice.data["targets"]} == {1}
+    assert choice.data["max_targets"] == 2
+
+
+def test_w3g2_fatal_lore_destroys_the_named_creatures_and_offers_the_draw(set_pool):
+    """The whole of the second mode: the caster's targets, "they can't be
+    regenerated", and a ceiling the *other* player answers under."""
+    game, p1, p2 = _w3g2_duel(set_pool, "Fatal Lore")
+    p2.library.extend(_w3g2_bear(f"Deck {i}") for i in range(5))
+    assert game.queue_from_hand(0, "Fatal Lore").supported
+    assert game.confirm_opponent_mode_choice(1, 1)
+    choice = game.pending_choices[0]
+    ids = [entry["permanent_id"] for entry in choice.data["targets"]]
+
+    assert game.confirm_modal_mode_targets(0, ids[:2])
+    game._settle()
+
+    assert list(game.controlled_by(p2)) == []
+    assert len(list(game.controlled_by(p1))) == 2, "the caster's board is untouched"
+    draw = game.pending_choices[0]
+    assert (draw.kind, draw.player_index) == ("draw_up_to", 1)
+    assert game.confirm_draw_up_to(1, 3)
+    game._settle()
+    assert len(p2.hand) == 3
+
+
+def test_w3g2_fatal_lores_draw_ceiling_can_be_answered_with_none(set_pool):
+    """"Draws **up to** three" is a decision, not an amount. Answered with
+    zero it draws nothing — which is the whole difference between this and a
+    forced draw, and the reason the lowering refused a plain amount."""
+    game, _p1, p2 = _w3g2_duel(set_pool, "Fatal Lore")
+    p2.library.extend(_w3g2_bear(f"Deck {i}") for i in range(5))
+    assert game.queue_from_hand(0, "Fatal Lore").supported
+    assert game.confirm_opponent_mode_choice(1, 1)
+    assert game.confirm_modal_mode_targets(0, [])
+    game._settle()
+
+    assert game.confirm_draw_up_to(1, 0)
+    game._settle()
+
+    assert p2.hand == []
+    assert len(list(game.controlled_by(p2))) == 2, "no targets named, nothing destroyed"
+
+
+def test_w3g2_fatal_lores_first_mode_needs_no_target_prompt(set_pool):
+    """The prompt is armed off the *chosen* mode. Picking "You draw three
+    cards" leaves the caster nothing to answer, and the spell resolves."""
+    game, p1, _p2 = _w3g2_duel(set_pool, "Fatal Lore")
+    p1.library.extend(_w3g2_bear(f"Deck {i}") for i in range(5))
+
+    assert game.queue_from_hand(0, "Fatal Lore").supported
+    assert game.confirm_opponent_mode_choice(1, 0)
+    game._settle()
+
+    assert game.pending_choices == []
+    assert len(p1.hand) == 3
+
+
+def test_w3g2_a_non_interactive_caster_names_targets_where_the_offer_stands(set_pool):
+    """`default_at_arm`, for `opponent_mode_choice`'s own reason: the
+    announcement has to finish, and a queued prompt on an AI seat would hold the
+    cast open forever. The stated policy is board order up to the ceiling —
+    there is no side to decide, because the printed noun phrase already narrowed
+    the candidates to one player's board."""
+    p1 = PlayerState(name="P1", hand=[set_pool("ALL")["Fatal Lore"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}          # the chooser only
+    for seat in (0, 1):
+        for index in range(3):
+            game._put_permanent_onto_battlefield(
+                seat, Permanent(card=_w3g2_bear(f"Bear {seat}{index}")), None
+            )
+    assert game.queue_from_hand(0, "Fatal Lore").supported
+
+    assert game.confirm_opponent_mode_choice(1, 1)
+    game._settle()
+
+    assert not [c for c in game.pending_choices if c.kind == "modal_mode_targets"]
+    assert len(list(game.controlled_by(p2))) == 1, "two of the three, in board order"
+    assert len(list(game.controlled_by(p1))) == 3, "the caster's own board is not offered"

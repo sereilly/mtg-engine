@@ -34,6 +34,7 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
+import dataclasses
 import re
 from dataclasses import replace
 
@@ -60,6 +61,7 @@ from .static_lines import (_looks_static, _parse_leading_static_condition_line,
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .rebinding import (bind_recorded_card,
+                        rebind_alternative_pronoun_to_choice_target,
                         rebind_attachment_pronoun_to_sentence_target,
                         rebind_delayed_pronoun_to_sentence_target,
                         rebind_pump_pronoun_to_sentence_target,
@@ -353,6 +355,105 @@ def _sentence_ended_on_a_quote(stream: TokenStream) -> bool:
     return previous is not None and previous.kind == QUOTE
 
 
+def _attach_granted_ability_permission(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold a trailing "who may activate" sentence into the ability the step
+    before it granted, and say whether one was found.
+
+    "Until end of turn, target creature you control gains "{0}: …" **Only you
+    may activate this ability.**" (Martyrdom.) The permission is about the
+    granted ability, not about the spell: what reaches the battlefield is the
+    quoted line, and `engine/keywords.py` records exactly that string for
+    `Permanent.effective_card` to fold in and the compiler to read. A clause
+    left outside it belongs to a spell that is in its owner's graveyard by the
+    time anyone activates — read there it would restrict nothing.
+
+    So the sentence is appended to the quoted text, which is the same rewrite
+    `oracle.expand_equip_lines` makes one layer up and for the same reason:
+    every reader of what the creature now says has to see the same sentence.
+    `engine/activation_permissions.py` is asked first, so a permission that
+    module does not implement leaves the line refused rather than consumed and
+    dropped.
+
+    Only a grant with **one** quoted ability is claimed. A sentence naming
+    "this ability" after two of them names one of the two and the card would
+    have to say which; nothing prints that, and guessing is what this refuses.
+    """
+    from ..activation_permissions import permission_clause_readable
+
+    if not steps or not isinstance(steps[-1], ast.GainAbilityText):
+        return False
+    grant = steps[-1]
+    if len(grant.abilities) != 1:
+        return False
+    mark = stream.mark()
+    stream.accept_punct(".", ";")
+    if not stream.at_word("any", "only"):
+        stream.reset(mark)
+        return False
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_punct("."):
+        words.append(str(stream.next().text))
+    sentence = " ".join(words).replace(" '", "'")
+    if not permission_clause_readable(sentence):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps[-1] = dataclasses.replace(
+        grant, abilities=(f"{grant.abilities[0]}. {sentence.capitalize()}",)
+    )
+    return True
+
+
+def _parse_statement_alternatives(
+    stream: TokenStream, first: ast.Statement, first_at: int
+) -> ast.Statement:
+    """*first*, or an :class:`ast.OneOf` if the sentence goes on with "**or**".
+
+    "Put a +1/+1 counter on target creature **or** that creature gains banding,
+    first strike, or trample." (Nature's Blessing.) One action with two ways to
+    take it, the controller choosing which as the effect is applied
+    (CR 608.2d) — not a `Sequence`, which does both, and not a modal spell's
+    bulleted "Choose one —", which is chosen as the spell is cast (CR 601.2b).
+
+    ``statements._parse_optional_action`` already reads this shape behind "you
+    may" (Crypt Lurker) and its docstring records why it was written there and
+    not at large: a statement-level "or" is rare, and putting a production in
+    front of every sentence in the game on the strength of one card is a bad
+    trade. What makes this position safe is not the count of cards but *where
+    it sits*: the statement has already been parsed and the cursor is on a word
+    that is neither a full stop nor a semicolon, which is the state the line
+    fails in three lines further down. So this can only claim text that is
+    being refused today.
+
+    An alternative that does not parse is left alone — the cursor rewinds and
+    the "unconsumed text" refusal below stands, naming the same offset it names
+    now.
+    """
+    if not stream.at_word("or"):
+        return first
+    options: list[ast.Statement] = [first]
+    spans: list[tuple[int, int]] = [(first_at, stream.pos)]
+    while stream.at_word("or"):
+        mark = stream.mark()
+        stream.advance()
+        start = stream.pos
+        try:
+            options.append(parse_statement(stream, top_level=False))
+        except GrammarError:
+            stream.reset(mark)
+            break
+        spans.append((start, stream.pos))
+    if len(options) == 1:
+        return first
+    return rebind_alternative_pronoun_to_choice_target(
+        ast.OneOf(
+            tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
+        )
+    )
+
+
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     """Parse the remaining tokens as one or more sentences, joining them into a
     ``Sequence``. A rider sentence folds into the effect it modifies instead of
@@ -503,6 +604,16 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if controller_token is not None:
                 steps.append(controller_token)
                 continue
+            # "…gains "<ability>." **Only you may activate this ability.**"
+            # (Martyrdom.) A sentence about the *granted* ability, printed
+            # outside the quotes because the quotes hold what the creature
+            # gains and this says who may use it — so it folds into the quoted
+            # text rather than becoming a step. Read before the trailing
+            # restriction below, which would consume the same sentence and
+            # record it on a **spell**: the spell is in a graveyard by the time
+            # anybody activates, so the clause would be enforced by nobody.
+            if _attach_granted_ability_permission(stream, steps):
+                continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line
             # fully accounted for; enforcement stays on the raw text.
@@ -515,6 +626,7 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_cost_x_definition(stream) is not None:
                 continue
 
+        sentence_at = stream.pos
         statement = parse_statement(stream)
         # "Destroy this enchantment **if it has five or more hunger counters on
         # it**." (Fasting.) The trailing spelling of the "if <condition>,
@@ -538,6 +650,7 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 stream.reset(if_mark)
             else:
                 statement = ast.Conditional(condition, statement)
+        statement = _parse_statement_alternatives(stream, statement, sentence_at)
         steps.append(statement)
         if (
             not stream.exhausted

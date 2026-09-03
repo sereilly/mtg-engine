@@ -30,7 +30,8 @@ from .references import parse_target_spec
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
                          SUBTYPE_INDEX, match_longest)
-from .keywords import PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords
+from .keywords import (PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords,
+                       parse_keyword_list)
 
 
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (

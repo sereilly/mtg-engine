@@ -762,29 +762,19 @@ def test_the_snow_land_tap_trigger_fires_end_to_end():
     )
 
 
-def test_natures_blessing_is_declined_naming_two_parts(set_pool):
-    """"{G}{W}, Discard a card: Put a +1/+1 counter on target creature **or**
-    that creature gains banding, first strike, or trample. (This effect lasts
-    indefinitely.)"
-
-    Both halves of the ability already exist in isolation - the counter
-    placement lowers, and each of the three keywords is in
-    ``vocabulary.IMPLEMENTED_KEYWORDS``. Two parts are missing:
-
-    1. **A modal written with "or" rather than "Choose one -".** The engine's
-       modes come from bulleted lines (``OracleProgram.modes``); this is pre-
-       Sixth-Edition templating that prints the alternatives inline, and the
-       nested "banding, first strike, or trample" is a *second* choice inside
-       the second mode, so the sentence offers four modes and not two.
-    2. **A keyword grant with an indefinite duration (CR 611.2a).** "Target
-       creature gains first strike." with no duration refuses today with
-       "continuous keyword grant needs the CR 613 layers engine" - the grant
-       kinds in the pool all end at a sweep (end of turn, end of combat), and
-       an effect that lasts indefinitely has no sweep to end it and so must be
-       a layer-6 contribution that outlives the resolution.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Nature's Blessing"])
-    assert not program.supported
+# W2G5's `test_natures_blessing_is_declined_naming_two_parts` stood here and is
+# **deleted** by W3G2, not edited: the card landed, so the assertion it made
+# ("assert not program.supported") is false, and a decline test whose subject
+# now works cannot be kept in any form. Both parts it named were right and both
+# were built - the inline "or" modal
+# (`parser._parse_statement_alternatives`) and the indefinite keyword grant
+# (`lowering/keywords._lower_gain_keyword`'s durationless target branch). The
+# card's tests are in W3G2's block in this file; the decline's own prose is in
+# ROADMAP.md under W2G5.
+#
+# Recorded here because this is the one non-append edit W3G2 makes to another
+# group's block, and the integrator's "both sides are pure appends" assertion is
+# meant to fire on it.
 
 
 # --- W2G3: upkeep and counters ---
@@ -1234,3 +1224,139 @@ def test_royal_decree_damages_the_tapped_permanents_controller_not_its_own():
     game.tap_land_for_mana(0, "Swamp")
     game.resolve_stack()
     assert game.players[0].life == 19 and game.players[1].life == 20
+
+
+# --- W3G2: modes, counters and granted abilities ---
+#
+# Nature's Blessing prints two choices in one sentence and neither is a modal
+# spell's bulleted "Choose one -": the alternatives are printed inline with
+# "or", and the second alternative offers a further choice among three
+# keywords. Both are CR 608.2d choices - announced while the effect is applied,
+# not as the ability is activated - which is what makes them one `choose_one`
+# nested inside another rather than four modes on the ability.
+#
+# The grant has **no printed duration**, so it lasts as long as the creature
+# does (CR 611.2b). The reminder text says so in as many words; the engine says
+# it with a `None` duration, which `KEYWORD_GRANT_DURATIONS` has always meant
+# and no sweep looks at.
+
+import pytest as _w3g2_pytest  # noqa: E402
+
+from engine.grammar import parse_line as _w3g2_parse_line  # noqa: E402
+from engine.grammar import lower_ability as _w3g2_lower  # noqa: E402
+from engine.grammar.errors import GrammarError as _W3G2GrammarError  # noqa: E402
+
+
+def _w3g2_blessing_board(set_pool):
+    """The enchantment, one 2/2 to aim it at, and one card in hand to discard."""
+    lea = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+    p1 = PlayerState(name="P1", hand=[lea["Forest"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("ALL")["Nature's Blessing"]), None
+    )
+    game._put_permanent_onto_battlefield(0, Permanent(card=lea["Grizzly Bears"]), None)
+    enchantment, bear = game.controlled_by(p1)
+    return game, p1, enchantment, bear
+
+
+def _w3g2_activate_blessing(game, enchantment, bear, picks):
+    result = game.activate_permanent_ability(
+        0, enchantment.card.name, target_player_index=0, ability_index=0,
+        target_permanent_index=game.battlefield_index_of(bear),
+    )
+    game.resolve_stack(pause_for_choices=True)
+    for pick in picks:
+        choice = game.pending_choices[0]
+        assert choice.kind == "mode_choice", choice.kind
+        assert game.resolve_pending_choice("mode_choice", 0, mode_index=pick)
+        game.resolve_stack(pause_for_choices=True)
+    return result
+
+
+def test_w3g2_natures_blessing_offers_the_counter_branch(set_pool):
+    """The first alternative. One target is announced for the whole ability
+    (CR 601.2c) and this branch puts the counter on it."""
+    game, p1, enchantment, bear = _w3g2_blessing_board(set_pool)
+
+    result = _w3g2_activate_blessing(game, enchantment, bear, [0])
+
+    assert result.supported
+    assert (bear.effective_power, bear.effective_toughness) == (3, 2 + 1)
+    assert p1.hand == [], "the discard is a cost, paid on activation"
+
+
+def test_w3g2_natures_blessing_offers_the_keyword_branch(set_pool):
+    """The second alternative, and the second choice inside it: three keywords
+    with "or" between them, one of which is granted."""
+    game, _p1, enchantment, bear = _w3g2_blessing_board(set_pool)
+
+    _w3g2_activate_blessing(game, enchantment, bear, [1, 2])
+
+    assert game._has_keyword(bear, "trample")
+    assert not game._has_keyword(bear, "banding")
+    assert not game._has_keyword(bear, "first strike")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2), (
+        "the branches are alternatives, so the counter did not also arrive"
+    )
+
+
+def test_w3g2_natures_blessing_grants_banding(set_pool):
+    """Banding is in ``IMPLEMENTED_KEYWORDS`` and has its own grant kind
+    (Helm of Chatzuk's), so the choice reaches real behaviour rather than a
+    word."""
+    game, _p1, enchantment, bear = _w3g2_blessing_board(set_pool)
+
+    _w3g2_activate_blessing(game, enchantment, bear, [1, 0])
+
+    assert game._has_keyword(bear, "banding")
+
+
+def test_w3g2_natures_blessing_grant_outlives_the_turn(set_pool):
+    """CR 611.2b: an effect with no stated duration lasts as long as the object
+    it affects. The reminder text spells it out ("This effect lasts
+    indefinitely"), and the cleanup step is where a grant that had quietly
+    become "until end of turn" would show it."""
+    game, _p1, enchantment, bear = _w3g2_blessing_board(set_pool)
+    _w3g2_activate_blessing(game, enchantment, bear, [1, 2])
+    assert game._has_keyword(bear, "trample")
+
+    game.resolve_cleanup_step(0)
+    game.resolve_cleanup_step(1)
+
+    assert game._has_keyword(bear, "trample")
+
+
+def test_w3g2_a_keyword_list_joined_by_and_still_grants_all_of_them(set_pool):
+    """The connective is *read* now, so the two spellings have to keep meaning
+    different things. "or" is a choice; "and" is every keyword in the list, and
+    a card printing one must not get the other."""
+    both = _w3g2_lower(
+        _w3g2_parse_line("Target creature gains flying and first strike until end of turn.")
+    )
+    assert len(both) == 1
+    assert both[0].kind == "grant_target_keyword_until_eot"
+    assert both[0].payload["keywords"] == ("flying", "first strike")
+
+    either = _w3g2_lower(
+        _w3g2_parse_line("Target creature gains flying or first strike until end of turn.")
+    )
+    assert len(either) == 1
+    assert either[0].kind == "choose_one"
+    assert [mode["label"] for mode in either[0].payload["modes"]] == [
+        "flying", "first strike",
+    ]
+
+
+def test_w3g2_an_alternative_that_does_not_parse_leaves_the_or_alone(set_pool):
+    """The bare-imperative "or" reader sits where a line is already failing, so
+    its refusal has to be the one that was there before it: the cursor rewinds
+    and "unconsumed text" still names the same offset. A production that
+    consumed the word and then failed would rename every such refusal."""
+    with _w3g2_pytest.raises(_W3G2GrammarError) as raised:
+        _w3g2_parse_line("Draw a card or beguile the wind.")
+
+    assert raised.value.reason == "unconsumed text"

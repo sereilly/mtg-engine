@@ -1357,6 +1357,13 @@ class LegalityMixin:
                 "defending_player_index"
             ):
                 continue
+            # "…**that player** controls" (Fatal Lore). The same arrangement one
+            # record over: CR 700.2e's mode choice froze the seat, and the
+            # caller holding that record supplies it beside the flag. A flag
+            # with no seat offers nothing, for the reason above — this one would
+            # otherwise widen to every creature in the game.
+            if spec.get("that_player_only") and seat != spec.get("that_player_index"):
+                continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):
                     continue

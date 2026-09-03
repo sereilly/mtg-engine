@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 84.5% | 83.3% | 64.1% | 121 |
+| ALL *(measured)* | 144 | 251 | 85.3% | 84.5% | 65.3% | 123 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 279 | 121 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
-| 70 | 31 | unconsumed text |  |
+| 69 | 30 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
-| 32 | 17 | granted ability in quotes | phase 3 (quoted abilities) |
+| 31 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 2 | expected a keyword ability |  |
 | 8 | 2 | expected 'the number of' in a where-clause |  |
@@ -2524,6 +2524,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)`
 - **Martyr's Cry**
   - `Exile all white creatures. For each creature exiled this way, its controller draws a card.`
+- **Martyrdom**
+  - `Until end of turn, target creature you control gains "{0}: The next 1 damage that would be dealt to target creature, planeswalker, or player this turn is dealt to this creature instead." Only you may activate this ability.`
 - **Masked Blackguard**
   - `{2}{B}: This creature gets +1/+1 until end of turn.`
 - **Massacre Wurm**
@@ -2614,6 +2616,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target instant or sorcery spell unless its controller pays {3}.`
 - **Misfortune**
   - `• You put a +1/+1 counter on each creature you control and gain 4 life.`
+  - `• You put a -1/-1 counter on each creature that player controls and Misfortune deals 4 damage to that player.`
 - **Mishra's Factory**
   - `{T}: Add {C}.`
   - `{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.`
@@ -2688,6 +2691,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
+- **Nature's Blessing**
+  - `{G}{W}, Discard a card: Put a +1/+1 counter on target creature or that creature gains banding, first strike, or trample. (This effect lasts indefinitely. Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Nature's Chosen**
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `Tap enchanted creature: Untap target artifact, creature, or land. Activate only if enchanted creature is white and untapped and only once each turn.`

@@ -748,6 +748,27 @@ def _lower_put_counter(
                 **_filter_payload(node.subject.filter),
             }),
         )
+    # "You put a **-1/-1** counter on **each creature that player controls**"
+    # (Misfortune). A CR 122.1a counter placed on every member of a set the
+    # sentence *describes* rather than chooses (CR 611.2c: the board is read as
+    # the effect resolves), which is one handler for either P/T pair and either
+    # scope — read here, above the "+1/+1 only" gate, because that gate was
+    # written for the placements a printed count chooses and reports every
+    # other pair as unimplemented.
+    #
+    # The pair is payload, not a kind: `Game.place_pt_counters` derives the P/T
+    # from the counter's own name, so "-1/-1 on each" and "+1/+1 on each" differ
+    # by one string. A counter with no P/T at all (a fade counter, a charge
+    # counter) is refused, for the reason the bound placement above refuses it.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+        and not node.up_to
+        and not node.then_double
+        and node.cap is None
+        and not node.distributed
+    ):
+        return _lower_counter_sweep(node)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
@@ -833,46 +854,61 @@ def _lower_put_counter(
             payload["then_double"] = True
         _describe_targets(payload, node.subject)
         return (OracleInstruction("add_counter_to_target", "", payload),)
-    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in (
-        "all",
-        "each",
-    ):
-        # "Put a +1/+1 counter on each creature you control." Only the
-        # own-side creature sweep has a handler; a wider scope refuses.
-        filt = node.subject.filter
-        if filt.card_types != ("creature",) or filt.controller != "you":
-            raise LoweringError("counters on a scope no handler sweeps", node=node)
-        return (
-            OracleInstruction(
-                "add_counter_to_each_you_control", "", {"power": 1, "toughness": 1}
-            ),
-        )
     raise LoweringError("counters on a non-source subject", node=node)
 
 
-# Counter placements repeated once per creature that died this turn, keyed by
-# the counter's printed name — the only thing that differs between the two
-# cards written this way, and what decides which handler runs. Both handlers
-# read the death count from the trigger's own context rather than from the
-# payload, so the payloads here are the legacy rules' literals and nothing
-# more.
-_PER_DEATH_COUNTERS: dict[str, tuple[str, dict[str, object]]] = {
-    # Scavenging Ghoul — regeneration fuel, spent by its own activated ability.
-    "corpse": ("add_corpse_counters_for_each_creature_died", {}),
-    # Khabál Ghoul — P/T counters.
-    "+1/+1": ("add_plus1_counters_for_each_creature_died", {"power": 1, "toughness": 1}),
-}
+def _lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+    """"Put a <pair> counter on **each** <noun phrase>." (Basri's Solidarity,
+    Misfortune.)
 
-# The exact subject both handlers act on. Compared for equality rather than
-# probed field by field, so a filter field added to the AST later refuses by
-# default instead of being ignored by a lowering written before it existed.
-_PER_DEATH_SUBJECT = ast.TargetSpec(
-    "this", ast.ObjectFilter(card_types=("creature",), is_source=True)
-)
+    The set is a *description*, so nothing is targeted and nothing is chosen —
+    the handler reads the board as the effect resolves (CR 611.2c) and places
+    the counter on every permanent the phrase matches. Which is why the printed
+    noun phrase travels as a filter the shared matcher tests, rather than being
+    baked into the handler's own name: a kind called
+    ``add_counter_to_each_you_control`` cannot honestly carry "each creature
+    **that player** controls", and a second kind beside it would be one effect
+    with two spellings.
 
-# Both handlers count *every* creature that died, with no narrowing available
-# to them, so any filtered set has to refuse rather than over-count.
-_ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
+    Every refusal below is a way the sentence could otherwise reach more
+    permanents than it names:
+
+    * the counter must be a CR 122.1a P/T pair, because ``place_pt_counters``
+      derives the P/T from the counter's own name and has nowhere to put one
+      that has none;
+    * the count must be a printed number, since nothing resolves an X over a
+      swept set;
+    * every narrowing must be one ``subject_matches`` can *test*. A key it
+      would ignore is a counter on strictly more permanents than the card
+      names, and on a -1/-1 sweep that is the board.
+
+    "**that player** controls" is the one narrowing the matcher refuses outright
+    rather than ignores (it names a seat no read of a board can make), so it is
+    carried through to the handler, which answers it from the seat the
+    announcement froze — the same split ``destroy_all_matching`` already makes
+    of the same two words.
+    """
+    if not is_pt_counter(node.counter):
+        raise LoweringError(
+            f"no handler sweeps a {node.counter} counter onto a described set",
+            node=node,
+        )
+    if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+        raise LoweringError("a swept counter count is a printed number", node=node)
+    described = _filter_payload(node.subject.filter)
+    seat_scoped = described.get("controller") == "that_player"
+    testable = dict(described)
+    if seat_scoped:
+        testable.pop("controller")
+    leftover = sorted(set(testable) - set(TESTABLE_SUBJECT_FILTER_KEYS))
+    if leftover:
+        raise LoweringError(
+            "a counter sweep cannot narrow by: " + ", ".join(leftover), node=node
+        )
+    payload: dict[str, object] = {"counter": node.counter, "filter": described}
+    if node.count.value != 1:
+        payload["count"] = node.count.value
+    return (OracleInstruction("add_counter_to_each_matching", "", payload),)
 
 
 def _fused_tap_enchanted_then_counters(
@@ -960,40 +996,3 @@ def _lower_player_gets_counters(
             "player_gets_poison_counters", "", {"amount": amount, "player": who},
         ),
     )
-
-
-def _lower_for_each(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
-    """"…put a <kind> counter on this creature for each creature that died this
-    turn." (Scavenging Ghoul, Khabál Ghoul.)
-
-    The legacy registry needed a whole-sentence substring rule per card, and the
-    +1/+1 one carries a comment saying it must out-rank the plain "put a +1/+1
-    counter on this creature" rule — which sits 96,500 order slots away, because
-    the two rules are unrelated except that one is a prefix of the other. Losing
-    that race would drop the per-death scaling and put down a single counter.
-    Here the "for each …" clause is a node, so the two shapes are simply
-    different ASTs and there is no race to lose.
-
-    Everything else refuses, because neither handler reads anything from its
-    payload: the subject, the multiplier and the counted set are all fixed in
-    the handler's own source, so a clause differing in any of them would be
-    executed as if it had not.
-    """
-    if node.iterator != _ANY_CREATURE_DIED:
-        raise LoweringError("no handler repeats an effect over this set", node=node)
-    placement = node.effect
-    if not isinstance(placement, ast.PutCounter):
-        raise LoweringError("no handler repeats this effect per death", node=node)
-    if placement.subject != _PER_DEATH_SUBJECT:
-        raise LoweringError(
-            "the per-death counter handlers only ever reach their own source", node=node
-        )
-    if placement.up_to or placement.count != ast.Fixed(1):
-        raise LoweringError("no handler places more than one counter per death", node=node)
-    found = _PER_DEATH_COUNTERS.get(placement.counter)
-    if found is None:
-        raise LoweringError(
-            f"no handler places {placement.counter!r} counters per death", node=node
-        )
-    kind, payload = found
-    return (OracleInstruction(kind, "", dict(payload)),)

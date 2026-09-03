@@ -153,10 +153,28 @@ def _lower_gain_keyword(
                     "keywords": tuple(node.keywords), "duration": None,
                 }),
             )
-        reason = _durationless_reason(node.subject)
-        if reason.startswith("continuous pump"):
-            reason = "continuous keyword grant needs the CR 613 layers engine"
-        raise LoweringError(reason, node=node)
+        # "Put a +1/+1 counter on target creature or **that creature gains
+        # banding, first strike, or trample**." (Nature's Blessing, whose
+        # reminder text says the effect "lasts indefinitely".) A *chosen*
+        # object's grant with no printed duration, which is CR 611.2b's
+        # indefinite one — the same reading the source branch above already
+        # takes, and through the same channels: `grant_keyword` has always
+        # meant "no sweep takes this away" by a ``None`` duration, and
+        # `KEYWORD_GRANT_DURATIONS` documents that value. So the difference
+        # between this and Helm of Chatzuk's "until end of turn" is one payload
+        # entry rather than a second handler.
+        #
+        # Everything past this point is the ordinary target path: the narrowing
+        # is described for the picker, the keyword registry is asked, and a
+        # keyword with no behaviour behind it still refuses.
+        if not _is_target(node.subject):
+            reason = _durationless_reason(node.subject)
+            if reason.startswith("continuous pump"):
+                reason = "continuous keyword grant needs the CR 613 layers engine"
+            raise LoweringError(reason, node=node)
+        duration: str | None = None
+    else:
+        duration = _grant_duration(node, node.duration)
     # Which sweep ends this grant, decided **before** any kind is chosen. Every
     # branch below used to hand the layer-6 channel a bare ``until_eot=True``,
     # so a duration this table does not hold did not refuse — it became end of
@@ -165,7 +183,6 @@ def _lower_gain_keyword(
     # Djinn's line needed a card-keyed hook: the one duration whose loss was
     # *visible* was special-cased into a refusal here, and the hook caught it.
     # The hook is gone with this table.
-    duration = _grant_duration(node, node.duration)
     # "Creatures you control gain flying until end of turn." (Basri, Devoted
     # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
     # kind, resolved over the controller's board by the handler.

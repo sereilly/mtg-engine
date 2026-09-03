@@ -211,6 +211,36 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     if stream.accept_phrase("any", "target"):
         return ast.TargetSpec("any_target", targeted=True)
 
+    # The same union spelled out: "target creature, planeswalker, or player"
+    # (Martyrdom). CR 115.4 says "any target" *is* that list, and Oracle keeps
+    # the long form on the cards that print a damage redirection rather than a
+    # damage deal — one card in this pool, and one that would otherwise be
+    # read as a bare "target creature" with the rest of the phrase left as
+    # unconsumed text.
+    #
+    # It produces the same node as the short spelling, which is the whole
+    # argument for reading it here: one quantifier, so every lowering that
+    # already answers "any target" answers this without knowing there are two
+    # ways to write it. Read before the ordinary noun phrase below, which would
+    # otherwise consume "target creature" and leave the comma.
+    #
+    # The full sequence or nothing: a comma after "target creature" is
+    # ordinary punctuation on dozens of cards ("Destroy target creature, then
+    # …"), so a partial match rewinds and the noun parser sees the stream it
+    # would have seen.
+    long_union = stream.mark()
+    if (
+        stream.accept_word("target")
+        and stream.accept_word("creature")
+        and stream.accept_punct(",")
+        and stream.accept_word("planeswalker")
+        and stream.accept_punct(",")
+        and stream.accept_word("or")
+        and stream.accept_word("player")
+    ):
+        return ast.TargetSpec("any_target", targeted=True)
+    stream.reset(long_union)
+
     # "…chooses and sacrifices **one of those creatures**." (Retribution.) One
     # member of the set an earlier sentence of this same effect named — the
     # singular selector over `parse_bound_subject`'s plural, and its own

@@ -793,27 +793,23 @@ def test_energy_arc_untaps_any_number_and_shields_both_ends(set_pool):
 # may build incidentally - and the card then falls out for free.
 
 
-def test_martyrdom_is_declined_naming_three_parts(set_pool):
-    """Three independent gaps, none of them the granted ability itself:
-
-    1. **The trailing sentence after a quoted grant.** "Only you may activate
-       this ability." sits outside the closing quote, and the quote guard in
-       ``parser._parse_line`` hands the whole line to the quoted-token reader,
-       which has no reading for anything after the quote. The same line with
-       nothing behind the quote parses today.
-    2. **A counted redirect onto a player.** "The next 1 damage that would be
-       dealt to **target creature, planeswalker, or player**" is CR 115.4's
-       "any target", and ``redirect_next_damage_to_source_until_eot`` hangs its
-       record off the *protected permanent* - Daughter of Autumn and Hazduhr
-       the Abbot both print a creature-only slot. A player recipient needs the
-       record to live on a seat.
-    3. **A "who may activate" restriction.** ``activation_restrictions.py``
-       gates *when* an ability may be activated; "Only you may activate this
-       ability" gates *who*, and on a granted ability that is the granting
-       player rather than the permanent's controller.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Martyrdom"])
-    assert not program.supported
+# W2G5's `test_martyrdom_is_declined_naming_three_parts` stood here and is
+# **deleted** by W3G2, not edited: the card landed, so its
+# "assert not program.supported" is false and a decline test whose subject works
+# cannot be kept in any form. All three named parts were right and all three
+# were built - the trailing sentence folds into the quoted text
+# (`parser._attach_granted_ability_permission`), the counted redirect reads
+# CR 115.4's union and hangs its record off a seat
+# (`handlers/damage.redirect_next_damage_to_source_until_eot`), and the "who
+# may activate" clause is a row in `engine/activation_permissions.py` rather
+# than in `activation_restrictions.py` - part 3 named the wrong file, which is
+# a decline list working exactly as intended: it pointed at the question and
+# the next reader corrected the address. The card's tests are in W3G2's block
+# in this file.
+#
+# Recorded here because this is a non-append edit to another group's block, and
+# the integrator's "both sides are pure appends" assertion is meant to fire on
+# it.
 
 
 # --- W2G3: upkeep and counters ---
@@ -1164,3 +1160,134 @@ def test_suffocation_is_declined_naming_four_parts():
     # what this asserts is that neither remaining sentence produced anything.
     kinds = [instruction.kind for instruction in program.instructions]
     assert "deal_damage" not in kinds
+
+
+# --- W3G2: modes, counters and granted abilities ---
+#
+# Martyrdom grants a whole printed ability (CR 113.3) and then says who may use
+# it. Three separate readings meet on one line: the quoted text is compiled by
+# `granted_abilities.py` when the grant is recorded, the trailing permission
+# belongs to *that* ability rather than to the spell, and the ability's own
+# recipient is CR 115.4's union spelled out the long way.
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.activation_permissions import (  # noqa: E402
+    activation_permission_denial as _w3g2_permission_denial,
+)
+from engine.card_loader import load_cards as _w3g2_load  # noqa: E402
+from engine.card_loader import manifest_set_path as _w3g2_path  # noqa: E402
+from engine.models import Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g2_compile  # noqa: E402
+
+_W3G2_LEA = {c.name: c for c in _w3g2_load(_w3g2_path("LEA"))}
+
+
+def _w3g2_martyrdom_board(set_pool):
+    """Martyrdom in hand, one 2/2 each, both seats interactive."""
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("ALL")["Martyrdom"]],
+        library=[_W3G2_LEA["Forest"]] * 5,
+    )
+    p2 = PlayerState(name="P2", library=[_W3G2_LEA["Forest"]] * 5)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    for seat in (0, 1):
+        game._put_permanent_onto_battlefield(
+            seat, Permanent(card=_W3G2_LEA["Grizzly Bears"]), None
+        )
+    mine = list(game.controlled_by(p1))[0]
+    theirs = list(game.controlled_by(p2))[0]
+    return game, p1, p2, mine, theirs
+
+
+def _w3g2_cast_martyrdom(game, mine):
+    return game.queue_from_hand(
+        0, "Martyrdom",
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(mine),
+        target_permanent_ids=[mine.permanent_id],
+    )
+
+
+def test_w3g2_martyrdom_grants_the_whole_printed_ability(set_pool):
+    """CR 113.3: what the creature gains is a printed ability, so the engine
+    records the *text* and the compiler makes the ability from it. The
+    trailing permission is part of that text — printed outside the quotes,
+    but about the granted ability rather than about the spell, which is in a
+    graveyard by the time anybody activates."""
+    game, _p1, _p2, mine, _theirs = _w3g2_martyrdom_board(set_pool)
+
+    assert _w3g2_cast_martyrdom(game, mine).supported
+    game.resolve_stack(pause_for_choices=True)
+
+    program = _w3g2_compile(mine.effective_card)
+    assert len(program.activated_abilities) == 1
+    line = program.activated_abilities[0].source_line
+    assert "Only you may activate this ability" in line
+    assert program.activated_abilities[0].instruction.kind == (
+        "redirect_next_damage_to_source_until_eot"
+    )
+
+
+def test_w3g2_only_the_granting_player_may_activate_martyrdoms_ability(set_pool):
+    """"Only **you**" is the seat that cast Martyrdom, not the creature's
+    controller — read the second way the sentence would be no rule at all,
+    because CR 602.1a already says that. The seat travels on the grant."""
+    game, _p1, _p2, mine, _theirs = _w3g2_martyrdom_board(set_pool)
+    assert _w3g2_cast_martyrdom(game, mine).supported
+    game.resolve_stack(pause_for_choices=True)
+    line = _w3g2_compile(mine.effective_card).activated_abilities[0].source_line
+
+    assert _w3g2_permission_denial(game, 0, mine, line) is None
+    assert "may activate" in (_w3g2_permission_denial(game, 1, mine, line) or "")
+
+
+def test_w3g2_martyrdom_redirects_exactly_one_damage_from_a_player(set_pool):
+    """The granted ability's recipient is CR 115.4's union written out
+    ("target creature, planeswalker, or player"), and a **player** is the half
+    no counted redirect in the pool had a record home for. One point moves and
+    the rest of the event lands normally (CR 615.7's arithmetic with CR 614.9's
+    verb), so the damage is still dealt in full by the same source."""
+    game, p1, p2, mine, _theirs = _w3g2_martyrdom_board(set_pool)
+    assert _w3g2_cast_martyrdom(game, mine).supported
+    game.resolve_stack(pause_for_choices=True)
+
+    activated = game.activate_permanent_ability(
+        0, mine.card.name, target_player_index=0, ability_index=0,
+    )
+    assert activated.supported
+    game.resolve_stack(pause_for_choices=True)
+
+    p2.hand.append(_W3G2_LEA["Lightning Bolt"])
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert p1.life == 18, "one of the three points moved"
+    assert mine.damage_marked == 1
+
+
+def test_w3g2_martyrdom_can_protect_a_creature_too(set_pool):
+    """The other half of the same union. The record hangs off whatever the
+    damage would be dealt to, which ``engine/damage_redirects`` has always
+    allowed to be a player or a permanent (CR 615.1's sibling wording)."""
+    game, _p1, p2, mine, theirs = _w3g2_martyrdom_board(set_pool)
+    assert _w3g2_cast_martyrdom(game, mine).supported
+    game.resolve_stack(pause_for_choices=True)
+
+    activated = game.activate_permanent_ability(
+        0, mine.card.name, target_player_index=1, ability_index=0,
+        target_permanent_index=game.battlefield_index_of(theirs),
+    )
+    assert activated.supported
+    game.resolve_stack(pause_for_choices=True)
+
+    p2.hand.append(_W3G2_LEA["Lightning Bolt"])
+    game.queue_from_hand(
+        1, "Lightning Bolt", target_player_index=1,
+        target_permanent_index=game.battlefield_index_of(theirs),
+    )
+    game.resolve_stack(pause_for_choices=True)
+
+    assert theirs.damage_marked == 2, "one of the three points moved"
+    assert mine.damage_marked == 1

@@ -745,6 +745,7 @@ class StackResolutionMixin:
             exile_instead_of_graveyard=item.exile_instead_of_graveyard,
             cast_from_zone=item.cast_from_zone,
             choices=item.choices,
+            trigger_context=item.trigger_context,
         )
         return
     def _resolve_card(
@@ -768,6 +769,14 @@ class StackResolutionMixin:
         exile_instead_of_graveyard: bool = False,
         cast_from_zone: str = "hand",
         choices: dict | None = None,
+        # What the *announcement* froze that this spell's own text refers back
+        # to. A trigger's context (CR 603.10) has always ridden the stack item;
+        # a spell had none to carry until CR 700.2e gave one a seat nobody on a
+        # board can name — "**an opponent** chooses one —", and then "that
+        # player" in the mode they chose. Same key, same reader
+        # (`handlers/_common.frozen_that_player_seat`), so the phrase has one
+        # answer whether a trigger or a mode choice bound it.
+        trigger_context: dict | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -930,6 +939,7 @@ class StackResolutionMixin:
                         divided_targets=divided_targets,
                         cast_from_zone=cast_from_zone,
                         choices=choices,
+                        trigger_context=trigger_context,
                     )
                 return
             self._apply_spell_text(
@@ -946,6 +956,7 @@ class StackResolutionMixin:
                 divided_targets=divided_targets,
                 cast_from_zone=cast_from_zone,
                 choices=choices,
+                trigger_context=trigger_context,
             )
 
         # ``finish`` may run twice: once at the end of the resolution, and — if

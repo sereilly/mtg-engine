@@ -411,6 +411,82 @@ class SpellCastingMixin:
             f"{self.players[chooser].name} chooses a mode for {card.name}"
         )
 
+    def arm_modal_mode_targets(self, spell_item, chooser_seat: int) -> None:
+        """CR 601.2c for a mode somebody else chose (CR 700.2e).
+
+        The rules order is modes (601.2b) then targets (601.2c), and for these
+        spells the two belong to different players — so the caster cannot name a
+        target while casting: they do not yet know which mode they are naming it
+        for, and a mode the opponent then declines to pick would have published
+        the caster's intentions for nothing.
+
+        So the targets are asked for *after* the answer, and the prompt is armed
+        by that answer. The spell is on the stack by then, which is a departure
+        from the rules' internal order and not from anything observable:
+        `opponent_mode_choice` and this prompt both block every seat, so no
+        player has had priority between CR 601.2i and this — the whole
+        announcement is still one uninterruptible moment.
+
+        The picker is the one `legality._enumerate_targets` builds for every
+        other spell, with the chooser's seat supplied beside the
+        ``that_player_only`` flag the mode's own noun phrase produced ("up to
+        two target creatures **that player** controls"). Nothing else can supply
+        it: the seat came into existence when the mode was chosen.
+
+        A mode that targets nothing arms nothing, which is every mode of every
+        other card that prints this head.
+        """
+        from ...targeting import _from_instructions
+
+        program = compile_card_oracle(spell_item.card)
+        index = spell_item.chosen_mode_index
+        if index is None or not 0 <= index < len(program.modes):
+            return
+        instruction = program.modes[index].instruction
+        if instruction is None:
+            return
+        spec = _from_instructions((instruction,))
+        if spec is None:
+            return
+        if spec.get("that_player_only"):
+            spec = {**spec, "that_player_index": chooser_seat}
+        candidates = self._enumerate_targets(
+            spell_item.caster_index, spell_item.card, spec, for_cast=True,
+        )
+        offered = []
+        for candidate in candidates:
+            if candidate.get("kind") != "permanent":
+                continue
+            perm = self.permanent_at(candidate["seat"], candidate["index"])
+            if perm is None:
+                continue
+            offered.append({
+                "seat": candidate["seat"],
+                "permanent_index": candidate["index"],
+                "permanent_id": perm.permanent_id,
+                "name": perm.card.name,
+            })
+        if not offered:
+            # CR 601.2c names as many targets as the spell requires and no more.
+            # "**Up to** two" requires none, so a board with nothing to destroy
+            # is a legal announcement and not a refusal — the mode simply
+            # destroys nothing. A mode with a *mandatory* target and no legal
+            # one could not have been chosen at all (CR 700.2a), which is a
+            # gate on the choice rather than on this prompt; no card in the pool
+            # prints one, and the refusal it would need is named in ROADMAP.md.
+            self.log.append(
+                f"{spell_item.card.name}: the chosen mode has no legal target"
+            )
+            return
+        self.arm_pending_choice(
+            "modal_mode_targets", spell_item.caster_index,
+            card_name=spell_item.card.name,
+            mode_label=program.modes[index].label,
+            targets=offered,
+            max_targets=int(spec.get("max_targets") or 1),
+            _item=spell_item,
+        )
+
     def _resolve_chosen_modes(
         self, card, mode_choices: list[dict] | None
     ) -> tuple[tuple, str | None]:

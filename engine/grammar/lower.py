@@ -44,6 +44,7 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering.loops import (
+    _lower_for_each,
     _lower_for_each_cost_paid,
     _lower_for_each_counters_placed,
     _lower_for_each_life_lost,
@@ -93,7 +94,6 @@ from .lowering import (
     _lower_discard,
     _lower_draw,
     _lower_exile,
-    _lower_for_each,
     _lower_repeat_process,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
@@ -876,10 +876,21 @@ def _lower_line_statement(
     )
 
 
-def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
+def lower_ability(
+    node: ast.AbilityNode, *, event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """Lower a whole ability line. Keyword and static lines carry no
     instructions of their own — they are recorded by the compiler as keyword or
-    static lines instead."""
+    static lines instead.
+
+    *event* names the **position** the line occupies when that position froze a
+    seat or an object the sentence can refer back to. A trigger reads its own
+    from ``node.event.kind``; an effect line has none of its own, and the one
+    caller that supplies one is the modal assembly in ``engine/oracle.py``,
+    where CR 700.2e's "an opponent chooses one —" makes the mode's "that
+    player" name the chooser (``lowering/_events.OPPONENT_CHOSE_MODE``). It is
+    ignored for every other node kind, which carry their own or none.
+    """
     if isinstance(node, ast.SpellEffectLine):
         # A spell whose **whole** effect is optional used to refuse here. The
         # reason was real and is now gone: the prompt rode
@@ -891,7 +902,7 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
         # last of its prompts is answered (CR 608.2, CR 117.3b), a spell's
         # ``may`` outlives its own resolution exactly like a trigger's. Twiddle
         # and Rebirth are the two cards that reach the shape.
-        return _lower_line_statement(node.statement)
+        return _lower_line_statement(node.statement, event=event)
     if isinstance(node, ast.TriggeredAbilityNode):
         fused = _fused_upkeep_pay_to_untap(node)
         if fused is not None:

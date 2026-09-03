@@ -106,6 +106,10 @@ class OracleInstructionsMixin:
         # anything a *cost* recorded arrives here, because a parameter per
         # choice is the shape `CHOICE_KEYS` exists to avoid.
         choices: dict | None = None,
+        # What the announcement froze for this spell's own text to refer back
+        # to — the same field a triggered ability's resolution already carries,
+        # for CR 700.2e's "an opponent chooses one —" (see `_resolve_card`).
+        trigger_context: dict | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -153,6 +157,7 @@ class OracleInstructionsMixin:
                 },
                 stack_target=stack_target,
                 cast_from_zone=cast_from_zone,
+                trigger_context=trigger_context,
             ),
         )
         state_machine.run(instruction)

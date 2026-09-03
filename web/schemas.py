@@ -103,6 +103,7 @@ ActionKind = Literal[
     "loyalty_recipient_confirm",
     "mode_choice_confirm",
     "opponent_mode_choice_confirm",
+    "modal_mode_targets_confirm",
     "lamp_draw_confirm",
     "outside_game_draw_confirm",
     "assign_defender_piles",

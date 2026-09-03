@@ -423,6 +423,19 @@ def _narrowing_flags(source: dict) -> dict:
         # With no seat supplied the enumerator offers nothing, which is the
         # safe direction: an unanswerable narrowing must never widen to "any".
         flags["defending_player_only"] = True
+    elif source.get("controller") == "that_player":
+        # "up to two target creatures **that player** controls" (Fatal Lore).
+        # The fourth seat test, and `defending_player_only`'s exact shape one
+        # record over: the seat is not relative to whoever is choosing but to
+        # something the *announcement* froze — there, the combat; here,
+        # CR 700.2e's mode choice. Two flags rather than one because they are
+        # two printed phrases reading two different records, and a caller that
+        # can supply one usually cannot supply the other.
+        #
+        # With no seat beside it the enumerator offers nothing, for that flag's
+        # stated reason: an unanswerable narrowing must never widen to "any",
+        # and this one widens to *every creature in the game*.
+        flags["that_player_only"] = True
     if source.get("enchanted_only"):
         # "destroy target **enchanted** creature" (Ramses Overdark) — the
         # positive twin of ``not_enchanted`` below, and a picker flag for the

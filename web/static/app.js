@@ -7151,6 +7151,69 @@ function renderPermanentSetChoiceModal(info) {
   }
 }
 
+// Fatal Lore: the targets of the mode an *opponent* chose (CR 700.2e, then
+// CR 601.2c). The other half of the opponent-mode prompt, on the caster's seat
+// this time, and still inside the announcement — nobody has priority until it
+// is answered. Its own modal rather than the set-choice one above because the
+// two are different prompts on different seats and both can be live in one
+// game; the list is what the server froze when the mode was chosen, so an
+// empty selection is legal wherever the mode printed "up to".
+let modalModeTargetsSelected = new Set();
+
+function getModalModeTargetsInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.modal_mode_targets;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function renderModalModeTargetsModal(info) {
+  const modal = document.getElementById("modalModeTargetsModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    modalModeTargetsSelected = new Set();
+    return;
+  }
+  modal.classList.remove("hidden");
+  const limit = Number(info.max_targets || 1);
+  const subtitle = document.getElementById("modalModeTargetsSubtitle");
+  if (subtitle) {
+    subtitle.textContent = `${info.card_name}: your opponent chose "${info.mode_label || ""}". Choose up to ${limit}.`;
+  }
+  const list = document.getElementById("modalModeTargetsList");
+  const confirmBtn = document.getElementById("modalModeTargetsConfirmBtn");
+  if (list) {
+    list.innerHTML = (info.candidates || [])
+      .map((entry) => {
+        const selectedClass = modalModeTargetsSelected.has(entry.id) ? " selected" : "";
+        const owner = entry.seat === seat ? "yours" : "opponent's";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
+    list.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = Number(el.dataset.id);
+        if (modalModeTargetsSelected.has(id)) modalModeTargetsSelected.delete(id);
+        else if (modalModeTargetsSelected.size < limit) modalModeTargetsSelected.add(id);
+        else return;
+        el.classList.toggle("selected");
+      });
+    });
+  }
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const ids = [...modalModeTargetsSelected];
+      modalModeTargetsSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "modal_mode_targets_confirm", target_permanent_ids: ids });
+    });
+  }
+}
+
 // Chandra, Heart of Fire's −9: a two-zone multi-select search. Any number of
 // the highlighted (matching) cards may be picked across both grids; confirm
 // exiles them, and confirming with nothing picked is the fail-to-find.
@@ -14877,6 +14940,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderSearchExileModal(getSearchExileInfo(state));
   renderUntapUpToModal(getUntapUpToInfo(state));
   renderPermanentSetChoiceModal(getPermanentSetChoiceInfo(state));
+  renderModalModeTargetsModal(getModalModeTargetsInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
   renderRevealedHandPickModal(getRevealedHandPickInfo(state));
   renderGraveyardExileModal(getGraveyardExilePickInfo(state));

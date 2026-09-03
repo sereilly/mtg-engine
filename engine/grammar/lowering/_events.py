@@ -220,6 +220,15 @@ BOUND_CARD_EVENTS = frozenset({
 #: has only one seat and it is already spelled "you". Only the conditions whose
 #: seat *varies* need freezing, and `upkeep_each` is the one the ordinary
 #: (non-registry) upkeep path admits — see `_ORDINARY_UPKEEP_SEATS`.
+#: The pseudo-event a modal spell's bullet is lowered under when the head names
+#: somebody other than the controller as the mode's chooser (CR 700.2e:
+#: "An opponent chooses one —"). It is not a trigger condition and never reaches
+#: `emit`; it is the name the *position* has, exactly as `activated` and
+#: `condition_kind` name a line's position in `engine/oracle.py`. What it buys
+#: is one reading of "that player" across the three families that read it.
+OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
+
+
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
     # "When a player doesn't pay this enchantment's cumulative upkeep,
@@ -275,6 +284,21 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # loop and the same stamp, gated the same way: the seat is whichever
     # player the returning enchantment was told to watch.
     "upkeep_chosen",
+    # "**An opponent** chooses one — … • You put a -1/-1 counter on each
+    # creature **that player** controls and this deals 4 damage to **that
+    # player**." (Misfortune; Fatal Lore prints the same back-reference.)
+    #
+    # Not a trigger, and admitted here anyway, because this table is not about
+    # triggers: it is about the events that *froze* a seat under
+    # `EVENT_SUBJECT_PLAYER`. CR 700.2e names a player who makes the mode
+    # choice, and the choice is where that seat comes into existence — nothing
+    # on a board says who chose, and in a three-player game "an opponent" is
+    # not "the opponent". `_resolve_opponent_mode_choice` stamps the chooser
+    # into the spell's context as it records the mode, which is the same freeze
+    # a fire site makes, so every reader of the phrase — the damage recipient
+    # here, the draw's seat, `subject_filters`' `controller: that_player` —
+    # gets one answer from one key.
+    OPPONENT_CHOSE_MODE,
 })
 
 #: Delayed-trigger events (CR 603.7) whose fire site freezes the **owner** of

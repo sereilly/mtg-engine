@@ -16,7 +16,18 @@ boundary rather than a size.
 
 Each takes its body **already lowered**: `lower.py` reads the sentence inside
 the loop, exactly as it does for the composers next door, so this module needs
-no parser handed down.
+no parser handed down. The one exception is the per-death counter loop at the
+bottom, whose two handlers read the death count out of the trigger's own
+context and take nothing from a payload — so its body is checked rather than
+lowered, and it is `lower.py`'s fall-through for `ForEach`.
+
+It arrived here from `lowering/counters.py` at Alliances' wave 3, when that
+module reached the size guard. That is the mirror re-forming rather than a new
+boundary: it is a `for_each` lowering and the other three already lived here,
+so "which set does this sentence repeat over?" is answered in one module again.
+What it repeats *is* a counter placement, which is exactly why it could sit in
+either — and `lower.py` dispatching `ForEach` is what decides, since a family
+named for the loop is the one that owns every reading of the loop.
 """
 
 from __future__ import annotations
@@ -216,3 +227,65 @@ def _lower_for_each_cost_paid(
             },
         ),
     )
+
+
+# Counter placements repeated once per creature that died this turn, keyed by
+# the counter's printed name — the only thing that differs between the two
+# cards written this way, and what decides which handler runs. Both handlers
+# read the death count from the trigger's own context rather than from the
+# payload, so the payloads here are the legacy rules' literals and nothing
+# more.
+_PER_DEATH_COUNTERS: dict[str, tuple[str, dict[str, object]]] = {
+    # Scavenging Ghoul — regeneration fuel, spent by its own activated ability.
+    "corpse": ("add_corpse_counters_for_each_creature_died", {}),
+    # Khabál Ghoul — P/T counters.
+    "+1/+1": ("add_plus1_counters_for_each_creature_died", {"power": 1, "toughness": 1}),
+}
+
+# The exact subject both handlers act on. Compared for equality rather than
+# probed field by field, so a filter field added to the AST later refuses by
+# default instead of being ignored by a lowering written before it existed.
+_PER_DEATH_SUBJECT = ast.TargetSpec(
+    "this", ast.ObjectFilter(card_types=("creature",), is_source=True)
+)
+
+# Both handlers count *every* creature that died, with no narrowing available
+# to them, so any filtered set has to refuse rather than over-count.
+_ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
+
+
+def _lower_for_each(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
+    """"…put a <kind> counter on this creature for each creature that died this
+    turn." (Scavenging Ghoul, Khabál Ghoul.)
+
+    The legacy registry needed a whole-sentence substring rule per card, and the
+    +1/+1 one carries a comment saying it must out-rank the plain "put a +1/+1
+    counter on this creature" rule — which sits 96,500 order slots away, because
+    the two rules are unrelated except that one is a prefix of the other. Losing
+    that race would drop the per-death scaling and put down a single counter.
+    Here the "for each …" clause is a node, so the two shapes are simply
+    different ASTs and there is no race to lose.
+
+    Everything else refuses, because neither handler reads anything from its
+    payload: the subject, the multiplier and the counted set are all fixed in
+    the handler's own source, so a clause differing in any of them would be
+    executed as if it had not.
+    """
+    if node.iterator != _ANY_CREATURE_DIED:
+        raise LoweringError("no handler repeats an effect over this set", node=node)
+    placement = node.effect
+    if not isinstance(placement, ast.PutCounter):
+        raise LoweringError("no handler repeats this effect per death", node=node)
+    if placement.subject != _PER_DEATH_SUBJECT:
+        raise LoweringError(
+            "the per-death counter handlers only ever reach their own source", node=node
+        )
+    if placement.up_to or placement.count != ast.Fixed(1):
+        raise LoweringError("no handler places more than one counter per death", node=node)
+    found = _PER_DEATH_COUNTERS.get(placement.counter)
+    if found is None:
+        raise LoweringError(
+            f"no handler places {placement.counter!r} counters per death", node=node
+        )
+    kind, payload = found
+    return (OracleInstruction(kind, "", dict(payload)),)
