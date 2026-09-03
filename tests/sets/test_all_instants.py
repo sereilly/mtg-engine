@@ -1032,3 +1032,148 @@ def test_bounty_of_the_hunt_takes_the_counters_back_at_cleanup(set_pool):
 
     assert (bear.effective_power, bear.effective_toughness) == (2, 2)
     assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+
+
+# --- W3-divided: the divided-target announcement ---
+#
+# CR 601.2d is announced as the spell is cast, and the AI had no field to
+# announce it in: every divided spell it cast arrived with no division at all.
+# Contagion and Bounty of the Hunt then resolved putting no counters anywhere,
+# and Pyrokinesis -- which names only creatures -- dealt its four damage to a
+# player's face. Which *side* the shares land on is the half no "did it place a
+# counter?" assertion can see, so every test below checks the seat.
+
+def _w3d_board(set_pool, name, creature="Gorilla Chieftain", each=2):
+    """Seat 0 holding *name*, with *each* copies of one creature per side.
+
+    Deliberately symmetric: a chooser that ignores the sign of the counter it
+    divides still lands on a legal target here, so only the seat tells a right
+    answer from a backwards one.
+    """
+    from engine import Game
+    from engine.models import Permanent, PlayerState
+
+    pool = set_pool("ALL")
+    p0 = PlayerState(
+        name="P0", life=20, hand=[pool[name]],
+        battlefield=[Permanent(card=pool[creature]) for _ in range(each)],
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=pool[creature]) for _ in range(each)],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game
+
+
+def _w3d_cast(game, seat, name, card, x_value=None):
+    """Cast *name* the way an AI seat now does: announce the division first."""
+    from engine.ai_policy import choose_divided_targets
+
+    announced = choose_divided_targets(game, seat, card, x_value)
+    result = game.cast_from_hand(
+        seat, name, target_player_index=1 - seat, x_value=x_value,
+        divided_targets=announced,
+    )
+    game._settle()
+    return announced, result
+
+
+def _w3d_counters(game, seat, key):
+    """How many counters of one kind sit on each of *seat*'s permanents, by
+    battlefield position -- counted per position rather than per name, because
+    the boards are two copies of one card."""
+    return [
+        int(perm.metadata.get(key, 0)) for perm in game.players[seat].battlefield
+    ]
+
+
+def test_contagion_puts_its_minus_counters_on_the_opponents_creatures(set_pool):
+    """"Distribute two -2/-1 counters among one or two target creatures."
+
+    CR 601.2d's announcement, aimed by the *sign* of the counter (CR 122.1a)
+    rather than by the card's name: a -2/-1 is removal, so both counters go on
+    the opponent's board. They used to go nowhere at all -- the resolver read
+    an empty division and logged "no creatures were given counters".
+    """
+    game = _w3d_board(set_pool, "Contagion")
+    announced, result = _w3d_cast(game, 0, "Contagion", set_pool("ALL")["Contagion"])
+
+    assert result.supported, result.details
+    assert announced and all(entry[0] == 1 for entry in announced), announced
+    assert _w3d_counters(game, 1, "-2/-1_counters") == [1, 1], \
+        "the printed count is two targets, each of which must get at least one"
+    assert _w3d_counters(game, 0, "-2/-1_counters") == [0, 0], \
+        "a -2/-1 counter on the caster's own creature is the sign read backwards"
+
+
+def test_bounty_of_the_hunt_puts_its_plus_counters_on_the_casters_own(set_pool):
+    """"Distribute three +1/+1 counters among one, two, or three target
+    creatures."
+
+    The same derivation with the sign the other way round, and the boundary
+    that makes it a derivation rather than a guess: this card and Contagion
+    compile to one instruction kind, and only the counter distinguishes them.
+    """
+    game = _w3d_board(set_pool, "Bounty of the Hunt")
+    announced, result = _w3d_cast(
+        game, 0, "Bounty of the Hunt", set_pool("ALL")["Bounty of the Hunt"],
+    )
+
+    assert result.supported, result.details
+    assert announced and all(entry[0] == 0 for entry in announced), announced
+    assert sum(_w3d_counters(game, 0, "plus_counters")) == 3
+    assert _w3d_counters(game, 1, "plus_counters") == [0, 0], \
+        "a +1/+1 counter on the opponent's creature is the sign read backwards"
+
+
+def test_pyrokinesis_divides_its_damage_among_creatures_not_a_face(set_pool):
+    """"Pyrokinesis deals 4 damage divided as you choose among any number of
+    **target creatures**."
+
+    The printed noun names no player, so a seat is not a legal target of it
+    (CR 601.2c). With no division announced the resolver fell through to the
+    engine's older single-target path, which has only ``target_player_index``
+    to read -- so a creature-only spell burned a player for four.
+    """
+    game = _w3d_board(set_pool, "Pyrokinesis")
+    announced, result = _w3d_cast(
+        game, 0, "Pyrokinesis", set_pool("ALL")["Pyrokinesis"],
+    )
+
+    assert result.supported, result.details
+    assert announced == [(1, 0, 4)], announced
+    assert game.players[1].life == 20, "the card names creatures, not a player"
+    assert len(game.players[1].battlefield) == 1, \
+        "four damage is lethal to a 3/3 (CR 704.5g)"
+    assert len(game.players[0].battlefield) == 2
+
+
+def test_a_divided_spell_naming_no_target_at_all_is_refused(set_pool):
+    """CR 601.2d divides "among **one or more** targets", so a divided spell
+    proposed with none is an illegal proposal and CR 601.2e returns the game to
+    the moment before it -- nothing spent.
+
+    Contagion is the sharpest case in the set: its alternative cost is "pay 1
+    life and exile a black card", so a cast that got past the gate paid a real
+    price for an announcement the rules never allowed.
+    """
+    from engine import Game
+    from engine.models import PlayerState
+
+    pool = set_pool("ALL")
+    p0 = PlayerState(name="P0", life=20, hand=[pool["Contagion"]])
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(0, "Contagion")
+
+    assert not result.supported
+    assert "601.2d" in result.details, result.details
+    assert [card.name for card in game.players[0].hand] == ["Contagion"]
+    assert (game.players[0].life, game.players[1].life) == (20, 20)
+    assert not game.stack
+# --- end W3-divided ---

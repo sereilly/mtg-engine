@@ -1466,3 +1466,81 @@ def test_601_2c_a_legal_sequence_wrapped_announcement_still_resolves_its_other_s
         ("Weird Token", 2)
     ], game.log
 # --- end GyRes ---
+
+
+# --- W3-divided: CR 601.2d needs one target or more ---
+#
+# ``division_refusal`` answered only the *shares* question, and the casting path
+# asked it only when a division had been announced. So a divided spell proposed
+# with nothing at all -- no share, no target -- walked past both: it was cast,
+# for its full cost, into a resolution with nothing to divide among.
+
+
+@pytest.mark.cr("601.2d")
+def test_601_2d_a_divided_spell_must_have_one_target_or_more():
+    """601.2d: "If the spell requires the player to divide or distribute an
+    effect ... **among one or more targets**, the player announces the
+    division."
+
+    An absent *division* is not a refusal -- an evenly-divided spell has none by
+    definition, and a non-interactive seat takes the even split. An absent
+    *target list* is one, and the two used to share an answer.
+    """
+    from engine.divided_damage import CHOSEN, EVENLY, division_refusal
+
+    assert "601.2d" in division_refusal(4, [], division=CHOSEN)
+    assert "601.2d" in division_refusal(4, [], division=EVENLY), \
+        "the rule is about targets, and every divided spell has to have one"
+    # ...unless the caster named one through the engine's older single-target
+    # channel, which is a lawful announcement of one target taking all of it.
+    assert division_refusal(4, [], division=CHOSEN, named_targets=1) is None
+    # An announced division is still judged on its own terms.
+    assert division_refusal(4, [(1, 0, 4)], division=CHOSEN) is None
+
+
+@pytest.mark.cr("601.2e")
+def test_601_2e_an_illegal_divided_proposal_costs_the_caster_nothing(catalog_by_name):
+    """601.2e returns the game to the moment before an illegal proposal.
+
+    Fire Covenant is the case that shows the cost of getting this wrong: "As an
+    additional cost to cast this spell, pay X life", and "X damage divided as
+    you choose among any number of **target creatures**". With no creature on
+    any battlefield there is no legal announcement at all, and the spell used to
+    be cast anyway -- three life paid, three damage to a player's face, for a
+    spell that may not target one.
+    """
+    covenant = catalog_by_name["Fire Covenant"]
+    p1 = PlayerState(name="P1", hand=[covenant], life=20)
+    game = _two_player_game(p1, PlayerState(name="P2", life=20))
+
+    result = game.cast_from_hand(0, "Fire Covenant", target_player_index=1, x_value=3)
+
+    assert result.supported is False
+    assert "601.2d" in result.details, result.details
+    assert (p1.life, game.players[1].life) == (20, 20), "601.2e: nothing was spent"
+    assert [card.name for card in p1.hand] == ["Fire Covenant"]
+    assert not game.stack
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_players_face_counts_as_the_named_target_only_where_the_card_admits_one(
+    catalog_by_name,
+):
+    """601.2c: the caster announces a target "for each target the spell
+    requires", and what may be one is the card's own noun.
+
+    Pyrotechnics divides "among any number of targets", so a seat is a lawful
+    one and a cast naming only ``target_player_index`` is a legal one-target
+    announcement. Fire Covenant divides among "target creatures", so the same
+    field names no target at all -- and the gate has to tell them apart, or it
+    either refuses every burn spell or lets every creature-only one hit a face.
+    """
+    for name, expected in (("Pyrotechnics", True), ("Fire Covenant", False)):
+        card = catalog_by_name[name]
+        p1 = PlayerState(name="P1", hand=[card], life=20)
+        game = _two_player_game(p1, PlayerState(name="P2", life=20))
+
+        result = game.cast_from_hand(0, name, target_player_index=1, x_value=3)
+
+        assert result.supported is expected, (name, result.details)
+# --- end W3-divided ---
