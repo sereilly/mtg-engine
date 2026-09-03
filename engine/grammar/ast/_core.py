@@ -304,9 +304,11 @@ class Times:
 
 
 @dataclass(frozen=True)
-class PowerOfSubject:
+class CharacteristicOfTarget:
     """``the power of target creature blocking or blocked by this creature``
-    (Sentinel) — one named object's power, read at resolution.
+    (Sentinel), ``the toughness of target creature blocking or being blocked by
+    this creature **minus 1**`` (Sworn Defender) — one named object's
+    characteristic, read at resolution.
 
     Beside :class:`GreatestPowerAmong` and not inside it: that node aggregates
     over a described *set*, this one reads a single referent — typically a
@@ -314,8 +316,29 @@ class PowerOfSubject:
     sentence's target. A lowering that accepts it must therefore describe the
     target it names, or refuse; dropping it would leave a picker with nothing
     to enumerate.
+
+    *characteristic* is a field and not half the class name, for exactly the
+    reason :class:`CharacteristicOfSubject` gives one field down: a
+    ``ToughnessOfTarget`` beside a ``PowerOfTarget`` would be two copies of one
+    production reaching two accessors through one resolution, and the next card
+    printing a third word would need a third copy. This node **was**
+    ``PowerOfSubject``, single-characteristic, and Sworn Defender is the card
+    that printed the second word.
+
+    *offset* is the printed constant the phrase adds or subtracts ("…minus 1"),
+    and it is payload for :class:`BoardCount`'s stated reason: "its toughness
+    minus 1" and "its power plus 2" are one arithmetic with one number changed.
+    Dropping it would set a base P/T one point off and report the card
+    supported — the dropped-rider class.
+
+    It is **not** the same node as :class:`Plus`. "1 plus the power of that
+    creature" is a printed number *in front of* the phrase and stays a ``Plus``
+    over this one; "the toughness of … minus 1" is a modifier *inside* it, and
+    the two are different because only the second one binds to the read.
     """
     subject: "TargetSpec"
+    characteristic: str = "power"    # power | toughness
+    offset: int = 0
 
 
 @dataclass(frozen=True)
@@ -373,7 +396,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------

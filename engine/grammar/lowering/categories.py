@@ -136,7 +136,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The CR 613.4b rewrite template (Sentinel, Wall of Tombstones, Halfdane,
     # Brine Hag). The same category as the setters above: a one-shot layer-7b
     # write, however its value is computed and however long it lasts.
-    "set_source_base_toughness_from_target_power": "pump",
+    "set_source_base_pt_from_target": "pump",
     "set_source_base_toughness_from_count": "pump",
     "set_source_base_pt_from_target_until_next_upkeep": "pump",
     "set_base_pt_of_creatures_that_damaged_source": "pump",

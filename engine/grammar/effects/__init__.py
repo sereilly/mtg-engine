@@ -67,6 +67,7 @@ from .characteristics import (
     _parse_for_each,
     _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
+    _parse_becomes_base_pt,
     _parse_change_text,
 )
 from .types import (
@@ -205,6 +206,7 @@ __all__ = [
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
     "_parse_change_base_pt",
+    "_parse_becomes_base_pt",
     "_parse_change_text",
     "_parse_becomes",
     "_parse_no_longer_supertype",

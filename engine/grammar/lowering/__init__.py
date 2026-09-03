@@ -115,10 +115,10 @@ from .characteristics import (
     _lower_pump,
     _lower_change_base_pt,
     _lower_set_base_pt,
-    _lower_become_color,
     _lower_change_text,
 )
 from .types import (
+    _lower_become_color,
     _lower_become_creature,
     _lower_change_land_type,
     _lower_change_supertype,

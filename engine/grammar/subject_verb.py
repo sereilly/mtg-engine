@@ -40,6 +40,7 @@ from .effects import (
     _parse_ante,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
+    _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
     _parse_no_longer_supertype,
     _parse_can_be_targeted_as_though,
@@ -447,6 +448,17 @@ def parse_subject_verb(
                 return no_damage
         if token.text in ("becomes", "become"):
             return _parse_becomes(stream, source_spec)
+        # "This creature**'s power becomes** the toughness of target creature
+        # …" (Sworn Defender). CR 613.4b's rewrite in the possessive voice,
+        # where the verb belongs to a *characteristic* of the subject rather
+        # than to the subject itself — so the dispatcher's own token is the
+        # possessive marker and not a verb at all. Non-consuming on refusal:
+        # "'s" opens sentences this has no business claiming, and one it cannot
+        # finish keeps the "unrecognized effect verb" it already had.
+        if token.text == "'s":
+            rewritten = _parse_becomes_base_pt(stream, source_spec)
+            if rewritten is not None:
+                return rewritten
         # "Target snow land **is no longer snow**." (Arcum's Weathervane.)
         # Non-consuming on refusal: "is" opens sentences this has no business
         # claiming, so anything it cannot finish keeps its own refusal.

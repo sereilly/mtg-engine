@@ -1326,3 +1326,112 @@ def test_w2g3_every_group_card_compiles_with_every_line_read(set_pool):
         assert claimed >= len(lines), (name, lines)
         for trigger in program.triggered_abilities:
             assert trigger.supported, (name, trigger.source_line)
+
+
+# --- W3G4: creature singletons ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+
+
+def _w3g4_vanilla(name: str, power: int, toughness: int) -> CardDefinition:
+    """A creature with no text, so the only thing under test is the number the
+    card being tested reads off it."""
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w3g4_blocked_by(set_pool, name: str, attacker_pt: tuple[int, int]):
+    """*name* (P2's) blocking an attacker of *attacker_pt* (P1's).
+
+    The relation the ability's noun phrase names is "blocking or being blocked
+    by this creature", which nothing on a board at rest can be, so every test
+    below has to reach the declare-blockers step rather than assert about a
+    compiled program.
+    """
+    subject = Permanent(card=set_pool("ALL")[name])
+    attacker = Permanent(card=_w3g4_vanilla("Attacker", *attacker_pt))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[subject], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    for perm in (subject, attacker):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: [0]})[0]
+    return game, subject, attacker
+
+
+@pytest.mark.parametrize("attacker_pt,expected", [((4, 6), (5, 5)), ((1, 1), (0, 2))])
+def test_sworn_defender_crosses_the_blocked_creature_s_stats(
+    set_pool, attacker_pt, expected
+):
+    """"{1}: This creature's power becomes the toughness of target creature
+    blocking or being blocked by this creature minus 1 until end of turn, and
+    its toughness becomes 1 plus the power of that creature until end of turn."
+
+    CR 613.4b, layer 7b, with the two stats **crossed**: power from the other
+    creature's toughness and toughness from its power. Parametrized because the
+    card is only interesting when the two numbers differ — a 4/4 attacker would
+    make a reading that dropped the crossing pass.
+    """
+    game, defender, _attacker = _w3g4_blocked_by(set_pool, "Sworn Defender", attacker_pt)
+
+    result = game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert (defender.effective_power, defender.effective_toughness) == expected
+
+
+def test_sworn_defender_s_rewrite_ends_with_the_turn(set_pool):
+    """Both clauses print "until end of turn", where Sentinel's twin prints no
+    duration at all. The word is payload on one instruction, so the two cards
+    differ only in that flag — and this is the half that would silently outlive
+    its turn if the flag were dropped."""
+    game, defender, _attacker = _w3g4_blocked_by(set_pool, "Sworn Defender", (4, 6))
+    game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+    assert (defender.effective_power, defender.effective_toughness) == (5, 5)
+
+    game.resolve_cleanup_step(0)
+
+    assert (defender.effective_power, defender.effective_toughness) == (1, 3), (
+        "the printed base P/T comes back at cleanup (CR 514.2)"
+    )
+
+
+def test_sworn_defender_is_refused_out_of_combat(set_pool):
+    """CR 602.2b via 601.2c: the printed target is a creature "blocking or being
+    blocked by this creature", so with nobody in combat with it the mandatory
+    target cannot be filled and the activation is refused with nothing paid —
+    the same gate Sentinel goes through, which is the point of the two cards
+    sharing one instruction kind."""
+    defender = Permanent(card=set_pool("ALL")["Sworn Defender"])
+    bystander = Permanent(card=_w3g4_vanilla("Bystander", 6, 6))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bystander]),
+        PlayerState(name="P2", battlefield=[defender]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        1, "Sworn Defender", permanent_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert (defender.effective_power, defender.effective_toughness) == (1, 3)

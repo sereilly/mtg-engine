@@ -323,7 +323,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Tolaria, Urborg) is `grant_target_keyword_until_eot` with a minus sign.
     "remove_target_keyword_until_eot": "activated_pump",
     # Sentinel, beside `set_base_pt_target_until_eot`.
-    "set_source_base_toughness_from_target_power": "activated_pump",
+    "set_source_base_pt_from_target": "activated_pump",
     # Every linked-duration steal: Aladdin's artifact, Merieke Ri Berit's and
     # Willow Satyr's creature, Orcish Squatters' land. One kind, because what
     # differs between them is which fact the sweep re-checks and that is
