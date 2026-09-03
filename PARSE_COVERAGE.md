@@ -229,7 +229,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | static-line table | 362 |
 | keyword table | 328 |
 | aura enchant noun (oracle_instructions attach) | 136 |
-| card_hooks bespoke (name-keyed) | 95 |
+| card_hooks bespoke (name-keyed) | 94 |
 | activation_restrictions.py | 69 |
 | aura static (oracle_instructions/permanent_state) | 50 |
 | auras.py (attached effect) | 43 |

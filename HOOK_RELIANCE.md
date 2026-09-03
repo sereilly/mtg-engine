@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**62 of 1725 supported cards (3.6%)** carry at least one name-keyed entry, across **68 entries** in 6 registries. The pool is 1725 cards, 100.0% supported.
+**61 of 1725 supported cards (3.5%)** carry at least one name-keyed entry, across **67 entries** in 6 registries. The pool is 1725 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **1,029 hand-written entries** covering **939 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **1,014 hand-written entries** covering **923 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -23,7 +23,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | LEA | 290 | 290 (100.0%) | 35 (12.1%) | 388 | 33 (8.5%) | 39 | 13.4 |
 | LEB | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
 | 2ED | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
-| ARN | 78 | 78 (100.0%) | 21 (26.9%) | 107 | 19 (17.8%) | 23 | 29.5 |
+| ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
 | 3ED | 296 | 296 (100.0%) | 29 (9.8%) | 389 | 28 (7.2%) | 32 | 10.8 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
@@ -34,8 +34,8 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | HML | 115 | 115 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | 5ED | 434 | 434 (100.0%) | 12 (2.8%) | 631 | 11 (1.7%) | 13 | 3.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ALL *(measured)* | 144 | 125 (86.8%) | 0 (0.0%) | 221 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **1725** | **1725 (100.0%)** | **62 (3.6%)** | **2670** | **58 (2.2%)** | **68** | **3.9** |
+| ALL *(measured)* | 144 | 130 (90.3%) | 0 (0.0%) | 227 | 0 (0.0%) | 0 | 0.0 |
+| **Whole pool (shipped, deduped)** | **1725** | **1725 (100.0%)** | **61 (3.5%)** | **2670** | **57 (2.1%)** | **67** | **3.9** |
 
 *(measured)* — ALL are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -45,7 +45,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 57 | 58 |
+| `CARD_LINE_INSTRUCTIONS` | 56 | 57 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -105,7 +105,6 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 - **Reverse Polarity** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ring of Ma'rûf** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Rohgahh of Kher Keep** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Serendib Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Shahrazad** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Simulacrum** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Sindbad** (`CARD_LINE_INSTRUCTIONS`) — 1 line
