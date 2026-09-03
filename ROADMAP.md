@@ -902,6 +902,50 @@ their other line. `picker_sweep.py --set ALL`: three findings, Arcane Denial in
 the Roots class (text names a choice, derivation offers no picker, so the client
 sends a bare cast) plus Tidal Control and Tornado.
 
+### Round plan — wave 3, the closing wave. 125 → 144 the target
+
+Nineteen cards left, and the split is no longer by fragment: the fragment
+census is exhausted, and what remains is four families of singletons plus one
+group that owns the population no census can see.
+
+- **W3G1 — repeated additional costs (CR 601.2b).** Primitive Justice, Taste of
+  Paradise, Undergrowth, Bounty of the Hunt. `you may pay {1}{G} **any number
+  of times**` has no machinery anywhere in the engine — one grep, one hit, in
+  `shields.py` about something else — and the load-bearing question is that
+  "for each additional {1}{R} you paid" needs the *count* to survive from
+  announcement to resolution, not the boolean Undergrowth alone would want.
+  W1G4 named this in its own scope and it did not land. Bounty of the Hunt's
+  pitch half already reads through `alternative_costs`, so it is its effect
+  half only — the refusal census quotes that line because the census probes the
+  grammar and the grammar is not its claimant.
+- **W3G2 — chosen modes, counters, granted abilities.** Fatal Lore, Misfortune,
+  Nature's Blessing, Martyrdom. W2G4's modal head and CR 700.2e chooser are
+  built, so two of three lines already read on both modal cards; what is
+  missing is a draw with a **ceiling the drawer chooses under**, and an ability
+  **granted in quotes**.
+- **W3G3 — iterative library procedures.** Gustha's Scepter, Helm of Obedience,
+  Phyrexian Portal, Lim-Dûl's Vault. Each is a *procedure* rather than an
+  effect. The machinery is mostly there and unobvious: `pending_choices`
+  already makes the game wait through a chain of decisions armed by answering
+  earlier ones (CR 608.2 / 117.3b), `resumption.py` already lets a loop record
+  the rest of itself, and W2G4's `effects/search` is the first parse-only
+  family. Briefed to prefer two verified cards with two individually-named
+  declines over four half-built ones.
+- **W3G4 — the creature singletons.** Sworn Defender, Stromgald Spy, Benthic
+  Explorers, Soldevi Sentry, Gargantuan Gorilla. Two carry W2G1's enumerated
+  declines as leads, and one of those leads is already half disproved:
+  `engine/revealed_hands.py` exists and `web/serialization.py` reads it, so the
+  Spy's "without which the card is hollow" part is done — but the module is a
+  table of *static* lines and the Spy's is a one-shot with a duration.
+- **W3G5 — the cards that already look done.** Winter's Night and Omen of Fire
+  are the only unsupported two; the group's real subject is the four hollow
+  lines (Tidal Control, Dystopia, Tornado, Sol Grail), the two picker findings
+  (the same cards again), and the five remaining unclaimed parse sentences.
+  Its leverage is that Dystopia, Nature's Wrath and Omen of Fire all print
+  `sacrifices a <X> or <Y> permanent of their choice` — three cards, one
+  production. This is the group that decides whether the set can be promoted
+  honestly, and its brief says so: three numbers must reach zero.
+
 ### Round plan — wave 1, five worktree groups
 
 Split by grammar family, ranked by the fragment census rather than the
@@ -1317,6 +1361,43 @@ at, by moving the divided-target description into `_common` rather than
 appending — "a 999 with four sibling branches still to merge is precisely the
 cap breach the playbook records as caused by no single branch".
 
+### W2G3 — upkeep and counters. Merged last; 115 → 125.
+
+Ten cards (Diseased Vermin, Fyndhorn Druid, Ivory Gargoyle, Juniper Order
+Advocate, Phantasmal Sphere, Rogue Skycaptain, Scars of the Veteran, Spiny
+Starfish, Splintering Wind, Varchild's War-Riders), zero hooks. ALL's grammar
+row 70.5% → **79.7% parsed**, and the set's hook reliance is **0.0% of 125
+supported cards** — sixty-three cards implemented across three waves without a
+single name-keyed entry.
+
+**Five of ten scopings were wrong and four in the usual direction: the
+machinery existed and the gap was a spelling.** `Trample; rampage 1` was never
+a question — `normalize_creature_line` rewrites `;` to `,` and
+`_is_supported_keyword_line` admits the result, so the census was reporting the
+*grammar* refusing a line the grammar does not own, an artefact of the report
+re-probing every line of a card that failed overall. Scars of the Veteran's
+declared blocker ("reading back how much a shield absorbed") shipped with
+Sacred Boon; what was missing was two spellings, "on **it**" where Sacred Boon
+prints "that creature" and the "if it's a creature" guard that "any target"
+needs. Juniper Order Advocate was filed under `static_bonuses.py`, whose effect
+half is anchored on the literal subject `this creature ` — the Advocate buffs a
+*set*, so it is a `lord_buffs` anthem, which already carried conditions.
+
+**Three latent traps, none of them a mis-play, all closed.**
+`@upkeep_effect("upkeep_self", "deal_damage")` ignores its recipient payload and
+always damages the controller — safe today only by which cards exist, and named
+rather than fixed because no card can demonstrate the wrong answer.
+`cumulative_upkeep` had no `INSTRUCTION_CATEGORIES` row, so reached from the
+grammar it lowered to `__ungated__` and was reported as "the grammar cannot
+parse this" — an instruction produced and then discarded. And `create_token`
+resolved its seat with `game.players.index(caster)`, the equality-search-over-a-
+mutable-dataclass class CLAUDE.md bans.
+
+**The differential moved 11 of 1,869 programs and the eleventh was free**:
+Phelddagrif, which the "target opponent creates a token" production picked up
+without being asked. Cyclone, Sacred Boon, Storm Cauldron and Puppet Master
+were byte-identical.
+
 ### W2G4 — library and modal. Merged; 102 → 108.
 
 Six cards (Browse, Ashnod's Cylix, Diminishing Returns, Misinformation,
@@ -1420,6 +1501,53 @@ once**, correctly, when W2G2 had edited a W1G4 decline docstring in place to
 record that its named part had landed. That is the convention working, not
 breaking: the strict "both sides are pure appends" rule inverts to "the incoming
 side must be", and the file is resolved on that instead.
+
+### Wave 2 closed: 89 → 125 of 144, zero hooks added
+
+Five worktree groups, and the last of them merged into a main that had already
+absorbed the other four — which is the integration shape the wave's findings
+come from. **Zero name-keyed hooks across 36 cards**, so ALL's hooked share of
+its supported pool stands at **0.0%** after three waves and 63 implemented
+cards.
+
+**The mover-versus-in-place hazard fired a second time in the same wave, and
+from the other direction.** W2G4 had extracted `imperatives` out of
+`subject_verb`; W2G3, branched before that split, rewrote the same dispatch
+region in place to route its three upkeep paragraphs through one
+`parse_upkeep_paragraph` entry point. The conflict presented as ~430 lines of
+"ours: a short imperative call, theirs: the whole dispatcher". Idiom 26's
+resolution held exactly: take the *structure* from the mover and re-apply the
+*change* in the file it moved to — the consolidation now sits in
+`imperatives.py`, where its call site went.
+
+**Two branches wrote the same production and the merge was clean.** W2G3's
+"target opponent creates a token" and W2G5's Phelddagrif work are the same
+widening of the same prefix table; because W2G4 had *moved* that block into
+`effects/game.py` as `_parse_create_token_for_recipient`, the incoming copy
+conflicted only in its comment, and the code was already identical. A pure
+comment conflict is what a duplicated *idea* looks like when the duplication is
+benign — the same shape with the block still in place would have been idiom 25,
+silent.
+
+**And idiom 25 had already fired, unnoticed, in the previous merge.** The
+post-wave duplicate-idea sweep found `_parse_entering_counters` defined
+**byte-identically** in both `subject_verb.py` and `imperatives.py`: W2G4's
+split had copied it rather than moved it, and the only caller was in the new
+home. `test_no_module_defines_the_same_name_twice` cannot see it — it looks for
+a repeated name *within* a module — and nothing else can either, because the
+dead copy imports clean, tests green and is simply never reached. **A module
+split needs three scans, not two**: the documented dead-import sweep, the
+missing-import scan, and a cross-module duplicate-definition sweep over the
+names the split touched.
+
+**The per-set test convention held, with its documented failure mode absent.**
+Three shared files conflicted; `test_all_creatures.py` and
+`test_all_enchantments.py` reconstructed from the merge base with "both sides
+are pure appends" asserted byte for byte, and `test_all_instants.py` needed the
+weaker form — both sides had *deleted* a decline test whose card had since
+landed (W2G2's Contagion, W2G3's Scars of the Veteran), non-overlapping, so the
+deletions auto-merged above the append region and only the two per-set blocks
+collided.
 
 ### Wave 1 closed: 62 → 89 of 144, zero hooks added
 
