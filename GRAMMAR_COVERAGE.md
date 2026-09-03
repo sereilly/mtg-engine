@@ -16,23 +16,23 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 85.1% | 83.2% | 46.9% | 165 |
-| LEB | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
-| 2ED | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
+| LEA | 290 | 388 | 85.3% | 83.5% | 47.2% | 166 |
+| LEB | 292 | 389 | 85.3% | 83.5% | 47.3% | 167 |
+| 2ED | 292 | 389 | 85.3% | 83.5% | 47.3% | 167 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 87.4% | 85.1% | 49.6% | 173 |
+| 3ED | 296 | 389 | 87.7% | 85.3% | 49.9% | 174 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 91.2% | 90.4% | 54.2% | 246 |
+| 4ED | 368 | 520 | 91.3% | 90.6% | 54.4% | 247 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
-| 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
+| 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 72.8% | 67.7% | 41.8% | 187 |
-| **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
+| MIR *(measured)* | 335 | 545 | 73.8% | 69.4% | 43.5% | 195 |
+| **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -44,13 +44,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 350 | 179 | expected a subject |  |
+| 348 | 177 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
-| 95 | 55 | unconsumed text |  |
+| 92 | 52 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 11 | 3 | expected a keyword ability |  |
 | 9 | 3 | expected 'the number of' in a where-clause |  |
 | 9 | 8 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -58,6 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
+| 5 | 2 | expected a keyword ability |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
@@ -72,7 +72,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-2526 cards, 3044 lines.
+2532 cards, 3050 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -81,6 +81,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
 - **Abu Ja'far**
   - `When this creature dies, destroy all creatures blocking or blocked by it. They can't be regenerated.`
+- **Abyssal Hunter**
+  - `{B}, {T}: Tap target creature. This creature deals damage equal to its power to that creature.`
 - **Abyssal Specter**
   - `Whenever this creature deals damage to a player, that player discards a card.`
   - `Whenever this creature deals damage to a player, that player discards a card.`
@@ -524,6 +526,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bone Harvest**
   - `Put any number of target creature cards from your graveyard on top of your library.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Bone Mask**
+  - `{2}, {T}: The next time a source of your choice would deal damage to you this turn, prevent that damage. Exile cards from the top of your library equal to the damage prevented this way.`
 - **Bone Pit Brute**
   - `When this creature enters, target creature gets +4/+0 until end of turn.`
 - **Bone Shaman**
@@ -603,6 +607,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
   - `Creatures you control get +2/+0 until end of turn.`
+- **Burning Palm Efreet**
+  - `{1}{R}{R}: This creature deals 2 damage to target creature with flying and that creature loses flying until end of turn.`
 - **Burning Shield Askari**
   - `{R}{R}: This creature gains first strike until end of turn.`
 - **Burnout**
@@ -894,6 +900,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Crash Through**
   - `Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Draw a card.`
+- **Crimson Hellkite**
+  - `{X}, {T}: This creature deals X damage to target creature. Spend only red mana on X.`
 - **Crimson Manticore**
   - `{R}, {T}: This creature deals 1 damage to target attacking or blocking creature.`
   - `{R}, {T}: This creature deals 1 damage to target attacking or blocking creature.`
@@ -2334,6 +2342,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You and target player exchange control of the creature you each control with the greatest mana value. Then exchange control of artifacts the same way. If two or more permanents a player controls are tied for greatest, their controller chooses one of them.`
 - **Juzám Djinn**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Kaervek's Hex**
+  - `Kaervek's Hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature.`
 - **Kaervek's Torch**
   - `Kaervek's Torch deals X damage to any target.`
 - **Kaervek, the Spiteful**
@@ -3289,6 +3299,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a +1/+1 counter on this creature. Then you may pay {X}, where X is the number of +1/+1 counters on it. If you don't, tap this creature and it deals X damage to you.`
 - **Princess Lucrezia**
   - `{T}: Add {U}.`
+- **Prismatic Circle**
+  - `{1}: The next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage.`
 - **Prismite**
   - `{2}: Add one mana of any color.`
 - **Prodigal Sorcerer**
@@ -3474,6 +3486,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target card from your graveyard to your hand.`
   - `Return target card from your graveyard to your hand.`
   - `Return target card from your graveyard to your hand.`
+- **Reign of Chaos**
+  - `• Destroy target Plains and target white creature.`
+  - `• Destroy target Island and target blue creature.`
 - **Reincarnation**
   - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
 - **Reinforcements**
@@ -3514,6 +3529,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Reveka deals 2 damage to any target and doesn't untap during your next untap step.`
 - **Reverberation**
   - `All damage that would be dealt this turn by target sorcery spell is dealt to that spell's controller instead.`
+- **Reverse Damage**
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+  - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
 - **Revitalize**
   - `You gain 3 life.`
   - `Draw a card.`
@@ -4505,6 +4527,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Triskelion**
   - `Remove a +1/+1 counter from this creature: It deals 1 damage to any target.`
   - `Remove a +1/+1 counter from this creature: It deals 1 damage to any target.`
+- **Tropical Storm**
+  - `Tropical Storm deals X damage to each creature with flying and 1 additional damage to each blue creature.`
 - **Truce**
   - `Each player may draw up to two cards. For each card less than two a player draws this way, that player gains 2 life.`
   - `Each player may draw up to two cards. For each card less than two a player draws this way, that player gains 2 life.`

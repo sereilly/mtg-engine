@@ -9,6 +9,8 @@ from ..shields import (
     make_capped_charge,
     make_capped_source,
     make_color_shield,
+    make_exile_charge,
+    make_exile_source,
     make_half_charge,
     make_half_source,
     make_life_gain_charge,
@@ -330,6 +332,39 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
     else:
         add_shield(caster, make_life_gain_charge(granted_by))
         game.log.append(f"{caster.name} armed a Reverse Damage shield")
+    return True, "resolved"
+
+
+@effect_handler("grant_exile_prevention_shield")
+def grant_exile_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Bone Mask: "{2}, {T}: The next time a source of your choice would deal
+    damage to you this turn, prevent that damage. Exile cards from the top of
+    your library equal to the damage prevented this way."
+
+    Reverse Damage's shield with a different sentence after it (CR 615.5), so
+    it makes the same choice its three siblings make — a permanent on any
+    battlefield, or a spell on the stack matched by the ``CardDefinition`` it
+    will deal its damage with. What differs is only what the interceptor does
+    once it has absorbed, which is what ``Shield.kind`` selects.
+    """
+    caster = context.caster
+    granted_by = context.card.name if context.card else None
+    if context.stack_target is not None:
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_players=()
+        )
+    if chosen is not None:
+        add_shield(caster, make_exile_source(chosen, granted_by))
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} will prevent the next damage from "
+            f"{getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        add_shield(caster, make_exile_charge(granted_by))
+        game.log.append(f"{caster.name} will prevent the next damage dealt to them")
     return True, "resolved"
 
 

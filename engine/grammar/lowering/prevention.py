@@ -131,6 +131,24 @@ def _lower_prevent_damage(
         raise LoweringError(
             "only a counted shield takes a second size", node=node
         )
+    # CR 615.5's additional effect ("…**You gain life equal to the damage
+    # prevented this way.**"). Exactly one shape below reads it — the
+    # unnarrowed chosen-source shield — and it is refused here for every other,
+    # rather than in each of them, because every branch was written before the
+    # rider existed and reads none of it: a Circle or a blanket printed with one
+    # would arm without it and report the card supported. The dropped-rider
+    # class, in the direction that quietly does less than the card says.
+    if node.prevented_rider is not None and (
+        node.from_filter != ast.ObjectFilter()
+        or not isinstance(node.amount, ast.Fixed)
+        or node.combat_only
+        or node.dealt_by is not None
+    ):
+        raise LoweringError(
+            "only the unnarrowed chosen-source shield carries an effect after "
+            "the prevention",
+            node=node,
+        )
     # "…prevent **half** that damage, rounded down." (Dark Sphere.) Read before
     # the source-scoped branch below, which counts a shield in whole instances
     # and would arm one that prevents the lot.
@@ -182,6 +200,22 @@ def _lower_prevent_damage(
                     "an unnarrowed chosen-source shield prevents the whole "
                     "instance, not a counted amount",
                     node=node,
+                )
+            # CR 615.5's additional effect. Its own instruction per rider
+            # rather than a payload flag, because ``Shield.kind`` names the
+            # *interceptor* that consumes the shield — and what happens after
+            # the absorption is what that interceptor does. Reverse Damage
+            # reached `grant_reverse_damage_shield` through a name-keyed hook
+            # until this round; the same instruction is what the production
+            # emits, so the card's compiled program is unchanged and only the
+            # hook is gone.
+            rider_kinds = {
+                "gain_life": "grant_reverse_damage_shield",
+                "exile_from_library": "grant_exile_prevention_shield",
+            }
+            if node.prevented_rider is not None:
+                return (
+                    OracleInstruction(rider_kinds[node.prevented_rider], "", {}),
                 )
             return (OracleInstruction("grant_whole_prevention_shield", "", {}),)
         # "…a source of your choice **of the chosen color**" (Prismatic

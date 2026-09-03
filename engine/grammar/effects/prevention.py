@@ -268,6 +268,56 @@ def _finish_named_source_shield(
     )
 
 
+#: CR 615.5's additional effect, keyed by the verb that opens it. A closed table
+#: rather than a nested statement parse, for the reason
+#: ``ast.PreventDamage.prevented_rider`` gives: the rider's quantity does not
+#: exist until the shield has absorbed something, so it runs from the
+#: interceptor rather than as a lowered step — and the interceptor is what the
+#: name selects. A card printing a third rider adds a row here, a shield kind
+#: and the code behind it, and is refused until it does.
+_PREVENTED_THIS_WAY_RIDERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("gain_life", ("you", "gain", "life")),
+    (
+        "exile_from_library",
+        ("exile", "cards", "from", "the", "top", "of", "your", "library"),
+    ),
+)
+
+
+def _parse_prevented_this_way_rider(stream: TokenStream) -> str | None:
+    """``. <effect> equal to the damage prevented this way.`` — the sentence a
+    shield's own card prints after the prevention (CR 615.5).
+
+    "You gain life equal to the damage prevented this way" (Reverse Damage) and
+    "Exile cards from the top of your library equal to the damage prevented this
+    way" (Bone Mask). One production, because everything from "equal to" onward
+    is the same clause and the amount is the same number — what the two cards do
+    with it is the row above.
+
+    Read here rather than as a sentence of its own for
+    :func:`_parse_instead_rider`'s reason one screen up: it refers to an amount
+    that does not exist yet, so a statement layer that split them would run it
+    over zero.
+
+    Refuses with the cursor untouched, so a prevention followed by any other
+    sentence keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    for name, phrase in _PREVENTED_THIS_WAY_RIDERS:
+        if stream.accept_phrase(*phrase):
+            if stream.accept_phrase(
+                "equal", "to", "the", "damage", "prevented", "this", "way"
+            ):
+                stream.accept_punct(".")
+                return name
+            stream.reset(mark)
+            return None
+    stream.reset(mark)
+    return None
+
+
 def _parse_source_of_choice_effect(
     stream: TokenStream,
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -410,6 +460,10 @@ def _parse_source_of_choice_effect(
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
+    # "…prevent that damage. **You gain life equal to the damage prevented this
+    # way.**" (Reverse Damage.) CR 615.5's additional effect, read as part of
+    # this sentence — see :func:`_parse_prevented_this_way_rider`.
+    rider = _parse_prevented_this_way_rider(stream)
     if colours:
         filt = ast.ObjectFilter(colors=tuple(colours))
     elif card_type:
@@ -422,7 +476,9 @@ def _parse_source_of_choice_effect(
         filt = ast.ObjectFilter(chosen_color=True)
     else:
         filt = ast.ObjectFilter()
-    return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
+    return ast.PreventDamage(
+        ast.Fixed(1), to=recipient, from_filter=filt, prevented_rider=rider
+    )
 
 
 def _parse_damage_cant_be_prevented(

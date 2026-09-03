@@ -728,14 +728,32 @@ def test_colour_scoped_shield_carries_its_colour():
     ) == [("grant_prevention_shield", {"amount": 1, "protection_kind": "color", "prevention_color": "R"})]
 
 
-def test_an_uncoloured_source_shield_is_refused():
+def test_an_uncoloured_source_shield_keeps_the_sentence_after_it():
     """Reverse Damage's "a source of your choice" with no colour is a different
     handler (it also gains life). Lowering it as a colourless Circle of
-    Protection would silently drop the life gain."""
-    result = compile_line(
+    Protection would silently drop the life gain.
+
+    This asserted the *refusal* until Mirage printed Bone Mask — the same seven
+    words with a different rider — which made the shape a production and retired
+    the name-keyed hook that had been carrying this card. The property the test
+    protects is unchanged and now held one step further along: the rider is read,
+    and it is what selects the shield.
+    """
+    assert _instructions(
         "The next time a source of your choice would deal damage to you this turn, "
         "prevent that damage. You gain life equal to the damage prevented this way.",
-        card_name="Reverse Damage",
+        "Reverse Damage",
+    ) == [("grant_reverse_damage_shield", {})]
+
+
+def test_a_narrowed_source_shield_refuses_the_sentence_after_it():
+    """The rider's other direction. Only the unnarrowed chosen-source shield has
+    an interceptor that runs an additional effect, so a Circle printed with one
+    refuses rather than arming a shield that quietly does less than the card."""
+    result = compile_line(
+        "The next time a red source of your choice would deal damage to you this turn, "
+        "prevent that damage. You gain life equal to the damage prevented this way.",
+        card_name="An Invented Circle",
     )
 
     assert not result.usable

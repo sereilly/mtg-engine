@@ -271,6 +271,20 @@ class DamageCantBePreventedOrRedirected:
 @dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
+    #: CR 615.5's "additional effect, which may refer to the amount of damage
+    #: that was prevented" — the sentence printed *after* the prevention, as the
+    #: name of what it does: "You gain life equal to the damage prevented this
+    #: way" (Reverse Damage) is ``"gain_life"``, "Exile cards from the top of
+    #: your library equal to the damage prevented this way" (Bone Mask) is
+    #: ``"exile_from_library"``.
+    #:
+    #: A name rather than a nested statement, and the reason is the amount: the
+    #: rider's quantity does not exist until the shield has absorbed something,
+    #: so it cannot be an ordinary lowered step reading the scratchpad — it runs
+    #: *inside* the prevention, from the interceptor, with the shields that did
+    #: the work in hand. Which is exactly why ``shields.Shield.kind`` names the
+    #: interceptor: the rider and the absorption are one effect.
+    prevented_rider: "str | None" = None
     to: Recipient | None = None
     from_filter: ObjectFilter | None = None
     duration: Duration = field(default_factory=Duration)

@@ -71,7 +71,8 @@ from .pt import remove_plus1_counters
 from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_GAIN_LIFE, PREVENT_HALF, PREVENT_FROM_COLOR,
                       PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
-                      PREVENT_NEXT_N, PREVENT_WHOLE, Shield, drop_spent, shields_on)
+                      PREVENT_NEXT_N, PREVENT_WHOLE, PREVENT_AND_EXILE,
+                      Shield, drop_spent, shields_on)
 
 # Order bands. Blanket combat shields run first: they are flags rather than
 # charges, so applying one costs the recipient nothing, and letting it go first
@@ -128,6 +129,12 @@ SOURCE_HALF = 150
 GENERIC_HALF = 160  # the same shield with no source recorded
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
+# "…prevent that damage. Exile cards from the top of your library equal to the
+# damage prevented this way." (Bone Mask.) CR 615.5's other rider, beside
+# Reverse Damage's and just behind it: both absorb the whole instance, and the
+# one that *pays* its controller is the shield a seat spends first. CR 616.1e
+# permits any order; this is the default a non-interactive seat takes.
+SOURCE_EXILE_SHIELD = 305
 # "…prevent that damage", with nothing after it (Pentagram of the Ages). The
 # same absorption as Reverse Damage's shield against the same chosen source, so
 # it sits beside it — behind, because Reverse Damage's rider gains its
@@ -135,6 +142,7 @@ SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
 # CR 616.1e permits any order; this is the default a non-interactive seat takes.
 SOURCE_WHOLE = 310
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
+GENERIC_EXILE_SHIELD = 405  # Bone Mask with no chosen source
 GENERIC_WHOLE = 410  # the same rider-less shield with no source recorded
 COLOR_SHIELD = 500  # Circle of Protection
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
@@ -776,6 +784,48 @@ def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and gained as life."""
     return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, rider=_gain_prevented_life)
+
+
+def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) -> None:
+    """Bone Mask's rider (CR 615.5): the prevention happens first, then cards
+    equal to what it absorbed leave the top of the shielded player's library.
+
+    The recipient's own library, because "your library" is the shield holder's
+    and this shield only ever sits on a player (``player_only`` below). An empty
+    library exiles what is there and no more — running out is not a loss until
+    a draw is attempted (CR 104.3c), and this is not a draw.
+    """
+    recipient = event["recipient"]
+    taken = min(prevented, len(recipient.library))
+    exiled = [recipient.library.pop(0) for _ in range(taken)]
+    recipient.exile.extend(exiled)
+    game.log.append(
+        f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
+        f"{recipient.name}"
+        + (
+            ", exiling " + ", ".join(card.name for card in exiled)
+            if exiled else ", with no cards left to exile"
+        )
+    )
+
+
+@prevention_effect(
+    SOURCE_EXILE_SHIELD, applies=_arms(PREVENT_AND_EXILE, chosen=True, player_only=True)
+)
+def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Bone Mask: the whole instance from the chosen source, and then the
+    library pays for it."""
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=True, rider=_exile_for_prevented)
+
+
+@prevention_effect(
+    GENERIC_EXILE_SHIELD,
+    applies=_arms(PREVENT_AND_EXILE, chosen=False, player_only=True),
+)
+def _exile_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """The same shield armed without recording a chosen source (AI / headless):
+    the next damage event from any source is prevented and paid for."""
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=False, rider=_exile_for_prevented)
 
 
 def _log_whole_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

@@ -77,6 +77,13 @@ PREVENT_AND_GAIN_LIFE = "prevent_and_gain_life"
 #: ``PREVENT_AND_GAIN_LIFE``, because ``kind`` names the interceptor that
 #: consumes the shield and gaining life is what that interceptor does.
 PREVENT_WHOLE = "prevent_whole"
+#: "…prevent that damage. **Exile cards from the top of your library equal to
+#: the damage prevented this way.**" (Bone Mask.) CR 615.5's additional effect
+#: again, one effect over from ``PREVENT_AND_GAIN_LIFE`` — its own kind rather
+#: than a flag on that one for the reason ``kind`` exists: it names the
+#: interceptor that consumes the shield, and what the interceptor does after
+#: absorbing is the whole difference between these two cards.
+PREVENT_AND_EXILE = "prevent_and_exile"
 #: "The next time a <colour> source of your choice would deal damage to you this
 #: turn, prevent that damage" (CR 615.9's rechecked property).
 PREVENT_FROM_COLOR = "prevent_from_color"
@@ -473,6 +480,19 @@ def make_life_gain_source(source, source_name: str | None = None) -> Shield:
 
 def make_life_gain_charge(source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
+
+
+def make_exile_source(source, source_name: str | None = None) -> Shield:
+    """Bone Mask's shield against the source its controller chose."""
+    return Shield(
+        kind=PREVENT_AND_EXILE, uses=1, source=source, source_name=source_name
+    )
+
+
+def make_exile_charge(source_name: str | None = None) -> Shield:
+    """The same shield with no source recorded — the AI/headless activation,
+    exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
+    return Shield(kind=PREVENT_AND_EXILE, uses=1, source_name=source_name)
 
 
 def make_whole_source(source, source_name: str | None = None) -> Shield:

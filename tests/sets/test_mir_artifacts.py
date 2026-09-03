@@ -135,3 +135,90 @@ def test_razor_pendulum_reads_a_life_total(set_pool):
     game.resolve_end_step(1)
     game.resolve_stack()
     assert game.players[1].life == 6
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game as _W1G3Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def _w1g3_bone_mask_board(set_pool, library_size=5):
+    pool = set_pool("MIR")
+    mask = _W1G3Permanent(card=pool["Bone Mask"])
+    ogre = _W1G3Permanent(card=pool["Wild Elephant"])
+    other = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(
+        name="P1", battlefield=[mask], life=20,
+        library=[pool["Island"]] * library_size,
+    )
+    p2 = _W1G3PlayerState(name="P2", battlefield=[ogre, other], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, p1, mask, ogre, other
+
+
+def test_bone_mask_prevents_the_whole_instance_and_pays_from_the_library(set_pool):
+    """"{2}, {T}: The next time a source of your choice would deal damage to
+    you this turn, prevent that damage. **Exile cards from the top of your
+    library equal to the damage prevented this way.**"
+
+    Reverse Damage's printed sentence with a different rider after it, which is
+    what made the shape a production: the pool had exactly one card printing
+    those seven words, so it sat in `card_hooks.py` under that card's name.
+    A second card sharing the shape is the entry bar failing, and the hook is
+    gone.
+
+    The rider is CR 615.5's additional effect and runs *inside* the prevention,
+    so it is sized by what was absorbed rather than by what was announced — a
+    whole instance, however big (CR 615.8).
+    """
+    from tests.helpers import _damage_dealt
+
+    game, p1, mask, ogre, other = _w1g3_bone_mask_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Bone Mask", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    assert mask.tapped
+
+    assert _damage_dealt(game, p1, 4, source=ogre) == 0, "the whole instance"
+    assert p1.life == 20
+    assert len(p1.library) == 1, "four cards paid for four damage"
+    assert len(p1.exile) == 4
+
+
+def test_bone_mask_waits_for_the_source_it_chose(set_pool):
+    """Without this the test above passes for a shield that answers to
+    everything — and then the library pays for damage the card never stopped."""
+    from tests.helpers import _damage_dealt
+
+    game, p1, mask, ogre, other = _w1g3_bone_mask_board(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Bone Mask", target_player_index=1, target_permanent_index=0
+    )
+
+    assert _damage_dealt(game, p1, 3, source=other) == 3
+    assert p1.exile == []
+    assert _damage_dealt(game, p1, 3, source=ogre) == 0
+    assert len(p1.exile) == 3
+
+
+def test_bone_mask_exiles_what_is_left_of_an_empty_library(set_pool):
+    """Running out is not a loss until a draw is attempted (CR 104.3c), and
+    this is not a draw — so the rider takes what is there and stops."""
+    from tests.helpers import _damage_dealt
+
+    game, p1, mask, ogre, other = _w1g3_bone_mask_board(set_pool, library_size=1)
+
+    game.activate_permanent_ability(
+        0, "Bone Mask", target_player_index=1, target_permanent_index=0
+    )
+    assert _damage_dealt(game, p1, 5, source=ogre) == 0
+
+    assert p1.library == []
+    assert len(p1.exile) == 1
+    assert not p1.lost

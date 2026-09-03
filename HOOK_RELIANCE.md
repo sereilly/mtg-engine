@@ -12,31 +12,31 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**61 of 1869 supported cards (3.3%)** carry at least one name-keyed entry, across **67 entries** in 6 registries. The pool is 1869 cards, 100.0% supported.
+**60 of 1869 supported cards (3.2%)** carry at least one name-keyed entry, across **66 entries** in 6 registries. The pool is 1869 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **936 hand-written entries** covering **852 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **922 hand-written entries** covering **838 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 35 (12.1%) | 388 | 33 (8.5%) | 39 | 13.4 |
-| LEB | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
-| 2ED | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
+| LEA | 290 | 290 (100.0%) | 34 (11.7%) | 388 | 32 (8.2%) | 38 | 13.1 |
+| LEB | 292 | 292 (100.0%) | 34 (11.6%) | 389 | 32 (8.2%) | 38 | 13.0 |
+| 2ED | 292 | 292 (100.0%) | 34 (11.6%) | 389 | 32 (8.2%) | 38 | 13.0 |
 | ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 29 (9.8%) | 389 | 28 (7.2%) | 32 | 10.8 |
+| 3ED | 296 | 296 (100.0%) | 28 (9.5%) | 389 | 27 (6.9%) | 31 | 10.5 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | FEM | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
-| 4ED | 368 | 368 (100.0%) | 21 (5.7%) | 520 | 20 (3.8%) | 23 | 6.2 |
+| 4ED | 368 | 368 (100.0%) | 20 (5.4%) | 520 | 19 (3.7%) | 22 | 6.0 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | HML | 115 | 115 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | ALL | 144 | 144 (100.0%) | 0 (0.0%) | 251 | 0 (0.0%) | 0 | 0.0 |
-| 5ED | 434 | 434 (100.0%) | 12 (2.8%) | 631 | 11 (1.7%) | 13 | 3.0 |
+| 5ED | 434 | 434 (100.0%) | 11 (2.5%) | 631 | 10 (1.6%) | 12 | 2.8 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| MIR *(measured)* | 335 | 227 (67.8%) | 1 (0.4%) | 377 | 0 (0.0%) | 1 | 0.4 |
-| **Whole pool (shipped, deduped)** | **1869** | **1869 (100.0%)** | **61 (3.3%)** | **2921** | **57 (2.0%)** | **67** | **3.6** |
+| MIR *(measured)* | 335 | 234 (69.9%) | 1 (0.4%) | 387 | 0 (0.0%) | 1 | 0.4 |
+| **Whole pool (shipped, deduped)** | **1869** | **1869 (100.0%)** | **60 (3.2%)** | **2921** | **56 (1.9%)** | **66** | **3.5** |
 
 *(measured)* — MIR are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -46,7 +46,7 @@ Held at this rate, supporting the 26,113-card release line would need about **93
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 56 | 57 |
+| `CARD_LINE_INSTRUCTIONS` | 55 | 56 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -102,7 +102,6 @@ Held at this rate, supporting the 26,113-card release line would need about **93
 - **Power Sink** (`ON_SPELL_COUNTERED`)
 - **Pyramids** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Raging River** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Reverse Damage** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Reverse Polarity** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ring of Ma'rûf** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Rohgahh of Kher Keep** (`CARD_LINE_INSTRUCTIONS`) — 1 line

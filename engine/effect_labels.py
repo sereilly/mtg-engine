@@ -351,6 +351,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     "reassign_blockers_between_attackers": "activated_combat",
     "redirect_source_class_damage_until_eot": "activated_prevention",
     "grant_whole_prevention_shield": "activated_prevention",
+    "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------
     # Same rule as M21's block above: the bucket the *ability* belongs to, not
     # the one its instruction kind reads like — and where the kind is a
