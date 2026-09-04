@@ -110,6 +110,29 @@ class BlockCountGrant:
 
 
 @dataclass(frozen=True)
+class BecomeBlocked:
+    """``Target unblocked attacking creature becomes blocked.`` (Dazzling
+    Beauty; CR 509.1h.)
+
+    The mirror of :class:`RemoveFromCombat` below: that one takes a creature
+    out of combat, this one changes what its being in combat *means*. CR 509.1h
+    is explicit that a creature can be blocked by no creatures at all — that is
+    the state an attacker is left in when its blockers leave, and it is the
+    state this sentence puts one into directly. So there is nobody to deal
+    damage to and nobody to take it: the attacker deals no combat damage at all
+    unless it has trample, and the reminder text says the same thing from the
+    other end ("This spell works on creatures that can't be blocked").
+
+    A separate node rather than a value on the "becomes" type/colour production,
+    because *blocked* is not a characteristic (CR 613 has no layer for it) — it
+    is a fact about a combat, recorded on the permanent and swept when that
+    combat ends.
+    """
+
+    subject: Recipient
+
+
+@dataclass(frozen=True)
 class RemoveFromCombat:
     """``Remove <subject> from combat.`` (Disharmony; CR 506.4c.)
 

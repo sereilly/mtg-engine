@@ -13,6 +13,8 @@ from ..enter_effects import (
     chooses_color_on_enter,
     chooses_two_land_types_on_enter,
     chooses_creature_type_on_enter,
+    chooses_land_type_on_enter,
+    chooses_two_card_names_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     chooses_opponent_on_enter,
     COPY_ARTIFACT_ON_ENTER,
@@ -48,6 +50,7 @@ from ..land_animation import (
     LandAnimation,
     land_animation_from_payload,
 )
+from ..cast_restrictions import CHOSEN_CARD_NAMES
 from ..land_types import (
     CHOSEN_LAND_TYPES,
     STATIC_SUPERTYPE_REMOVAL_KIND,
@@ -487,6 +490,82 @@ class PermanentStateMixin:
                 default_color=None, needs_creature_type=True,
                 default_creature_type=permanent.metadata["chosen_creature_type"],
             )
+
+        # "As this enchantment enters, choose **a land type**." (Shimmer.) The
+        # fourth quality this one sentence names, and a different catalog from
+        # the *basic* pair above: CR 205.3i's land types include Desert and
+        # Urza's, which no "basic land type" clause may name. Armed exactly as
+        # the creature type is, with the record stamped first so an AI or
+        # headless controller never blocks.
+        #
+        # The static beside it reads the record ("Each land of the chosen type
+        # has phasing"), and the record did not exist when the entry
+        # recalculation ran — so recompute, the way Illusionary Terrain's pair
+        # and Jihad's anthem both do.
+        if chooses_land_type_on_enter(text):
+            permanent.metadata["chosen_land_type"] = (
+                self._default_chosen_land_type(caster_index)
+            )
+            self._recalculate_lord_buffs()
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=False, opponents=[], default_seat=None,
+                default_color=None, needs_land_type=True,
+                default_land_type=permanent.metadata["chosen_land_type"],
+            )
+
+        # "As this enchantment enters, **you and an opponent each** choose a
+        # card name other than a basic land card name." (Null Chamber.) Two
+        # names and two choosers, so it is two armings of the one prompt rather
+        # than a new kind: what differs from Runed Halo's single choice is who
+        # answers and which slot the answer lands in, and both are data.
+        #
+        # Read *before* Runed Halo's phrase, which is a substring of this one —
+        # tried first it would claim this line, record one name and leave the
+        # opponent's choice unmade, which is the enchantment doing half of what
+        # it prints.
+        #
+        # Both defaults are stamped first so an AI or headless seat never
+        # blocks, exactly as every other arming here does. Each seat's default
+        # names something that seat can see and would want gone: the priciest
+        # nonland card in an opponent's graveyard, else one of their
+        # permanents. Naming nothing would make the enchantment inert, which is
+        # legal and is not a choice any player would make (idiom 8).
+        if chooses_two_card_names_on_enter(text):
+            opponents = [
+                i for i, p in enumerate(self.players)
+                if i != caster_index and not p.lost
+            ]
+            # CR 201.2 lets the controller pick which opponent answers; with
+            # nobody to ask, the controller's own name is the whole choice.
+            opponent_index = opponents[0] if opponents else None
+            # The enchantment itself is excluded from both defaults. Naming
+            # it is legal (CR 201.2 bounds nothing) and stops nothing that is
+            # already on the battlefield, so it is not a choice a player would
+            # make — and it is the *first* thing an opponent's scan of the
+            # controller's permanents reaches.
+            source_name = permanent.card.name
+            names = [
+                self._default_named_card(caster_index, exclude=source_name),
+                (
+                    self._default_named_card(opponent_index, exclude=source_name)
+                    if opponent_index is not None else ""
+                ),
+            ]
+            permanent.metadata[CHOSEN_CARD_NAMES] = names
+            for slot, seat in enumerate([caster_index, opponent_index]):
+                if seat is None:
+                    continue
+                self.arm_pending_choice(
+                    "enter_choice", seat,
+                    card_name=permanent.card.name, permanent=permanent,
+                    needs_color=False, opponents=[], default_seat=None,
+                    default_color=None, needs_card_name=True,
+                    card_name_slot=slot,
+                    choices=self._nameable_cards(seat, exclude=source_name),
+                    default_card_name=names[slot],
+                )
 
         # "As this enchantment enters, choose a card name." (Runed Halo.) The
         # choice is made *as* the permanent enters (CR 614.1c), so it is stamped
@@ -1802,6 +1881,87 @@ class PermanentStateMixin:
             return "human"
         return max(sorted(counts), key=lambda word: counts[word])
 
+    def _nameable_cards(
+        self, chooser_index: int, *, exclude: str | None = None
+    ) -> list[str]:
+        """The card names *chooser_index* can see, for a "choose a card name"
+        picker.
+
+        CR 201.2 does not bound the choice by any board — a player may name any
+        card — so this is an *offer* rather than a whitelist, and the resolver
+        deliberately accepts a name that is not on it. What it excludes is the
+        one thing the printed line excludes: a basic land card name, which
+        Null Chamber may not name.
+        """
+        from ..grammar.phrases import BASIC_LAND_WORDS
+
+        basics = {word.capitalize() for word in BASIC_LAND_WORDS}
+        seen = [
+            card.name
+            for seat, player in enumerate(self.players)
+            if seat != chooser_index and not player.lost
+            for card in reversed(player.graveyard)
+        ] + [
+            perm.card.name
+            for seat, player in enumerate(self.players)
+            if seat != chooser_index and not player.lost
+            for perm in self.controlled_by(seat)
+        ]
+        return sorted({
+            name for name in seen if name not in basics and name != exclude
+        })
+
+    def _default_named_card(
+        self, chooser_index: int, *, exclude: str | None = None
+    ) -> str:
+        """The card name *chooser_index* takes when nobody chooses.
+
+        The first name they can see that is not a basic land — the choice a
+        player would make with a card whose whole point is to stop something,
+        and the reason a default is stated rather than left empty (idiom 8):
+        naming nothing makes the enchantment inert, which is legal and
+        pointless. Empty when there is nothing to see, which is the honest
+        answer for a board with nothing on it.
+        """
+        offered = self._nameable_cards(chooser_index, exclude=exclude)
+        return offered[0] if offered else ""
+
+    def _default_chosen_land_type(self, caster_index: int) -> str:
+        """The land type Shimmer takes when nobody chooses.
+
+        The type *caster_index*'s opponents control most of — the choice a
+        player would make with the card, and the reason a default is stated
+        rather than left to the first word of a catalog (idiom 8): a type
+        nobody controls makes the enchantment inert, which is legal and
+        pointless.
+
+        Read through ``computed_types`` (CR 613 layer 4) rather than off the
+        printed type line, so a land some earlier effect turned into a Swamp
+        counts as a Swamp — the same read ``subject_matches`` will make when
+        the static is applied. ``basic_land_types`` would answer only for the
+        five basics, and this choice ranges over every land type there is.
+
+        "Island" when no opponent controls a land at all: any word is a legal
+        choice there, and it is the type the pool prints most.
+        """
+        from ..grammar.vocabulary import LAND_TYPES
+        from ..layer_bridge import computed_types
+
+        counts: dict[str, int] = {}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                card_types, subtypes = computed_types(perm)
+                if "land" not in card_types:
+                    continue
+                for subtype in subtypes:
+                    if subtype in LAND_TYPES:
+                        counts[subtype] = counts.get(subtype, 0) + 1
+        if not counts:
+            return "island"
+        return max(sorted(counts), key=lambda word: counts[word])
+
     def _default_terrain_land_types(self, caster_index: int) -> tuple[str, str]:
         """The ordered pair Illusionary Terrain takes when nobody chooses.
 
@@ -1982,6 +2142,20 @@ class PermanentStateMixin:
         # joins, with nothing to add back or subtract (CR 613.5).
         if any(target_perm.has_keyword(word) for word in filt.without_keywords):
             return False
+        # "Each land **of the chosen type** has phasing." (Shimmer.) The one
+        # field of this filter whose word is not in the sentence: it was chosen
+        # as *source_perm* entered (CR 614.1c) and recorded there, so this is
+        # the only reader that can answer it — which is exactly why the pure
+        # matcher one file over refuses the key outright.
+        #
+        # Through ``has_type`` like every other type read here (CR 613 layer 4),
+        # so a land Phantasmal Terrain turned into an Island is an Island. No
+        # word recorded yet means the anthem reaches nothing, which is the safe
+        # direction: dropping the narrowing would phase out every land there is.
+        if filt.chosen_land_type:
+            word = getattr(source_perm, "metadata", {}).get("chosen_land_type")
+            if not word or not target_perm.has_type(str(word)):
+                return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:

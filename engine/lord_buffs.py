@@ -255,6 +255,18 @@ class LordBuffFilter:
     # is not a narrower positive, and folding the two would make "noncreature
     # artifact" and "artifact creature" the same phrase.
     excluded_types: tuple[str, ...] = ()
+    # "Each land **of the chosen type** has phasing." (Shimmer.) The land type
+    # this buff's *source* recorded as it entered (CR 614.1c, CR 205.3i), so
+    # the set the anthem reaches is named by a word the sentence never prints.
+    # Its own field rather than a ``subtypes`` entry because there is no word
+    # to put there until the choice is made, and a sentinel one would be
+    # compared against every real subtype by every reader.
+    #
+    # ``_lord_buff_matches`` holds the source, which is what lets it answer;
+    # a buff carrying this with nothing chosen yet reaches nothing, which is
+    # the safe direction — a dropped narrowing would phase out every land on
+    # the board.
+    chosen_land_type: bool = False
 
 
 @dataclass(frozen=True)
@@ -740,6 +752,13 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["card_types"] = list(buff.filter.card_types)
     if buff.filter.excluded_types:
         payload["exclude_types"] = list(buff.filter.excluded_types)
+    # "Each land **of the chosen type**…" (Shimmer). A flag, not a word: the
+    # word is on the source and is read at match time. Dropping it here is the
+    # widening this file's every field comment warns about, and this payload is
+    # the *only* thing the consumer sees — `_lord_filter`'s round trip proves
+    # the table can carry a restriction, not that the instruction does.
+    if buff.filter.chosen_land_type:
+        payload["chosen_land_type"] = True
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -771,6 +790,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             without_keywords=tuple(payload.get("without_keywords") or ()),
             card_types=tuple(payload.get("card_types") or ("creature",)),
             excluded_types=tuple(payload.get("exclude_types") or ()),
+            chosen_land_type=bool(payload.get("chosen_land_type")),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

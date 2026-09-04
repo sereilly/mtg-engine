@@ -1290,3 +1290,303 @@ def test_w2g3_the_circle_asks_for_a_target_and_then_a_source(set_pool):
         # its own picker.
         "cost_spec": {"kind": "creature", "own_only": True, "sacrifice_cost": True},
     }, spec
+
+
+# --- W2G5: a chosen *land* type (CR 205.3i, CR 614.1c) ---
+#
+# Shimmer names a fourth quality the "as this enters, choose ..." sentence can
+# carry, and the whole of what made it hard is that the phrase it is read back
+# by is **identical** to An-Zerrin Ruins': "of the chosen type". The catalog the
+# word came from is spelled exactly once, in the head noun — a land there, a
+# creature there — so the noun phrase produces a different filter key and the
+# choice is recorded in a different slot on the source. One key for both would
+# have let a Shimmer that named Desert answer a sentence asking for a creature
+# type, and stored a land type under a creature type's name for the next reader
+# to trip on.
+
+from engine import Game, PlayerState
+from engine.grammar import compile_line
+from engine.lord_buffs import lord_buff_from_payload, lord_buff_payload
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import _mk_card
+
+
+def _w2g5_land(name: str, subtype: str) -> Permanent:
+    return Permanent(card=_mk_card(name, f"Land - {subtype}", ""))
+
+
+def _w2g5_shimmer_board(set_pool, *, chosen: str | None = None, interactive=False):
+    """Shimmer on seat 0; seat 1 holding an Island, a Forest and a Desert.
+
+    A Desert on purpose: CR 205.3i's land types are not the five basics, and
+    "choose a land type" may name any of them — which is why this choice does
+    not travel on the five-way encoding Illusionary Terrain's ordered pair uses.
+    """
+    pool = set_pool("MIR")
+    shimmer = Permanent(card=pool["Shimmer"])
+    island = _w2g5_land("Isle", "Island")
+    forest = _w2g5_land("Wood", "Forest")
+    desert = _w2g5_land("Dust", "Desert")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[shimmer]),
+        PlayerState(name="P2", battlefield=[island, forest, desert]),
+    ])
+    game.enforce_mana_costs = False
+    # A non-interactive seat takes the default the moment the prompt is armed,
+    # so a test that means to *answer* has to own a seat that waits.
+    game.interactive_seats = {0} if interactive else set()
+    game._initialize_permanent_state(shimmer, 0, 1)
+    if chosen is not None:
+        shimmer.metadata["chosen_land_type"] = chosen
+        game._recalculate_lord_buffs()
+    game._settle()
+    return game, shimmer, {"island": island, "forest": forest, "desert": desert}
+
+
+def test_shimmer_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Shimmer"])
+    assert program.supported, program.reason
+
+
+def test_shimmer_grants_phasing_only_to_the_chosen_type(set_pool):
+    """The static, in a game. The restriction is the whole card: an anthem that
+    lost it would phase out every land on the board, which is the widening
+    direction and silent."""
+    game, _shimmer, lands = _w2g5_shimmer_board(set_pool, chosen="desert")
+
+    assert game._has_keyword(lands["desert"], "phasing")
+    assert not game._has_keyword(lands["island"], "phasing")
+    assert not game._has_keyword(lands["forest"], "phasing")
+
+
+def test_shimmer_may_name_a_nonbasic_land_type(set_pool):
+    """A Desert is a land type (CR 205.3i) and not a basic one, so the choice
+    travels as the word rather than on the colour encoding the *basic* pair
+    uses. Asserted through the resolver the web answer path calls, so the
+    prompt and the record cannot disagree."""
+    game, shimmer, lands = _w2g5_shimmer_board(set_pool, interactive=True)
+
+    assert game.confirm_enter_choice(0, land_type="desert")
+    game._settle()
+
+    assert shimmer.metadata["chosen_land_type"] == "desert"
+    assert game._has_keyword(lands["desert"], "phasing")
+
+
+def test_shimmer_refuses_a_word_that_is_not_a_land_type(set_pool):
+    """CR 205.3i bounds the choice by the catalog, so an answer outside it is
+    refused rather than repaired — quietly keeping the default would tell the
+    player they had chosen something they had not. "Bear" is a creature type,
+    which is the near miss the two keys exist to keep apart."""
+    game, shimmer, _lands = _w2g5_shimmer_board(set_pool, interactive=True)
+    shimmer.metadata["chosen_land_type"] = "island"
+
+    assert not game.confirm_enter_choice(0, land_type="bear")
+    assert shimmer.metadata["chosen_land_type"] == "island"
+
+
+def test_shimmer_s_lands_phase_out_at_their_controller_s_untap_step(set_pool):
+    """CR 702.26a's alternation, reached through layer 6 — the keyword is a
+    derived grant, not a flag anyone wrote on the land."""
+    game, _shimmer, lands = _w2g5_shimmer_board(set_pool, chosen="forest")
+
+    game.start_turn(1)
+
+    assert lands["forest"] in game.players[1].phased_out
+    assert lands["island"] not in game.players[1].phased_out
+    assert lands["desert"] not in game.players[1].phased_out
+
+
+def test_shimmer_leaving_takes_the_phasing_with_it(set_pool):
+    """Derived on every recompute, so there is nothing to undo: the land stops
+    having the keyword the moment the enchantment stops contributing it."""
+    game, shimmer, lands = _w2g5_shimmer_board(set_pool, chosen="forest")
+    assert game._has_keyword(lands["forest"], "phasing")
+
+    game.remove_from_battlefield(shimmer)
+    game._recalculate_lord_buffs()
+    game._settle()
+
+    assert not game._has_keyword(lands["forest"], "phasing")
+
+
+def test_the_chosen_type_narrowing_survives_the_instruction(set_pool):
+    """The payload is the only thing the consumer sees.
+
+    ``_lord_filter``'s round trip proves the derivation *table* can carry a
+    restriction; it says nothing about whether the emitted instruction does.
+    The narrowing was carried through the first round trip and dropped by the
+    second on the first writing of this, which is an anthem that compiles,
+    reports supported and reaches every land there is.
+    """
+    compiled = compile_line("Each land of the chosen type has phasing.")
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    payload = compiled.instructions[0].payload
+
+    assert payload["chosen_land_type"] is True
+    assert lord_buff_from_payload(payload).filter.chosen_land_type
+
+
+# --- W2G5 (continued): two seats, one record, a name-keyed ban (CR 601.3a) ---
+#
+# Null Chamber is two templates, and both were shapes the engine had exactly
+# half of.
+#
+# "You and an opponent **each** choose a card name" is two armings of the one
+# `enter_choice` prompt rather than a new kind: what differs from Runed Halo's
+# single choice is who answers and which slot the answer lands in, and both are
+# data. It is read *before* Runed Halo's phrase, which is a substring of it —
+# tried first that one would claim this line, record one name, and leave the
+# opponent's choice unmade.
+#
+# And the ban is `global_cast_ban`'s twin keyed on what a card is *called*
+# rather than on its type. One row for both halves of the printed sentence,
+# because a spell and a land drop are the same action to `cast_from_hand` — and
+# claiming only the casting half would ship an enchantment that stops a Wrath of
+# God and lets its Island through, which is not the card.
+
+
+def _w2g5_chamber_board(set_pool):
+    """Null Chamber on seat 0, with a hand each side has cards to name from."""
+    pool = set_pool("MIR")
+    chamber = Permanent(card=pool["Null Chamber"])
+    bear = _mk_card("Grizzly Bears", "{1}{G}", "Creature - Bear", "")
+    wolf = _mk_card("Timber Wolves", "{1}{G}", "Creature - Wolf", "")
+    forest = _mk_card("Forest", "", "Basic Land - Forest", "")
+    tower = _mk_card("Ivory Tower", "{2}", "Artifact", "")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chamber], hand=[bear, wolf, forest, tower]),
+        PlayerState(name="P2", battlefield=[Permanent(card=bear)], hand=[wolf]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._initialize_permanent_state(chamber, 0, 1)
+    return game, chamber
+
+
+def test_null_chamber_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Null Chamber"])
+    assert program.supported, program.reason
+
+
+def test_both_seats_are_asked_and_both_answers_are_kept(set_pool):
+    """Two prompts, one per seat, writing into two slots of one record. Written
+    by index rather than appended, because a prompt answering into the wrong
+    slot would swap the two players' choices — which no test of the *ban* could
+    tell apart, since it reads the record as a set."""
+    game, chamber = _w2g5_chamber_board(set_pool)
+
+    owed = [(c.player_index, c.data.get("card_name_slot")) for c in game.pending_choices]
+    assert owed == [(0, 0), (1, 1)], owed
+
+    assert game.confirm_enter_choice(0, card_name="Grizzly Bears")
+    assert game.confirm_enter_choice(1, card_name="Timber Wolves")
+
+    assert chamber.metadata["chosen_card_names"] == ["Grizzly Bears", "Timber Wolves"]
+
+
+def test_a_basic_land_name_is_refused(set_pool):
+    """The one restriction the sentence prints, and the whole of the card's
+    cost: without it Null Chamber names Forest and stops a deck. Refused rather
+    than repaired — quietly keeping the default would tell the player they had
+    chosen something they had not."""
+    game, chamber = _w2g5_chamber_board(set_pool)
+
+    assert not game.confirm_enter_choice(0, card_name="Forest")
+    assert [c.player_index for c in game.pending_choices] == [0, 1], (
+        "a rejected answer leaves the prompt owed"
+    )
+
+
+def test_the_ban_binds_both_players_including_its_controller(set_pool):
+    """CR 601.3a: the sentence names nobody, so it binds everybody — which for
+    this card is the design, since one of the two names is the *opponent's*
+    choice and stops the enchantment's own controller."""
+    game, _chamber = _w2g5_chamber_board(set_pool)
+    assert game.confirm_enter_choice(0, card_name="Grizzly Bears")
+    assert game.confirm_enter_choice(1, card_name="Timber Wolves")
+    game.start_turn(0)
+
+    stopped = game.cast_from_hand(0, "Timber Wolves")
+    assert not stopped.supported
+    assert "Null Chamber" in stopped.details
+
+    assert game.cast_from_hand(0, "Ivory Tower").supported, (
+        "the control: a card neither seat named is unaffected"
+    )
+
+
+def test_a_named_land_cannot_be_played_either(set_pool):
+    """"…**and lands with the chosen names can't be played**." The second half
+    of one printed sentence, and the half a type-keyed ban cannot express — the
+    gate sits above the land-drop refusal, which is behind `enforce_mana_costs`
+    while a prohibition is not."""
+    pool = set_pool("MIR")
+    chamber = Permanent(card=pool["Null Chamber"])
+    haven = _mk_card("Safe Haven", "", "Land", "")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chamber], hand=[haven]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(chamber, 0, 1)
+    assert game.confirm_enter_choice(0, card_name="Safe Haven")
+    game.start_turn(0)
+
+    refused = game.cast_from_hand(0, "Safe Haven")
+
+    assert not refused.supported
+    assert "Null Chamber" in refused.details, refused.details
+
+
+# --- W2G5 (continued): the multiplier at its other printed position ---
+#
+# "When a round extends a fragment production, look for the other one first."
+# Waiting in the Weeds prints "…token **for each** untapped Forest they control"
+# with nothing after the token spec; Tombstone Stairwell prints "…token **named
+# Tombspawn** for each creature card in their graveyard", and the name parser
+# ran to the end of the line — so it swallowed the multiplier and called the
+# token "Tombspawn For Each Creature Card In Their Graveyard", one per player,
+# where the card makes one per creature card.
+#
+# Tombstone Stairwell does not collect this yet: its trigger line refuses one
+# layer up, on the intervening-if ("at the beginning of each upkeep, **if this
+# enchantment is on the battlefield**"), and `oracle_diff` reports no card moved.
+# What it buys is the production this branch added being right at *both* printed
+# positions rather than at the one the first card happened to use.
+
+from engine.grammar import compile_line as _w2g5_compile_line
+
+
+def test_a_token_name_does_not_swallow_the_multiplier():
+    """The name and the count are two clauses, and the name is read first. No
+    token Magic prints is named "… for each …", so stopping the run there costs
+    nothing — and leaving it unbounded costs the whole count."""
+    compiled = _w2g5_compile_line(
+        "Each player creates a 2/2 black Zombie creature token with haste named "
+        "Tombspawn for each creature card in their graveyard."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    payload = compiled.instructions[0].payload
+
+    assert payload["name"] == "Tombspawn"
+    assert payload["count"]["per_recipient"] is True
+    assert payload["count"]["per_each"]["zone"] == "graveyard"
+
+
+def test_the_zone_possessive_names_the_recipient_too():
+    """One printed clause names the distributed player two ways: "they
+    **control**" narrows by controller and "**their** graveyard" names a zone
+    owner. Reading only the first would take the graveyard count on the
+    caster's pile for every player — the same number for everyone, and the
+    caster's."""
+    compiled = _w2g5_compile_line(
+        "Each player creates a 1/1 white Soldier creature token for each "
+        "creature card in their graveyard."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+
+    assert compiled.instructions[0].payload["count"]["per_recipient"] is True

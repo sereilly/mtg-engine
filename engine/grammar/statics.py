@@ -73,6 +73,10 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # now that it asks the filter.
         card_types=filt.card_types,
         excluded_types=filt.excluded_types,
+        # "Each land **of the chosen type** has phasing." (Shimmer.) Carried
+        # through like every other field, so the round trip below is what
+        # decides whether the table can express it.
+        chosen_land_type=filt.chosen_land_type,
     )
 
 
@@ -89,6 +93,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "named": lord.named,
         "with_keywords": lord.with_keywords,
         "without_keywords": lord.without_keywords,
+        "chosen_land_type": lord.chosen_land_type,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

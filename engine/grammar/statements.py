@@ -26,6 +26,8 @@ from .conditions import _parse_condition
 from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
+                        rebind_counter_pronoun_to_bound_target,
+                        rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
 from .phrases import _parse_duration, _parse_mana_payment
 from .effects import (_parse_untap_chosen_by_paying,
@@ -562,8 +564,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             # this the arm reads "it" as the spell itself and lowers to a pump
             # of a card on the stack, which is a supported card that does
             # nothing.
+            # "…is 5 or less, exchange life totals with **that player**"
+            # (Psychic Transfer). The same substitution for the *player*
+            # pronoun, run after the object one: a condition that announced a
+            # targeted seat has chosen it, and "that player" names that choice.
             return ast.Conditional(
-                condition, rebind_pronoun_to_condition_target(condition, then)
+                condition,
+                rebind_player_pronoun_to_condition_target(
+                    condition, rebind_pronoun_to_condition_target(condition, then)
+                ),
             )
         except GrammarError:
             stream.reset(mark)
@@ -708,6 +717,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 stream.reset(after_fail)
                 stream.reset(mark)
                 break
+        # "…**and put a -1/-0 counter on it**." (Jabari's Influence.) The
+        # pronoun names what the clause in front of it targeted, which the
+        # rider table already says at a *sentence* boundary — but a conjunction
+        # never reaches that table, so the same printed clause one punctuation
+        # mark over placed the counter on the ability's source.
+        follow = rebind_counter_pronoun_to_bound_target(statement, follow)
         statement = ast.Sequence((statement, follow))
         # A third clause shares the subject of the one it follows, not of the
         # sentence's head, which is the same rule and matters the moment a

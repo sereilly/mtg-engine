@@ -260,6 +260,46 @@ def test_chosen_creature_type_is_read_off_the_ability_s_source(pool):
     assert not subject_matches(game, bears, {"chosen_creature_type": True})
 
 
+def test_chosen_land_type_is_read_off_the_ability_s_source(pool):
+    """"Each land **of the chosen type**" (Shimmer).
+
+    The third of these, and the one that shows why they are three keys rather
+    than one: the phrase "of the chosen type" is identical on An-Zerrin Ruins
+    and on Shimmer, and the *catalog* the word came from is spelled only in the
+    head noun -- CR 205.3m's creature types there, CR 205.3i's land types here.
+    Two choices recorded under one name would let a Shimmer naming Desert
+    answer a sentence asking for a creature type.
+
+    Without a source it refuses every permanent, for the reason its two
+    siblings do: a dropped narrowing here phases out every land on the board.
+    """
+    forest = Permanent(card=pool["Forest"])
+    island = Permanent(card=pool["Island"])
+    shimmer = Permanent(
+        card=pool["Grizzly Bears"], metadata={"chosen_land_type": "forest"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[forest, island, shimmer]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, forest, {"type_filter": "land"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, forest, {"chosen_land_type": True}, source=shimmer)
+    assert not subject_matches(game, island, {"chosen_land_type": True}, source=shimmer)
+    assert not subject_matches(game, forest, {"chosen_land_type": True})
+    # The two keys do not answer for each other: the word is recorded under the
+    # catalog it was chosen from, and a reader asking the other one finds
+    # nothing rather than the wrong thing.
+    assert not subject_matches(
+        game, forest, {"chosen_creature_type": True}, source=shimmer
+    )
+
+
 def test_the_combat_records_are_read_off_the_permanent(pool):
     """"…creatures **that didn't attack this turn**, except for creatures
     **that couldn't attack**." (Season of the Witch.)
@@ -471,6 +511,8 @@ _COVERED_ELSEWHERE = {
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
     "chosen_creature_type":
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
+    "chosen_land_type":
+        "test_chosen_land_type_is_read_off_the_ability_s_source",
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
@@ -479,6 +521,8 @@ _COVERED_ELSEWHERE = {
     "blocked_source_this_turn":
         "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
+    "attacked_you_this_turn":
+        "test_attacked_you_this_turn_outlives_the_combat_it_names",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "not_attacking": "test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role",
@@ -884,6 +928,49 @@ def test_attacking_you_is_two_questions_not_one(pool):
     )
     assert not subject_matches(game, idle, described, observer=1)
     assert not subject_matches(game, attacker, described)
+
+
+def test_attacked_you_this_turn_outlives_the_combat_it_names(pool):
+    """"target … creature **that attacked you this turn**" (Jabari's Influence).
+
+    The past tense of the key above, and a different question from it in the one
+    way that matters: ``attacking_you`` reads the live combat relation, which
+    end of combat clears — and this card prints "cast this spell only after
+    combat", so the live reading is *always* None by the time it is asked. The
+    record the declaration writes is what answers it.
+
+    Three players again, because the seat is the whole point: a creature that
+    attacked somebody else did not attack you.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, idle]),
+        PlayerState(name="P2"),
+        PlayerState(name="P3"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    # Combat over: the live relation is gone and only the record is left.
+    game.current_turn_phase = "postcombat_main"
+    game.current_step = "postcombat_main"
+    for permanent in game.all_permanents():
+        permanent.attacking = False
+        permanent.defending_player_index = None
+
+    described = {"attacked_you_this_turn": True}
+    assert subject_matches(game, attacker, described, observer=1)
+    assert not subject_matches(game, attacker, described, observer=2), (
+        "attacking somebody else is not attacking you"
+    )
+    assert not subject_matches(game, idle, described, observer=1)
+    assert not subject_matches(game, attacker, described)
+    assert not subject_matches(game, attacker, {"attacking_you": True}, observer=1), (
+        "the live relation is what the record exists to outlive"
+    )
 
 
 def test_controlled_since_turn_start_rejects_a_creature_that_just_arrived(pool):

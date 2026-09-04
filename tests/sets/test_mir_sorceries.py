@@ -806,3 +806,208 @@ def test_w2g3_all_three_sorceries_are_supported(set_pool):
     for name in ("Reign of Terror", "Builder's Bane", "Seeds of Innocence"):
         program = _w2g3_compile(pool[name])
         assert program.supported, f"{name}: {program.reason}"
+
+
+# --- W2G5: a comparison between two life totals (CR 107.1) ---
+#
+# Psychic Transfer needed one condition node and one rebinding, and the second
+# is the half that generalises. ``PlayerLifeIs`` reads *one* seat's life; the
+# number this card compares is the distance between two, which belongs to
+# neither seat — so it is its own node with two player refs and one comparison.
+# And "exchange life totals with **that player**" names the seat the condition
+# in front of it already targeted (CR 601.2c), which is exactly what
+# ``rebind_pronoun_to_condition_target`` does for an *object* pronoun and had no
+# player sibling: left alone the arm reached the lowering as a referent no spell
+# froze, and the exchange refused the line.
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.grammar import compile_line
+from engine.oracle import compile_card_oracle
+
+
+def _w2g5_transfer_game(set_pool, p1_life: int, p2_life: int):
+    card = set_pool("MIR")["Psychic Transfer"]
+    game = Game(players=[
+        PlayerState(name="P1", life=p1_life, hand=[card]),
+        PlayerState(name="P2", life=p2_life),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def test_psychic_transfer_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Psychic Transfer"])
+    assert program.supported, program.reason
+
+
+@pytest.mark.parametrize(
+    "mine,theirs",
+    [(20, 17), (20, 25), (20, 20), (20, 15), (20, 25)],
+)
+def test_psychic_transfer_swaps_inside_the_bound(set_pool, mine, theirs):
+    """"The difference between" is unsigned (CR 107.1 has no negative
+    quantities), so the card reads the same whichever player is ahead. A signed
+    subtraction would make this castable only while its controller was behind —
+    which is a legal-looking card that is not the printed one."""
+    game = _w2g5_transfer_game(set_pool, mine, theirs)
+
+    assert game.cast_from_hand(0, "Psychic Transfer", target_player_index=1).supported
+    game.resolve_stack()
+
+    assert (game.players[0].life, game.players[1].life) == (theirs, mine), game.log
+
+
+def test_psychic_transfer_does_nothing_outside_the_bound(set_pool):
+    """The gate is the card. A condition that answered True regardless would be
+    an unconditional Mirror Universe for one mana less."""
+    game = _w2g5_transfer_game(set_pool, 10, 20)
+
+    assert game.cast_from_hand(0, "Psychic Transfer", target_player_index=1).supported
+    game.resolve_stack()
+
+    assert (game.players[0].life, game.players[1].life) == (10, 20), game.log
+
+
+def test_the_pronoun_names_the_seat_the_condition_targeted(set_pool):
+    """"…exchange life totals with **that player**." The rebinding, read off the
+    compiled program rather than off a board: without it the exchange reaches a
+    referent no spell froze and the whole line refuses, which costs the card
+    while nothing fails."""
+    compiled = compile_line(
+        "If the difference between your life total and target player's life "
+        "total is 5 or less, exchange life totals with that player."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    payload = compiled.instructions[0].payload
+
+    assert payload["condition"] == {
+        "kind": "life_total_difference",
+        "player": "you",
+        "other": "target_player",
+        "op": "le",
+        "value": 5,
+    }
+    assert payload["then"][0].payload == {"recipient": "target"}
+
+
+def test_only_a_targeted_seat_is_rebound(set_pool):
+    """The rebinding rewrites ``that player`` and nothing else. A walk that
+    rewrote "you" as well would put the condition's target where the caster is
+    named — silently, and in a sentence that still compiles."""
+    compiled = compile_line(
+        "If the difference between your life total and target player's life "
+        "total is 5 or less, you gain 2 life."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    gain = compiled.instructions[0].payload["then"][0]
+
+    assert gain.payload.get("recipient") == "caster"
+
+
+# --- W2G5 (continued): a token count taken once per player (CR 111.1) ---
+#
+# "Each player creates a 1/1 green Cat creature token for each untapped Forest
+# **they** control." Two pieces, and only the second is interesting.
+#
+# The recipient was one row in a table that already had "each opponent" and
+# "target opponent", and the handler already knew `each_player`. The **count**
+# is the part with no channel: every multiplied token count in the engine was
+# either a game-wide tally (Gadrak) or a record on one permanent (Spiny
+# Starfish), both of them one number computed in front of the loop over seats.
+# This one is a different number for each seat, so it has to be evaluated
+# inside that loop — evaluated once, every player would create as many Cats as
+# the *caster's* board carried, which is a card nobody printed and which no
+# two-Forest test would notice.
+
+from engine.models import Permanent
+
+from tests.helpers import _mk_card
+
+
+def _w2g5_forest(tapped: bool = False) -> Permanent:
+    return Permanent(card=_mk_card("Forest", "Basic Land - Forest", ""))
+
+
+def _w2g5_weeds_game(set_pool, mine: int, theirs: int, *, tapped: int = 0):
+    pool = set_pool("MIR")
+    my_lands = [_w2g5_forest() for _ in range(mine)]
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[pool["Waiting in the Weeds"]], battlefield=my_lands
+        ),
+        PlayerState(name="P2", battlefield=[_w2g5_forest() for _ in range(theirs)]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    # After the untap step, or the mark this test is about would be swept before
+    # the spell is ever cast.
+    for land in my_lands[:tapped]:
+        land.tapped = True
+    return game
+
+
+def _w2g5_cats(game, seat: int) -> int:
+    return sum(
+        1 for perm in game.controlled_by(seat) if perm.metadata.get("is_token")
+    )
+
+
+def test_waiting_in_the_weeds_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Waiting in the Weeds"])
+    assert program.supported, program.reason
+
+
+def test_each_player_counts_their_own_forests(set_pool):
+    """The whole card. The two boards are deliberately different sizes: a count
+    taken once in front of the loop over seats would give both players the same
+    number, and it would be the caster's."""
+    game = _w2g5_weeds_game(set_pool, mine=3, theirs=1)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (3, 1), game.log
+
+
+def test_a_tapped_forest_is_not_counted(set_pool):
+    """"…for each **untapped** Forest they control." The adjective is a third of
+    the sentence, and a count that dropped it would be silently too large — the
+    dropped-rider bug with an arithmetic face."""
+    game = _w2g5_weeds_game(set_pool, mine=3, theirs=1, tapped=1)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (2, 1), game.log
+
+
+def test_a_player_with_no_forests_creates_nothing(set_pool):
+    """Zero is a number the sentence can produce, and CR 111.1 makes no token
+    for it — as against a count that failed to resolve, which this test would
+    not tell apart from a working one if the opponent had any Forest at all."""
+    game = _w2g5_weeds_game(set_pool, mine=2, theirs=0)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (2, 0), game.log
+
+
+def test_they_control_needs_a_distributed_subject(set_pool):
+    """"They" names nobody when the sentence in front of it named nobody. The
+    refusal is the point: falling back to the caster would be the same card with
+    the wrong board counted, and nothing would say so."""
+    compiled = compile_line(
+        "Create a 1/1 green Cat creature token for each untapped Forest they control."
+    )
+
+    assert not compiled.instructions
+    assert "names no seat" in (compiled.lowering_error or ""), compiled.lowering_error

@@ -161,8 +161,14 @@ from .combat import (
     _parse_cant_attack_or_block,
     _CANT_BE_ACTIONS,
     _parse_cant_be,
+    _parse_becomes_blocked,
     _parse_remove_from_combat,
     _parse_choose_blocks_for_defenders,
+)
+from .tokens import (
+    _parse_token_keywords,
+    _parse_create_token,
+    _parse_create_token_for_recipient,
 )
 from .game import (
     _parse_ante,
@@ -176,9 +182,6 @@ from .game import (
     _parse_coin_flip_stakes_loop,
     _parse_flip_coin,
     _parse_game_is_a_draw,
-    _parse_token_keywords,
-    _parse_create_token,
-    _parse_create_token_for_recipient,
     _parse_enchant,
     _parse_end_the_turn,
     _parse_extra_turn,
@@ -291,6 +294,7 @@ __all__ = [
     "_parse_assigns_no_combat_damage",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
+    "_parse_becomes_blocked",
     "_parse_remove_from_combat",
     "_parse_choose_blocks_for_defenders",
     "_CANT_BE_ACTIONS",

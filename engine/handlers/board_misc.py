@@ -1215,6 +1215,14 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # still holds. Which tally the phrase named is settled at lowering; an
         # unknown one makes no tokens rather than falling back to a wider count.
         count = int(getattr(game, str(raw_count["history"]), 0) or 0)
+    elif isinstance(raw_count, dict) and "per_each" in raw_count:
+        # "…for each untapped Forest **they** control" (Waiting in the Weeds).
+        # A board count rather than a tally, and the one count here that is
+        # taken **per recipient**: "they" is each player the sentence
+        # distributes over, so the number is different for each of them and
+        # cannot be computed in front of the loop. Left to the loop below,
+        # which passes the seat it is making tokens for.
+        count = 0
     else:
         count = resolve_amount(raw_count, context.x_value)
     # "**Each opponent** creates …" (Pursued Whale). Who gets the tokens, which
@@ -1248,6 +1256,18 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
             else []
         )
     for seat in recipients:
+      # The per-recipient count, evaluated here rather than above: "for each
+      # untapped Forest **they** control" is a different number for each seat,
+      # and evaluating it once would make every player create as many tokens as
+      # the caster's own board carried. ``per_recipient`` false is the same
+      # spec taken on the caster's board every time (nothing prints it yet, and
+      # refusing it in the lowering would refuse a sentence this can answer).
+      if isinstance(raw_count, dict) and "per_each" in raw_count:
+          owner = game.players[seat] if raw_count.get("per_recipient") else caster
+          count = evaluate_count(
+              game, owner, raw_count["per_each"],
+              source=context.source_permanent,
+          )
       for _ in range(count):
         metadata: dict = {"is_token": True}
         # "…any number of tokens **created with this creature**." (Tetravus.)

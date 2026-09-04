@@ -1106,6 +1106,14 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
 
     source = context.source_permanent
     in_combat_only = bool(instruction.payload.get("in_combat_with_source"))
+    # "…on target creature **that attacked you this turn**" (Jabari's
+    # Influence). A record about a *seat*, which the pure matcher below cannot
+    # answer — so it rides the instruction like the in-combat relation above
+    # and is re-asked here, through the one reader of what a printed noun
+    # phrase means. CR 608.2b asks a target's legality again at resolution, and
+    # the record outlives combat, so the question is still answerable.
+    attacked_you_only = bool(instruction.payload.get("attacked_you_this_turn"))
+    from ..subject_filters import subject_matches as _subject_matches
 
     def counter_target_legal(perm) -> bool:
         # "target creature with a +1/+1 counter on it" (Tempered Veteran): the
@@ -1127,6 +1135,11 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         if in_combat_only and (
             source is None
             or not any(perm is other for other in game.creatures_in_combat_with(source))
+        ):
+            return False
+        if attacked_you_only and not _subject_matches(
+            game, perm, {"attacked_you_this_turn": True},
+            observer=game.players.index(context.caster),
         ):
             return False
         if filters.get("exclude_self") and perm is source:

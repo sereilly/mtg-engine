@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .handlers._common import (_comparison_holds, _resolve_chosen_color,
-                               _resolve_chosen_creature_type,
+                               _resolve_chosen_subtype,
                                permanent_matches_filter)
 
 if TYPE_CHECKING:
@@ -93,6 +93,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # reason, and resolved into the ordinary subtype key before the pure
     # matcher is asked.
     "chosen_creature_type",
+    # "Each **land** of the chosen type" (Shimmer). The same recorded choice a
+    # third characteristic over — CR 205.3i's land types rather than
+    # CR 205.3m's creature types — needing the same source and resolved through
+    # the same helper into the same ordinary subtype key.
+    "chosen_land_type",
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch). Per-turn records the permanent carries,
     # frozen when the combat asked the question — so they are answerable from
@@ -179,6 +184,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # a sweep.
     "blocked_source_this_turn",
     "attacking_you",
+    # "…creature **that attacked you this turn**" (Jabari's Influence). The
+    # *record* behind the live relation above, and testable on the same
+    # footing: what it needs beyond the object is the seat asking, which is
+    # exactly what ``observer`` is. Its own key rather than a flag on
+    # ``attacking_you`` because the two read different places — one the live
+    # combat, one a per-turn stamp — and a card printed after combat can only
+    # ask the second.
+    "attacked_you_this_turn",
     # "…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
     # War Machine). A history rather than a characteristic, and one no read of
     # the permanent alone can answer: a tapped permanent looks the same however
@@ -523,6 +536,20 @@ def subject_matches(
     # Both sides through the layer accessors (CR 613), never ``card.power``:
     # Ironclaw Curse's own "-0/-1" is part of the toughness it compares against,
     # and a pumped attacker is over the bound while it is pumped.
+    # "…creature **that attacked you this turn**" (Jabari's Influence). A
+    # record about a *seat*, which the pure matcher refuses outright — so it is
+    # answered here, where the observer is in hand, and stripped before that
+    # matcher runs. Refusing rather than ignoring is what the pure half does
+    # with every seat-relative key, and this is the reader that supplies the
+    # seat.
+    if described.get("attacked_you_this_turn"):
+        from .turn_state import attacked_seat_this_turn
+
+        described = {
+            k: v for k, v in described.items() if k != "attacked_you_this_turn"
+        }
+        if observer is None or not attacked_seat_this_turn(obj, observer):
+            return False
     relative = described.get("characteristic_vs_source")
     if relative:
         described = {
@@ -531,7 +558,7 @@ def subject_matches(
         if source is None or not _source_relative_bound_holds(obj, relative, source):
             return False
     described = _resolve_chosen_color(described, source)
-    described = _resolve_chosen_creature_type(described, source)
+    described = _resolve_chosen_subtype(described, source)
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")

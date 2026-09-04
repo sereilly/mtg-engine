@@ -210,6 +210,9 @@ class _FilterDraft:
     other_than_attached_host: bool = False
     banded_with_source: bool = False
     attacking_you: bool = False
+    # "…creature **that attacked you this turn**" (Jabari's Influence) — see
+    # the field of the same name on ``ast.ObjectFilter``.
+    attacked_you_this_turn: bool = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -229,6 +232,9 @@ class _FilterDraft:
     # "Creatures **of the chosen type**" (An-Zerrin Ruins) — see the field of
     # the same name on ``ast.ObjectFilter``.
     chosen_creature_type: bool = False
+    # "Each **land** of the chosen type" (Shimmer) — see the field of the same
+    # name on ``ast.ObjectFilter``.
+    chosen_land_type: bool = False
     # "…that didn't attack this turn" / "…that couldn't attack" — see
     # ``ast.ObjectFilter``.
     attacked_this_turn: bool | None = None
@@ -856,6 +862,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         other_than_attached_host=d.other_than_attached_host,
         banded_with_source=d.banded_with_source,
         attacking_you=d.attacking_you,
+        attacked_you_this_turn=d.attacked_you_this_turn,
         blocked=d.blocked,
         power=d.power,
         toughness=d.toughness,
@@ -867,6 +874,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         nontoken=d.nontoken,
         chosen_color=d.chosen_color,
         chosen_creature_type=d.chosen_creature_type,
+        chosen_land_type=d.chosen_land_type,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,
         controlled_since_turn_start=d.controlled_since_turn_start,

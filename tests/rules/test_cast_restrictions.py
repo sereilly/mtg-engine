@@ -167,3 +167,52 @@ def test_506_7_the_restriction_is_enforced_by_the_cast_path_not_only_reported():
 
     assert result.supported is False
     assert any(card.name == "Berserk" for card in p1.hand)
+
+
+# --- W2G5: the whole of an opponent's turn (CR 102.1) ---
+
+
+@pytest.mark.cr("601.3a", "102.1")
+def test_601_3a_an_opponents_turn_is_the_whole_turn():
+    """Delirium — "Cast this spell only during an opponent's turn."
+
+    The window is a *turn* and not a step, which is what separates it from the
+    two narrower rows beside it ("…, before attackers are declared" and "…after
+    their upkeep step"): those name a point inside the turn as well, and this
+    one names none. So the seat is the only test there is — and it is the right
+    one in a multiplayer game too, because CR 102.1 gives every seat its own
+    turn and "an opponent's turn" is every turn but the caster's.
+
+    Checked by behaviour at both ends. A restriction that is claimed and not
+    enforced has no symptom: the spell resolves, the card reports supported, and
+    the game is wrong in its caster's favour.
+    """
+    game, _p1, _p2 = _duel()
+    text = "cast this spell only during an opponent's turn."
+
+    game.start_turn(0)
+    assert check_cast_timing(game, 0, text) == (
+        "can only be cast during an opponent's turn"
+    )
+    assert check_cast_timing(game, 1, text) is None
+
+    game.start_turn(1)
+    assert check_cast_timing(game, 0, text) is None
+    assert check_cast_timing(game, 1, text) == (
+        "can only be cast during an opponent's turn"
+    )
+
+
+@pytest.mark.cr("601.3a")
+def test_601_3a_the_opponents_turn_window_is_not_narrowed_to_a_step():
+    """Every step of that turn, not just the one the narrower rows name. Its
+    own assertion because the near miss is silent: a window read as one step
+    refuses a legal cast, which fails no test and simply makes the card worse
+    than printed."""
+    game, _p1, _p2 = _duel()
+    text = "cast this spell only during an opponent's turn."
+    game.start_turn(1)
+
+    for phase in ("beginning", "precombat_main", "combat", "postcombat_main", "ending"):
+        game.current_turn_phase = phase
+        assert check_cast_timing(game, 0, text) is None, phase

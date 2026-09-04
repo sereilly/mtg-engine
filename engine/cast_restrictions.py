@@ -110,6 +110,18 @@ def _before_combat_damage_step(game: "Game", caster_index: int) -> bool:
     return not past_combat_damage
 
 
+def _during_an_opponents_turn(game: "Game", caster_index: int) -> bool:
+    """Delirium: legal only while it is not this player's turn.
+
+    The whole turn, which is what separates it from the two narrower windows
+    below — those name a *step* as well, and this one names none. The seat test
+    is the only test there is, and it is the right one in a multiplayer game
+    too: CR 102.1 gives every seat its own turn, so "an opponent's turn" is
+    every turn but the caster's.
+    """
+    return game.active_player_index != caster_index
+
+
 def _opponents_turn_before_attackers(game: "Game", caster_index: int) -> bool:
     if game.active_player_index == caster_index:
         return False
@@ -200,6 +212,19 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's turn after their upkeep step",
         _opponents_turn_after_upkeep,
         "can only be cast during an opponent's turn after their upkeep step",
+    ),
+    # **Last, and the order is load-bearing.** This phrase is a strict prefix of
+    # the two above it, and `check_cast_timing` reports the *first* violated
+    # restriction it finds — so above them it would answer Siren's Call and
+    # Reset with a message naming a window wider than the one they print. The
+    # enforcement is unaffected either way (a card printing the longer clause
+    # violates both rows together), which is exactly why the ordering has to be
+    # stated: the failure is a message, and a message is not something a
+    # behavioural test looks at unless it is told to.
+    CastRestriction(
+        "cast this spell only during an opponent's turn",
+        _during_an_opponents_turn,
+        "can only be cast during an opponent's turn",
     ),
 )
 
@@ -497,6 +522,74 @@ def global_cast_ban_line(line: str) -> str | None:
     """
     match = _GLOBAL_CAST_BAN.match(line.strip().lower().rstrip("."))
     return match.group("type") if match is not None else None
+
+
+#: Where a permanent records the names two seats chose as it entered (Null
+#: Chamber). A list, and the order is the choosers' — it is read as a *set* by
+#: the ban below, but recorded in order because each slot belongs to one seat
+#: and a prompt answering into the wrong one would swap the two players'
+#: choices.
+CHOSEN_CARD_NAMES = "chosen_card_names"
+
+#: "Spells with the chosen names can't be cast and lands with the chosen names
+#: can't be played." (Null Chamber.) The *name*-keyed twin of the type-keyed ban
+#: above, and its own row rather than a widening of that one: what a card is
+#: called is not a characteristic anything else in this table tests, and the
+#: names are not in the sentence at all — they were chosen as the permanent
+#: entered (CR 614.1c) and live on it.
+#:
+#: Both halves of the printed sentence are one row on purpose. A spell and a
+#: land drop are the same action to `cast_from_hand`, so one gate covers both —
+#: and claiming only the casting half would ship an enchantment that stops a
+#: Wrath of God and lets its Island through, which is not the card.
+_CHOSEN_NAME_BAN = re.compile(
+    r"^spells with the chosen names can't be cast and lands with the chosen "
+    r"names can't be played$"
+)
+
+
+@lru_cache(maxsize=None)
+def chosen_name_ban_line(line: str) -> bool:
+    """Whether *line* is the chosen-name prohibition.
+
+    One reader, two callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and ``mixins/stack/casting.py`` asks it at CR 601.3 so the line is
+    *enforced*. A restriction claimed and not enforced is an enchantment that
+    reports supported and stops nothing.
+    """
+    return _CHOSEN_NAME_BAN.match(line.strip().lower().rstrip(".")) is not None
+
+
+def chosen_name_ban(game: "Game", card) -> str | None:
+    """The name of a permanent whose chosen names forbid *card*, or None.
+
+    Every battlefield and no seat comparison: the sentence names nobody, so it
+    binds everybody including the enchantment's own controller (CR 601.3a) —
+    which for Null Chamber is the whole design, since one of the two names is
+    its controller's own choice and the other is an opponent's.
+
+    Compared through ``search_filters.name_key`` on both sides, so a printing
+    with different punctuation is the same name — the comparison every other
+    name test in the engine makes.
+    """
+    from .search_filters import name_key
+
+    wanted = name_key(getattr(card, "name", "") or "")
+    if not wanted:
+        return None
+    for _seat, permanent in game.permanents_with_controller():
+        chosen = permanent.metadata.get(CHOSEN_CARD_NAMES) or ()
+        if not chosen:
+            continue
+        if not any(
+            chosen_name_ban_line(raw_line)
+            for raw_line in (permanent.effective_card.oracle_text or "").splitlines()
+        ):
+            continue
+        if any(name_key(str(name)) == wanted for name in chosen if name):
+            return permanent.card.name
+    return None
 
 
 def global_cast_ban(game: "Game", card) -> str | None:

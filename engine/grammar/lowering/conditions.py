@@ -539,6 +539,29 @@ def _lower_condition(
             "op": condition.comparison.op,
             "value": bound.value,
         }
+    if isinstance(condition, ast.LifeTotalDifference):
+        # "If the difference between your life total and target player's life
+        # total is 5 or less" (Psychic Transfer). Two seats through the *same*
+        # reader the one-seat gate above uses, so a pronoun means the same
+        # thing in both — and both are carried, because the number compared is
+        # the distance between them and belongs to neither.
+        bound = condition.comparison.value
+        if not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "a life-difference gate compares against a printed number",
+                node=condition,
+            )
+        return {
+            "kind": "life_total_difference",
+            "player": _condition_seat(
+                condition, condition.first, event, "life-difference gate"
+            ),
+            "other": _condition_seat(
+                condition, condition.second, event, "life-difference gate"
+            ),
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
     if isinstance(condition, ast.MilledThisWay):
         # "If one or more creature cards were put into that graveyard this
         # way" (Helm of Obedience). The producer is demanded for

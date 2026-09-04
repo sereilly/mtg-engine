@@ -102,6 +102,7 @@ from .conditions import (
     EveryOf,
     IsState,
     ItIsColor,
+    LifeTotalDifference,
     ObjectHasKeyword,
     OnBattlefield,
     PlayerLifeIs,
@@ -302,6 +303,7 @@ from .combat import (
     CombatRestriction,
     ForceChosenCreatureToAttack,
     RemoveFromCombat,
+    BecomeBlocked,
 )
 from .game import (
     Ante,
@@ -417,6 +419,7 @@ __all__ = [
     "RevealedCardIs",
     "Controls",
     "CountedNumber",
+    "LifeTotalDifference",
     "PlayerLifeIs",
     "ZoneHasCards",
     "SacrificeExpansionPermanents",
@@ -602,6 +605,7 @@ __all__ = [
     "AttackingDoesntTap",
     "BlockCountGrant",
     "CombatRestriction",
+    "BecomeBlocked",
     "RemoveFromCombat",
     # game
     "CreateEmblem",

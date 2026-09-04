@@ -297,6 +297,7 @@ from .combat import (
     _lower_force_chosen_creature_to_attack,
     _lower_choose_blocks_for_defenders,
     _lower_reassign_blockers_between_attackers,
+    _lower_become_blocked,
     _lower_remove_from_combat,
 )
 from .tokens import (_lower_create_copy_token, _lower_create_emblem, _title,
@@ -529,6 +530,7 @@ __all__ = [
     "_lower_attacking_doesnt_tap",
     "_lower_choose_blocks_for_defenders",
     "_lower_reassign_blockers_between_attackers",
+    "_lower_become_blocked",
     "_lower_remove_from_combat",
     "_lower_ante",
     "_lower_repeat_process",

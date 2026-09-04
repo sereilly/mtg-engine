@@ -642,6 +642,30 @@ def _lower_cant_be(
     raise LoweringError(f"no handler for a {node.action!r} restriction", node=node)
 
 
+def _lower_become_blocked(
+    node: "ast.BecomeBlocked",
+) -> tuple[OracleInstruction, ...]:
+    """"Target unblocked attacking creature becomes blocked." (Dazzling Beauty;
+    CR 509.1h.)
+
+    A chosen target, unlike its neighbour below: the sentence names the creature
+    itself rather than borrowing one an earlier step recorded, so the target
+    description is carried and the handler resolves it. The printed narrowing
+    ("unblocked", "attacking") travels in that description — a card is what its
+    noun phrase says, and dropping the two adjectives would let this be cast on
+    a creature that is not in combat at all.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or not subject.targeted:
+        raise LoweringError(
+            "becoming blocked is a change to a creature the spell targets",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, subject)
+    return (OracleInstruction("become_blocked", "", payload),)
+
+
 def _lower_remove_from_combat(
     node: ast.RemoveFromCombat, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:

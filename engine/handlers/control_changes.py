@@ -158,9 +158,33 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
         return True, "resolved"
 
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    # Through ``subject_matches`` — the one reader of what a printed noun
+    # phrase means — with the seat and the source this resolution holds, so the
+    # set the picker offered and the set this accepts are decided by the same
+    # function. The pure matcher answers about a permanent alone and **refuses**
+    # every seat-relative key outright, so "target … creature **that attacked
+    # you this turn**" (Jabari's Influence) resolved to nothing after a picker
+    # that had offered exactly one legal creature. That is Reality Ripple's
+    # defect one file over, and the same fix.
+    from ..subject_filters import subject_matches
+
+    observer = game.players.index(context.caster)
+    # "target artifact **defending player controls**" (Kukemssa Pirates). The
+    # seat the trigger's announcement froze if there is one (CR 603.10), and
+    # otherwise the live combat's — the same two-step reader every other
+    # resolution that can meet the phrase already uses. A seat this cannot
+    # answer refuses the phrase, which offers nothing rather than everything.
+    defending = (context.trigger_context or {}).get(
+        "trigger_defending_player_index"
+    )
+    if not isinstance(defending, int):
+        defending = game.defending_player_index_now()
     target = resolve_target_permanent(
         game, context,
-        predicate=lambda perm: permanent_matches_filter(perm, filters),
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer,
+            source=context.source_permanent, defending=defending,
+        ),
         fallback_on_invalid_choice=False,
     )
     if target is None:

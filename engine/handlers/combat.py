@@ -15,7 +15,8 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
-from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
+                                 BLOCKED_WITHOUT_BLOCKERS)
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
@@ -412,6 +413,50 @@ def swap_block_assignments(game: Game, instruction: OracleInstruction, context: 
     game.log.append(
         f"{context.card.name}: {first.card.name} and {second.card.name} "
         "swapped the creatures they were blocking"
+    )
+    return True, "resolved"
+
+
+@effect_handler("become_blocked")
+def become_blocked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target unblocked attacking creature becomes blocked." (Dazzling Beauty.)
+
+    CR 509.1h: a creature can be blocked by *no* creatures, which is exactly the
+    state an attacker is left in when its blockers leave combat — so nothing is
+    added to any block map and no creature is put in front of this one. The
+    consequence is the whole card: an attacker that is blocked and has no
+    blockers assigns its combat damage to nothing at all unless it has trample,
+    which is a branch the combat damage step has had since it was written.
+
+    Two writes, and they are not a duplicate. ``blocked`` is the live flag every
+    combat reader already asks, and the mark is what makes it *survive* — the
+    combat phase rebuilds ``blocked`` from the block maps every time it prunes
+    combat state, and this creature is in none of them.
+
+    The printed narrowing is re-asked here (CR 608.2b): a creature that stopped
+    attacking, or that something else blocked, between announcement and
+    resolution is no longer a legal target, and the spell does nothing rather
+    than marking a bystander.
+    """
+    from ..subject_filters import subject_matches
+
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    creature = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if creature is None:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    creature.blocked = True
+    creature.metadata[BLOCKED_WITHOUT_BLOCKERS] = True
+    game.log.append(
+        f"{creature.card.name} becomes blocked ({context.card.name})"
     )
     return True, "resolved"
 

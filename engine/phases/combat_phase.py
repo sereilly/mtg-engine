@@ -11,6 +11,7 @@ in the sibling step modules (``beginning_of_combat_step``, ``declare_attackers_s
 ``declare_blockers_step``, ``combat_damage_step``, ``end_of_combat_step``).
 """
 
+from ..combat_assignment import BLOCKED_WITHOUT_BLOCKERS
 from ..events import emit
 from ..models import Permanent
 from ..resumption import run_resumable
@@ -525,7 +526,15 @@ class CombatPhaseMixin:
             attacker = active.battlefield[attacker_idx]
             attacker.attacking = True
             attacker.defending_player_index = defending_idx
-            attacker.blocked = was_blocked.get(attacker_idx, False) or attacker_idx in all_blocked_attacker_idxs
+            # "…**becomes blocked**." (Dazzling Beauty; CR 509.1h.) A creature
+            # blocked by no creatures is in no block map, so the two readings
+            # above cannot find it — and this rebuild runs on every prune, so
+            # without the mark the state would be undone by the next one.
+            attacker.blocked = (
+                was_blocked.get(attacker_idx, False)
+                or attacker_idx in all_blocked_attacker_idxs
+                or bool(attacker.metadata.get(BLOCKED_WITHOUT_BLOCKERS))
+            )
 
         for defending_idx, blocker_map in self.combat_blockers.items():
             defender = self.players[defending_idx]

@@ -10,6 +10,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
+from ..turn_state import ATTACKED_SEATS_THIS_TURN_KEY
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -57,6 +58,13 @@ _EOT_METADATA_KEYS = (
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",
     "attacked_this_turn",
+    # **Whom** it attacked, beside the fact that it did. Swept here with its
+    # twin above because it answers the same window — "that attacked you *this
+    # turn*" (Jabari's Influence) — and a stamp that outlived the turn would
+    # offer a creature for a combat that is over. The seat-turn ordinal beside
+    # them (`attacked_on_seat_turn`) is deliberately *not* here, because the
+    # question it answers reaches back a whole turn.
+    ATTACKED_SEATS_THIS_TURN_KEY,
     # "…except for creatures that **couldn't attack**." (Season of the Witch.)
     # Stamped as the declare-attackers step begins (CR 508.1), swept here with
     # its twin above: the two are one turn's record read together, and a stamp

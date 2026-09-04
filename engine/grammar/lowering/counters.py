@@ -474,8 +474,19 @@ def _lower_put_counter(
                 "at a time", node=node,
             )
         filt = node.subject.filter
+        # The two printed *exclusions* are here because the pure matcher
+        # already answers them off the permanent alone — "target **nonartifact,
+        # nonblack** creature that attacked you this turn" (Jabari's Influence)
+        # — so admitting them costs the placement nothing and refusing them
+        # cost the card. The seat-relative record beside them is stripped and
+        # carried, exactly as the in-combat relation is and for its reason: no
+        # read of the chosen creature alone can answer it.
         leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "in_combat_with_source"})
+            filt,
+            frozenset({
+                "card_types", "in_combat_with_source",
+                "excluded_types", "excluded_colors", "attacked_you_this_turn",
+            }),
         )
         if leftover or filt.card_types != ("creature",):
             raise LoweringError(
@@ -484,13 +495,15 @@ def _lower_put_counter(
                 node=node,
             )
         stripped = dataclasses.replace(node.subject, filter=dataclasses.replace(
-            filt, in_combat_with_source=False
+            filt, in_combat_with_source=False, attacked_you_this_turn=False,
         ))
         payload: dict[str, object] = {"counter": node.counter}
         if placed != 1:
             payload["count"] = placed
         if filt.in_combat_with_source:
             payload["in_combat_with_source"] = True
+        if filt.attacked_you_this_turn:
+            payload["attacked_you_this_turn"] = True
         _describe_targets(payload, stripped)
         return (OracleInstruction("add_counter_to_target", "", payload),)
     # "Put **X +0/+1** counters on this creature." (Necropolis.) The source's

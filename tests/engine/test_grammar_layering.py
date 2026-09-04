@@ -332,7 +332,15 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # `lowering/exile.py`'s name, which has been a lowering-only family since
 # before the parse half existed, so the mirror re-forms rather than forking:
 # the same move `prevention` and `counters` made, in the other direction.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
+# `tokens` joined the parse side at Mirage's second wave, when the token
+# production grew a board-count multiplier and `effects/game.py` crossed the
+# guard. It reuses `lowering/tokens.py`'s name — a lowering-only family since
+# Fallen Empires took *that* module past the cap — so the mirror re-forms rather
+# than forking, the same move `exile`, `prevention` and `counters` each made.
+# The boundary is CR's: a token is an **object the game creates** (CR 111.1),
+# where everything left in `game` changes the state a *player* is in — life,
+# extra turns, winning, losing, ante, the choices a sentence makes.
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -552,6 +560,13 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "tapping", "attachments",
+        # `tokens` is a parse family and a lowering family with no AST module
+        # of its own, for `types`' reason below: `CreateToken`,
+        # `CreateCopyToken` and `CreateEmblem` are things the *game* gains, and
+        # they already live in `ast/game.py` beside the extra turns and the
+        # ante. Splitting them out would put a node in one family and both of
+        # its readers in another.
+        "tokens",
         # `types` is a parse family and a lowering family with no AST module of
         # its own: what the `becomes` verb produces is `BecomeCreature`,
         # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,

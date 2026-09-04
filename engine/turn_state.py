@@ -106,6 +106,42 @@ def attacked_this_turn(permanent) -> bool:
     return bool(permanent.metadata.get(ATTACKED_THIS_TURN_KEY))
 
 
+#: The metadata key holding the seats this permanent has been declared as an
+#: attacker **against** this turn, as a list (CR 508.1a: a creature is declared
+#: attacking a player, a planeswalker or a battle).
+#:
+#: A record rather than a read of ``Permanent.defending_player_index``, which is
+#: the *live* relation and is cleared when combat ends — "target creature that
+#: attacked you this turn" (Jabari's Influence) is printed on a card whose other
+#: line is "cast this spell only after combat", so by the time the question is
+#: asked there is nothing live to read.
+#:
+#: A list, not one seat: a turn may have two combat phases (Relentless Assault),
+#: and a creature that attacked two different players in them attacked both.
+#: Swept at cleanup with ``attacked_this_turn``, whose window this shares.
+ATTACKED_SEATS_THIS_TURN_KEY = "attacked_seats_this_turn"
+
+
+def record_attacked_seat(permanent, seat: int | None) -> None:
+    """Stamp that *permanent* was declared attacking *seat* this turn.
+
+    ``None`` — CR 508.5's planeswalker attack — records nothing: the creature
+    attacked a permanent, not the player, and "attacked you" is about the
+    player. Dropping it is the narrow direction, which is the one a target
+    description may not get wrong.
+    """
+    if seat is None:
+        return
+    seats = permanent.metadata.setdefault(ATTACKED_SEATS_THIS_TURN_KEY, [])
+    if seat not in seats:
+        seats.append(seat)
+
+
+def attacked_seat_this_turn(permanent, seat: int) -> bool:
+    """Whether *permanent* attacked *seat* this turn."""
+    return seat in (permanent.metadata.get(ATTACKED_SEATS_THIS_TURN_KEY) or ())
+
+
 def record_attack(permanent, seat: int, seat_turn: int) -> None:
     """Stamp that *permanent* attacked on *seat*'s turn number *seat_turn*."""
     permanent.metadata[ATTACKED_ON_SEAT_TURN_KEY] = {

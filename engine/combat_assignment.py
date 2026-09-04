@@ -31,6 +31,21 @@ from __future__ import annotations
 #: "This creature assigns no combat damage this turn." (Floral Spuzzem.)
 ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 
+#: "Target unblocked attacking creature **becomes blocked**." (Dazzling Beauty;
+#: CR 509.1h.) Named here rather than beside the combat maps because the maps
+#: record *who blocks whom*, and this is precisely the state CR 509.1h says a
+#: creature can be in with no blockers at all — the one an attacker is left in
+#: when its blockers leave combat.
+#:
+#: A mark on the permanent, not an entry in a combat map. The maps are keyed by
+#: battlefield slot and have to be renumbered whenever anything leaves; this
+#: travels with the permanent and dies with it, which CR 400.7 gives for free.
+#:
+#: Swept by the **end of combat** step, not by cleanup: a turn may hold a second
+#: combat phase (Relentless Assault), and a creature this blocked in the first
+#: one is a fresh attacker in the second.
+BLOCKED_WITHOUT_BLOCKERS = "blocked_without_blockers_this_combat"
+
 
 def combat_damage_assigned_by(permanent) -> int:
     """How much combat damage *permanent* assigns this step (CR 510.1a).

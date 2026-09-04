@@ -23,7 +23,8 @@ from ...auras import aura_enchant_clause
 from ...alternative_costs import AlternativeCost, alternative_costs
 from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
 from ...auras import controller_cast_ban
-from ...cast_restrictions import check_cast_timing, global_cast_ban
+from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
+                                  global_cast_ban)
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
@@ -798,6 +799,18 @@ class SpellCastingMixin:
         forbidding_permanent = global_cast_ban(self, card)
         if forbidding_permanent is not None:
             details = f"can't cast {card.name}: {forbidding_permanent}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Spells with the chosen names can't be cast **and lands with the
+        # chosen names can't be played**." (Null Chamber.) The same CR 601.3a
+        # prohibition keyed on what a card is *called* rather than on its type,
+        # and one gate for both halves of the printed sentence: playing a land
+        # reaches this function too, and the land-drop refusal above is behind
+        # `enforce_mana_costs` while a prohibition is not.
+        naming_permanent = chosen_name_ban(self, card)
+        if naming_permanent is not None:
+            details = f"can't play {card.name}: {naming_permanent}"
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 

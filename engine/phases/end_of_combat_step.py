@@ -7,6 +7,7 @@ Cockatrice/Thicket Basilisk delayed destruction) while "attacked or blocked this
 combat" is still known, then clears until-end-of-combat effects and combat state.
 """
 
+from ..combat_assignment import BLOCKED_WITHOUT_BLOCKERS
 from ..attack_tapping import clear_attack_tap_exemptions
 from ..delayed_triggers import (expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
@@ -60,6 +61,11 @@ class EndOfCombatStepMixin:
             # so "this combat" means one window from both ends. A turn's second
             # combat phase starts with both marks clear.
             permanent.metadata.pop("attacked_this_combat", None)
+            # "…becomes blocked." (Dazzling Beauty; CR 509.1h.) Swept in the
+            # same pass and for the same reason: a turn may hold a second combat
+            # phase, and a creature blocked in the first one is a fresh attacker
+            # in the second.
+            permanent.metadata.pop(BLOCKED_WITHOUT_BLOCKERS, None)
         # "…this combat" (Johan). The exemptions are scoped to the combat
         # phase, so they end where every other until-end-of-combat effect above
         # does rather than waiting for cleanup.

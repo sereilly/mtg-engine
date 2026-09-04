@@ -191,6 +191,15 @@ class ObjectFilter:
     # narrows by, and one field meaning either would leave the matcher
     # guessing. Emitted, and answered only by a reader holding the source.
     chosen_creature_type: bool = False
+    # "Each **land** of the chosen type" (Shimmer). The same CR 614.1c choice
+    # a third characteristic over, and its own field for ``chosen_color``'s
+    # reason rather than a value of the one above: the *catalog* the word came
+    # from is what the choice recorded, and a land type stored under a creature
+    # type's name is a lie the next reader trips on. Which key the noun phrase
+    # produces is decided by its head noun — "land of the chosen type" is this
+    # one, everything else is the creature type — because the sentence spells
+    # the catalog exactly once, in the head.
+    chosen_land_type: bool = False
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch): two questions about one combat, both
     # answered off the permanent's own per-turn record.
@@ -434,6 +443,15 @@ class ObjectFilter:
     # a caller with no observer refuses rather than dropping the narrowing,
     # which would offer every attacker in a multiplayer game.
     attacking_you: bool = False
+    # "target nonartifact, nonblack creature **that attacked you this turn**"
+    # (Jabari's Influence). The *history* of the live relation beside it, and
+    # its own field for that distinction exactly: ``attacking_you`` reads
+    # ``Permanent.defending_player_index``, which end of combat clears — and
+    # this card may only be cast *after* combat, so the live field is always
+    # None by the time it is asked. Answered off a per-turn record the
+    # declaration writes, and relative to the seat asking, which is what keeps
+    # it out of the pure matcher.
+    attacked_you_this_turn: bool = False
     # "…all creatures that were **blocked by that creature this turn**"
     # (Glyph of Doom). A history relative to the object a delayed triggered
     # ability was bound to, answered from the block record that creature
@@ -640,6 +658,8 @@ class ObjectFilter:
             payload["banded_with_source"] = True
         if self.attacking_you:
             payload["attacking_you"] = True
+        if self.attacked_you_this_turn:
+            payload["attacked_you_this_turn"] = True
         if self.was_dealt_damage_this_turn:
             payload["dealt_damage_this_turn"] = True
         if self.blocking is True:
@@ -678,6 +698,8 @@ class ObjectFilter:
             payload["chosen_color"] = True
         if self.chosen_creature_type:
             payload["chosen_creature_type"] = True
+        if self.chosen_land_type:
+            payload["chosen_land_type"] = True
         if self.attacked_this_turn is True:
             payload["attacked_this_turn"] = True
         elif self.attacked_this_turn is False:

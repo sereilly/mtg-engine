@@ -290,6 +290,45 @@ def test_the_payload_round_trips(line):
     assert lord_buff_from_payload(lord_buff_payload(buff)) == buff
 
 
+# W2G5: the parametrization above is a hand-maintained list of *sentences*, and
+# a field only the grammar's static production can produce appears in none of
+# them — ``chosen_land_type`` (Shimmer) was carried through
+# ``statics._lord_filter``'s round trip, emitted by neither payload function,
+# and so reached the consumer as an anthem over every land there is. That round
+# trip proves the *table* can carry a restriction; this one proves the
+# **instruction** does, which is the only thing ``_recalculate_lord_buffs``
+# ever sees.
+def _distinct_value(field):
+    """A value for *field* that is not its default, by type."""
+    if field.type in ("bool", bool):
+        return True
+    if field.type in ("str | None", "int | None"):
+        return "x" if "str" in str(field.type) else 1
+    return ("x",)
+
+
+def test_every_filter_field_survives_the_payload():
+    """Derived from ``LordBuffFilter``'s own fields, so a field added later is
+    covered by construction rather than by remembering to extend a list.
+
+    A dropped filter field is always a **widening**: the anthem reaches a set
+    strictly larger than the card prints, nothing raises, and the card reports
+    supported. That is why this asks about every field rather than the ones a
+    printed sentence happens to produce today.
+    """
+    import dataclasses
+
+    for field in dataclasses.fields(LordBuffFilter):
+        value = _distinct_value(field)
+        buff = LordBuff(filter=LordBuffFilter(**{field.name: value}))
+        rebuilt = lord_buff_from_payload(lord_buff_payload(buff))
+        assert getattr(rebuilt.filter, field.name) == value, (
+            f"{field.name} does not survive lord_buff_payload -> "
+            f"lord_buff_from_payload; the instruction is the only thing the "
+            f"consumer sees, so the narrowing is silently dropped"
+        )
+
+
 # ---------------------------------------------------------------------------
 # The pool, swept by shape rather than by name
 # ---------------------------------------------------------------------------

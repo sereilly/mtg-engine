@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.grammar.phrases import BASIC_LAND_WORDS
-from engine.grammar.vocabulary import CREATURE_TYPES
+from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
@@ -1223,17 +1223,36 @@ def _opponent_damage(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("enter_choice")
 def _enter_choice(ctx: PromptContext, choices: list) -> dict:
+    """The "as this enters, choose …" prompt, in all six of its shapes.
+
+    Every key is read with ``.get``, and that is not defensive style: the
+    armings do not all pass the same fields. Runed Halo's card-name arming
+    passes ``needs_card_name`` and nothing else, so ``data["needs_color"]``
+    raised ``KeyError`` and the whole state payload 500'd for any interactive
+    seat that resolved it — the prompt could not be shown, so the choice could
+    not be answered and the game could not go on. One arming forgetting a key a
+    renderer subscripts is a shape no test of the *engine* can see, which is why
+    the guard beside this one renders every kind's own data.
+    """
     data = choices[0].data
+    needs_color = bool(data.get("needs_color"))
     return {
         "card_name": data["card_name"],
-        "needs_color": bool(data["needs_color"]),
+        "needs_color": needs_color,
         "opponents": [
             {"seat": seat, "name": ctx.game.players[seat].name}
-            for seat in data["opponents"]
+            for seat in (data.get("opponents") or ())
         ],
-        "default_seat": data["default_seat"],
-        "default_color": data["default_color"],
-        "colors": ["W", "U", "B", "R", "G"] if data["needs_color"] else [],
+        "default_seat": data.get("default_seat"),
+        "default_color": data.get("default_color"),
+        "colors": ["W", "U", "B", "R", "G"] if needs_color else [],
+        # "…choose a card name." (Runed Halo.) A name rather than a quality:
+        # CR 202.1 lets a player name any card, so the offered list is what the
+        # chooser can actually see rather than a catalog, and the answer is not
+        # checked against it.
+        "needs_card_name": bool(data.get("needs_card_name")),
+        "card_names": list(data.get("choices") or ()),
+        "default_chosen_card_name": data.get("default_card_name"),
         # "…choose two basic land types." (Illusionary Terrain.) A fourth shape
         # of this one prompt: an ordered pair out of CR 205.3i's five, with no
         # seat and no colour. The offered list is the vocabulary the resolver
@@ -1254,6 +1273,16 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
             sorted(CREATURE_TYPES) if data.get("needs_creature_type") else []
         ),
         "default_creature_type": data.get("default_creature_type"),
+        # "…choose a land type." (Shimmer.) A sixth shape of this one prompt:
+        # one word out of CR 205.3i's catalog, with no seat and no colour, and
+        # the *whole* catalog rather than the five basics the ordered pair
+        # above draws from. Offered from the same vocabulary the resolver
+        # checks the answer against (idiom 9).
+        "needs_land_type": bool(data.get("needs_land_type")),
+        "chosen_land_types": (
+            sorted(LAND_TYPES) if data.get("needs_land_type") else []
+        ),
+        "default_land_type": data.get("default_land_type"),
     }
 
 

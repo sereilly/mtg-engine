@@ -22,7 +22,7 @@ from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
-from ..turn_state import attacked_during_seats_last_turn, record_attack
+from ..turn_state import record_attacked_seat, attacked_during_seats_last_turn, record_attack
 
 
 class DeclareAttackersStepMixin:
@@ -254,6 +254,13 @@ class DeclareAttackersStepMixin:
             # same. CR 506.4 removes a creature from combat; it does not unmake
             # the declaration.
             attacker.metadata["attacked_this_combat"] = True
+            # **Whom** it attacked, beside the fact that it did. The live
+            # relation (``Permanent.defending_player_index``) is cleared when
+            # combat ends, and "target creature that attacked you this turn"
+            # (Jabari's Influence) is printed on a card that may only be cast
+            # *after* combat — so the question is always asked after the only
+            # reader of that field has been reset.
+            record_attacked_seat(attacker, per_attacker_defender.get(idx))
             # The durable half of that record: which seat's turn it attacked
             # on, by that seat's own turn ordinal. `attacked_this_turn` is
             # swept at cleanup, and "it attacked during your last turn" (Giant

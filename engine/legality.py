@@ -1459,11 +1459,13 @@ class LegalityMixin:
                     spec.get("blocked_by_source")
                     or spec.get("blocking_source")
                     or spec.get("attacking_you")
+                    or spec.get("attacked_you_this_turn")
                 ):
                     relation = {
                         key: True
                         for key in (
                             "blocked_by_source", "blocking_source", "attacking_you",
+                            "attacked_you_this_turn",
                         )
                         if spec.get(key)
                     }

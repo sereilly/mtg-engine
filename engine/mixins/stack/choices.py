@@ -2616,6 +2616,7 @@ class PendingChoicesMixin:
         mana_color: str | None = None, card_name: str | None = None,
         land_types: "tuple[str, str] | list[str] | None" = None,
         creature_type: str | None = None,
+        land_type: str | None = None,
     ) -> bool:
         """Resolve a pending "as this enters, choose an opponent [and a color]"
         prompt (Black Vise / Jihad), overwriting the provisional defaults
@@ -2623,7 +2624,7 @@ class PendingChoicesMixin:
         return self.resolve_pending_choice(
             "enter_choice", player_index, opponent_index=opponent_index,
             mana_color=mana_color, card_name=card_name, land_types=land_types,
-            creature_type=creature_type,
+            creature_type=creature_type, land_type=land_type,
         )
 
     def _resolve_enter_choice(
@@ -2631,6 +2632,7 @@ class PendingChoicesMixin:
         mana_color: str | None = None, card_name: str | None = None,
         land_types: "tuple[str, str] | list[str] | None" = None,
         creature_type: str | None = None,
+        land_type: str | None = None,
     ) -> bool:
         player_index = choice.player_index
         # "…choose **a creature type**." (An-Zerrin Ruins.) A fifth shape of
@@ -2643,6 +2645,32 @@ class PendingChoicesMixin:
         # keeping the default would tell the player they had chosen something
         # they had not. An empty answer keeps the default, which is a choice
         # already recorded rather than none at all.
+        # "…choose **a land type**." (Shimmer.) The sixth shape of this one
+        # prompt and the fifth that names no seat, so it answers and returns
+        # like the creature type below it.
+        #
+        # CR 205.3i: the answer must be a land type — and the *whole* catalog,
+        # not the five basics: Shimmer may name Desert. Checked against the
+        # same vocabulary the picker offers, so the two cannot disagree
+        # (idiom 9), and anything else is refused rather than repaired. The
+        # static beside the choice reads the record, so the board is
+        # recomputed once it changes.
+        if choice.data.get("needs_land_type"):
+            from ...grammar.vocabulary import LAND_TYPES
+
+            permanent = choice.data["permanent"]
+            if land_type:
+                word = str(land_type).strip().lower()
+                if word not in LAND_TYPES:
+                    return False
+                if self.is_on_battlefield(permanent):
+                    permanent.metadata["chosen_land_type"] = word
+                    self.log.append(
+                        f"{choice.data['card_name']}: chose {word}"
+                    )
+                    self._recalculate_lord_buffs()
+            self.discard_pending_choice(choice)
+            return True
         if choice.data.get("needs_creature_type"):
             from ...grammar.vocabulary import CREATURE_TYPES
 
@@ -2694,7 +2722,42 @@ class PendingChoicesMixin:
         # default rather than naming nothing, which would make the protection
         # apply to nothing.
         if choice.data.get("needs_card_name"):
+            from ...cast_restrictions import CHOSEN_CARD_NAMES
+
             permanent = choice.data["permanent"]
+            # "…**you and an opponent each** choose a card name other than a
+            # basic land card name." (Null Chamber.) Two seats answering into
+            # one record, so the slot says whose answer this is — read as a set
+            # by the ban, but written by index, because a prompt answering into
+            # the wrong slot would swap the two players' choices.
+            slot = choice.data.get("card_name_slot")
+            if slot is not None:
+                # ``BASIC_LAND_WORDS`` is the module-level import. A local one
+                # here would shadow it for the *whole* function — Python binds
+                # a name by function, not by block — and Illusionary Terrain's
+                # branch above would raise reading it before this line ran.
+                if card_name:
+                    # The one restriction the sentence prints. CR 201.2 leaves
+                    # the choice otherwise unbounded, so a name off the offered
+                    # list is legal — this is the only answer that is not, and
+                    # it is refused rather than repaired: quietly keeping the
+                    # default would tell the player they had chosen something
+                    # they had not.
+                    if str(card_name).strip().lower() in BASIC_LAND_WORDS:
+                        return False
+                    names = list(
+                        permanent.metadata.get(CHOSEN_CARD_NAMES) or ["", ""]
+                    )
+                    while len(names) <= int(slot):
+                        names.append("")
+                    names[int(slot)] = card_name
+                    permanent.metadata[CHOSEN_CARD_NAMES] = names
+                self.discard_pending_choice(choice)
+                self.log.append(
+                    f"{self.players[player_index].name} named "
+                    f"{card_name or 'nothing'} for {choice.data['card_name']}"
+                )
+                return True
             if card_name:
                 permanent.metadata["chosen_card_name"] = card_name
             self.discard_pending_choice(choice)
@@ -6935,7 +6998,7 @@ register_choice(
     "enter_choice",
     resolve=lambda game, choice, r: game._resolve_enter_choice(
         choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name"),
-        r.get("land_types"), r.get("creature_type"),
+        r.get("land_types"), r.get("creature_type"), r.get("land_type"),
     ),
     # Black Vise / Jihad stamp their deterministic defaults on the permanent as
     # it enters, so a non-interactive controller has nothing left to apply.
