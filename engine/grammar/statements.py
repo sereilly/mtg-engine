@@ -37,6 +37,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
                       _parse_create_token, _parse_reveal_hand_and_choose,
                       _parse_count_objects, _parse_produces_instead,
+                      _parse_tapped_lands_produce_chosen,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders, _parse_sacrifice,
                       _parse_counted_sacrifice, _parse_sacrifice_expansion_permanents,
@@ -482,6 +483,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         becomes_counters = _parse_damage_becomes_counter_removal(stream)
         if becomes_counters is not None:
             return becomes_counters
+
+    # "Until end of turn, **lands tapped for mana produce mana of the chosen
+    # color** instead of any other color." (Hall of Gemstone.) The passive
+    # voice of the two swaps above, with the lands in the subject slot — so it
+    # is read here, ahead of the subject-verb reader that would take "lands"
+    # for an ordinary noun phrase and fail on "tapped". Declines without
+    # consuming, leaving every other sentence opening with a noun untouched.
+    chosen_swap = _parse_tapped_lands_produce_chosen(stream)
+    if chosen_swap is not None:
+        return chosen_swap
 
     # "Attacking doesn't cause creatures you control to tap this combat if
     # Johan is untapped." (Johan.) A sentence whose subject is a gerund, which

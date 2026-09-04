@@ -21,7 +21,7 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import PT
+from .lexer import PT, WORD
 from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
@@ -31,7 +31,7 @@ from .condition_clauses import (_accept_record_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
 from .stream import TokenStream
-from .vocabulary import NUMBER_WORDS
+from .vocabulary import CARD_TYPES, NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -96,6 +96,28 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             stream.reset(mark)
             break
     return first if len(parts) == 1 else ast.EveryOf(tuple(parts))
+
+
+def _accept_counter_kind(stream: TokenStream) -> str | None:
+    """The counter's written name, or None with the cursor untouched.
+
+    A **P/T token or a word**, because CR 122.1a spells one kind with symbols
+    and CR 122.1 lets the rest have any name — the same pair
+    ``phrases._expect_counter_kind`` admits one layer down, read here rather
+    than imported because a condition declines where that one raises.
+
+    Reading ``peek_word`` alone was why "three or more **+1/+0** counters"
+    (Consuming Ferocity) failed a clause whose "three or more **echo**
+    counters" twin has worked since Fasting: the lexer gives "+1/+0" its own
+    token kind, so the word table never saw it.
+    """
+    token = stream.peek()
+    if token is None or token.kind not in (PT, WORD):
+        return None
+    if token.is_word("counter", "counters"):
+        return None
+    stream.advance()
+    return token.text
 
 
 def _parse_single_condition(stream: TokenStream) -> ast.Condition:
@@ -581,19 +603,51 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         if word is not None and word in NUMBER_WORDS:
             stream.advance()
             if stream.accept_phrase("or", "more"):
-                counter_word = stream.peek_word()
-                if counter_word is not None and counter_word not in (
-                    "counter", "counters"
+                counter_word = _accept_counter_kind(stream)
+                if counter_word is not None and (
+                    stream.accept_word("counters", "counter")
+                    and stream.accept_phrase("on", "it")
                 ):
-                    stream.advance()
-                    if (
-                        stream.accept_word("counters", "counter")
-                        and stream.accept_phrase("on", "it")
-                    ):
-                        return ast.SourceCounterCount(
-                            counter_word, NUMBER_WORDS[word], comparison="at_least"
-                        )
+                    return ast.SourceCounterCount(
+                        counter_word, NUMBER_WORDS[word], comparison="at_least"
+                    )
     stream.reset(threshold_mark)
+
+    # "if **that creature has three or more +1/+0 counters on it**" (Consuming
+    # Ferocity). The same count over the permanent an Aura is attached to
+    # rather than over the Aura itself — a different object, so a different
+    # node: read as :class:`ast.SourceCounterCount` the clause would ask the
+    # enchantment how many +1/+0 counters *it* had, which is always none, and
+    # the card would never reach its own payoff.
+    #
+    # Both printed subjects reach it. "Enchanted creature" names the host
+    # outright; "that creature" is the host only because the sentence in front
+    # of it named one, which is a fact about the *effect* — so it rides the
+    # node and the lowering is what checks a step really named it.
+    attached_mark = stream.mark()
+    bound = None
+    if stream.accept_word("enchanted"):
+        bound = False
+    elif stream.accept_word("that"):
+        bound = True
+    if bound is not None:
+        noun = stream.peek_word()
+        if noun is not None and noun in CARD_TYPES:
+            stream.advance()
+            if stream.accept_word("has"):
+                word = stream.peek_word()
+                if word is not None and word in NUMBER_WORDS:
+                    stream.advance()
+                    if stream.accept_phrase("or", "more"):
+                        counter_word = _accept_counter_kind(stream)
+                        if counter_word is not None and (
+                            stream.accept_word("counters", "counter")
+                            and stream.accept_phrase("on", "it")
+                        ):
+                            return ast.AttachedCounterCount(
+                                counter_word, NUMBER_WORDS[word], bound=bound,
+                            )
+    stream.reset(attached_mark)
 
     # "if **this ability has been activated four or more times this turn**"
     # (Farrelite Priest, Initiates of the Ebon Hand). The one condition here

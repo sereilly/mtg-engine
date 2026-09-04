@@ -266,6 +266,12 @@ class ProducesManaInstead:
     #: seat — this says the effect arms one on **every** seat, so each player's
     #: own lands are covered by their own record.
     each_player: bool = False
+    #: "…produce mana of **the chosen color**…" (Hall of Gemstone.) The symbol
+    #: is not printed at all: it is the one an earlier sentence of the same
+    #: ability had a player name, and only the resolution knows it. So it
+    #: travels as a reference and ``produced`` stays empty, the same split
+    #: :class:`AddMana` already makes for "add one mana of the chosen color".
+    from_chosen_color: bool = False
 
 
 @dataclass(frozen=True)

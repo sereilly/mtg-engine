@@ -27,7 +27,9 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._events import BOUND_CARD_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_PLAYER
+from .lowering._events import (BOUND_CARD_EVENTS, CHOSEN_PLAYER,
+                               EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER,
+                               _EVENT_SUBJECT_PLAYERS)
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -590,10 +592,30 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.ChooseColor):
-        # Nothing to carry: the colour is not printed, the chooser is the
-        # ability's controller and the permanent it lands on is the ability's
-        # own source — see the node.
-        return (OracleInstruction("choose_color", "", {}),)
+        # The colour is not printed and the permanent it lands on is the
+        # ability's own source — see the node. What can vary is *who* names it.
+        if statement.chooser is None:
+            # CR 601.2b's default, and the payload every printing before Hall
+            # of Gemstone produced: the ability's controller, read by the
+            # handler off the source.
+            return (OracleInstruction("choose_color", "", {}),)
+        if statement.chooser.kind != "that_player":
+            raise LoweringError(
+                f"no colour choice is made by {statement.chooser.kind!r}",
+                node=statement,
+            )
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            # "That player" under an event that froze no seat names nobody, and
+            # the prompt would go to whoever the resolution happened to be
+            # holding — the refusal every other reading of these two words in
+            # this package makes, for the same reason.
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat \"that player\" names",
+                node=statement,
+            )
+        return (
+            OracleInstruction("choose_color", "", {"chooser": EVENT_SUBJECT_PLAYER}),
+        )
 
     if isinstance(statement, ast.ChoosePlayerWhoCast):
         # "Choose a player who cast one or more sorcery spells this turn."

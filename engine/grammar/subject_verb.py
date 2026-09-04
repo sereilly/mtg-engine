@@ -330,6 +330,23 @@ def parse_subject_verb(
         # Dispatched on the verb like every other player action; the production
         # reads its own words to the end.
         if token.text in ("chooses", "choose") and isinstance(source_spec, ast.PlayerRef):
+            # "At the beginning of each player's upkeep, **that player chooses
+            # a color**." (Hall of Gemstone.) The imperative production reads
+            # the same three words with no subject in front of them, where CR
+            # 601.2b's default makes the ability's controller the chooser; here
+            # the sentence names somebody else, and for this card that is a
+            # different seat every turn.
+            #
+            # First among these arms, and matched in full: every one below
+            # declines without consuming, and this is the only reading of the
+            # verb whose object is a colour.
+            mark_colour = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("a", "color") and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                return ast.ChooseColor(chooser=source_spec)
+            stream.reset(mark_colour)
             # "That creature's controller **chooses a creature that this card
             # could enchant**." (Takklemaggot.) Read first because it declines
             # without consuming, where the paragraph below expects "a card

@@ -271,11 +271,17 @@ class ChooseColor:
     sentence on the card — here the Aura's static shield, which answers to
     "sources of the last chosen color".
 
-    Nothing rides the node. The colour is not printed, the chooser is the
-    ability's controller by CR 601.2b's default, and the permanent it is
-    recorded on is the ability's own source — the same place the CR 614.1c
-    entry-state version records it, which is what lets one reader answer both.
+    The colour is not printed and the permanent it is recorded on is the
+    ability's own source — the same place the CR 614.1c entry-state version
+    records it, which is what lets one reader answer both.
+
+    ``chooser`` is who names it. None is CR 601.2b's default, the ability's
+    controller, and every payload written before this field existed means that.
+    "At the beginning of each player's upkeep, **that player** chooses a color"
+    (Hall of Gemstone) is the other reading: the seat the firing event froze,
+    which changes every turn and is nobody's controller.
     """
+    chooser: PlayerRef | None = None
 
 
 @dataclass(frozen=True)

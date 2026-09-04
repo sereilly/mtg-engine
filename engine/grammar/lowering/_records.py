@@ -445,6 +445,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the sentence behind this step names a player and the only place that
     # player exists by then is this record (CR 608.2h).
     "destroy_attached_permanent": ATTACHED_PERMANENT_CONTROLLER,
+    # "At the beginning of your upkeep, put a +1/+0 counter on **enchanted
+    # creature**. If that creature has three or more … **it deals damage equal
+    # to its power to its controller, then destroy that creature**."
+    # (Consuming Ferocity.) The same record from the other verb: a step that
+    # acts on the attachment is what makes every "that creature" and "its
+    # controller" behind it readable, and which verb did it is not the
+    # question — the destroy above records it because Orcish Mine's sentence
+    # happened to be a destroy.
+    "add_pt_counters_to_attached": ATTACHED_PERMANENT_CONTROLLER,
     # "Destroy target artifact. You gain life equal to **its** mana value."
     # (Divine Offering.) The destruction records the mana value of the
     # permanent it was aimed at — read *before* the destroy, so a regenerated

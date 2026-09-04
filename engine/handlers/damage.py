@@ -123,6 +123,20 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # resolution counts — and read off the `Permanent`, not the card, so it
         # is the computed power (CR 613) rather than the printed one.
         damage = max(0, source_permanent.effective_power) if source_permanent else 0
+    elif instruction.payload.get("amount_from_attached_power"):
+        # "…**it** deals damage equal to **its power** to its controller"
+        # (Consuming Ferocity), where "it" is the creature the Aura enchants.
+        # The same read one object over, and the object is what matters: the
+        # Aura has no power, so routed through the branch above the card would
+        # deal nothing at all while compiling clean.
+        #
+        # The power is computed (CR 613), which is the whole card — the counter
+        # this same trigger placed a step earlier is what pushes it over the
+        # line.
+        from ._common import attached_host
+
+        host = attached_host(game, source_permanent)
+        damage = max(0, host.effective_power) if host is not None else 0
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     # "…deals **X plus 3** damage to you" (Hellfire). The printed constant, kept

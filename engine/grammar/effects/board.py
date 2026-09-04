@@ -505,6 +505,13 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")
+    # "…destroy that creature **and** it can't be regenerated" (Consuming
+    # Ferocity) against "Destroy target creature. It can't be regenerated"
+    # (Terror). One printed word apart, and without it the conjunction loop one
+    # layer up takes the "and" and then fails the line on a clause that is a
+    # rider rather than a statement — W1G3's Burning Palm Efreet finding, in a
+    # second family.
+    stream.accept_word("and")
     if (
         stream.accept_phrase("it", "can't", "be", "regenerated")
         or stream.accept_phrase("they", "can't", "be", "regenerated")

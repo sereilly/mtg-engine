@@ -1086,6 +1086,9 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
 from engine import Game, PlayerState
 from engine.auras import attach_aura, aura_color_grants, detach_aura
+import pytest
+
+from engine.land_mana_swaps import swapped_symbol
 from engine.linked_exile import linked_entries
 from engine.named_counters import add_counters, counters_on, remove_counters
 from engine.models import CardDefinition, Permanent
@@ -1536,3 +1539,164 @@ def test_the_counter_replacement_covers_only_the_abilitys_controller(set_pool):
     game._deal_damage_to_player(game.players[1], 3)
     assert game.players[1].life == 17, game.log
     assert counters_on(echo, "echo") == 3
+
+
+def test_hall_of_gemstone_makes_every_land_produce_the_active_players_colour(set_pool):
+    """"At the beginning of each player's upkeep, **that player** chooses a
+    color. Until end of turn, lands tapped for mana produce mana of the chosen
+    color instead of any other color."
+
+    Two halves and two seats. The chooser is the seat the fire site froze
+    (CR 603.10) — a different player every turn and never the enchantment's
+    controller except on their own turn — and the swap covers *every* player's
+    lands, because the sentence names no seat at all.
+    """
+    pool = set_pool("MIR")
+    hall = Permanent(card=pool["Hall of Gemstone"])
+    forest = Permanent(card=pool["Forest"])
+    island = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, hall, None)
+    game._put_permanent_onto_battlefield(0, forest, None)
+    game._put_permanent_onto_battlefield(1, island, None)
+    game._settle()
+
+    assert swapped_symbol(game, forest) is None
+    assert swapped_symbol(game, island) is None
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    chosen = hall.metadata.get("chosen_color")
+    assert chosen, game.log
+    assert swapped_symbol(game, forest) == chosen, game.log
+    # The opponent's Island too: the swap is armed on every seat, because
+    # ``swapped_symbol`` asks the land's *own* controller for their records.
+    assert swapped_symbol(game, island) == chosen, game.log
+
+    game.tap_land_for_mana(1, "Island")
+    assert game.players[1].mana_pool.get(chosen) == 1, game.log
+    assert not game.players[1].mana_pool.get("U"), game.log
+
+
+def test_hall_of_gemstone_asks_the_player_whose_upkeep_it_is(set_pool):
+    """The seat is read off the frozen event and not off the enchantment's
+    controller, which is the difference the card's own subject is printed for.
+    """
+    pool = set_pool("MIR")
+    hall = Permanent(card=pool["Hall of Gemstone"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, hall, None)
+    game._settle()
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert any("P2 chooses a color" in line for line in game.log), game.log
+
+
+def test_consuming_ferocity_grows_its_host_then_kills_it(set_pool):
+    """The whole trigger, and every pronoun in it names the same object.
+
+    "Put a +1/+0 counter on **enchanted creature**. If **that creature** has
+    three or more +1/+0 counters on it, **it** deals damage equal to **its**
+    power to **its controller**, then destroy **that creature** and it can't be
+    regenerated."
+
+    Nothing after the first clause says "enchanted" again, so what makes the
+    rest readable is the record that first step writes (CR 608.2h) — the same
+    record Orcish Mine's destroy has written since it landed. Without it the
+    damage clause reads "it" as the Aura, which has no power, and the card
+    deals nothing while compiling clean.
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Consuming Ferocity"])
+    victim = Permanent(card=_w2g2_vanilla("Victim", 2, 4))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Mountain"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Mountain"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, aura, None)
+    # An **opponent's** creature, so "its controller" and the ability's
+    # controller are different seats — the whole reason the recipient is read
+    # off the host rather than off the caster.
+    game._put_permanent_onto_battlefield(1, victim, None)
+    attach_aura(aura, victim)
+    game._settle()
+
+    assert (victim.effective_power, victim.effective_toughness) == (3, 4)
+
+    for expected in (1, 2):
+        game.start_next_turn() if expected > 1 else game.start_turn(0)
+        if game.active_player_index != 0:
+            game.start_next_turn()
+        game.auto_resolve_pending_choices()
+        game.resolve_stack()
+        game._settle()
+        assert counters_on(victim, "+1/+0") == expected, game.log
+        assert game.players[1].life == 20, game.log
+        assert victim in game.players[1].battlefield
+
+    # The third counter crosses the threshold: 2 printed + 1 from the Aura's
+    # static + 3 counters = 6 damage, to the creature's controller.
+    game.start_next_turn()
+    if game.active_player_index != 0:
+        game.start_next_turn()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert game.players[1].life == 14, game.log
+    assert victim not in game.players[1].battlefield, game.log
+    assert "Victim" in [c.name for c in game.players[1].graveyard]
+
+
+def test_the_attached_counter_condition_refuses_an_unbound_that(set_pool):
+    """"That creature" names the host only because a step in front of it did.
+
+    The gate is the record, not the word: a line whose first sentence never
+    touched the attachment leaves the pronoun naming nothing, and a condition
+    that answered off the attachment anyway would be reading a card that never
+    said "enchanted".
+    """
+    from engine.grammar import GrammarError, LoweringError, lower_ability, parse_line
+
+    node = parse_line(
+        "At the beginning of your upkeep, if that creature has three or more "
+        "+1/+0 counters on it, destroy that creature."
+    )
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(node)
+
+
+def test_a_counter_condition_reads_a_pt_counter_kind():
+    """"three or more **+1/+0** counters" against "three or more **echo**
+    counters".
+
+    The lexer gives a P/T counter its own token kind, so the word table never
+    saw it — which is why Fasting's clause has worked since Ice Age and
+    Consuming Ferocity's identical one refused.
+    """
+    from engine.grammar import lower_ability, parse_line
+
+    instructions = lower_ability(parse_line(
+        "If this enchantment has three or more +1/+0 counters on it, "
+        "sacrifice it."
+    ))
+    assert [i.kind for i in instructions] == ["if_then"]
+    assert instructions[0].payload["condition"] == {
+        "kind": "source_counter_count",
+        "counter": "+1/+0",
+        "count": 3,
+        "comparison": "at_least",
+    }

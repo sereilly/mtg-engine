@@ -489,6 +489,18 @@ def _lower_controller_mana_swap(
     payload: dict[str, object] = {"produced": node.produced, "lands": described}
     if node.each_player:
         payload["seats"] = "each"
+    if node.from_chosen_color:
+        # "…produce mana of **the chosen color**…" (Hall of Gemstone.) The
+        # symbol is not printed: it is the one the sentence in front of this
+        # had a player name, and only the resolution knows it. Emitted as a
+        # reference rather than resolved here for the reason every other
+        # chosen-colour payload in this engine is — the choice is made when the
+        # ability resolves and the lowering happens once, at compile time.
+        payload["produced_from_chosen_color"] = True
+    elif not node.produced:
+        # A swap with no symbol at either end would arm a record that makes
+        # nothing, which is a land that taps for no mana at all.
+        raise LoweringError("a mana swap needs a symbol to produce", node=node)
     return (OracleInstruction("swap_controller_land_mana_until_eot", "", payload),)
 
 

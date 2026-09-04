@@ -352,6 +352,38 @@ def _lower_damage_shape(
     # bites handler below — which resolves a permanent — cannot carry it. The
     # generic damage instruction can: what is new is only where the *number*
     # comes from, and that is one payload key rather than a kind.
+    # "…**it** deals damage equal to **its** power to **its controller**"
+    # (Consuming Ferocity). Three pronouns, one referent, and none of them is
+    # the ability's source: the sentence in front of this one put a counter on
+    # "enchanted creature", so every "it" behind it is that creature and "its
+    # controller" is that creature's seat (CR 608.2h).
+    #
+    # Read before the source branch below, which cannot tell the two apart —
+    # a bare "it" parses to the same spec either way — and gated on the record
+    # rather than on the word, because the record is the only thing that says
+    # a step of this effect named the attachment. Without it the branch below
+    # takes the line and the Aura deals damage equal to *its own* power, which
+    # is zero.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and node.source is not None
+        and (_is_source(node.source) or _is_enchanted(node.source))
+        and len(node.recipients) == 1
+        and isinstance(node.recipients[0], ast.PlayerRef)
+        and node.recipients[0].kind in ("controller", "that_player")
+        and ATTACHED_PERMANENT_CONTROLLER in produced
+    ):
+        return (
+            OracleInstruction(
+                "deal_damage", "",
+                {
+                    "amount_from_attached_power": True,
+                    "recipient": ATTACHED_PERMANENT_CONTROLLER,
+                },
+            ),
+        )
     if (
         isinstance(node.amount, ast.ThatMuch)
         and node.amount.source == "its_power"

@@ -76,6 +76,24 @@ class LandManaSwap:
     lands: dict = field(default_factory=dict)
     lifetime: str = END_OF_TURN
     source_name: str | None = None
+    #: The permanent whose recorded ``chosen_color`` this swap follows, for
+    #: "lands tapped for mana produce mana of **the chosen color**" (Hall of
+    #: Gemstone). None on every other record, which carries its symbol in
+    #: ``produced``.
+    #:
+    #: Read when a land is tapped rather than snapshotted when the swap is
+    #: armed, and the difference is an interactive seat: the colour choice is a
+    #: queued prompt, so the step that arms this record can run before the
+    #: answer arrives. Nothing can be tapped for mana in between — no player
+    #: gets priority inside a resolution (CR 608.2) — so the later read is the
+    #: same answer, and it is the one that cannot be a stale default.
+    chosen_by: object | None = None
+
+    def symbol(self) -> str:
+        """The symbol this record makes a covered land produce."""
+        if self.chosen_by is None:
+            return self.produced
+        return str(getattr(self.chosen_by, "metadata", {}).get("chosen_color") or "")
 
 
 #: Where the list hangs off a player, for the reason ``engine/shields.py`` uses
@@ -286,8 +304,14 @@ def swapped_symbol(game, land) -> str | None:
         return None
     found = static_substituted_symbol(game, land)
     for record in swaps_on(game.players[seat]):
-        if subject_matches(game, land, record.lands, observer=seat):
-            found = record.produced
+        if not subject_matches(game, land, record.lands, observer=seat):
+            continue
+        # A record following a chosen colour nobody has named yet says nothing,
+        # rather than making the land produce the empty symbol — which is a
+        # land that taps for no mana at all.
+        symbol = record.symbol()
+        if symbol:
+            found = symbol
     return found
 
 

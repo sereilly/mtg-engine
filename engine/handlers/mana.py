@@ -620,19 +620,38 @@ def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstructi
     seats = (
         list(game.players) if instruction.payload.get("seats") == "each" else [caster]
     )
+    produced = str(instruction.payload.get("produced", ""))
+    # "…produce mana of **the chosen color**…" (Hall of Gemstone.) The colour
+    # the sentence in front of this one had a player name, which is recorded on
+    # the ability's own source — the one place every "chosen color" in this
+    # engine is written, so the reader is the same whether the choice was made
+    # as the permanent entered or by a trigger a moment ago.
+    #
+    # The record *follows* that permanent rather than copying its answer, for
+    # ``LandManaSwap.chosen_by``'s reason: an interactive seat's colour prompt
+    # is queued, so this step can run before the answer arrives, and a snapshot
+    # taken here would be the deterministic default the arming stamped.
+    chosen_by = (
+        context.source_permanent
+        if instruction.payload.get("produced_from_chosen_color") else None
+    )
     for player in seats:
         add_swap(
             player,
             LandManaSwap(
-                produced=str(instruction.payload.get("produced", "")),
+                produced=produced,
                 lands=dict(instruction.payload.get("lands") or {}),
                 source_name=getattr(context.card, "name", None),
+                chosen_by=chosen_by,
             ),
         )
     whose = "every player's" if len(seats) > 1 else f"{caster.name}'s"
+    shown = produced or str(
+        (chosen_by.metadata.get("chosen_color") if chosen_by is not None else "") or "?"
+    )
     game.log.append(
         f"{getattr(context.card, 'name', 'an effect')}: {whose} lands "
-        f"produce {{{instruction.payload.get('produced', '')}}} this turn"
+        f"produce {{{shown}}} this turn"
     )
     return True, "resolved"
 

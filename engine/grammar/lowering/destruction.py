@@ -28,7 +28,7 @@ from ._common import (describe_independent_target_roles, _describe_several_targe
                       _names_several_targets, _restrictions_beyond,
                       is_mana_value_x)
 from ._records import optional_cost_key
-from ._events import (_RECORDED_PERMANENTS, _EVENT_SUBJECT_PLAYERS,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent,
                       CHOSEN_PERMANENT, _BOUND_OBJECT_DELAYED_EVENTS)
 
@@ -381,6 +381,27 @@ def _lower_destroy(
     # referent and a bare destroy would hit whatever the context happened to
     # hold.
     if spec.quantifier == "that":
+        # "…then destroy **that creature** and it can't be regenerated."
+        # (Consuming Ferocity.) The permanent the Aura is attached to, named
+        # "enchanted creature" by the step in front of this one — so it is the
+        # ordinary attached destroy, and the only thing that makes the pronoun
+        # readable is that record. Checked rather than assumed: with no such
+        # step the words name nothing, and a destroy that reached the
+        # attachment anyway would be reading a card that never said
+        # "enchanted".
+        #
+        # Ahead of the delayed and event-subject branches below because it is
+        # the narrower question: those ask what a *trigger* recorded, and this
+        # asks what an earlier step of this same effect did (CR 608.2h).
+        if ATTACHED_PERMANENT_CONTROLLER in produced:
+            attached_payload: dict[str, object] = {}
+            if node.no_regen:
+                attached_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction(
+                    "destroy_attached_permanent", "", attached_payload
+                ),
+            )
         # "…destroy **that creature**" inside a *delayed* ability (War Barge).
         # The object is the one the creating ability bound (CR 603.7c), carried
         # by id in the trigger's context — never a pick, and never the object

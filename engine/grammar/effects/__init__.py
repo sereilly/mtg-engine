@@ -101,6 +101,7 @@ from .mana import (
     _parse_note_mana_spent,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_tapped_lands_produce_chosen,
     _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
 )
@@ -267,6 +268,7 @@ __all__ = [
     "_parse_player_puts_hand_cards_on_library",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
+    "_parse_tapped_lands_produce_chosen",
     "_parse_tapper_produces_instead",
     "_parse_spend_mana_as_though",
     "_parse_double",
