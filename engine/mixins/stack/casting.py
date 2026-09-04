@@ -37,7 +37,7 @@ from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, sacrifice_taxes,
-    spell_cost_tax, spell_life_tax, spell_symbol_tax,
+    self_per_target_tax, spell_cost_tax, spell_life_tax, spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
@@ -390,6 +390,12 @@ class SpellCastingMixin:
         # its cost was collected. A seat that names neither gets the
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        # The same choice for a cost that eats **more than one** permanent
+        # (Phyrexian Tribute's "sacrifice two creatures"): one index cannot name
+        # two victims. By id, never by slot, because each sacrifice renumbers
+        # the battlefield behind it -- the same channel and the same reason
+        # `activate_permanent_ability` takes them.
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         # CR 118.9's choice, forwarded whole for the reason the cost fields
         # above are: dropping it here would resolve the spell having quietly
@@ -420,6 +426,7 @@ class SpellCastingMixin:
             from_zone=from_zone,
             use_free_permission=use_free_permission,
             cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
@@ -661,6 +668,12 @@ class SpellCastingMixin:
         # its cost was collected. A seat that names neither gets the
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        # The same choice for a cost that eats **more than one** permanent
+        # (Phyrexian Tribute's "sacrifice two creatures"): one index cannot name
+        # two victims. By id, never by slot, because each sacrifice renumbers
+        # the battlefield behind it -- the same channel and the same reason
+        # `activate_permanent_ability` takes them.
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         # CR 118.9's choice: whether to pay the spell's printed *alternative*
         # cost rather than its mana cost, and which card in hand pays the exile
@@ -901,26 +914,28 @@ class SpellCastingMixin:
 
         # "…that target this creature cost an additional 3 life to cast."
         # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
-        # the spell *targets* — so it is charged here, where the chosen targets
-        # are known (CR 601.2c chooses them before 601.2h pays), and refused
-        # rather than clamped when the caster cannot pay: CR 119.4 caps the
-        # payment at the payer's life total and CR 601.2h makes an
-        # unpayable cost an uncastable spell, not a free one.
-        life_tax, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
-        if life_tax:
-            if caster.life < life_tax:
-                details = (
-                    f"{caster.name} cannot pay {life_tax} life to cast {card.name} "
-                    f"({', '.join(life_taxing_names)})"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, details
-                )
-            caster.life -= life_tax
-            self.log.append(
-                f"{caster.name} paid {life_tax} life to cast {card.name} "
+        # the spell *targets* — so it is **determined** here, where the chosen
+        # targets are known (CR 601.2c chooses them before 601.2f calculates the
+        # cost), and refused rather than clamped when the caster cannot pay:
+        # CR 119.4 caps the payment at the payer's life total and CR 601.2h
+        # makes an unpayable cost an uncastable spell, not a free one.
+        #
+        # **Determined and not yet paid**, which is the correction. The life
+        # used to come off right here, above the support gate, the timing gate,
+        # the target gates, the additional costs and the mana — so every one of
+        # those refusals left the caster having paid life for a spell that was
+        # never cast, which CR 601.2 makes a rewind rather than a purchase. The
+        # payment is now down with the mana, and everything between the two
+        # points spends nothing.
+        life_owed, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
+        if life_owed and caster.life < life_owed:
+            details = (
+                f"{caster.name} cannot pay {life_owed} life to cast {card.name} "
                 f"({', '.join(life_taxing_names)})"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, details
             )
 
         # CR 601.2f: increases first, then reductions.
@@ -1094,18 +1109,61 @@ class SpellCastingMixin:
                 cleaned.append((seat, index) if share is None else (seat, index, share))
             divided_targets = cleaned or None
 
-        # Fireball-style spells cost {1} more to cast for each target beyond the
-        # first. Count the chosen targets (the cross-seat divided list, a list of
-        # creature indices, or a single creature/player) and tax the extras as
-        # generic mana.
-        if "costs {1} more to cast for each target beyond the first" in card.oracle_text.lower():
+        # "This spell costs {1} more to cast for each target beyond the first."
+        # (Fireball) / "This spell costs 3 life more to cast for each target."
+        # (Phyrexian Purge.) A spell's own increase, sized by how many targets it
+        # chose — CR 601.2c settles the targets before CR 601.2f calculates the
+        # cost, which is what makes the sentence answerable at all.
+        #
+        # Read off `cost_modifiers.self_per_target_tax`, the table the support
+        # gate and the parse census also ask, rather than off a substring here:
+        # this used to be Fireball's own sentence written out in this function
+        # and again as a literal in parse_coverage, and Phyrexian Purge is the
+        # second card that shares the shape.
+        per_target = self_per_target_tax(card.oracle_text or "")
+        if per_target is not None:
+            # The chosen targets: the cross-seat divided list, a list of
+            # creature indices, the same list by id, or a single one.
             if divided_targets is not None:
                 num_targets = len(divided_targets)
             elif isinstance(target_permanent_index, list):
                 num_targets = len([i for i in target_permanent_index if isinstance(i, int)])
-            else:
+            elif target_permanent_ids:
+                num_targets = len(
+                    [i for i in target_permanent_ids if isinstance(i, int)]
+                )
+            elif target_permanent_index is not None:
                 num_targets = 1
-            extra_generic_tax += max(0, num_targets - 1)
+            else:
+                # A seat and nothing else. For a spell whose target list is
+                # **open-ended** — "Destroy any number of target creatures" —
+                # that is an announcement of no targets at all, and CR 601.2c
+                # allows it: the caster is charged nothing and the spell
+                # destroys nothing. For every other spell the seat *is* the
+                # target (Fireball to the face), so one it is. Read off
+                # `derive_cast_spec`'s `unbounded_targets`, which is the general
+                # shape rather than a card, and asked only in this branch so
+                # every named-target path stays exactly what it was.
+                spec = derive_cast_spec(card, compile_card_oracle(card)) or {}
+                num_targets = 0 if spec.get("unbounded_targets") else 1
+            owed = per_target.owed(num_targets)
+            if per_target.life:
+                # CR 118.3b: life is not mana, so it joins the life the board's
+                # taxes owe rather than the generic total — a {R} cannot pay it.
+                life_owed += owed
+                if owed:
+                    life_taxing_names = [*life_taxing_names, card.name]
+                if caster.life < life_owed:
+                    details = (
+                        f"{caster.name} cannot pay {life_owed} life to cast "
+                        f"{card.name} for {num_targets} target(s)"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+            else:
+                extra_generic_tax += owed
 
         x_colors = x_spend_colors_from_text(card.oracle_text)
         # What the payment below actually put on X, per colour. Empty until
@@ -1215,6 +1273,11 @@ class SpellCastingMixin:
         unpayable = self._unpayable_additional_cost(
             caster_index, card, cast_costs, spell_hand_index=hand_index,
             from_zone=from_zone, x_value=resolved_x_value,
+            # What the cost increases above will take before this cost is paid.
+            # Two life prices on one cast are each payable alone and not
+            # together, and the gate that could not see the other one would
+            # admit a cast that then took the caster below 0 (CR 119.4).
+            life_already_owed=life_owed,
         )
         if unpayable is not None:
             self.log.append(unpayable)
@@ -1330,9 +1393,20 @@ class SpellCastingMixin:
         self._pay_alternative_cost(
             caster_index, card, chosen_alternative, alternative_card,
         )
+        # CR 601.2f's increases, in life. Gated far above, where the targets
+        # settle what they come to, and paid here with every other cost —
+        # nothing between the two points spends anything, so a refusal up there
+        # costs the caster exactly nothing.
+        if life_owed:
+            caster.life -= life_owed
+            self.log.append(
+                f"{caster.name} paid {life_owed} life to cast {card.name} "
+                f"({', '.join(life_taxing_names)})"
+            )
         cost_spoils = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
         )
@@ -1570,6 +1644,7 @@ class SpellCastingMixin:
         spell_hand_index: int | None,
         from_zone: str,
         x_value: int | None = None,
+        life_already_owed: int = 0,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -1586,10 +1661,22 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         for cost in costs:
             if cost.sacrifice_filter is not None:
-                if not self._additional_cost_candidates(caster_index, cost):
+                # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
+                # *count* is what makes such a cost unpayable: one creature is
+                # no more a payment than none, and a gate that asked only
+                # whether one existed would admit the cast and then charge one
+                # -- a spell cast for less than it prints. The same question
+                # `activate_permanent_ability` asks of Goblin Warrens, because
+                # CR 601.2b and CR 602.2b are one announcement step.
+                available = self._additional_cost_candidates(caster_index, cost)
+                wanted = max(1, cost.sacrifice_count)
+                if len(available) < wanted:
+                    noun = filter_head_noun(cost.sacrifice_filter)
+                    shortfall = (
+                        f"no {noun}" if wanted == 1 else f"not enough {noun}s"
+                    )
                     return (
-                        f"{card.name} can't be cast: no "
-                        f"{filter_head_noun(cost.sacrifice_filter)} to "
+                        f"{card.name} can't be cast: {shortfall} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
                     )
             # "…, **exile a creature you control**." (Soul Exchange.) Gated
@@ -1608,10 +1695,15 @@ class SpellCastingMixin:
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
             life = cost.life_charged(x_value)
-            if life and caster.life < life:
+            # Against what the cost increases have already claimed, not against
+            # the raw total: CR 601.2f's increases and CR 601.2b's printed cost
+            # are paid out of one life total, and a gate reading it twice would
+            # admit a pair of prices the caster can meet only one at a time.
+            available = caster.life - max(0, life_already_owed)
+            if life and available < life:
                 return (
                     f"{card.name} can't be cast: {caster.name} cannot pay "
-                    f"{life} life with {caster.life} remaining "
+                    f"{life} life with {available} remaining "
                     f"(CR 601.2h)"
                 )
             if cost.discard_cards:
@@ -1928,6 +2020,7 @@ class SpellCastingMixin:
         cost_permanent_index: int | None,
         cost_hand_card: "CardDefinition | None",
         x_value: int | None = None,
+        cost_permanent_ids: list[int] | None = None,
     ) -> dict:
         """Perform *card*'s printed additional costs, returning what they ate.
 
@@ -1980,27 +2073,55 @@ class SpellCastingMixin:
                         f"{caster.name} exiled {exiled_card.name} to cast {card.name}"
                     )
             if cost.sacrifice_filter is not None:
-                candidates = self._additional_cost_candidates(caster_index, cost)
-                if not candidates:
-                    continue  # gated above; a board that changed since is a no-op
-                named = (
-                    self.permanent_at(caster, cost_permanent_index)
-                    if isinstance(cost_permanent_index, int)
-                    else None
-                )
-                chosen = (
-                    named
+                # Whom the payer named, in the order they named them. Two
+                # channels because a counted cost needs two names and
+                # `cost_permanent_index` can only carry one: the id list is the
+                # same channel every chosen cost permanent arrives on for an
+                # activation, and the single index is what every caller written
+                # before a counted cast cost existed still sends.
+                named: list = [
+                    found
+                    for found in (
+                        self.permanent_by_id(permanent_id)
+                        for permanent_id in (cost_permanent_ids or ())
+                        if isinstance(permanent_id, int)
+                    )
+                    if found is not None
+                ]
+                if not named and isinstance(cost_permanent_index, int):
+                    at_index = self.permanent_at(caster, cost_permanent_index)
+                    if at_index is not None:
+                        named.append(at_index)
+                # Re-enumerated per victim, never sliced off one list: each
+                # sacrifice removes a permanent, and a list held across that
+                # holds an object the board no longer has.
+                for _ in range(max(1, cost.sacrifice_count)):
+                    candidates = self._additional_cost_candidates(caster_index, cost)
+                    if not candidates:
+                        break  # gated above; a board that changed since is a no-op
                     # `in` compares Permanents by value and would match a
                     # look-alike; membership is by identity.
-                    if any(perm is named for perm in candidates)
-                    else self.default_sacrifice_pick(candidates)
-                )
-                name = chosen.card.name
-                if self.sacrifice_permanent(chosen) is not None:
-                    sacrificed = chosen
-                    self.log.append(
-                        f"{caster.name} sacrificed {name} to cast {card.name}"
+                    chosen = next(
+                        (
+                            claimed for claimed in named
+                            if any(perm is claimed for perm in candidates)
+                        ),
+                        None,
                     )
+                    if chosen is None:
+                        chosen = self.default_sacrifice_pick(candidates)
+                    named = [perm for perm in named if perm is not chosen]
+                    name = chosen.card.name
+                    if self.sacrifice_permanent(chosen) is not None:
+                        # The **first**, which is "the sacrificed creature" a
+                        # spell reads back (Soul Exchange). No card in the pool
+                        # reads one back out of a counted cost, and recording
+                        # the last would answer a different question than the
+                        # singular cost has always answered.
+                        sacrificed = sacrificed or chosen
+                        self.log.append(
+                            f"{caster.name} sacrificed {name} to cast {card.name}"
+                        )
             life = cost.life_charged(x_value)
             if life:
                 caster.life -= life

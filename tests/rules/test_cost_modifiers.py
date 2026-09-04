@@ -312,3 +312,117 @@ def test_601_2f_a_conjunct_that_cannot_be_read_refuses_the_whole_clause():
 
     assert cost_modifiers_for(text.lower().rstrip(".")) == ()
     assert not cost_modifier_claims_line(text)
+
+
+# --- W4G1: a spell's own per-target increase, and when a life cost is paid ---
+
+from engine import Game as _w4g1c_Game, PlayerState as _w4g1c_PlayerState  # noqa: E402
+from engine.card_loader import load_catalog as _w4g1c_load  # noqa: E402
+from engine.cost_modifiers import (  # noqa: E402
+    cost_modifier_claims_line as _w4g1c_claims,
+    self_per_target_tax as _w4g1c_tax,
+)
+from engine.models import Permanent as _w4g1c_Permanent  # noqa: E402
+
+_W4G1C_CATALOG = {card.name: card for card in _w4g1c_load()}
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_spells_own_increase_is_sized_by_its_chosen_targets():
+    """"This spell costs {2} more to cast for each target." — an invented
+    wording, for this file's stated reason: a test naming Phyrexian Purge would
+    pass against a lookup keyed by "Phyrexian Purge", and the point of a
+    template is that a card the engine has never seen is charged correctly.
+
+    CR 601.2c chooses the targets before CR 601.2f calculates the cost, which is
+    what makes "for each target" answerable at all.
+    """
+    tax = _w4g1c_tax("This spell costs {2} more to cast for each target.")
+
+    assert tax is not None
+    assert (tax.amount, tax.life, tax.beyond_first) == (2, False, False)
+    assert [tax.owed(n) for n in range(4)] == [0, 2, 4, 6]
+
+
+@pytest.mark.cr("601.2f", "118.3b")
+def test_601_2f_the_resource_and_the_exemption_are_both_payload():
+    """The pool prints the template twice and differs on both axes: Fireball
+    pays mana and exempts the first target, Phyrexian Purge pays life and
+    exempts none. Reading either as the other is a cost error — and the life one
+    matters most, because generic mana may be paid with anything (CR 118.3b) and
+    life may not."""
+    mana = _w4g1c_tax("This spell costs {1} more to cast for each target beyond the first.")
+    life = _w4g1c_tax("This spell costs 3 life more to cast for each target.")
+
+    assert (mana.life, mana.beyond_first) == (False, True)
+    assert [mana.owed(n) for n in range(4)] == [0, 0, 1, 2]
+    assert (life.life, life.beyond_first) == (True, False)
+    assert [life.owed(n) for n in range(4)] == [0, 3, 6, 9]
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_the_per_target_increase_is_claimed_by_the_table_that_charges_it():
+    """One reader for the claim and the charge, which is what stops a card
+    reporting supported with its cost sentence dropped. A sentence about
+    *other* spells is not this template and stays unclaimed here."""
+    assert _w4g1c_claims("This spell costs 3 life more to cast for each target.")
+    assert _w4g1c_claims(
+        "This spell costs {1} more to cast for each target beyond the first."
+    )
+    assert not _w4g1c_claims("Spells cost 3 life more to cast for each target.")
+
+
+@pytest.mark.cr("601.2e", "601.2h")
+def test_601_2e_a_life_tax_is_not_paid_by_a_cast_that_is_then_refused():
+    """CR 601.2 makes an illegal proposal a **rewind**, not a purchase.
+
+    "Spells your opponents cast that target this creature cost an additional 3
+    life to cast." (Terror of the Peaks.) The life used to come off the moment
+    the tax was measured — above the support gate, the timing gate, the target
+    gates, the printed additional costs and the mana — so every refusal below
+    that point left the caster three life poorer for a spell that was never
+    cast. Nothing crashed and nothing was missing; the player simply paid for
+    nothing, which is why it wanted a test rather than a look.
+    """
+    terror = _w4g1c_Permanent(card=_W4G1C_CATALOG["Terror of the Peaks"])
+    game = _w4g1c_Game(players=[
+        _w4g1c_PlayerState(name="P1", hand=[_W4G1C_CATALOG["Lightning Bolt"]]),
+        _w4g1c_PlayerState(name="P2", battlefield=[terror]),
+    ])
+    game._sync_control()
+    game.start_turn(0)
+    game.enforce_mana_costs = True  # and P1 controls no land at all
+
+    result = game.cast_from_hand(
+        0, "Lightning Bolt",
+        target_player_index=1, target_permanent_index=0,
+        target_permanent_ids=[terror.permanent_id],
+    )
+
+    assert result.supported is False, result.details
+    assert "insufficient mana" in result.details, result.details
+    assert game.players[0].life == 20, game.log
+    assert any(card.name == "Lightning Bolt" for card in game.players[0].hand)
+
+
+@pytest.mark.cr("601.2f", "119.4")
+def test_601_2f_a_life_tax_is_still_paid_by_a_cast_that_goes_through():
+    """The other half of the move, because a payment deferred to a site nothing
+    reaches is a tax deleted."""
+    terror = _w4g1c_Permanent(card=_W4G1C_CATALOG["Terror of the Peaks"])
+    game = _w4g1c_Game(players=[
+        _w4g1c_PlayerState(name="P1", hand=[_W4G1C_CATALOG["Lightning Bolt"]]),
+        _w4g1c_PlayerState(name="P2", battlefield=[terror]),
+    ])
+    game._sync_control()
+    game.start_turn(0)
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Lightning Bolt",
+        target_player_index=1, target_permanent_index=0,
+        target_permanent_ids=[terror.permanent_id],
+    )
+
+    assert result.supported is True, result.details
+    assert game.players[0].life == 17, game.log

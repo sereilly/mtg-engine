@@ -31,6 +31,7 @@ from ..auras import aura_continuous_claim
 from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
+                                 cast_opponent_cast_line,
                                  chosen_name_ban_line,
                                  global_cast_ban_line)
 from ..cost_modifiers import cost_modifier_claims_line
@@ -102,6 +103,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # the card matcher cannot test leaves the line unclaimed rather than
     # admitted with the restriction dropped.
     if cast_damage_source_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same half of CR 601.3 asked about a
+    # window of *casts* rather than of damage: "Cast this spell only if an
+    # opponent cast a creature spell this turn." (Lure of Prey.) Its own row and
+    # its own reader, over the per-turn record `spells_cast_this_turn`; the
+    # claim asks the reader that answers it, so a phrase the card matcher cannot
+    # test leaves the line unclaimed rather than admitted with the restriction
+    # dropped.
+    if cast_opponent_cast_line(normalized) is not None:
         return "cast_restrictions"
 
     # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature

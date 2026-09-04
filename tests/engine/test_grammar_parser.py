@@ -451,6 +451,17 @@ REGISTRY_LINES = [
     # engine/cost_modifiers.py, applied by spell_cost_tax / ability_cost_tax.
     ("White spells cost {3} more to cast.", "cost_modifiers"),
     ("Activated abilities of white enchantments cost {3} more to activate.", "cost_modifiers"),
+    # The same module's *self* increase, sized by the spell's own chosen targets
+    # and charged by queue_from_hand off `self_per_target_tax`. It sat in the
+    # lookalike list below until Phyrexian Purge arrived printing the same
+    # template in life: one card's sentence had been written out inside
+    # `queue_from_hand` and again as a parse_coverage literal, and a second card
+    # sharing the shape is the bar for making it a table.
+    (
+        "This spell costs {1} more to cast for each target beyond the first.",
+        "cost_modifiers",
+    ),
+    ("This spell costs 3 life more to cast for each target.", "cost_modifiers"),
     # engine/replacements.py CR 614 interceptors.
     ("If you would gain life, draw that many cards instead.", "replacements"),
     (
@@ -495,10 +506,12 @@ def test_registry_line_produces_no_instructions_and_never_executes(line: str, re
 @pytest.mark.parametrize(
     "line",
     [
-        # Not a template cost_modifiers.py knows — Fireball's surcharge lives in
-        # mixins/stack/activation.py, and claiming it here would be a lie about
-        # which code runs it.
-        "This spell costs {1} more to cast for each target beyond the first.",
+        # A per-target surcharge no template reads: the pool prints "for each
+        # target" and "for each target beyond the first", and a sentence
+        # counting something else has nothing behind it. (Fireball's own line
+        # used to stand here; it moved up into REGISTRY_LINES when the table
+        # learned it.)
+        "This spell costs {1} more to cast for each creature you control.",
         # A timing restriction no CAST_RESTRICTIONS entry carries.
         "Cast this spell only during your untap step.",
         # An untap wording UNTAP_RESTRICTION_PATTERNS does not match.

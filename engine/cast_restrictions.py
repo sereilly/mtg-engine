@@ -66,6 +66,17 @@ def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
     # reached it. (`_during_combat_before_blockers` is the *narrower* sibling:
     # its line says "during combat before blockers are declared", which adds a
     # combat-phase floor this one does not have.)
+    #
+    # The **step's arrival** is the deadline, not `combat_blockers_locked`, and
+    # that is CR 509.1: blockers are declared as a turn-based action when the
+    # step begins, before anybody receives priority. So no castable moment of
+    # that step is "before blockers are declared".
+    # `activation_restrictions._before_blockers_are_declared` reads the lock
+    # instead, and the difference is deliberate rather than drift: this engine
+    # declares blocks as an action inside the step, and the window between the
+    # step opening and the declaration is one in which `_advance_combat_state`
+    # starts no priority window at all — so the two readings differ only where
+    # neither a spell nor an ability can actually be played.
     past_blockers = (
         game.current_turn_phase in ("postcombat_main", "ending")
         or (
@@ -74,6 +85,34 @@ def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
         )
     )
     return not past_blockers
+
+
+def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
+    """Aleatory: "only during combat **after** blockers are declared".
+
+    CR 506.7's window one point later than every other row here, and written as
+    the *complement* of the row above rather than as its own list of steps:
+    "before blockers are declared" and "after blockers are declared" partition
+    the turn between them, and no moment may fall into both or into neither.
+    Spelling the steps out again is how that guarantee would be lost -- the same
+    reason ``activation_restrictions`` gives for keeping one predicate per point
+    in combat.
+
+    The combat-phase floor is this card's own word ("during combat"), and it is
+    exactly what the complement does not carry: the sibling is True in the
+    precombat main phase, which is before the declaration and not during combat.
+
+    Where the point *is* -- the declare blockers step's arrival, per CR 509.1's
+    turn-based action -- is stated once, in the sibling, and never here. One
+    artifact of the engine's step model rides along with that: CR 508.8 skips
+    the declare blockers step outright when nothing attacked, so the window this
+    card names does not exist in that combat at all, and the engine keeps the
+    step. The difference is confined to a window in which no priority is given.
+    """
+    return (
+        game.current_turn_phase == "combat"
+        and not _before_blockers_are_declared(game, caster_index)
+    )
 
 
 def _after_combat(game: "Game", caster_index: int) -> bool:
@@ -210,6 +249,11 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during combat on your turn before blockers are declared",
         _own_combat_before_blockers,
         "can only be cast during combat on your turn before blockers are declared",
+    ),
+    CastRestriction(
+        "cast this spell only during combat after blockers are declared",
+        _combat_after_blockers,
+        "can only be cast during combat after blockers are declared",
     ),
     CastRestriction(
         "cast this spell only before the combat damage step",
@@ -420,6 +464,95 @@ def cast_damage_source_line(line: str) -> "tuple[dict, str] | None":
     return testable, described
 
 
+#: "Cast this spell only if **an opponent cast a creature spell this turn**."
+#: (Lure of Prey.) The fourth condition row, and the second whose question is
+#: about a *window* rather than a board: what it asks about is gone by the time
+#: it is asked -- the spell it names has resolved, been countered or is still on
+#: the stack, and none of those states is on any battlefield.
+#:
+#: It needs no record of its own. ``PlayerState.spells_cast_this_turn`` has held
+#: every cast of the turn beside the seat that made it since Stormwing Entity's
+#: ordinal, and ``turn_management`` empties it at the turn boundary with the
+#: rest of the turn's history -- which is the half that matters here, because a
+#: record that outlived its turn would be a restriction that stopped applying,
+#: and a restriction lifted is a spell castable when the card forbids it.
+#:
+#: The noun phrase is payload, for :func:`cast_condition_line`'s reason: a card
+#: printed about an *artifact* spell, or a black one, is this restriction with
+#: one word changed and needs no second row.
+_OPPONENT_CAST_RE = re.compile(
+    r"^cast this spell only if an opponent cast (?P<spell>.+) this turn$"
+)
+
+
+@lru_cache(maxsize=None)
+def cast_opponent_cast_line(line: str) -> "tuple[dict, str] | None":
+    """``(filter payload, the printed noun phrase)`` for the opponent-cast row.
+
+    Through **the grammar's noun parser** and then through
+    ``subject_filters.card_only_filter``, which is the gate here rather than
+    ``untestable_filter_keys`` for the reason :func:`cast_damage_source_line`
+    gives one row up: what this asks about is a *spell*, and a spell is not a
+    permanent -- CR 613.1 gives it no computed characteristics, so the printed
+    face is the whole of what is testable and the permanent matcher's keys would
+    promise answers nobody can give.
+
+    A phrase reaching outside that set leaves the line unclaimed rather than
+    admitted with the narrowing dropped, which is the direction every row in
+    this file refuses in: a restriction quietly widened is a spell castable when
+    the card forbids it. "**a**"/"**an**" and nothing else, exactly as the two
+    rows above read their article.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import card_only_filter
+
+    match = _OPPONENT_CAST_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    described = match.group("spell")
+    article, _, rest = described.partition(" ")
+    if article not in ("a", "an") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        parsed = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = parsed.to_payload()
+    if not payload:
+        return None
+    testable = card_only_filter(payload)
+    if not testable:
+        return None
+    return testable, described
+
+
+def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
+    """Whether any opponent of *caster_index* has cast a spell the phrase names.
+
+    ``opponents_of`` rather than "every other seat", because CR 800.4a says a
+    player who has left the game is nobody's opponent any more -- and the same
+    reading every other seat comparison in the engine makes.
+
+    The card is tested with ``_card_matches_filter``, which is the matcher
+    ``card_only_filter`` gates for: the record holds ``CardDefinition``s, the
+    printed faces, which is exactly what there is to ask about a spell that is
+    no longer anywhere.
+    """
+    from .handlers._common import _card_matches_filter
+
+    return any(
+        _card_matches_filter(spell, payload)
+        for seat in game.opponents_of(caster_index)
+        for spell in game.players[seat].spells_cast_this_turn
+    )
+
+
 def _was_dealt_damage_by(game: "Game", caster_index: int, payload: dict) -> bool:
     """Whether a spell the phrase names has dealt *caster_index* damage this turn.
 
@@ -499,6 +632,16 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
                 "can only be cast if you were dealt damage this turn by "
                 f"{described}"
             )
+    # Per line for the three loops above's reason: the phrase ends with its
+    # sentence, and a window read out of the middle of a longer one would be a
+    # restriction the card does not print.
+    for line in oracle_text_lower.split("\n"):
+        opponent_cast = cast_opponent_cast_line(line)
+        if opponent_cast is None:
+            continue
+        payload, described = opponent_cast
+        if not _an_opponent_cast(game, caster_index, payload):
+            return f"can only be cast if an opponent cast {described} this turn"
     return None
 
 
