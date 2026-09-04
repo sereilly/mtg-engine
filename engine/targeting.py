@@ -1392,11 +1392,19 @@ def _retarget_spec(payload: dict) -> dict:
     the spells the effect could actually re-aim are the same set — an offer the
     handler then refuses is mana paid for nothing.
     """
-    return {
+    spec = {
         "kind": "stack",
         "stack_single_target": True,
         "stack_single_target_is": payload.get("current_target"),
     }
+    # "…and **that target is a creature**" (Meddle). The object half of the
+    # same question, on its own key because the two are tested with different
+    # readers — a seat is compared against the caster and a permanent is asked
+    # what type it is. Emitted only when the card prints it, so Deflection's and
+    # Reflecting Mirror's specs stay byte-identical.
+    if payload.get("current_target_type"):
+        spec["stack_single_target_type"] = payload["current_target_type"]
+    return spec
 
 
 _KIND_TO_SPEC_FROM_PAYLOAD = {

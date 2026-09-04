@@ -328,6 +328,65 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     return ast.ChangeTarget(subject, current_target=current)
 
 
+def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None":
+    """``If target spell has only one target and that target is a <noun>,
+    change that spell's target to another <noun>.`` (Meddle.)
+
+    The same effect as :func:`_parse_change_target` above with the restrictions
+    arranged as a condition instead of as a noun phrase, so it produces the same
+    node: CR 115.9a's count, the shape the current target has to be, and the
+    bound on the new one. Written as its own production rather than folded into
+    the sentence loop's trailing-``if``, for the reason that reader gives about
+    "if that target is you" — neither half is a question about the board, and
+    the picker has to ask both before the spell is cast at all.
+
+    **The two nouns must match.** "…that target is a creature, change that
+    spell's target to another **creature**" is one restriction stated twice, and
+    a card naming two different nouns would be a retarget whose new target the
+    old one's legality says nothing about — refused rather than read as the
+    first, which is the direction that re-aims a spell somewhere it may not go.
+
+    Returns None with the cursor untouched for every other sentence opening
+    "if", so the ordinary condition reader keeps its own.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "target", "spell", "has", "only", "one", "target"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "that", "target", "is", "a"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "change", "that", "spell", "'s", "target", "to", "another"
+    ):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() != noun:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.ChangeTarget(
+        # The same spec "target spell with a single target" parses to one
+        # production up: CR 115.9a's count and nothing else. The zone is not on
+        # the filter there either — what says "spell" is the picker the kind
+        # table derives, and setting it here would be a narrowing the retarget
+        # lowering has never been asked to honour.
+        ast.TargetSpec(
+            "target", ast.ObjectFilter(target_count=1), targeted=True,
+        ),
+        current_target_type=noun,
+        new_target=noun,
+    )
+
+
 # The words that can count modes. `NUMBER_WORDS` minus the articles: "Choose a
 # card name other than a basic land card name." (Necromentia) opens with the
 # same two tokens as a modal head, and reading "a" as the count would put the

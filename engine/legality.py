@@ -2063,6 +2063,18 @@ class LegalityMixin:
                     and chosen.get("seat") == caster_index
                 ):
                     continue
+                # "…and **that target is a creature**" (Meddle). The object half
+                # of the same question, asked through `is_creature` — CR 613's
+                # answer rather than the printed type line, so an animated land
+                # a spell is aimed at is a creature here exactly as it is
+                # everywhere else. A permanent that has left is not one.
+                wanted_type = spec.get("stack_single_target_type")
+                if wanted_type is not None:
+                    if chosen.get("kind") != "permanent":
+                        continue
+                    aimed = self.permanent_by_id(chosen.get("permanent_id"))
+                    if aimed is None or not aimed.is_creature:
+                        continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")

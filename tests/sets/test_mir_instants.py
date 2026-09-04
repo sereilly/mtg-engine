@@ -1592,3 +1592,105 @@ def test_ether_wells_offer_defaults_to_the_bottom_for_an_ai_seat(set_pool):
 
     assert [c.kind for c in game.pending_choices] == [], game.log
     assert [c.name for c in game.players[1].library][-1] == "Viashino Warrior"
+
+
+# --- W2G4: re-aiming another spell, gated on what it already points at ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_meddle(set_pool, spell, mine=("Femeref Knight", "Zhalfirin Knight")):
+    """Meddle in seat 0's hand, *spell* in seat 1's, creatures on seat 0's board."""
+    perms = [Permanent(card=set_pool("MIR")[name]) for name in mine]
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Meddle"]],
+            battlefield=list(perms), life=20,
+        ),
+        PlayerState(name="P2", hand=[set_pool("MIR")[spell]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    return game, perms
+
+
+def _w2g4_meddle_spec(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Meddle"])
+    from engine.targeting import derive_cast_spec
+
+    return derive_cast_spec(set_pool("MIR")["Meddle"], program)
+
+
+def test_meddle_is_supported(set_pool):
+    """The same node Deflection parses to, with the restrictions arranged as a
+    condition rather than as a noun phrase — CR 115.9a's count, what the current
+    target has to be, and the bound on the new one."""
+    program = compile_card_oracle(set_pool("MIR")["Meddle"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_new_spell_target", "change_target_spell_target",
+    ]
+    assert steps[0].payload["current_target_type"] == "creature"
+    assert steps[0].payload["new_target"] == "creature"
+
+
+def test_meddle_re_aims_a_spell_at_another_creature(set_pool):
+    """CR 115.7a: the spell keeps everything else it announced and only what it
+    points at moves — so Dark Banishing destroys the *other* Knight."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing")
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+    game.queue_from_hand(0, "Meddle", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Femeref Knight"
+    ], game.log
+    assert "Zhalfirin Knight" in [c.name for c in game.players[0].graveyard]
+
+
+def test_meddle_is_not_offered_a_spell_whose_target_is_a_player(set_pool):
+    """"…and **that target is a creature**". A production that consumed the
+    clause and dropped it would let Meddle re-aim a spell pointed at a face,
+    which is a strictly larger card than the one printed."""
+    game, _ = _w2g4_meddle(set_pool, "Kaervek's Hex")
+    game.queue_from_hand(1, "Kaervek's Hex")
+
+    offered = game._enumerate_targets(
+        0, set_pool("MIR")["Meddle"], _w2g4_meddle_spec(set_pool), for_cast=True
+    )
+    assert offered == [], game.log
+
+
+def test_meddle_is_offered_a_spell_aimed_at_a_creature(set_pool):
+    """The other side of the same gate, so the test above is not passing for
+    the wrong reason."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing")
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+
+    offered = game._enumerate_targets(
+        0, set_pool("MIR")["Meddle"], _w2g4_meddle_spec(set_pool), for_cast=True
+    )
+    assert [entry["name"] for entry in offered] == ["Dark Banishing"], game.log
+
+
+def test_meddle_leaves_a_spell_alone_when_there_is_no_other_creature(set_pool):
+    """"…to **another** creature" (CR 115.7a). The target the spell already
+    points at is not among the candidates, so a board with one creature on it
+    leaves the spell exactly as it was — the Knight it named still dies."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing", mine=("Femeref Knight",))
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+    game.queue_from_hand(0, "Meddle", target_stack_index=0)
+    game.resolve_stack()
+
+    assert game.players[0].battlefield == [], game.log
+    assert "Femeref Knight" in [c.name for c in game.players[0].graveyard]

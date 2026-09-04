@@ -41,6 +41,7 @@ from .effects import (_parse_untap_chosen_by_paying,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
 from .sacrifices import _parse_counted_sacrifice
+from .effects.stack import _parse_conditional_retarget
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +495,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # for — and refuses without consuming, so every other "if" keeps its
     # reading.
     if stream.at_word("if"):
+        # "If target spell has only one target and that target is a creature,
+        # change that spell's target to another creature." (Meddle.) Read here
+        # for the reason the two below it are: what looks like a condition is
+        # not one — nothing about the *board* is tested, and both halves are
+        # questions about the announced target of another object, which the
+        # picker has to ask before the spell is cast at all. Refuses without
+        # consuming, so every other "If …" keeps its reading.
+        retarget = _parse_conditional_retarget(stream)
+        if retarget is not None:
+            return retarget
         produces = _parse_produces_instead(stream)
         if produces is not None:
             return produces
