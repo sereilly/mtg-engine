@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 81.1% | 80.0% | 53.2% | 236 |
+| MIR *(measured)* | 335 | 545 | 82.8% | 82.0% | 55.2% | 246 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,8 +44,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 333 | 162 | expected a subject |  |
-| 114 | 52 | unrecognized effect verb |  |
+| 326 | 155 | expected a subject |  |
+| 113 | 51 | unrecognized effect verb |  |
 | 87 | 42 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -88,6 +88,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a player, that player discards a card.`
 - **Acid Rain**
   - `Destroy all Forests.`
+- **Acidic Dagger**
+  - `{4}, {T}: Whenever target creature deals combat damage to a non-Wall creature this turn, destroy that non-Wall creature. When the targeted creature leaves the battlefield this turn, sacrifice this artifact. Activate only before blockers are declared.`
 - **Active Volcano**
   - `• Destroy target blue permanent.`
   - `• Return target Island to its owner's hand.`
@@ -380,6 +382,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}, {T}: This creature deals half X damage, rounded down, to any target, and half X damage, rounded up, to you.`
 - **Barbarian Guides**
   - `{2}{R}, {T}: Choose a land type. Target creature you control gains snow landwalk of the chosen type until end of turn. Return that creature to its owner's hand at the beginning of the next end step. (It can't be blocked as long as defending player controls a snow land of that type.)`
+- **Barbed Foliage**
+  - `Whenever a creature attacks you, it loses flanking until end of turn.`
+  - `Whenever a creature without flying attacks you, this enchantment deals 1 damage to it.`
 - **Barbed Sextant**
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
@@ -391,11 +396,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Baron Sengir**
   - `Whenever a creature dealt damage by Baron Sengir this turn dies, put a +2/+2 counter on Baron Sengir.`
   - `{T}: Regenerate another target Vampire.`
+- **Barreling Attack**
+  - `Target creature gains trample until end of turn. When that creature becomes blocked this turn, it gets +1/+1 until end of turn for each creature blocking it.`
 - **Barrin, Tolarian Archmage**
   - `When Barrin enters, return up to one other target creature or planeswalker to its owner's hand.`
   - `At the beginning of your end step, if a permanent was put into your hand from the battlefield this turn, draw a card.`
 - **Basal Thrull**
   - `{T}, Sacrifice this creature: Add {B}{B}.`
+- **Basalt Golem**
+  - `Whenever this creature becomes blocked by a creature, that creature's controller sacrifices it at end of combat. If the player does, they create a 0/2 colorless Wall artifact creature token with defender.`
 - **Basalt Monolith**
   - `{T}: Add {C}{C}{C}.`
   - `{3}: Untap this artifact.`
@@ -492,6 +501,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Blighted Shaman**
   - `{T}, Sacrifice a Swamp: Target creature gets +1/+1 until end of turn.`
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
+- **Blind Fury**
+  - `All creatures lose trample until end of turn. If a creature would deal combat damage to a creature this turn, it deals double that damage to that creature instead.`
 - **Blinding Light**
   - `Tap all nonwhite creatures.`
 - **Blinking Spirit**
@@ -901,6 +912,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+- **Coral Fighters**
+  - `Whenever this creature attacks and isn't blocked, look at the top card of defending player's library. You may put that card on the bottom of that player's library.`
 - **Coral Helm**
   - `{3}, Discard a card at random: Target creature gets +2/+2 until end of turn.`
   - `{3}, Discard a card at random: Target creature gets +2/+2 until end of turn.`
@@ -1211,6 +1224,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw three cards, then put two cards from your hand both on top of your library or both on the bottom of your library.`
 - **Dream Coat**
   - `{0}: Enchanted creature becomes the color or colors of your choice. Activate only once each turn.`
+- **Dream Fighter**
+  - `Whenever this creature blocks or becomes blocked by a creature, this creature and that creature phase out. (While they're phased out, they're treated as though they don't exist. Each one phases in before its controller untaps during their next untap step.)`
 - **Dreams of the Dead**
   - `{1}{U}: Return target white or black creature card from your graveyard to the battlefield. That creature gains "Cumulative upkeep {2}." If the creature would leave the battlefield, exile it instead of putting it anywhere else. (At the beginning of its controller's upkeep, that player puts an age counter on it, then sacrifices it unless they pay its upkeep cost for each age counter on it.)`
 - **Drought**
@@ -2878,6 +2893,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Look at target player's hand and choose X cards from it. That player discards those cards.`
 - **Mind Whip**
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {3}. If they don't, this Aura deals 2 damage to that player and you tap that creature.`
+- **Mindbender Spores**
+  - `Whenever this creature blocks a creature, put four fungus counters on that creature. The creature gains "This creature doesn't untap during your untap step if it has a fungus counter on it" and "At the beginning of your upkeep, remove a fungus counter from this creature."`
 - **Mindstab Thrull**
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
@@ -2959,6 +2976,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U}.`
 - **Mtenda Griffin**
   - `{W}, {T}: Return this creature to its owner's hand and return target Griffin card from your graveyard to your hand. Activate only during your upkeep.`
+- **Mtenda Lion**
+  - `Whenever this creature attacks, defending player may pay {U}. If that player does, prevent all combat damage that would be dealt by this creature this turn.`
 - **Mudslide**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. If the player does, untap those creatures.`
 - **Murk Dwellers**
@@ -3564,6 +3583,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Renewal**
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Reparations**
+  - `Whenever an opponent casts a spell that targets you or a creature you control, you may draw a card.`
 - **Reprisal**
   - `Destroy target creature with power 4 or greater. It can't be regenerated.`
 - **Reset**
