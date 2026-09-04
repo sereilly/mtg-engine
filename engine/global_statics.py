@@ -101,7 +101,17 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # payload — read into ``applies_to`` by ``global_static_for`` below,
         # the one place a printed plural becomes the singular type word
         # ``_global_static_applies`` tests.
-        re.compile(r"^all (?P<scope>artifacts|creatures) have \"(?P<ability>.+)\"$"),
+        # **And so is the quantifier.** "**Each creature has** …" (Torrent of
+        # Lava, inside the "as long as this is on the stack" clause
+        # ``engine/stack_statics.py`` strips) names the same set "all creatures
+        # have …" names — CR 109.2 draws no distinction between the two printed
+        # words — so it is an alternation here rather than a row of its own,
+        # and the singular noun that comes with it is normalised beside the
+        # plural in ``global_static_for``.
+        re.compile(
+            r"^(?:all (?P<scope>artifacts|creatures) have"
+            r"|each (?P<each_scope>artifact|creature) has) \"(?P<ability>.+)\"$"
+        ),
         GlobalStatic(name="granted_board_wide_ability", applies_to=""),
     ),
     (
@@ -186,12 +196,14 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             if granted:
                 # "all creatures" names the type `creature`; the plural is
                 # printed English, not a key. Singularised here rather than in
-                # the predicate, so each type word has one spelling.
-                scope = groups.get("scope")
+                # the predicate, so each type word has one spelling. "**Each**
+                # creature" prints the singular already and arrives in its own
+                # group, because one alternation cannot spell a noun two ways.
+                scope = groups.get("scope") or groups.get("each_scope")
                 colour = groups.get("color")
                 return GlobalStatic(
                     name=static.name,
-                    applies_to=(scope[:-1] if scope else static.applies_to),
+                    applies_to=(scope.rstrip("s") if scope else static.applies_to),
                     removes_abilities=static.removes_abilities,
                     adds_creature_type=static.adds_creature_type,
                     pt_from_mana_value=static.pt_from_mana_value,
@@ -222,12 +234,27 @@ def global_static_sources(permanents) -> list[tuple]:
     ]
 
 
+#: Where the refresh records the statics a **spell on the stack** applies to
+#: this permanent (CR 113.6b, ``engine/stack_statics.py``). Its own key beside
+#: ``global_static_sources`` because the two are recorded differently and have
+#: to be: a permanent source is stored as the object and re-derived from its
+#: printed text on every read, and a stack object's text carries the "as long as
+#: … is on the stack" prefix that :func:`global_static_for` deliberately does
+#: not read — a permanent printing that sentence is *not* on the stack, and
+#: reading it here would apply the ability from the wrong zone.
+STACK_STATICS_KEY = "stack_static_effects"
+
+
 def global_statics_applying_to(permanent) -> list[GlobalStatic]:
     """Every global static currently applying to *permanent*.
 
     Read from the source permanents recorded on it, so a source that has left
-    the battlefield contributes nothing the moment the refresh drops it.
+    the battlefield contributes nothing the moment the refresh drops it — and,
+    on the second channel, from the statics a spell on the stack is applying,
+    which end the same way when that spell leaves the stack.
     """
-    return [static for _source, static in global_static_sources(
+    statics = [static for _source, static in global_static_sources(
         permanent.metadata.get("global_static_sources") or ()
     )]
+    statics.extend(permanent.metadata.get(STACK_STATICS_KEY) or ())
+    return statics

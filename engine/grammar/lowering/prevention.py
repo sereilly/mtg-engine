@@ -354,6 +354,25 @@ def _lower_prevent_damage(
     }
     if alternate is not None:
         payload["amount_if"] = alternate
+    # "…dealt to this creature **by Torrent of Lava** this turn." Whose damage
+    # the shield answers to, on the same shield rather than as a kind of its
+    # own: CR 615.9 rechecks a *recorded property* against the source when the
+    # damage would be dealt, and ``Shield.source_filter`` is already that
+    # recheck for every kind — only which property differs, which is payload.
+    if node.dealt_by is not None:
+        if not isinstance(node.dealt_by, ast.TargetSpec) or node.dealt_by.targeted:
+            raise LoweringError(
+                "a counted shield's source is described, not chosen", node=node
+            )
+        described_source = _filter_payload(node.dealt_by.filter)
+        if not described_source or (
+            set(described_source) - TESTABLE_SUBJECT_FILTER_KEYS
+        ):
+            raise LoweringError(
+                "the shield cannot test the noun phrase naming its source",
+                node=node,
+            )
+        payload["source_filter"] = described_source
     # "…dealt to **enchanted creature** this turn." (Fylgja.) A fourth
     # recipient, in the same shape as the three booleans above rather than as a
     # kind of its own, because CR 615.1's shield goes around one object either

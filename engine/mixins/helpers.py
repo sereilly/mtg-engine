@@ -2133,6 +2133,23 @@ class GameHelpersMixin:
         # made with one they have not.
         if not targets_already_chosen:
             self._choose_trigger_targets(item)
+        # CR 113.6b: an ability that functions while the card is **on the
+        # stack** starts functioning the moment the object is put there, and
+        # Torrent of Lava's grants an activated ability to every creature — so
+        # the layer pass has to run before the next player could use it, not at
+        # the next state-based check.
+        #
+        # Guarded on the card's own text so this costs a cached substring test
+        # for every other spell and every trigger. The *end* of the ability
+        # needs no hook: the object leaves the stack by resolving, by being
+        # countered or with its controller, and the CR 704.3 sweep recomputes
+        # continuous effects before anybody receives priority again — which is
+        # the same argument that lets a permanent leaving the battlefield end
+        # its own board-wide static.
+        from ..stack_statics import grants_stack_static
+
+        if item is not None and grants_stack_static(getattr(item, "card", None)):
+            self._recompute_continuous_effects()
         return item
 
     def _stack_push_object(self, item) -> None:

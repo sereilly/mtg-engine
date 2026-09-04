@@ -24,6 +24,7 @@ from ..references import parse_player_ref, parse_recipient
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..lexer import NUMBER
+from ..names import accept_source_card_name
 from ..readers import accept_source_reference
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
@@ -66,19 +67,55 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     # words (Chandra's Magmutt) and the two families may not import each other.
     # Read before the trailing duration, which is where the card prints it.
     recipient = accept_or_planeswalker(stream, recipient)
+    # "…dealt to this creature **by Torrent of Lava** this turn." Whose damage
+    # the shield stops — which the blanket branch below has read since
+    # Al-abara's Carpet and this one never had, so those words ran off the end
+    # of the line and the card refused at "by" with nothing else wrong with it.
+    # Read on **both** sides of the trailing duration, exactly as that branch
+    # reads its own: the printed orders differ between cards.
+    dealt_by = _accept_prevention_source(stream)
     # The trailing spelling. Only one of the two may be printed: a duration on
     # both sides is not a sentence this reads, and taking the second silently
     # would let two windows disagree about how long the shield lasts.
     if duration.kind is None:
         duration = _parse_duration(stream)
+    if dealt_by is None:
+        dealt_by = _accept_prevention_source(stream)
     alternate = _parse_instead_rider(stream)
     if alternate is None:
-        return ast.PreventDamage(amount, to=recipient, duration=duration)
+        return ast.PreventDamage(
+            amount, to=recipient, duration=duration, dealt_by=dealt_by
+        )
     described, larger = alternate
     return ast.PreventDamage(
-        amount, to=recipient, duration=duration,
+        amount, to=recipient, duration=duration, dealt_by=dealt_by,
         alternate_amount=larger, alternate_subject=described,
     )
+
+
+def _accept_prevention_source(stream: TokenStream) -> "ast.Recipient | None":
+    """``by <whose damage this stops>``, or None with the cursor unmoved.
+
+    Three readings in that order and for that reason: the noun-phrase
+    vocabulary, then the bound reader that follows a pronoun back to what an
+    earlier clause chose, and only then a bare card **name** — a literal string
+    (``engine/grammar/names.py``), which is why it is last. A phrase either of
+    the first two could read must be read as a phrase; the name scan is for the
+    words nothing else claims. Refusing with the cursor untouched leaves a "by"
+    clause this cannot read unconsumed, so the line refuses naming those words
+    instead of arming a shield against nothing.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("by"):
+        return None
+    found = parse_recipient(stream) or parse_bound_subject(stream)
+    if found is not None:
+        return found
+    named = accept_source_card_name(stream)
+    if named is not None:
+        return ast.TargetSpec(quantifier="a", filter=ast.ObjectFilter(named=named))
+    stream.reset(mark)
+    return None
 
 
 def _parse_instead_rider(

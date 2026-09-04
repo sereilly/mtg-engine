@@ -1685,9 +1685,17 @@ class PermanentStateMixin:
         recorded on `_add_static_pt`: an adjustment that does not exactly match
         what it undid compounds, and CR 611.3a means this runs constantly.
         """
-        from ..global_statics import global_static_sources
+        from ..global_statics import STACK_STATICS_KEY, global_static_sources
+        from ..stack_statics import stack_static_grant_sources
 
         sources = global_static_sources(all_permanents)
+        # The same statics from the other zone (CR 113.6b): "As long as Torrent
+        # of Lava is on the stack, each creature has …". Rebuilt from the stack
+        # on every pass exactly as the battlefield half is, so a spell that has
+        # resolved or been countered takes its grant with it — there is no flag
+        # to clear, which is the whole reason both halves are recomputed rather
+        # than adjusted.
+        stack_sources = stack_static_grant_sources(getattr(self, "stack", ()))
 
         # A static that outlives its source (Titania's Song: "if this
         # enchantment leaves the battlefield, this effect continues until end of
@@ -1729,6 +1737,26 @@ class PermanentStateMixin:
                 perm.metadata["global_static_sources"] = applying
             else:
                 perm.metadata.pop("global_static_sources", None)
+            # …and the same statics from a **spell on the stack** (CR 113.6b,
+            # Torrent of Lava). The derived static is recorded rather than its
+            # source, because a stack object's printed text carries the "as long
+            # as … is on the stack" prefix `global_static_for` refuses — see
+            # `global_statics.STACK_STATICS_KEY`.
+            #
+            # `source=None`: `_global_static_applies` needs one only for a scope
+            # that is *relative* to its source's controller, and a spell on the
+            # stack is not a permanent to compare seats with. That scope is
+            # refused where the clause is read (`stack_statics._global_static`),
+            # so nothing reaching here needs it.
+            applying_from_stack = [
+                static
+                for _item, static in stack_sources
+                if self._global_static_applies(static, perm, None, self)
+            ]
+            if applying_from_stack:
+                perm.metadata[STACK_STATICS_KEY] = applying_from_stack
+            else:
+                perm.metadata.pop(STACK_STATICS_KEY, None)
 
     #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
     #: every filter payload in the engine spells a colour with. One map rather

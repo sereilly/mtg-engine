@@ -481,22 +481,38 @@ def _source_matches(game, shield: Shield, source) -> bool:
 
 
 def _source_in_subject(game, shield: Shield, source) -> bool:
-    """Whether *source* is one of the permanents *shield*'s noun phrase names.
+    """Whether *source* is one of the objects *shield*'s noun phrase names.
 
     Asked through ``subject_filters.subject_matches`` — the one answer every
     reader of a printed noun phrase uses — rather than field by field here, so
     a phrase the matcher cannot test is refused where the line is *compiled*
     instead of being quietly ignored at damage time.
 
-    A source that is not a permanent (a spell's ``CardDefinition``, CR 109.5)
-    matches no phrase describing permanents, so it is not shielded against.
+    **A source that is not a permanent gets the one question a card can answer.**
+    A spell reaches the damage paths as its printed ``CardDefinition``
+    (CR 109.5), which has no battlefield, no controller and no layers — so every
+    key in the vocabulary is unanswerable about it except ``named``, which is a
+    characteristic of the card itself. "…would be dealt to this creature **by
+    Torrent of Lava** this turn" names a spell and nothing else, and answering
+    it "no" because the source is not a permanent would have made the shield
+    Torrent of Lava grants prevent nothing at all. A phrase describing anything
+    wider still declines, which is the safe direction: a shield is smaller than
+    the card prints, never larger.
     """
+    from .search_filters import name_key
     from .subject_filters import subject_matches
 
-    if source is None or not hasattr(source, "metadata"):
+    described = dict(shield.source_filter or {})
+    if source is None:
         return False
+    if not hasattr(source, "metadata"):
+        if set(described) != {"named"}:
+            return False
+        return name_key(getattr(source, "name", "") or "") == name_key(
+            str(described["named"])
+        )
     return subject_matches(
-        game, source, dict(shield.source_filter or {}), observer=shield.filter_seat
+        game, source, described, observer=shield.filter_seat
     )
 
 

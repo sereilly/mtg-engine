@@ -489,9 +489,24 @@ def color_badge_view(doc: str) -> property:
 # The shield each legacy list/count view arms when something appends to it.
 
 
-def make_numeric_pool(amount: int, source_name: str | None = None) -> Shield:
+def make_numeric_pool(
+    amount: int, source_name: str | None = None, source_filter: dict | None = None
+) -> Shield:
+    """CR 615.7's point pool, optionally narrowed to the sources one printed
+    noun phrase names ("...by Torrent of Lava this turn").
+
+    The narrowing is a field on the same shield rather than a kind of its own,
+    because ``kind`` names the *interceptor* that consumes the shield and this
+    one is still spent a point at a time by ``prevention._prevention_pool``.
+    What differs is a recorded property, which CR 615.9 rechecks when the damage
+    would be dealt — the same axis ``colors`` and ``source_type`` already sit on.
+    """
     return Shield(
-        kind=PREVENT_NEXT_N, amount=amount, uses=None, source_name=source_name
+        kind=PREVENT_NEXT_N,
+        amount=amount,
+        uses=None,
+        source_filter=dict(source_filter) if source_filter else None,
+        source_name=source_name,
     )
 
 

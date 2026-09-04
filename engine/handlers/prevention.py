@@ -33,7 +33,9 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
-def _grant_pool(recipient, amount: int, source_name: str | None):
+def _grant_pool(
+    recipient, amount: int, source_name: str | None, source_filter: dict | None = None
+):
     """Arm one CR 615.7 numeric shield on *recipient* and return it.
 
     A shield rather than an addition to a running total: several "prevent the
@@ -44,10 +46,18 @@ def _grant_pool(recipient, amount: int, source_name: str | None):
     Returned so the resolution that armed it can record it — Sacred Boon's
     second sentence reads back what *this* shield prevented, and only the object
     survives from here to the end step.
+
+    *source_filter* is the printed noun phrase naming **whose** damage this
+    shield answers to ("…by Torrent of Lava this turn"). Recorded on the shield
+    rather than tested here, because CR 615.9 rechecks a shield's property
+    against the source when the damage would be dealt — a source matched at the
+    arming would shield against a creature that has since changed.
     """
     if amount <= 0:
         return None
-    return add_shield(recipient, make_numeric_pool(amount, source_name))
+    return add_shield(
+        recipient, make_numeric_pool(amount, source_name, source_filter)
+    )
 
 
 def apply_prevention_shield(
@@ -57,20 +67,29 @@ def apply_prevention_shield(
     amount: int,
     source_name: str | None = None,
     context: OracleExecutionContext | None = None,
+    source_filter: dict | None = None,
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
-    its art on the shield badge. Returns the name of the beneficiary."""
+    its art on the shield badge, and *source_filter* — the printed phrase naming
+    whose damage the shield stops — so a narrowed shield reaching this recipient
+    is narrowed here too. Returns the name of the beneficiary."""
     if (
         isinstance(target_permanent_index, int)
         and 0 <= target_permanent_index < len(target.battlefield)
         and target.battlefield[target_permanent_index].is_creature
     ):
         permanent = target.battlefield[target_permanent_index]
-        _record_shield(context, _grant_pool(permanent, amount, source_name), permanent)
+        _record_shield(
+            context,
+            _grant_pool(permanent, amount, source_name, source_filter),
+            permanent,
+        )
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
         return permanent.card.name
-    _record_shield(context, _grant_pool(target, amount, source_name), None)
+    _record_shield(
+        context, _grant_pool(target, amount, source_name, source_filter), None
+    )
     game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return target.name
 
@@ -153,6 +172,12 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     target = context.target
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     source_name = context.card.name if context.card else None
+    # "…**by Torrent of Lava** this turn." The printed noun phrase naming whose
+    # damage this shield answers to, carried onto the shield so CR 615.9's
+    # recheck can ask it when the damage would be dealt. Absent — every other
+    # card reaching this handler — the shield answers to any source, exactly as
+    # it always did.
+    source_filter = instruction.payload.get("source_filter") or None
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
@@ -221,7 +246,9 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         return True, "resolved"
 
     if instruction.payload.get("to_self"):
-        _record_shield(context, _grant_pool(caster, amount, source_name), None)
+        _record_shield(
+            context, _grant_pool(caster, amount, source_name, source_filter), None
+        )
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
@@ -233,7 +260,11 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if instruction.payload.get("to_attached"):
         host = attached_host(game, context.source_permanent)
         if host is not None:
-            _record_shield(context, _grant_pool(host, amount, source_name), host)
+            _record_shield(
+                context,
+                _grant_pool(host, amount, source_name, source_filter),
+                host,
+            )
             game.log.append(
                 f"{host.card.name} gains prevention shield for {amount} damage"
             )
@@ -246,7 +277,9 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         source_perm = context.source_permanent
         if source_perm is not None:
             _record_shield(
-                context, _grant_pool(source_perm, amount, source_name), source_perm
+                context,
+                _grant_pool(source_perm, amount, source_name, source_filter),
+                source_perm,
             )
             game.log.append(
                 f"{source_perm.card.name} gains prevention shield for {amount} damage"
@@ -259,7 +292,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     amount = _sized_for_recipient(game, context, instruction, target, amount)
     apply_prevention_shield(
         game, target, context.target_permanent_index, amount, source_name,
-        context=context,
+        context=context, source_filter=source_filter,
     )
     return True, "resolved"
 

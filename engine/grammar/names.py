@@ -93,7 +93,63 @@ def parse_card_name(stream: TokenStream) -> str:
     return render(stream.tokens[start:stream.mark()])
 
 
-__all__ = ["parse_card_name"]
+#: The words a *bare* name scan stops before. Each opens the clause that follows
+#: a name in the one template that prints one — a duration, a conjunct, or the
+#: word ending a replacement. No card in the pool has any of them in its name
+#: (checked against every set file), so a stop can only end a scan the name was
+#: never part of.
+_BARE_NAME_STOPS = ("this", "until", "during", "and", "or", "instead")
+
+#: The words a bare name may not *begin* with. Each one opens a printed **noun
+#: phrase** — a description of a set of objects — and a phrase the vocabulary
+#: could not read must refuse the line rather than be taken for a literal
+#: string: a name matching no card is a shield that never fires, silent and in
+#: nobody's favour. Refusing leaves the wording in the backlog, which is where
+#: an unread noun phrase belongs.
+_NOT_A_NAME = (
+    "a", "an", "the", "each", "all", "any", "every", "another", "other",
+    "target", "this", "that", "those", "these", "its", "your", "their",
+    "one", "two", "three", "no", "up", "attacking", "blocking", "tapped",
+    "untapped", "unblocked", "enchanted", "equipped",
+)
+
+
+def accept_source_card_name(stream: TokenStream) -> str | None:
+    """A card's printed name standing on its own, or None with the cursor unmoved.
+
+    "…that would be dealt to this creature **by Torrent of Lava** this turn."
+    (the ability Torrent of Lava grants each creature while it is on the stack.)
+    The name is a literal string rather than a description of a set, which is
+    this module's subject — and it is read *last*, after every noun-phrase
+    reader has refused, because those readers are what tell a printed phrase
+    from a printed name.
+
+    Two guards keep it from swallowing a phrase nobody read: it refuses
+    outright when the first word opens a noun phrase (:data:`_NOT_A_NAME`), and
+    it stops before the words that open the next clause
+    (:data:`_BARE_NAME_STOPS`). Both fail towards a refusal, so an unread phrase
+    stays unread rather than becoming a name that matches nothing.
+    """
+    mark = stream.mark()
+    first = stream.peek_word()
+    if first is None or first in _NOT_A_NAME or first in _NAME_STOPS:
+        return None
+    while not stream.exhausted:
+        if (
+            stream.at_punct(".")
+            or stream.at_punct(",")
+            or stream.at_word(*_BARE_NAME_STOPS)
+            or stream.at_word(*_NAME_STOPS)
+            or stream.peek_word() is None
+        ):
+            break
+        stream.advance()
+    if stream.mark() == mark:
+        return None
+    return render(stream.tokens[mark:stream.mark()])
+
+
+__all__ = ["accept_source_card_name", "parse_card_name"]
 
 
 def accept_original_expansion(stream: TokenStream) -> str | None:

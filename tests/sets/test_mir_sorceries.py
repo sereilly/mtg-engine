@@ -1704,7 +1704,98 @@ def test_w4g2_the_torch_tax_ends_when_it_leaves_the_stack(set_pool):
     assert _w4g2_spell_cost_tax(game, 1, lapse, (), [torch]) == (0, [])
 
 
+# --- Torrent of Lava: the ability it grants each creature ---
+
+
+def test_w4g2_torrent_of_lava_grants_the_shield_while_it_is_on_the_stack(set_pool):
+    """"…each creature has "{T}: Prevent the next 1 damage …"" — appended to
+    each creature's *effective* card, so the compiler produces the activated
+    ability and every consumer sees it without knowing a spell granted it.
+
+    Before and after are both asserted: an ability that outlived the spell would
+    let a creature shield itself against a Torrent that had already resolved.
+    """
+    game, _, theirs = _w4g2_game(
+        set_pool, my_hand=["Torrent of Lava"], theirs=["Femeref Scouts"]
+    )
+    scout, = theirs
+
+    assert not _w4g2_compile(scout.effective_card).activated_abilities
+
+    game.queue_from_hand(0, "Torrent of Lava", x_value=2)
+    granted = _w4g2_compile(scout.effective_card).activated_abilities
+    assert [a.instruction.kind for a in granted] == ["grant_prevention_shield"]
+    assert granted[0].instruction.payload["source_filter"] == {
+        "named": "torrent of lava"
+    }
+
+    game.resolve_stack()
+    game.check_state_based_actions()
+    assert not _w4g2_compile(scout.effective_card).activated_abilities
+
+
+def test_w4g2_a_creature_that_taps_takes_one_less_from_the_torrent(set_pool):
+    """The whole card, driven: tap one of two creatures in response, and it takes
+    X-1 while its neighbour takes X.
+
+    Both halves matter. A shield that prevented everything would pass a test
+    that only checked the tapped creature took less.
+    """
+    game, _, theirs = _w4g2_game(
+        set_pool, my_hand=["Torrent of Lava"],
+        theirs=["Femeref Scouts", "Femeref Scouts"],
+    )
+    shielded, exposed = theirs
+
+    game.queue_from_hand(0, "Torrent of Lava", x_value=2)
+    game.activate_permanent_ability(1, "Femeref Scouts", permanent_index=0)
+
+    assert shielded.tapped
+    assert shielded.damage_marked == 1
+    assert exposed.damage_marked == 2
+
+
+def test_w4g2_the_granted_shield_answers_only_to_the_torrent(set_pool):
+    """"…that would be dealt to this creature **by Torrent of Lava**": a recorded
+    property CR 615.9 rechecks against the source when the damage would be
+    dealt, so another source's damage passes through untouched and the shield is
+    still there for the Torrent."""
+    game, _, theirs = _w4g2_game(
+        set_pool, my_hand=["Torrent of Lava", "Chaos Charm"],
+        theirs=["Femeref Scouts"],
+    )
+    scout, = theirs
+
+    game.queue_from_hand(0, "Torrent of Lava", x_value=2)
+    game.queue_permanent_ability(1, "Femeref Scouts", permanent_index=0)
+    game.resolve_top_of_stack()
+
+    game.queue_from_hand(
+        0, "Chaos Charm", target_player_index=1, target_permanent_index=0,
+        mode_index=1,
+    )
+    game.resolve_top_of_stack()
+    assert scout.damage_marked == 1, "the Charm's damage is not the Torrent's"
+
+    game.resolve_top_of_stack()
+    assert scout.damage_marked == 2, "1 of the Torrent's 2 was prevented"
+
+
 # --- the seam itself ---
+
+
+def test_w4g2_both_cards_claim_their_stack_static(set_pool):
+    """The line is claimed by the table that carries it out, so neither card can
+    report supported on its damage line while its static does nothing."""
+    pool = set_pool("MIR")
+    for name in ("Kaervek's Torch", "Torrent of Lava"):
+        program = _w4g2_compile(pool[name])
+        assert program.supported, program.reason
+        assert any(
+            instruction.kind == "derived_static_rule"
+            and instruction.value == "stack_statics"
+            for instruction in program.instructions
+        ), name
 
 
 def test_w4g2_a_stack_static_about_another_object_refuses():
@@ -1735,3 +1826,44 @@ def test_w4g2_an_unimplemented_stack_static_is_not_claimed():
         "{2} more to cast.",
         "Probe",
     )
+
+
+def test_w4g2_an_unread_noun_phrase_is_not_taken_for_a_card_name():
+    """The bare-name scan is tried **last** and refuses anything opening a noun
+    phrase.
+
+    A phrase read as a literal name would match no card, so the shield would
+    never fire — silent, and in nobody's favour. The refusal keeps the wording
+    in the backlog instead.
+    """
+    with _w4g2_pytest.raises(_W4G2GrammarError):
+        _w4g2_parse_line(
+            "Prevent the next 1 damage that would be dealt to this creature "
+            "by a wurm of your choosing this turn."
+        )
+
+
+def test_w4g2_a_named_source_narrows_the_counted_shield_and_nothing_else():
+    """The narrowing rides the shield the card already arms. A card printing the
+    same sentence with no "by" clause keeps the unnarrowed shield it had, which
+    is what says the payload key is read rather than defaulted."""
+    def shield_payload(text: str) -> dict:
+        card = _W4G2CardDefinition(
+            name="Probe", mana_cost="{1}", cmc=1.0, type_line="Creature - Bear",
+            oracle_text=text, colors=("G",), color_identity=("G",), keywords=(),
+            produced_mana=(), raw={}, power="2", toughness="2",
+        )
+        ability, = _w4g2_compile(card).activated_abilities
+        return ability.instruction.payload
+
+    narrowed = shield_payload(
+        "{T}: Prevent the next 1 damage that would be dealt to this creature "
+        "by Torrent of Lava this turn."
+    )
+    plain = shield_payload(
+        "{T}: Prevent the next 1 damage that would be dealt to this creature "
+        "this turn."
+    )
+
+    assert narrowed["source_filter"] == {"named": "torrent of lava"}
+    assert "source_filter" not in plain
