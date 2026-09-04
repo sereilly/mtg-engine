@@ -29,14 +29,17 @@ from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_counter_pronoun_to_bound_target,
                         rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
-from .phrases import _parse_duration, _parse_mana_payment
-from .effects import (_parse_untap_chosen_by_paying,
+from .phrases import (_accept_conjoined_life_cost, _parse_duration,
+                      _parse_mana_payment)
+from .effects import (_parse_damage_becomes_counter_removal,
+                      _parse_untap_chosen_by_paying,
                       _parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage, _parse_cast_permission,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
                       _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
                       _parse_create_token, _parse_reveal_hand_and_choose,
                       _parse_count_objects, _parse_produces_instead,
+                      _parse_tapped_lands_produce_chosen,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders, _parse_sacrifice,
                       _parse_counted_sacrifice, _parse_sacrifice_expansion_permanents,
@@ -489,6 +492,24 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         as_though = _parse_spend_mana_as_though(stream)
         if as_though is not None:
             return as_though
+        # "For each 1 damage that would be dealt to you until your next upkeep,
+        # you remove an echo counter from this enchantment instead." (Soul
+        # Echo.) CR 614's replacement, opening with the same two words as the
+        # ordinary per-object loop below — so it is read here and refuses
+        # without consuming, leaving "for each" every reading it had.
+        becomes_counters = _parse_damage_becomes_counter_removal(stream)
+        if becomes_counters is not None:
+            return becomes_counters
+
+    # "Until end of turn, **lands tapped for mana produce mana of the chosen
+    # color** instead of any other color." (Hall of Gemstone.) The passive
+    # voice of the two swaps above, with the lands in the subject slot — so it
+    # is read here, ahead of the subject-verb reader that would take "lands"
+    # for an ordinary noun phrase and fail on "tapped". Declines without
+    # consuming, leaving every other sentence opening with a noun untouched.
+    chosen_swap = _parse_tapped_lands_produce_chosen(stream)
+    if chosen_swap is not None:
+        return chosen_swap
 
     # "Attacking doesn't cause creatures you control to tap this combat if
     # Johan is untapped." (Johan.) A sentence whose subject is a gerund, which
@@ -629,7 +650,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 # is made by the same handler either way, and an undefined X
                 # would make it "pay {0}", which is not a choice.
                 cost = _parse_mana_payment(stream, allow_variable=True)
-                return ast.May(ast.PlayerRef("you"), cost=cost)
+                # "You may pay {4} **and 2 life**." (Purgatory.) One offer with
+                # two prices — CR 118.8's "or" is the alternative and this is
+                # the conjunction, so both are charged and a player short of
+                # either cannot take the offer at all.
+                return ast.May(
+                    ast.PlayerRef("you"),
+                    cost=cost,
+                    life_cost=_accept_conjoined_life_cost(stream),
+                )
             # The causative "you may have <subject> <verb> …" (Goblin
             # Arsonist's "you may have it deal 1 damage to any target") is the
             # optional form of the unwrapped sentence — the verb table already

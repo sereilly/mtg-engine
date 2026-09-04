@@ -23,7 +23,7 @@ from ..lexer import WORD
 from ..stream import TokenStream
 from ..where_x import _parse_where_x_is
 from ..phrases import (
-    _accept_mana_alternatives,
+    _accept_mana_alternatives, _accept_per_counter_multiplier,
     _parse_duration, _parse_mana_payment, _parse_opponents_choice,
     _parse_per_each_objects, _parse_that_object, accept_or_planeswalker,
     parse_bound_subject,
@@ -489,7 +489,13 @@ def _parse_damage_unless_pay(
             actor=payer, cost=cost, cost_alternatives=alternatives,
             otherwise=damage,
         )
-    return ast.DamageUnlessPay(damage, payer, cost)
+    # "…unless they pay {1} **for each vortex counter on this enchantment**."
+    # (Energy Vortex.) The same escalation `_parse_destroy` already reads
+    # behind its own "unless you pay", through the same fragment — so the two
+    # verbs cannot come to disagree about what the clause multiplies.
+    return ast.DamageUnlessPay(
+        damage, payer, cost, per_counter=_accept_per_counter_multiplier(stream)
+    )
 
 
 def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None:

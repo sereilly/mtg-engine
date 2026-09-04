@@ -947,6 +947,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # with another one is a card this row already reads. In the whenever table
     # under the "when" the card prints, like every state trigger above it: a
     # kind lives in one table, and this is the one both printed words reach.
+    # "**When** this enchantment has no +1/+1 counters on it, sacrifice it."
+    # (Afiya Grove.) CR 603.8's state trigger again, and the *opposite* state
+    # from `counters_reach_threshold` above rather than a threshold of zero:
+    # read as "zero or more" that row would fire on a permanent holding three,
+    # and read as "exactly zero" it would need a comparison field no other
+    # printing uses. Two states, two kinds, one sweep.
+    #
+    # The counter kind is payload and its character class is wider than every
+    # other row's, because a P/T counter is spelled with symbols (CR 122.1a) —
+    # "+1/+1" is the kind here, where "page" and "tide" are the kinds above.
+    #
+    # **Above `source_has_keyword`**, whose pattern is `has (?P<keyword_name>
+    # [a-z]+)` with nothing after it: a creature printing this sentence would
+    # otherwise trigger on "having" a keyword called "no".
+    ("source_has_no_counters",
+     r"whenever this (?:artifact|aura|creature|enchantment|permanent|land) "
+     r"has no (?P<counter_kind>[-+/0-9a-z]+) counters? on it"),
     ("source_has_keyword",
      r"whenever this creature has (?P<keyword_name>[a-z]+)"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"

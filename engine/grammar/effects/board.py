@@ -39,7 +39,9 @@ from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import (
-    _accept_number, _parse_counted_sacrifice,
+    _accept_life_alternative, _accept_number, _accept_per_counter_multiplier,
+    _accept_unless_life_cost,
+    _parse_counted_sacrifice,
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
     _parse_sacrificed_subject, _parse_that_object, _parse_zone,
 )
@@ -398,58 +400,6 @@ def _parse_further_subjects(
         extra.append(nxt)
 
 
-def _accept_unless_life_cost(stream: TokenStream) -> "ast.Amount | None":
-    """The life half of "… unless <player> pays <life>", or None, cursor unmoved.
-
-    Two printed shapes and no third: "**3 life**" and "**life equal to its
-    toughness**" (Essence Vortex). The second is not a number this parser could
-    count — CR 613 makes toughness computed, so it is whatever the creature has
-    when the offer is made — and it travels as the characteristic reference the
-    resolution reads.
-
-    None rather than a raise, so the mana payment beside it keeps its reading of
-    every clause that is not a life cost.
-    """
-    mark = stream.mark()
-    if stream.accept_word("life"):
-        if stream.accept_phrase("equal", "to", "its"):
-            for name in ("toughness", "power"):
-                if stream.accept_word(name):
-                    return ast.CharacteristicOfSubject(name, 0)
-        stream.reset(mark)
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if isinstance(amount, ast.Fixed) and amount.value > 0 and stream.accept_word("life"):
-        return amount
-    stream.reset(mark)
-    return None
-
-
-def _accept_life_alternative(stream: TokenStream) -> int | None:
-    """``or 1 life`` trailing a mana payment (Erosion) — CR 118.8, or None.
-
-    Only the amount is carried, not a whole cost node: this is the second half
-    of one offer, and the payer covers it either way. Refuses without consuming
-    so any other "or" in the sentence keeps the reading it had.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("or"):
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(amount, ast.Fixed) or not stream.accept_word("life"):
-        stream.reset(mark)
-        return None
-    return amount.value
-
-
 def _parse_destroy(stream: TokenStream) -> ast.Statement:
     """``destroy <objects> [. It can't be regenerated.]``
 
@@ -555,7 +505,18 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")
-    if _accept_destroyed_this_way_no_regen(stream):
+    # "…destroy that creature **and** it can't be regenerated" (Consuming
+    # Ferocity) against "Destroy target creature. It can't be regenerated"
+    # (Terror). One printed word apart, and without it the conjunction loop one
+    # layer up takes the "and" and then fails the line on a clause that is a
+    # rider rather than a statement — W1G3's Burning Palm Efreet finding, in a
+    # second family.
+    stream.accept_word("and")
+    if (
+        stream.accept_phrase("it", "can't", "be", "regenerated")
+        or stream.accept_phrase("they", "can't", "be", "regenerated")
+        or _accept_destroyed_this_way_no_regen(stream)
+    ):
         no_regen = True
     else:
         stream.reset(mark)
@@ -585,29 +546,6 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             for each in (subject, *further)
         ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
-
-
-def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
-    """``for each <word> counter on it`` trailing a printed cost, or None.
-
-    "Destroy this creature unless you pay {1} **for each music counter on it**"
-    — the ability Musician grants: CR 702.24a's escalation with the keyword's
-    name taken off it. The counter word is payload, so a card printing a
-    different one needs no production. Returns None with the cursor untouched,
-    because a flat cost must keep reading exactly as it did.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
-    word = stream.peek_word()
-    if word is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_word("counter") or not stream.accept_phrase("on", "it"):
-        stream.reset(mark)
-        return None
-    return str(word)
 
 
 def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:

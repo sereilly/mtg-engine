@@ -124,6 +124,20 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # resolution counts — and read off the `Permanent`, not the card, so it
         # is the computed power (CR 613) rather than the printed one.
         damage = max(0, source_permanent.effective_power) if source_permanent else 0
+    elif instruction.payload.get("amount_from_attached_power"):
+        # "…**it** deals damage equal to **its power** to its controller"
+        # (Consuming Ferocity), where "it" is the creature the Aura enchants.
+        # The same read one object over, and the object is what matters: the
+        # Aura has no power, so routed through the branch above the card would
+        # deal nothing at all while compiling clean.
+        #
+        # The power is computed (CR 613), which is the whole card — the counter
+        # this same trigger placed a step earlier is what pushes it over the
+        # line.
+        from ._common import attached_host
+
+        host = attached_host(game, source_permanent)
+        damage = max(0, host.effective_power) if host is not None else 0
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     # "…deals **X plus 3** damage to you" (Hellfire). The printed constant, kept
@@ -1102,6 +1116,22 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     cost = int(instruction.payload.get("cost", 0))
+    per_counter = instruction.payload.get("cost_per_counter")
+    if per_counter:
+        # "…unless they pay {1} **for each vortex counter on this
+        # enchantment**." (Energy Vortex.) CR 608.2: the price is read now,
+        # not when the ability went on the stack — the counters are what the
+        # rest of the card is about, and its own upkeep trigger removes them
+        # all a step earlier on its controller's turn.
+        #
+        # A source that has left takes its counters with it (CR 122.2), which
+        # leaves the price at zero — the offer is free and the damage does not
+        # happen, which is CR 608.2's "as much as possible" rather than a
+        # reason to skip the prompt.
+        from ..named_counters import counters_on
+
+        source = context.source_permanent
+        cost *= counters_on(source, str(per_counter)) if source is not None else 0
     seat = game.players.index(caster)
     if instruction.payload.get("payer") == "event_subject_player":
         # "…deals 2 damage to **that player** unless they pay {2}" (Soul
@@ -1155,6 +1185,46 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     )
     game.log.append(
         f"{payer.name} may pay {{{cost}}} or {card.name} deals {amount} damage to them"
+    )
+    return True, "resolved"
+
+
+@effect_handler("arm_damage_to_counter_removal")
+def arm_damage_to_counter_removal(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Soul Echo: "…target opponent may choose that for each 1 damage that
+    would be dealt to you until your next upkeep, you remove an echo counter
+    from this enchantment instead."
+
+    Arms the CR 614 replacement `engine/replacements.py` applies. The record
+    goes on the **permanent**, not on the seat it covers: the counters it
+    spends live there, CR 122.2 takes them with the permanent when it leaves,
+    and a record on the player would outlive the store and replace damage with
+    nothing.
+
+    The seat is the ability's *controller* (CR 109.5) even though the offer was
+    made to an opponent — "you" in the sentence behind "may choose that" is
+    still the ability's own controller, and the lowering refuses any other
+    reading rather than letting the wrong life total be covered.
+
+    The duration needs no field: the sweep at the top of the upkeep step drops
+    every record naming the seat whose upkeep it is, which is exactly "until
+    your next upkeep".
+    """
+    from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{context.card.name}: no permanent to spend counters from")
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    source.metadata[DAMAGE_TO_COUNTER_REMOVAL_RECORD] = {
+        "counter": str(instruction.payload.get("counter", "")),
+        "seat": seat,
+    }
+    game.log.append(
+        f"Damage to {game.players[seat].name} will remove "
+        f"{instruction.payload.get('counter')} counters from {source.card.name} "
+        "until their next upkeep"
     )
     return True, "resolved"
 

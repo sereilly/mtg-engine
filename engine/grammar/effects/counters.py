@@ -335,6 +335,57 @@ def _accept_target_bound(stream: TokenStream) -> int | None:
     return numbers[-1]
 
 
+def _parse_move_counter(stream: TokenStream) -> "ast.MoveCounter | None":
+    """``Move [a|N] <kind> counter(s) from <subject> onto <subject>.``
+    (Afiya Grove.)
+
+    CR 121.6 makes this **one** action rather than a removal and a placement:
+    with no such counter on the first object nothing happens at all, where two
+    steps in a sequence would put a counter on the destination anyway. That is
+    the whole reason it is its own node.
+
+    Returns None with the cursor untouched on anything else, so every other
+    "move …" sentence keeps its own refusal — the verb also opens the
+    counter-less "move it to the battlefield" shapes this does not read.
+
+    Both prepositions Magic prints for the destination are accepted ("onto" on
+    Afiya Grove, "to" elsewhere); the difference is English rather than a
+    different effect.
+    """
+    mark = stream.mark()
+    stream.expect_word("move")
+    if stream.accept_word("a", "an"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        try:
+            count = parse_amount(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+    try:
+        counter = _expect_counter_kind(stream, " to move").text
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("from"):
+        stream.reset(mark)
+        return None
+    origin = parse_recipient(stream)
+    if origin is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("onto", "to"):
+        stream.reset(mark)
+        return None
+    destination = parse_recipient(stream)
+    if destination is None:
+        raise stream.error("expected what to move a counter onto")
+    return ast.MoveCounter(origin, destination, counter, count)
+
+
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
     """``Remove [a|N] <kind> counter(s) from <subject>`` as an *effect*.
 

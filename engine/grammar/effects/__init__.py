@@ -38,6 +38,7 @@ from .prevention import (
     _parse_prevent,
     _parse_prevent_all,
     _parse_source_of_choice_effect,
+    _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
@@ -54,6 +55,7 @@ from .counters import (
     _expect_counter_kind,
     _parse_distribute_counters,
     _parse_put_counter,
+    _parse_move_counter,
     _parse_remove_counter,
 )
 from .characteristics import (
@@ -75,7 +77,6 @@ from .types import (
     _parse_no_longer_supertype,
 )
 from .board import (
-    _accept_life_alternative,
     _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
     _parse_counted_sacrifice,
@@ -100,6 +101,7 @@ from .mana import (
     _parse_note_mana_spent,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_tapped_lands_produce_chosen,
     _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
 )
@@ -192,12 +194,12 @@ __all__ = [
     "_parse_damage",
     "_parse_damage_unless_pay",
     "_parse_have_source_deal_damage",
-    "_accept_life_alternative",
     "_parse_for_each_destroy_unless_paid",
     "_parse_damage_rider_sentence",
     "_parse_prevent",
     "_parse_prevent_all",
     "_parse_source_of_choice_effect",
+    "_parse_damage_becomes_counter_removal",
     "_parse_damage_redirect",
     "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
@@ -213,6 +215,7 @@ __all__ = [
     "_parse_for_each",
     "_parse_distribute_counters",
     "_parse_put_counter",
+    "_parse_move_counter",
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
     "_parse_change_base_pt",
@@ -268,6 +271,7 @@ __all__ = [
     "_parse_player_puts_hand_cards_on_library",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
+    "_parse_tapped_lands_produce_chosen",
     "_parse_tapper_produces_instead",
     "_parse_spend_mana_as_though",
     "_parse_double",

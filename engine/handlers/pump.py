@@ -19,7 +19,7 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword, remove_keyword
-from ..oracle_types import COUNTERS_PLACED_THIS_WAY
+from ..oracle_types import ATTACHED_PERMANENT_CONTROLLER, COUNTERS_PLACED_THIS_WAY
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -803,6 +803,15 @@ def add_pt_counters_to_attached(game: Game, instruction: OracleInstruction, cont
     attached = attached_host(game, context.source_permanent)
     if attached is None:
         return True, "resolved"
+    # The host's seat, recorded for the sentences behind this step: "…deals
+    # damage … to **its controller**", "…destroy **that creature**" (Consuming
+    # Ferocity). The same record ``destroy_attached_permanent`` writes for
+    # Orcish Mine, and written *before* anything else for that handler's
+    # reason — CR 608.2h's last-known information, so a host that leaves
+    # between the two steps still supplies the seat the sentence names.
+    seat = game.controller_index_of(attached)
+    if seat is not None:
+        context.results[ATTACHED_PERMANENT_CONTROLLER] = seat
     kind = str(instruction.payload.get("counter", ""))
     count = int(instruction.payload.get("count", 1))
     placed = game.place_pt_counters(attached, kind, count)

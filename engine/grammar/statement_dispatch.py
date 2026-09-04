@@ -27,8 +27,9 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT,
-                              LOOP_BOUND_PLAYER)
+from .lowering._events import (BOUND_CARD_EVENTS, CHOSEN_PLAYER,
+                               EVENT_SUBJECT_PLAYER, LOOP_BOUND_OBJECT,
+                               LOOP_BOUND_PLAYER, _EVENT_SUBJECT_PLAYERS)
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -100,6 +101,7 @@ from .lowering import (
     _lower_put_counter,
     _lower_put_onto_battlefield,
     _lower_reveal_until,
+    _lower_move_counter,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -226,6 +228,8 @@ def lower_statement(
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
+    if isinstance(statement, ast.MoveCounter):
+        return _lower_move_counter(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
@@ -481,6 +485,24 @@ def lower_statement(
         return (OracleInstruction("put_exiled_cards_into_hand", "", {}),)
 
     if isinstance(statement, ast.ExileBoundCard):
+        # "Whenever a nontoken creature is put into your graveyard from the
+        # battlefield, **exile that card**." (Purgatory.) No printed zone,
+        # because the trigger's own condition already said which one — so the
+        # card is the ``dead_card`` the death seam froze (CR 603.10) and the
+        # handler looks for it by identity wherever CR 404.1 put it.
+        #
+        # Gated on the same ``BOUND_CARD_EVENTS`` every other reading of "that
+        # card" is gated on: an event that records no card makes these two
+        # words name nothing, and the honest answer is a refusal rather than a
+        # handler that finds nothing while the card compiles supported.
+        if statement.from_zone is None:
+            if event not in BOUND_CARD_EVENTS:
+                raise LoweringError(
+                    "'that card' names the firing event's object, and this "
+                    "event records none",
+                    node=statement,
+                )
+            return (OracleInstruction("exile_bound_card", "", {}),)
         # "Exile **that card** from your graveyard." (Necropotence.) The object
         # the firing event named, so the event has to be one whose fire site
         # records it — under anything else the words name a card nobody wrote
@@ -571,10 +593,30 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.ChooseColor):
-        # Nothing to carry: the colour is not printed, the chooser is the
-        # ability's controller and the permanent it lands on is the ability's
-        # own source — see the node.
-        return (OracleInstruction("choose_color", "", {}),)
+        # The colour is not printed and the permanent it lands on is the
+        # ability's own source — see the node. What can vary is *who* names it.
+        if statement.chooser is None:
+            # CR 601.2b's default, and the payload every printing before Hall
+            # of Gemstone produced: the ability's controller, read by the
+            # handler off the source.
+            return (OracleInstruction("choose_color", "", {}),)
+        if statement.chooser.kind != "that_player":
+            raise LoweringError(
+                f"no colour choice is made by {statement.chooser.kind!r}",
+                node=statement,
+            )
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            # "That player" under an event that froze no seat names nobody, and
+            # the prompt would go to whoever the resolution happened to be
+            # holding — the refusal every other reading of these two words in
+            # this package makes, for the same reason.
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat \"that player\" names",
+                node=statement,
+            )
+        return (
+            OracleInstruction("choose_color", "", {"chooser": EVENT_SUBJECT_PLAYER}),
+        )
 
     if isinstance(statement, ast.ChoosePlayerWhoCast):
         # "Choose a player who cast one or more sorcery spells this turn."

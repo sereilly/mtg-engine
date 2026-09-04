@@ -160,6 +160,34 @@ class DamageUnlessPay:
     damage: DealDamage
     payer: PlayerRef
     cost: ManaCost
+    #: "…unless they pay {1} **for each vortex counter on this enchantment**."
+    #: (Energy Vortex.) The counter word the printed cost is multiplied by, or
+    #: None for a flat one. Payload rather than a second node, exactly as the
+    #: identical clause behind a destruction already is (``DestroyUnlessPay
+    #: .per_counter``): the cost is read at resolution either way, and a card
+    #: printing a different counter word needs no production.
+    per_counter: str | None = None
+
+
+@dataclass(frozen=True)
+class DamageBecomesCounterRemoval:
+    """``For each 1 damage that would be dealt to you until your next upkeep,
+    you remove an echo counter from this enchantment instead.`` (Soul Echo.)
+
+    CR 614's replacement, and **not** a prevention: the damage is replaced by
+    another action rather than reduced to nothing, so "damage that can't be
+    prevented" still becomes counters. Sharing :class:`PreventDamage`'s node
+    would put the two one boolean apart in the AST and one mistake apart in
+    every reader, which is the argument :class:`RedirectDamage` below makes
+    about the same pair.
+
+    Per **1** damage, which is the whole shape of the card: a five-point burn
+    spell takes five counters off, and a source with fewer counters than that
+    absorbs as much as it can (CR 614.6).
+    """
+    recipient: PlayerRef
+    counter: str
+    duration: Duration = field(default_factory=Duration)
 
 
 @dataclass(frozen=True)

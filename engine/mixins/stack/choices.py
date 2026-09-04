@@ -3913,7 +3913,13 @@ class PendingChoicesMixin:
         else:
             source.metadata.pop(RECORD_KEY, None)
         zone = str(choice.data.get("zone", "hand"))
-        self.leave_linked_exile(entry, zone)
+        self.leave_linked_exile(
+            entry, zone,
+            controller_index=(
+                choice.player_index
+                if choice.data.get("under_control_of_chooser") else None
+            ),
+        )
         self.log.append(
             f"{self.players[choice.player_index].name} returned "
             f"{entry['card'].name} to their {zone}"
@@ -4537,7 +4543,16 @@ class PendingChoicesMixin:
             # CR 119.4: a player may pay N life only with at least N to pay —
             # paying down to exactly 0 is legal, and the state-based check that
             # follows is what ends the game.
-            return player.life >= life_cost
+            if player.life < life_cost:
+                return False
+            # "You may pay {4} **and** 2 life." (Purgatory.) Both prices, so
+            # the life half answering yes is no longer the whole answer: with a
+            # mana half printed beside it the board has to cover that too. An
+            # offer with no mana half (Bronze Tablet) falls through to a plan
+            # over an empty cost, which is always payable — so one path answers
+            # both spellings without having to ask which it is.
+            if not entry.get("cost"):
+                return True
         if self._optional_pay_plan(player, entry) is not None:
             return True
         alternative = int(entry.get("life_alternative", 0) or 0)
@@ -4613,11 +4628,18 @@ class PendingChoicesMixin:
         if life_cost:
             if player.life < life_cost:
                 return
+            # "You may pay {4} **and** 2 life." (Purgatory.) Both halves or
+            # neither: the mana is planned *before* the life is spent, because
+            # a payer charged the life and then unable to cover the mana would
+            # have paid for nothing — CR 601.2h is asked of the whole price,
+            # and the board can have changed since the offer was made.
+            if entry.get("cost") and self._optional_pay_plan(player, entry) is None:
+                return
             player.life -= life_cost
             self.log.append(
                 f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
             )
-        else:
+        if not life_cost or entry.get("cost"):
             # A graded offer is paid with the option that was chosen and with no
             # other: falling back through the alternatives would charge a cost
             # the payer did not pick and then run the consequence that cost
@@ -5374,22 +5396,36 @@ class PendingChoicesMixin:
         # reserve to spend — so the stated policy is the one a player at a
         # healthy life total would take: pay, unless it would be lethal.
         life_cost = int(entry.get("life_cost", 0) or 0)
-        floating = (
-            (True if player.life > life_cost else None)
-            if life_cost
-            else next(
-                (
-                    plan
-                    for cost in (
-                        entry.get("cost") or {},
-                        *(entry.get("cost_alternatives") or ()),
-                    )
-                    for plan in (plan_payment(player.mana_pool, (), cost),)
-                    if plan is not None
-                ),
-                None,
-            )
+        mana_covered = next(
+            (
+                plan
+                for cost in (
+                    entry.get("cost") or {},
+                    *(entry.get("cost_alternatives") or ()),
+                )
+                for plan in (plan_payment(player.mana_pool, (), cost),)
+                if plan is not None
+            ),
+            None,
         )
+        if not life_cost:
+            floating = mana_covered
+        elif not entry.get("cost"):
+            # A life cost with no mana half (Bronze Tablet). No "already
+            # floating" reading — nothing is held in reserve to spend — so the
+            # policy is the one a player at a healthy life total would take.
+            floating = True if player.life > life_cost else None
+        else:
+            # "You may pay {4} **and** 2 life." (Purgatory.) One offer with two
+            # prices, so neither branch above answers it: the life is judged the
+            # way the branch above judges it, and the mana still has to clear
+            # the floating-mana rule — otherwise the policy would tap four lands
+            # for an offer it has just said it would not tap one for.
+            floating = (
+                True
+                if player.life > life_cost and mana_covered is not None
+                else None
+            )
         # A graded offer needs the policy to say *which* option as well as
         # whether to pay, because each buys something different (Winter's
         # Chill). The same policy one step further: the last option the floating

@@ -44,6 +44,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "coin_flip_damage_loop": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
+    # Soul Echo. In the damage category because what the sentence is about is a
+    # damage event — the counters are the substitution, not the subject.
+    "arm_damage_to_counter_removal": "damage",
     "self_damage_unless_pay": "damage",
     # Dispatched by the (trigger condition, instruction kind) registry in
     # engine/phases/upkeep_effects.py rather than by EFFECT_HANDLERS, so they
@@ -198,6 +201,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rather than permanent metadata, but what the sentence does is place a
     # counter, which is what the category is about.
     "player_gets_poison_counters": "counters",
+    # Afiya Grove. In the counter category and not in ``pump``, where the
+    # placement half lives: what the sentence does is take a counter off one
+    # object and put it on another, and CR 121.6 makes that one action.
+    "move_counter_from_self": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
     # Giant Oyster's release. The bound-object twin of the row above — same

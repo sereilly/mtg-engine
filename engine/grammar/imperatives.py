@@ -58,6 +58,7 @@ from .effects import (
     _parse_copy_this_spell,
     _parse_counter,
     _parse_create_token, _parse_create_token_for_recipient,
+    _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
     _parse_destroy,
     _parse_discard,
@@ -91,6 +92,7 @@ from .effects import (
     parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_put_source_into_zone,
+    _parse_move_counter,
     _parse_remove_counter,
     _parse_remove_from_combat,
     _parse_return,
@@ -163,6 +165,14 @@ def parse_imperative(
     redirect = _parse_damage_redirect(stream)
     if redirect is not None:
         return redirect
+    # "For each 1 damage that would be dealt to you until your next upkeep, you
+    # remove an echo counter from this enchantment instead." (Soul Echo.) The
+    # same kind of sentence as the redirect above — one *about* a damage event
+    # — and refusing without consuming for the same reason: "For each …" opens
+    # the ordinary per-object loop, which must keep its own reading.
+    becomes_counters = _parse_damage_becomes_counter_removal(stream)
+    if becomes_counters is not None:
+        return becomes_counters
     # "Damage that would be dealt to that creature this turn can't be prevented
     # or dealt instead to another permanent or player." (Whippoorwill.) Another
     # noun phrase in front of the verb, and beside the redirect above for the
@@ -278,6 +288,15 @@ def parse_imperative(
         return _parse_double(stream)
     if stream.at_word("switch"):
         return _parse_switch_pt(stream)
+    if stream.at_word("move"):
+        # "Move a +1/+1 counter from this enchantment onto target creature."
+        # (Afiya Grove.) Non-consuming on refusal, so the counter-less "move"
+        # sentences keep failing on their own missing production rather than on
+        # a counter kind they never mentioned — `_parse_remove_counter`'s rule
+        # one verb over.
+        moved = _parse_move_counter(stream)
+        if moved is not None:
+            return moved
     if stream.at_word("remove"):
         removal = _parse_remove_counter(stream)
         if removal is not None:

@@ -275,6 +275,32 @@ class SourceExiledWithCounter:
 
 
 @dataclass(frozen=True)
+class AttachedCounterCount:
+    """``if that creature has three or more +1/+0 counters on it`` (Consuming
+    Ferocity).
+
+    :class:`SourceCounterCount`'s twin over a different object: the permanent
+    the Aura is attached to rather than the Aura. Two nodes and not one with a
+    subject flag, because the two are answered by reading two different
+    permanents and a card printing one never means the other — an enchantment
+    counting *its own* +1/+0 counters is always counting zero.
+
+    ``bound`` is which printed subject the card used. False is "enchanted
+    &lt;noun&gt;", which names the host outright; True is "that &lt;noun&gt;",
+    which names it only because an earlier step of the same effect did — a fact
+    about the effect rather than about this clause, so the lowering is what
+    checks it.
+    """
+    counter: str
+    count: int
+    bound: bool = False
+    #: The comparison, as :class:`SourceCounterCount` carries it. Only
+    #: ``"at_least"`` is printed on this side today ("three **or more**"); the
+    #: field exists so the two nodes stay readable against each other.
+    comparison: str = "at_least"
+
+
+@dataclass(frozen=True)
 class SourceCounterCount:
     """"if **there are no more scream counters on it**" (All Hallow's Eve).
 
@@ -409,6 +435,7 @@ Condition = Union[
     PlayerLifeIs,
     RawCondition,
     SelfInGraveyardWithCardsAbove,
+    AttachedCounterCount,
     SourceCounterCount,
     SourceExiledWithCounter,
     SubjectCharacteristicIs,

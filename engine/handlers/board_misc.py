@@ -1610,6 +1610,68 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("move_counter_from_self")
+def move_counter_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Move a +1/+1 counter from this enchantment onto target creature."
+    (Afiya Grove.)
+
+    **CR 121.6 makes this one action**, and that is the whole reason it is one
+    handler rather than a ``sequence`` of the removal and the placement beside
+    it: with no counter on the source the move does not happen at all, where
+    two composed steps would put a counter on the target anyway — an Afiya
+    Grove that never runs dry.
+
+    The order is the rule too. The counter comes off first, so the number
+    placed is the number actually taken; a source holding fewer than the
+    sentence names gives up what it has and the target receives exactly that.
+
+    Reads and writes through the shared counter seams
+    (``named_counters.counters_on`` / ``remove_counters`` and
+    ``Game.place_pt_counters``), so a P/T counter brings its layer 7c
+    contribution with it in both directions (CR 122.1a) and the last-counter
+    record every state trigger reads is written where it always is.
+    """
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{context.card.name}: no permanent to move a counter from")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+1/+1"))
+    wanted = int(instruction.payload.get("count", 1) or 1)
+    held = counters_on(source, counter)
+    if held <= 0:
+        # CR 121.6: nothing to move means nothing happens — to *either* end.
+        game.log.append(
+            f"{source.card.name} has no {counter} counter to move"
+        )
+        return True, "resolved"
+    moving = min(held, wanted)
+    # The printed noun phrase, through the one reader the picker enumerated
+    # with — Reality Ripple's lesson: a handler that pins a type the payload
+    # does not say declines targets the picker legitimately offered.
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    creature = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described,
+            observer=game.players.index(context.caster), source=source,
+        ),
+    )
+    if creature is None:
+        # The destination has left (CR 608.2b). The counter stays where it is:
+        # a move with nowhere to land is not a removal.
+        game.log.append(f"{context.card.name}: nothing left to move a counter onto")
+        return True, "no target"
+    remove_counters(source, counter, moving)
+    game.place_pt_counters(creature, counter, moving)
+    game.log.append(
+        f"Moved {moving} {counter} counter(s) from {source.card.name} "
+        f"onto {creature.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_all_counters_from_bound")
 def remove_all_counters_from_bound(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature leaves the battlefield or becomes untapped, remove

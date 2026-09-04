@@ -25,7 +25,7 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from ._common import _filter_payload, _is_enchanted, _restrictions_beyond
-from ._events import (_EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
                       EVENT_SUBJECT_PLAYER)
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
@@ -666,6 +666,29 @@ def _lower_condition(
     if isinstance(condition, ast.SourceCounterCount):
         return {
             "kind": "source_counter_count",
+            "counter": condition.counter,
+            "count": condition.count,
+            "comparison": condition.comparison,
+        }
+    if isinstance(condition, ast.AttachedCounterCount):
+        # "if **that creature** has three or more +1/+0 counters on it"
+        # (Consuming Ferocity). The host, read at resolution off the
+        # attachment, which is why the printed subject is the whole of what
+        # this carries: the counter kind and the threshold are the card's, and
+        # the object is always the one the Aura is on.
+        #
+        # "That creature" names it only because the step in front named it, and
+        # that is checked here rather than trusted: with no such step the words
+        # name nothing, and a condition that answered off the attachment anyway
+        # would be reading a card that never said "enchanted".
+        if condition.bound and ATTACHED_PERMANENT_CONTROLLER not in produced:
+            raise LoweringError(
+                "\"that creature\" names an object no step of this effect "
+                "attached to",
+                node=condition,
+            )
+        return {
+            "kind": "attached_counter_count",
             "counter": condition.counter,
             "count": condition.count,
             "comparison": condition.comparison,

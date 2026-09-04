@@ -202,6 +202,28 @@ class RemoveCounter:
 
 
 @dataclass(frozen=True)
+class MoveCounter:
+    """``Move a +1/+1 counter from this enchantment onto target creature.``
+    (Afiya Grove.)
+
+    **One effect, not a removal followed by a placement.** CR 121.6 makes a
+    move a single action that does nothing at all when the first object has no
+    such counter — so written as two steps in a sequence, an empty source would
+    still put a counter on the destination, which is a card strictly better
+    than the printed one.
+
+    *source* and *destination* are both recipients, because the printed
+    sentence names both ends; every card in this pool prints the ability's own
+    permanent on the first end, and the lowering is what says so rather than
+    this node pinning it.
+    """
+    source: Recipient
+    destination: Recipient
+    counter: str = "+1/+1"
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class PlayerGetsCounters:
     """``<player> gets [a|N] <kind> counter(s).`` (CR 122.1 counters on a
     *player* — Pit Scorpion's poison.)

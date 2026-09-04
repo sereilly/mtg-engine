@@ -46,12 +46,19 @@ def _parse_put_exiled_card_into_hand(
 
 
 def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":
-    """``Exile that card from your graveyard.`` (Necropotence.)
+    """``Exile that card from your graveyard.`` (Necropotence.) /
+    ``…exile that card.`` (Purgatory.)
 
     Refuses without consuming, like the other exile productions beside it, so
-    an ordinary exile keeps its own refusal. The zone is required: "exile that
-    card" alone names an object that could be anywhere, and this handler looks
-    in exactly one place.
+    an ordinary exile keeps its own refusal.
+
+    The zone is **optional**, and the lowering is where the difference lands:
+    with a zone the sentence names the pile it expects, without one it names
+    the pile the firing event already said the card went to. Reading the
+    zone-less form here rather than refusing it is safe because "that card" has
+    no other referent — the recipient parser one production down reads
+    permanents and chosen cards, so an unclaimed "exile that card" fails the
+    whole line rather than matching something else.
     """
     mark = stream.mark()
     stream.expect_word("exile")
@@ -59,8 +66,7 @@ def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":
         stream.reset(mark)
         return None
     if not stream.accept_word("from"):
-        stream.reset(mark)
-        return None
+        return ast.ExileBoundCard(None)
     zone = _parse_zone(stream)
     return ast.ExileBoundCard(zone)
 
@@ -159,6 +165,16 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         preposition = "to"
         chosen = True
         owned_by_you = True
+    elif stream.accept_phrase("return", "a", "card", "exiled", "with"):
+        # "…**return a card** exiled with this enchantment **to the
+        # battlefield**." (Purgatory.) Gustha's Scepter's shape with the "you
+        # own" narrowing not printed, which is the whole difference: this pile
+        # only ever holds cards its controller owns, because the ability that
+        # filled it watches "**your** graveyard", so there is nothing for the
+        # narrowing to exclude. Read after that spelling, whose first five
+        # words this would otherwise consume before choking on "you".
+        preposition = "to"
+        chosen = True
     elif stream.accept_phrase("return", "the", "exiled", "card"):
         # "…**the exiled card**…" (Icy Prison). The same linked pile with no
         # possessive on it: CR 610.3 makes the two abilities linked, so "the

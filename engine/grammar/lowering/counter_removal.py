@@ -224,3 +224,45 @@ def _lower_remove_counter(
     return (
         OracleInstruction("remove_counter_from_self", "", {"counter": node.counter}),
     )
+
+
+def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...]:
+    """``Move a +1/+1 counter from this enchantment onto target creature.``
+    (Afiya Grove.)
+
+    Here rather than in ``lowering/counters.py`` because CR 121.6's move is a
+    removal that happens to end somewhere: what decides whether anything at all
+    happens is the *source's* counter store, which is this module's question,
+    and the placement is the tail of it.
+
+    Three refusals, each a way the sentence could otherwise do more than it
+    says:
+
+    * The source must be the ability's **own permanent**. Every printing of
+      this sentence names it, and a wording naming something else would be an
+      object nobody chose — the handler would read whatever the resolution
+      context was carrying and take a counter off it.
+    * The destination must be a chosen object, and its narrowing has to be one
+      the picker can test, for ``_describe_targets``' standing reason: a
+      restriction the picker cannot honour is a restriction dropped.
+    * The count is a printed number. "Move **X** counters" would be a quantity
+      the handler cannot re-ask at resolution, and a move of zero is a move
+      that silently does nothing.
+    """
+    if not _is_source(node.source):
+        raise LoweringError(
+            "a counter is moved off the ability's own permanent", node=node
+        )
+    destination = node.destination
+    if not isinstance(destination, ast.TargetSpec) or not destination.targeted:
+        raise LoweringError(
+            "a moved counter goes onto a chosen permanent", node=node
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count < 1:
+        raise LoweringError(
+            "a counter move carries a printed number of counters", node=node
+        )
+    payload: dict[str, object] = {"counter": node.counter, "count": count}
+    _describe_targets(payload, destination)
+    return (OracleInstruction("move_counter_from_self", "", payload),)

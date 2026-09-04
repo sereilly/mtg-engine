@@ -24,6 +24,7 @@ from ..layer_bridge import GAINED_TYPES
 from ..models import Permanent
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
+from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
@@ -804,6 +805,16 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # which the untap step ran one step earlier this turn, so the lock
             # covers the whole window the card names and no more.
             expire_phase_out_locks(perm, "your_next_upkeep", seat=player_index)
+            # "For each 1 damage that would be dealt to you **until your next
+            # upkeep**, you remove an echo counter from this enchantment
+            # instead." (Soul Echo.) The same moment and the same seat rule as
+            # the sweeps above, and the same reason it is here rather than at
+            # the end of the previous turn: this turn's own upkeep trigger
+            # offers a fresh one, and a record left standing would make the
+            # offer meaningless.
+            record = perm.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD)
+            if isinstance(record, dict) and record.get("seat") == player_index:
+                perm.metadata.pop(DAMAGE_TO_COUNTER_REMOVAL_RECORD, None)
             # "Until **your** next upkeep, target noncreature artifact becomes
             # an artifact creature…" (Xenic Poltergeist) — the same moment and
             # the same reasoning as the sweep above: it expires at the

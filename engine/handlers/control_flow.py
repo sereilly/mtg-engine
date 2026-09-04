@@ -763,6 +763,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return held >= wanted
         return held == wanted
 
+    if kind == "attached_counter_count":
+        # "if that creature has three or more +1/+0 counters on it" (Consuming
+        # Ferocity). The permanent the Aura is attached to, not the Aura — the
+        # clause one branch up asks the source and this one asks its host, and
+        # an enchantment counting its own +1/+0 counters is always counting
+        # zero.
+        host = attached_host(game, context.source_permanent)
+        if host is None:
+            # Nothing is attached, so the clause is about no object at all —
+            # the same False the source branch above answers with when its own
+            # holder has gone.
+            return False
+        held = counters_on(host, str(payload.get("counter", "")))
+        wanted = int(payload.get("count", 0))
+        if str(payload.get("comparison", "exactly")) == "at_least":
+            return held >= wanted
+        return held == wanted
+
     if kind == "source_ability_activations":
         # "If this ability has been activated four or more times this turn, …"
         # (Farrelite Priest, Initiates of the Ebon Hand.) The ledger the
@@ -1073,6 +1091,18 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         )
         return True, "resolved"
     seat = game.controller_index_of(permanent)
+    if instruction.payload.get("chooser") == "event_subject_player":
+        # "At the beginning of each player's upkeep, **that player** chooses a
+        # color." (Hall of Gemstone.) The seat the fire site froze (CR 603.10),
+        # which is a different player every turn and never the enchantment's
+        # controller except on their own turn. No record means the words named
+        # nobody, and nothing is asked — the same rule every other reading of
+        # this key follows, and the safe one.
+        recorded = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{card_name}: no recorded player to choose a colour")
+            return True, "resolved"
+        seat = recorded
     if seat is None:
         return True, "resolved"
     counts: dict[str, int] = {}

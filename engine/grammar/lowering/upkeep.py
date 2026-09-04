@@ -122,11 +122,26 @@ def _lower_damage_unless_pay(
             "a pay-or-else damage prompt exists only as a trigger's own effect",
             node=node,
         )
-    if event.startswith("upkeep"):
-        if event != "upkeep_self":
+    # **One upkeep condition takes the registry, and the rest take the ordinary
+    # route.** `upkeep_self` is the fused handler's, because its prompt
+    # protocol the web layer drives inline; every other upkeep condition the
+    # step names a seat for goes on the stack like any other trigger
+    # (`phases/upkeep_step._ORDINARY_UPKEEP_SEATS`), where
+    # `self_damage_unless_pay` arms the generic queue and reads the payer off
+    # the frozen context.
+    #
+    # This used to refuse every upkeep condition but the first, which cost
+    # Energy Vortex its whole payoff: "at the beginning of **the chosen
+    # player's** upkeep, this enchantment deals 3 damage to that player unless
+    # they pay …" has a seat, a handler and a fire site, and the only thing
+    # standing between them was a gate written when `upkeep_self` was the one
+    # condition either flow could reach. Nothing replaces it, because the
+    # generic path has a gate of its own that is *about the seat*: an event
+    # freezing none refuses below rather than guessing one.
+    if event == "upkeep_self":
+        if node.per_counter:
             raise LoweringError(
-                f"no upkeep handler pairs {event!r} with a pay-or-else damage prompt",
-                node=node,
+                "the fused upkeep prompt charges a flat cost", node=node
             )
         return (
             OracleInstruction(
@@ -138,6 +153,14 @@ def _lower_damage_unless_pay(
     payload: dict[str, object] = {
         "amount": amount, "cost": _generic_only(node.cost, node),
     }
+    if node.per_counter:
+        # "…unless they pay {1} **for each vortex counter on this
+        # enchantment**." (Energy Vortex.) The printed cost is a multiplier, so
+        # the number is not known until the trigger resolves — the counters can
+        # change between the ability going on the stack and its resolution, and
+        # CR 608.2 reads it then. The counter word rides the payload and the
+        # handler asks the one counter reader for the total.
+        payload["cost_per_counter"] = node.per_counter
     if on_event_player:
         # Which seat is offered the cost, as payload rather than a second kind:
         # same prompt, same damage, same decline — only the player differs, and

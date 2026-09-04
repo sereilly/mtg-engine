@@ -761,6 +761,58 @@ def _parse_tapper_produces_instead(
     )
 
 
+def _parse_tapped_lands_produce_chosen(
+    stream: TokenStream,
+) -> "ast.ProducesManaInstead | None":
+    """``<lands> tapped for mana produce mana of the chosen color instead of
+    any other color.`` (Hall of Gemstone, behind its leading "Until end of
+    turn,".)
+
+    The **passive** voice of the swap the two productions above read, and its
+    own production for their own reason: the three sentences share no word
+    after their first, because each puts a different thing in the subject slot.
+    Here it is the lands themselves, and nobody is named as the tapper at all —
+    which is what makes the swap cover every seat.
+
+    The colour is not printed. It is the one an earlier sentence of the same
+    ability had a player choose, so the node carries the *reference* and the
+    handler reads the record — the same channel "add one mana of the chosen
+    color" already travels.
+
+    Refuses without consuming, like both productions above it: a noun phrase in
+    the subject slot is what every ordinary sentence in the pool opens with.
+    """
+    mark = stream.mark()
+    try:
+        subject = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("tapped", "for", "mana"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("produce", "mana", "of", "the", "chosen", "color"):
+        stream.reset(mark)
+        return None
+    # "instead of any other **color**" where the active-voice spellings print
+    # "type". Both ends are read for that production's reason: a reader that
+    # stopped at "instead of" would compile a swap of one unnamed symbol.
+    if not stream.accept_phrase("instead", "of", "any", "other", "color"):
+        stream.reset(mark)
+        return None
+    return ast.ProducesManaInstead(
+        subject,
+        replaced=ast.ANY_OTHER_TYPE,
+        produced="",
+        from_chosen_color=True,
+        by_controller=True,
+        each_player=True,
+    )
+
+
 def _parse_spend_mana_as_though(stream: TokenStream) -> "ast.SpendManaAsThough | None":
     """``For <N> spell(s) this turn, you may spend mana as though it were mana
     of any color/type to pay that spell's mana cost.``

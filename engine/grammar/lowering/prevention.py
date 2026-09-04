@@ -939,3 +939,40 @@ def _lower_damage_cant_be_prevented(
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("the damage lock lasts exactly this turn", node=node)
     return (OracleInstruction("lock_damage_to_target", "", {}),)
+
+
+def _lower_damage_becomes_counter_removal(
+    node: "ast.DamageBecomesCounterRemoval",
+) -> tuple[OracleInstruction, ...]:
+    """"For each 1 damage that would be dealt to you until your next upkeep,
+    you remove an echo counter from this enchantment instead." (Soul Echo.)
+
+    Two refusals, and each is a way the sentence could otherwise cover more
+    than it says.
+
+    The player is the ability's **controller**. CR 109.5 makes "you" the
+    ability's controller wherever it is printed, and this sentence is offered
+    to an *opponent* — so reading the seat off the offer would arm the
+    replacement over the wrong player's life total, which is the whole card
+    inverted.
+
+    The duration is required and is "until your next upkeep" alone. It is what
+    the sweep at the top of the upkeep step keys on; a replacement armed with
+    no duration is one nothing ever takes away, and the card would replace
+    every point of damage its controller was ever dealt.
+    """
+    if node.recipient.kind != "you":
+        raise LoweringError(
+            "the counter-removal replacement covers the ability's controller",
+            node=node,
+        )
+    if node.duration.kind != "until_your_next_upkeep":
+        raise LoweringError(
+            "a counter-removal replacement lasts until your next upkeep",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "arm_damage_to_counter_removal", "", {"counter": node.counter},
+        ),
+    )

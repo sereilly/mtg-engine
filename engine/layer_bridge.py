@@ -22,6 +22,7 @@ from .oracle_types import compilation_cache
 from .banding import band_quality
 from .auras import (
     animating_auras,
+    aura_color_grants,
     aura_conditional_grant_holds,
     aura_conditional_keyword_grants,
     aura_keyword_grants,
@@ -855,6 +856,40 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 set_colors(scope_only(oid), colours, timestamp=stamp,
                            label=f"colour override{suffix}")
             )
+
+    # "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.) The
+    # third channel into this layer, and the one that needs no sweep: like
+    # every other half of an Aura, it is derived from the Aura's own text on
+    # each recompute and stamped with the moment it attached (CR 613.7b), so
+    # detaching one simply stops contributing the colour. That is the whole
+    # reason it is here rather than written onto ``color_override`` when the
+    # Aura resolves — a stamped override would outlive the Aura, and CR 105.3
+    # replaces every colour the creature had, so there would be nothing left to
+    # put back.
+    from .grammar.vocabulary import COLOR_WORDS
+
+    for aura in auras_attached_to(perm):
+        # The printed word mapped to the symbol every other colour in this
+        # engine is spelled with, at the call site rather than in the reader —
+        # `aura_protection_colors`' rule, and for its reason: the text change
+        # that could rewrite the word (Sleight of Mind) is layer 3, already
+        # folded into ``effective_card``, so the word read here is the word the
+        # Aura currently says.
+        granted = [
+            COLOR_WORDS[word]
+            for word in aura_color_grants(aura.effective_card.oracle_text)
+            if word in COLOR_WORDS
+        ]
+        if not granted:
+            continue
+        effects.append(
+            set_colors(
+                scope_only(oid),
+                granted,
+                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                label=f"aura:{aura.card.name}",
+            )
+        )
     return effects
 
 

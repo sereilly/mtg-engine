@@ -146,12 +146,27 @@ DAMAGE_SOURCE_CAP = 5  # Forethought Amulet
 # damage minus 1 to that permanent or player instead." (Benevolent Unicorn.)
 # The same kind of effect as the cap above — CR 120.4b, the damage *dealt* —
 # and beside it for the same reasons, one slot later only because a card
-# printing both would want the cap applied to the printed number first. Ahead
-# of the prevention shields at 10-600, again for the cap's reason: a shield
-# spent first absorbs its points from the printed damage and the reduction
-# takes what is left down anyway, where the reduction spent first leaves the
-# shield its points for the next source.
+# printing both would want the cap applied to the printed number first.
 DAMAGE_SOURCE_REDUCTION = 6  # Benevolent Unicorn
+
+# "For each 1 damage that would be dealt to you until your next upkeep, you
+# remove an echo counter from this enchantment instead." (Soul Echo.) A
+# **substitution** of the event rather than a change to its amount, which is
+# why it sits after the two amount effects above and not beside them: how many
+# counters come off is "for each 1 damage that would be dealt", so the number
+# has to be the one the cap and the reduction have already settled. Two
+# branches of one wave each claimed slot 6 for these, and the collision is real
+# rather than cosmetic — this file compares orders across both registries and
+# raises at import, which is what made the choice have to be made rather than
+# merged.
+#
+# Ahead of the prevention shields at 10-600 all the same, for
+# `DAMAGE_SOURCE_CAP`'s reason read once more: a shield spent first absorbs its
+# points from the printed damage and this then takes the rest in counters
+# anyway, where this spent first leaves the shield its points for the next
+# source. CR 616.1e lets the affected player choose either; the default should
+# not be the one that costs them a shield for nothing.
+DAMAGE_TO_COUNTER_REMOVAL = 7  # Soul Echo
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -916,6 +931,76 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
         f"Damage to {permanent.card.name} redirected to {game.players[redirect_idx].name} (Jade Monolith)"
     )
     return ReplacementOutcome(replaced=True)
+
+
+#: Where the armed counter-removal replacement is written: on the **permanent**
+#: whose counters it spends (Soul Echo), never on the player it covers. The
+#: counters, the sacrifice that reads them and the replacement are one card's,
+#: and CR 122.2 takes the counters with the permanent when it leaves — so a
+#: record on the seat would outlive the store it spends and replace damage with
+#: nothing.
+DAMAGE_TO_COUNTER_REMOVAL_RECORD = "damage_to_counter_removal"
+
+
+def _counter_removal_source(game, payload: dict):
+    """The permanent whose counters would absorb this damage, or None.
+
+    Pure, like every other applicability predicate here (``effect_ordering``
+    counts the contenders before any of them runs), and it answers None the
+    moment the store is empty: a replacement that could remove no counter has
+    nothing to do instead, and CR 614.6's "as much as possible" is about the
+    *event*, not about an effect with nothing to give.
+    """
+    from .named_counters import counters_on
+    from .models import PlayerState
+
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or not isinstance(recipient, PlayerState):
+        return None
+    seat = game.players.index(recipient)
+    for permanent in game.all_permanents():
+        record = permanent.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD)
+        if not isinstance(record, dict) or record.get("seat") != seat:
+            continue
+        if counters_on(permanent, str(record.get("counter", ""))) > 0:
+            return permanent
+    return None
+
+
+def _applies_damage_to_counter_removal(game, payload: dict) -> bool:
+    return _counter_removal_source(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_TO_COUNTER_REMOVAL,
+    applies=_applies_damage_to_counter_removal,
+)
+def _damage_removes_counters_instead(game, payload: dict) -> ReplacementOutcome | None:
+    """Soul Echo: "For each 1 damage that would be dealt to you until your next
+    upkeep, you remove an echo counter from this enchantment instead."
+
+    One counter per point, and **as much as possible** (CR 614.6): a store
+    smaller than the damage gives up what it has and the rest is dealt. That is
+    what makes the card finite — the counters run down, the upkeep trigger
+    finds none and sacrifices the enchantment, and the "you don't lose the game
+    for having 0 or less life" static goes with it.
+
+    Applied once for the whole event rather than once per point, which is what
+    CR 616.1 asks of a replacement: the printed "for each 1 damage" is the
+    *rate*, not a count of applications.
+    """
+    from .named_counters import counters_on, remove_counters
+
+    permanent = _counter_removal_source(game, payload)
+    counter = str(permanent.metadata[DAMAGE_TO_COUNTER_REMOVAL_RECORD]["counter"])
+    amount = payload["amount"]
+    removed = min(amount, counters_on(permanent, counter))
+    remove_counters(permanent, counter, removed)
+    game.log.append(
+        f"{removed} of {amount} damage becomes {removed} {counter} counter(s) "
+        f"removed from {permanent.card.name}"
+    )
+    return ReplacementOutcome(new_amount=amount - removed)
 
 
 def _applies_redirect_one_damage(game, payload: dict) -> bool:

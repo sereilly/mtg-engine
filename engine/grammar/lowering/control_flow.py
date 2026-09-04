@@ -455,11 +455,23 @@ def _lower_may(
         # symbol — ``_player_can_pay_optional`` already keeps the two apart for
         # Bronze Tablet, and folding them would make an unaffordable mana cost
         # read as a life one.
-        if node.cost is not None:
-            raise LoweringError(
-                "an offer charges mana or life, not both", node=node
-            )
+        #
+        # **Both together is the conjunction, not the alternative.** "You may
+        # pay {4} **and** 2 life" (Purgatory) is one offer with two prices; the
+        # refusal that used to stand here read the pairing as impossible,
+        # because the only spelling in the pool was Erosion's "**or** 1 life",
+        # which is ``life_alternative`` below. Charged together, an offer the
+        # payer can only half cover is one they cannot take at all (CR 601.2h
+        # asked of the whole price).
         payload["life_cost"] = _life_cost_payload(node)
+        if node.cost is not None and node.life_alternative is not None:
+            # Nothing in the pool prints both, and the two contradict: "or 1
+            # life" says the life *replaces* the mana and "and 2 life" says it
+            # accompanies it, so one prompt could not say which the payer did.
+            raise LoweringError(
+                "an offer cannot charge life and offer it as an alternative",
+                node=node,
+            )
     if node.life_alternative is not None:
         # CR 118.8's alternative payment ("…pays {1} **or 1 life**", Erosion).
         # A second reading of the *same* offer, so it rides the one prompt

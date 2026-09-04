@@ -771,19 +771,34 @@ def _lower_put_exiled_with_source(
         raise LoweringError(
             f"a linked exile cannot be put into the {zone.name}", node=node
         )
-    if node.chosen and not node.owned_by_you:
-        raise LoweringError(
-            "the picked linked exile reads the cards you own", node=node
-        )
     owner_kind = zone.owner.kind if zone.owner is not None else None
-    if owner_kind != "owner" and not (node.chosen and owner_kind == "you"):
+    # "Return **a card** exiled with this enchantment **to the battlefield**."
+    # (Purgatory.) The one destination with no possessive to print — a
+    # battlefield is nobody's zone — so CR 110.2a decides instead: the card
+    # enters under the control of the player the effect instructed to put it
+    # there, which is this ability's controller. Recorded rather than left to
+    # the handler's default, which is the card's *owner*: the two coincide for
+    # every printing of this sentence in the pool and would silently diverge
+    # the moment one did not.
+    under_controller = node.chosen and zone.name == "battlefield" and owner_kind is None
+    if not under_controller and owner_kind != "owner" and not (
+        node.chosen and owner_kind == "you"
+    ):
         raise LoweringError(
             "a linked exile goes to each card's own owner's zone", node=node
         )
     payload: dict[str, object] = {"zone": zone.name}
     if node.chosen:
         payload["one_of"] = True
-        payload["owned_by_chooser"] = True
+        # "…a card **you own**…" (Gustha's Scepter) narrows the pile to the
+        # chooser's own cards; Purgatory prints no such clause and its pile
+        # holds every card the enchantment exiled. A narrowing applied where the
+        # card prints none would leave a card in exile the sentence says comes
+        # back.
+        if node.owned_by_you:
+            payload["owned_by_chooser"] = True
+        if under_controller:
+            payload["under_control_of"] = "chooser"
     return (
         OracleInstruction("put_exiled_with_source", "", payload),
     )

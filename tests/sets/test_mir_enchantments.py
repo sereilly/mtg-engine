@@ -1590,3 +1590,623 @@ def test_the_zone_possessive_names_the_recipient_too():
     assert compiled.instructions, compiled.parse_error or compiled.lowering_error
 
     assert compiled.instructions[0].payload["count"]["per_recipient"] is True
+
+
+# --- W2G2: upkeep, delayed triggers and counters ---
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura, aura_color_grants, detach_aura
+import pytest
+
+from engine.land_mana_swaps import swapped_symbol
+from engine.linked_exile import linked_entries
+from engine.named_counters import add_counters, counters_on, remove_counters
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g2_vanilla(name: str, power: int = 2, toughness: int = 2,
+                  colors: tuple[str, ...] = ("G",)) -> CardDefinition:
+    type_line = "Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="{G}", cmc=1.0, type_line=type_line,
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g2_game(*battlefield, opponent=()):
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(battlefield), life=20),
+        PlayerState(name="P2", battlefield=list(opponent), life=20),
+    ])
+    game.interactive_seats = set()
+    game._settle()
+    return game
+
+
+def test_grave_servitude_makes_the_creature_black_and_gives_back_its_colour(set_pool):
+    """"Enchanted creature gets +3/-1 **and is black**."
+
+    CR 105.3: a granted colour **replaces** every colour the object had, and
+    CR 613.1e puts it in layer 5. Derived from the Aura's own text on each
+    recompute like every other half of ``auras.py``, so detaching it gives the
+    printed colour back with nothing having to be undone — which is the whole
+    reason the grant is not a ``color_override`` stamped onto the creature: an
+    override that replaced every colour would leave nothing to put back.
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Grave Servitude"])
+    host = Permanent(card=_w2g2_vanilla("Host", 2, 2, colors=("W",)))
+    game = _w2g2_game(aura, host)
+
+    assert host.effective_colors == {"W"}
+
+    attach_aura(aura, host)
+    game._settle()
+    assert host.effective_colors == {"B"}, game.log
+    # The P/T half of the same printed line still reads, which is the point of
+    # `aura_static_pt_grant` searching rather than anchoring.
+    assert (host.effective_power, host.effective_toughness) == (5, 1)
+
+    detach_aura(aura, host)
+    game._settle()
+    assert host.effective_colors == {"W"}
+    assert (host.effective_power, host.effective_toughness) == (2, 2)
+
+
+def test_the_aura_colour_reader_takes_the_bare_sentence_too():
+    """The grant is read off the printed line, and the P/T half in front of it
+    is optional — a card printing "Enchanted creature is black" alone reaches
+    the same layer-5 contribution. Asserted on the reader rather than on a
+    card, because no card in this pool prints the bare form yet and a
+    production that only worked with a P/T prefix in front of it is one the
+    next such card would have to discover.
+    """
+    assert aura_color_grants("Enchanted creature gets +3/-1 and is black.") == ("black",)
+    assert aura_color_grants("Enchanted creature is red.") == ("red",)
+    # "as long as" is a condition this does not implement, so the anchored end
+    # of the pattern refuses it rather than granting the colour unconditionally.
+    assert aura_color_grants(
+        "Enchanted creature is blue as long as you control a Forest."
+    ) == ()
+
+
+def test_purgatory_exiles_what_dies_and_buys_it_back_for_mana_and_life(set_pool):
+    """Both halves of Purgatory, and the link between them (CR 610.3).
+
+    The death trigger's "exile **that card**" prints no zone, because its own
+    condition already said which one — so the card is the ``dead_card`` the
+    death seam froze, found by identity. The exile is recorded against the
+    enchantment, which is the only thing that can answer "a card exiled with
+    this enchantment" a turn later.
+
+    The upkeep offer charges "{4} **and** 2 life": one offer with two prices,
+    where CR 118.8's "or" would be an alternative. Both are taken.
+    """
+    pool = set_pool("MIR")
+    purgatory = Permanent(card=pool["Purgatory"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    lands = [Permanent(card=pool["Plains"]) for _ in range(5)]
+    game = _w2g2_game(purgatory, bear, *lands)
+
+    game._permanent_to_graveyard(game.players[0], bear)
+    game.remove_from_battlefield(bear)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == []
+    assert [c.name for c in game.players[0].exile] == ["Bear"]
+    assert [e["card"].name for e in linked_entries(purgatory)] == ["Bear"], game.log
+
+    game.start_turn(0)
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert game.confirm_optional_pay(0, "Purgatory", accept=True), game.log
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert game.players[0].life == 18, game.log
+    assert [c.name for c in game.players[0].exile] == []
+    assert "Bear" in [p.card.name for p in game.players[0].battlefield], game.log
+    # CR 610.3: the pile gives up one entry, and is not drained wholesale.
+    assert linked_entries(purgatory) == ()
+
+
+def test_purgatory_declines_its_own_offer_when_the_life_is_missing(set_pool):
+    """"You may pay {4} **and** 2 life" is one price with two halves, so a
+    player who can cover only one of them is never offered it at all
+    (CR 601.2h asked of the whole cost).
+
+    The direction matters: read as CR 118.8's alternative the offer would be
+    takeable on the mana alone, and Purgatory would reanimate for free at one
+    life.
+    """
+    pool = set_pool("MIR")
+    purgatory = Permanent(card=pool["Purgatory"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    lands = [Permanent(card=pool["Plains"]) for _ in range(5)]
+    game = _w2g2_game(purgatory, bear, *lands)
+
+    game._permanent_to_graveyard(game.players[0], bear)
+    game.remove_from_battlefield(bear)
+    game.resolve_stack()
+
+    game.players[0].life = 1
+    game.start_turn(0)
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert not game.pending_choices_of("optional_pay"), game.log
+    assert game.players[0].life == 1
+    assert [c.name for c in game.players[0].exile] == ["Bear"]
+
+
+def test_purgatory_returns_the_card_under_its_controllers_control(set_pool):
+    """"…return a card exiled with this enchantment **to the battlefield**" —
+    the one destination with no possessive to print, so CR 110.2a decides: the
+    card enters under the control of the player the effect instructed, which is
+    this ability's controller.
+
+    Its opposite is Safe Haven, which prints "under **its owner's** control"
+    out loud; the two are different sentences and lower to different seats.
+    """
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Purgatory"])
+    upkeep = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "upkeep_self"
+    )
+    assert upkeep.supported
+    step = upkeep.instruction.payload["then"][0]
+    assert step.kind == "put_exiled_with_source"
+    assert step.payload["under_control_of"] == "chooser"
+    # And no "you own" narrowing, which Purgatory does not print: its pile is
+    # every card the enchantment exiled.
+    assert "owned_by_chooser" not in step.payload
+
+
+def test_afiya_grove_moves_a_counter_each_upkeep_and_dies_empty(set_pool):
+    """Three lines, of which the engine used to run one: it entered with three
+    +1/+1 counters and then did nothing at all, for ever.
+
+    The upkeep line is CR 121.6's **move** — one action, not a removal and a
+    placement — and the last line is CR 603.8's state trigger in the direction
+    the threshold sweep could not express: the store being *empty*.
+    """
+    pool = set_pool("MIR")
+    grove = Permanent(card=pool["Afiya Grove"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Forest"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, grove, None)
+    game._put_permanent_onto_battlefield(0, bear, None)
+    game._settle()
+
+    assert counters_on(grove, "+1/+1") == 3
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+    for expected in (2, 1, 0):
+        game.start_next_turn()
+        if game.active_player_index != 0:
+            game.start_next_turn()
+        game.auto_resolve_pending_choices()
+        game.resolve_stack()
+        game._settle()
+        assert counters_on(grove, "+1/+1") == expected, game.log
+
+    # The counter really moved: what the Grove lost the Bear gained, and the
+    # P/T came with it (CR 122.1a).
+    assert (bear.effective_power, bear.effective_toughness) == (5, 5), game.log
+
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert grove not in game.players[0].battlefield, game.log
+    assert "Afiya Grove" in [c.name for c in game.players[0].graveyard]
+
+
+def test_afiya_grove_moves_nothing_when_it_has_nothing(set_pool):
+    """CR 121.6: with no counter on the source the move does not happen — to
+    **either** end.
+
+    The direction that matters: written as a ``sequence`` of the removal and
+    the placement beside it, an empty Grove would still put a counter on the
+    target, and its own last line would then never fire because it would be
+    sacrificed the turn it emptied and grow the board every turn until then.
+    """
+    pool = set_pool("MIR")
+    grove = Permanent(card=pool["Afiya Grove"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Forest"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, grove, None)
+    game._put_permanent_onto_battlefield(0, bear, None)
+    game._settle()
+    remove_counters(grove, "+1/+1", 3)
+    assert counters_on(grove, "+1/+1") == 0
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2), game.log
+    assert counters_on(bear, "+1/+1") == 0
+
+
+def test_energy_vortex_tolls_the_chosen_player_per_counter(set_pool):
+    """"At the beginning of **the chosen player's** upkeep, this enchantment
+    deals 3 damage to that player unless they pay {1} **for each vortex
+    counter** on this enchantment."
+
+    Two things stood between this and firing, and both were gates written when
+    ``upkeep_self`` was the only upkeep condition either pay-or-else flow could
+    reach: the lowering refused every other upkeep condition outright, and the
+    per-counter escalation had a reader only behind a *destruction*. The seat
+    was never the problem — the upkeep step has frozen it on every ordinary
+    firing since Takklemaggot.
+
+    The price is read at resolution (CR 608.2), which is what makes the card
+    work: its own upkeep trigger strips the counters a step earlier on its
+    controller's turn, so the toll is whatever was put back since.
+    """
+    pool = set_pool("MIR")
+    vortex = Permanent(card=pool["Energy Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Island"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, vortex, None)
+    game._settle()
+
+    # "As this enchantment enters, choose an opponent."
+    assert vortex.metadata.get("chosen_player_index") == 1
+    add_counters(vortex, "vortex", 2)
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    # Two counters, so the offer is {2}; P2 has no mana and takes the damage.
+    assert any("may pay {2}" in line for line in game.log), game.log
+    assert game.players[1].life == 17, game.log
+    # The counters are not spent by the toll — only the controller's own upkeep
+    # trigger removes them.
+    assert counters_on(vortex, "vortex") == 2
+
+
+def test_energy_vortex_offers_nothing_to_the_controller(set_pool):
+    """The seat is the one the enters-choice recorded, not the ability's
+    controller — so the Vortex's own upkeep brings the counter wipe and no
+    toll at all.
+    """
+    pool = set_pool("MIR")
+    vortex = Permanent(card=pool["Energy Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Island"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, vortex, None)
+    game._settle()
+    add_counters(vortex, "vortex", 3)
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert game.players[0].life == 20, game.log
+    # "At the beginning of your upkeep, remove all vortex counters from this
+    # enchantment" — the half that already worked, and the reason the toll is
+    # read at resolution rather than when the trigger was put on the stack.
+    assert counters_on(vortex, "vortex") == 0, game.log
+
+
+def _w2g2_soul_echo(set_pool, x: int):
+    """Soul Echo on the battlefield with *x* echo counters, its first upkeep
+    resolved and the offer answered."""
+    pool = set_pool("MIR")
+    echo = Permanent(card=pool["Soul Echo"])
+    # "This enchantment enters with X echo counters on it" reads the announced
+    # X (CR 601.2b) off the cast, which is the one thing a hand-built permanent
+    # has to be given.
+    echo.metadata["cast_x_value"] = x
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Plains"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Plains"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, echo, None)
+    game._settle()
+    return game, echo
+
+
+def test_soul_echo_enters_with_its_announced_x(set_pool):
+    """The half the census called hollow and the engine had all along.
+
+    ``enters_with_x_named_counters`` has read this sentence since Iceberg; what
+    was missing was everything downstream of it, so the counters went on and
+    nothing ever took one off.
+    """
+    _game, echo = _w2g2_soul_echo(set_pool, 3)
+    assert counters_on(echo, "echo") == 3
+
+
+def test_soul_echo_turns_damage_into_counters_and_then_stops(set_pool):
+    """The card end to end, and the bug it was hiding.
+
+    "You don't lose the game for having 0 or less life" was live; the upkeep
+    trigger that would sacrifice the enchantment was unsupported and the
+    counters had nothing to remove them — so a player at −7 life never lost,
+    for ever.
+
+    The offer is CR 614's replacement, made to an **opponent** and covering the
+    ability's *controller* (CR 109.5's "you"), and it takes one counter per
+    point of damage. As much as possible (CR 614.6): a store smaller than the
+    damage gives up what it has and the rest is dealt, which is what makes the
+    card finite.
+    """
+    game, echo = _w2g2_soul_echo(set_pool, 3)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    game._deal_damage_to_player(game.players[0], 2)
+    assert game.players[0].life == 20, game.log
+    assert counters_on(echo, "echo") == 1
+
+    # Five more against one counter: one point becomes a counter and four are
+    # dealt.
+    game._deal_damage_to_player(game.players[0], 5)
+    assert counters_on(echo, "echo") == 0
+    assert game.players[0].life == 16, game.log
+
+    # …and from here it is an ordinary damage event again.
+    game._deal_damage_to_player(game.players[0], 3)
+    assert game.players[0].life == 13, game.log
+
+
+def test_soul_echo_stops_protecting_once_its_counters_are_gone(set_pool):
+    """The whole point of the card, and the exact bug: below zero life the
+    static holds while the enchantment is there, and the upkeep trigger takes
+    the enchantment away the moment its store is empty (CR 704.5a then ends the
+    game).
+    """
+    game, echo = _w2g2_soul_echo(set_pool, 2)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    game._deal_damage_to_player(game.players[0], 27)
+    game.check_state_based_actions()
+    assert game.players[0].life == -5
+    assert not any("lost the game" in line for line in game.log), game.log
+
+    game.start_next_turn()
+    game.start_next_turn()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert echo not in game.players[0].battlefield, game.log
+    assert any("lost the game" in line for line in game.log), game.log
+
+
+def test_soul_echo_offers_a_fresh_replacement_every_upkeep(set_pool):
+    """"…until your next upkeep" is swept at the top of that upkeep, before the
+    trigger that offers a new one — the rule every other duration of this
+    spelling already follows there.
+
+    Without the sweep the record would stand for ever and the opponent's
+    decision would be made once, on the first upkeep, for the rest of the game.
+    """
+    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    game, echo = _w2g2_soul_echo(set_pool, 4)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD) == {
+        "counter": "echo", "seat": 0,
+    }
+
+    game.start_next_turn()          # the opponent's turn — the record stands
+    assert DAMAGE_TO_COUNTER_REMOVAL_RECORD in echo.metadata, game.log
+
+    game.start_next_turn()          # back to the controller: swept, then re-armed
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD) == {
+        "counter": "echo", "seat": 0,
+    }, game.log
+
+
+def test_the_counter_replacement_covers_only_the_abilitys_controller(set_pool):
+    """CR 109.5: "you" is the ability's controller wherever it is printed, and
+    this sentence is printed inside an offer made to somebody else.
+
+    Read off the offer instead, Soul Echo would spend its counters on damage
+    dealt to the opponent — the whole card inverted — so the lowering pins the
+    seat and the arming handler records it.
+    """
+    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    game, echo = _w2g2_soul_echo(set_pool, 3)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata[DAMAGE_TO_COUNTER_REMOVAL_RECORD]["seat"] == 0
+
+    # Damage to the seat that was *offered* the choice is ordinary damage.
+    game._deal_damage_to_player(game.players[1], 3)
+    assert game.players[1].life == 17, game.log
+    assert counters_on(echo, "echo") == 3
+
+
+def test_hall_of_gemstone_makes_every_land_produce_the_active_players_colour(set_pool):
+    """"At the beginning of each player's upkeep, **that player** chooses a
+    color. Until end of turn, lands tapped for mana produce mana of the chosen
+    color instead of any other color."
+
+    Two halves and two seats. The chooser is the seat the fire site froze
+    (CR 603.10) — a different player every turn and never the enchantment's
+    controller except on their own turn — and the swap covers *every* player's
+    lands, because the sentence names no seat at all.
+    """
+    pool = set_pool("MIR")
+    hall = Permanent(card=pool["Hall of Gemstone"])
+    forest = Permanent(card=pool["Forest"])
+    island = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, hall, None)
+    game._put_permanent_onto_battlefield(0, forest, None)
+    game._put_permanent_onto_battlefield(1, island, None)
+    game._settle()
+
+    assert swapped_symbol(game, forest) is None
+    assert swapped_symbol(game, island) is None
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    chosen = hall.metadata.get("chosen_color")
+    assert chosen, game.log
+    assert swapped_symbol(game, forest) == chosen, game.log
+    # The opponent's Island too: the swap is armed on every seat, because
+    # ``swapped_symbol`` asks the land's *own* controller for their records.
+    assert swapped_symbol(game, island) == chosen, game.log
+
+    game.tap_land_for_mana(1, "Island")
+    assert game.players[1].mana_pool.get(chosen) == 1, game.log
+    assert not game.players[1].mana_pool.get("U"), game.log
+
+
+def test_hall_of_gemstone_asks_the_player_whose_upkeep_it_is(set_pool):
+    """The seat is read off the frozen event and not off the enchantment's
+    controller, which is the difference the card's own subject is printed for.
+    """
+    pool = set_pool("MIR")
+    hall = Permanent(card=pool["Hall of Gemstone"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, hall, None)
+    game._settle()
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert any("P2 chooses a color" in line for line in game.log), game.log
+
+
+def test_consuming_ferocity_grows_its_host_then_kills_it(set_pool):
+    """The whole trigger, and every pronoun in it names the same object.
+
+    "Put a +1/+0 counter on **enchanted creature**. If **that creature** has
+    three or more +1/+0 counters on it, **it** deals damage equal to **its**
+    power to **its controller**, then destroy **that creature** and it can't be
+    regenerated."
+
+    Nothing after the first clause says "enchanted" again, so what makes the
+    rest readable is the record that first step writes (CR 608.2h) — the same
+    record Orcish Mine's destroy has written since it landed. Without it the
+    damage clause reads "it" as the Aura, which has no power, and the card
+    deals nothing while compiling clean.
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Consuming Ferocity"])
+    victim = Permanent(card=_w2g2_vanilla("Victim", 2, 4))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Mountain"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Mountain"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, aura, None)
+    # An **opponent's** creature, so "its controller" and the ability's
+    # controller are different seats — the whole reason the recipient is read
+    # off the host rather than off the caster.
+    game._put_permanent_onto_battlefield(1, victim, None)
+    attach_aura(aura, victim)
+    game._settle()
+
+    assert (victim.effective_power, victim.effective_toughness) == (3, 4)
+
+    for expected in (1, 2):
+        game.start_next_turn() if expected > 1 else game.start_turn(0)
+        if game.active_player_index != 0:
+            game.start_next_turn()
+        game.auto_resolve_pending_choices()
+        game.resolve_stack()
+        game._settle()
+        assert counters_on(victim, "+1/+0") == expected, game.log
+        assert game.players[1].life == 20, game.log
+        assert victim in game.players[1].battlefield
+
+    # The third counter crosses the threshold: 2 printed + 1 from the Aura's
+    # static + 3 counters = 6 damage, to the creature's controller.
+    game.start_next_turn()
+    if game.active_player_index != 0:
+        game.start_next_turn()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert game.players[1].life == 14, game.log
+    assert victim not in game.players[1].battlefield, game.log
+    assert "Victim" in [c.name for c in game.players[1].graveyard]
+
+
+def test_the_attached_counter_condition_refuses_an_unbound_that(set_pool):
+    """"That creature" names the host only because a step in front of it did.
+
+    The gate is the record, not the word: a line whose first sentence never
+    touched the attachment leaves the pronoun naming nothing, and a condition
+    that answered off the attachment anyway would be reading a card that never
+    said "enchanted".
+    """
+    from engine.grammar import GrammarError, LoweringError, lower_ability, parse_line
+
+    node = parse_line(
+        "At the beginning of your upkeep, if that creature has three or more "
+        "+1/+0 counters on it, destroy that creature."
+    )
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(node)
+
+
+def test_a_counter_condition_reads_a_pt_counter_kind():
+    """"three or more **+1/+0** counters" against "three or more **echo**
+    counters".
+
+    The lexer gives a P/T counter its own token kind, so the word table never
+    saw it — which is why Fasting's clause has worked since Ice Age and
+    Consuming Ferocity's identical one refused.
+    """
+    from engine.grammar import lower_ability, parse_line
+
+    instructions = lower_ability(parse_line(
+        "If this enchantment has three or more +1/+0 counters on it, "
+        "sacrifice it."
+    ))
+    assert [i.kind for i in instructions] == ["if_then"]
+    assert instructions[0].payload["condition"] == {
+        "kind": "source_counter_count",
+        "counter": "+1/+0",
+        "count": 3,
+        "comparison": "at_least",
+    }

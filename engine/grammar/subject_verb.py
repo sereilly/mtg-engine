@@ -32,13 +32,13 @@ from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import (
     _accept_mana_alternatives,
+    _accept_life_alternative,
     _parse_can_attack_as_though,
     _parse_duration,
     _parse_mana_payment,
     parse_bound_subject,
 )
 from .effects import (
-    _accept_life_alternative,
     parse_block_count_grant,
     _parse_ante,
     _parse_gain_control,
@@ -331,6 +331,23 @@ def parse_subject_verb(
         # Dispatched on the verb like every other player action; the production
         # reads its own words to the end.
         if token.text in ("chooses", "choose") and isinstance(source_spec, ast.PlayerRef):
+            # "At the beginning of each player's upkeep, **that player chooses
+            # a color**." (Hall of Gemstone.) The imperative production reads
+            # the same three words with no subject in front of them, where CR
+            # 601.2b's default makes the ability's controller the chooser; here
+            # the sentence names somebody else, and for this card that is a
+            # different seat every turn.
+            #
+            # First among these arms, and matched in full: every one below
+            # declines without consuming, and this is the only reading of the
+            # verb whose object is a colour.
+            mark_colour = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("a", "color") and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                return ast.ChooseColor(chooser=source_spec)
+            stream.reset(mark_colour)
             # "That creature's controller **chooses a creature that this card
             # could enchant**." (Takklemaggot.) Read first because it declines
             # without consuming, where the paragraph below expects "a card
@@ -447,6 +464,28 @@ def parse_subject_verb(
                     )
                 except GrammarError:
                     stream.reset(mark_pay)
+            # "Target opponent **may choose that** for each 1 damage that would
+            # be dealt to you …" (Soul Echo.) An offer with no price at all:
+            # what the seat is being asked is whether the sentence behind
+            # "that" happens. The words are the offer, so they are consumed and
+            # the clause behind them becomes the offered *action* — which is
+            # what puts it on the ordinary optional-choice queue with the
+            # ability's controller as the one it happens to.
+            #
+            # Distinct from the "you may **choose to** have it …" spelling one
+            # module over, which is the same offer written about the *actor*;
+            # here the chooser and the affected player are different seats, and
+            # that is the whole reason the card prints a subject.
+            if stream.at_word("choose") and stream.peek_word(1) == "that":
+                mark_choose = stream.mark()
+                stream.advance(2)
+                try:
+                    return ast.May(
+                        source_spec,
+                        action=parse_optional_action(stream),
+                    )
+                except GrammarError:
+                    stream.reset(mark_choose)
             # "…its controller **may add** an additional {U}." (Snowfall.) The
             # offer of a *mana production* to a seat the enclosing trigger
             # bound. Routed to the same production the un-offered spelling one

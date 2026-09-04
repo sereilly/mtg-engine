@@ -2280,17 +2280,32 @@ def test_a_pay_or_else_damage_clause_outside_a_trigger_refuses():
     assert result.parsed and not result.lowered
 
 
-def test_a_pay_or_else_damage_clause_on_the_wrong_upkeep_refuses():
+def test_a_pay_or_else_damage_clause_off_the_registry_takes_the_ordinary_route():
     """Only ``("upkeep_self", "upkeep_pay_or_deal_damage_to_controller")`` is
-    registered. Under "each player's upkeep" the same clause would compile
-    cleanly onto no handler."""
+    registered, and this used to be a hard refusal for every other upkeep
+    condition — "the same clause would compile cleanly onto no handler".
+
+    That stopped being true when ``_ORDINARY_UPKEEP_SEATS`` was introduced: an
+    upkeep trigger with no registry pair goes on the stack like any other and
+    resolves through ``EFFECT_HANDLERS``, where ``self_damage_unless_pay``
+    arms the generic optional-pay queue. The refusal was costing Energy Vortex
+    its whole payoff, so what is asserted now is the routing rather than the
+    refusal: the registry keeps ``upkeep_self`` and everything else lowers to
+    the generic kind.
+
+    "…to **you** unless **you** pay" names the ability's controller on both
+    ends, so no frozen seat is needed and none is recorded — the handler reads
+    ``context.caster``.
+    """
     result = compile_line(
         "At the beginning of each player's upkeep, this creature deals 3 damage to you "
         "unless you pay {2}.",
         card_name="Test",
     )
 
-    assert result.parsed and not result.lowered
+    assert result.parsed and result.lowered
+    assert [i.kind for i in result.instructions] == ["self_damage_unless_pay"]
+    assert "payer" not in result.instructions[0].payload
 
 
 def test_a_coloured_cost_refuses_outside_the_upkeep_prompt():
