@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 85.1% | 84.4% | 56.7% | 251 |
+| MIR *(measured)* | 335 | 545 | 87.2% | 86.4% | 58.7% | 259 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 321 | 150 | expected a subject |  |
+| 317 | 146 | expected a subject |  |
 | 112 | 50 | unrecognized effect verb |  |
-| 82 | 37 | unconsumed text |  |
+| 78 | 33 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -435,6 +435,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.`
 - **Bazaar of Baghdad**
   - `{T}: Draw two cards, then discard three cards.`
+- **Bazaar of Wonders**
+  - `When this enchantment enters, exile all graveyards.`
+  - `Whenever a player casts a spell, counter it if a card with the same name is in a graveyard or a nontoken permanent with the same name is on the battlefield.`
 - **Beast Walkers**
   - `{G}: This creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Beasts of Bogardan**
@@ -1320,6 +1323,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {B}{B}.`
 - **Ebony Charm**
   - `• Target opponent loses 1 life and you gain 1 life.`
+  - `• Exile up to three target cards from a single graveyard.`
   - `• Target creature gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
 - **Ebony Horse**
   - `{2}, {T}: Untap target attacking creature you control. Prevent all combat damage that would be dealt to and dealt by that creature this turn.`
@@ -1428,6 +1432,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature unless its controller pays life equal to its toughness. A creature destroyed this way can't be regenerated.`
 - **Eternal Flame**
   - `Eternal Flame deals X damage to target opponent or planeswalker and half X damage, rounded up, to you, where X is the number of Mountains you control.`
+- **Ether Well**
+  - `Put target creature on top of its owner's library. If that creature is red, you may put it on the bottom of its owner's library instead.`
 - **Ethereal Champion**
   - `Pay 1 life: Prevent the next 1 damage that would be dealt to this creature this turn.`
 - **Eureka**
@@ -1562,6 +1568,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Flare deals 1 damage to any target.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Flash**
+  - `You may put a creature card from your hand onto the battlefield. If you do, sacrifice it unless you pay its mana cost reduced by {2}.`
 - **Flash Counter**
   - `Counter target instant spell.`
 - **Flash Flood**
@@ -1954,6 +1962,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target player discards a card at random. Activate only during your turn.`
 - **Hail Storm**
   - `Hail Storm deals 2 damage to each attacking creature and 1 damage to you and each creature you control.`
+- **Hakim, Loreweaver**
+  - `{U}{U}: Return target Aura card from your graveyard to the battlefield attached to Hakim. Activate only during your upkeep and only if Hakim isn't enchanted.`
+  - `{U}{U}, {T}: Destroy all Auras attached to Hakim.`
 - **Halfdane**
   - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hall of Gemstone**
@@ -2832,6 +2843,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{2}, {T}, Put a page counter on this artifact: Draw a card.`
   - `When there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.`
+- **Meddle**
+  - `If target spell has only one target and that target is a creature, change that spell's target to another creature.`
 - **Melee**
   - `You choose which creatures block this combat and how those creatures block.`
 - **Melting**
@@ -2873,6 +2886,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
+- **Mind Bend**
+  - `Change the text of target permanent by replacing all instances of one color word with another or one basic land type with another. (For example, you may change "nonblack creature" to "nongreen creature" or "forestwalk" to "islandwalk." This effect lasts indefinitely.)`
 - **Mind Bomb**
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
@@ -3260,6 +3275,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Phyrexian Devourer**
   - `When this creature's power is 7 or greater, sacrifice it.`
   - `Exile the top card of your library: Put X +1/+1 counters on this creature, where X is the exiled card's mana value.`
+- **Phyrexian Dreadnought**
+  - `When this creature enters, sacrifice it unless you sacrifice any number of creatures with total power 12 or greater.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Phyrexian Portal**
@@ -4022,6 +4039,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Sirocco**
+  - `Target player reveals their hand. For each blue instant card revealed this way, that player discards that card unless they pay 4 life.`
 - **Sisters of the Flame**
   - `{T}: Add {R}.`
   - `{T}: Add {R}.`
