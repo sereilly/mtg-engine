@@ -5607,8 +5607,14 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
         return True, "resolved"
     game.arm_pending_choice(
         "hand_to_library", game.players.index(player), count=actual,
+        # "…both on top of your library **or both on the bottom**" (Dream
+        # Cache). Carried onto the prompt so what the player is offered and
+        # what an answer is checked against are one rule: without the key the
+        # resolver refuses a bottoming answer outright.
+        **({"destination": instruction.payload["destination"]}
+           if instruction.payload.get("destination") else {}),
     )
     game.log.append(
-        f"{player.name} must choose {actual} card(s) to put on top of their library"
+        f"{player.name} must choose {actual} card(s) to put back on their library"
     )
     return True, "pending_hand_to_library"

@@ -392,7 +392,9 @@ def _action_hand_to_library_confirm(session, req, seat_type):
     # the choice the card offers away.
     if req.hand_indices is None:
         raise HTTPException(status_code=400, detail="hand_indices is required")
-    ok = session.game.confirm_hand_to_library(req.seat, list(req.hand_indices))
+    ok = session.game.confirm_hand_to_library(
+        req.seat, list(req.hand_indices), bool(req.to_bottom)
+    )
     if not ok:
         raise HTTPException(status_code=400, detail="invalid card selection")
 

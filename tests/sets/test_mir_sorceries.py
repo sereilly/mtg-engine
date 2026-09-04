@@ -303,3 +303,82 @@ def test_sealed_fate_looks_through_the_opponents_library_and_the_caster_decides(
     assert [c.name for c in game.players[1].library][:2] == [
         "Viashino Warrior", "Femeref Scouts",
     ]
+
+
+def test_dream_cache_sends_both_cards_to_the_end_the_player_names(set_pool):
+    """"Draw three cards, then put two cards from your hand **both on top of
+    your library or both on the bottom of your library**."
+
+    Brainstorm's prompt with the end printed as a choice, which is the only
+    thing that differs -- same cards, same hand, same prompt -- so it is a
+    field on the node rather than a second production. The repeated "both" is
+    read as one phrase: a sentence letting the two cards go to different ends
+    is a card nobody printed.
+
+    The order is the other half of the reading. On top the first card named
+    ends up on top, so the cards are laid down in reverse; on the bottom the
+    first named goes down first. Both are the same sentence read from the
+    library's own end.
+    """
+    pool = set_pool("MIR")
+    library = [pool[n] for n in (
+        "Femeref Scouts", "Mana Prism", "Viashino Warrior",
+        "Island", "Mountain", "Plains",
+    )]
+
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[pool["Dream Cache"]], library=list(library)),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = {0}
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Dream Cache").supported
+    assert [c.name for c in game.players[0].hand] == [
+        "Femeref Scouts", "Mana Prism", "Viashino Warrior",
+    ]
+    assert game.confirm_hand_to_library(0, [0, 1], to_bottom=True)
+
+    assert [c.name for c in game.players[0].hand] == ["Viashino Warrior"]
+    assert [c.name for c in game.players[0].library] == [
+        "Island", "Mountain", "Plains", "Femeref Scouts", "Mana Prism",
+    ]
+
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[pool["Dream Cache"]], library=list(library)),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = {0}
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.cast_from_hand(0, "Dream Cache")
+
+    assert game.confirm_hand_to_library(0, [1, 0])
+    assert [c.name for c in game.players[0].library][:2] == [
+        "Mana Prism", "Femeref Scouts",
+    ], "the first named ends up on top"
+
+
+def test_a_card_that_names_no_end_refuses_a_bottoming_answer(set_pool, catalog_by_name):
+    """Brainstorm puts its two cards on **top**, and a client saying otherwise
+    is refused rather than ignored.
+
+    Ignoring it is the failure that matters: the cards would go on top while
+    the client believed it had bottomed them, which is a silently different
+    spell. The key the resolver checks is the same one the renderer reads to
+    decide whether to offer the second button at all.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[catalog_by_name["Brainstorm"]],
+                         library=[pool["Island"]] * 6),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = {0}
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Brainstorm").supported
+    assert not game.confirm_hand_to_library(0, [0, 1], to_bottom=True)
+    assert game.confirm_hand_to_library(0, [0, 1])

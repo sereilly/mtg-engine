@@ -1883,19 +1883,28 @@ class PendingChoicesMixin:
 
     # -- Hand back onto the library ------------------------------------------
 
-    def confirm_hand_to_library(self, player_index: int, hand_indices: list[int]) -> bool:
+    def confirm_hand_to_library(
+        self, player_index: int, hand_indices: list[int], to_bottom: bool = False
+    ) -> bool:
         """Resolve a pending "put N cards from your hand on top of your library"
         (Brainstorm, Stunted Growth) with the player's chosen cards.
 
         The order of *hand_indices* is the order the card gives them ("in any
         order"): the first named ends up on top.
+
+        *to_bottom* is the second half of Dream Cache's answer — "both on top of
+        your library **or both on the bottom**". It is refused on every other
+        card rather than ignored: a bottomed Brainstorm is a strictly different
+        spell, and nothing on the board would show it.
         """
         return self.resolve_pending_choice(
-            "hand_to_library", player_index, hand_indices=hand_indices
+            "hand_to_library", player_index,
+            hand_indices=hand_indices, to_bottom=to_bottom,
         )
 
     def _resolve_hand_to_library(
-        self, choice: PendingChoice, hand_indices: list[int]
+        self, choice: PendingChoice, hand_indices: list[int],
+        to_bottom: bool = False,
     ) -> bool:
         """Move the chosen cards, last-named first, so the first is on top.
 
@@ -1914,11 +1923,24 @@ class PendingChoicesMixin:
         chosen = [i for i in dict.fromkeys(hand_indices) if 0 <= i < len(hand)][:count]
         if len(chosen) != count:
             return False
+        # "…both on top of your library **or both on the bottom of your
+        # library**" (Dream Cache). Which end is part of the answer, and only
+        # where the card offers it: a bottoming answer on Brainstorm is refused
+        # rather than ignored, because ignoring it would put the cards on top
+        # while the client believed it had bottomed them.
+        offers_either_end = choice.data.get("destination") == "either_end"
+        if to_bottom and not offers_either_end:
+            return False
+        position = "bottom" if to_bottom else "top"
         player = self.players[choice.player_index]
         cards = [hand[index] for index in chosen]
-        for card in reversed(cards):
+        # On the bottom the printed order is the order they are named, because
+        # the first named goes down first; on top it is reversed, so the first
+        # named ends up on top. Both are the same sentence read from the
+        # library's own end.
+        for card in (cards if position == "bottom" else reversed(cards)):
             if self.take_card_from_hand(player, card):
-                self.put_card_into_library(player, card, position="top")
+                self.put_card_into_library(player, card, position=position)
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) CR 701.19 makes the shuffle part of the move
         # rather than a rider on it, so it happens here rather than as a step
@@ -1936,7 +1958,8 @@ class PendingChoicesMixin:
             )
         else:
             self.log.append(
-                f"{player.name} put {len(cards)} card(s) on top of their library"
+                f"{player.name} put {len(cards)} card(s) on the {position} of "
+                f"their library"
             )
         self.discard_pending_choice(choice)
         return True
@@ -6073,7 +6096,7 @@ register_choice(
 register_choice(
     "hand_to_library",
     resolve=lambda game, choice, r: game._resolve_hand_to_library(
-        choice, r["hand_indices"]
+        choice, r["hand_indices"], bool(r.get("to_bottom")),
     ),
     default=lambda game, choice: game._default_hand_to_library(choice),
     action="hand_to_library_confirm",

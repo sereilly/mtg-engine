@@ -89,6 +89,14 @@ class PutHandCardsOnLibrary:
     #: ``count``, because only this spelling can never be short — CR 608.2's
     #: "as much as it can" has nothing to trim.
     whole_hand: bool = False
+    #: Which end of the library the cards go on. ``"top"`` is every printing
+    #: but one; Dream Cache prints ``"either_end"`` — "put two cards from your
+    #: hand **both on top of your library or both on the bottom of your
+    #: library**", where the end is the player's to choose and both cards go to
+    #: the same one. A field rather than two nodes, because the choice is the
+    #: only difference: the same cards leave the same hand through the same
+    #: prompt.
+    destination: str = "top"
 
 
 @dataclass(frozen=True)

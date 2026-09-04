@@ -692,6 +692,10 @@ def _hand_to_library(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "count": choice.data["count"],
+        # "…both on top of your library **or both on the bottom**" (Dream
+        # Cache). Whether the client offers the second button at all, read off
+        # the same key the resolver checks the answer against.
+        "may_choose_end": choice.data.get("destination") == "either_end",
         "cards": [ctx.serialize_card(card) for card in player.hand],
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) The same decision — which cards leave the hand —
