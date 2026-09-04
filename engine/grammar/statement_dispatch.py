@@ -86,6 +86,7 @@ from .lowering import (
     _lower_prevent_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
+    _lower_phase_out,
     _lower_gain_life,
     _lower_discard_revealed_unless_pay_life,
     _lower_play_with_hand_revealed,
@@ -218,6 +219,14 @@ def lower_statement(
         return _lower_damage_unless_pay(statement, dispatch_event, produced)
     if isinstance(statement, ast.LoseKeyword):
         return _lower_lose_keyword(statement, dispatch_event)
+    if isinstance(statement, ast.PhaseOut):
+        # The **unfiltered** event, for `_lower_destroy`'s reason below: the
+        # phase-out asks whether the trigger bound one creature
+        # (CR 509.3c/509.3d), which is a fact about the trigger and true of
+        # every clause under it. Dream Fighter's sentence is a union of two
+        # subjects, so it lowers under a `Conjunction` and would see no event
+        # at all if this were gated on `whole_effect`.
+        return _lower_phase_out(statement, event, event_subject)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement, dispatch_event, produced)
     if isinstance(statement, ast.PlayerGetsCounters):
@@ -298,8 +307,16 @@ def lower_statement(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
         ):
             return _lower_damage_conjunction(statement)
+        # `event_subject` travels with `event`, exactly as it does for the
+        # `Sequence` branch below: they are the same fact about the same
+        # trigger, and a conjunct that saw only the kind could not tell CR
+        # 509.3c's bare becomes-blocked firing from CR 509.3d's narrowed one —
+        # so "that creature" inside a conjunction refused where the same clause
+        # in a sequence lowered. Dream Fighter's "this creature **and** that
+        # creature phase out" is one conjunction and nothing else.
         return _lower_steps(
-            statement.effects, produced, event, lower_statement=lower_statement
+            statement.effects, produced, event, event_subject,
+            lower_statement=lower_statement,
         )
 
     if isinstance(statement, ast.DestroyUnlessPay):

@@ -2354,3 +2354,95 @@ def test_mtenda_lion_hits_for_everything_when_the_toll_is_declined(set_pool):
     game.advance_combat_phase()
 
     assert game.players[1].life == 15, game.log
+
+
+def _w2g1_dream_fighter(set_pool, attacking: bool):
+    """Dream Fighter on one side of a block, with a bystander on the other.
+
+    *attacking* puts the Fighter in the attack and lets an Ogre block it;
+    otherwise the Ogre attacks and the Fighter blocks. The two are different
+    fire sites -- the becomes-blocked half puts the other creature in the stack
+    item's target, the blocks half targets the *blocker* so a self-affecting
+    trigger can find itself -- and the card has to read the same on both.
+    """
+    fighter = _w2g1_nosick(Permanent(card=set_pool("MIR")["Dream Fighter"]))
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    wall = _w2g1_nosick(Permanent(card=_w2g1_creature("Wall", 0, 4)))
+    if attacking:
+        game = _w2g1_combat([fighter], [ogre, wall])
+    else:
+        game = _w2g1_combat([ogre], [fighter, wall])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g1_resolve(game)
+    return game, fighter, ogre, wall
+
+
+def test_dream_fighter_compiles_a_union_of_two_subjects(set_pool):
+    """"**This creature and that creature** phase out."
+
+    A union of noun phrases in the *subject* position, which the parser has read
+    since Spore Cloud -- but only of object-quantified phrases. "That creature"
+    is a bound referent read by ``parse_bound_subject`` and by nothing else, and
+    the union may take it exactly where the caller has read a subject and no verb
+    yet: an "and" that early cannot be joining two clauses.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Dream Fighter"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "creature_blocks_or_blocked_by"
+    steps = trig.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "phase_out_self", "phase_out_block_pair"
+    ]
+
+
+@pytest.mark.parametrize("attacking", [True, False], ids=["blocked", "blocks"])
+def test_dream_fighter_phases_out_both_halves_of_the_block(set_pool, attacking):
+    """CR 509.3a-d's pair, read on both sides.
+
+    The bystander is the control: ``block_pair_permanents`` is the one reader of
+    how the two fire sites bind "that creature", and reading the stack item's
+    target on the *blocks* half would have phased the Fighter out twice and its
+    opponent not at all.
+    """
+    game, fighter, ogre, wall = _w2g1_dream_fighter(set_pool, attacking)
+
+    phased = {
+        perm.card.name
+        for player in game.players for perm in player.phased_out
+    }
+    assert phased == {"Dream Fighter", "Ogre"}, game.log
+    assert wall.card.name in {
+        perm.card.name for player in game.players for perm in player.battlefield
+    }
+
+
+def test_a_conjunction_carries_the_triggers_narrowing_to_every_conjunct(set_pool):
+    """The defect the card found, one layer under it.
+
+    ``lower_statement`` threads a trigger's *kind* into every nested statement
+    and threaded its printed **narrowing** into a ``Sequence`` and not into a
+    ``Conjunction``. The two are the same fact about the same trigger, and
+    without the narrowing ``binds_block_pair`` cannot tell CR 509.3c's bare
+    becomes-blocked firing -- several blockers and no way to say which "that
+    creature" is -- from CR 509.3d's narrowed one. So the identical clause
+    lowered in a sequence and refused in a conjunction.
+    """
+    from engine.grammar import compile_line
+
+    joined = compile_line(
+        "Whenever this creature blocks or becomes blocked by a creature, "
+        "this creature and that creature phase out.",
+        card_name="Dream Fighter",
+    )
+    sequenced = compile_line(
+        "Whenever this creature blocks or becomes blocked by a creature, "
+        "this creature phases out. That creature phases out.",
+        card_name="Dream Fighter",
+    )
+    assert joined.lowering_error is None, joined.lowering_error
+    assert [i.kind for i in joined.instructions] == [
+        i.kind for i in sequenced.instructions
+    ]

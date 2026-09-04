@@ -368,7 +368,7 @@ def _attach_no_regeneration(stream: TokenStream, steps: list[ast.Statement]) -> 
     sentence stay one rule — a second copy here is the two-readings shape this
     grammar keeps removing.
     """
-    from .effects.board import _accept_destroyed_this_way_no_regen
+    from .effects.destruction import _accept_destroyed_this_way_no_regen
 
     last = steps[-1] if steps else None
     if last is None:

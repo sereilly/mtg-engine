@@ -3224,6 +3224,38 @@ def phase_out_self(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+@effect_handler("phase_out_block_pair")
+def phase_out_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This creature and **that creature** phase out." (Dream Fighter.)
+
+    The other half of the block CR 509.3a-d announced. Read through
+    ``block_pair_permanents``, the one function that knows how the two fire
+    sites bind it — the becomes-blocked half puts the creature in the stack
+    item's target, the blocks half targets the *blocker* (so a self-affecting
+    trigger can find itself) and carries the pair in ``blocked_permanent_ids``.
+    Reading the target on the blocks half would phase out this creature twice
+    and its opponent not at all.
+
+    The source's own half of the sentence is a separate ``phase_out_self``
+    beside this one, because the union lowers to one statement per phrase.
+    CR 702.26a's simultaneity is not at stake: a one-shot phase-out is not the
+    keyword's alternation, and the pair was frozen by the trigger before either
+    permanent moved.
+    """
+    from ._common import block_pair_permanents
+
+    victims = [
+        perm for perm in block_pair_permanents(game, context)
+        if game.is_on_battlefield(perm)
+    ]
+    if not victims:
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    for perm in victims:
+        game.phase_out_permanent(perm)
+    return True, "resolved"
+
+
 @effect_handler("phase_out_matching")
 def phase_out_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"All lands you control phase out." (Taniwha.)

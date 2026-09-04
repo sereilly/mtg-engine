@@ -75,17 +75,19 @@ from .types import (
     _parse_no_longer_supertype,
 )
 from .board import (
-    _accept_life_alternative,
-    _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
     _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
     _parse_return,
     _parse_put_source_into_zone,
-    _parse_destroy,
-    _parse_further_subjects,
     _parse_that_object,
+)
+from .destruction import (
+    _accept_destroyed_this_way_no_regen,
+    _accept_life_alternative,
+    _parse_destroy,
+    _parse_for_each_destroy_unless_paid,
 )
 from .attachments import (
     _parse_attach,
@@ -221,8 +223,8 @@ __all__ = [
     "parse_player_chooses_permanent",
     "_parse_return",
     "_parse_put_source_into_zone",
+    "_accept_destroyed_this_way_no_regen",
     "_parse_destroy",
-    "_parse_further_subjects",
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
     "_parse_linked_untap_restriction",

@@ -32,11 +32,12 @@ from ..errors import LoweringError
 from ._amounts import halved_count_spec
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
-                      _is_enchanted, _is_source, _is_target)
+                      _is_enchanted, _is_source, _is_target,
+                      _restrictions_beyond)
 from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT,
-                      _BOUND_OBJECT_DELAYED_EVENTS)
+                      _BOUND_OBJECT_DELAYED_EVENTS, binds_block_pair)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.
@@ -361,7 +362,11 @@ def _lower_sacrifice(
     return (OracleInstruction("sacrifice_self", "", {}),)
 
 
-def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
+def _lower_phase_out(
+    node: ast.PhaseOut,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
     """CR 702.26's two printed shapes: one chosen creature (Teferi, Master of
     Time's −3) and a swept set belonging to a targeted opponent with the
     can't-phase-in rider (Teferi, Timeless Voyager's −8)."""
@@ -431,6 +436,36 @@ def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
         return (
             OracleInstruction("phase_out_matching", "", {"filter": described}),
         )
+    # "This creature and **that creature** phase out." (Dream Fighter.) The
+    # other half of the block CR 509.3a-d announced, which the trigger froze —
+    # the same referent `pump_block_pair` and `grant_keyword_to_block_pair`
+    # already act on, and read by the one function that knows how the two fire
+    # sites bind it (`handlers/_common.block_pair_permanents`).
+    #
+    # `binds_block_pair` rather than the kind alone, for the reason that helper
+    # exists: a *bare* becomes-blocked firing has several blockers and no way to
+    # say which one "that creature" is, so the sentence is admitted only where
+    # the printed noun phrase narrowed the condition to one.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+    ):
+        if not binds_block_pair(event, event_subject):
+            raise LoweringError(
+                "\"that creature\" phases out only under a block trigger that "
+                "names one creature",
+                node=node,
+            )
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the bound phase-out reads no narrowing beyond the noun", node=node
+            )
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        return (OracleInstruction("phase_out_block_pair", "", {}),)
     raise LoweringError("no handler phases out this subject", node=node)
 
 

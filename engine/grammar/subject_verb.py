@@ -31,6 +31,7 @@ from .imperatives import parse_imperative
 from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import (
+    _parse_further_subjects,
     _accept_mana_alternatives,
     _parse_can_attack_as_though,
     _parse_duration,
@@ -55,7 +56,6 @@ from .effects import (
     _parse_reveal_hand,
     _parse_doesnt_untap_next_step,
     _parse_draw,
-    _parse_further_subjects,
     _parse_exile_entire_library,
     _parse_fight,
     _parse_gains,
@@ -165,7 +165,9 @@ def parse_subject_verb(
         # ``_parse_further_subjects`` rewinds whole unless a separator really is
         # followed by an object-quantified noun phrase.
         if source_spec is not None and stream.at_word("and"):
-            shared = _parse_further_subjects(stream, source_spec)
+            shared = _parse_further_subjects(
+                stream, source_spec, before_verb=True
+            )
             if shared:
                 verb_at = stream.mark()
                 parts = []

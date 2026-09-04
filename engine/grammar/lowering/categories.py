@@ -613,6 +613,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lands you control phase out").
     "phase_out_self": "zones",
     "phase_out_matching": "zones",
+    # "…and **that creature** phase out" (Dream Fighter): the creature the
+    # block trigger bound, beside the sweep and the source above it.
+    "phase_out_block_pair": "zones",
     # Ending the game (CR 104). Their own category rather than "life": nothing
     # about a life total is involved, and the three outcomes share one set of
     # handlers in engine/handlers/life_and_game.py.

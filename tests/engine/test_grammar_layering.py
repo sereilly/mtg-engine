@@ -332,7 +332,27 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # `lowering/exile.py`'s name, which has been a lowering-only family since
 # before the parse half existed, so the mirror re-forms rather than forking:
 # the same move `prevention` and `counters` made, in the other direction.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
+# `destruction` joined the parse side the fifth time `effects/board.py` reached
+# the size guard, reusing the name `lowering/destruction.py` has carried since
+# it left the same family one package over — the mirror re-forming rather than
+# forking, after `prevention`, `counters`, `tapping` and `attachments`. That
+# module's own note below records the asymmetry as settled ("the parse side
+# stays in `effects/board.py`, where destroy is one production reading the same
+# noun phrase as the rest"); like `types`' prediction one paragraph up, it was a
+# claim about a *size*, and the size changed. The line is the one the lowering
+# side already drew and it is the CR's own keyword action: destroying a
+# permanent (CR 701.7) is not sacrificing one (CR 701.17), returning one to a
+# hand or phasing one out (CR 702.26), which is what `board` keeps. What travels
+# with the verb is what only the verb prints — the "unless its controller pays"
+# offer and its life half, CR 701.15c's "destroyed this way … can't be
+# regenerated" rider, and the per-payer sweep.
+#
+# **The split moved one fragment down rather than sideways.**
+# `_parse_further_subjects` — the union of noun phrases one verb reaches — was
+# in `board` and is now in `phrases`, because `destruction` needs it too and a
+# fragment two families need is not one family's property. Four modules read it
+# now, which is the shared-module rule doing exactly what it is for.
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "destruction"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -451,7 +471,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
 # `sequences` is the lowering-only family Mirage's wave 1 split off
 # `lowering/control_flow.py`, along the line that module's own docstring
 # already drew: it names three composers (`sequence`, `may`, `one_of`) and
@@ -552,6 +572,14 @@ AST_FAMILIES = [
         # nodes out to match would put a node in one family with both of its
         # readers in another — exactly what `types` records.
         "exile",
+        # `destruction` is the third of that shape, and it arrived on the parse
+        # side after the lowering side had carried it for a set. `Destroy`,
+        # `DestroyUnlessPay` and `DestroyEachUnlessPaid` are things done to a
+        # permanent on the battlefield, and they live in `ast/board.py` beside
+        # the sacrifice, the bounce and the phase-out for that reason. The guard
+        # fired on the readers (`effects/board.py` at 1,007), not on the
+        # inventory.
+        "destruction",
     )
 ]
 # `library` left this list at Alliances' third wave, when the size guard below
