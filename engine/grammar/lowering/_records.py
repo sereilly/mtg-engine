@@ -480,6 +480,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
         LAST_TARGET_CONTROLLER,
+        # "…equal to the number of artifacts **they controlled** that were put
+        # into a graveyard this way." (Builder's Bane.) The same per-object
+        # seat map the sweeps beside it write, read here as a per-seat tally
+        # rather than one entry per loop iteration: "they" is every player at
+        # once, so the sentence has one answer each and no loop to bind them.
+        PER_OBJECT_SEAT_RECORDS["controller"],
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

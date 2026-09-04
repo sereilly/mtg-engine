@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import count_from_payload, evaluate_count, resolve_amount
+from ._common import (bound_permanent, count_from_payload, evaluate_count,
+                      resolve_amount)
 from ..exiled_records import source_object
 from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
-                            LAST_TARGET_CONTROLLER,
+                            LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
 from ..mana_payment import generic_cost
@@ -242,7 +243,19 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     for victim in victims:
         loss = evaluate_count(game, victim, per_seat) if per_seat is not None else amount
-        if per_each is not None:
+        if per_each is not None and per_each.get("record"):
+            # "You lose 2 life **for each creature that died this way**."
+            # (Reign of Terror.) One earlier step's result, read off the
+            # resolution scratchpad rather than off any zone: the creatures
+            # counted are precisely the ones no battlefield still holds, and a
+            # graveyard scan would count everything that had died all game.
+            #
+            # No record is zero deaths and so no loss, which is also what the
+            # words say — the sweep in front of this destroyed nothing.
+            loss = amount * max(
+                0, int((context.results or {}).get(str(per_each["record"]), 0) or 0)
+            )
+        elif per_each is not None:
             wanted = tuple(per_each.get("card_types") or ())
             loss = amount * sum(
                 1
@@ -398,6 +411,22 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded player, no life gained")
             return True, "resolved"
         gainer = game.players[seat]
+    elif recipient == PER_OBJECT_SEAT_RECORDS["controller"]:
+        # "For each artifact destroyed this way, **its controller** gains life
+        # equal to its mana value." (Seeds of Innocence.) The seat the sweep
+        # froze about the object *this iteration* is on — `for_each` resolves
+        # the record to that object's entry before running the step, so the
+        # lookup is by the record's name and never by the object.
+        #
+        # No entry means the loop is not running or recorded nothing about this
+        # object, and nobody gains: the same rule the two whole-effect records
+        # below follow, and the safe one — a seat guessed here is a player the
+        # card never named.
+        seat = context.iteration_seats.get(recipient)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no life gained")
+            return True, "resolved"
+        gainer = game.players[seat]
     elif recipient in (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER):
         # "**Its controller** gains life equal to its mana value."
         # (Illumination.) The controller of the object an earlier step of this
@@ -439,6 +468,24 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # arming handler froze — live, because the creature is on the battlefield
     # attacking when this resolves, and gone means no life rather than a printed
     # number read off a card.
+    if instruction.payload.get("amount_from_bound_mana_value"):
+        # "…gains life equal to **its mana value**" inside a loop over what an
+        # earlier step destroyed (Seeds of Innocence). The object is a card in
+        # a graveyard by now (CR 400.7), so the number is last-known
+        # information (CR 608.2h) — read off the `Permanent` the loop hands
+        # round, through `effective_card` so a copy effect's cost is the one
+        # counted (CR 707.2), which is the reading the singular destroy's
+        # `its_mana_value` record already takes.
+        #
+        # No bound object gains nothing rather than falling back to the
+        # ability's own source, which is a mana value the card never mentions.
+        bound = bound_permanent(game, context)
+        game._gain_life(
+            gainer,
+            max(0, int(bound.effective_card.cmc or 0)) if bound is not None else 0,
+            card.name,
+        )
+        return True, "resolved"
     if instruction.payload.get("amount_from_bound_power"):
         bound = (context.trigger_context or {}).get("bound_permanent_id")
         watched = game.permanent_by_id(bound) if isinstance(bound, int) else None

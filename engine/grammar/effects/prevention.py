@@ -450,13 +450,23 @@ def _parse_source_of_choice_effect(
     chosen_color = bool(stream.accept_phrase("of", "the", "chosen", "color"))
     if chosen_color and (colours or card_type):
         raise stream.error("a shield records one source property, not two")
-    if not stream.accept_phrase("would", "deal", "damage", "to"):
+    if not stream.accept_phrase("would", "deal", "damage"):
         stream.reset(mark)
         return None
-    recipient = parse_recipient(stream)
-    if recipient is None:
-        stream.reset(mark)
-        return None
+    # "The next time a source of your choice would deal damage **this turn**,
+    # that damage is dealt to that source's controller instead." (Reflect
+    # Damage.) The one printing of this sentence that names no recipient at
+    # all: it moves whatever the chosen source deals, to whoever it would have
+    # damaged. So the "to <recipient>" clause is optional here — and its
+    # absence is a *fact about the card*, carried through as ``to=None``, which
+    # is the same value Reverberation's sentence already produces one
+    # production over.
+    recipient = None
+    if stream.accept_word("to"):
+        recipient = parse_recipient(stream)
+        if recipient is None:
+            stream.reset(mark)
+            return None
     # "…would deal damage to **you and/or creatures you control** this turn"
     # (Shadowbane). One shield over several recipients, joined by the printed
     # "and/or" — CR 615.1's shield goes around whatever the effect is affecting,
@@ -492,6 +502,14 @@ def _parse_source_of_choice_effect(
             one_shot=True,
             chooser=chooser,
         )
+    if recipient is None:
+        # Every branch below is a *shield*, and CR 615.1 puts one around
+        # something — with no recipient printed there is nothing for it to go
+        # around. Only the redirect above can read the sentence without one,
+        # because it names where the damage goes instead. Rewound rather than
+        # raised, so the line keeps whatever refusal it had.
+        stream.reset(mark)
+        return None
     # "…, prevent **half** that damage, rounded down." (Dark Sphere.) The same
     # sentence, absorbing a share of the event instead of all of it — so it is
     # a branch of this production rather than a second one racing it over the

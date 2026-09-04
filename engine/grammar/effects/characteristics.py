@@ -487,13 +487,23 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             # "loses 2 life for each creature card in their graveyard"
             # (Liliana, Death Mage) — a multiplier over a count of objects,
             # recorded rather than consumed-and-dropped.
-            per_each: ast.ObjectFilter | None = None
-            for_each_mark = stream.mark()
-            if stream.accept_phrase("for", "each"):
-                try:
-                    per_each = parse_object_filter(stream)
-                except GrammarError:
-                    stream.reset(for_each_mark)
+            #
+            # The *history* spellings are read first and through
+            # ``phrases._parse_for_each``, the reader the gain-life production
+            # already uses: "for each creature that died this way" (Reign of
+            # Terror) has a relative clause the bare noun phrase below stops in
+            # front of, so it used to leave "that died this way" as unconsumed
+            # text and take the whole line down. A second inline reader here is
+            # what made one printed idiom mean two things depending on the verb
+            # in front of it.
+            per_each: object | None = _parse_for_each(stream, allow_this_way=True)
+            if per_each is None:
+                for_each_mark = stream.mark()
+                if stream.accept_phrase("for", "each"):
+                    try:
+                        per_each = parse_object_filter(stream)
+                    except GrammarError:
+                        stream.reset(for_each_mark)
             return ast.LoseLife(player, amount, per_each=per_each)
     except GrammarError:
         pass

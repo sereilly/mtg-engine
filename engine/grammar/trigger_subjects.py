@@ -89,7 +89,7 @@ def _parse_attached_step_event(
     """"At the beginning of the <step> of enchanted <noun>'s controller, …".
 
     A production rather than four more rows of ``triggers._AT_EVENTS``, and the
-    **subject** is why — the same reason ``_parse_attached_combat_event`` is
+    **subject** is why — the same reason ``_parse_attached_event`` is
     one. A table row builds an event with no subject, and the effect behind
     this one says "destroy that creature **if it** didn't attack this turn":
     with no subject on the event, ``rebinding`` leaves the pronoun pointing at
@@ -122,17 +122,17 @@ def _parse_attached_step_event(
     return None
 
 
-#: The combat events an Aura or Equipment watches its host for. Both are
-#: events ``_WHENEVER_EVENTS`` already holds for "this creature", read here
-#: about the attached permanent instead — one kind per event, because whose
-#: ability is watching is the narrowing and not a different event.
+#: The events an Aura or Equipment watches its host for. Every one is an event
+#: ``_WHENEVER_EVENTS`` already holds for "this creature", read here about the
+#: attached permanent instead — one kind per event, because whose ability is
+#: watching is the narrowing and not a different event.
 #:
 #: "…attacks and isn't blocked" (Cloak of Confusion) sits above "…attacks or
 #: blocks" only for tidiness: the two diverge at the third word, so neither is
 #: a prefix of the other. Written as a table anyway, because the next attached
 #: combat event to be printed will be one, and a second `accept_phrase` chain
 #: is how the ordering rule stops being visible.
-_ATTACHED_COMBAT_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+_ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks", "and", "isn't", "blocked"), "attacks_unblocked"),
     (("attacks", "or", "blocks"), "creature_attacks_or_blocks"),
     # The two block halves (Gift of the Woods, Bestial Fury). Longest first, as
@@ -151,14 +151,23 @@ _ATTACHED_COMBAT_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # standing in for CR 509.3d's.
     (("blocks", "or", "becomes", "blocked"), "creature_blocks_or_blocked_by"),
     (("becomes", "blocked"), "creature_becomes_blocked"),
+    # "Whenever enchanted creature **is dealt damage**, this Aura deals that
+    # much damage to that creature's controller." (Binding Agony.) The first
+    # entry here that is not a combat event at all — which is why the table
+    # stopped being named for combat. Nothing about the reading changes: the
+    # event is the one Fungusaur's "whenever this creature is dealt damage"
+    # already names, and the subject is the attachment's host rather than the
+    # ability's own source.
+    (("is", "dealt", "damage"), "creature_dealt_damage"),
 )
 
 
-def _parse_attached_combat_event(
+def _parse_attached_event(
     stream: TokenStream, word: str
 ) -> ast.TriggerEvent | None:
-    """"Whenever **enchanted creature** attacks or blocks" (Imprison), and
-    "…attacks and isn't blocked" (Cloak of Confusion).
+    """"Whenever **enchanted creature** attacks or blocks" (Imprison),
+    "…attacks and isn't blocked" (Cloak of Confusion), "…is dealt damage"
+    (Binding Agony).
 
     The same events ``_WHENEVER_EVENTS`` holds for "this creature", watched by
     an Aura or Equipment rather than by the creature itself — one kind per
@@ -183,7 +192,7 @@ def _parse_attached_combat_event(
     # Longest first, as in every table this file's productions stand beside:
     # "attacks" opens both readings, so the joined attack-or-block sentence
     # must be tried against the unblocked one rather than after it.
-    for phrase, kind in _ATTACHED_COMBAT_EVENTS:
+    for phrase, kind in _ATTACHED_EVENTS:
         if stream.accept_phrase(*phrase):
             return ast.TriggerEvent(
                 kind, word,

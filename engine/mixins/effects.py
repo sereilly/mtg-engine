@@ -7,6 +7,7 @@ from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter
 from ..auras import aura_restriction_active
+from ..auras import attached_subject_triggers
 from ..auras import aura_enchants
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import emit
@@ -156,16 +157,39 @@ class EffectsMixin:
         exists to describe.
         """
         controller_index = self._controller_index_of(permanent)
+        # "…deals that much damage to **that creature's controller**" (Binding
+        # Agony). The seat that controlled the damaged creature, frozen here
+        # while it is still on a battlefield: this trigger resolves off the
+        # stack (CR 603.3), and lethal damage puts the creature in a graveyard
+        # before then — where CR 400.7 makes it a new object with no controller
+        # at all. Under a control-change effect that seat was never its owner
+        # either, so no later read can reconstruct it.
+        context = {
+            "damage_dealt": max(0, int(amount)),
+            "event_subject_controller": controller_index,
+        }
         events = [
-            make_trigger_event(
-                controller_index, permanent, trig,
-                trigger_context={"damage_dealt": max(0, int(amount))},
-            )
+            make_trigger_event(controller_index, permanent, trig, trigger_context=context)
             for trig in matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"creature_dealt_damage"},
             )
         ]
+        # "Whenever **enchanted creature** is dealt damage…" (Binding Agony).
+        # The same event watched by something attached to the damaged creature
+        # rather than by the creature itself — invisible to the scan above,
+        # because an Aura's ability is the Aura's and not a granted ability of
+        # its host (CR 113.7a). The same reader the combat fire sites use, so
+        # one condition kind has one meaning in both dispatch scopes.
+        for seat, attachment, trig in attached_subject_triggers(
+            self, permanent, {"creature_dealt_damage"}, "damaged_attached",
+        ):
+            events.append(make_trigger_event(
+                # CR 603.3a: the ability's controller is the *attachment's*
+                # controller, never the damaged creature's — which on this card
+                # is the whole point, since the damage goes the other way.
+                seat, attachment, trig, trigger_context=context,
+            ))
         self._enqueue_triggered_batch(events)
 
     def _controller_index_of(self, permanent: Permanent) -> int:

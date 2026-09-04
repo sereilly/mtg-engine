@@ -451,7 +451,23 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+# `life` split out of `lowering/game.py` at 1,014, the second time that module
+# crossed the guard and along the same seam `tokens` left through one set
+# earlier: what stays in `game` changes the state of the **game** (an extra
+# turn, winning, losing, ante, a repeated round of offers, a whole-game damage
+# history) and what left changes one number on one **player** (CR 118). It is
+# also the half that grows with the pool — every set prints life gain and life
+# loss, and the branch table for their printed shapes is the whole of the new
+# module, where the game half has taken one function in five sets.
+# The two shared `_player_recipient`, a three-row table mapping a printed
+# player reference onto a recipient key, which went **down** into `_seats`
+# rather than staying in either: two families reading it is exactly the
+# condition that makes something a floor.
+# Asymmetric like `zones`, `types`, `destruction`, `counter_removal` and
+# `tokens`: the parse side stays in `effects/game.py` and
+# `effects/characteristics.py`, where a life sentence is one branch of the
+# verb table each.
 # `sequences` is the lowering-only family Mirage's wave 1 split off
 # `lowering/control_flow.py`, along the line that module's own docstring
 # already drew: it names three composers (`sequence`, `may`, `one_of`) and
@@ -625,7 +641,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -898,6 +914,15 @@ FAMILY_SHARED = {
     # itself be one, and the alternative was `board` and `damage` importing
     # each other.
     "_sacrifices",
+    # `_seats` arrived at the `life` split, holding the one thing the two
+    # halves shared: which recipient key a printed player reference becomes.
+    # A floor for `_amounts`' reason exactly -- `game` asks it for CR 407's
+    # ante and `life` for CR 119.5's "that player's life total becomes N", and
+    # a module two families import cannot itself be one. Small, and that is
+    # not an argument against it: the alternative was `life` importing `game`
+    # or a second copy of a three-row seat table, and a seat table that
+    # disagrees with itself lands an effect on the wrong player.
+    "_seats",
     # `_records` split out of `categories` when *that* module crossed the guard:
     # it carried two registries with two different keys — which family a kind
     # belongs to, and what a kind writes into the resolution scratchpad — and

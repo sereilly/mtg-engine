@@ -53,6 +53,7 @@ from .sentence_clauses import (
     _distribute_duration,
     _parse_unless_player_pays,
     _accept_trailing_toll,
+    _parse_leading_controller_of_each,
     _parse_leading_count_scale,
     _parse_leading_for_each,
     _parse_leading_linked_duration,
@@ -349,6 +350,20 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     per_count = _parse_leading_count_scale(_parse_statement_body, stream)
     if per_count is not None:
         return per_count
+    # "**The controller of each of those artifacts** gains life equal to its
+    # mana value." (Seeds of Innocence.) The loop with its subject printed in
+    # front of it. Read here, beside the "for each …" spelling it is a word
+    # order of and before the subject-verb reader below, which would take "the
+    # controller" as a bare back-reference and then loop over nothing.
+    controller_of_each = _parse_leading_controller_of_each(stream)
+    if controller_of_each is not None:
+        return ast.ForEach(
+            controller_of_each,
+            parse_subject_verb(
+                stream, ast.PlayerRef("controller"),
+                parse_optional_action=_parse_optional_action,
+            ),
+        )
     per_death = _parse_leading_for_each(_parse_statement_body, stream)
     if per_death is not None:
         # The repeated act may be printed as a choice of two ("pay 4 life **or**

@@ -38,7 +38,7 @@ from .stream import TokenStream
 from .trigger_subjects import (
     _accept_ability_activated_tail,
     _parse_ability_activated_event,
-    _parse_attached_combat_event,
+    _parse_attached_event,
     _parse_attached_step_event,
     _parse_named_subject_tap_event,
 )
@@ -721,9 +721,9 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         activated = _parse_ability_activated_event(stream, "whenever")
         if activated is not None:
             return activated
-        attached_combat = _parse_attached_combat_event(stream, "whenever")
-        if attached_combat is not None:
-            return attached_combat
+        attached = _parse_attached_event(stream, "whenever")
+        if attached is not None:
+            return attached
         named_tap = _parse_named_subject_tap_event(stream, "whenever")
         if named_tap is not None:
             return named_tap

@@ -109,6 +109,27 @@ class DamageRedirect:
     #: difference is not bookkeeping: a 1-point record read as a blanket one
     #: would move a Fireball's twelve.
     amount: int | None = None
+    #: "The next time a source of your choice would deal damage this turn, that
+    #: damage is dealt to that source's controller instead." (Reflect Damage.)
+    #: The one printed shape that names **neither** end of the event: not the
+    #: recipient it protects — it moves whatever the chosen source deals, to
+    #: whoever would have taken it — and not the new recipient either, which is
+    #: read off the source when the damage would be dealt.
+    #:
+    #: A record with no recipient has nothing of its own to hang off, exactly as
+    #: a class-scoped one does not, so it lives on the seat that armed it and is
+    #: reached by :func:`source_keyed_redirects` scanning every player. It is
+    #: found by its ``source`` and by nothing else, which is why ``source`` is
+    #: required alongside it — with neither a recipient nor a source it would
+    #: move every point of damage in the game.
+    any_recipient: bool = False
+    #: "…is dealt to **that source's controller** instead." Who takes it cannot
+    #: be known when the record is armed: CR 109.5's controller of a source is a
+    #: live question, and a permanent can change hands between the arming and
+    #: the damage. So the seat is derived at fire time from the damage's own
+    #: source (``damage_events.damage_source_seat``, the one answer every event
+    #: already carries) rather than frozen into ``new_recipient``.
+    to_source_controller: bool = False
 
     @property
     def spent(self) -> bool:
@@ -222,13 +243,28 @@ def source_matches(chosen, source) -> bool:
     return getattr(chosen, "card", chosen) is getattr(source, "card", source)
 
 
-def live_recipient(game, redirect: DamageRedirect):
+def live_recipient(game, redirect: DamageRedirect, source=None):
     """The object *redirect* would move damage to, or None when CR 614.9 says
     the effect does nothing.
 
     A permanent must still be on the battlefield and still be one of the things
     damage can be redirected to; a player must still be in the game.
+
+    *source* is the damage's own source, and only one record reads it: "…is
+    dealt to **that source's controller** instead" (Reflect Damage) names a
+    seat that has no value until there is an event to ask about. Derived
+    through ``damage_events.damage_source_seat``, which is the answer
+    ``deal_damage`` already puts on every event — a second derivation here
+    would be a second answer to "who dealt this?".
     """
+    if redirect.to_source_controller:
+        from .damage_events import damage_source_seat
+
+        seat = damage_source_seat(game, source)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return None
+        player = game.players[seat]
+        return None if getattr(player, "lost", False) else player
     target = redirect.new_recipient
     if target is None:
         return None
@@ -239,6 +275,35 @@ def live_recipient(game, redirect: DamageRedirect):
             return None
         return target
     return None if getattr(target, "lost", False) else target
+
+
+def source_keyed_redirects(game) -> list[DamageRedirect]:
+    """Every record that watches a **source** and no recipient at all.
+
+    Reflect Damage — "The next time a source of your choice would deal damage
+    this turn, that damage is dealt to that source's controller instead" — is
+    the one printed shape with neither end of the event named, so nothing it
+    protects can hold its record. It lives on the seat that armed it, which is
+    the same home a class-scoped record uses (:func:`class_redirects`) and for
+    the same reason: the objects it covers include ones that do not exist yet.
+
+    Unlike that one it is found for **any** recipient, a player included, so it
+    is its own scan rather than a widening of that function — which asks a noun
+    phrase about a permanent and would answer True for every key it could not
+    test if handed a player.
+
+    Turn order from the active player is not asked for here: the scan is over
+    the seats in table order, and ``applicable_redirect`` takes the first record
+    whose source matches. Two such records over one event is a shape no card in
+    the pool prints; when one does, it wants CR 616.1e's choice put to the
+    affected player rather than this order reused.
+    """
+    return [
+        record
+        for player in game.players
+        for record in redirects_on(player)
+        if record.any_recipient
+    ]
 
 
 def resolving_object_redirects(game) -> list[DamageRedirect]:
@@ -342,9 +407,13 @@ def applicable_redirect(
     event neither matcher above can be asked for — a record printed "all combat
     damage" declines every other kind rather than having the word dropped.
     """
-    own = [r for r in redirects_on(recipient) if r.recipients is None]
+    own = [
+        r for r in redirects_on(recipient)
+        if r.recipients is None and not r.any_recipient
+    ]
     for redirect in (
         own + class_redirects(game, recipient) + resolving_object_redirects(game)
+        + source_keyed_redirects(game)
     ):
         if redirect.spent or redirect.applying:
             continue
@@ -354,7 +423,16 @@ def applicable_redirect(
             continue
         if not source_class_matches(game, redirect, source):
             continue
-        if live_recipient(game, redirect) is None:
+        if live_recipient(game, redirect, source) is None:
+            continue
+        # A record that would move the damage to the player it is already
+        # being dealt to moves nothing (CR 614.9's effect "does nothing" when
+        # its recipient is not there; here it *is* there and is the same
+        # object). Left in, Reflect Damage aimed at a source whose controller
+        # is the damaged player would re-run the event onto that same player —
+        # `applying` stops the recursion, but the record would be spent on a
+        # redirect that changed nothing.
+        if live_recipient(game, redirect, source) is recipient:
             continue
         return redirect
     return None

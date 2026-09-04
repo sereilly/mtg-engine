@@ -50,6 +50,39 @@ _SHORTFALL_RECORDS: dict[tuple[str, str], str] = {
 _SHORTFALL_NOUNS = frozenset(noun for noun, _ in _SHORTFALL_RECORDS)
 
 
+def _parse_leading_controller_of_each(
+    stream: TokenStream,
+) -> "ast.ChosenThisWay | None":
+    """``The controller of each of those <noun>`` — a loop printed as a subject.
+
+    "**The controller of each of those artifacts** gains life equal to its mana
+    value." (Seeds of Innocence.) The same sentence
+    :func:`_parse_leading_for_each` reads one word order over ("for each of
+    those artifacts, its controller gains …"), and it produces the same
+    iterator: the difference is Wizards' templating, and two nodes would be two
+    answers to what "those" names.
+
+    Only the head is consumed. The verb phrase behind it is the caller's, read
+    through ``parse_subject_verb`` with "its controller" carried in as the
+    subject — so every effect a loop body can already hold is reachable here
+    with no second copy of the verb table.
+
+    Returns None with the cursor where it found it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "the", "controller", "of", "each", "of", "those"
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.ChosenThisWay(named)
+
+
 def _parse_leading_for_each(
     parse_body,
     stream: TokenStream,

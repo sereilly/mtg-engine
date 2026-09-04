@@ -937,11 +937,22 @@ def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
 def _log_whole_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
     game.log.append(
         f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
-        f"{event['recipient'].name}"
+        f"{recipient_label(event['recipient'])}"
     )
 
 
-@prevention_effect(SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True, player_only=True))
+def recipient_label(recipient) -> str:
+    """A damage recipient's name, whichever of CR 615.1's two kinds it is.
+
+    A ``PlayerState`` has a ``name`` and a ``Permanent`` has a card that does.
+    Every log line here read the player half until Circle of Despair armed a
+    whole-instance shield on a creature, which is not a case a log line should
+    ever have been able to decide.
+    """
+    return getattr(recipient, "name", None) or recipient.card.name
+
+
+@prevention_effect(SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True))
 def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Pentagram of the Ages: "The next time a source of your choice would deal
     damage to you this turn, prevent that damage."
@@ -953,7 +964,13 @@ def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
     return _spend(game, event, PREVENT_WHOLE, chosen=True, rider=_log_whole_prevention)
 
 
-@prevention_effect(GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False, player_only=True))
+# ``player_only`` is gone from both of these, and it was never the rule: CR
+# 615.1 puts a shield around "a player or a permanent", and every card that
+# armed one of these happened to protect a player until Circle of Despair
+# printed "…would deal damage to **any target**". A flag that says which cards
+# exist rather than which the rule allows is one this engine removes when a card
+# disagrees with it.
+@prevention_effect(GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False))
 def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield activated without recording a chosen source (AI /
     headless): the next damage event from any source is prevented."""

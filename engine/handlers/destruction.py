@@ -474,6 +474,35 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+def _record_destroyed_this_way(
+    context: OracleExecutionContext,
+    died: list[Permanent],
+    controllers: dict[int, int],
+) -> None:
+    """What a destroy step leaves behind for the sentence after it.
+
+    Three records, written together because they are three questions about one
+    step and a branch that answers two of them is a producer the lowering may
+    cite and the handler never wrote -- which reads back as zero with nothing
+    failing. ``destroy_target_permanent`` has four branches and the singular one
+    already carries that lesson in its own comment; this is the same lesson
+    taken one record further.
+
+    *controllers* is ``{permanent_id: seat}`` collected **before** the
+    destruction (CR 608.2h / CR 400.7): "the number of artifacts **they
+    controlled** that were put into a graveyard this way" (Builder's Bane) asks
+    about permanents that are cards in a graveyard by the time it is read, and
+    under a control-change effect that seat was never the owner either.
+    """
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = {
+        perm.permanent_id: controllers[perm.permanent_id]
+        for perm in died
+        if perm.permanent_id in controllers
+    }
+
+
 @effect_handler("destroy_target_permanent")
 def destroy_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
@@ -496,9 +525,11 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             game.permanent_by_id(permanent_id) if permanent_id is not None else None
         )
         died: list[Permanent] = []
+        controllers: dict[int, int] = {}
         if victim is not None:
             seat = game.controller_index_of(victim)
             if seat is not None:
+                controllers[victim.permanent_id] = seat
                 died = game._destroy_swept_permanents(
                     game.players[seat],
                     lambda candidate, chosen=victim: candidate is chosen,
@@ -506,8 +537,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
                         "bypass_regeneration"
                     ),
                 )
-        context.results["destroyed_this_way_objects"] = died
-        context.results["destroyed_this_way"] = len(died)
+        _record_destroyed_this_way(context, died, controllers)
         game.log.append(
             f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
             if died else f"{card.name}: nothing to destroy"
@@ -541,6 +571,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             else None
         )
         died: list[Permanent] = []
+        controllers: dict[int, int] = {}
         for role in targets_desc.get("roles") or ():
             victim = resolve_role_permanent(
                 game, context, instruction.payload, role.get("role")
@@ -555,13 +586,13 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             seat = game.controller_index_of(victim)
             if seat is None:
                 continue
+            controllers[victim.permanent_id] = seat
             died.extend(game._destroy_swept_permanents(
                 game.players[seat],
                 lambda candidate, chosen=victim: candidate is chosen,
                 allow_regeneration=not instruction.payload.get("bypass_regeneration"),
             ))
-        context.results["destroyed_this_way_objects"] = died
-        context.results["destroyed_this_way"] = len(died)
+        _record_destroyed_this_way(context, died, controllers)
         game.log.append(
             f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
             if died else f"{card.name}: nothing to destroy"
@@ -608,10 +639,12 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             ),
         )
         died: list[Permanent] = []
+        controllers: dict[int, int] = {}
         for perm in chosen:
             seat = game.controller_index_of(perm)
             if seat is None:
                 continue
+            controllers[perm.permanent_id] = seat
             died.extend(game._destroy_swept_permanents(
                 game.players[seat],
                 lambda candidate, victim=perm: candidate is victim,
@@ -621,8 +654,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # key the sweep uses, because "the number of Mountains put into a
         # graveyard this way" is the same question whichever branch destroyed
         # them.
-        context.results["destroyed_this_way_objects"] = died
-        context.results["destroyed_this_way"] = len(died)
+        _record_destroyed_this_way(context, died, controllers)
         game.log.append(
             f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
             if died else f"{card.name}: nothing to destroy"
@@ -665,6 +697,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # (`web/actions.py`), which is why the app never showed it — the same
     # "one caller's spelling enforced, another's silently not" the CR 702.16b
     # gate in `mixins/stack/casting.py` records about itself.
+    singular_seat: int | None = None
     named_id = context.target_permanent_id
     if isinstance(named_id, list):
         named_id = next((pid for pid in named_id if isinstance(pid, int)), None)
@@ -699,6 +732,12 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         seat = game.controller_index_of(victim)
         if seat is not None:
             context.results[LAST_TARGET_CONTROLLER] = seat
+            # The same seat under the per-object key, so a sentence counting
+            # "the artifacts **they** controlled" reaches it whichever branch
+            # of this handler ran. Read here rather than after the destroy for
+            # this block's own stated reason: by then the permanent is a card
+            # in a graveyard with no controller at all (CR 400.7).
+            singular_seat = seat
         # "You gain life equal to **its** mana value." (Divine Offering.)
         # Recorded here, before the destruction, for two reasons: the
         # permanent is gone by the time the next step runs (CR 608.2h), and
@@ -746,8 +785,11 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # cannot disagree; a regenerated or indestructible target is in neither
     # (CR 701.8c: a replaced destruction is not a death).
     died = [destroyed] if destroyed is not None else []
-    context.results["destroyed_this_way_objects"] = died
-    context.results["destroyed_this_way"] = len(died)
+    _record_destroyed_this_way(
+        context, died,
+        {destroyed.permanent_id: singular_seat}
+        if destroyed is not None and singular_seat is not None else {},
+    )
     if destroyed is not None:
         if source_permanent is not None:
             game.log.append(f"{card.name} destroyed {destroyed.card.name}")

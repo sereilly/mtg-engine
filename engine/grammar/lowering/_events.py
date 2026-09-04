@@ -23,6 +23,8 @@ this one beside `_common` in its `shared` tuple.
 
 from __future__ import annotations
 
+from ...oracle_types import PER_OBJECT_SEAT_RECORDS
+
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
                              SEARCHED_PERMANENTS,
                              LAST_TARGET_CONTROLLER,
@@ -112,6 +114,17 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # died — which under a control-change effect is not its owner.
     "creature_dies",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
+    # Binding Agony — the **damaged** creature's, which for an Aura watching
+    # its host is the host's controller. Frozen by `_fire_dealt_damage_triggers`
+    # while the creature is still on the battlefield: this trigger resolves off
+    # the stack (CR 603.3), and lethal damage is exactly the case where the
+    # creature is in a graveyard by then and CR 400.7 leaves nothing with a
+    # controller to read.
+    #
+    # The subject of *this* event is the damaged object, not the damager — the
+    # `damage_dealt` row below is the other way round, and reading one for the
+    # other on a creature that traded would charge the wrong player.
+    "creature_dealt_damage",
     # Backfire — the damager's. The subject of a damage event is whatever dealt
     # it, so "that creature's controller" is the seat `deal_damage` derives for
     # every event and freezes into the announcement.
@@ -391,6 +404,31 @@ EVENT_SUBJECT_PLAYER = "event_subject_player"
 #: reading while the same words under a bare trigger refuse — the loop is the
 #: innermost binder, so it is checked before the event tables above.
 LOOP_BOUND_PLAYER = "loop_bound_player"
+
+#: The same marker for a loop over **objects** rather than seats: added to
+#: *produced* while lowering the body of "for each <noun> destroyed / exiled /
+#: tapped / chosen this way", where ``handlers/control_flow.for_each`` binds
+#: each object in turn (``iteration_target``, and the per-object seats beside
+#: it).
+#:
+#: A marker rather than a scratchpad key, exactly as its seat-shaped sibling
+#: above is: nothing is recorded under it, it only says the loop is what a bare
+#: "it" / "its controller" / "its mana value" refers to. Without it those
+#: phrases are gated on the *record* alone, which is present after any sweep at
+#: all -- so "Destroy all artifacts. Its controller gains 2 life." would compile
+#: to a per-iteration read with no iteration around it and gain nobody anything.
+LOOP_BOUND_OBJECT = "loop_bound_object"
+
+#: The per-object seat map a destroy or exile step freezes about what it took,
+#: read two ways: one entry per iteration inside an object loop ("its
+#: controller"), and as a per-seat tally outside one ("the number of artifacts
+#: **they controlled** that were put into a graveyard this way").
+#:
+#: Named here rather than spelled from ``PER_OBJECT_SEAT_RECORDS`` at each
+#: reader for this module's own reason: two lowering families cite it (life and
+#: damage) and a name defined twice is the duplicate this package keeps
+#: removing.
+SWEPT_CONTROLLER_SEATS = PER_OBJECT_SEAT_RECORDS["controller"]
 
 #: And the seat that *controlled* what the event was about, from
 #: `_EVENT_SUBJECT_CONTROLLERS` above. A constant for `EVENT_SUBJECT_PLAYER`'s

@@ -25,14 +25,17 @@ from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter, untestable_filter_keys,
 )
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
-                             LAST_DAMAGER_CONTROLLER, X_FROM_COUNT)
+                             LAST_DAMAGER_CONTROLLER,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
 from ._amounts import (
+    _LOOPED_PLAYER_RECIPIENTS,
     _lower_board_count_damage,
     _lower_chosen_cast_damage,
     _lower_cost_sacrifice_damage,
     _lower_cost_tap_damage,
     _lower_counted_damage,
 )
+
 from ._sweeps import (
     lower_described_set_damage,
     lower_counted_sweep_damage,
@@ -60,6 +63,7 @@ from ._events import (
     EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     LOOP_BOUND_PLAYER,
+    SWEPT_CONTROLLER_SEATS,
     _back_reference_payload,
     _DAMAGED_PERMANENTS,
     _RECORDED_PERMANENTS,
@@ -476,6 +480,51 @@ def _lower_damage_shape(
                 "'put into a graveyard this way' counts what the earlier step "
                 "destroyed and cannot be narrowed further",
                 node=node,
+            )
+        if node.amount.per_controller:
+            # "…deals damage to each player equal to the number of artifacts
+            # **they controlled** that were put into a graveyard this way."
+            # (Builder's Bane.) The same record, read one seat at a time: the
+            # count is each player's own share of what the destroy in front of
+            # this one took, never the whole of it. Dropped, the possessive
+            # would deal every player the *total* — five artifacts destroyed
+            # and both seats take five — which is a card that reports supported
+            # and hits twice as hard as it prints.
+            #
+            # It travels the per-recipient channel every other one-number-per-
+            # seat clause travels, with the record named rather than a board
+            # described: by the time this runs the artifacts are cards in a
+            # graveyard (CR 400.7), so the only thing that can say whose each
+            # was is the seat map the destroy step froze (CR 608.2h).
+            if not isinstance(node.recipients, tuple) or len(node.recipients) != 1:
+                raise LoweringError(
+                    "a per-controller death count damages one set of seats",
+                    node=node,
+                )
+            seats_recipient = node.recipients[0]
+            if (
+                not isinstance(seats_recipient, ast.PlayerRef)
+                or seats_recipient.kind not in _LOOPED_PLAYER_RECIPIENTS
+            ):
+                raise LoweringError(
+                    "no handler counts this death record per recipient", node=node
+                )
+            if SWEPT_CONTROLLER_SEATS not in produced:
+                raise LoweringError(
+                    f"back-reference to {SWEPT_CONTROLLER_SEATS!r} with no "
+                    "producer in this effect",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "deal_damage", "",
+                    {
+                        "recipient": seats_recipient.kind,
+                        X_FROM_COUNT_PER_RECIPIENT: {
+                            "seat_tally_of": SWEPT_CONTROLLER_SEATS,
+                        },
+                    },
+                ),
             )
         back_reference = {"amount_from": "destroyed_this_way"}
         amount = 0

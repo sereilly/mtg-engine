@@ -21,6 +21,7 @@ from ._common import (
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                            LAST_DAMAGER_CONTROLLER,
                            X_FROM_COUNT_PER_RECIPIENT)
+from .prevention import chosen_shield_source
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -171,6 +172,22 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # so it is read out of the scratchpad here instead of going to
         # `evaluate_count`, which counts objects. A seat the record never
         # mentions discarded nothing, which is the printed base.
+        # "…equal to the number of artifacts **they controlled** that were put
+        # into a graveyard this way" (Builder's Bane). One earlier step of this
+        # same resolution froze a ``{permanent_id: seat}`` map about what it
+        # took, and this seat's share of it is the number. Counted off that map
+        # rather than off a per-seat tally recorded beside it, because a tally
+        # would be a second copy of one fact -- and the map is what the readers
+        # of "its controller" already ask, so a destroy step has one thing to
+        # remember rather than two that can drift.
+        #
+        # A seat the map never mentions lost nothing and takes nothing, which
+        # is also what the words say.
+        tally = per_recipient_spec.get("seat_tally_of")
+        if tally is not None:
+            recorded = context.results.get(tally) or {}
+            seat = game.players.index(face)
+            return sum(1 for owner in recorded.values() if owner == seat)
         record = per_recipient_spec.get("resolution_record")
         if record is not None:
             recorded = context.results.get(record) or {}
@@ -1490,6 +1507,38 @@ def redirect_damage_until_eot(
     card_name = getattr(context.card, "name", "")
     targets_source = instruction.kind == "redirect_damage_from_target_until_eot"
 
+    if payload.get("any_recipient"):
+        # "The next time a source of your choice would deal damage this turn,
+        # that damage is dealt to **that source's controller** instead."
+        # (Reflect Damage.) Neither end of the event is named by the sentence:
+        # the record watches whatever the chosen source damages, and who takes
+        # it is derived from the source when the damage would be dealt
+        # (CR 109.5's controller is a live question). So there is no recipient
+        # to resolve here and no new recipient to check for liveness — the
+        # record carries the derivation instead, and `live_recipient` performs
+        # it.
+        #
+        # The record hangs off the caster because it has nothing else to hang
+        # off, exactly as a class-scoped one does, and
+        # `damage_redirects.source_keyed_redirects` is what finds it again.
+        moved_source = chosen_shield_source(game, context)
+        add_redirect(
+            caster,
+            DamageRedirect(
+                new_recipient=None,
+                source=moved_source,
+                uses=payload.get("uses"),
+                any_recipient=True,
+                to_source_controller=True,
+                source_name=card_name or None,
+            ),
+        )
+        named = getattr(getattr(moved_source, "card", moved_source), "name", None)
+        game.log.append(
+            f"{card_name}: the next damage {named or 'any source'} would deal "
+            "this turn is dealt to its controller instead"
+        )
+        return True, "resolved"
     if payload.get("new_recipient") == "source":
         new_recipient = context.source_permanent
     else:

@@ -204,6 +204,38 @@ def _lower_prevent_damage(
         # Read before the axis check below, which reads an empty filter as *no*
         # axis rather than as the whole class of sources.
         if node.from_filter == ast.ObjectFilter():
+            # "…would deal damage to **any target** this turn, prevent that
+            # damage." (Circle of Despair.) CR 615.1 puts a shield around a
+            # player or a permanent, and this is the first printing in the pool
+            # that names one the ability chooses rather than its controller. The
+            # recipient rides as payload and the *targets* description beside it
+            # is what makes the picker ask for it — without that the shield
+            # would be armed on whichever object a targetless resolution
+            # defaults to.
+            #
+            # Only "any target", and only on the unnarrowed shield: the rider
+            # branches below hand their own kinds a recipient they have no
+            # reading for, and a colour- or type-scoped shield protecting
+            # somebody else is a card nobody prints.
+            if (
+                isinstance(recipient, ast.TargetSpec)
+                and recipient.quantifier == "any_target"
+                and not node.to_others
+                and node.prevented_rider is None
+                and isinstance(node.amount, ast.Fixed)
+                and node.amount.value == 1
+            ):
+                return (
+                    OracleInstruction(
+                        "grant_whole_prevention_shield", "",
+                        {
+                            "recipient": "target",
+                            "targets": {
+                                "quantifier": "any_target", "kind": "any",
+                            },
+                        },
+                    ),
+                )
             if not _is_you(recipient):
                 raise LoweringError(
                     "a chosen-source shield only protects its controller", node=node

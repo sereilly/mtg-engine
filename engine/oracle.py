@@ -544,6 +544,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # its noun phrase dropped.
     ("creature_becomes_blocked",
      r"whenever enchanted (?P<combatant_attached>[a-z]+) becomes blocked"),
+    # "Whenever **enchanted creature** is dealt damage, this Aura deals that
+    # much damage to that creature's controller." (Binding Agony.) The same
+    # event as the row below, watched by something attached to the damaged
+    # creature rather than by the creature itself — one kind, with
+    # `damaged_attached` saying which permanent's ability is watching, exactly
+    # as `combatant_attached` does for the combat events and `tapped_attached`
+    # for the tap one. A key per event family rather than one shared key: the
+    # fire sites are different functions and each scans for its own, so a shared
+    # spelling would have the combat scan pick up a damage trigger.
+    #
+    # Above the self spelling it is not a prefix of, in the order this table's
+    # own note asks for.
+    ("creature_dealt_damage",
+     r"whenever enchanted (?P<damaged_attached>[a-z]+) is dealt damage"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
