@@ -2608,6 +2608,27 @@ class SpellCastingMixin:
         )
         temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
 
+        # "You may spend mana as though it were mana of any color." (Chromatic
+        # Orrery.) The permission `_pay_mana_cost_directly` honours, asked here
+        # too -- and it was not, for as long as both existed. The cascade below
+        # tests each coloured pip against its own symbol, so a colourless pool
+        # inferred X = 0 for **every** {X} spell with a coloured pip in it, and
+        # the spell then resolved with X = 0 having spent nothing: Fireball
+        # dealt 0 damage off four mana. A permission honoured at one payment
+        # site out of several is an ability that works less often than the card
+        # allows, which is the quieter half of `activation_restrictions`'
+        # failure and just as silent.
+        #
+        # Ahead of the coloured cascade *and* of the restricted-X branch below.
+        # "Spend only black mana on X" (Drain Life) is satisfied by every unit
+        # under this permission, so the two questions collapse into one: what is
+        # left after the pips and the printed generic are paid.
+        if player.spends_mana_as_any_color:
+            from ...mana_payment import fungible_colors_headroom
+
+            headroom = fungible_colors_headroom(temp, required)
+            return 0 if headroom is None else headroom
+
         if temp.get("W", 0) < required["W"]:
             return 0
         if temp.get("U", 0) < required["U"]:
@@ -2954,14 +2975,16 @@ class SpellCastingMixin:
         Colourless is spent *last* among the coloured pips, so a cost that also
         wants {C} is not starved by a pip that a coloured unit could have paid.
         """
+        from ...mana_payment import fungible_colors_headroom
+
         pool = {sym: int(player.mana_pool.get(sym, 0)) for sym in ("W", "U", "B", "R", "G", "C")}
         colored_pips = sum(required[sym] for sym in ("W", "U", "B", "R", "G"))
-        total = sum(pool.values())
-        if total < colored_pips + required["C"] + required["generic"]:
-            return False
-        if pool["C"] < required["C"] + max(0, colored_pips - (total - pool["C"])):
-            # The colourless the cost names is not reachable: too much of the
-            # pool has already been claimed by pips no coloured unit can cover.
+        # Whether it can be paid at all is `mana_payment`'s arithmetic, not a
+        # second copy here: the X inference and the client's affordability
+        # display ask the same question of the same permission, and the three
+        # answers have to agree. What stays here is the *spending*, which is
+        # the only half of the job those two do not want.
+        if fungible_colors_headroom(pool, required) is None:
             return False
 
         temp = dict(pool)

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**348 / 612 tracked rules covered (56%)** — 1911 tests, 0 unannotated.
+**348 / 612 tracked rules covered (56%)** — 1919 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 105. Colors
 
-- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(3 tests)*
+- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(4 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(8 tests, subrules abc)*
 - [ ] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an...
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
@@ -172,7 +172,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(1 tests, subrules a)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(5 tests, subrules ab)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(7 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(174 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(176 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(12 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
-- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(5 tests)*
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(12 tests, subrules b)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(3 tests, subrules bc)*

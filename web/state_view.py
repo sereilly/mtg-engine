@@ -130,6 +130,17 @@ def _seat_deck_display_name(session: Session, seat: int) -> str:
 
 def _can_afford_with_pool(pool: dict, cost: dict, player: PlayerState) -> bool:
     """Check whether `pool` can pay `cost` without mutating either."""
+    # "You may spend mana as though it were mana of any color." (Chromatic
+    # Orrery.) Asked through the engine's own arithmetic rather than answered
+    # again here: this function is already a second reading of
+    # `_pay_mana_cost_directly`, and a second reading that knows about one of
+    # the two spending permissions greys out a card the engine would happily
+    # cast.
+    if player.spends_mana_as_any_color:
+        from engine.mana_payment import fungible_colors_headroom
+
+        return fungible_colors_headroom(pool, cost) is not None
+
     temp = dict(pool)
     for sym in ("W", "U", "B", "G", "C"):
         if temp.get(sym, 0) < cost.get(sym, 0):
