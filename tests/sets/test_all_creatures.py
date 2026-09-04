@@ -1784,3 +1784,63 @@ def test_a_chosen_player_binding_needs_a_choose_step(set_pool):
     ]
     assert delayed, "the Bauble arms a delayed draw"
     assert "binds_player" not in delayed[0].payload
+
+
+# --- W3G3: Balduvian Horde and the offer nobody could afford ---
+#
+# Found by sweeping Mirage's own class rather than by a report. Tainted Specter
+# needed a takeability entry for its put-back — an empty hand cannot cover
+# "unless they put a card from their hand on top of their library" — and the
+# same question asked of every *other* offer action in the pool turned up one
+# with no entry behind it: "Sacrifice it **unless you discard a card at
+# random**."
+#
+# The failure is the silent kind. With an empty hand the offer was made, taken,
+# and the handler discarded **zero cards at random** — so the Horde stayed on
+# the battlefield for free, the log said "P0 discarded 0 cards at random", and
+# no rule was visibly broken. CR 601.2h asks what a player is *able* to do, and
+# discarding a card you do not have is not one of them.
+
+from engine import (Game as _w3g3h_Game,  # noqa: E402
+                    PlayerState as _w3g3h_PlayerState)
+from engine.card_loader import (load_cards as _w3g3h_load,  # noqa: E402
+                                manifest_set_path as _w3g3h_path)
+
+
+def _w3g3h_horde_game(set_pool, hand_size):
+    lea = {card.name: card for card in _w3g3h_load(_w3g3h_path("LEA"))}
+    horde = set_pool("ALL")["Balduvian Horde"]
+    game = _w3g3h_Game(players=[
+        _w3g3h_PlayerState(name="P0", hand=[lea["Island"]] * hand_size + [horde],
+                           library=[lea["Island"]] * 8),
+        _w3g3h_PlayerState(name="P1", library=[lea["Forest"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game.queue_from_hand(0, "Balduvian Horde")
+    game.resolve_stack()
+    game._settle()
+    return game
+
+
+def test_w3g3_balduvian_horde_discards_when_it_can(set_pool):
+    """The offer as printed: a card leaves the hand and the Horde stays."""
+    game = _w3g3h_horde_game(set_pool, hand_size=1)
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    game._settle()
+    assert [p.card.name for p in game.players[0].battlefield] == ["Balduvian Horde"]
+    assert [c.name for c in game.players[0].graveyard] == ["Island"]
+
+
+def test_w3g3_balduvian_horde_goes_when_the_hand_is_empty(set_pool):
+    """An empty hand cannot pay the cost, so the offer is never made and the
+    penalty stands. Before the takeability entry the Horde was offered the
+    choice, "discarded 0 cards at random", and kept itself."""
+    game = _w3g3h_horde_game(set_pool, hand_size=0)
+
+    assert game.pending_choices == [], game.log
+    assert game.players[0].battlefield == [], game.log
+    assert [c.name for c in game.players[0].graveyard] == ["Balduvian Horde"]

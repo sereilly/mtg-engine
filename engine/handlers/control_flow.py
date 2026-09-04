@@ -1263,6 +1263,31 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # offered seat. A put-back out of the *caster's* hand is not a price this
     # player pays, and answering False for it would withdraw an offer the card
     # makes.
+    # "Sacrifice it **unless you discard a card at random**." (Balduvian Horde.)
+    # The random half of the same question ``discard_controller_cards`` answers
+    # above, and it was the half nobody asked: an empty hand discarded **zero
+    # cards at random**, the offer counted as taken, and the Horde stayed on the
+    # battlefield for free. CR 601.2h asks what a player is *able* to do, and
+    # discarding a card you do not have is not one of them.
+    #
+    # Only the ``caster`` spelling — the seat an offer with actor "you" is made
+    # to. A random discard out of somebody else's hand is not a price this
+    # player pays, and answering False for it would withdraw an offer the card
+    # makes. A computed count answers True for the same reason: this predicate
+    # has no ``x_value``, and a wrongly-False answer is the one that costs a
+    # card its ability.
+    if instruction.kind == "discard_x_target_cards":
+        amount = instruction.payload.get("amount", 1)
+        if instruction.payload.get("who") != "caster" or not isinstance(amount, int):
+            return True
+        return len(player.hand) >= amount
+    # "**You may sacrifice this enchantment** and pay {2}{G}{G}." (Preferred
+    # Selection.) A source that has left the battlefield cannot be sacrificed
+    # (CR 701.17a), and the handler underneath treats "nothing to sacrifice" as
+    # a no-op — so the offer would be takeable, the mana charged, and the card
+    # taken into hand for a price half of which was never paid.
+    if instruction.kind == "sacrifice_self":
+        return source is not None and game.is_on_battlefield(source)
     if instruction.kind == "put_hand_cards_on_library":
         if instruction.payload.get("recipient") != "target":
             return True
