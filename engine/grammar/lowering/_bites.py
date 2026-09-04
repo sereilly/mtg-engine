@@ -37,7 +37,7 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
 )
-from ._events import _DAMAGED_PERMANENTS
+from ._events import _DAMAGED_PERMANENTS, _RECORDED_PERMANENTS
 
 
 def lower_bite(
@@ -214,6 +214,63 @@ def lower_bite(
             OracleInstruction(
                 "bound_bites_source", "",
                 {"permanents_from": _DAMAGED_PERMANENTS},
+            ),
+        )
+
+    # "Tap target creature that player controls. **That creature deals damage
+    # equal to its power to the player.**" (Delirium.) The branch above with
+    # the bitten end swapped for a seat: same biter — a permanent an earlier
+    # step of this same effect recorded — and the same read of its power, so it
+    # is one row down rather than a kind somewhere else.
+    #
+    # Which seat is not something the *sentence* says. "The player" is the
+    # definite article pointing back at the player line 1 named, and line 1 is
+    # a cast-timing registry line that produces no instruction at all — so
+    # there is nothing in this effect for the pronoun to be bound to except the
+    # creature the step in front acted on. Its controller is that player, by the
+    # printed target restriction ("target creature **that player** controls",
+    # re-checked at CR 608.2b), and reading it off the biter is the only answer
+    # that needs no record nobody writes.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and node.source is not None
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "that"
+        and len(node.recipients) == 1
+        and isinstance(node.recipients[0], ast.PlayerRef)
+        and node.riders == ast.DamageRiders()
+    ):
+        if node.recipients[0].kind != "that_player":
+            # Every other seat this engine can name is one the sentence would
+            # have had to say — "you", "each opponent", the seat a trigger
+            # froze. None of them is a bare "the player", and lowering one of
+            # them onto this kind would damage a seat the card never named.
+            raise LoweringError(
+                "a bound creature's bite names the player its own controller is",
+                node=node,
+            )
+        if _restrictions_beyond(node.source.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the bite could honour",
+                node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            # Nothing recorded means the pronoun names nothing and the handler
+            # would deal no damage on a card compiling clean; *two* records mean
+            # the sentence is ambiguous about which step it points back at, and
+            # picking one would be right half the time.
+            raise LoweringError(
+                "a bound creature's bite needs exactly one recorded permanent "
+                "in front of it",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "bound_bites_player", "",
+                {"permanents_from": recorded[0], "recipient": "biter_controller"},
             ),
         )
 

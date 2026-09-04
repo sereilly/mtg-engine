@@ -1563,6 +1563,18 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
         seat = frozen.get(key)
         if isinstance(seat, int) and 0 <= seat < len(game.players):
             return seat
+    # A **spell** has no firing event, so there is nothing frozen to read — and
+    # the pronoun still has an antecedent: the sentence in front of it. "Cast
+    # this spell only during an opponent's turn. Tap target creature **that
+    # player** controls." (Delirium.) The timing clause is the only thing in
+    # that card naming a player, and the table that owns the phrase is what
+    # answers — the same table the picker asks, so what a player was offered and
+    # what the resolution acts on cannot disagree.
+    from ..cast_restrictions import timing_fixed_seat
+
+    caster = context.caster
+    if caster in game.players and context.card is not None:
+        return timing_fixed_seat(game, game.players.index(caster), context.card)
     return None
 
 

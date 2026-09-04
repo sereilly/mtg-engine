@@ -35,6 +35,18 @@ class CastRestriction:
     phrase: str                # canonical lowercase oracle-text phrase
     is_legal: TimingPredicate
     denial_message: str
+    #: The seat this window **names**, for the printed "that player" that refers
+    #: back to it. "Cast this spell only during an opponent's turn. Tap target
+    #: creature **that player** controls." (Delirium.) The pronoun's antecedent
+    #: is in the timing clause and nowhere else — the effect line that reads it
+    #: produces no player of its own — so the table that owns the phrase is
+    #: what says who it means.
+    #:
+    #: ``"active"`` is the only value today and the only one these phrases can
+    #: have: every window naming a player names *whose turn or step it is*.
+    #: None for a window that names nobody ("only before blockers are
+    #: declared"), which is most of them.
+    names_seat: str | None = None
 
 
 def _during_own_declare_attackers(game: "Game", caster_index: int) -> bool:
@@ -162,6 +174,7 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's upkeep",
         _during_an_opponents_upkeep,
         "can only be cast during an opponent's upkeep",
+        names_seat="active",
     ),
     CastRestriction(
         "cast this spell only during your declare attackers step",
@@ -207,11 +220,13 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's turn, before attackers are declared",
         _opponents_turn_before_attackers,
         "can only be cast during an opponent's turn, before attackers are declared",
+        names_seat="active",
     ),
     CastRestriction(
         "cast this spell only during an opponent's turn after their upkeep step",
         _opponents_turn_after_upkeep,
         "can only be cast during an opponent's turn after their upkeep step",
+        names_seat="active",
     ),
     # **Last, and the order is load-bearing.** This phrase is a strict prefix of
     # the two above it, and `check_cast_timing` reports the *first* violated
@@ -225,6 +240,7 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's turn",
         _during_an_opponents_turn,
         "can only be cast during an opponent's turn",
+        names_seat="active",
     ),
 )
 
@@ -483,6 +499,47 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
                 "can only be cast if you were dealt damage this turn by "
                 f"{described}"
             )
+    return None
+
+
+def timing_fixed_seat(game: "Game", caster_index: int, card) -> "int | None":
+    """The seat this spell's own timing clause names, or None when none does.
+
+    CR 601.2c chooses targets as the spell is announced, and "target creature
+    **that player** controls" has to know which player before it can offer one.
+    On a trigger the seat is the firing event's, frozen at the fire site; on a
+    modal spell it is the seat that chose the mode. A **spell** printing the
+    phrase in its own text has neither, and the only place the word can point
+    is the sentence in front of it — which for every card in the pool that
+    prints one is the timing clause above.
+
+    The seat is checked against CR 102.3 rather than trusted: every window that
+    names a player names an *opponent's* turn, so the active player being the
+    caster means the spell is being asked about outside its own window, and the
+    honest answer is that the phrase names nobody. The picker then offers
+    nothing, which is what an unanswerable target means (the same direction
+    ``defending_player_only`` takes with no combat).
+
+    The **card** rather than its text, so the one printed-text read lives here,
+    beside ``check_cast_timing``'s callers, which make the identical read of the
+    identical clause. There is no ``effective_card`` to prefer: that is a
+    ``Permanent``'s accessor for what a *permanent* says (CR 707.2, CR 612.1),
+    and the object this asks about is a card on its way to the stack.
+
+    Asked twice — once by the picker at CR 601.2c and once at resolution — and
+    the two cannot disagree: the window is an opponent's *turn*, and a turn
+    cannot end while the spell that named it is still on the stack.
+    """
+    oracle_text_lower = (getattr(card, "oracle_text", "") or "").lower()
+    for restriction in CAST_RESTRICTIONS:
+        if restriction.names_seat is None:
+            continue
+        if restriction.phrase not in oracle_text_lower:
+            continue
+        seat = game.active_player_index
+        if seat == caster_index or not 0 <= seat < len(game.players):
+            return None
+        return seat
     return None
 
 

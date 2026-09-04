@@ -38,6 +38,7 @@ import re
 from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
                                state_holds)
 from .models import CardDefinition, Permanent
+from .cast_restrictions import timing_fixed_seat
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
 from .oracle import compile_card_oracle, expand_ability_lines
@@ -1327,6 +1328,18 @@ class LegalityMixin:
         defending_seat = spec.get("defending_player_index")
         if defending_seat is None:
             defending_seat = self.defending_player_index_now()
+        # "…**that player** controls", resolved the same way one record over.
+        # A modal spell's chooser supplies the seat on the spec (CR 700.2e) and
+        # a trigger's fire site froze one; a **spell** printing the phrase in
+        # its own text has neither, and the only sentence its pronoun can point
+        # back at is the timing clause above it — "Cast this spell only during
+        # an opponent's turn. Tap target creature that player controls."
+        # (Delirium). The table that owns that phrase is what answers, so the
+        # picker and the timing gate cannot disagree about which player the
+        # card is talking about.
+        that_player_seat = spec.get("that_player_index")
+        if that_player_seat is None:
+            that_player_seat = timing_fixed_seat(self, caster_index, card)
         if kind == "hand_card":
             return self._enumerate_cost_hand_cards(
                 caster_index, card, spec, for_cast=for_cast
@@ -1433,7 +1446,7 @@ class LegalityMixin:
             # caller holding that record supplies it beside the flag. A flag
             # with no seat offers nothing, for the reason above — this one would
             # otherwise widen to every creature in the game.
-            if spec.get("that_player_only") and seat != spec.get("that_player_index"):
+            if spec.get("that_player_only") and seat != that_player_seat:
                 continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):

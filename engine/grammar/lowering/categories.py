@@ -658,6 +658,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The other half of Tracker's exchange: the creature the sentence before it
     # bit, biting back. The damage family, like the one-way half it answers.
     "bound_bites_source": "damage",
+    "bound_bites_player": "damage",
     "grant_unblockable_to_target": "evasion",
     # "Target creature can't be blocked **by Walls** this turn." (Tower of
     # Coireall.) The same evasion family: what differs is that the restriction

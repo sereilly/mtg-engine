@@ -456,6 +456,7 @@ def subject_matches(
     observer: int | None = None,
     source: "Permanent | None" = None,
     defending: int | None = None,
+    that_player: int | None = None,
 ) -> bool:
     """Whether *obj* is in the set the filter payload *described* names.
 
@@ -478,6 +479,15 @@ def subject_matches(
     frozen into its context, and that combat may be over by the time the
     ability resolves. A caller that cannot say refuses the word, which is the
     direction that offers nothing rather than the whole table.
+
+    *that_player* is the same arrangement one record over: the seat a printed
+    "that player" names. A trigger's fire site froze it (CR 603.10), a modal
+    spell's chooser supplied it (CR 700.2e), and a spell printing the phrase in
+    its own text takes it from the timing clause its pronoun points back at —
+    three different places, none of them anything this file can read, which is
+    why it arrives as an argument. A caller that cannot say still refuses the
+    word rather than reducing it to "not you", which is "any opponent": right
+    in a two-player game by coincidence and wrong the moment there are three.
     """
     if not described:
         return True
@@ -497,6 +507,7 @@ def subject_matches(
         if not subject_matches(
             game, host, nested_host, observer=observer, source=source,
             defending=defending,
+            that_player=that_player,
         ):
             return False
     # "permanents **of the chosen color**" (Psychic Allergy). The colour lives
@@ -521,6 +532,7 @@ def subject_matches(
             subject_matches(
                 game, other, controller_controls, observer=seat, source=source,
                 defending=defending,
+                that_player=that_player,
             )
             for other in game.controlled_by(game.players[seat])
         ):
@@ -586,9 +598,13 @@ def subject_matches(
             if defending is None:
                 return False
             return game.controls(defending, obj)
-        # "**That player** controls" is not a seat this can compare against.
+        # "**That player** controls", answered when the caller supplies the seat
+        # and refused when it does not — the `defending_player` split directly
+        # above, one record over.
         if controller == "that_player":
-            return False
+            if that_player is None:
+                return False
+            return game.controls(that_player, obj)
         seat = game.controller_index_of(obj)
         if seat is None or observer is None:
             return False
