@@ -45,6 +45,21 @@ _NAME_STOPS = (
     "you",
 )
 
+# The same stops, but only *after a comma*. A comma inside a name is the one a
+# legendary title carries ("Chandra, Flame's Catalyst"), and no card in this
+# pool follows one with an article — checked against every set file, and it is
+# not a coincidence: a Magic title's second half is an apposition ("Adeliz, the
+# Cinder Wind"), never an indefinite noun phrase.
+#
+# What follows one *outside* a name is the next item of a printed list:
+# "Sacrifice a creature named Feral Shadow**, a creature named
+# Breathstealer**, and this creature" (Urborg Panther). Without the stop the
+# scan ran to the next "and" and produced a filter asking for a card literally
+# named "Feral Shadow, a creature named Breathstealer" — which matches nothing,
+# so the cost was admitted and could never be paid. "the" is deliberately not
+# here: it is exactly the word a legendary apposition does begin with.
+_AFTER_COMMA_STOPS = ("a", "an", "another", "this")
+
 
 def parse_card_name(stream: TokenStream) -> str:
     """The card name after ``named``, wherever a noun phrase carries one.
@@ -63,7 +78,12 @@ def parse_card_name(stream: TokenStream) -> str:
         if stream.at_punct(","):
             mark = stream.mark()
             stream.advance()
-            if stream.exhausted or stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
+            if (
+                stream.exhausted
+                or stream.at_punct(".")
+                or stream.at_word(*_NAME_STOPS)
+                or stream.at_word(*_AFTER_COMMA_STOPS)
+            ):
                 stream.reset(mark)
                 break
             continue

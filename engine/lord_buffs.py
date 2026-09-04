@@ -232,6 +232,14 @@ class LordBuffFilter:
     # strike"); every word must hold, which is what the English conjunction
     # means and the only reading :func:`_parse_subject` will produce.
     with_keywords: tuple[str, ...] = ()
+    # "Creatures **without flying** have reach." (Chaosphere.) The negated twin
+    # of the field above, layer-6 for its reason exactly and in the other
+    # direction: a creature an Aura gave flying leaves the set at once, and one
+    # that lost it joins. It has to be a field rather than a dropped adjective
+    # for this file's standing reason -- an unread narrowing is a strictly wider
+    # anthem than the card prints, and here it would hand *every* creature reach
+    # including the fliers the sentence excludes.
+    without_keywords: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -451,6 +459,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     supertypes: list[str] = []
     with_plus1_counter = False
     with_keywords: tuple[str, ...] = ()
+    without_keywords: tuple[str, ...] = ()
 
     # "Each creature you control…" / "All creatures…": a distributive article
     # naming exactly the set an unqualified anthem already reaches, so it is
@@ -527,6 +536,15 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
             return None
         with_keywords = found
         index = len(words)
+    # "Creatures **without flying** have reach." (Chaosphere.) The same keyword
+    # run negated, read by the same reader so the two directions of one word
+    # cannot come to disagree about which words are readable at all.
+    elif index < len(words) and words[index] == "without":
+        found = _filter_keywords(words[index + 1:])
+        if found is None:
+            return None
+        without_keywords = found
+        index = len(words)
 
     if index != len(words):
         return None
@@ -539,6 +557,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         qualifiers=tuple(qualifiers),
         with_plus1_counter=with_plus1_counter,
         with_keywords=with_keywords,
+        without_keywords=without_keywords,
     )
 
 
@@ -696,6 +715,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["named"] = buff.filter.named
     if buff.filter.with_keywords:
         payload["with_keywords"] = list(buff.filter.with_keywords)
+    if buff.filter.without_keywords:
+        payload["without_keywords"] = list(buff.filter.without_keywords)
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -724,6 +745,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             with_plus1_counter=bool(payload.get("with_plus1_counter")),
             named=payload.get("named"),
             with_keywords=tuple(payload.get("with_keywords") or ()),
+            without_keywords=tuple(payload.get("without_keywords") or ()),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

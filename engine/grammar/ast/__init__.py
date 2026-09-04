@@ -293,6 +293,7 @@ from .stack import (
 from .combat import (
     AssignsNoCombatDamage,
     AttackingDoesntTap,
+    BlockCountGrant,
     CantBe,
     ChooseBlocksForDefenders,
     ReassignBlockersBetweenAttackers,
@@ -597,6 +598,7 @@ __all__ = [
     "AttackAsThough",
     "AssignsNoCombatDamage",
     "AttackingDoesntTap",
+    "BlockCountGrant",
     "CombatRestriction",
     "RemoveFromCombat",
     # game

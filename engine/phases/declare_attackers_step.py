@@ -12,7 +12,9 @@ pass. Also holds the attack-legality query (``can_attack``),
 from ..attack_tapping import attacking_causes_tap
 from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
-from ..combat_restrictions import declaration_company_required, participation_cap
+from ..combat_restrictions import (declaration_company_required,
+                                   participation_cap,
+                                   restriction_condition_holds)
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
 from ..subject_filters import subject_matches
 from ..events import emit
@@ -107,15 +109,34 @@ class DeclareAttackersStepMixin:
                 f"no more than {attack_cap} creature(s) can attack each combat"
             )
 
+        # The permanents this declaration names, needed *before* the requirement
+        # loop below: "If a creature you control attacks, this creature also
+        # attacks if able" (Ekundu Cyclops) is a requirement conditional on the
+        # rest of the declaration, so the loop cannot ask it one creature at a
+        # time off the board. Collected by index here rather than reusing the
+        # `declared_attackers` list built further down, which does not exist yet
+        # and which validates as it goes — this read only has to say who was
+        # named.
+        # Through the seam (`permanent_at`), never `controller.battlefield[i]`:
+        # a slot is what the wire carries and this is the module that turns one
+        # into a permanent.
+        declared_now = [
+            perm
+            for perm in (self.permanent_at(controller_index, i) for i in unique_indices)
+            if perm is not None
+        ]
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):
             if not self._is_creature(attacker) or attacker.tapped:
                 continue
             if idx in unique_indices:
                 continue
-            if self._must_attack_if_able(attacker) and any(
-                self.can_attack(attacker, opp) for opp in living_opponents
+            if not (
+                self._must_attack_if_able(attacker)
+                or self._must_attack_beside(attacker, declared_now)
             ):
+                continue
+            if any(self.can_attack(attacker, opp) for opp in living_opponents):
                 required_attackers.append(attacker.card.name)
         # CR 508.1d: requirements are obeyed to the maximum **subject to** the
         # restrictions. A declaration already sitting at the cap has obeyed as
@@ -699,9 +720,31 @@ class DeclareAttackersStepMixin:
         # (Faith's Fetters). Asked of the Auras attached right now, so the
         # restriction ends when the Aura does without anything clearing a flag —
         # the arrangement every other entry in that table already uses.
-        if "cant_attack" in instr_kinds or aura_restriction_active(
-            attacker, "cant_attack"
-        ):
+        #
+        # Read as an *instruction* rather than out of `instr_kinds`, because the
+        # clause can be qualified: "…**if there's another creature on the
+        # battlefield**" (Shauku, Endbringer) is the same restriction with a
+        # condition, and a kind-set read drops the condition and grounds the
+        # creature for good. Every printed clause separately, because CR 508.1c
+        # makes restrictions cumulative — one whose condition is false answers
+        # only itself. The Aura form carries no condition, so it is asked
+        # unqualified exactly as before.
+        for restriction in program.instructions:
+            if restriction.kind != "cant_attack":
+                continue
+            if restriction_condition_holds(
+                self,
+                restriction.payload.get("condition"),
+                # CR 109.5: "you" inside the noun phrase is the seat whose
+                # ability this is, which is the attacker's controller.
+                observer=self.controller_index_of(attacker),
+                defender=defending_player_index,
+                # "Another" is measured against the permanent whose line this
+                # is — the attacker itself.
+                source=attacker,
+            ):
+                return False
+        if aura_restriction_active(attacker, "cant_attack"):
             return False
 
         # The board-reaching restrictions, asked of every permanent's compiled
@@ -928,6 +971,47 @@ class DeclareAttackersStepMixin:
             return True
         program = compile_card_oracle(attacker.effective_card)
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
+
+    def _must_attack_beside(
+        self, attacker: Permanent, declared: "list[Permanent]"
+    ) -> bool:
+        """""If a creature you control attacks, this creature **also** attacks
+        if able." (Ekundu Cyclops.)
+
+        CR 508.1d's requirement with a condition about the declaration rather
+        than about the board, which is the whole reason it is not one more row
+        in :meth:`_must_attack_if_able`: that predicate sees one creature and
+        cannot be told who else was named.
+
+        The condition is tested against the *other* declared attackers. "Also"
+        is what says so — a lone Cyclops would otherwise be the creature its
+        own condition names, and the requirement would demand it attack because
+        it is attacking. Identity, not value: two Cyclopes are two permanents
+        and each answers for the other, and ``is`` is the only comparison that
+        can tell them apart (idiom #11).
+
+        Through ``subject_matches`` with the requirement's own seat as CR 109.5's
+        observer, so "you control" means the seat whose printed line this is —
+        the same reader every other noun phrase in the combat steps goes
+        through.
+        """
+        seat = self.controller_index_of(attacker)
+        if seat is None:
+            return False
+        program = compile_card_oracle(attacker.effective_card)
+        for restriction in program.instructions:
+            if restriction.kind != "must_attack_if_partner_attacks":
+                continue
+            described = restriction.payload.get("subject") or {}
+            if any(
+                other is not attacker
+                and subject_matches(
+                    self, other, described, observer=seat, source=attacker
+                )
+                for other in declared
+            ):
+                return True
+        return False
 
     def attack_declaration_refusal(
         self, declared_attackers: list[Permanent]

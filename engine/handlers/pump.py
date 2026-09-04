@@ -122,6 +122,9 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     if instruction.payload.get("toughness_negative"):
         toughness_delta = -toughness_delta
     blocking_only = bool(instruction.payload.get("blocking_only"))
+    # Function-level, like every other handler that reads a noun phrase: the
+    # module graph runs card_loader -> oracle -> subject_filters -> handlers.
+    from ..subject_filters import subject_matches
 
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
 
@@ -135,15 +138,31 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         # creature?", so Ranger's Guile's "target creature **you control**"
         # pumped an opponent's creature — the pump half of the same card whose
         # keyword half had the identical hole.
-        if not permanent_matches_filter(perm, filters):
-            return False
-        if filters.get("exclude_self") and perm is context.source_permanent:
-            return False
-        if filters.get("controller") == "you" and not game.controls(
-            game.players.index(caster), perm
-        ):
-            return False
-        return True
+        #
+        # Through ``subject_matches``, **not** the pure matcher and its two
+        # hand-written seat tests. Those covered `controller` and `exclude_self`
+        # and nothing else relative, so a *relation* in the phrase was carried
+        # by the payload and tested by nobody: "target green creature
+        # **blocking this creature**" (Barbed-Back Wurm) would have shrunk any
+        # green creature on the table. One reader, with CR 109.5's observer and
+        # the ability's own source, is what keeps the list the picker offers
+        # and the set this shrinks the same list.
+        # "target creature **defending player controls**" (Yare). The seat the
+        # trigger's announcement froze if there is one (CR 603.10), and
+        # otherwise the live combat's — a spell is resolving inside the combat
+        # it names, and outside combat there is no defending player at all
+        # (CR 506.2), which makes the phrase match nothing.
+        defending = (context.trigger_context or {}).get(
+            "trigger_defending_player_index"
+        )
+        if not isinstance(defending, int):
+            defending = game.defending_player_index_now()
+        return subject_matches(
+            game, perm, filters,
+            observer=game.players.index(caster),
+            source=context.source_permanent,
+            defending=defending,
+        )
 
     target_perm = resolve_target_permanent(
         game, context, predicate=_eligible, fallback_players=(target, caster)
@@ -318,6 +337,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     blocking_only = bool(instruction.payload.get("blocking_only"))
     subtypes = tuple(instruction.payload.get("subtypes") or ())
     exclude_types = tuple(instruction.payload.get("exclude_types") or ())
+    with_keywords = tuple(instruction.payload.get("with_keywords") or ())
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
@@ -369,6 +389,16 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # became an artifact after the spell was cast but before it
             # resolved (CR 611.2c fixes the set at resolution, which is now).
             if exclude_types and any(perm.has_type(name) for name in exclude_types):
+                continue
+            # "…all attacking creatures **with flanking**" (Telim'Tor). Asked of
+            # layer 6 (CR 613.1f) rather than of the printed keyword list, the
+            # same reader ``subject_matches`` uses -- so a creature an Aura
+            # granted flanking is in the set, which is the whole reason
+            # `keywords.LINE_DERIVED_KEYWORDS` puts the word back when it grants
+            # the line.
+            if with_keywords and not all(
+                game._has_keyword(perm, word) for word in with_keywords
+            ):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")

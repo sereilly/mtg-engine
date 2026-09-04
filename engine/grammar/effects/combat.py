@@ -215,6 +215,60 @@ def _parse_cant_attack_or_block(
     return _parse_cant_be(stream, subject)
 
 
+def parse_block_count_grant(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.BlockCountGrant | None":
+    """``can block [up to <n>] additional creature(s) <duration>``, or None.
+
+    "That creature can block **up to two additional creatures** this turn."
+    (Yare.) CR 509.1b's block-count restriction lifted for a turn, which is the
+    one direction the combat productions in this file did not read: everything
+    beside it says what a creature may *not* do.
+
+    The count is payload, so "an additional creature" -- the far commoner
+    printing, and the one the pool's static form already carries -- is this
+    production with a 1 rather than a second one. "Up to" and the bare article
+    are the same permission: a ceiling is a ceiling however many of it the
+    defender chooses to use, and CR 509.1b never obliges anyone to block at all.
+
+    The duration is **required**. Without one the sentence is a static ability
+    ("This creature can block an additional creature each combat"), which
+    ``_max_blocks_for`` already derives off the printed text -- so claiming the
+    durationless form here would take that reading away and replace it with a
+    one-shot that never fires.
+
+    Non-consuming on refusal, like every other "can …" reader, so a sentence
+    this cannot finish keeps the refusal it has today.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("can", "block"):
+        stream.reset(mark)
+        return None
+    count = 1
+    if stream.accept_phrase("up", "to"):
+        parsed = _accept_number(stream)
+        if parsed is None:
+            stream.reset(mark)
+            return None
+        count = parsed
+    elif stream.accept_word("an", "a"):
+        pass
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("additional"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("creature", "creatures"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind is None:
+        stream.reset(mark)
+        return None
+    return ast.BlockCountGrant(subject, count, duration)
+
+
 # Participles this production recognizes after "can't be". A closed list, so a
 # restriction the grammar has never seen fails in the parser by name instead of
 # being read as one of these.

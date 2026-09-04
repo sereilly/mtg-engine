@@ -965,3 +965,704 @@ def test_floodgate_counts_islands_when_it_leaves(set_pool):
     assert ground.damage_marked == 2, f"half of five Islands: {game.log}"
     assert flier.damage_marked == 0, "flying is spared"
     assert blue_ground.damage_marked == 2, "black is not blue"
+
+
+# --- W1G1: the combat family ---
+#
+# Cards whose refusal sat in a combat gate rather than in a production: the two
+# printed *restriction* tables (`engine/combat_restrictions.py`,
+# `engine/activation_restrictions.py`), the block relations, and the flanking
+# leftovers round 1 named. Each section below names the card and the layer that
+# was missing.
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w1g1_vanilla(
+    name: str, power: int, toughness: int, text: str = "",
+    subtype: str = "Test", colors: tuple = (),
+) -> CardDefinition:
+    """A creature carrying only its numbers.
+
+    Invented rather than pulled from the pool: every test below is about a
+    relation between two creatures, and a pool creature would bring its own
+    printed line along with the answer.
+    """
+    type_line = f"Creature - {subtype}"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text=text, colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w1g1_nosick(perm: Permanent) -> Permanent:
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g1_game(mine, theirs, active: int = 0) -> Game:
+    """A two-seat game stopped at the declare-attackers step of *active*'s turn."""
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(active)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    return game
+
+
+# --- Shauku, Endbringer: a restriction qualified by the *shared* zone ---
+
+
+def test_shauku_alone_on_the_battlefield_may_attack(set_pool):
+    """"Shauku can't attack **if there's another creature on the
+    battlefield**."
+
+    The qualifier is what makes the card playable at all, and reading "another"
+    as an article would have grounded it permanently -- so the empty-board case
+    is the one that proves the word survived the parse.
+    """
+    shauku = _w1g1_nosick(Permanent(card=set_pool("MIR")["Shauku, Endbringer"]))
+    game = _w1g1_game([shauku], [])
+
+    assert game.can_attack(shauku, 1)
+    assert game.declare_attackers(0, [0])[0]
+
+
+@pytest.mark.parametrize("side", ["mine", "theirs"])
+def test_shauku_is_grounded_by_any_other_creature(set_pool, side):
+    """CR 403.1 makes the battlefield one shared zone, so the clause is not a
+    question about either player's board -- an opponent's creature stops Shauku
+    exactly as its own controller's does. That is the reading the seat-scoped
+    "as long as ... controls" qualifier could not have expressed."""
+    shauku = _w1g1_nosick(Permanent(card=set_pool("MIR")["Shauku, Endbringer"]))
+    other = Permanent(card=_w1g1_vanilla("Bystander", 1, 1))
+    game = _w1g1_game(
+        [shauku, other] if side == "mine" else [shauku],
+        [] if side == "mine" else [other],
+    )
+
+    assert not game.can_attack(shauku, 1)
+    ok, reason = game.declare_attackers(0, [0])
+    assert not ok and "Shauku" in reason
+
+
+def test_shauku_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Shauku, Endbringer"])
+    assert program.supported, program.reason
+    condition = next(
+        i.payload["condition"] for i in program.instructions
+        if i.kind == "cant_attack"
+    )
+    # "Another" reaches the matcher as the key every other reader of a noun
+    # phrase already tests, rather than as a spelling only this table knows.
+    assert condition["subject"]["exclude_self"] is True
+    assert condition["who"] == "anyone"
+
+
+# --- Ekundu Cyclops: a CR 508.1d requirement conditional on the declaration ---
+
+
+def test_ekundu_cyclops_may_attack_alone(set_pool):
+    """"**If a creature you control attacks**, this creature also attacks if
+    able."
+
+    "Also" is what says the condition names another creature. Read as including
+    the Cyclops itself the requirement would be self-satisfying, which is a
+    different card -- so the lone declaration is legal and nothing forces it.
+    """
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+
+    assert game.declare_attackers(0, [0])[0]
+
+
+def test_ekundu_cyclops_must_join_a_declaration(set_pool):
+    """The requirement is about the *set*, not about the creature: a Bear
+    attacking alone is an illegal declaration while the Cyclops could attack,
+    which is why this cannot live in the per-creature ``_must_attack_if_able``
+    predicate."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+
+    ok, reason = game.declare_attackers(0, [1])
+    assert not ok and "Ekundu Cyclops" in reason
+
+    game = _w1g1_game(
+        [_w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"])),
+         _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))], [],
+    )
+    assert game.declare_attackers(0, [0, 1])[0]
+
+
+def test_ekundu_cyclops_is_not_required_when_it_cannot_attack(set_pool):
+    """CR 508.1d obeys a requirement only so far as it is able: a tapped
+    Cyclops cannot attack, so the Bear's declaration stands."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    bear = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Bear", 2, 2)))
+    game = _w1g1_game([cyclops, bear], [])
+    # After the untap step, or CR 502.1 would have undone it.
+    cyclops.tapped = True
+
+    assert game.declare_attackers(0, [1])[0]
+
+
+def test_ekundu_cyclops_is_not_required_by_an_opponents_attack(set_pool):
+    """"A creature **you control**" is CR 109.5's seat -- the controller of the
+    printed line, not whoever happens to be attacking. The Cyclops's own
+    controller declaring nobody leaves it free."""
+    cyclops = _w1g1_nosick(Permanent(card=set_pool("MIR")["Ekundu Cyclops"]))
+    raider = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Raider", 2, 2)))
+    game = _w1g1_game([raider], [cyclops], active=0)
+
+    assert game.declare_attackers(0, [0])[0]
+
+
+# --- Sawback Manticore: a CR 602.5 clause about the source's combat role ---
+
+
+def test_sawback_manticore_refuses_while_out_of_combat(set_pool):
+    """"Activate only **if this creature is attacking or blocking**."
+
+    The distinction from the phase clause beside it (Jade Statue's "only during
+    combat") is the whole point: a Manticore sitting at home during somebody
+    else's combat is in the combat phase and is in neither role. Driven with a
+    legal target on the board, so the refusal that fires is this one rather
+    than the target gate.
+    """
+    manticore = _w1g1_nosick(Permanent(card=set_pool("MIR")["Sawback Manticore"]))
+    raider = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Raider", 4, 4)))
+    game = _w1g1_game([raider], [manticore], active=0)
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+
+    result = game.activate_permanent_ability(
+        1, "Sawback Manticore", permanent_index=0,
+        target_player_index=0, target_permanent_index=0, ability_index=1,
+    )
+    assert not result.supported
+    assert "not attacking or blocking" in result.details
+
+
+def test_sawback_manticore_pings_while_attacking(set_pool):
+    """And the same ability, once the source is in a role. The second
+    activation is refused by the "and only once each turn" conjunct, which
+    ``_conjuncts`` splits off -- proof that admitting the new clause did not
+    swallow the one beside it.
+    """
+    manticore = _w1g1_nosick(Permanent(card=set_pool("MIR")["Sawback Manticore"]))
+    wall = Permanent(card=_w1g1_vanilla("Blocker", 4, 4))
+    game = _w1g1_game([manticore], [wall])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    def ping():
+        return game.activate_permanent_ability(
+            0, "Sawback Manticore", permanent_index=0,
+            target_player_index=1, target_permanent_index=0, ability_index=1,
+        )
+
+    result = ping()
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    assert any("dealt 2 damage to Blocker" in line for line in game.log)
+
+    assert "only once each turn" in ping().details
+
+
+# --- Barbed-Back Wurm and Urborg Panther: the block relation, both spellings ---
+
+
+def _w1g1_blocked(set_pool, attacker_name: str, colors: tuple = ("G",)):
+    """*attacker_name* attacking, blocked by the first of two identical
+    creatures.
+
+    Two on the far side on purpose, and identical: one blocked and one did not,
+    and *nothing about either creature* tells them apart. A dropped relation
+    therefore shows up as the bystander being reachable, which is the only way
+    to see it -- a differently-shaped bystander would be excluded by its shape.
+    """
+    attacker = _w1g1_nosick(Permanent(card=set_pool("MIR")[attacker_name]))
+    others = [
+        Permanent(card=_w1g1_vanilla(name, 5, 5, colors=colors))
+        for name in ("Blocker", "Bystander")
+    ]
+    game = _w1g1_game([attacker], others)
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+    return game, attacker, others
+
+
+def test_barbed_back_wurm_shrinks_only_a_green_blocker(set_pool):
+    """"{B}: Target **green** creature blocking this creature gets -1/-1."
+
+    "Blocking this creature" is ``blocked_by_source`` read from the other end,
+    and it was the one relative narrowing with no payload form -- so the whole
+    ability refused. It has one now, tested by the same ``subject_matches`` its
+    mirror goes through, and the colour rides beside it like any other key.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Barbed-Back Wurm"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    described = ability.instruction.payload["targets"]["filter"]
+    assert described["blocking_source"] is True
+    assert described["color_filter"] == "G"
+
+
+def test_barbed_back_wurm_offers_only_the_creature_in_front_of_it(set_pool):
+    """The picker and the resolution are the same list.
+
+    Both halves matter and each was broken on its own: the enumerator offered
+    every creature on the board without the flag, and the pump handler dropped
+    the relation at resolution because it asked the *pure* matcher.
+    """
+    game, wurm, others = _w1g1_blocked(set_pool, "Barbed-Back Wurm")
+    blocker, bystander = others
+
+    result = game.activate_permanent_ability(
+        0, "Barbed-Back Wurm", permanent_index=0,
+        target_player_index=1, target_permanent_index=1,
+    )
+    assert not result.supported, "the bystander is not blocking this creature"
+
+    result = game.activate_permanent_ability(
+        0, "Barbed-Back Wurm", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    assert (blocker.effective_power, blocker.effective_toughness) == (4, 4)
+    assert (bystander.effective_power, bystander.effective_toughness) == (5, 5)
+
+
+def test_urborg_panther_binds_its_pronoun_to_its_own_source(set_pool):
+    """"Destroy target creature blocking **it**."
+
+    Nothing is printed after the word, so the noun parser reads a
+    back-reference -- and under an activated ability whose whole effect is this
+    one statement there is nothing earlier for it to name. The pronoun is
+    rebound onto the source where the sentence is in view, which is the same
+    rewrite Johtull Wurm's "for each creature blocking it" already needed.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Urborg Panther"])
+    assert program.supported, program.reason
+    destroy = program.activated_abilities[0].instruction
+    assert destroy.kind == "destroy_target_permanent"
+    assert destroy.payload["targets"]["filter"]["blocking_source"] is True
+    assert "blocking_bound_target" not in destroy.payload["targets"]["filter"]
+
+
+def test_a_bare_spell_line_keeps_refusing_the_pronoun(set_pool):
+    """The rewrite is narrow on purpose. A spell's own source is a card on the
+    stack, which blocks nothing, so "Destroy target creature blocking it" as a
+    whole printed line still has no referent and still refuses."""
+    from engine.grammar import compile_line
+
+    result = compile_line("Destroy target creature blocking it.", card_name="Test")
+    assert result.parsed and not result.lowered
+
+
+def test_urborg_panther_destroys_the_creature_blocking_it(set_pool):
+    game, panther, others = _w1g1_blocked(set_pool, "Urborg Panther")
+    blocker, bystander = others
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0,
+        target_player_index=1, target_permanent_index=0, ability_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(blocker)
+    assert game.is_on_battlefield(bystander)
+
+
+def test_urborg_panther_charges_all_three_sacrifices(set_pool):
+    """"Sacrifice a creature named Feral Shadow, a creature named
+    Breathstealer, **and this creature**."
+
+    Three objects under one printed verb, which is two more than the
+    single-object delimiter could see: it stopped at the first comma, read the
+    Shadow and missed both the Breathstealer and the source. A cost charged as
+    one third of what the card prints is an ability activated for less than it
+    says, so the list is read by the grammar *and* by the charger, and capped at
+    what the three cost fields can hold.
+    """
+    pool = set_pool("MIR")
+    panther = _w1g1_nosick(Permanent(card=pool["Urborg Panther"]))
+    shadow = _w1g1_nosick(Permanent(card=pool["Feral Shadow"]))
+    breathstealer = _w1g1_nosick(Permanent(card=pool["Breathstealer"]))
+    library = [pool["Spirit of the Night"], _w1g1_vanilla("Filler", 1, 1)]
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[panther, shadow, breathstealer],
+            library=list(library),
+        ),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0, ability_index=1
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert {card.name for card in game.players[0].graveyard} == {
+        "Urborg Panther", "Feral Shadow", "Breathstealer",
+    }
+
+    index = next(
+        i for i, card in enumerate(game.players[0].library)
+        if card.name == "Spirit of the Night"
+    )
+    assert game.confirm_search_library(0, index)
+    game._settle()
+    assert [perm.card.name for perm in game.players[0].battlefield] == [
+        "Spirit of the Night"
+    ]
+
+
+def test_urborg_panther_pays_nothing_when_a_piece_is_missing(set_pool):
+    """CR 601.2h: the whole cost is unpayable, so the activation is refused with
+    nothing sacrificed -- not the Shadow eaten for an ability that then cannot
+    finish."""
+    pool = set_pool("MIR")
+    panther = _w1g1_nosick(Permanent(card=pool["Urborg Panther"]))
+    shadow = _w1g1_nosick(Permanent(card=pool["Feral Shadow"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[panther, shadow],
+                    library=[pool["Spirit of the Night"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0, ability_index=1
+    )
+    assert not result.supported
+    assert {perm.card.name for perm in game.players[0].battlefield} == {
+        "Urborg Panther", "Feral Shadow",
+    }
+
+
+def test_a_card_name_stops_at_a_list_separator(set_pool):
+    """The bug the three-object cost exposed, which has nothing to do with
+    sacrifice: a comma inside a name is the one a legendary title carries, and
+    the scan ran through this one to the next "and". The first cost object came
+    back asking for a card literally named "Feral Shadow, a creature named
+    Breathstealer" -- a filter matching nothing, so the cost was admitted and
+    could never be paid."""
+    from engine.oracle import parse_activated_ability_cost
+
+    cost = parse_activated_ability_cost(
+        set_pool("MIR")["Urborg Panther"].oracle_text.splitlines()[1]
+    )
+    assert cost.sacrifice_self is True
+    assert cost.sacrifice_filter == {
+        "type_filter": "creature", "named": "feral shadow",
+    }
+    assert cost.sacrifice_also_filter == {
+        "type_filter": "creature", "named": "breathstealer",
+    }
+
+
+# --- Wave Elemental and Telim'Tor: a keyword narrowing on a multi-target ---
+
+
+def test_wave_elemental_taps_the_ground_and_not_the_sky(set_pool):
+    """"Tap up to three target creatures **without flying**."
+
+    The several-target arm gated on a hand-listed three fields written against
+    a handler that asked the *pure* matcher, so a layer-6 question refused --
+    one the sweep arm directly above it has answered since it was written. Both
+    ask ``subject_matches`` now and both gate on what it can test.
+    """
+    elemental = _w1g1_nosick(Permanent(card=set_pool("MIR")["Wave Elemental"]))
+    ground = [
+        Permanent(card=_w1g1_vanilla(f"Footman{i}", 2, 2)) for i in range(3)
+    ]
+    flier = Permanent(
+        card=CardDefinition(
+            name="Skyguard", mana_cost="", cmc=0.0, type_line="Creature - Test",
+            oracle_text="Flying", colors=(), color_identity=(),
+            keywords=("Flying",), produced_mana=(),
+            raw={"name": "Skyguard", "type_line": "Creature - Test",
+                 "power": "2", "toughness": "2"},
+        )
+    )
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[elemental]),
+        PlayerState(name="P2", battlefield=[*ground, flier]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Wave Elemental", permanent_index=0, target_player_index=1,
+        target_permanent_ids=[
+            ground[0].permanent_id, ground[1].permanent_id, flier.permanent_id
+        ],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert [perm.tapped for perm in ground] == [True, True, False]
+    assert not flier.tapped, "the printed narrowing must not be dropped"
+
+
+def test_telim_tor_pumps_only_the_flankers(set_pool):
+    """"Whenever Telim'Tor attacks, all attacking creatures **with flanking**
+    get +1/+1 until end of turn."
+
+    The one card round 1 named and did not buy: the global buff's narrowing
+    vocabulary is hand-listed, and a keyword was not on the list. Asked of layer
+    6 (CR 613.1f), so a creature an Aura gave flanking is in the set -- which is
+    the whole reason ``keywords.LINE_DERIVED_KEYWORDS`` puts the word back when
+    it grants the line.
+    """
+    pool = set_pool("MIR")
+    telim = _w1g1_nosick(Permanent(card=pool["Telim'Tor"]))
+    askari = _w1g1_nosick(Permanent(card=pool["Searing Spear Askari"]))
+    plain = _w1g1_nosick(Permanent(card=_w1g1_vanilla("Footman", 2, 2)))
+    game = _w1g1_game([telim, askari, plain], [])
+
+    before = {
+        perm.card.name: (perm.effective_power, perm.effective_toughness)
+        for perm in (telim, askari, plain)
+    }
+    assert game.declare_attackers(0, [0, 1, 2])[0]
+    game.resolve_stack()
+    game._settle()
+
+    assert (telim.effective_power, telim.effective_toughness) == (
+        before["Telim'Tor"][0] + 1, before["Telim'Tor"][1] + 1,
+    )
+    assert (askari.effective_power, askari.effective_toughness) == (
+        before["Searing Spear Askari"][0] + 1,
+        before["Searing Spear Askari"][1] + 1,
+    )
+    assert (plain.effective_power, plain.effective_toughness) == before["Footman"]
+
+
+def test_a_keyword_the_engine_does_not_implement_refuses_the_anthem(set_pool):
+    """The gate that comes with the narrowing. ``_has_keyword`` answers no for
+    a word no behaviour is registered under, so a filter naming one is not
+    refused anywhere -- it is silently inert, and an inert *positive* filter
+    matches nothing at all. That is a buff the card reports as supported and
+    which reaches nobody, so the line refuses instead."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Creatures with shadow get +1/+1 until end of turn.", card_name="Test"
+    )
+    assert result.parsed and not result.lowered
+    assert "shadow" in result.failure_reason
+
+
+# --- Catacomb Dragon: a halved characteristic in a where-clause ---
+
+
+def test_catacomb_dragon_halves_the_blockers_power(set_pool):
+    """"…gets -X/-0 until end of turn, where X is **half the creature's power,
+    rounded down**."
+
+    Two pieces the where-clause had neither of: an arithmetic over a
+    *characteristic* rather than over a count, and the definite-article
+    possessive ("**the** creature's power" beside the demonstrative one it
+    already read). The halving rides on the count spec like the multiplier and
+    the offset, so `_scaled` applies it -- which is also where the bug was: the
+    characteristic branch was the one computed quantity that never reached that
+    function at all.
+    """
+    dragon = _w1g1_nosick(Permanent(card=set_pool("MIR")["Catacomb Dragon"]))
+    blocker = Permanent(
+        card=CardDefinition(
+            name="Longbowman", mana_cost="", cmc=0.0, type_line="Creature - Test",
+            oracle_text="Reach", colors=(), color_identity=(), keywords=("Reach",),
+            produced_mana=(),
+            raw={"name": "Longbowman", "type_line": "Creature - Test",
+                 "power": "7", "toughness": "7"},
+        )
+    )
+    game = _w1g1_game([dragon], [blocker])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    assert len(game.stack) == 1, "the -X/-0 waits on the stack (CR 603.3)"
+
+    game.resolve_stack()
+    game._settle()
+
+    # 7 // 2 == 3, rounded down as printed.
+    assert (blocker.effective_power, blocker.effective_toughness) == (4, 7)
+
+
+def test_catacomb_dragon_reads_the_printed_exclusions(set_pool):
+    """"…blocked by a **nonartifact, non-Dragon** creature."
+
+    The comma bound on a trigger's subject group is load-bearing -- a condition
+    ends at one -- and this is the one printed shape where a comma falls
+    *inside* the noun phrase. The delimiter stopped at the first one, so the
+    whole condition went unread and the card refused with every line
+    grammar-clean, which is the refusal no census can attribute to a clause.
+    """
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Catacomb Dragon"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.payload["blocker_filter"] == {
+        "type_filter": "creature",
+        "exclude_types": ["artifact"],
+        "exclude_subtypes": ["dragon"],
+    }
+
+    for type_line in ("Artifact Creature - Golem", "Creature - Dragon"):
+        dragon = _w1g1_nosick(Permanent(card=pool["Catacomb Dragon"]))
+        exempt = Permanent(
+            card=CardDefinition(
+                name="Exempt", mana_cost="", cmc=0.0, type_line=type_line,
+                oracle_text="Reach", colors=(), color_identity=(),
+                keywords=("Reach",), produced_mana=(),
+                raw={"name": "Exempt", "type_line": type_line,
+                     "power": "4", "toughness": "4"},
+            )
+        )
+        game = _w1g1_game([dragon], [exempt])
+        assert game.declare_attackers(0, [0])[0]
+        game.advance_combat_phase()
+        assert game.declare_blockers(1, {0: 0})[0]
+
+        assert not game.stack, f"{type_line} is excluded by the printed phrase"
+        game._settle()
+        assert (exempt.effective_power, exempt.effective_toughness) == (4, 4)
+
+
+def test_a_halved_where_clause_must_print_its_rounding(set_pool):
+    """CR 107.1b gives no default. A sentence that halves always says which
+    way, so one that does not is a sentence this is misreading -- and guessing
+    "down" would be a silent arithmetic choice on a number the card never
+    printed."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Target creature gets -X/-0 until end of turn, "
+        "where X is half that creature's power.",
+        card_name="Test",
+    )
+    assert not result.parsed
+    assert "rounding" in result.failure_reason
+
+
+# --- Kukemssa Pirates: "defending player controls" on a steal ---
+
+
+def _w1g1_artifact(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def _w1g1_unblocked_attack(set_pool, extra_own_artifact: bool = False):
+    """Kukemssa Pirates attacking unblocked, with its trigger on the stack
+    resolved and its offer waiting."""
+    pirates = _w1g1_nosick(Permanent(card=set_pool("MIR")["Kukemssa Pirates"]))
+    mine = [Permanent(card=_w1g1_artifact("My Bauble"))] if extra_own_artifact else []
+    theirs = Permanent(card=_w1g1_artifact("Their Relic"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[pirates, *mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    game.advance_combat_phase()
+    game.resolve_stack()
+    return game, pirates, theirs
+
+
+def test_kukemssa_pirates_offers_only_the_defenders_artifact(set_pool):
+    """"…target artifact **defending player controls**".
+
+    The permanent steal refused the seat outright: `object_only_filter` was
+    asked with nothing carried, so every "gain control of target X <seat>
+    controls" in the pool was unsupported for a narrowing the picker was
+    already carrying out for the *linked* durations beside it.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Kukemssa Pirates"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    steal, rider = trigger.instruction.payload["action"] + trigger.instruction.payload["then"]
+    assert steal.kind == "gain_control_of_target"
+    assert steal.payload["controller"] == "defending_player"
+    assert rider.kind == "assign_no_combat_damage_until_eot"
+
+
+def test_kukemssa_pirates_steals_when_the_offer_is_taken(set_pool):
+    """And the offer, taken. The trigger names its target as it goes on the
+    stack (CR 603.3d), which is what the seat had to reach: without it the
+    picker offered nothing and the ability left the stack under CR 603.3c."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    game, pirates, relic = _w1g1_unblocked_attack(set_pool, extra_own_artifact=True)
+    (offer,) = game.pending_optional_pays
+
+    assert game.confirm_optional_pay(offer["player_index"], accept=True)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.controls(0, relic)
+    assert pirates.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE)
+
+
+def test_kukemssa_pirates_declined_steals_nothing_and_hits(set_pool):
+    """The decline branch. "If you do" is what pairs the rider to the steal, so
+    a declined offer leaves the attacker assigning its damage normally."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    game, pirates, relic = _w1g1_unblocked_attack(set_pool)
+    (offer,) = game.pending_optional_pays
+
+    assert game.confirm_optional_pay(offer["player_index"], accept=False)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.controls(1, relic)
+    assert not pirates.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE)

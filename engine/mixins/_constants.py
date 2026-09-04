@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
 from ..cost_tap_records import TAPPED_TO_PAY_FOR
-from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
-                                  CANT_BLOCK_UNTIL_EOT)
+from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
+                                  ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+                                  CANT_BLOCK_UNTIL_EOT,
+                                  MUST_BLOCK_ALL_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
@@ -33,6 +36,18 @@ _EOT_METADATA_KEYS = (
     # the same combat: the two flags above are about being blocked, this one is
     # about blocking.
     CANT_BLOCK_UNTIL_EOT,
+    # "That creature can block up to two additional creatures **this turn**."
+    # (Yare.) The sweep is the duration: the record is a count on the permanent
+    # and nothing else ends it.
+    ADDITIONAL_BLOCKS_UNTIL_EOT,
+    # "Target creature defending player controls can block any number of
+    # creatures **this turn**. It blocks each attacking creature this turn if
+    # able." (Blaze of Glory.) Both halves were written by the handler, read by
+    # the blockers step and by the AI, and swept by **nothing** -- so a card
+    # that says "this turn" made a creature block everything, and have to, for
+    # the rest of the game. Found by adding the count above beside them.
+    CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+    MUST_BLOCK_ALL_UNTIL_EOT,
     # "Until end of turn, Autumn Willow can be the target of spells and
     # abilities controlled by target player as though it didn't have shroud."
     # The sweep *is* the duration: the waiver is a list of seats on the

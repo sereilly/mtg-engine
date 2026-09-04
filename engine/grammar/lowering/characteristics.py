@@ -335,6 +335,14 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                 "card_types", "colors", "excluded_colors", "controller",
                 "attacking", "blocking", "other_than_source", "subtypes",
                 "excluded_types",
+                # "all attacking creatures **with flanking**" (Telim'Tor),
+                # "Creatures **with flying** get +1/+0" (Aether Storm's
+                # neighbours). A layer-6 question (CR 613.1f), so a creature
+                # *granted* the word is in the set and a printed one that lost
+                # it is not -- which is exactly why it cannot be answered off
+                # the printed keyword list and has to reach the handler as
+                # payload.
+                "with_keywords",
             }),
         )
         if leftover:
@@ -377,6 +385,28 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # the permanent matcher OR's them.
         if filt.subtypes:
             payload["subtypes"] = list(filt.subtypes)
+        # "…all attacking creatures **with flanking** get +1/+1 until end of
+        # turn." (Telim'Tor.) Carried rather than dropped for this file's
+        # standing reason: an ignored narrowing is a strictly wider sweep than
+        # the card prints -- here Telim'Tor pumping the defending player's
+        # blockers is not on the table, but it would pump every attacker in a
+        # multiplayer combat. The word is validated against
+        # ``IMPLEMENTED_KEYWORDS`` because a word no behaviour is registered
+        # under makes ``_has_keyword`` answer no for everything, which turns
+        # the buff into a no-op the card reports as supported.
+        if filt.with_keywords:
+            from ...subject_filters import unimplemented_filter_keywords
+
+            unknown = unimplemented_filter_keywords(
+                {"with_keywords": list(filt.with_keywords)}
+            )
+            if unknown:
+                raise LoweringError(
+                    "the global buff cannot test the keyword(s): "
+                    + ", ".join(sorted(unknown)),
+                    node=node,
+                )
+            payload["with_keywords"] = list(filt.with_keywords)
         # "**Nonartifact** creatures get -1/-1 until end of turn." (Stench of
         # Decay.) The type twin of ``exclude_colors`` above, and it is the same
         # argument for carrying it: the noun phrase already read the exclusion,

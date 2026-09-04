@@ -555,3 +555,144 @@ def test_shadowbane_does_not_shield_an_opponents_creature(set_pool):
     assert _damage_dealt(game, threat, 2, source=threat) == 2, (
         f"the phrase names the caster's creatures: {game.log}"
     )
+
+
+# --- W1G1: the combat family ---
+#
+# Yare is the instant half of the combat group: CR 509.1b's block-count ceiling
+# raised rather than tightened, which is the one direction the combat
+# productions did not read.
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w1g1i_creature(name: str, power: int, toughness: int) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w1g1i_nosick(perm: Permanent) -> Permanent:
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g1i_combat(set_pool, attackers: int = 3):
+    """Seat 0 attacking with *attackers* creatures into seat 1's lone Defender,
+    with Yare in seat 1's hand and the attack already declared."""
+    raiders = [
+        _w1g1i_nosick(Permanent(card=_w1g1i_creature(f"Raider{i}", 1, 1)))
+        for i in range(attackers)
+    ]
+    defender = _w1g1i_nosick(Permanent(card=_w1g1i_creature("Defender", 2, 6)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(raiders)),
+        PlayerState(name="P2", battlefield=[defender], hand=[set_pool("MIR")["Yare"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, list(range(attackers)))[0]
+    return game, defender
+
+
+def test_yare_compiles_both_of_its_sentences(set_pool):
+    """The second sentence's "that creature" is the bound object the first one
+    targeted, not a second choice -- so it emits no target description of its
+    own and the handler acts on the spell's one target, the idiom
+    ``lowering/keywords.py`` established for the identical pronoun."""
+    program = compile_card_oracle(set_pool("MIR")["Yare"])
+    assert program.supported, program.reason
+    (sequence, _pattern) = program.instructions
+    steps = sequence.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "pump_target_creature_until_eot", "grant_additional_blocks_until_eot",
+    ]
+    assert steps[1].payload == {"count": 2}
+
+
+def test_yare_lets_one_creature_block_three(set_pool):
+    """CR 509.1b's ceiling raised by two. The permission **adds** to the
+    printed default rather than replacing it -- a creature blocks one attacker
+    to begin with, so "up to two additional" is three."""
+    game, defender = _w1g1i_combat(set_pool)
+    assert game._max_blocks_for(defender) == 1
+
+    result = game.cast_from_hand(
+        1, "Yare", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert (defender.effective_power, defender.effective_toughness) == (5, 6)
+    assert game._max_blocks_for(defender) == 3
+
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: [0, 1, 2]})[0]
+
+
+def test_yare_ends_with_the_turn(set_pool):
+    """"…this turn" is the sweep, and the sweep is what says so: a granted
+    combat permission nothing clears is a permanent one. Blaze of Glory's two
+    flags had exactly that hole -- written by a handler, read by the blockers
+    step and by the AI, swept by nothing -- and were found by putting this
+    count beside them."""
+    game, defender = _w1g1i_combat(set_pool)
+    assert game.cast_from_hand(
+        1, "Yare", target_player_index=1, target_permanent_index=0
+    ).supported
+    game.resolve_stack()
+    game._settle()
+    assert game._max_blocks_for(defender) == 3
+
+    game.resolve_cleanup_step(0)
+
+    assert game._max_blocks_for(defender) == 1
+
+
+def test_yare_is_uncastable_with_no_combat(set_pool):
+    """"Target creature **defending player controls**" outside combat names a
+    seat that does not exist (CR 506.2), so the spell has no legal target.
+
+    That is the answer rather than a fallback, and it is the half of the
+    defending-player narrowing a *spell* needed: a trigger's announcement
+    freezes the seat because its combat may be over by resolution, and a spell
+    has no such record because it is being cast right now.
+    """
+    defender = _w1g1i_nosick(Permanent(card=_w1g1i_creature("Defender", 2, 6)))
+    game = Game(players=[
+        PlayerState(name="P1"),
+        PlayerState(name="P2", battlefield=[defender],
+                    hand=[set_pool("MIR")["Yare"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.cast_from_hand(
+        1, "Yare", target_player_index=1, target_permanent_index=0
+    )
+    assert not result.supported
+    assert game._max_blocks_for(defender) == 1
+
+
+def test_yare_does_not_reach_the_attacking_players_creatures(set_pool):
+    """The narrowing the picker had no way to answer, and which the pump
+    handler dropped on the other side: "defending player controls" is a seat,
+    and both ends now read the live combat's."""
+    game, _defender = _w1g1i_combat(set_pool)
+
+    result = game.cast_from_hand(
+        1, "Yare", target_player_index=0, target_permanent_index=0
+    )
+    assert not result.supported, "an attacker is not a creature the defender controls"

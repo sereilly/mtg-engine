@@ -199,7 +199,16 @@ def count_from_payload(
         return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
-        return _characteristic_of_object(game, context, characteristic, instruction)
+        # Scaled here, like every aggregate below: "…where X is **half** the
+        # creature's power, rounded down" (Catacomb Dragon) puts the halving on
+        # *this* spec, and this was the one computed quantity that never
+        # reached `_scaled` at all. A scaling honoured at some return sites and
+        # forgotten at others is the dropped-rider bug with an arithmetic face,
+        # which is the reason that function exists.
+        return _scaled(
+            _characteristic_of_object(game, context, characteristic, instruction),
+            spec,
+        )
     scope = spec.get("owner", "you")
     if scope == "you":
         owner = context.caster
@@ -277,6 +286,13 @@ def _characteristic_of_object(
     The offset is applied before the floor, so "its toughness minus 1" on a 0/1
     is 0 rather than -1 — an amount is never negative here, and the sign a
     pump prints travels separately.
+
+    The multiplier and the halving are **not** applied here. They ride the
+    *outer* spec — "half the creature's power, rounded down" (Catacomb Dragon)
+    is `{"object_characteristic": {…}, "half": "down"}` — and the offset above
+    rides the inner one, so a `_scaled` call taken with this function's own
+    argument would read the wrong dict and apply the offset twice. The caller
+    scales, which is where every other aggregate is scaled too.
     """
     offset = int(spec.get("offset", 0) or 0)
     name = spec.get("characteristic", "mana_value")

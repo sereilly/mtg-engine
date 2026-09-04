@@ -562,6 +562,45 @@ def _legal_declaration(
     return [idx for idx, _perm in pruned]
 
 
+def _with_conditional_requirements(
+    game: Game, attacking_player_index: int, chosen: list[int], legal: list[int]
+) -> list[int]:
+    """*chosen*, plus every legal attacker the set itself now **requires**.
+
+    The mirror of :func:`_legal_declaration` one rule over. That one prunes
+    until a restriction stops being disobeyed; this one adds until a
+    *requirement* is obeyed — "If a creature you control attacks, this creature
+    also attacks if able" (Ekundu Cyclops) is conditional on the rest of the
+    declaration, so a set that was legal before a creature was added can stop
+    being legal because of it.
+
+    Asked of the engine rather than re-read here, for ``_legal_declaration``'s
+    reason: a second copy of the rule in the AI drifts, and the direction it
+    drifts is a seat whose whole declaration is refused and which therefore
+    attacks with nobody all game.
+
+    Terminates because each pass adds at least one creature out of a finite
+    list, and a set that adds nothing is stable.
+    """
+    picked = list(chosen)
+    while True:
+        declared = [
+            perm for perm in
+            (game.permanent_at(attacking_player_index, idx) for idx in picked)
+            if perm is not None
+        ]
+        added = [
+            idx for idx in legal
+            if idx not in picked
+            and game._must_attack_beside(
+                game.permanent_at(attacking_player_index, idx), declared
+            )
+        ]
+        if not added:
+            return picked
+        picked.extend(added)
+
+
 def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     """Return indices of creatures that should attack this turn.
 
@@ -612,6 +651,9 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
             chosen.append(idx)
+    chosen = _with_conditional_requirements(
+        game, attacking_player_index, chosen, legal_attackers_list
+    )
     chosen = _legal_declaration(game, attacking_player_index, chosen)
 
     # Go all-in when lethal is on the table.

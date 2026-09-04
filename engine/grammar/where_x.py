@@ -16,6 +16,7 @@ from . import ast
 from .amounts import accept_counters_on_source
 from .records import accept_added_base, accept_damage_dealt_this_turn, accept_exiled_for_cost, accept_sacrificed_for_cost
 
+from .errors import GrammarError
 from .lexer import NUMBER
 from .nouns import parse_object_filter
 from .stream import TokenStream
@@ -167,6 +168,19 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
         return None
     if not (stream.accept_word("x") and stream.accept_word("is")):
         raise stream.error("expected 'X is' after 'where'")
+    return _parse_where_x_alternatives(stream)
+
+
+def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
+    """Everything a "where X is" clause may say, once the words are consumed.
+
+    Split from :func:`parse_where_x_definition` so the arithmetic wrappers can
+    recurse over **all** of it. "Half the creature's power" is a fraction of a
+    characteristic, and the wrappers used to descend into
+    :func:`parse_where_x_definition_body` alone -- the three aggregates and the
+    payment channels -- so a fraction of anything the branches above that read
+    was a sentence with no reader at all.
+    """
     # "…where X is **its** mana value" / "…where X is **its toughness minus
     # 1**". A characteristic of the object the sentence already named rather
     # than an aggregate over a set, so it carries no filter — read first
@@ -210,16 +224,54 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     # what they mean is identical — the referent travels on the same node and
     # is matched against the sentence's target roles by the same lowering — and
     # two would be two answers to which characteristics a card may name.
+    # "**that** creature's power" and "**the** creature's power" (Catacomb
+    # Dragon) are one referent with two articles. Both are read here rather
+    # than only the demonstrative, because what decides the referent is not the
+    # article: the phrase travels on the node and the lowering matches it
+    # against the sentence's target roles, refusing when it names none of them.
+    # So a definite article that pointed at something else would refuse rather
+    # than read a characteristic off the wrong object.
     possessive_mark = stream.mark()
-    if stream.accept_word("that"):
-        referent = parse_object_filter(stream)
-        if stream.accept_word("'s"):
+    if stream.accept_word("that", "the"):
+        # Speculative in full, refusal included. "The" is also the first word of
+        # "the number of …", which is not a possessive at all — so the noun
+        # parser is *expected* to refuse here, and letting that refusal escape
+        # would take down every count in the pool. The demonstrative never had
+        # this problem because nothing else in this clause begins with it.
+        try:
+            referent = parse_object_filter(stream)
+        except GrammarError:
+            referent = None
+        if referent is not None and stream.accept_word("'s"):
             for phrase, name in _SUBJECT_CHARACTERISTICS:
                 if stream.accept_phrase(*phrase):
                     return ast.CharacteristicOfSubject(
                         name, _accept_offset(stream), referent
                     )
     stream.reset(possessive_mark)
+    # "…where X is **half** the creature's power, **rounded down**" (Catacomb
+    # Dragon). The mirror of the multiplier below and read in the same place
+    # for the same reason: the halving is not a property of any one definition
+    # under it, so folding it into one would leave every other definition
+    # unable to carry a fraction the card printed. ``ast.Half`` is the node the
+    # amount parser already produces for "half X, rounded down" everywhere
+    # else, so one printed idea stays one node.
+    #
+    # The rounding word is **required**. CR 107.1b leaves no default -- a card
+    # that halves always says which way -- so a sentence missing it is a
+    # sentence this is misreading, and guessing "down" would be a silent
+    # arithmetic choice on a number the card never printed.
+    halving = stream.mark()
+    if stream.accept_word("half"):
+        inner = _parse_where_x_alternatives(stream)
+        if not (stream.accept_punct(",") and stream.accept_word("rounded")):
+            raise stream.error("a halved where-clause must print its rounding")
+        word = stream.peek_word()
+        if word not in ("down", "up"):
+            raise stream.error("a halved where-clause must print its rounding")
+        stream.advance()
+        return ast.Half(inner, rounding=word)
+    stream.reset(halving)
     # "…where X is **twice** the number of white creatures that player
     # controls" (Jovial Evil). A multiplier in front of whatever definition
     # follows, read here so it scales every one of them rather than only the

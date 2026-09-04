@@ -84,6 +84,32 @@ class CombatRestriction:
 
 
 @dataclass(frozen=True)
+class BlockCountGrant:
+    """``<subject> can block up to <n> additional creatures <duration>.`` (Yare.)
+
+    CR 509.1b's block-count restriction lifted rather than tightened: the
+    printed default is one attacker, and this raises the ceiling for the
+    duration the card names. The *permission* twin of ``CombatRestriction``,
+    and a node of its own for the reason that family keeps
+    ``cant_be_blocked_by`` and ``cant_be_blocked_except_by`` apart -- a
+    permission and a restriction say opposite things about everything they do
+    not name, and one node with a polarity flag is how the two come to be read
+    as each other.
+
+    ``count`` is how many *additional* attackers, so the far commoner printing
+    ("an additional creature") is this node with a 1 rather than a second
+    production -- the same number the pool's static form already counts by
+    repetition. ``duration`` is required in practice: without one the sentence
+    is a static ability, which ``_max_blocks_for`` already derives off the
+    printed text.
+    """
+
+    subject: Recipient
+    count: int
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class RemoveFromCombat:
     """``Remove <subject> from combat.`` (Disharmony; CR 506.4c.)
 

@@ -22,7 +22,8 @@ import dataclasses
 from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
+                                untestable_filter_keys)
 from ._common import (
     _describe_several_targets,
     _describe_targets,
@@ -345,44 +346,38 @@ def _lower_tap(
         # Gated to exactly what that handler reads: a *targeted* "up to N" /
         # "N target". `_describe_several_targets` refuses the untargeted
         # spelling itself ("up to four lands", Rewind, is chosen on
-        # resolution), and the key gate keeps a narrowing the handler's
-        # `permanent_matches_filter` plus its two seat tests cannot answer from
-        # compiling into a wider tap.
+        # resolution), and the key gate keeps a narrowing the matcher cannot
+        # answer from compiling into a wider tap.
         #
         # **The type is not part of that gate**, and used to be: this arm
         # demanded `card_types == ("creature",)` where its untap twin below
         # demands nothing, so "{X}{X}{1}, {T}: Tap **X target lands**"
         # (Floodwater Dam) refused on a restriction the handler does not have.
-        # A card type is exactly what `permanent_matches_filter` answers about
-        # a permanent alone — it is the one key Ali Baba's single-target tap has
-        # always ridden — and the two seat keys the sweep cannot answer purely
-        # are asked by `_tap_several_targets` itself.
-        if (
-            isinstance(node, ast.Tap)
-            and not _restrictions_beyond(
-                spec.filter, frozenset({"card_types", "controller", "other_than_source"})
-            )
-        ):
-            several = _filter_payload(spec.filter)
-            _describe_several_targets(several, spec)
-            return (OracleInstruction("tap_target_permanent", "", several),)
-        # "Untap X target lands." (Candelabra of Tawnos.) Untap reaches the same
-        # several-targets opt-in the tap above uses: `untap_target_permanent`
-        # resolves a list when the description says there is one.
         #
-        # Gated the same way, and for the same reason — the filter must be one
-        # the handler's `permanent_matches_filter` can answer in full, or a
-        # narrowing would be dropped and the untap would reach more permanents
-        # than the card names.
-        if (
-            isinstance(node, ast.Untap)
-            and not _restrictions_beyond(
-                spec.filter, frozenset({"card_types", "controller", "other_than_source"})
-            )
-        ):
+        # **Nor is the gate a hand-listed three fields any more.** It was
+        # `card_types` plus the two seat keys, written against a handler that
+        # asked `permanent_matches_filter` and tested those two seats itself —
+        # so "Tap up to three target creatures **without flying**" (Wave
+        # Elemental) refused on a layer-6 question `subject_matches` answers
+        # perfectly well, and has answered for the *sweep* one branch up since
+        # it was written. Both handlers ask that one matcher now, so both gate
+        # on `TESTABLE_SUBJECT_FILTER_KEYS` — the same claim, in the same
+        # words, that every other consumer of a noun phrase makes.
+        if isinstance(node, (ast.Tap, ast.Untap)):
             several = _filter_payload(spec.filter)
+            unknown = untestable_filter_keys(several)
+            if unknown:
+                raise LoweringError(
+                    "the several-target tap/untap cannot test: "
+                    + ", ".join(sorted(unknown)),
+                    node=node,
+                )
             _describe_several_targets(several, spec)
-            return (OracleInstruction("untap_target_permanent", "", several),)
+            kind = (
+                "tap_target_permanent" if isinstance(node, ast.Tap)
+                else "untap_target_permanent"
+            )
+            return (OracleInstruction(kind, "", several),)
         raise LoweringError("no handler taps or untaps several targets", node=node)
     if not _is_target(spec):
         # "…unless you **tap an untapped creature you control**." (Koskun

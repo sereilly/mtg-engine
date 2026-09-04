@@ -154,6 +154,7 @@ from .stack import (
     _parse_cost_x_definition,
 )
 from .combat import (
+    parse_block_count_grant,
     _parse_assigns_no_combat_damage,
     _parse_force_chosen_creature_to_attack,
     _parse_attacking_doesnt_tap,
@@ -286,6 +287,7 @@ __all__ = [
     "_parse_x_spend_restriction",
     "_parse_cost_x_definition",
     "_parse_cant_attack_or_block",
+    "parse_block_count_grant",
     "_parse_assigns_no_combat_damage",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",

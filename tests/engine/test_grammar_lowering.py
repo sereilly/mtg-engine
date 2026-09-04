@@ -170,17 +170,21 @@ def test_a_restriction_the_table_cannot_carry_is_refused_not_widened():
     it.
 
     The example used to be "Creatures **with** flying get +1/+1", which Serra
-    Aviary then printed and ``LordBuffFilter.with_keywords`` learned to carry.
-    Its negation is the sharper pin anyway: the two sentences differ by one
-    word, one of them is a restriction the consumer can test and the other is
-    not — so what this asserts is the round trip deciding, rather than the
-    table happening to be small.
+    Aviary then printed and ``LordBuffFilter.with_keywords`` learned to carry;
+    then its negation, which Chaosphere printed and ``without_keywords``
+    learned. Both of those are the round trip working — a field arrived and the
+    equality started admitting the sentence — so the pin moved to a restriction
+    the *table* still has no field for at all, with its carried neighbour
+    beside it. The two sentences differ by one clause, one of them is carried
+    and the other is not, so what this asserts is the round trip deciding
+    rather than the table happening to be small.
     """
     carried = compile_line("Creatures with flying get +1/+1.", card_name="Invented Anthem")
     assert carried.lowered, carried.failure_reason
 
     result = compile_line(
-        "Creatures without flying get +1/+1.", card_name="Invented Anthem"
+        "Creatures with power 2 or greater get +1/+1.",
+        card_name="Invented Anthem",
     )
 
     assert result.parsed, result.failure_reason
@@ -1484,8 +1488,13 @@ def test_tap_or_untap_still_refuses_a_restriction_the_matcher_cannot_test():
     """The gate moved out to ``TESTABLE_SUBJECT_FILTER_KEYS``; it did not go
     away. A phrase naming something no filter payload can carry is still
     refused, because it would be dropped where the narrowing is applied."""
+    # "blocking **it**" and not "blocking this creature": the second is testable
+    # now (``blocking_source`` is a payload key, answered off the combat maps
+    # like its mirror), and the first still is not — a back-reference to an
+    # object no earlier clause of this line bound has nothing to resolve
+    # against.
     result = compile_line(
-        "Tap or untap target creature blocking this creature.", card_name="Test"
+        "Tap or untap target creature blocking it.", card_name="Test"
     )
 
     assert result.parsed and not result.lowered

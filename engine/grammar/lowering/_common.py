@@ -178,14 +178,14 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # strips the field and carries the relation as its own payload key.
     "in_combat_with_source": "in_combat_with_source",
     "dealt_damage_to_source_this_turn": "dealt_damage_to_source_this_turn",
-    # "blocking this creature" (The Wretched) — the third source-relative
-    # narrowing, landed the same round as the two above by a sibling branch
-    # that guarded it only through the dataclass-wide payload gates. Its one
-    # admitting lowering (`steal_blockers_of_source`) reads the fields
-    # directly and never builds a payload from the filter, so listing it here
-    # costs that path nothing and buys the same refuse-by-name everywhere
-    # else.
-    "blocking_source": "blocking_source",
+    # "blocking this creature" is **not** here any more. It was, on the
+    # reading that no read of the blocker alone can answer the relation — which
+    # is true, and is also true of ``blocked_by_source``, which has been an
+    # emitted key all along. What separates a relative narrowing that refuses
+    # from one that carries is not whether the *pure* matcher can test it but
+    # whether ``subject_matches`` can, and that function takes the source. So
+    # the field now has a payload form and every lowering carries it, the same
+    # way they all carry its mirror.
     # "…that **blocked or were blocked by** it this turn" (Venomous Breath).
     # A history relative to the object a delayed ability was bound to, so it
     # has no ``to_payload`` form for its one-way sibling's reason — listed here

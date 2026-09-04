@@ -27,3 +27,19 @@ ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
 #: ``engine/combat_restrictions.py``, where the *derivation* of the printed
 #: clause lives, cannot be imported that early.
 CANT_BLOCK_UNTIL_EOT = "cant_block_until_eot"
+
+#: "That creature can block up to two additional creatures this turn." (Yare.)
+#: How many attackers *beyond the printed one* this permanent may block for the
+#: rest of the turn, read by ``_max_blocks_for`` and swept with the turn. A
+#: count rather than a flag, because CR 509.1b's ceilings add: two copies of the
+#: spell are four extra attackers, and a creature whose own printed line already
+#: blocks an additional one keeps that too.
+ADDITIONAL_BLOCKS_UNTIL_EOT = "additional_blocks_until_eot"
+
+#: Blaze of Glory's pair. Both are named here rather than spelled at their two
+#: call sites for this module's stated reason -- and because naming them is what
+#: got them into the cleanup sweep: "this turn" was written on the card and
+#: nothing ever cleared either flag, so one Blaze of Glory made a creature able
+#: to block every attacker, and obliged to, for the rest of the game.
+CAN_BLOCK_ANY_NUMBER_UNTIL_EOT = "can_block_any_number_until_eot"
+MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"

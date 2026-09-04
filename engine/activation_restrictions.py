@@ -414,6 +414,52 @@ def _during_combat(game: "Game", controller_index: int, source) -> bool:
     return game.current_turn_phase == "combat"
 
 
+def _source_in_combat(game: "Game", controller_index: int, source, match) -> bool:
+    """"Activate only if this creature is **attacking or blocking**." (Sawback
+    Manticore.)
+
+    A state of the ability's own *source*, which is what separates it from
+    ``_during_combat`` above: Jade Statue's clause is satisfied by the phase,
+    and this one is not — a Manticore sitting at home during somebody else's
+    combat is in the combat phase and is neither attacking nor blocking.
+
+    Read through the same two accessors ``permanent_matches_filter`` uses for
+    the printed adjectives ("target **attacking** creature"), so the role this
+    asks about and the role a noun phrase names are one answer. CR 508.1a and
+    CR 509.1g both make the role a state of the permanent, stamped by the
+    declaration step and cleared when it leaves combat, so nothing here needs
+    the combat maps.
+
+    The two words are payload rather than two rows, because a card printing
+    only one half ("Activate only if this creature is attacking", which Magic
+    prints often) is this rule with one conjunct, not a different rule. With no
+    source there is no permanent to be in a role, and the answer is no — the
+    direction that refuses an activation rather than allowing one the card
+    forbids.
+    """
+    if source is None:
+        return False
+    from .handlers._common import state_holds
+
+    words = [word for word in match.group("roles").split(" or ")]
+    return any(state_holds(source, word) for word in words)
+
+
+def _readable_source_roles(match: "re.Match[str]") -> bool:
+    """Whether every printed role in the clause is one ``state_holds`` answers.
+
+    ``state_holds`` answers False for a word it has never heard of, which for a
+    *restriction* is the safe direction per activation but the wrong one for the
+    support gate: a clause naming an unknown role would read as understood and
+    then forbid the ability outright. So the gate refuses the clause instead and
+    the card is reported unsupported naming it.
+    """
+    return all(
+        word in ("attacking", "blocking")
+        for word in match.group("roles").split(" or ")
+    )
+
+
 def _during_declare_blockers(game: "Game", controller_index: int, source) -> bool:
     """Lesser Werewolf. A window scoped to a *step* and to neither player's
     turn: blockers are declared on the defending player's behalf during the
@@ -1274,6 +1320,21 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only during combat$"),
         _during_combat,
         "only during combat",
+    ),
+    ActivationRestriction(
+        # "Activate only if this creature is attacking or blocking." (Sawback
+        # Manticore.) Beside the phase row above because the two look alike and
+        # are not: that one asks what step the game is in, this asks what the
+        # source is *doing*. The printed roles are payload, so the one-role
+        # spelling every set prints is this row rather than a second one.
+        re.compile(
+            r"^activate only if this creature is "
+            r"(?P<roles>attacking(?: or blocking)?|blocking(?: or attacking)?)$"
+        ),
+        _source_in_combat,
+        "this creature is not attacking or blocking",
+        reads_payload=True,
+        payload_readable=_readable_source_roles,
     ),
     ActivationRestriction(
         re.compile(

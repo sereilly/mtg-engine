@@ -668,6 +668,14 @@ def count_spec(
     # above would have read as the source controller's.
     if filt.blocking_source:
         spec["blocking_source"] = True
+        # …and out of the filter it is now emitted into. The evaluator resolves
+        # the relation itself (it holds the source and the combat maps) and
+        # then tests each blocker with the *pure* matcher, which has no key for
+        # it — so a copy left inside would be a key nothing reads, and every
+        # count spec written before the key existed would move. Lifted rather
+        # than left redundant, so `oracle_diff` stays quiet about cards this
+        # change is not about.
+        payload.pop("blocking_source", None)
     # Omitted when it is the default, so every spec written before aggregates
     # existed is byte-identical.
     if aggregate != "count":
@@ -793,6 +801,20 @@ def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
 
 def _x_definition_spec(definition: ast.Amount, node) -> dict:
     """The spec behind a where-clause's X, whichever aggregate it names."""
+    # "…, where X is **half** the creature's power, **rounded down**."
+    # (Catacomb Dragon.) The halving rides on the spec rather than on the
+    # definition, so every alternative below carries it without knowing it can
+    # — `_scaled` is the one place that applies it, the same arrangement the
+    # multiplier and the offset already have. Unwrapped first because it is not
+    # a definition at all: it is an arithmetic over whichever one follows.
+    if isinstance(definition, ast.Half):
+        spec = _x_definition_spec(definition.of, node)
+        spec["half"] = definition.rounding
+        # Omitted at 2, so every spec written before fractions existed stays
+        # byte-identical (see `ast.Half`).
+        if definition.divisor != 2:
+            spec["divide_by"] = definition.divisor
+        return spec
     if isinstance(definition, ast.GreatestPowerAmong):
         return count_spec(definition.filter, node, aggregate="greatest_power")
     if isinstance(definition, ast.ColorsAmong):

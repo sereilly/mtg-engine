@@ -1310,6 +1310,22 @@ class LegalityMixin:
         kind = spec["kind"]
         if kind in ("none", "modal"):
             return []
+        # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
+        # Yare). Not relative to the seat choosing but to a combat, and which
+        # combat depends on who is asking: a *trigger* names the one it fired
+        # in, which may be over by the time it resolves, so the announcement
+        # freezes the seat and passes it on the spec. A **spell** has no such
+        # record -- it is being cast right now -- so the seat is the live
+        # combat's, through the one reader that asks CR 506.2's strict
+        # question. Outside combat there is no defending player at all, so the
+        # card has no legal target, which is the answer rather than a fallback.
+        #
+        # Resolved once, here, because the phrase is read twice below: as a
+        # flag on the seat loop, and inside the printed noun phrase every
+        # candidate goes through.
+        defending_seat = spec.get("defending_player_index")
+        if defending_seat is None:
+            defending_seat = self.defending_player_index_now()
         if kind == "hand_card":
             return self._enumerate_cost_hand_cards(
                 caster_index, card, spec, for_cast=for_cast
@@ -1395,14 +1411,21 @@ class LegalityMixin:
             # the other direction.
             if spec.get("opponent_only") and seat == caster_index:
                 continue
-            # "…**defending player controls**" (Floral Spuzzem). Not relative
-            # to the seat choosing but to the combat the ability's trigger
-            # fired in, so the seat travels on the spec beside the flag. A flag
-            # with no seat offers nothing rather than everything: a narrowing
-            # nobody can answer must refuse, never widen.
-            if spec.get("defending_player_only") and seat != spec.get(
-                "defending_player_index"
-            ):
+            # "…**defending player controls**" (Floral Spuzzem, Yare). Not
+            # relative to the seat choosing but to a combat, and which combat
+            # depends on who is asking: a *trigger* names the one it fired in,
+            # which may be over by the time it resolves, so the announcement
+            # freezes the seat and passes it on the spec. A **spell** has no
+            # such record — it is being cast right now — so the seat is the
+            # live combat's, through the engine's one reader.
+            #
+            # The supplied seat wins wherever there is one, which is what keeps
+            # a trigger reading its own combat rather than whatever is
+            # happening when it resolves. And a flag with no seat and no combat
+            # still offers nothing rather than everything: outside combat there
+            # is no defending player (CR 506.2), so the card has no legal
+            # target, which is the answer rather than a fallback.
+            if spec.get("defending_player_only") and seat != defending_seat:
                 continue
             # "…**that player** controls" (Fatal Lore). The same arrangement one
             # record over: CR 700.2e's mode choice froze the seat, and the
@@ -1425,17 +1448,23 @@ class LegalityMixin:
 
                     if perm is attached_host(self, source_permanent):
                         continue
-                # The two combat *relations* a target description can print.
+                # The three combat *relations* a target description can print.
                 # Both are asked through ``subject_matches`` — the one reader of
                 # what a printed noun phrase means — with the observer and
                 # source this loop holds, so the list the picker offers and the
                 # set the handler affects are decided by the same function.
                 # A flag with nothing to answer it against offers nothing, which
                 # is the direction that cannot widen a target description.
-                if spec.get("blocked_by_source") or spec.get("attacking_you"):
+                if (
+                    spec.get("blocked_by_source")
+                    or spec.get("blocking_source")
+                    or spec.get("attacking_you")
+                ):
                     relation = {
                         key: True
-                        for key in ("blocked_by_source", "attacking_you")
+                        for key in (
+                            "blocked_by_source", "blocking_source", "attacking_you",
+                        )
                         if spec.get(key)
                     }
                     if not subject_matches(
@@ -1450,7 +1479,9 @@ class LegalityMixin:
                 # the list accepted there are the same list — a picker offering
                 # an ineligible permanent would have its answer silently
                 # replaced by the deterministic pick.
-                if not subject_matches(self, perm, spec.get("filter")):
+                if not subject_matches(
+                    self, perm, spec.get("filter"), defending=defending_seat
+                ):
                     continue
                 if not paying_a_cost:
                     if for_cast:
@@ -1478,6 +1509,7 @@ class LegalityMixin:
                             ability_instruction, perm,
                             candidate_seat=seat, controller_index=caster_index,
                             source_permanent=source_permanent,
+                            defending=defending_seat,
                         ):
                             continue
                 targets.append({
@@ -1503,9 +1535,16 @@ class LegalityMixin:
     def _ability_target_legal(
         self, instruction, perm: Permanent, *,
         candidate_seat=None, controller_index=None, source_permanent=None,
+        defending: int | None = None,
     ) -> bool:
         """Whether *perm* satisfies an activated ability instruction's own target
-        restriction (beyond the text-derived kind)."""
+        restriction (beyond the text-derived kind).
+
+        *defending* is CR 506.2's seat, resolved by the caller and handed down
+        for the generic tail's ``subject_matches`` -- a printed "defending
+        player controls" is a narrowing like any other and must be tested, not
+        dropped, at the one place that decides what a picker offers.
+        """
         instruction = _targeting_step(instruction) or instruction
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
@@ -1689,6 +1728,7 @@ class LegalityMixin:
                 subject_matches(
                     self, perm, slot or {},
                     observer=controller_index, source=source_permanent,
+                    defending=defending,
                 )
                 for slot in slot_filters
             )
@@ -1697,6 +1737,7 @@ class LegalityMixin:
             return subject_matches(
                 self, perm, described,
                 observer=controller_index, source=source_permanent,
+                defending=defending,
             )
         return True
 

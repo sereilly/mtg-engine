@@ -69,6 +69,8 @@ class CombatRestriction:
 #                                   + declare_attackers (the charge)
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
+#   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
+#                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
 #                                   phases/declare_attackers_step.can_attack
 #   cant_be_blocked_by              phases/declare_blockers_step
@@ -79,6 +81,7 @@ class CombatRestriction:
 #   creatures_that_attacked_last_turn_cant_attack
 #                                   phases/declare_attackers_step.can_attack
 #   can_block_only_with_keyword     phases/declare_blockers_step
+#   subject_can_block_only          phases/declare_blockers_step (a board scan)
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
@@ -271,6 +274,26 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
+    # "**If a creature you control attacks**, this creature also attacks if
+    # able." (Ekundu Cyclops.) CR 508.1d's requirement with a condition, and
+    # the condition is about the *declaration being made* rather than about the
+    # board — which is why it cannot ride `must_attack_each_combat`'s
+    # per-creature predicate and gets its own kind. The noun phrase is payload
+    # for every other noun in this file's reason: a card printing "if a Goblin
+    # you control attacks" is this rule, not a new one.
+    #
+    # "Also" is what says the condition excludes the creature itself: a lone
+    # Cyclops is not "a creature you control" that attacked, so nothing
+    # requires it to attack. The enforcement site tests the *other* declared
+    # attackers, which is the only reading that does not make the requirement
+    # self-satisfying.
+    (
+        re.compile(
+            r"^if an? (?P<attack_partner>.+) attacks, "
+            r"this creature also attacks if able$"
+        ),
+        "must_attack_if_partner_attacks",
+    ),
     # "This creature can attack as though it had haste unless it entered this
     # turn." (Chaos Lord.) A *permission* rather than a restriction, and here
     # for the reason `combat_permissions.CANT_BLOCK_UNTIL_EOT` lives beside a
@@ -500,6 +523,27 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "can_block_only_with_keyword",
     ),
+    (
+        # "**Creatures with flying** can block only creatures with flying."
+        # (Chaosphere.) The row above printed about the *board* instead of
+        # about one creature, which makes it a different rule and not that
+        # row's payload: that one is read off the blocker's own program, and
+        # this has to be found by scanning every permanent -- a single kind read
+        # by both loops would ground every blocker in the game the moment one
+        # Chaosphere was in play.
+        #
+        # Both noun phrases are payload, read by the one noun reader on this
+        # page: a card printing "creatures with shadow can block only creatures
+        # with shadow" is this rule, not a new one. Placed **after** the
+        # self-scoped row, per this file's ordering rule -- that one's sentence
+        # begins "this creature" and could not reach here, but a general row
+        # ending in `.+` above it would have claimed the specific one.
+        re.compile(
+            r"^(?P<block_only_subject>creatures[^:]*?) can block only "
+            r"(?P<block_only_allowed>.+)$"
+        ),
+        "subject_can_block_only",
+    ),
 )
 
 
@@ -514,6 +558,23 @@ _AS_LONG_AS = re.compile(
     r"(?:controls?) an? (?P<board>.+)$"
 )
 
+#: "…**if there's another creature on the battlefield**." (Shauku, Endbringer.)
+#: The second printed qualifier, and it differs from the one above in the one
+#: way that matters to the reader: CR 403.1 makes the battlefield a **shared**
+#: zone, so "on the battlefield" is every seat's permanents and not a seat's
+#: board. Written as a second qualifier rather than as a row because it is the
+#: same composition — a condition on whatever restriction precedes it — and
+#: because a row would have had to spell the noun phrase out.
+#:
+#: "Another" is captured rather than swallowed. It is the whole of what makes
+#: the card playable: Shauku alone on the battlefield may attack, and reading
+#: the word as an article would have grounded it permanently — the dropped
+#: rider with a combat face.
+_IF_ON_BATTLEFIELD = re.compile(
+    r"^(?P<rest>.+?) if there's (?:(?P<other>another)|an?) (?P<board>.+) "
+    r"on the battlefield$"
+)
+
 #: The kinds whose enforcement site **asks** about a condition. A qualifier
 #: attached to any other kind would be a restriction applied unconditionally —
 #: silently, and in the direction of doing more than the card says — so the line
@@ -521,7 +582,9 @@ _AS_LONG_AS = re.compile(
 #: is the same claim `activation_restrictions.payload_readable` makes: a row may
 #: match more sentences than it implements, and the ones it does not implement
 #: must refuse rather than drop a clause.
-CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset({"cant_be_blocked_by"})
+CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset(
+    {"cant_be_blocked_by", "cant_attack"}
+)
 
 
 def _printed_noun(phrase: str) -> dict | None:
@@ -570,9 +633,14 @@ def _printed_noun(phrase: str) -> dict | None:
 
 
 def restriction_condition_holds(
-    game, condition: dict | None, *, observer: int | None, defender: int | None
+    game,
+    condition: dict | None,
+    *,
+    observer: int | None,
+    defender: int | None,
+    source=None,
 ) -> bool:
-    """Whether a restriction's "as long as" clause holds right now.
+    """Whether a restriction's qualifying clause holds right now.
 
     ``None`` — no clause — is True: an unqualified restriction always applies.
 
@@ -581,17 +649,34 @@ def restriction_condition_holds(
     the caller cannot name answers False, which keeps the restriction *on*:
     for a clause the card prints as a condition for the restriction applying,
     the safe direction is the one that does not silently widen what may block.
+
+    ``"anyone"`` is not a seat at all. "…if there's another creature **on the
+    battlefield**" (Shauku, Endbringer) names CR 403.1's shared zone, so the
+    scan is every seat's permanents and no seat has to be nameable for the
+    clause to be answered — which is why it is a scope rather than a third
+    value of the seat question.
+
+    *source* is the permanent whose printed line this is, for the "another" the
+    shared-zone qualifier can carry. With no source ``subject_matches`` refuses
+    the key, which leaves the condition false and the restriction off — the
+    direction that lets a creature attack rather than grounding it on a clause
+    nobody could read.
     """
     if not condition:
         return True
     from .subject_filters import subject_matches
 
+    described = condition.get("subject") or {}
+    if condition.get("who") == "anyone":
+        return any(
+            subject_matches(game, perm, described, observer=observer, source=source)
+            for perm in game.all_permanents()
+        )
     seat = defender if condition.get("who") == "defending_player" else observer
     if seat is None or not (0 <= seat < len(game.players)):
         return False
-    described = condition.get("subject") or {}
     return any(
-        subject_matches(game, perm, described, observer=observer)
+        subject_matches(game, perm, described, observer=observer, source=source)
         for perm in game.controlled_by(seat)
     )
 
@@ -623,6 +708,24 @@ def combat_restriction_for(
             return None
         condition = {"who": qualifier.group("who").replace(" ", "_"), "subject": board}
         normalized_line = qualifier.group("rest").strip()
+    else:
+        # The battlefield-wide qualifier, tried only where the seat-scoped one
+        # did not match: a sentence carries one condition clause, and reading
+        # both would let a card state two and have one enforced.
+        shared = _IF_ON_BATTLEFIELD.match(normalized_line)
+        if shared is not None:
+            board = _printed_noun(shared.group("board"))
+            if board is None:
+                return None
+            if shared.group("other"):
+                # "Another" is a comparison against the ability's own source
+                # (CR 109.5), which is exactly what `exclude_self` means to
+                # `subject_matches` — so the word becomes the key every other
+                # reader of a noun phrase already tests, rather than a second
+                # spelling only this file would know.
+                board = {**board, "exclude_self": True}
+            condition = {"who": "anyone", "subject": board}
+            normalized_line = shared.group("rest").strip()
 
     for pattern, kind in _PATTERNS:
         match = pattern.match(normalized_line)
@@ -743,6 +846,30 @@ def combat_restriction_for(
         # captured word here for the reasons written on their rows: an
         # unvalidated word does not widen the restriction, it *over-applies*
         # it, which is just as silent and wrong in the other direction.
+        # "If **a creature you control** attacks…" — the noun the requirement
+        # is conditional on, read here for the reason every other noun on this
+        # page is read here: the regex ends in `.+`, and a phrase admitted
+        # unread would be a requirement conditional on nothing, which fires on
+        # every declaration.
+        attack_partner = payload.pop("attack_partner", None)
+        if attack_partner is not None:
+            described = _printed_noun(attack_partner)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "**Creatures with flying** can block only **creatures with
+        # flying**." Both halves read here for the reason every other noun on
+        # this page is read here: the regex ends in `.+`, and a phrase admitted
+        # unread would be a restriction the gate accepts and the enforcement
+        # applies to the wrong set -- in this direction, to *every* blocker.
+        block_only_subject = payload.pop("block_only_subject", None)
+        if block_only_subject is not None:
+            subject = _printed_noun(block_only_subject)
+            allowed = _printed_noun(payload.pop("block_only_allowed", ""))
+            if subject is None or allowed is None:
+                return None
+            payload["subject"] = subject
+            payload["allowed"] = allowed
         without_keyword = payload.pop("without_keyword", None)
         if without_keyword is not None:
             if without_keyword not in IMPLEMENTED_KEYWORDS:

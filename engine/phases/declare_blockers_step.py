@@ -13,7 +13,10 @@ import random
 import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
-from ..combat_permissions import CANT_BLOCK_UNTIL_EOT
+from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
+                                  CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+                                  MUST_BLOCK_ALL_UNTIL_EOT,
+                                  CANT_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
@@ -92,10 +95,16 @@ class DeclareBlockersStepMixin:
         1; each "can block an additional creature" grant (Two-Headed Giant of
         Foriys) adds one. Blaze of Glory grants "can block any number of creatures",
         modeled as effectively unlimited."""
-        if blocker.metadata.get("can_block_any_number_until_eot"):
+        if blocker.metadata.get(CAN_BLOCK_ANY_NUMBER_UNTIL_EOT):
             return 1_000_000
         text = blocker.effective_card.oracle_text.lower()
-        return 1 + text.count("can block an additional creature")
+        # "That creature can block up to two additional creatures this turn."
+        # (Yare.) A granted ceiling, added to the printed one for CR 509.1b's
+        # reason: restrictions and the permissions that lift them are
+        # cumulative, so a creature whose own line already blocks an additional
+        # one keeps that and gains these.
+        granted = int(blocker.metadata.get(ADDITIONAL_BLOCKS_UNTIL_EOT, 0) or 0)
+        return 1 + text.count("can block an additional creature") + granted
 
     def declare_blockers(
         self,
@@ -351,7 +360,7 @@ class DeclareBlockersStepMixin:
         # can legally block must be among its assignments. Also skipped for
         # Camouflage resolutions.
         for blocker_idx, blocker in enumerate(defender.battlefield if not _camouflage_resolution else ()):
-            if not blocker.metadata.get("must_block_all_until_eot"):
+            if not blocker.metadata.get(MUST_BLOCK_ALL_UNTIL_EOT):
                 continue
             if not blocker.is_creature or blocker.tapped:
                 continue
@@ -921,6 +930,59 @@ class DeclareBlockersStepMixin:
             attacker, str(only_with.payload.get("required_keyword") or "")
         ):
             return False
+
+        # "Creatures with flying can block only creatures with flying."
+        # (Chaosphere.) The restriction above printed about the board, so it is
+        # found by scanning every permanent rather than read off the blocker —
+        # the source is a World Enchantment nobody is attacking or blocking, and
+        # the sentence says "creatures", so it reaches both seats' creatures
+        # including its own controller's.
+        #
+        # Both halves through ``subject_matches``, with **no** observer: neither
+        # noun phrase names a seat, and passing one would let a future "creatures
+        # you control" printing silently mean the wrong board. CR 509.1b keeps
+        # every such restriction cumulative, so each one is asked separately.
+        for permanent in self.all_permanents():
+            for restriction in compile_card_oracle(
+                permanent.effective_card
+            ).instructions:
+                if restriction.kind != "subject_can_block_only":
+                    continue
+                if not subject_matches(
+                    self, blocker, restriction.payload.get("subject") or {}
+                ):
+                    continue
+                if not subject_matches(
+                    self, attacker, restriction.payload.get("allowed") or {}
+                ):
+                    return False
+
+        # "Creatures with flying can block only creatures with flying."
+        # (Chaosphere.) The restriction above printed about the board, so it is
+        # found by scanning every permanent rather than read off the blocker —
+        # its source is a World Enchantment nobody is attacking or blocking, and
+        # the sentence says "creatures", so it reaches both seats' creatures
+        # including its own controller's.
+        #
+        # Both halves through ``subject_matches`` with **no** observer: neither
+        # noun phrase names a seat, and supplying one would let a future
+        # "creatures you control" printing quietly mean the wrong board. CR
+        # 509.1b keeps every such restriction cumulative, so each is asked
+        # separately and satisfying one answers only that one.
+        for permanent in self.all_permanents():
+            for restriction in compile_card_oracle(
+                permanent.effective_card
+            ).instructions:
+                if restriction.kind != "subject_can_block_only":
+                    continue
+                if not subject_matches(
+                    self, blocker, restriction.payload.get("subject") or {}
+                ):
+                    continue
+                if not subject_matches(
+                    self, attacker, restriction.payload.get("allowed") or {}
+                ):
+                    return False
 
         # Landwalk (CR 702.14): the attacker can't be blocked if the defending
         # player controls a land of the matching basic type. The blocker is one of

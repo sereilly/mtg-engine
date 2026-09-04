@@ -97,6 +97,50 @@ def _accept_cost_count(stream: TokenStream) -> "ast.Fixed | None":
     return None
 
 
+def _accept_sacrifice_list_tail(
+    stream: TokenStream,
+) -> "list[ast.ObjectFilter] | None":
+    """The rest of a comma-separated sacrifice list, or None if none is printed.
+
+    "Sacrifice **a creature named Feral Shadow, a creature named Breathstealer,
+    and this creature**" (Urborg Panther). One printed verb naming three
+    objects, which is the two-object "and" tail with an Oxford list in front of
+    it -- and one filter cannot hold them, because every matcher ANDs a filter's
+    keys and no permanent is named two things at once.
+
+    The whole tail is speculative, and it has to be: a comma after a sacrifice
+    is *also* how one cost is separated from the next ("Sacrifice a creature,
+    {T}: …"). So a comma is only a list separator when the list turns out to
+    end in "and <object>", and anything else rewinds to where the first object
+    left off and leaves the comma to the cost loop.
+
+    Returns the objects **after** the first, in printed order; None when the
+    line prints no list.
+    """
+    mark = stream.mark()
+    extra: list[ast.ObjectFilter] = []
+    while True:
+        if stream.accept_word("and"):
+            try:
+                extra.append(_parse_cost_object(stream, "sacrifice"))
+            except GrammarError:
+                stream.reset(mark)
+                return None
+            return extra
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        # The Oxford comma itself: "…, and this creature". The "and" branch at
+        # the top of the loop reads what follows on the next pass.
+        if stream.at_word("and"):
+            continue
+        try:
+            extra.append(_parse_cost_object(stream, "sacrifice"))
+        except GrammarError:
+            stream.reset(mark)
+            return None
+
+
 def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """Whether the payment path can actually collect this sacrifice cost.
 
@@ -434,20 +478,41 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 if not _is_chargeable_sacrifice(several):
                     raise stream.error("no cost path charges a narrowed sacrifice")
                 costs.append(ast.SacrificeCost(several, count=ast.AnyNumber()))
-            elif stream.accept_word("and"):
-                # "Sacrifice a creature **and a Swamp**" (Viscerid Drone). One
-                # printed verb naming two *different* objects, so it becomes two
-                # entries — the same decomposition Sword of the Ages' tail makes
-                # one branch up, with a second noun phrase where that one has a
-                # count. A single filter cannot hold it: the two are ANDed by
-                # every matcher, and "a creature that is also a Swamp" is a
-                # permanent this pool never prints.
-                also = _parse_cost_object(stream, "sacrifice")
-                if not _is_chargeable_sacrifice(also):
-                    raise stream.error("no cost path charges a narrowed sacrifice")
-                costs.append(ast.SacrificeCost(also))
             else:
                 stream.reset(more)
+                # "Sacrifice a creature **and a Swamp**" (Viscerid Drone), and
+                # "…**a creature named Feral Shadow, a creature named
+                # Breathstealer, and this creature**" (Urborg Panther). One
+                # printed verb naming two or three *different* objects, so it
+                # becomes that many entries — the same decomposition Sword of
+                # the Ages' tail makes one branch up, with noun phrases where
+                # that one has a count. A single filter cannot hold them: the
+                # keys are ANDed by every matcher, and "a creature that is also
+                # a Swamp" is a permanent this pool never prints.
+                #
+                # **Capped at three objects, one of which must be the source.**
+                # That is not a grammar limit, it is what the charger can hold:
+                # `ActivatedAbilityCost` has `sacrifice_self` plus two chosen
+                # filters, and a fourth object would be a cost the ability is
+                # admitted with and never charged. Refusing here reports the
+                # card unsupported naming the clause instead — loud, and the
+                # direction that never activates an ability for less than it
+                # prints.
+                also = _accept_sacrifice_list_tail(stream)
+                if also is not None:
+                    chosen = [
+                        filt for filt in (sacrificed, *also) if not filt.is_source
+                    ]
+                    if len(chosen) > 2:
+                        raise stream.error(
+                            "no cost path charges more than two chosen sacrifices"
+                        )
+                    for filt in also:
+                        if not _is_chargeable_sacrifice(filt):
+                            raise stream.error(
+                                "no cost path charges a narrowed sacrifice"
+                            )
+                        costs.append(ast.SacrificeCost(filt))
             stream.accept_punct(",")
             continue
         if stream.accept_word("exile"):

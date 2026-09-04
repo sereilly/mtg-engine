@@ -330,10 +330,27 @@ class TestTargetSelectionPrompts:
         return _game(p1, p2)
 
     def test_blaze_of_glory_targets_a_creature(self):
+        """"Target creature **defending player controls**" (CR 506.2).
+
+        The board is a real combat now, and that is the whole change: the
+        printed seat was enforced nowhere, so this used to find a target with
+        nobody attacking and would happily have offered the caster's own
+        creature. Both halves are asserted — the spell still classifies as
+        targeting a creature and still offers the defender's one — and the
+        seat is checked, which is what the old assertion could not distinguish.
+        """
         game = self._board()
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game.players[0].battlefield[0].metadata["summoning_sickness_turn"] = -99
+        game.advance_combat_phase()
+        game.advance_combat_phase()
+        assert game.declare_attackers(0, [0])[0]
+
         spec = game.cast_target_spec(0, _C["Blaze of Glory"])
         assert spec["kind"] == "creature" and spec["requires_target"]
-        assert len(spec["valid_targets"]) >= 1
+        offered = {target["name"] for target in spec["valid_targets"]}
+        assert offered == {"Hill Giant"}, "only the defending player's creature"
 
     def test_false_orders_targets_a_creature(self):
         game = self._board()

@@ -37,6 +37,7 @@ from .phrases import (
     parse_bound_subject,
 )
 from .effects import (
+    parse_block_count_grant,
     _parse_ante,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
@@ -555,6 +556,14 @@ def parse_subject_verb(
             waived = _parse_can_be_targeted_as_though(stream, source_spec)
             if waived is not None:
                 return waived
+            # "<subject> can block up to two additional creatures this turn"
+            # (Yare) — CR 509.1b's block-count ceiling raised rather than an
+            # "as though" waiver, so it is a third reader beside the two above
+            # rather than a branch inside either: all three share the auxiliary
+            # and nothing else, and all three refuse without consuming.
+            blocks = parse_block_count_grant(stream, source_spec)
+            if blocks is not None:
+                return blocks
         if token.text in ("can't", "cannot"):
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap

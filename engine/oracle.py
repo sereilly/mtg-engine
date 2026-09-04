@@ -223,6 +223,26 @@ SUPPORTED_SPELL_PATTERNS = (
 # Checked in order; first match wins.
 # ---------------------------------------------------------------------------
 
+#: A run of comma-joined **negated** adjectives, for the front of a subject
+#: group -- "a **nonartifact, non-Dragon** creature" (Catacomb Dragon).
+#:
+#: The comma bound on a subject group is load-bearing everywhere in this table:
+#: a trigger condition ends at a comma, so a group bounded by ``[^,]+`` can
+#: never reach into the effect clause. This is the one printed shape where a
+#: comma falls *inside* the noun phrase instead of after it. The noun parser
+#: reads the run perfectly well; only the delimiter could not see past the first
+#: comma, so the whole condition went unread and the card was refused with every
+#: one of its lines grammar-clean -- the refusal the census cannot attribute to
+#: any clause.
+#:
+#: Admitted for a "non-" word alone, which is what keeps the bound load-bearing:
+#: no effect clause begins with one, so the run still cannot cross the trigger's
+#: own comma. A row adopting it is one name; rows that never print the shape
+#: keep the plain bound, per this table's rule that a narrowing is listed once
+#: the pool prints it.
+_NEGATED_ADJECTIVE_RUN = r"(?:non-?[a-z'-]+, )*"
+
+
 # "whenever" triggers
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
@@ -512,7 +532,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # creature that answers the filter (CR 509.1h), where the bare form below
     # fires once for the block itself. Same ordering rule.
     ("creature_becomes_blocked",
-     r"whenever this creature becomes blocked by (?P<blocker_subject>(?:a|another) [^,]+)"),
+     r"whenever this creature becomes blocked by "
+     r"(?P<blocker_subject>(?:a|another) " + _NEGATED_ADJECTIVE_RUN + r"[^,]+)"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     # "Whenever **enchanted creature** becomes blocked" (Bestial Fury). The
     # attacking half of the pair above watched by an Aura rather than by the
@@ -1790,8 +1811,37 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # (round 34). A regex approximating the noun parser is a second reader of
     # one clause, and the direction those drift in is a cost charged more widely
     # than the card prints.
+    # "Sacrifice **a creature named Feral Shadow, a creature named
+    # Breathstealer, and this creature**" (Urborg Panther). An Oxford list of
+    # objects under one printed verb, which the single-object delimiter below
+    # cannot see at all: it stops at the first comma, so it read the Shadow,
+    # missed the Breathstealer and missed the source — a cost charged as one
+    # third of what the card prints, which is the direction that activates an
+    # ability for less than it says.
+    #
+    # Found *before* that delimiter and consumed after it, so the two cannot
+    # both claim the phrase. The whole match must end in "and <object>", which
+    # is what keeps a comma separating two *costs* ("Sacrifice a creature, {T}:
+    # …") from reading as a separator inside one. The grammar reads the same
+    # shape (`costs._accept_sacrifice_list_tail`) and caps it at what these
+    # three fields can hold, which is what keeps the two readers of this clause
+    # from admitting different sentences.
+    sacrifice_list = re.search(
+        r"\bsacrifice ((?:(?:another|an?|this) [^,:]+, )+"
+        r"and (?:another|an?|this) [^,:]+?)\s*(?=,|$)",
+        cost_lower,
+    )
+    sacrifice_list_items = (
+        [
+            part.strip()
+            for part in sacrifice_list.group(1).replace(", and ", ", ").split(", ")
+            if part.strip()
+        ]
+        if sacrifice_list is not None
+        else None
+    )
     chosen_sacrifice = (
-        None if sacrifice_self
+        None if sacrifice_self or sacrifice_list_items is not None
         else re.search(r"\bsacrifice ((?:another|an?) [^,:]+?)\s*(?=,|$)", cost_lower)
     )
     sacrifice_filter = (
@@ -1818,6 +1868,20 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if first_filter is not None and second_filter is not None:
             sacrifice_filter = first_filter
             sacrifice_also_filter = second_filter
+    if sacrifice_list_items is not None:
+        # "…and **this creature**" is the source, which has its own flag and
+        # no filter — the charger sacrifices the ability's own source rather
+        # than picking a permanent that matches a phrase.
+        chosen_items = [
+            item for item in sacrifice_list_items if not item.startswith("this ")
+        ]
+        filters = [_chargeable_sacrifice_filter(item) for item in chosen_items]
+        if len(chosen_items) <= 2 and all(f is not None for f in filters):
+            sacrifice_self = sacrifice_self or len(chosen_items) < len(
+                sacrifice_list_items
+            )
+            sacrifice_filter = filters[0] if filters else None
+            sacrifice_also_filter = filters[1] if len(filters) > 1 else None
     # "Sacrifice this artifact **and any number of creatures you control**"
     # (Sword of the Ages). One printed cost naming two things: the source, read
     # above, and a *set* whose size the payer chooses. The same field carries
