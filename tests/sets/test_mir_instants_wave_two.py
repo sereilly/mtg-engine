@@ -231,3 +231,140 @@ def test_w3g4_delirium_deals_no_damage_when_its_creature_has_left(set_pool):
     _HANDLERS[bite.kind](game, bite, context)
 
     assert game.players[1].life == 20, game.log
+
+
+# --- W4G1: Aleatory's combat window (CR 506.7) ---
+
+from engine import Game as _w4g1i_Game, PlayerState as _w4g1i_PlayerState  # noqa: E402
+from engine.models import Permanent as _w4g1i_Permanent  # noqa: E402
+from tests.helpers import _nosick as _w4g1i_nosick  # noqa: E402
+
+
+def _w4g1i_combat_game(set_pool, spell: str):
+    """Seat 0 holding *spell*, with a creature apiece and an attack to declare.
+
+    Real combat rather than a poked phase where the window is being read: a
+    timing clause is only worth having if the cast path meets it, and stepping
+    the game through its own combat is what puts the card in front of it.
+    """
+    pool = set_pool("MIR")
+    lea = set_pool("LEA")
+    mine = _w4g1i_Permanent(card=lea["Grizzly Bears"])
+    theirs = _w4g1i_Permanent(card=lea["Grizzly Bears"])
+    _w4g1i_nosick(mine)
+    _w4g1i_nosick(theirs)
+    game = _w4g1i_Game(players=[
+        _w4g1i_PlayerState(
+            name="P1", hand=[pool[spell]], library=[pool["Mountain"]] * 6,
+            battlefield=[mine],
+        ),
+        _w4g1i_PlayerState(
+            name="P2", library=[pool["Mountain"]] * 6, battlefield=[theirs],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    game.start_turn(0)
+    return game, mine, theirs
+
+
+def test_w4g1_aleatory_is_refused_before_blockers_are_declared(set_pool):
+    """"Cast this spell only during combat after blockers are declared."
+
+    An unenforced timing clause has no symptom — the spell resolves, the card
+    reports supported, and the game is wrong in its caster's favour — so this
+    drives the cast path at four points the window is shut and checks the card
+    is still in hand each time.
+    """
+    game, mine, _theirs = _w4g1i_combat_game(set_pool, "Aleatory")
+
+    def _refused(where: str) -> None:
+        result = game.cast_from_hand(
+            0, "Aleatory", target_player_index=0, target_permanent_index=0,
+        )
+        assert result.supported is False, f"{where}: {result.details}"
+        assert result.details == (
+            "can only be cast during combat after blockers are declared"
+        ), where
+        assert any(card.name == "Aleatory" for card in game.players[0].hand), where
+
+    _refused("precombat main")
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    _refused("beginning of combat")
+
+    game.advance_combat_phase()  # declare_attackers
+    _refused("declare attackers")
+
+    game.declare_attackers(0, [0])
+
+    # The declare blockers step itself is *not* refused: CR 509.1 declares
+    # blockers as a turn-based action when the step begins, so every moment of
+    # it anybody could cast in is after the declaration. The two ends of the
+    # turn are, though, and they are the ones a "combat" floor is for.
+    game.current_turn_phase, game.current_step = "postcombat_main", "declare_blockers"
+    _refused("postcombat main")
+
+    game.current_turn_phase = "ending"
+    _refused("ending phase")
+
+
+def test_w4g1_aleatory_resolves_once_blockers_have_been_declared(set_pool):
+    """The other end of the same window: a restriction that refuses everything
+    passes a test that only checks it refuses."""
+    game, mine, _theirs = _w4g1i_combat_game(set_pool, "Aleatory")
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # declare_blockers
+    game.declare_blockers(1, {})
+
+    result = game.cast_from_hand(
+        0, "Aleatory", target_player_index=0, target_permanent_index=0,
+    )
+
+    assert result.supported is True, result.details
+    assert not any(card.name == "Aleatory" for card in game.players[0].hand)
+
+
+def test_w4g1_rapid_fires_window_is_the_same_point_seen_from_the_other_side(
+    set_pool,
+):
+    """Legends' Rapid Fire prints "only **before** blockers are declared", and
+    the two clauses partition the turn: no moment may be legal for both or for
+    neither. The pairing is what the complement in ``cast_restrictions`` buys,
+    and it is asserted rather than assumed because the failure is silent — one
+    predicate updated and not the other simply makes a card castable in a
+    window it does not print."""
+    from engine.cast_restrictions import check_cast_timing
+
+    game, _mine, _theirs = _w4g1i_combat_game(set_pool, "Aleatory")
+    after = "cast this spell only during combat after blockers are declared."
+    before = "cast this spell only before blockers are declared."
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+
+    # Every step of the turn, both clauses, and exactly one of them open at a
+    # time inside combat. The precombat main phase is the pair's asymmetry and
+    # is checked too: it is before the declaration and *not* during combat, so
+    # neither clause admits Aleatory there and Rapid Fire's does admit it.
+    assert check_cast_timing(game, 0, before) is None
+    assert check_cast_timing(game, 0, after) is not None
+
+    for step in ("beginning_of_combat", "declare_attackers"):
+        game.current_step = step
+        assert check_cast_timing(game, 0, before) is None, step
+        assert check_cast_timing(game, 0, after) is not None, step
+
+    for step in ("declare_blockers", "combat_damage", "end_of_combat"):
+        game.current_step = step
+        assert check_cast_timing(game, 0, before) is not None, step
+        assert check_cast_timing(game, 0, after) is None, step
+
+    game.current_turn_phase = "precombat_main"
+    assert check_cast_timing(game, 0, before) is None
+    assert check_cast_timing(game, 0, after) is not None

@@ -66,6 +66,17 @@ def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
     # reached it. (`_during_combat_before_blockers` is the *narrower* sibling:
     # its line says "during combat before blockers are declared", which adds a
     # combat-phase floor this one does not have.)
+    #
+    # The **step's arrival** is the deadline, not `combat_blockers_locked`, and
+    # that is CR 509.1: blockers are declared as a turn-based action when the
+    # step begins, before anybody receives priority. So no castable moment of
+    # that step is "before blockers are declared".
+    # `activation_restrictions._before_blockers_are_declared` reads the lock
+    # instead, and the difference is deliberate rather than drift: this engine
+    # declares blocks as an action inside the step, and the window between the
+    # step opening and the declaration is one in which `_advance_combat_state`
+    # starts no priority window at all — so the two readings differ only where
+    # neither a spell nor an ability can actually be played.
     past_blockers = (
         game.current_turn_phase in ("postcombat_main", "ending")
         or (
@@ -74,6 +85,34 @@ def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
         )
     )
     return not past_blockers
+
+
+def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
+    """Aleatory: "only during combat **after** blockers are declared".
+
+    CR 506.7's window one point later than every other row here, and written as
+    the *complement* of the row above rather than as its own list of steps:
+    "before blockers are declared" and "after blockers are declared" partition
+    the turn between them, and no moment may fall into both or into neither.
+    Spelling the steps out again is how that guarantee would be lost -- the same
+    reason ``activation_restrictions`` gives for keeping one predicate per point
+    in combat.
+
+    The combat-phase floor is this card's own word ("during combat"), and it is
+    exactly what the complement does not carry: the sibling is True in the
+    precombat main phase, which is before the declaration and not during combat.
+
+    Where the point *is* -- the declare blockers step's arrival, per CR 509.1's
+    turn-based action -- is stated once, in the sibling, and never here. One
+    artifact of the engine's step model rides along with that: CR 508.8 skips
+    the declare blockers step outright when nothing attacked, so the window this
+    card names does not exist in that combat at all, and the engine keeps the
+    step. The difference is confined to a window in which no priority is given.
+    """
+    return (
+        game.current_turn_phase == "combat"
+        and not _before_blockers_are_declared(game, caster_index)
+    )
 
 
 def _after_combat(game: "Game", caster_index: int) -> bool:
@@ -210,6 +249,11 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during combat on your turn before blockers are declared",
         _own_combat_before_blockers,
         "can only be cast during combat on your turn before blockers are declared",
+    ),
+    CastRestriction(
+        "cast this spell only during combat after blockers are declared",
+        _combat_after_blockers,
+        "can only be cast during combat after blockers are declared",
     ),
     CastRestriction(
         "cast this spell only before the combat damage step",
