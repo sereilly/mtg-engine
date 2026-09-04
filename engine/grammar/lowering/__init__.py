@@ -100,6 +100,7 @@ from .fighting import (
     _lower_fight,
 )
 from .redirection import (
+    _lower_double_combat_damage,
     _lower_redirect_damage,
 )
 from .prevention import (
@@ -377,6 +378,7 @@ __all__ = [
     "_lower_damage_cant_be_prevented",
     "_lower_prevent_damage",
     "_lower_prevent_half",
+    "_lower_double_combat_damage",
     "_lower_redirect_damage",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",

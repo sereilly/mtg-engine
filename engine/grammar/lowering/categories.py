@@ -358,6 +358,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
+    # "…it deals **double** that damage to that creature instead" (Blind
+    # Fury). The third half of a damage event a CR 614 replacement can
+    # change, beside the recipient above and the prevention elsewhere:
+    # categorised with the damage it multiplies.
+    "double_combat_damage_until_eot": "damage",
     # The class-scoped, optional one (Blood of the Martyr). Same category
     # for the same reason: what it moves is damage, and being optional and
     # being about a class are payload differences.

@@ -60,6 +60,7 @@ from .effects import (
     _parse_counter,
     _parse_create_token, _parse_create_token_for_recipient,
     _parse_damage_redirect,
+    _parse_double_combat_damage,
     _parse_destroy,
     _parse_discard,
     _parse_damage_cant_be_prevented,
@@ -163,6 +164,15 @@ def parse_imperative(
     redirect = _parse_damage_redirect(stream)
     if redirect is not None:
         return redirect
+    # "If a creature would deal combat damage to a creature this turn, it deals
+    # double that damage to that creature instead." (Blind Fury.) A CR 614
+    # replacement whose sentence opens on "if" and never names a subject, so the
+    # subject-verb reader below would take "a creature" for one and fail on the
+    # modal — the same reason the redirect above and the lock below are read
+    # here. Refuses without consuming.
+    doubled = _parse_double_combat_damage(stream)
+    if doubled is not None:
+        return doubled
     # "Damage that would be dealt to that creature this turn can't be prevented
     # or dealt instead to another permanent or player." (Whippoorwill.) Another
     # noun phrase in front of the verb, and beside the redirect above for the

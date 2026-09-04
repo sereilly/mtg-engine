@@ -163,6 +163,25 @@ class DamageUnlessPay:
 
 
 @dataclass(frozen=True)
+class DoubleCombatDamage:
+    """"If a creature would deal combat damage to a creature this turn, it deals
+    **double** that damage to that creature instead." (Blind Fury — CR 614.)
+
+    Its own node beside :class:`RedirectDamage` and for that node's reason: what
+    changes here is neither who takes the damage nor whether it is dealt, but
+    **how much** — so a flag on either of them would put three different
+    replacements one boolean apart in every reader.
+
+    Nothing is parameterised yet and that is deliberate. The pool prints one
+    card, whose every word is a narrowing the interceptor tests: combat damage,
+    dealt by a creature, dealt to a creature, for this turn. A field here with
+    no second card behind it would be a claim nothing checks; the day a card
+    prints "triple" or names a class, the number and the phrase are what move
+    onto the node.
+    """
+
+
+@dataclass(frozen=True)
 class RedirectDamage:
     """"All damage that would be dealt to you this turn by <source> is dealt to
     <recipient> instead." (Shimian Night Stalker, Nova Pentacle — CR 614.9.)

@@ -1362,3 +1362,113 @@ def test_barreling_attack_gives_nothing_to_an_unblocked_creature(set_pool):
 
     assert (attacker.effective_power, attacker.effective_toughness) == (3, 3), game.log
     assert game._has_keyword(attacker, "trample")
+
+
+def _w2g1i_blind_fury(set_pool, *, cast: bool):
+    """A trampling 2/6 attacking into a 1/9 Wall, with or without the spell."""
+    attacker = _w2g1i_nosick(Permanent(card=CardDefinition(
+        name="Ogre", mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=("Trample",),
+        produced_mana=(),
+        raw={"name": "Ogre", "type_line": "Creature - Test",
+             "power": "2", "toughness": "6"},
+    )))
+    wall = _w2g1i_nosick(Permanent(card=_w2g1i_creature("Wall", 1, 9)))
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[attacker],
+            hand=[set_pool("MIR")["Blind Fury"]] if cast else [],
+        ),
+        PlayerState(name="P2", battlefield=[wall]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    if cast:
+        game.cast_from_hand(0, "Blind Fury")
+        game.resolve_stack()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+    game.advance_combat_phase()
+    game.resolve_stack()
+    return game, attacker, wall
+
+
+def test_blind_fury_doubles_combat_damage_between_creatures(set_pool):
+    """"If a creature would deal combat damage to a creature this turn, it deals
+    double that damage to that creature instead."
+
+    A CR 614 replacement armed by a *resolving spell*: there is no permanent for
+    an interceptor to read off a board, and by the time a blocker connects the
+    spell is a card in a graveyard -- so the record is turn-scoped on the game,
+    the shape the Fog flag beside it already has.
+
+    Both halves of the card are tested together because the second is what makes
+    the first matter: without the trample removal a 2/6 with trample would push
+    its doubled damage past the Wall.
+    """
+    plain, attacker, wall = _w2g1i_blind_fury(set_pool, cast=False)
+    assert (wall.damage_marked, attacker.damage_marked) == (2, 1), plain.log
+    assert plain._has_keyword(attacker, "trample")
+
+    game, attacker, wall = _w2g1i_blind_fury(set_pool, cast=True)
+    assert (wall.damage_marked, attacker.damage_marked) == (4, 2), game.log
+    assert not game._has_keyword(attacker, "trample")
+    assert game.players[1].life == 20, "no trample, so nothing gets through"
+
+
+def test_blind_fury_leaves_damage_to_a_player_alone(set_pool):
+    """"…to **a creature**" is a narrowing, and dropping it would make this a
+    burn spell rather than a trick for blockers. An unblocked attacker hits the
+    face for what it prints."""
+    attacker = _w2g1i_nosick(Permanent(card=_w2g1i_creature("Ogre", 3, 3)))
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[attacker],
+            hand=[set_pool("MIR")["Blind Fury"]],
+        ),
+        PlayerState(name="P2", battlefield=[]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.cast_from_hand(0, "Blind Fury")
+    game.resolve_stack()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    for _ in range(3):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+    assert game.players[1].life == 17, game.log
+
+
+def test_blind_fury_leaves_a_noncombat_ping_alone(set_pool):
+    """"**Combat** damage" is the other narrowing: a creature's ping ability
+    deals damage that is not combat damage (CR 510.2), and the interceptor tests
+    the flag rather than the source's type."""
+    pinger = _w2g1i_nosick(Permanent(card=_w2g1i_creature("Pinger", 1, 1)))
+    victim = _w2g1i_nosick(Permanent(card=_w2g1i_creature("Bear", 2, 2)))
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[pinger],
+            hand=[set_pool("MIR")["Blind Fury"]],
+        ),
+        PlayerState(name="P2", battlefield=[victim]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.cast_from_hand(0, "Blind Fury")
+    game.resolve_stack()
+    game._mark_damage_on_permanent(victim, 1, source=pinger)
+
+    assert victim.damage_marked == 1, game.log

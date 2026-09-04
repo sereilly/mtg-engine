@@ -90,6 +90,10 @@ class CleanupStepMixin:
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
         self.combat_damage_prevented_until_eot = False
+        # "…this turn" (Blind Fury). Cleared here and **not** at the end of
+        # combat, unlike the Fog flag above: the sentence names the turn, so a
+        # second combat phase is still doubled.
+        self.combat_damage_doubled_between_creatures.clear()
         self.combat_damage_prevented_for = []
         self.combat_damage_prevented_except_from = []
         # CR 603.7b: a delayed trigger scoped to "this turn" that has not fired

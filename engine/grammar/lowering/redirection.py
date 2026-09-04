@@ -435,3 +435,22 @@ def _lower_next_damage_redirect(
     return (
         OracleInstruction("redirect_next_damage_to_source_until_eot", "", payload),
     )
+
+
+def _lower_double_combat_damage(
+    node: ast.DoubleCombatDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Blind Fury: "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead."
+
+    Beside the redirect in this module rather than with the shields: all three
+    are CR 614 replacements on a damage event, and what separates them is which
+    half of the event they change — the recipient here, the amount there, and
+    whether it happens at all in ``prevention``.
+
+    No payload, because the node carries none: the pool prints one wording and
+    every word of it is a narrowing the interceptor tests. A parameter with no
+    second card behind it would be a claim nothing checks.
+    """
+    return (OracleInstruction("double_combat_damage_until_eot", "", {}),)
+
