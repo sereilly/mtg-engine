@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (288/335 supported, still `measured`)
+## Mirage (MIR) — in progress (300/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1489,6 +1489,48 @@ Five builder pairs underneath repeat the same two lines. It predates the wave
 (the wave added two of the five), nothing is wrong, and collapsing it wants its
 own differential — so it is a Known gap in SET_PLAYBOOK rather than an
 end-of-wave refactor.
+
+### Wave 2 — the last 47, five groups again
+
+Briefed from wave 1's declines rather than from the census: every group got its
+cards as *enumerated missing pieces*, which is the highest-leverage thing a
+decline can be. Two of those pieces turned out to be one clause each.
+
+#### W2G3 — damage: seven, and the shield gap closed unprompted
+
+Reign of Terror, Builder's Bane, Seeds of Innocence, Benevolent Unicorn, Binding
+Agony, Circle of Despair, Reflect Damage — merged with **no conflicts at all**.
+
+It cleared the Known gap wave 1 recorded, without being told to: one
+`chosen_shield_source` reader of "a source of your choice" shared by all five
+shields *and* by a redirect, one arming body, one builder behind ten named
+wrappers. And it was right to stop where it did — the four instruction *kinds*
+stay four, because `Shield.kind` is read by `targeting.py`'s picker table and
+`effect_labels.py`'s buckets as well as by the interceptors, so folding them
+moves every affected card's compiled program.
+
+Six brief corrections, every one the same shape as wave 1's: **Circle of Despair
+needed no new prompt at all** — `choices["chosen_source"]` has been a declared
+announcement field since Jade Monolith, and it was the *handlers* misusing the
+target channel. Binding Agony's "even the simplest attached trigger refuses" was
+untrue: one table row and one call.
+
+#### W2G5 — statics: six, and a game that could not be read
+
+Shimmer, Psychic Transfer, Jabari's Influence, Waiting in the Weeds, Null
+Chamber, and Dazzling Beauty (already "supported", doing nothing).
+
+**Runed Halo, shipped, made its own game unfetchable.** Its enter-choice prompt
+raised `KeyError: 'needs_color'` out of `/api/sessions/{id}/state` — so the
+prompt could not be shown and the choice could not be answered. The card-name
+shape had no branch in the API's answer chain either.
+
+**And the fifth piece of Shimmer is the one to remember.** `statics._lord_filter`'s
+round trip proves the *table* can carry a restriction and says nothing about the
+emitted instruction: `lord_buff_payload`/`lord_buff_from_payload` is a **second,
+unchecked** round trip, and `chosen_land_type` passed the first and was dropped
+by the second — an anthem that compiles, reports supported, and gives phasing to
+every land on the board. Two round trips, one checked.
 
 ### Where the set stands — ten rounds in
 
