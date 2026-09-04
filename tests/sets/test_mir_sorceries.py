@@ -1011,3 +1011,92 @@ def test_they_control_needs_a_distributed_subject(set_pool):
 
     assert not compiled.instructions
     assert "names no seat" in (compiled.lowering_error or ""), compiled.lowering_error
+
+
+# --- W3G5: the search sorceries and Sealed Fate's missing player picker ---
+
+import pytest as _pytest_w3g5
+
+from engine import Game as _Game_w3g5, PlayerState as _PlayerState_w3g5
+from engine.oracle import compile_card_oracle as _compile_w3g5
+from engine.targeting import derive_cast_spec as _cast_spec_w3g5
+
+
+def _w3g5_sealed_fate_game(set_pool):
+    """Sealed Fate in seat 0's hand, four known cards on seat 1's library."""
+    pool = set_pool("MIR")
+    game = _Game_w3g5(players=[
+        _PlayerState_w3g5(
+            name="P1", hand=[pool["Sealed Fate"]], library=[pool["Island"]] * 6
+        ),
+        _PlayerState_w3g5(
+            name="P2",
+            library=[
+                pool["Bay Falcon"], pool["Island"], pool["Mountain"], pool["Forest"]
+            ],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_sealed_fate_derives_the_opponent_picker_its_line_names(set_pool):
+    """"Look at the top X cards of **target opponent's** library."
+
+    The picker sweep's Roots class: the card reported supported, claimed every
+    sentence, and derived *no* cast spec — because ``look_top_pick_to_hand`` has
+    a row in the payload-keyed spec table and that row pre-empts the generic
+    ``targets`` reading. The row answered only Ashnod's Cylix's ``looker`` key,
+    so Sealed Fate's ``pile_owner`` description was thrown away.
+    """
+    pool = set_pool("MIR")
+    card = pool["Sealed Fate"]
+
+    spec = _cast_spec_w3g5(card, _compile_w3g5(card))
+
+    assert spec is not None, "the client would send a bare cast"
+    assert spec["kind"] == "player"
+    # CR 115.4: "target opponent" may not choose the caster.
+    assert spec.get("opponents_only") is True, spec
+
+
+def test_sealed_fate_exiles_one_and_stacks_the_rest_back(set_pool):
+    """The game the derivation exists for: the caster names the opponent, sees
+    the top three, exiles one and puts the other two back on top."""
+    game = _w3g5_sealed_fate_game(set_pool)
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Sealed Fate", target_player_index=1, x_value=3)
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    prompt = next(c for c in game.pending_choices if c.kind == "look_top_pick")
+    # The pile is the opponent's; the decision is the caster's (CR 608.2c).
+    assert prompt.player_index == 0
+    assert game.look_top_pile_index(prompt) == 1
+    assert game.live_look_top_candidates(prompt) == [0, 1, 2]
+
+    assert game.confirm_look_top_pick(0, 0)
+
+    assert [c.name for c in game.players[1].exile] == ["Bay Falcon"]
+    assert [c.name for c in game.players[1].library] == [
+        "Island", "Mountain", "Forest"
+    ]
+
+
+def test_sealed_fate_without_a_named_opponent_looks_at_nothing(set_pool):
+    """The failure the derivation caused, pinned so it stays a *refusal* rather
+    than becoming a silent no-op again.
+
+    With no seat named the handler has no pile, logs that it was given none and
+    resolves having moved nothing — which is what the app did on every cast of
+    this card, because the bare cast was all the client knew how to send.
+    """
+    game = _w3g5_sealed_fate_game(set_pool)
+    game.interactive_seats = set()
+
+    assert game.cast_from_hand(0, "Sealed Fate", x_value=3).supported
+    game.resolve_stack()
+
+    assert game.players[1].exile == []
+    assert len(game.players[1].library) == 4
