@@ -153,6 +153,32 @@ def accept_sacrificed_for_cost(stream: "TokenStream") -> "ast.SacrificedForCost 
     return None
 
 
+def accept_tapped_for_cost(stream: "TokenStream") -> "ast.TappedForCost | None":
+    """``the tapped <noun>'s <characteristic>`` — or None, cursor unmoved.
+
+    "This artifact deals damage equal to **the tapped creature's power** to
+    target attacking or blocking creature with flying." (Unerring Sling.) The
+    third sibling of :func:`accept_sacrificed_for_cost`, reading the permanent
+    the cost *tapped* — and a named function for that one's reason exactly: two
+    front ends read the phrase, so two copies is how they come to name two
+    channels. The leading "the" is the caller's.
+    """
+    mark = stream.mark()
+    if stream.accept_word("tapped"):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_word("'s"):
+                if stream.accept_phrase("mana", "value"):
+                    return ast.TappedForCost("mana_value")
+                characteristic = stream.peek_word()
+                if characteristic in ("power", "toughness"):
+                    stream.advance()
+                    return ast.TappedForCost(str(characteristic))
+    stream.reset(mark)
+    return None
+
+
 def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
     """``the exiled card's <characteristic>`` — or None with the cursor unmoved.
 

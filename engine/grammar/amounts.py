@@ -15,7 +15,8 @@ from .lexer import MANA, NUMBER, PT, WORD
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
 from .records import (accept_damage_dealt_by_chosen_cast,
-                      accept_exiled_for_cost, accept_sacrificed_for_cost)
+                      accept_exiled_for_cost, accept_sacrificed_for_cost,
+                      accept_tapped_for_cost)
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -295,7 +296,9 @@ def _parse_counted_amount(
     # The leading "the" is this reader's, exactly as it is one function up.
     channel = stream.mark()
     stream.accept_word("the")
-    for accept_channel in (accept_sacrificed_for_cost, accept_exiled_for_cost):
+    for accept_channel in (
+        accept_sacrificed_for_cost, accept_exiled_for_cost, accept_tapped_for_cost,
+    ):
         payment = accept_channel(stream)
         if payment is not None:
             return payment
@@ -390,6 +393,13 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     sacrificed = accept_sacrificed_for_cost(stream)
     if sacrificed is not None:
         return sacrificed
+
+    # "…equal to **the tapped creature's power**" (Unerring Sling) — the third
+    # payment channel, read here beside its two siblings and through the same
+    # kind of named reader for their reason: two front ends read the phrase.
+    tapped = accept_tapped_for_cost(stream)
+    if tapped is not None:
+        return tapped
 
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"

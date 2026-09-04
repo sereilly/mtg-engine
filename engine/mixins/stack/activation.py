@@ -1670,6 +1670,9 @@ class AbilityActivationMixin:
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
                         "untapped_for_cost": untap_cost_permanent,
+                        "tapped_for_cost": (
+                            tap_cost_permanents[0] if tap_cost_permanents else None
+                        ),
                         "discarded_for_cost": (
                             list(discard_cost_cards)
                             + (
@@ -1739,6 +1742,19 @@ class AbilityActivationMixin:
                     # board scan at resolution would name whichever one matches
                     # now (CR 608.2h).
                     "untapped_for_cost": untap_cost_permanent,
+                    # "…deals damage equal to **the tapped creature's** power"
+                    # (Unerring Sling). Beside the untap record and for its
+                    # reason exactly: still on the battlefield, carried rather
+                    # than re-found, because a board scan at resolution would
+                    # name whichever creature its controller tapped since.
+                    #
+                    # The first of the chosen set, because the printed cost taps
+                    # one; a card taping several and then naming "the tapped
+                    # creature" is a sentence nobody has printed, and the
+                    # lowering is what would have to decide which it meant.
+                    "tapped_for_cost": (
+                        tap_cost_permanents[0] if tap_cost_permanents else None
+                    ),
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
                     # card" (Land's Edge) is asked once the card is already in

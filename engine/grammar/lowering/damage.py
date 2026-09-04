@@ -30,6 +30,7 @@ from ._amounts import (
     _lower_board_count_damage,
     _lower_chosen_cast_damage,
     _lower_cost_sacrifice_damage,
+    _lower_cost_tap_damage,
     _lower_counted_damage,
 )
 from ._sweeps import (
@@ -292,6 +293,12 @@ def _lower_damage_shape(
     # of anything on a board, so it sits beside the count rather than inside it.
     if isinstance(node.amount, ast.SacrificedForCost):
         return _lower_cost_sacrifice_damage(node)
+    # "…equal to **the tapped creature's power**" (Unerring Sling) — the same
+    # shape one payment over, and beside it for that branch's reason: a
+    # characteristic of what the cost acted on rather than a count of anything
+    # on a board.
+    if isinstance(node.amount, ast.TappedForCost):
+        return _lower_cost_tap_damage(node)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node, produced)
     # "Target creature you control deals damage equal to its power to another

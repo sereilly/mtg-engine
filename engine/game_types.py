@@ -60,6 +60,14 @@ CHOICE_KEYS = (
     # of an opponent's happens to match then, which after the payment is a
     # different one.
     "untapped_for_cost",
+    # The creature a printed **tap** cost paid with (Unerring Sling: "{3}, {T},
+    # Tap an untapped creature you control: This artifact deals damage equal to
+    # **the tapped creature's** power to …"). Beside ``untapped_for_cost`` and
+    # the odd one out for the same reason: the creature is still on the
+    # battlefield at resolution, so this is a back-reference rather than
+    # last-known information — a board scan would name whichever creature its
+    # controller happens to have tapped since.
+    "tapped_for_cost",
     # The cards a printed **discard** cost ate, same channel and same reason:
     # "If the discarded card was a land card" (Land's Edge) is asked when the
     # card is already in a graveyard, which CR 400.7 makes a different object.

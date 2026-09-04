@@ -128,6 +128,55 @@ _READABLE_COST_SACRIFICE_CHARACTERISTICS = frozenset(
 )
 
 
+#: The characteristics of a **cost-tapped** permanent ``count_from_payload``
+#: reads back. All three, and unlike the sacrifice channel beside it none of
+#: them is last-known information: the creature is still on the battlefield when
+#: the effect resolves, so the power is simply its power.
+_READABLE_COST_TAP_CHARACTERISTICS = frozenset({"mana_value", "power", "toughness"})
+
+
+def _lower_cost_tap_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"This artifact deals damage equal to **the tapped creature's power** to
+    target attacking or blocking creature with flying." (Unerring Sling.)
+
+    :func:`_lower_cost_sacrifice_damage` with the payment one verb over, and the
+    same three refusals for the same reasons — a characteristic the evaluator
+    cannot answer, a rider no counted damage carries, and more than one
+    recipient. The number travels on the one ``x_from_count`` channel every
+    other computed amount already uses.
+    """
+    assert isinstance(node.amount, ast.TappedForCost)
+    characteristic = node.amount.characteristic
+    if characteristic not in _READABLE_COST_TAP_CHARACTERISTICS:
+        raise LoweringError(
+            f"no handler reads the tapped permanent's {characteristic!r}",
+            node=node,
+        )
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if len(node.recipients) != 1:
+        raise LoweringError("a counted damage reaches one recipient", node=node)
+    recipient = node.recipients[0]
+    payload: dict[str, object] = {
+        "amount": "x",
+        X_FROM_COUNT: {"cost_tap_characteristic": characteristic},
+    }
+    if isinstance(recipient, ast.PlayerRef):
+        if recipient.kind not in ("target_player", "target_opponent", "you"):
+            raise LoweringError("no handler aims this counted damage", node=node)
+        payload["recipient"] = "caster" if recipient.kind == "you" else "target_player"
+    elif not (
+        _is_target(recipient)
+        or (isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "any_target")
+    ):
+        raise LoweringError("no handler aims this counted damage", node=node)
+    _describe_targets(payload, recipient)
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
 def _lower_cost_sacrifice_damage(
     node: ast.DealDamage,
 ) -> tuple[OracleInstruction, ...]:

@@ -222,3 +222,70 @@ def test_bone_mask_exiles_what_is_left_of_an_empty_library(set_pool):
     assert p1.library == []
     assert len(p1.exile) == 1
     assert not p1.lost
+
+
+def _w1g3_sling_board(set_pool, payer_name):
+    pool = set_pool("MIR")
+    sling = _W1G3Permanent(card=pool["Unerring Sling"])
+    payer = _W1G3Permanent(card=pool[payer_name])
+    flier = _W1G3Permanent(card=pool["Cerulean Wyvern"])     # 3/3 flier
+    ground = _W1G3Permanent(card=pool["Wall of Corpses"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[sling, payer], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[flier, ground], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(1, [0])                  # the flier attacks
+    assert ok, msg
+    return game, sling, payer, flier, ground
+
+
+def test_unerring_sling_reads_the_creature_its_cost_tapped(set_pool):
+    """"{3}, {T}, Tap an untapped creature you control: This artifact deals
+    damage equal to **the tapped creature's power** to target attacking or
+    blocking creature with flying."
+
+    The third payment channel beside "the sacrificed creature's" and "the
+    exiled card's", and the odd one of the three: the creature is still on the
+    battlefield at resolution, so this is a plain back-reference rather than
+    last-known information — a board scan would name whichever creature its
+    controller had tapped since (the argument `untapped_for_cost` already makes
+    for Benthic Explorers' land).
+    """
+    game, sling, payer, flier, ground = _w1g3_sling_board(
+        set_pool, "Wild Elephant"                             # 3/3
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Unerring Sling",
+        target_player_index=1, target_permanent_index=0,
+        cost_permanent_ids=[payer.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert payer.tapped, "the cost tapped it"
+    assert flier.damage_marked == 3, f"the payer's power: {game.log}"
+    assert ground.damage_marked == 0
+
+
+def test_unerring_sling_reads_a_different_payers_power(set_pool):
+    """The same ability with a smaller creature paying — without this the test
+    above passes for an ability that deals whatever number it likes."""
+    game, sling, payer, flier, ground = _w1g3_sling_board(
+        set_pool, "Zhalfirin Commander"                       # 2/2
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Unerring Sling",
+        target_player_index=1, target_permanent_index=0,
+        cost_permanent_ids=[payer.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert flier.damage_marked == 2, f"the payer's power: {game.log}"

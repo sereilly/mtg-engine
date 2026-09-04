@@ -180,6 +180,23 @@ def count_from_payload(
             last_known = getattr(sacrificed, f"effective_{cost_sacrifice}", None)
             return max(0, _scaled(int(last_known or 0), spec))
         return 0
+    # "…deals damage equal to **the tapped creature's power**" (Unerring
+    # Sling). The channel beside the sacrifice above, with one difference that
+    # matters: the creature is still on the battlefield, so this is a plain read
+    # rather than last-known information — and it is read off the `Permanent`
+    # for the numbers layer 7 computes, exactly as the sacrifice branch does.
+    cost_tap = spec.get("cost_tap_characteristic")
+    if cost_tap is not None:
+        tapped = (context.choices or {}).get("tapped_for_cost")
+        if tapped is None:
+            return 0
+        if cost_tap == "mana_value":
+            card = getattr(tapped, "card", None) or tapped
+            return max(0, _scaled(int(getattr(card, "cmc", 0) or 0), spec))
+        if cost_tap in ("power", "toughness"):
+            value = getattr(tapped, f"effective_{cost_tap}", None)
+            return max(0, _scaled(int(value or 0), spec))
+        return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)
