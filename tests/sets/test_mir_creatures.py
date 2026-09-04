@@ -1112,3 +1112,88 @@ def test_a_halved_where_clause_must_print_its_rounding(set_pool):
     )
     assert not result.parsed
     assert "rounding" in result.failure_reason
+
+
+# --- Kukemssa Pirates: "defending player controls" on a steal ---
+
+
+def _w1g1_artifact(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def _w1g1_unblocked_attack(set_pool, extra_own_artifact: bool = False):
+    """Kukemssa Pirates attacking unblocked, with its trigger on the stack
+    resolved and its offer waiting."""
+    pirates = _w1g1_nosick(Permanent(card=set_pool("MIR")["Kukemssa Pirates"]))
+    mine = [Permanent(card=_w1g1_artifact("My Bauble"))] if extra_own_artifact else []
+    theirs = Permanent(card=_w1g1_artifact("Their Relic"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[pirates, *mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    game.advance_combat_phase()
+    game.resolve_stack()
+    return game, pirates, theirs
+
+
+def test_kukemssa_pirates_offers_only_the_defenders_artifact(set_pool):
+    """"…target artifact **defending player controls**".
+
+    The permanent steal refused the seat outright: `object_only_filter` was
+    asked with nothing carried, so every "gain control of target X <seat>
+    controls" in the pool was unsupported for a narrowing the picker was
+    already carrying out for the *linked* durations beside it.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Kukemssa Pirates"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    steal, rider = trigger.instruction.payload["action"] + trigger.instruction.payload["then"]
+    assert steal.kind == "gain_control_of_target"
+    assert steal.payload["controller"] == "defending_player"
+    assert rider.kind == "assign_no_combat_damage_until_eot"
+
+
+def test_kukemssa_pirates_steals_when_the_offer_is_taken(set_pool):
+    """And the offer, taken. The trigger names its target as it goes on the
+    stack (CR 603.3d), which is what the seat had to reach: without it the
+    picker offered nothing and the ability left the stack under CR 603.3c."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    game, pirates, relic = _w1g1_unblocked_attack(set_pool, extra_own_artifact=True)
+    (offer,) = game.pending_optional_pays
+
+    assert game.confirm_optional_pay(offer["player_index"], accept=True)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.controls(0, relic)
+    assert pirates.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE)
+
+
+def test_kukemssa_pirates_declined_steals_nothing_and_hits(set_pool):
+    """The decline branch. "If you do" is what pairs the rider to the steal, so
+    a declined offer leaves the attacker assigning its damage normally."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    game, pirates, relic = _w1g1_unblocked_attack(set_pool)
+    (offer,) = game.pending_optional_pays
+
+    assert game.confirm_optional_pay(offer["player_index"], accept=False)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.controls(1, relic)
+    assert not pirates.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE)

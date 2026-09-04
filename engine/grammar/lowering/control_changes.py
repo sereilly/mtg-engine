@@ -335,7 +335,22 @@ def _lower_gain_control(
                 "the indefinite control change needs a named target", node=node
             )
         described = _filter_payload(subject.filter)
-        if object_only_filter(described) is None:
+        # "…target artifact **defending player controls**" (Kukemssa Pirates).
+        # A seat, which the pure matcher the handler re-asks at resolution
+        # cannot answer and which `legality._enumerate_targets` answers before
+        # the target is ever named — the claim `_PICKER_ENFORCED_CONTROLLERS`
+        # states above, made here as well. The linked-duration branch has
+        # carried it since Scarwood Bandits; the permanent steal refused it, so
+        # every "gain control of target X <seat> controls" in the pool was
+        # unsupported for a narrowing the picker was already carrying out.
+        controller = described.get("controller")
+        if controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        if object_only_filter(
+            described, carried_separately=frozenset({"controller"})
+        ) is None:
             raise LoweringError(
                 "the control change cannot test this restriction", node=node
             )

@@ -437,6 +437,7 @@ def subject_matches(
     *,
     observer: int | None = None,
     source: "Permanent | None" = None,
+    defending: int | None = None,
 ) -> bool:
     """Whether *obj* is in the set the filter payload *described* names.
 
@@ -452,6 +453,13 @@ def subject_matches(
     this is must not be handed a narrowing it would then ignore.
 
     *source* is the ability's own source, for "another".
+
+    *defending* is the seat "defending player controls" names (CR 506.2). It is
+    an argument rather than something read off the game because *which* combat
+    is meant depends on who is asking: a trigger names the one it fired in,
+    frozen into its context, and that combat may be over by the time the
+    ability resolves. A caller that cannot say refuses the word, which is the
+    direction that offers nothing rather than the whole table.
     """
     if not described:
         return True
@@ -469,7 +477,8 @@ def subject_matches(
         described = {k: v for k, v in described.items() if k != "attached_to_filter"}
         host = obj.metadata.get("attached_to")
         if not subject_matches(
-            game, host, nested_host, observer=observer, source=source
+            game, host, nested_host, observer=observer, source=source,
+            defending=defending,
         ):
             return False
     # "permanents **of the chosen color**" (Psychic Allergy). The colour lives
@@ -492,7 +501,8 @@ def subject_matches(
             return False
         if not any(
             subject_matches(
-                game, other, controller_controls, observer=seat, source=source
+                game, other, controller_controls, observer=seat, source=source,
+                defending=defending,
             )
             for other in game.controlled_by(game.players[seat])
         ):
@@ -535,7 +545,17 @@ def subject_matches(
         # with the same answer: the seat is a fact about the combat the trigger
         # fired in, known to the announcement that armed the pick and to
         # nothing here.
-        if controller in ("that_player", "defending_player"):
+        # "**Defending player** controls" (Floral Spuzzem, Kukemssa Pirates,
+        # Yare). Answered when the caller supplies the seat and refused when it
+        # does not -- the same split "another" and ``attached_to`` make, and
+        # for the same reason: nothing here can know which combat the sentence
+        # means.
+        if controller == "defending_player":
+            if defending is None:
+                return False
+            return game.controls(defending, obj)
+        # "**That player** controls" is not a seat this can compare against.
+        if controller == "that_player":
             return False
         seat = game.controller_index_of(obj)
         if seat is None or observer is None:
