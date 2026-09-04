@@ -1113,7 +1113,7 @@ class PendingChoicesMixin:
             # looked at again.
             if choice.data.get("rest_destination") == "graveyard":
                 for card in rest:
-                    caster.graveyard.append(card)
+                    self.put_card_into_graveyard(caster, card)
                 return
             # "…and **exile the rest**." (Browse.) The cards leave the game
             # rather than the library, which is why the same ability may be
@@ -2602,7 +2602,7 @@ class PendingChoicesMixin:
         discarded = [card for card in revealed if named and card.name == named]
         for index in reversed(revealed_indices):
             if named and zone[index].name == named:
-                target.graveyard.append(zone.pop(index))
+                self.put_card_into_graveyard(target, zone.pop(index))
         self.discard_pending_choice(choice)
         self.log.append(
             f"{target.name} revealed {len(revealed)} card(s) at random from their "
@@ -4921,7 +4921,7 @@ class PendingChoicesMixin:
         for perm in chosen_perms:
             self.sacrifice_permanent(perm)
         for i in sorted(hand, reverse=True):
-            player.graveyard.append(player.hand.pop(i))
+            self.put_card_into_graveyard(player, player.hand.pop(i))
         self.discard_pending_choice(choice)
         self.log.append(f"{player.name} resolved their Balance sacrifices")
         return True
@@ -6259,7 +6259,7 @@ class PendingChoicesMixin:
         player = self.players[drawing_seat]
         if bought and player.library:
             card = player.library.pop(0)
-            player.graveyard.append(card)
+            self.put_card_into_graveyard(player, card)
             self.log.append(
                 f"{card.name} was put into {player.name}'s graveyard "
                 f"({source_name})"
@@ -7808,4 +7808,23 @@ register_choice(
     prompt_key="outside_game_draw",
     blocked_detail="choose a card from outside the game before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "return_from_graveyard_instead_of_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="graveyard_return_draw_confirm",
+    prompt_key="return_from_graveyard_instead_of_draw",
+    blocked_detail=(
+        "choose which card comes back from your graveyard (Forbidden Crypt) "
+        "before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draws queued behind it are the
+    # resolver's own business - so nothing is waiting on the answer to carry on,
+    # exactly as for the four offers above.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
 )

@@ -1331,3 +1331,264 @@ def test_w3g2_unpaid_cumulative_upkeep_makes_no_zombies_on_its_way_out(set_pool)
     assert "Tombstone Stairwell" in [card.name for card in game.players[0].graveyard]
     assert _w3g2_names(game.players[0]) == [], game.log
     assert _w3g2_names(game.players[1]) == [], game.log
+
+
+# --- W3G2: Forbidden Crypt ---
+#
+# Two CR 614 replacements and nothing else, which is why the card reported
+# "no ability of this permanent is implemented": an interceptor produces no
+# instruction, so a permanent whose whole text is one is held up by
+# REPLACEMENT_LINES.
+#
+# The second line is the one that needed building. "If a card would be put into
+# your graveyard **from anywhere**" has no single fire site — a death, a
+# discard, a mill, a sacrifice and a spell finishing on the stack are one event
+# with twenty-six spellings — so it needed the graveyard seam
+# (`Game.put_card_into_graveyard`) that `put_card_into_hand` and
+# `put_card_into_library` already had for CR 903.9b's identical problem. The
+# tests below drive four of those paths, because the interesting failure of a
+# rule like this is not that it does nothing, it is that it works on the path
+# you tested and nowhere else.
+
+from engine import Game as _w3g2c_Game, PlayerState as _w3g2c_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g2c_load,  # noqa: E402
+                                manifest_set_path as _w3g2c_path)
+from engine.models import Permanent as _w3g2c_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g2c_compile  # noqa: E402
+
+
+def _w3g2c_lea():
+    return {card.name: card for card in _w3g2c_load(_w3g2c_path("LEA"))}
+
+
+def _w3g2c_board(set_pool, *, graveyard=(), seat=0, interactive=()):
+    """A two-seat game with a Forbidden Crypt under *seat*.
+
+    ``graveyard`` fills P1's graveyard by LEA card name — the pile the first
+    line spends and the second line keeps empty.
+    """
+    lea = _w3g2c_lea()
+    game = _w3g2c_Game(players=[
+        _w3g2c_PlayerState(
+            name="P1", library=[lea["Island"]] * 10,
+            graveyard=[lea[name] for name in graveyard],
+        ),
+        _w3g2c_PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    crypt = _w3g2c_Permanent(card=set_pool("MIR")["Forbidden Crypt"])
+    game._put_permanent_onto_battlefield(seat, crypt, None)
+    return game, crypt
+
+
+def test_w3g2_forbidden_crypt_is_supported_by_its_replacements(set_pool):
+    """The card's whole text is two interceptors, so nothing it does reaches
+    the compiled program — the support gate has to read REPLACEMENT_LINES for
+    it, which is exactly the gap Fiery Emancipation opened."""
+    program = _w3g2c_compile(set_pool("MIR")["Forbidden Crypt"])
+    assert program.supported, program.reason
+
+
+def test_w3g2_a_draw_returns_a_card_from_the_graveyard_instead(set_pool):
+    """"If you would draw a card, return a card from your graveyard to your
+    hand instead."
+
+    Nothing is drawn: the replacement consumes the event, so a "whenever you
+    draw a card" effect correctly sees no draw and the library is untouched.
+    """
+    game, _ = _w3g2c_board(set_pool, graveyard=["Black Lotus", "Grizzly Bears"])
+    player = game.players[0]
+    library_before = len(player.library)
+
+    drawn = game._draw_with_replacements(player, 1)
+
+    assert drawn == 0
+    assert len(player.library) == library_before
+    assert [card.name for card in player.hand] == ["Black Lotus"]
+    assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
+
+
+def test_w3g2_an_interactive_seat_picks_which_card_comes_back(set_pool):
+    """The return is a choice, so it is offered rather than taken. An
+    interactive seat queues it and the draw suspends; every other seat takes
+    the default at once, through the same resolver."""
+    game, _ = _w3g2c_board(
+        set_pool, graveyard=["Black Lotus", "Grizzly Bears"], interactive=(0,),
+    )
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 1) == 0
+    [choice] = game.pending_replacement_choices
+    assert choice.kind == "return_from_graveyard_instead_of_draw"
+    assert choice.options == ("Black Lotus", "Grizzly Bears")
+
+    assert game.resolve_replacement_choice(0, 1) is True
+    assert [card.name for card in player.hand] == ["Grizzly Bears"]
+    assert [card.name for card in player.graveyard] == ["Black Lotus"]
+
+
+def test_w3g2_an_empty_graveyard_loses_the_game(set_pool):
+    """"If you can't, you lose the game." (CR 104.3e.)
+
+    The decline branch of the replacement, and the clause that makes Forbidden
+    Crypt a real card rather than a slow Regrowth. It is not a state-based
+    action waiting to be noticed: the effect states the player loses, so they
+    have, and the opponent has won.
+    """
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 1) == 0
+    assert player.lost
+    assert game.get_winner() is game.players[1]
+
+
+def test_w3g2_the_second_draw_of_a_pair_finds_the_graveyard_empty(set_pool):
+    """CR 121.2: a two-card draw is two draws, each replaced on its own.
+
+    The first spends the only card in the graveyard and the second has nothing
+    to return, so the loss lands on the second — which a replacement written
+    once per *event* rather than once per draw would have missed entirely.
+    """
+    game, _ = _w3g2c_board(set_pool, graveyard=["Black Lotus"])
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 2) == 0
+    assert [card.name for card in player.hand] == ["Black Lotus"]
+    assert player.lost
+
+
+def test_w3g2_a_dying_creature_is_exiled_and_did_not_die(set_pool):
+    """"If a card would be put into your graveyard from anywhere, exile that
+    card instead."
+
+    A death is one of the paths, and the consequence goes further than the
+    pile: CR 700.4 defines dying as being put into a graveyard *from the
+    battlefield*, so a creature exiled instead did not die — no dies trigger,
+    and no creature counted toward "a creature died this turn".
+    """
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    bear = _w3g2c_Permanent(card=_w3g2c_lea()["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bear, None)
+
+    game.remove_from_battlefield(bear)
+    game._permanent_to_graveyard(player, bear)
+
+    assert [card.name for card in player.exile] == ["Grizzly Bears"]
+    assert player.graveyard == []
+    assert getattr(game, "creatures_died_this_turn", 0) == 0
+    assert player.creatures_died_under_your_control_this_turn == 0
+
+
+def test_w3g2_a_discard_a_mill_and_a_resolved_spell_are_all_exiled(set_pool):
+    """The other three paths into a graveyard, driven one at a time.
+
+    A rule written "from anywhere" fails by working on the path its author
+    tested. These are the three that reach a different module each: the
+    discard seam in ``mixins/effects.py``, the mill handler in
+    ``handlers/zones.py``, and the stack's leave-the-stack transition in
+    ``mixins/stack/resolution.py``.
+    """
+    lea = _w3g2c_lea()
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    player.hand.append(lea["Black Lotus"])
+    game.take_card_from_hand(player, player.hand[0])
+    game._discard_card(player, lea["Black Lotus"])
+    assert [card.name for card in player.exile] == ["Black Lotus"]
+    assert player.graveyard == []
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    millstone = _w3g2c_Permanent(
+        card={c.name: c for c in _w3g2c_load(_w3g2c_path("ATQ"))}["Millstone"]
+    )
+    game._put_permanent_onto_battlefield(0, millstone, None)
+    millstone.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Millstone", target_player_index=0)
+    game._settle()
+    assert len(player.exile) == 2, game.log
+    assert player.graveyard == [], game.log
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    player.hand.append(lea["Lightning Bolt"])
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+    assert [card.name for card in player.exile] == ["Lightning Bolt"]
+    assert player.graveyard == []
+    assert game.players[1].life == 17
+
+
+def test_w3g2_an_opponents_crypt_leaves_your_graveyard_alone(set_pool):
+    """"**Your** graveyard" is read relative to the enchantment's controller
+    (CR 109.5), so a Crypt across the table exiles nothing of yours and does
+    not replace your draws either.
+
+    The direction that would be invisible: a scope word read as "anybody's"
+    would empty both graveyards and lose both players the game, and every
+    assertion about the controller's own side would still pass.
+    """
+    game, _ = _w3g2c_board(set_pool, seat=1)
+    victim = game.players[0]
+    victim.hand.append(_w3g2c_lea()["Black Lotus"])
+    game.take_card_from_hand(victim, victim.hand[0])
+    game._discard_card(victim, _w3g2c_lea()["Black Lotus"])
+
+    assert [card.name for card in victim.graveyard] == ["Black Lotus"]
+    assert victim.exile == []
+    assert game._draw_with_replacements(victim, 1) == 1
+    assert not victim.lost
+
+
+def test_w3g2_the_scope_word_is_payload_not_a_constant(set_pool):
+    """"If a card would be put into **a** graveyard from anywhere, exile it
+    instead." (Rest in Peace's sentence, Planar Void's.)
+
+    The same production with a different seat in it, so the matcher takes the
+    scope as payload rather than pinning Forbidden Crypt's wording. Checked
+    with an invented card carrying the printed line, which is the "would a
+    second card work?" test the card-hook bar asks for — and the answer has to
+    be yes, or the phrase belongs in ``card_hooks``.
+    """
+    from engine.replacements import graveyard_exile_scope
+
+    assert graveyard_exile_scope(
+        "If a card would be put into your graveyard from anywhere, exile that "
+        "card instead."
+    ) == "you"
+    assert graveyard_exile_scope(
+        "If a card would be put into a graveyard from anywhere, exile it instead."
+    ) == "any"
+    assert graveyard_exile_scope(
+        "If a card would be put into an opponent's graveyard from anywhere, "
+        "exile it instead."
+    ) == "opponent"
+    assert graveyard_exile_scope("Destroy target creature.") is None
+
+    from tests.helpers import _mk_card as _w3g2c_mk_card
+
+    lea = _w3g2c_lea()
+    void = _w3g2c_mk_card(
+        "Planar Void (test)", "{B}", "Enchantment",
+        "If a card would be put into a graveyard from anywhere, exile it "
+        "instead.",
+    )
+    game = _w3g2c_Game(players=[
+        _w3g2c_PlayerState(name="P1", library=[lea["Island"]] * 5),
+        _w3g2c_PlayerState(name="P2", library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, _w3g2c_Permanent(card=void), None)
+
+    for seat in (0, 1):
+        player = game.players[seat]
+        assert game.put_card_into_graveyard(player, lea["Black Lotus"]) is False
+        assert player.graveyard == []
+        assert [card.name for card in player.exile] == ["Black Lotus"]
+    assert _w3g2c_compile(void).supported, "the shape claims its own line"

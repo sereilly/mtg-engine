@@ -319,7 +319,8 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     # `others` is the exact prefix of caster.ante taken before the append, so
     # slicing it off leaves only the newly anted Bird.
     caster.ante = caster.ante[len(others):]
-    caster.graveyard.extend(others)
+    for other in others:
+        game.put_card_into_graveyard(caster, other)
     if others:
         game.log.append(
             f"{card.name} put {len(others)} other card(s) {caster.name} owns "
@@ -334,7 +335,7 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
 def wheel_of_fortune(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:
         while player.hand:
-            player.graveyard.append(player.hand.pop(0))
+            game.put_card_into_graveyard(player, player.hand.pop(0))
         game._draw_with_replacements(player, 7)
     game.log.append("Wheel effect resolved for all players")
     return True, "resolved"
@@ -627,7 +628,7 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
         game.put_card_into_library(player, card, "top")
         game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
     else:
-        player.graveyard.append(card)
+        game.put_card_into_graveyard(player, card)
         game.log.append(f"{player.name} discarded {card.name}")
     # The discarded card's own trigger (CR 113.6d, Psychic Purge). This is the
     # *second* place a card is discarded — `Game._discard_card` is the other —
@@ -772,7 +773,7 @@ def place_held_card(game: Game, instruction: OracleInstruction, context: OracleE
         return True, "resolved"
     # CR 400.3: a card put into a graveyard goes to its **owner's**, and the
     # only owner a library card can have is the player whose library it was.
-    game.players[seat].graveyard.append(card)
+    game.put_card_into_graveyard(seat, card)
     game.log.append(f"{card.name} is put into its owner's graveyard")
     return True, "resolved"
 
@@ -916,7 +917,7 @@ def return_exiled_source_to_graveyard(game: Game, instruction: OracleInstruction
         holder = game.players[from_seat]
         if card in holder.exile:
             holder.exile.remove(card)
-        holder.graveyard.append(card)
+        game.put_card_into_graveyard(holder, card)
         game.log.append(f"{card.name} is put into its owner's graveyard")
     return True, "resolved"
 
@@ -2117,7 +2118,8 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         # shuffle in the engine, so a given seed still replays exactly.
         random.shuffle(player.library)
     else:
-        player.graveyard.extend(revealed)
+        for card in revealed:
+            game.put_card_into_graveyard(player, card)
     return True, "resolved"
 
 
@@ -3035,7 +3037,7 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
         for _ in range(amount):
             if not victim.library:
                 break
-            victim.graveyard.append(victim.library.pop(0))
+            game.put_card_into_graveyard(victim, victim.library.pop(0))
             milled += 1
         game.log.append(f"{victim.name} milled {milled} card(s)")
     return True, "resolved"
@@ -3149,7 +3151,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
     milled = 0
     while milled < limit and victim.library:
         card = victim.library.pop(0)
-        victim.graveyard.append(card)
+        game.put_card_into_graveyard(victim, card)
         milled += 1
         if _card_matches_filter(card, stop_filter):
             matched.append(card)
@@ -5480,7 +5482,7 @@ def _give_card_to_graveyard(
         return False
     seat, zone, at = located
     getattr(game.players[seat], zone).pop(at)
-    game.players[new_owner_seat].graveyard.append(card)
+    game.put_card_into_graveyard(new_owner_seat, card)
     return True
 
 
@@ -5626,7 +5628,7 @@ def take_revealed_card_in_exchange(game: Game, instruction: OracleInstruction, c
     # like any other move to a hand). The hand it goes to is the new owner's,
     # which is what an ownership exchange *is* in this engine.
     game.put_card_into_hand(game.players[caster_seat], revealed)
-    victim.graveyard.append(context.card)
+    game.put_card_into_graveyard(victim, context.card)
     game.log.append(
         f"{context.caster.name} now owns {revealed.name} and {victim.name} now "
         f"owns {card_name} (CR 407)"
@@ -5775,7 +5777,7 @@ def put_self_into_zone(game: Game, instruction: OracleInstruction, context: Orac
             owner.exile.pop(index)
             break
     forget_record(game, source)
-    owner.graveyard.append(source.card)
+    game.put_card_into_graveyard(owner, source.card)
     game.log.append(f"{source.card.name} was put into {owner.name}'s graveyard from exile")
     return True, "resolved"
 
@@ -5892,7 +5894,7 @@ def discard_revealed_card(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
         return True, "resolved"
     victim.hand.pop(index)
-    victim.graveyard.append(card)
+    game.put_card_into_graveyard(victim, card)
     game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 
@@ -6038,7 +6040,7 @@ def discard_bound_revealed_card(game: Game, instruction: OracleInstruction, cont
     if not game.take_card_from_hand(victim, card):
         game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
         return True, "resolved"
-    victim.graveyard.append(card)
+    game.put_card_into_graveyard(victim, card)
     game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 

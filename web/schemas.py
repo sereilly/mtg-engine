@@ -115,6 +115,7 @@ ActionKind = Literal[
     "modal_mode_targets_confirm",
     "lamp_draw_confirm",
     "outside_game_draw_confirm",
+    "graveyard_return_draw_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "assign_camouflage_piles",

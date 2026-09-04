@@ -225,6 +225,14 @@ DRAW_REVEALS_TOP = 31  # Enduring Renewal
 # a Lamp or a Renewal never puts that question, which is the ordering the
 # drawing player would choose and the rule permits.
 DRAW_REVEALED_UNLESS_PAID = 32  # Zur's Weirding
+# The fourth of the consuming draw replacements, and last of them on purpose.
+# CR 616.1e's default is the lowest order, and this is the only replacement in
+# the engine that can **lose the affected player the game**: with an empty
+# graveyard Forbidden Crypt's second sentence ends the game on the spot. A Lamp,
+# a Renewal or a Weirding applied first consumes the draw and this never
+# applies, which is the order the drawing player would pick and the rule
+# permits.
+DRAW_RETURNS_FROM_GRAVEYARD = 33  # Forbidden Crypt
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # Before it, and before every other entry replacement. CR 614.17c: an event that
@@ -257,6 +265,13 @@ COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
 # the payment planner has to be able to ask the same question without applying
 # anything.
 LAND_MANA_SUBSTITUTION = 10  # Ritual of Subdual, Infernal Darkness, Deep Water
+#: "If a card would be put into your graveyard from anywhere, exile that card
+#: instead." (Forbidden Crypt.) Its own event kind, over the seam every path
+#: into a graveyard now runs through (``Game.put_card_into_graveyard``) — not a
+#: widening of ``would_die``, which is one of the ways a card reaches a
+#: graveyard and says nothing about a discard, a mill or a spell finishing on
+#: the stack.
+EXILE_INSTEAD_OF_GRAVEYARD = 10  # Forbidden Crypt
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -1737,7 +1752,7 @@ def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | 
     owner = game.players[
         owner_index if owner_index is not None else payload["controller_index"]
     ]
-    owner.graveyard.append(permanent.card)
+    game.put_card_into_graveyard(owner, permanent.card)
     game.log.append(
         f"{permanent.card.name} was put into {owner.name}'s graveyard instead of "
         f"entering the battlefield"
@@ -1842,7 +1857,7 @@ def _graveyard_instead_of_paying_entry_sacrifice(
     owner = game.players[
         owner_index if owner_index is not None else payload["controller_index"]
     ]
-    owner.graveyard.append(permanent.card)
+    game.put_card_into_graveyard(owner, permanent.card)
     game.log.append(
         f"{permanent.card.name} was put into {owner.name}'s graveyard instead of "
         f"entering the battlefield (nothing to sacrifice for it)"
@@ -2048,7 +2063,7 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
             f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
         )
     else:
-        player.graveyard.append(card)
+        game.put_card_into_graveyard(player, card)
         game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
     return 0
 
@@ -2425,7 +2440,7 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
         game.record_reveal(game.players.index(player), [revealed.name])
         if card_has_type(revealed, "creature"):
             player.library.pop(0)
-            player.graveyard.append(revealed)
+            game.put_card_into_graveyard(player, revealed)
             game.log.append(
                 f"{player.name} revealed {revealed.name} and put it into their "
                 f"graveyard ({source.card.name})"
@@ -2545,7 +2560,7 @@ def _mill_cards(game, player, count: int) -> int:
     for _ in range(count):
         if not player.library:
             break
-        player.graveyard.append(player.library.pop(0))
+        game.put_card_into_graveyard(player, player.library.pop(0))
         milled += 1
     return milled
 
@@ -2712,6 +2727,194 @@ def _reveal_draw_unless_paid(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT = (
+    "if you would draw a card, return a card from your graveyard to your hand "
+    "instead. if you can\'t, you lose the game"
+)
+
+
+def _applies_return_from_graveyard_instead_of_draw(game, payload: dict) -> bool:
+    return game._player_controls_text(
+        payload["player"], RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_RETURNS_FROM_GRAVEYARD,
+    applies=_applies_return_from_graveyard_instead_of_draw,
+)
+def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Forbidden Crypt: "If you would draw a card, return a card from your
+    graveyard to your hand instead. If you can\'t, you lose the game."
+
+    Both printed sentences, because the second is this replacement\'s *decline*
+    branch rather than a separate ability: CR 614.6\'s "as much as possible" has
+    nothing to say here — the card names what happens when the replacement
+    cannot be carried out, and what it names is CR 104.3e.
+
+    One draw at a time (CR 121.2). The draws queued behind this one are their
+    own events and go back through the seam, which is what makes a two-card
+    draw under an empty Crypt lose the game on the first of them rather than on
+    the second.
+
+    Which card comes back is the player\'s choice, so it is offered rather than
+    picked: an interactive seat is queued and the draw suspends, every other
+    seat takes the default at once, and both finish through the one resolver
+    below.
+    """
+    player = payload["player"]
+    remaining = int(payload["count"]) - 1
+    if not player.graveyard:
+        # "If you can\'t, you lose the game." CR 104.3e — an effect that states
+        # a player loses the game, applied here and not left to a state-based
+        # action, exactly as the `player_loses_game` handler applies it.
+        if not player.lost:
+            player.lost = True
+            game.log.append(
+                f"{player.name} had no card to return from their graveyard and "
+                f"lost the game (104.3e)"
+            )
+        payload["drawn"] = 0
+        return ReplacementOutcome(replaced=True)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="return_from_graveyard_instead_of_draw",
+            player_index=game.players.index(player),
+            options=tuple(card.name for card in player.graveyard),
+            # Option 0 like every other choice in this file. The offer is
+            # between *cards*, not between outcomes, and which card is worth
+            # more is a valuation question that belongs in
+            # ``engine/ai_valuation.py`` rather than in a replacement effect.
+            default_option=0,
+            data={"remaining_draws": max(0, remaining)},
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} returns a card from their graveyard instead of "
+            f"drawing (Forbidden Crypt)"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("return_from_graveyard_instead_of_draw")
+def _resolve_return_from_graveyard_instead_of_draw(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Move the chosen card, then make the draws queued behind this one.
+
+    Through ``put_card_into_hand`` rather than a bare append, so CR 903.9b sees
+    a commander coming back and offers its command zone — the reason that seam
+    exists at all. Zero cards drawn either way: the draw was replaced, so a
+    "whenever you draw a card" effect correctly sees none.
+    """
+    player = game.players[choice.player_index]
+    if 0 <= option_index < len(player.graveyard):
+        card = player.graveyard.pop(option_index)
+        game.put_card_into_hand(player, card)
+        game.log.append(
+            f"{player.name} returned {card.name} from their graveyard to their "
+            f"hand instead of drawing (Forbidden Crypt)"
+        )
+    remaining = int(choice.data.get("remaining_draws", 0))
+    if remaining > 0:
+        game._draw_with_replacements(player, remaining)
+    return 0
+
+
+#: "If a card would be put into **your** graveyard from anywhere, exile that
+#: card instead." (Forbidden Crypt.) Whose graveyard is payload for the reason
+#: every parameter in this file is: "an opponent\'s graveyard" (Leyline of the
+#: Void) and "a graveyard" (Rest in Peace, Planar Void) are the same sentence
+#: with a different seat in it, and the interceptor answers all three from one
+#: comparison. "That card" and "it" are the same back-reference.
+_GRAVEYARD_TO_EXILE = re.compile(
+    r"^if a card would be put into (?P<whose>your|an opponent\'s|a) graveyard "
+    r"from anywhere, exile (?:that card|it) instead$"
+)
+
+
+def graveyard_exile_scope(line: str) -> str | None:
+    """Whose graveyards *line* empties into exile — "you", "opponent" or
+    "any" — or None when it is not that line.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is exiled and what is claimed
+    cannot drift — the arrangement ``source_damage_cap`` already has.
+    """
+    match = _GRAVEYARD_TO_EXILE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    whose = match.group("whose")
+    return "you" if whose == "your" else ("opponent" if whose != "a" else "any")
+
+
+def _graveyard_exile_source(game, payload: dict):
+    """The permanent whose printed line would exile this card, or None.
+
+    Pure, like every other applicability predicate here. The scan is over every
+    battlefield rather than the affected player\'s own, because the scope word
+    is what says whose graveyard is meant: "your" is read relative to the
+    permanent\'s controller (CR 109.5), so an opponent\'s Forbidden Crypt does
+    nothing to your graveyard and a Leyline of the Void does nothing to its
+    own controller\'s.
+    """
+    player = payload.get("player")
+    if player is None:
+        return None
+    seat = game.players.index(player)
+    for permanent in game.all_permanents():
+        controller = game.controller_index_of(permanent)
+        if controller is None:
+            continue
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            scope = graveyard_exile_scope(line)
+            if scope is None:
+                continue
+            if scope == "any":
+                return permanent
+            if (seat == controller) == (scope == "you"):
+                return permanent
+    return None
+
+
+def _applies_graveyard_exile(game, payload: dict) -> bool:
+    return _graveyard_exile_source(game, payload) is not None
+
+
+@replacement_effect(
+    "put_into_graveyard", EXILE_INSTEAD_OF_GRAVEYARD,
+    applies=_applies_graveyard_exile,
+)
+def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Forbidden Crypt: "If a card would be put into your graveyard from
+    anywhere, exile that card instead."
+
+    "From anywhere" is the whole sentence, and the reason
+    ``Game.put_card_into_graveyard`` had to exist before this could: a death, a
+    discard, a mill, a sacrifice and a spell finishing on the stack are one
+    event with twenty-six spellings, and an interceptor hung on any one of them
+    would be a card that works on Mondays.
+
+    The exile is the *owner\'s*, which is the seat whose graveyard the card was
+    headed for — this engine keeps exile per player, and CR 400.3 already
+    decided the seat one call up.
+    """
+    player = payload["player"]
+    card = payload["card"]
+    source = _graveyard_exile_source(game, payload)
+    player.exile.append(card)
+    game.log.append(
+        f"{card.name} was exiled instead of going to {player.name}\'s graveyard"
+        + (f" ({source.card.name})" if source is not None else "")
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 #: Each entry is ``(the phrase an interceptor above self-selects on, the
 #: trailing clause that same interceptor also performs)``. The tail is spelled
 #: out in full rather than left as an open-ended "and whatever follows" — it is
@@ -2795,6 +2998,12 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # is let through and the sacrifice is armed once the land is on the
     # battlefield, which is what "then" says.
     (LAND_EQUILIBRIUM_TEXT, ""),
+    # _return_from_graveyard_instead_of_drawing (Forbidden Crypt): the constant
+    # is both printed sentences, because the interceptor performs both — the
+    # return, and CR 104.3e behind a graveyard with nothing in it. A claim
+    # stopping at the first sentence would admit the card with the clause that
+    # makes it a real card doing nothing.
+    (RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, ""),
 )
 
 
@@ -2839,6 +3048,13 @@ def replacement_claims_line(line: str) -> bool:
     # the two cards printing the second spelling. Asked of the same reader
     # ``_substitute_land_mana`` reaches, so a clause it cannot read leaves the
     # line unclaimed rather than admitted with the substitution not firing.
+    # "If a card would be put into your graveyard from anywhere, exile that card
+    # instead." (Forbidden Crypt.) Matched by shape for the reason the four
+    # above are: whose graveyard is payload, and it is asked of the same reader
+    # the interceptor uses, so a scope word it cannot answer leaves the line
+    # unclaimed rather than admitted with nothing exiled.
+    if graveyard_exile_scope(normalized) is not None:
+        return True
     from .land_mana_swaps import substitution_line
 
     return substitution_line(normalized) is not None

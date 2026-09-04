@@ -856,6 +856,20 @@ def _action_outside_game_draw_confirm(session, req, seat_type):
     if not session.game.confirm_outside_game_draw(req.seat, req.hand_index):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
+@action_handler("graveyard_return_draw_confirm")
+def _action_graveyard_return_draw_confirm(session, req, seat_type):
+    # Forbidden Crypt: the draw was replaced by a return from the graveyard and
+    # the player picks which card comes back (hand_index = position in their
+    # graveyard). Answered through the generic replacement-choice resolver
+    # rather than a bespoke ``confirm_`` method - the two above predate it.
+    if req.hand_index is None:
+        raise HTTPException(status_code=400, detail="hand_index is required")
+    if not session.game.resolve_replacement_choice(
+        req.seat, req.hand_index, kind="return_from_graveyard_instead_of_draw"
+    ):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("opponent_damage_choose")
 def _action_opponent_damage_choose(session, req, seat_type):
     # Cuombajj Witches: the opposing chooser picks any target for the second

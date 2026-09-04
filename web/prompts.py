@@ -1753,6 +1753,22 @@ def _lamp_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("return_from_graveyard_instead_of_draw")
+def _return_from_graveyard_instead_of_draw(ctx: PromptContext, choices: list) -> dict:
+    """Forbidden Crypt: the whole graveyard is offered, in its own order, and
+    the answer is a position in it. Serialized from the pile rather than from
+    the recorded names so the picker shows the cards themselves; ``card_names``
+    stays the authoritative order and length, as it is for the two pickers
+    below."""
+    choice = choices[0]
+    names = list(choice.options)
+    graveyard = ctx.game.players[choice.player_index].graveyard
+    return {
+        "card_names": names,
+        "cards": [ctx.serialize_card(card) for card in graveyard[: len(names)]],
+    }
+
+
 @prompt_renderer("outside_game_draw")
 def _outside_game_draw(ctx: PromptContext, choices: list) -> dict:
     """Ring of Ma'rûf: the offered cards can be a subset of the sideboard (CR

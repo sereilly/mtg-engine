@@ -2939,6 +2939,15 @@ function getOutsideGameDrawInfo(state = currentState) {
   return info;
 }
 
+// Forbidden Crypt: pick which card comes back from your graveyard instead of
+// the draw that was replaced.
+function getGraveyardReturnDrawInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.return_from_graveyard_instead_of_draw;
+  if (!info || !Array.isArray(info.card_names) || info.card_names.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -4845,12 +4854,23 @@ function renderDrawChoiceModals(state) {
     return;
   }
   const outside = getOutsideGameDrawInfo(state);
-  renderDrawChoiceModal(outside, {
-    title: "Ring of Ma'rûf",
-    action: "outside_game_draw_confirm",
+  if (outside) {
+    renderDrawChoiceModal(outside, {
+      title: "Ring of Ma'rûf",
+      action: "outside_game_draw_confirm",
+      subtitle: (n) =>
+        `Choose a card you own from outside the game to put into your hand ` +
+        `(${n} available).`,
+    });
+    return;
+  }
+  const crypt = getGraveyardReturnDrawInfo(state);
+  renderDrawChoiceModal(crypt, {
+    title: "Forbidden Crypt",
+    action: "graveyard_return_draw_confirm",
     subtitle: (n) =>
-      `Choose a card you own from outside the game to put into your hand ` +
-      `(${n} available).`,
+      `Choose a card to return from your graveyard to your hand instead of ` +
+      `drawing (${n} in your graveyard).`,
   });
 }
 

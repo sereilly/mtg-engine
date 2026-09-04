@@ -86,7 +86,7 @@ class StackResolutionMixin:
             owner.exile.append(card)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
         else:
-            owner.graveyard.append(card)
+            self.put_card_into_graveyard(owner, card)
             self.log.append(f"{card.name} {verb} and moved to graveyard")
 
     def _default_opposing_seat(self, caster_index: int) -> int:
@@ -873,7 +873,7 @@ class StackResolutionMixin:
                 holder = self.controller_index_of(permanent)
                 if holder is not None:
                     self.remove_from_battlefield(permanent)
-                caster.graveyard.append(card)
+                self.put_card_into_graveyard(caster, card)
                 self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
                 self._refresh_dynamic_creatures()
                 return
