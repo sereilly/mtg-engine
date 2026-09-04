@@ -320,20 +320,22 @@ ceiling per offer computed from pool and board, a several-target collection
 whose maximum is recomputed from the answer through
 `oracle_types.cost_target_count`, and sending the map on the cast action.
 
-**Added at MIR's wave 1: the chosen-source shield is one instruction spelled
-three times.** `grant_reverse_damage_shield`, `grant_exile_prevention_shield` and
-`grant_whole_prevention_shield` have byte-identical bodies — resolve the chosen
-source (a permanent, or a spell on the stack by its `CardDefinition`), arm a
-shield, fall back to a sourceless charge — and differ only in which
-`shields.make_*` builder they call. `Shield.kind` already carries that
-difference, and the five builder pairs underneath (`_source`/`_charge` for whole,
-half, life-gain, exile, team) repeat the same two lines with one constant
-changed. Nothing is broken and no card is mis-played; what it costs is a fourth
-copy every time a set prints a new rider on CR 615.5's sentence, which Mirage
-did twice. **Phase 3 of the next set that prints one clears it**, by making the
-rider payload on one kind rather than by adding the fourth handler — and the
-collapse wants its own `oracle_diff`, which is why it was not taken at the end of
-the wave that found it.
+**Added at MIR's wave 1, and half-drained at wave 2: the chosen-source shield.**
+Three prevention handlers had byte-identical bodies differing only in which
+`shields.make_*` builder they called. W2G3 removed the duplication itself
+without being asked to: one `chosen_shield_source` reader of "a source of your
+choice" shared by all five shields *and* by a redirect, one
+`_arm_chosen_source_shield` body, one `make_chosen_source_shield` builder the
+ten named wrappers delegate to.
+
+What is left is the part it was right to refuse: the four instruction **kinds**
+are still four. `Shield.kind` is read by `targeting.py`'s picker table and
+`effect_labels.py`'s support buckets as well as by the interceptors, so folding
+them into one kind with the rider as payload moves every affected card's
+compiled program. **That wants its own round and its own `oracle_diff`**, not a
+ride on a round that was about cards — which is the general rule this entry is
+now here to record: a refactor whose blast radius is the whole pool does not
+travel with a wave.
 
 **Added at MIR's wave 1: `_per_recipient_count` means two things.** It is defined
 in `lowering/_amounts.py` (a per-seat count spec) and in `lowering/_sweeps.py` (a
