@@ -3850,7 +3850,13 @@ class PendingChoicesMixin:
         else:
             source.metadata.pop(RECORD_KEY, None)
         zone = str(choice.data.get("zone", "hand"))
-        self.leave_linked_exile(entry, zone)
+        self.leave_linked_exile(
+            entry, zone,
+            controller_index=(
+                choice.player_index
+                if choice.data.get("under_control_of_chooser") else None
+            ),
+        )
         self.log.append(
             f"{self.players[choice.player_index].name} returned "
             f"{entry['card'].name} to their {zone}"
@@ -4474,7 +4480,16 @@ class PendingChoicesMixin:
             # CR 119.4: a player may pay N life only with at least N to pay —
             # paying down to exactly 0 is legal, and the state-based check that
             # follows is what ends the game.
-            return player.life >= life_cost
+            if player.life < life_cost:
+                return False
+            # "You may pay {4} **and** 2 life." (Purgatory.) Both prices, so
+            # the life half answering yes is no longer the whole answer: with a
+            # mana half printed beside it the board has to cover that too. An
+            # offer with no mana half (Bronze Tablet) falls through to a plan
+            # over an empty cost, which is always payable — so one path answers
+            # both spellings without having to ask which it is.
+            if not entry.get("cost"):
+                return True
         if self._optional_pay_plan(player, entry) is not None:
             return True
         alternative = int(entry.get("life_alternative", 0) or 0)
@@ -4550,11 +4565,18 @@ class PendingChoicesMixin:
         if life_cost:
             if player.life < life_cost:
                 return
+            # "You may pay {4} **and** 2 life." (Purgatory.) Both halves or
+            # neither: the mana is planned *before* the life is spent, because
+            # a payer charged the life and then unable to cover the mana would
+            # have paid for nothing — CR 601.2h is asked of the whole price,
+            # and the board can have changed since the offer was made.
+            if entry.get("cost") and self._optional_pay_plan(player, entry) is None:
+                return
             player.life -= life_cost
             self.log.append(
                 f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
             )
-        else:
+        if not life_cost or entry.get("cost"):
             # A graded offer is paid with the option that was chosen and with no
             # other: falling back through the alternatives would charge a cost
             # the payer did not pick and then run the consequence that cost

@@ -27,7 +27,7 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._events import CHOSEN_PLAYER, LOOP_BOUND_PLAYER
+from .lowering._events import BOUND_CARD_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_PLAYER
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -479,6 +479,24 @@ def lower_statement(
         return (OracleInstruction("put_exiled_cards_into_hand", "", {}),)
 
     if isinstance(statement, ast.ExileBoundCard):
+        # "Whenever a nontoken creature is put into your graveyard from the
+        # battlefield, **exile that card**." (Purgatory.) No printed zone,
+        # because the trigger's own condition already said which one — so the
+        # card is the ``dead_card`` the death seam froze (CR 603.10) and the
+        # handler looks for it by identity wherever CR 404.1 put it.
+        #
+        # Gated on the same ``BOUND_CARD_EVENTS`` every other reading of "that
+        # card" is gated on: an event that records no card makes these two
+        # words name nothing, and the honest answer is a refusal rather than a
+        # handler that finds nothing while the card compiles supported.
+        if statement.from_zone is None:
+            if event not in BOUND_CARD_EVENTS:
+                raise LoweringError(
+                    "'that card' names the firing event's object, and this "
+                    "event records none",
+                    node=statement,
+                )
+            return (OracleInstruction("exile_bound_card", "", {}),)
         # "Exile **that card** from your graveyard." (Necropotence.) The object
         # the firing event named, so the event has to be one whose fire site
         # records it — under anything else the words name a card nobody wrote

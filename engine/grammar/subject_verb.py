@@ -32,13 +32,13 @@ from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import (
     _accept_mana_alternatives,
+    _accept_life_alternative,
     _parse_can_attack_as_though,
     _parse_duration,
     _parse_mana_payment,
     parse_bound_subject,
 )
 from .effects import (
-    _accept_life_alternative,
     parse_block_count_grant,
     _parse_ante,
     _parse_gain_control,

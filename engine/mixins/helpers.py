@@ -1661,9 +1661,18 @@ class GameHelpersMixin:
         return removed
 
     def leave_linked_exile(
-        self, entry: dict, zone: str
+        self, entry: dict, zone: str, *, controller_index: int | None = None
     ) -> "Permanent | None":
         """Take one linked-exile entry's card out of exile and into *zone*.
+
+        *controller_index* is the seat a **battlefield** arrival enters under
+        (CR 110.2a: the player the effect instructed to put it there). It
+        defaults to the card's owner, which is what every automatic return means
+        — those give a card back to where it came from — and is passed only by
+        an effect whose printed sentence names no owner, "return a card exiled
+        with this enchantment to the battlefield" (Purgatory). Ownership never
+        moves either way (CR 108.3), so the card goes back to its owner's
+        graveyard when it next dies.
 
         The one placement both readers of the record share: the automatic
         return below, and the ``put_exiled_with_source`` handler that Knowledge
@@ -1692,7 +1701,17 @@ class GameHelpersMixin:
             getattr(owner, zone).append(card)
             return None
         arrival = Permanent(card=card)
-        self._put_permanent_onto_battlefield(int(entry["owner_index"]), arrival, None)
+        owner_index = int(entry["owner_index"])
+        seat = owner_index if controller_index is None else int(controller_index)
+        if seat != owner_index:
+            # The base controller and the owner differ, which is the one fact
+            # `_put_permanent_onto_battlefield` cannot re-derive: it is handed a
+            # seat and takes it for both. Recorded for `reanimate_bound_card`'s
+            # reason — everywhere else in this pool the two coincide, so the
+            # only thing that could say otherwise is the write that made them
+            # differ.
+            arrival.metadata["owner_player_index"] = owner_index
+        self._put_permanent_onto_battlefield(seat, arrival, None)
         if entry.get("tapped"):
             arrival.tapped = True
         if entry.get("counters"):

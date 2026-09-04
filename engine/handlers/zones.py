@@ -2055,26 +2055,68 @@ def exile_bound_card(game: Game, instruction: OracleInstruction, context: Oracle
     A card that has already left that pile exiles nothing rather than falling
     back to a scan: CR 608.2's "as much as possible", and a scan would exile
     whichever look-alike it reached first.
+
+    **Two ways the card can have been recorded, and the identity one wins.**
+    "Whenever a nontoken creature is put into your graveyard from the
+    battlefield, exile that card" (Purgatory) fires from the death seam, which
+    freezes the ``CardDefinition`` itself; the delayed spelling above it froze a
+    seat and a *name*, because that fire site had nothing else. An identity is
+    strictly the better answer — a graveyard holding two copies of one card
+    holds one ``CardDefinition`` twice, so the name cannot tell them apart and
+    the seat cannot either — so it is asked first and the name is the fallback
+    rather than the rule.
+
+    The exile is **recorded against the ability's source** (CR 610.3). Nothing
+    here can know whether the permanent has a second ability naming "a card
+    exiled with this enchantment" — Purgatory does, Whippoorwill does not — and
+    the record is the only thing that could answer it, so it is always written.
+    It ends nothing on its own: ``ends_on`` is empty, so no sweep gives these
+    cards back.
     """
+    from ..linked_exile import link_exiled_card
+
     trigger = context.trigger_context or {}
-    seat = trigger.get("event_subject_owner")
-    name = trigger.get("dead_name")
-    if not isinstance(seat, int) or not (0 <= seat < len(game.players)) or not name:
-        game.log.append(f"{context.card.name}: no card was recorded to exile")
-        return True, "resolved"
-    owner = game.players[seat]
-    index = next(
-        (i for i in range(len(owner.graveyard) - 1, -1, -1)
-         if owner.graveyard[i].name == name),
-        None,
-    )
-    if index is None:
-        game.log.append(
-            f"{context.card.name}: {name} is no longer in {owner.name}'s graveyard"
+    card = trigger.get("dead_card")
+    owner = None
+    index = None
+    if card is not None:
+        for player in game.players:
+            found = next(
+                (i for i, held in enumerate(player.graveyard) if held is card), None
+            )
+            if found is not None:
+                owner, index = player, found
+                break
+        if owner is None:
+            game.log.append(
+                f"{context.card.name}: {card.name} is no longer in a graveyard"
+            )
+            return True, "resolved"
+    else:
+        seat = trigger.get("event_subject_owner")
+        name = trigger.get("dead_name")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)) or not name:
+            game.log.append(f"{context.card.name}: no card was recorded to exile")
+            return True, "resolved"
+        owner = game.players[seat]
+        index = next(
+            (i for i in range(len(owner.graveyard) - 1, -1, -1)
+             if owner.graveyard[i].name == name),
+            None,
         )
-        return True, "resolved"
-    owner.exile.append(owner.graveyard.pop(index))
-    game.log.append(f"{context.card.name} exiled {name} from {owner.name}'s graveyard")
+        if index is None:
+            game.log.append(
+                f"{context.card.name}: {name} is no longer in {owner.name}'s graveyard"
+            )
+            return True, "resolved"
+    exiled = owner.graveyard.pop(index)
+    owner.exile.append(exiled)
+    source = context.source_permanent
+    if source is not None:
+        link_exiled_card(source, exiled, game.players.index(owner))
+    game.log.append(
+        f"{context.card.name} exiled {exiled.name} from {owner.name}'s graveyard"
+    )
     return True, "resolved"
 
 
@@ -3952,6 +3994,13 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             card_name=context.card.name if context.card is not None else "",
             zone=zone,
             owned_by_chooser=bool(instruction.payload.get("owned_by_chooser")),
+            # CR 110.2a, for the one destination that has no possessive to
+            # print: "return a card exiled with this enchantment **to the
+            # battlefield**" (Purgatory) puts it under the control of the seat
+            # the effect instructed, and every other spelling names an owner.
+            under_control_of_chooser=(
+                instruction.payload.get("under_control_of") == "chooser"
+            ),
             _source_permanent=source,
         )
         return True, "resolved"

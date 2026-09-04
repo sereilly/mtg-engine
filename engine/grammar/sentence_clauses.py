@@ -23,9 +23,10 @@ from .nouns import parse_object_filter
 from .references import parse_player_ref, parse_recipient
 from .vocabulary import singular as _singular
 from .stream import TokenStream
-from .phrases import _accept_number, _accept_self_reference, _parse_mana_payment
+from .phrases import (_accept_life_alternative, _accept_number,
+                      _accept_self_reference, _parse_mana_payment)
 from .records import accept_additional_cost_paid
-from .effects import (_accept_life_alternative, _parse_discard, _parse_gain_control,
+from .effects import (_parse_discard, _parse_gain_control,
                       _parse_mill, _parse_put_counter, _parse_linked_untap_restriction)
 
 

@@ -75,7 +75,6 @@ from .types import (
     _parse_no_longer_supertype,
 )
 from .board import (
-    _accept_life_alternative,
     _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
     _parse_counted_sacrifice,
@@ -189,7 +188,6 @@ __all__ = [
     "_parse_damage",
     "_parse_damage_unless_pay",
     "_parse_have_source_deal_damage",
-    "_accept_life_alternative",
     "_parse_for_each_destroy_unless_paid",
     "_parse_damage_rider_sentence",
     "_parse_prevent",

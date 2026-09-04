@@ -27,7 +27,8 @@ from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_pronoun_to_condition_target)
-from .phrases import _parse_duration, _parse_mana_payment
+from .phrases import (_accept_conjoined_life_cost, _parse_duration,
+                      _parse_mana_payment)
 from .effects import (_parse_untap_chosen_by_paying,
                       _parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage, _parse_cast_permission,
@@ -605,7 +606,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 # is made by the same handler either way, and an undefined X
                 # would make it "pay {0}", which is not a choice.
                 cost = _parse_mana_payment(stream, allow_variable=True)
-                return ast.May(ast.PlayerRef("you"), cost=cost)
+                # "You may pay {4} **and 2 life**." (Purgatory.) One offer with
+                # two prices — CR 118.8's "or" is the alternative and this is
+                # the conjunction, so both are charged and a player short of
+                # either cannot take the offer at all.
+                return ast.May(
+                    ast.PlayerRef("you"),
+                    cost=cost,
+                    life_cost=_accept_conjoined_life_cost(stream),
+                )
             # The causative "you may have <subject> <verb> …" (Goblin
             # Arsonist's "you may have it deal 1 damage to any target") is the
             # optional form of the unwrapped sentence — the verb table already

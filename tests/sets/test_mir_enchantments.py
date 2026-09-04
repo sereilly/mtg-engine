@@ -1080,3 +1080,175 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
     assert not forest.tapped, game.log
     assert game.controller_index_of(forest) == 0, game.log
+
+
+# --- W2G2: upkeep, delayed triggers and counters ---
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura, aura_color_grants, detach_aura
+from engine.linked_exile import linked_entries
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g2_vanilla(name: str, power: int = 2, toughness: int = 2,
+                  colors: tuple[str, ...] = ("G",)) -> CardDefinition:
+    type_line = "Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="{G}", cmc=1.0, type_line=type_line,
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g2_game(*battlefield, opponent=()):
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(battlefield), life=20),
+        PlayerState(name="P2", battlefield=list(opponent), life=20),
+    ])
+    game.interactive_seats = set()
+    game._settle()
+    return game
+
+
+def test_grave_servitude_makes_the_creature_black_and_gives_back_its_colour(set_pool):
+    """"Enchanted creature gets +3/-1 **and is black**."
+
+    CR 105.3: a granted colour **replaces** every colour the object had, and
+    CR 613.1e puts it in layer 5. Derived from the Aura's own text on each
+    recompute like every other half of ``auras.py``, so detaching it gives the
+    printed colour back with nothing having to be undone — which is the whole
+    reason the grant is not a ``color_override`` stamped onto the creature: an
+    override that replaced every colour would leave nothing to put back.
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Grave Servitude"])
+    host = Permanent(card=_w2g2_vanilla("Host", 2, 2, colors=("W",)))
+    game = _w2g2_game(aura, host)
+
+    assert host.effective_colors == {"W"}
+
+    attach_aura(aura, host)
+    game._settle()
+    assert host.effective_colors == {"B"}, game.log
+    # The P/T half of the same printed line still reads, which is the point of
+    # `aura_static_pt_grant` searching rather than anchoring.
+    assert (host.effective_power, host.effective_toughness) == (5, 1)
+
+    detach_aura(aura, host)
+    game._settle()
+    assert host.effective_colors == {"W"}
+    assert (host.effective_power, host.effective_toughness) == (2, 2)
+
+
+def test_the_aura_colour_reader_takes_the_bare_sentence_too():
+    """The grant is read off the printed line, and the P/T half in front of it
+    is optional — a card printing "Enchanted creature is black" alone reaches
+    the same layer-5 contribution. Asserted on the reader rather than on a
+    card, because no card in this pool prints the bare form yet and a
+    production that only worked with a P/T prefix in front of it is one the
+    next such card would have to discover.
+    """
+    assert aura_color_grants("Enchanted creature gets +3/-1 and is black.") == ("black",)
+    assert aura_color_grants("Enchanted creature is red.") == ("red",)
+    # "as long as" is a condition this does not implement, so the anchored end
+    # of the pattern refuses it rather than granting the colour unconditionally.
+    assert aura_color_grants(
+        "Enchanted creature is blue as long as you control a Forest."
+    ) == ()
+
+
+def test_purgatory_exiles_what_dies_and_buys_it_back_for_mana_and_life(set_pool):
+    """Both halves of Purgatory, and the link between them (CR 610.3).
+
+    The death trigger's "exile **that card**" prints no zone, because its own
+    condition already said which one — so the card is the ``dead_card`` the
+    death seam froze, found by identity. The exile is recorded against the
+    enchantment, which is the only thing that can answer "a card exiled with
+    this enchantment" a turn later.
+
+    The upkeep offer charges "{4} **and** 2 life": one offer with two prices,
+    where CR 118.8's "or" would be an alternative. Both are taken.
+    """
+    pool = set_pool("MIR")
+    purgatory = Permanent(card=pool["Purgatory"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    lands = [Permanent(card=pool["Plains"]) for _ in range(5)]
+    game = _w2g2_game(purgatory, bear, *lands)
+
+    game._permanent_to_graveyard(game.players[0], bear)
+    game.remove_from_battlefield(bear)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == []
+    assert [c.name for c in game.players[0].exile] == ["Bear"]
+    assert [e["card"].name for e in linked_entries(purgatory)] == ["Bear"], game.log
+
+    game.start_turn(0)
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert game.confirm_optional_pay(0, "Purgatory", accept=True), game.log
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert game.players[0].life == 18, game.log
+    assert [c.name for c in game.players[0].exile] == []
+    assert "Bear" in [p.card.name for p in game.players[0].battlefield], game.log
+    # CR 610.3: the pile gives up one entry, and is not drained wholesale.
+    assert linked_entries(purgatory) == ()
+
+
+def test_purgatory_declines_its_own_offer_when_the_life_is_missing(set_pool):
+    """"You may pay {4} **and** 2 life" is one price with two halves, so a
+    player who can cover only one of them is never offered it at all
+    (CR 601.2h asked of the whole cost).
+
+    The direction matters: read as CR 118.8's alternative the offer would be
+    takeable on the mana alone, and Purgatory would reanimate for free at one
+    life.
+    """
+    pool = set_pool("MIR")
+    purgatory = Permanent(card=pool["Purgatory"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    lands = [Permanent(card=pool["Plains"]) for _ in range(5)]
+    game = _w2g2_game(purgatory, bear, *lands)
+
+    game._permanent_to_graveyard(game.players[0], bear)
+    game.remove_from_battlefield(bear)
+    game.resolve_stack()
+
+    game.players[0].life = 1
+    game.start_turn(0)
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert not game.pending_choices_of("optional_pay"), game.log
+    assert game.players[0].life == 1
+    assert [c.name for c in game.players[0].exile] == ["Bear"]
+
+
+def test_purgatory_returns_the_card_under_its_controllers_control(set_pool):
+    """"…return a card exiled with this enchantment **to the battlefield**" —
+    the one destination with no possessive to print, so CR 110.2a decides: the
+    card enters under the control of the player the effect instructed, which is
+    this ability's controller.
+
+    Its opposite is Safe Haven, which prints "under **its owner's** control"
+    out loud; the two are different sentences and lower to different seats.
+    """
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Purgatory"])
+    upkeep = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "upkeep_self"
+    )
+    assert upkeep.supported
+    step = upkeep.instruction.payload["then"][0]
+    assert step.kind == "put_exiled_with_source"
+    assert step.payload["under_control_of"] == "chooser"
+    # And no "you own" narrowing, which Purgatory does not print: its pile is
+    # every card the enchantment exiled.
+    assert "owned_by_chooser" not in step.payload

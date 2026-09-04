@@ -134,9 +134,9 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         # reach" / "gets +0/+2 and has '{W}: ... until end of turn.'"
         re.compile(
             rf"^{_ATTACHED} {_NOUN} gets [+-]\d+/[+-]\d+"
-            rf"""(?: and has (?:{_KEYWORDS}|['"][^'"]+['"]))?$"""
+            rf"""(?: and (?:has (?:{_KEYWORDS}|['"][^'"]+['"])|is (?:{_COLORS})))?$"""
         ),
-        "static P/T (and optional granted keyword or ability) — _apply_aura_effect",
+        "static P/T (and optional granted keyword, ability or colour) — _apply_aura_effect",
     ),
     (
         # Aspect of Wolf: a P/T that recomputes from the board.
@@ -166,6 +166,15 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(rf"^{_ATTACHED} {_NOUN} has (?:{_KEYWORDS})$"),
         "keyword grant — _apply_aura_effect",
+    ),
+    (
+        # "Enchanted creature **is black**." The colour half of the P/T row
+        # above, printed on its own. Its own row rather than a fourth optional
+        # suffix there, because a card printing the colour and nothing else
+        # would have to make the P/T half optional too — and a pattern whose
+        # every half is optional matches "enchanted creature" alone.
+        re.compile(rf"^{_ATTACHED} {_NOUN} is (?:{_COLORS})$"),
+        "colour override (layer 5) — aura_color_grants / layer_bridge",
     ),
     (
         re.compile(rf'^{_ATTACHED} {_NOUN} has "[^"]+"$'),
@@ -1740,6 +1749,44 @@ def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
         match = _TYPE_ADDITION_GRANT.match(_line_text(raw_line))
         if match is not None:
             granted.append(match.group("subtype"))
+    return tuple(granted)
+
+
+#: "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.) The
+#: colour half of the compound line, and the bare "…is black" beside it.
+#:
+#: A **search**, not an anchored match, for `_STATIC_PT_GRANT`'s reason one
+#: screen down: the two halves of one printed line live in two layers (7c and
+#: 5), and each is read by the reader that owns its layer. Anchoring here would
+#: make the compound line answer for the colour and not the P/T, or the other
+#: way round, depending on which reader was written last.
+#:
+#: The trailing anchor is still required. "is black" ends the sentence on every
+#: printing of it, and without the anchor "enchanted creature is black **as
+#: long as …**" — a conditional this does not implement — would read as the
+#: unconditional grant.
+_COLOR_GRANT = re.compile(
+    rf"{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? is (?P<color>{_COLORS})$"
+)
+
+
+def aura_color_grants(oracle_text: str) -> tuple[str, ...]:
+    """Colour words an Aura gives what it enchants (CR 613 layer 5).
+
+    CR 105.3: a new colour **replaces** every colour the object had, unless the
+    effect says "in addition". No printing of this sentence says it, so the
+    grant is a `set_colors` contribution and not an addition — a creature under
+    Grave Servitude is black and nothing else.
+
+    Colour *words*, exactly as :func:`aura_protection_colors` returns them: the
+    caller is the one that knows whether a text change has remapped the word
+    (Sleight of Mind), and mapping here would be a second answer to that.
+    """
+    granted: list[str] = []
+    for raw_line in oracle_text.splitlines():
+        match = _COLOR_GRANT.search(_line_text(raw_line))
+        if match is not None:
+            granted.append(match.group("color"))
     return tuple(granted)
 
 

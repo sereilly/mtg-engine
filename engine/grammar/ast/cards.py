@@ -301,10 +301,17 @@ class ExileBoundCard:
     nothing is chosen — "that card" is the discard the trigger watched, and the
     only place it can be read is the event's own captured context.
 
-    ``from_zone`` is read rather than assumed, because "exile that card" with no
-    zone would be a different sentence about an object that may be anywhere.
+    ``from_zone`` is None where the card prints no zone at all ("Whenever a
+    nontoken creature is put into your graveyard from the battlefield, **exile
+    that card**", Purgatory). It is not the same sentence with a word missing:
+    Necropotence's trigger is about a *discard*, whose card could have been
+    replaced somewhere else on its way (Library of Leng), which is why that
+    spelling names the pile it expects to find it in. A death trigger has
+    already said where the card went — its own condition is "is put into <a>
+    graveyard" — so the zone is in the event rather than in the effect, and the
+    two lower to two handlers that look in two places.
     """
-    from_zone: Zone
+    from_zone: Zone | None = None
 
 
 @dataclass(frozen=True)

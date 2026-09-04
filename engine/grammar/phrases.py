@@ -562,6 +562,91 @@ def _accept_mana_alternatives(stream: TokenStream) -> tuple["ast.ManaCost", ...]
             return tuple(alternatives)
 
 
+def _accept_unless_life_cost(stream: TokenStream) -> "ast.Amount | None":
+    """The life half of "… unless <player> pays <life>", or None, cursor unmoved.
+
+    Two printed shapes and no third: "**3 life**" and "**life equal to its
+    toughness**" (Essence Vortex). The second is not a number this parser could
+    count — CR 613 makes toughness computed, so it is whatever the creature has
+    when the offer is made — and it travels as the characteristic reference the
+    resolution reads.
+
+    None rather than a raise, so the mana payment beside it keeps its reading of
+    every clause that is not a life cost.
+    """
+    mark = stream.mark()
+    if stream.accept_word("life"):
+        if stream.accept_phrase("equal", "to", "its"):
+            for name in ("toughness", "power"):
+                if stream.accept_word(name):
+                    return ast.CharacteristicOfSubject(name, 0)
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if isinstance(amount, ast.Fixed) and amount.value > 0 and stream.accept_word("life"):
+        return amount
+    stream.reset(mark)
+    return None
+
+
+def _accept_life_alternative(stream: TokenStream) -> int | None:
+    """``or 1 life`` trailing a mana payment (Erosion) — CR 118.8, or None.
+
+    Only the amount is carried, not a whole cost node: this is the second half
+    of one offer, and the payer covers it either way. Refuses without consuming
+    so any other "or" in the sentence keeps the reading it had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(amount, ast.Fixed) or not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return amount.value
+
+
+def _accept_conjoined_life_cost(stream: TokenStream) -> "ast.Amount | None":
+    """``and 2 life`` trailing a mana payment (Purgatory) — or None, unmoved.
+
+    CR 118.8's alternative reads "**or** 1 life" and is one offer the payer may
+    cover either way; this is "**and** 2 life" and is one offer with two
+    prices, both of which have to be paid. One word apart in print and opposite
+    in meaning, which is why it is its own reader beside
+    :func:`_accept_life_alternative` rather than a flag on it — folded
+    together, a player with the mana and no life would take Purgatory's offer
+    for free.
+
+    Refuses without consuming, so any other "and" in the sentence keeps its own
+    reading — "you may pay {4} and draw a card" is a conjunction of an offer
+    and an effect, and this must not eat its "and".
+    """
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        isinstance(amount, ast.Fixed)
+        and amount.value > 0
+        and stream.accept_word("life")
+    ):
+        return amount
+    stream.reset(mark)
+    return None
+
+
 def _parse_card_alternatives(
     stream: TokenStream,
 ) -> tuple[ast.ObjectFilter, ...] | None:
