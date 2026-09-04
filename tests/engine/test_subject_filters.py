@@ -536,6 +536,8 @@ _COVERED_ELSEWHERE = {
     "controller_controls":
         "test_controller_controls_asks_about_the_candidate_s_own_seat",
     "banded_with_source": "test_banded_with_source_names_only_the_band",
+    "created_with_source":
+        "test_created_with_source_names_only_one_maker_s_tokens",
     "characteristic_vs_source":
         "test_a_source_relative_bound_is_read_through_the_layers",
 }
@@ -1077,6 +1079,56 @@ def test_a_source_relative_bound_is_read_through_the_layers(pool):
     # bound although nothing printed on it changed.
     add_pt_modifier(source, 0, -1)
     assert subject_matches(game, one_power, described, source=source)
+
+
+def test_created_with_source_names_only_one_maker_s_tokens(pool):
+    """"Destroy all **tokens created with this enchantment**" (Tombstone
+    Stairwell); "exile any number of **tokens created with this creature**"
+    (Tetravus).
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: that table
+    builds a bare permanent, and the rejection here is about a *record* two
+    otherwise identical tokens differ by. The maker stamps its own
+    ``permanent_id`` on what it makes, so the phrase cannot be answered off the
+    token at all — which is the whole reason it needs the ability's source.
+
+    The third assertion is the one that matters on a sweep: with no source the
+    answer is no. A caller that dropped the narrowing instead would destroy
+    every token on the table.
+    """
+    from engine.tokens import CREATED_WITH_PERMANENT_ID
+
+    maker = Permanent(card=pool["Grizzly Bears"])
+    other_maker = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[maker, other_maker]),
+        PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+
+    mine = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={"is_token": True,
+                  CREATED_WITH_PERMANENT_ID: maker.permanent_id},
+    )
+    theirs = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={"is_token": True,
+                  CREATED_WITH_PERMANENT_ID: other_maker.permanent_id},
+    )
+    unmade = Permanent(card=pool["Grizzly Bears"], metadata={"is_token": True})
+
+    described = {"token_only": True, "created_with_source": True}
+    assert subject_matches(game, mine, described, source=maker)
+    assert not subject_matches(game, theirs, described, source=maker), (
+        "a look-alike from another maker is not one of these"
+    )
+    assert not subject_matches(game, unmade, described, source=maker), (
+        "a token nothing recorded making was not created with this permanent"
+    )
+    assert not subject_matches(game, mine, described), (
+        "with no source there is nothing the record is relative to"
+    )
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

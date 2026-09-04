@@ -545,6 +545,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         value = permanent_state_holds(source, state)
         return (not value) if payload.get("negated") else value
 
+    if kind == "source_on_battlefield":
+        # "if this enchantment is on the battlefield" (Tombstone Stairwell) —
+        # CR 603.4 checked again at resolution, which is the whole reason the
+        # clause is printed: the trigger goes on the stack, the enchantment is
+        # destroyed in response, and the ability then does nothing.
+        #
+        # Through the control seam's `is_on_battlefield`, never a truth test on
+        # the permanent: a `Permanent` that has left is still a live Python
+        # object (the leaves-the-battlefield trigger beside this one depends on
+        # that), so "we have one" is not "it is there".
+        source = context.source_permanent
+        there = source is not None and game.is_on_battlefield(source)
+        return (not there) if payload.get("negated") else there
+
     if kind == "started_turn_state":
         # "If this creature started the turn untapped" (Rasputin Dreamweaver).
         # The board cannot answer this at an upkeep — the untap step has already

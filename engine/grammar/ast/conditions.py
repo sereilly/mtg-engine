@@ -208,6 +208,32 @@ class IsState:
     state: str          # tapped | attacking | blocking | attacked_this_turn
     negated: bool = False
 @dataclass(frozen=True)
+class SourceOnBattlefield:
+    """"if this enchantment is on the battlefield" (Tombstone Stairwell).
+
+    CR 603.4's intervening-if asking whether the ability's own source is still
+    where it was when the trigger fired. It reads as a redundancy and is not
+    one: the condition is checked again as the ability resolves, so a source
+    destroyed in response makes the whole ability do nothing — which for
+    Tombstone Stairwell is the difference between an upkeep that fills two
+    boards with Zombies and one that does not.
+
+    Its own node rather than an :class:`IsState` with a state word, because the
+    two read different things: every state on that node is a field of the
+    permanent, and this is a question about which *zone* the object is in
+    (CR 400.1), which only the game can answer. A state word the permanent
+    cannot answer reads False forever, which here would silently turn the
+    clause into "never".
+
+    The subject travels on the node for :class:`IsState`'s reason — a printed
+    "it" can have been rebound to an attached host — and lowering refuses a
+    rebound one rather than answering about the wrong object.
+    """
+    subject: "TargetSpec"
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class SubjectCharacteristicIs:
     """"if this creature's power is 1 or more" (Lesser Werewolf), "if target
     creature has toughness 5 or greater" (Blood Lust).
@@ -468,6 +494,7 @@ Condition = Union[
     ItIsColor,
     ObjectHasKeyword,
     OnBattlefield,
+    SourceOnBattlefield,
     LifeTotalDifference,
     PlayerLifeIs,
     RawCondition,
