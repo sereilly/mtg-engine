@@ -445,3 +445,144 @@ def test_phyrexian_dreadnought_goes_when_the_offer_is_declined(set_pool):
     assert [c.name for c in game.players[0].graveyard] == [
         "Phyrexian Dreadnought"
     ], game.log
+
+
+# --- W3G3: Tainted Specter, an offer whose refusal is what the card is for ---
+#
+# "Target player discards a card unless they put a card from their hand on top
+# of their library. If that player discards a card this way, this creature
+# deals 1 damage to each creature and each player."
+#
+# Three riders on one activated ability, and only the middle one is new. The
+# "unless" is `ast.May` with the put-back as its *action*, the way every other
+# non-mana toll in this grammar decomposes; the sweep behind it is a condition
+# on the record the discard writes, folded into the offer's decline branch by
+# `_lower_steps`; and "Activate only as a sorcery" was already a row in
+# `engine/activation_restrictions.py`.
+#
+# The condition is the half a kind-shaped assertion cannot see. A player with an
+# empty hand can neither put a card back nor discard one, so the offer is never
+# made, the discard takes nothing and **the sweep must not happen** — which is
+# what `it_happened` over `discarded_count` buys and what folding the damage
+# into the decline branch unconditionally would have lost.
+
+from engine import (Game as _w3g3c_Game,  # noqa: E402
+                    PlayerState as _w3g3c_PlayerState)
+from engine.card_loader import (load_cards as _w3g3c_load,  # noqa: E402
+                                manifest_set_path as _w3g3c_path)
+from engine.models import Permanent as _w3g3c_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g3c_compile  # noqa: E402
+
+
+def _w3g3c_lea():
+    return {card.name: card for card in _w3g3c_load(_w3g3c_path("LEA"))}
+
+
+def _w3g3c_specter_game(set_pool, opponent_hand=2, theirs=("Grizzly Bears",)):
+    """A Specter under P1 and a two-card hand under P2, ready to activate."""
+    lea = _w3g3c_lea()
+    specter = _w3g3c_Permanent(card=set_pool("MIR")["Tainted Specter"])
+    specter.metadata["summoning_sickness_turn"] = -99
+    game = _w3g3c_Game(players=[
+        _w3g3c_PlayerState(name="P1", battlefield=[specter],
+                           library=[lea["Island"]] * 8),
+        _w3g3c_PlayerState(
+            name="P2", hand=[lea["Island"]] * opponent_hand,
+            battlefield=[_w3g3c_Permanent(card=lea[name]) for name in theirs],
+            library=[lea["Forest"]] * 8,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+    game.start_turn(0)
+    return game, specter
+
+
+def test_w3g3_tainted_specter_is_supported(set_pool):
+    """The offer, its penalty and the conditional sweep, in that shape.
+
+    The sweep sits **inside** the decline branch rather than beside it: it can
+    only happen when the put-back did not, and `_lower_steps` folds a step that
+    reads what a branch records into that branch.
+    """
+    program = _w3g3c_compile(set_pool("MIR")["Tainted Specter"])
+    assert program.supported, program.reason
+
+    ability = program.activated_abilities[0]
+    assert ability.cost.requires_tap
+    assert ability.cost.mana["B"] == 2 and ability.cost.mana["generic"] == 1
+    offer = ability.instruction
+    assert offer.kind == "may" and offer.payload["actor"] == "that_player"
+    assert [step.kind for step in offer.payload["action"]] == [
+        "put_hand_cards_on_library"
+    ]
+    declined = offer.payload["otherwise"]
+    assert [step.kind for step in declined] == ["discard_target_cards", "if_then"]
+    assert declined[1].payload["condition"] == {
+        "kind": "it_happened", "key": "discarded_count",
+    }
+
+
+def test_w3g3_tainted_specter_taking_the_offer_deals_no_damage(set_pool):
+    """Accepting puts a card on the library and stops there. Nothing is
+    discarded, so the sentence behind the offer has nothing to fire on."""
+    game, _ = _w3g3c_specter_game(set_pool)
+    game.activate_permanent_ability(0, "Tainted Specter", target_player_index=1)
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+
+    assert game.confirm_optional_pay(1, accept=True), game.log
+    assert [c.kind for c in game.pending_choices] == ["hand_to_library"]
+    assert game.confirm_hand_to_library(1, [0]), game.log
+
+    assert len(game.players[1].hand) == 1
+    assert game.players[1].library[0].name == "Island"
+    assert game.players[1].graveyard == []
+    assert [player.life for player in game.players] == [20, 20], game.log
+    assert game.players[1].battlefield[0].damage_marked == 0
+
+
+def test_w3g3_tainted_specter_declining_discards_and_then_sweeps(set_pool):
+    """Declining is what the card is for: the discard happens and the sweep
+    behind it deals 1 to **each** creature and **each** player — the Specter
+    and its own controller included."""
+    game, specter = _w3g3c_specter_game(set_pool)
+    game.activate_permanent_ability(0, "Tainted Specter", target_player_index=1)
+
+    assert game.confirm_optional_pay(1, accept=False), game.log
+    assert [c.kind for c in game.pending_choices] == ["discard"]
+    assert game.confirm_discard(1, [0]), game.log
+
+    assert [c.name for c in game.players[1].graveyard] == ["Island"]
+    assert [player.life for player in game.players] == [19, 19], game.log
+    assert specter.damage_marked == 1
+    assert game.players[1].battlefield[0].damage_marked == 1
+
+
+def test_w3g3_tainted_specter_sweeps_nothing_off_an_empty_hand(set_pool):
+    """The condition, and the whole reason it is one. With no cards there is no
+    offer to make and no card to discard, so "discards a card this way" is
+    false — folded unconditionally into the decline branch the sweep would have
+    fired for a player who lost nothing."""
+    game, specter = _w3g3c_specter_game(set_pool, opponent_hand=0)
+    game.activate_permanent_ability(0, "Tainted Specter", target_player_index=1)
+
+    assert game.pending_choices == [], game.log
+    assert [player.life for player in game.players] == [20, 20], game.log
+    assert specter.damage_marked == 0
+    assert game.players[1].battlefield[0].damage_marked == 0
+
+
+def test_w3g3_tainted_specter_is_sorcery_speed(set_pool):
+    """CR 602.5's printed clause, enforced rather than parsed and dropped. The
+    failure this guards is not a crash: it is an ability usable on an
+    opponent's turn, which is silent and in its controller's favour."""
+    game, _ = _w3g3c_specter_game(set_pool)
+    game.start_turn(1)
+
+    result = game.activate_permanent_ability(
+        0, "Tainted Specter", target_player_index=1
+    )
+    assert not result.supported
+    assert "sorcery-speed" in result.details
+    assert game.pending_choices == [], game.log
+    assert len(game.players[1].hand) == 2

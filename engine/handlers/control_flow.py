@@ -1251,6 +1251,24 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)
+    # "Target player discards a card unless they **put a card from their hand on
+    # top of their library**." (Tainted Specter.) An empty hand is a real and
+    # checkable "nothing to give": the handler underneath moves as many cards as
+    # it can (CR 608.2), so an offer taken from an empty hand would put nothing
+    # back and still skip the discard the card prints for not putting one back.
+    # The printed count, for Mold Demon's reason — a hand one card short cannot
+    # cover the offer either.
+    #
+    # Only the ``target`` spelling, which is the one whose recipient is the
+    # offered seat. A put-back out of the *caster's* hand is not a price this
+    # player pays, and answering False for it would withdraw an offer the card
+    # makes.
+    if instruction.kind == "put_hand_cards_on_library":
+        if instruction.payload.get("recipient") != "target":
+            return True
+        if instruction.payload.get("whole_hand"):
+            return bool(player.hand)
+        return len(player.hand) >= int(instruction.payload.get("amount", 1) or 1)
     # "You may remove a vitality counter from this Aura. **If you do**, you gain
     # 1 life." (Living Artifact.) With no counter there is nothing to remove, so
     # the offer is not made and the if-you-do branch never runs. The handler

@@ -269,6 +269,22 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
             pass
     stream.reset(that_card)
 
+    # "**If that player discards a card this way,** this creature deals 1
+    # damage to each creature and each player." (Tainted Specter.) The yes/no
+    # reading of a discard an earlier sentence of this same effect performed.
+    # Read before the "the discarded card was …" clause below it, which is a
+    # question about *what* went rather than whether anything did; the two open
+    # on different words and neither consumes the other's.
+    #
+    # "That player" is the only printed subject and it is checked rather than
+    # skipped: the words name the seat the offer in front of this was made to,
+    # and a spelling that named somebody else would be asking about a discard
+    # this record does not hold.
+    this_way = stream.mark()
+    if stream.accept_phrase("that", "player", "discards", "a", "card", "this", "way"):
+        return ast.DiscardedThisWay()
+    stream.reset(this_way)
+
     # "if **the discarded card** was a land card" (Land's Edge). The same
     # past-tense back-reference as the clause above, naming its producer in
     # words instead of with a pronoun — which is why it is a separate node: the

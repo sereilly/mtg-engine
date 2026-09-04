@@ -27,7 +27,9 @@ from .phrases import (_accept_life_alternative, _accept_number,
                       _accept_self_reference, _parse_mana_payment)
 from .records import accept_additional_cost_paid
 from .effects import (_parse_discard, _parse_gain_control,
-                      _parse_mill, _parse_put_counter, _parse_linked_untap_restriction)
+                      _parse_mill, _parse_put_counter,
+                      _parse_put_hand_cards_on_library,
+                      _parse_linked_untap_restriction)
 
 
 # ---------------------------------------------------------------------------
@@ -795,6 +797,23 @@ def _accept_trailing_toll(
     # offer, the penalty and the "you have nothing to put it on" case all come
     # from machinery that already works.
     if stream.at_word("puts", "put"):
+        # "…unless they **put a card from their hand on top of their library**"
+        # (Tainted Specter). The fourth printed currency beside mana, a discard
+        # and a counter placement, and the same decomposition every one of them
+        # takes: an "unless" is an offer with a penalty, so the placement is the
+        # offer's *action* and the discard behind it is the penalty. Read before
+        # the counter branch because both open on "put" and only one of them can
+        # consume "a card from their hand"; the production refuses without
+        # consuming, so a counter sentence still reaches the branch below.
+        #
+        # Not offered to an enumerated payer, for the counter branch's reason:
+        # `ast.May` is one offer to one seat, and "each player" would be a chain.
+        back_on_top = _parse_put_hand_cards_on_library(stream, payer)
+        if back_on_top is not None:
+            if payer.kind in _ENUMERATED_PAYERS:
+                stream.reset(mark)
+                return None
+            return ast.May(actor=payer, action=back_on_top, otherwise=body)
         try:
             placement = _parse_put_counter(stream)
         except GrammarError:
