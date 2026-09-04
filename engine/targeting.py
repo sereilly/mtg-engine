@@ -737,6 +737,10 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # phrase. The creature that takes the redirected damage is *not* here: an
     # opponent picks it (CR 601.2c's chooser is not always the controller), so
     # it is a prompt the resolution arms rather than one this picker runs.
+    # Reflect Damage prints the same seven words a third time — the source may
+    # be a permanent on any battlefield or a spell on the stack. It names no
+    # recipient at all, which changes what the *record* watches and nothing
+    # about what the caster is asked for.
     "redirect_damage_from_chosen_source_until_eot": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },

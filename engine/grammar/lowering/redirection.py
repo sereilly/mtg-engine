@@ -248,6 +248,48 @@ def _lower_spell_damage_redirect(
     controller by the only reading available, and any other player reference
     refuses rather than being resolved to a seat nobody chose.
     """
+    if node.from_chosen_source:
+        # "The next time **a source of your choice** would deal damage this
+        # turn, that damage is dealt to that source's controller instead."
+        # (Reflect Damage.) Reverberation's sentence with the source named the
+        # other way — chosen as the spell is cast (CR 615.8's phrase) rather
+        # than targeted — which is the axis every source-naming effect in this
+        # engine splits on: one picker runs over the stack alone and the other
+        # over every source there is.
+        if node.dealt_by is not None:
+            raise LoweringError(
+                "a redirect names its source once: either a chosen source or a "
+                "target",
+                node=node,
+            )
+        if (
+            not isinstance(node.new_recipient, ast.PlayerRef)
+            or node.new_recipient.kind != "that_player"
+        ):
+            raise LoweringError(
+                "no handler resolves this redirect's new recipient", node=node
+            )
+        if node.duration.kind not in _REST_OF_TURN:
+            raise LoweringError(
+                "a recorded redirect lasts exactly this turn", node=node
+            )
+        if not node.one_shot:
+            # "**The next time**" is the whole of how far this record reaches.
+            # A blanket printing of the same sentence would move every point of
+            # damage that source deals all turn, which is a different card and
+            # has no handler — refused rather than armed with the bound
+            # dropped.
+            raise LoweringError(
+                "a chosen-source redirect with no recipient moves one instance",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "redirect_damage_from_chosen_source_until_eot", "",
+                {"uses": 1, "any_recipient": True,
+                 "new_recipient": "source_controller"},
+            ),
+        )
     spec = node.dealt_by
     if (
         not isinstance(spec, ast.TargetSpec)

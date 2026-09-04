@@ -999,9 +999,12 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     if redirect.optional:
         return _offer_optional_redirect(game, payload, redirect)
     recipient = payload["recipient"]
-    new_recipient = live_recipient(game, redirect)
     amount = payload["amount"]
     source = payload.get("source")
+    # The source is handed over because one record's new recipient is derived
+    # from it — "…is dealt to **that source's controller** instead" (Reflect
+    # Damage), a seat that has no value until there is an event to ask about.
+    new_recipient = live_recipient(game, redirect, source)
     moved = redirect.moves(amount)
     if moved <= 0:  # pragma: no cover - `spent` already excludes an empty pool
         return None

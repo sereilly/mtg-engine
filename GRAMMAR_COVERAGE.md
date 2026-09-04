@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 82.0% | 81.1% | 54.1% | 241 |
+| MIR *(measured)* | 335 | 545 | 82.2% | 81.3% | 54.3% | 242 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 330 | 159 | expected a subject |  |
+| 329 | 158 | expected a subject |  |
 | 114 | 52 | unrecognized effect verb |  |
 | 85 | 40 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
@@ -3532,6 +3532,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Reef Pirates**
   - `Whenever this creature deals damage to an opponent, that player mills a card.`
   - `Whenever this creature deals damage to an opponent, that player mills a card.`
+- **Reflect Damage**
+  - `The next time a source of your choice would deal damage this turn, that damage is dealt to that source's controller instead.`
 - **Reflecting Mirror**
   - `{X}, {T}: Change the target of target spell with a single target if that target is you. The new target must be a player. X is twice the mana value of that spell.`
 - **Regeneration**

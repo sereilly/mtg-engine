@@ -1260,3 +1260,152 @@ def test_shallow_grave_with_no_creature_card_does_nothing(set_pool):
 
     assert game.players[0].battlefield == [], game.log
     assert not [e for e in game.delayed_triggers if e.event == "next_end_step"], game.log
+
+
+# --- W2G3: Reflect Damage ---
+#
+# "The next time a source of your choice would deal damage this turn, that
+# damage is dealt to that source's controller instead."
+#
+# The one printed shape in the pool that names **neither** end of the event: not
+# the recipient it protects (it moves whatever the chosen source deals, to
+# whoever would have taken it) and not the new recipient either (that is derived
+# from the source when the damage would be dealt, because CR 109.5's controller
+# of a source is a live question). So the record hangs off the seat that cast
+# it, exactly as a class-scoped one does, and is found by its source alone.
+
+from engine import Game as _w2g3i_Game, PlayerState as _w2g3i_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w2g3i_load,  # noqa: E402
+                                manifest_set_path as _w2g3i_path)
+from engine.damage_redirects import redirects_on as _w2g3i_records  # noqa: E402
+from engine.models import Permanent as _w2g3i_Permanent  # noqa: E402
+
+
+def _w2g3i_board(pool):
+    """Reflect Damage in hand, an opposing pinger to choose, a creature of the
+    caster's to be pinged, and a second pinger nobody chose."""
+    lea = {card.name: card for card in _w2g3i_load(_w2g3i_path("LEA"))}
+    game = _w2g3i_Game(players=[
+        _w2g3i_PlayerState(name="P1", hand=[pool["Reflect Damage"]],
+                           library=[lea["Island"]] * 6),
+        _w2g3i_PlayerState(name="P2", library=[lea["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(
+        1, _w2g3i_Permanent(card=lea["Prodigal Sorcerer"]), None)
+    game._put_permanent_onto_battlefield(
+        1, _w2g3i_Permanent(card=lea["Rod of Ruin"]), None)
+    game._put_permanent_onto_battlefield(
+        0, _w2g3i_Permanent(card=lea["Hill Giant"]), None)
+    for player in game.players:
+        for permanent in player.battlefield:
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def _w2g3i_arm(game):
+    """Cast it naming the Sorcerer. "A source of your choice" is not a target,
+    but on a *cast* it rides the target channel — the same route Reverse Damage
+    and Pentagram of the Ages have always used for the same seven words."""
+    cast = game.cast_from_hand(
+        0, "Reflect Damage", target_player_index=1, target_permanent_index=0,
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+
+def test_w2g3_reflect_damage_sends_the_ping_back_at_its_own_controller(set_pool):
+    """The card, end to end: the chosen source's damage is *dealt* — not
+    prevented — to the seat that controls it."""
+    game = _w2g3i_board(set_pool("MIR"))
+    _w2g3i_arm(game)
+
+    armed = _w2g3i_records(game.players[0])
+    assert [(r.any_recipient, r.to_source_controller) for r in armed] == [(True, True)]
+    assert armed[0].source.card.name == "Prodigal Sorcerer"
+
+    game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[0].life == 20, "the damage never lands on the caster"
+    assert game.players[1].life == 19, "it lands on the Sorcerer's controller"
+
+
+def test_w2g3_reflect_damage_moves_damage_aimed_at_anything(set_pool):
+    """No recipient is printed, so the record is not about the caster's face:
+    the same ping aimed at the caster's *creature* moves too. A record read as
+    "damage to you" would have left this one alone."""
+    game = _w2g3i_board(set_pool("MIR"))
+    giant = game.players[0].battlefield[0]
+    _w2g3i_arm(game)
+
+    game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0,
+        target_permanent_index=0, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert giant.damage_marked == 0
+    assert game.players[1].life == 19
+
+
+def test_w2g3_reflect_damage_leaves_a_source_nobody_chose(set_pool):
+    """The other half, and the half a dropped choice gets wrong: with no source
+    recorded the record would answer to everything, which is a strictly stronger
+    card than the one printed."""
+    game = _w2g3i_board(set_pool("MIR"))
+    _w2g3i_arm(game)
+
+    game.activate_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[0].life == 19, "the Rod is not the chosen source"
+    assert game.players[1].life == 20
+    assert len(_w2g3i_records(game.players[0])) == 1, "and the record still waits"
+
+
+def test_w2g3_reflect_damage_does_not_move_damage_already_going_there(set_pool):
+    """The chosen source damaging its own controller has nowhere to move to.
+    Left in, the record would re-run the event onto the same player and be spent
+    on a redirect that changed nothing — so the damage is dealt once, normally,
+    and the record is still armed."""
+    game = _w2g3i_board(set_pool("MIR"))
+    _w2g3i_arm(game)
+
+    game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=1, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[1].life == 19, "dealt once, not moved and not doubled"
+    assert len(_w2g3i_records(game.players[0])) == 1
+
+
+def test_w2g3_the_sentence_without_a_recipient_is_a_redirect_and_nothing_else(set_pool):
+    """"…would deal damage this turn" with no "to <recipient>" is readable only
+    by the redirect: every other branch of that production is a *shield*, and
+    CR 615.1 puts one around something. A shield sentence missing its recipient
+    keeps the refusal it had rather than being armed around nobody."""
+    from engine.grammar import compile_line as _compile
+
+    shieldless = _compile(
+        "The next time a source of your choice would deal damage this turn, "
+        "prevent that damage."
+    )
+    assert not shieldless.parsed, shieldless.instructions
+
+    blanket = _compile(
+        "All damage a source of your choice would deal this turn is dealt to "
+        "that source's controller instead."
+    )
+    assert not blanket.usable, "no handler moves every instance this way"
