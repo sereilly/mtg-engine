@@ -399,13 +399,20 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # where a second group's move would have summed past the guard) because it
 # reads `parse_recipient` and `parse_bound_subject`, both defined there; five
 # modules read it now, `phrases` re-exporting it under its old name.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction"]
-# The lowering side carries families the parsing side does not. Zone movement
-# is one `return`/`exile`/`put` production each on the way in and a decision
-# about *which handler moves the object* on the way out, so `lowering/board.py`
-# outgrew the 1,000-line cap while `effects/board.py` stayed small. A near-empty
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones"]
+# `zones` used to be one of the asymmetries below — the note read "a near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
-# for — one home per template per side, findable from the family name.
+# for", because zone movement is one `return`/`exile`/`put` production each on
+# the way in and a decision about *which handler moves the object* on the way
+# out, so `lowering/board.py` outgrew the cap while `effects/board.py` stayed
+# small. That reason expired at Mirage's third wave, the way `library`'s did at
+# Alliances': `effects/library.py` crossed the guard and the half that came out
+# is not near-empty. What left is every production that moves a pile of cards
+# between zones with **nobody looking through it** — a library exiled whole, N
+# cards off the top, a card put on a library, a graveyard or a hand shuffled in,
+# a bare shuffle — against the looking that stays, which is that module's own
+# printed criterion ("a pile being looked through"). Three of the six lower in
+# `lowering/zones.py`, so the split re-forms the mirror rather than forking it.
 # `library` and `mana` split out of `lowering/cards.py` the same way when it
 # reached 959 of the 1,000 lines: the hidden-zone flows and mana production
 # each lower to far more than their parse halves read. `mana` is no longer one
@@ -526,7 +533,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # and cost the thing symmetry is for.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
-] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
 # `life` split out of `lowering/game.py` at 1,014, the second time that module
 # crossed the guard and along the same seam `tokens` left through one set
 # earlier: what stays in `game` changes the state of the **game** (an extra
@@ -669,6 +676,16 @@ AST_FAMILIES = [
         # fired on the readers (`effects/board.py` at 1,007), not on the
         # inventory.
         "destruction",
+        # `zones` is the fourth of that shape. The nodes its six productions
+        # build — `ShuffleLibrary`, `ShuffleGraveyardIntoLibrary`,
+        # `ShuffleHandIntoLibrary`, `ExileTopOfLibrary`, `ExileEntireLibrary`,
+        # `PutIteratedCardOnLibrary` — are cards in a pile, and they already
+        # live in `ast/cards.py` and `ast/library.py` beside every other card
+        # node. The guard fired on the readers (`effects/library.py` at 1,030),
+        # not on the inventory, and splitting the nodes out to match would put a
+        # node in one family with both of its readers in another — exactly what
+        # `types` records.
+        "zones",
     )
 ]
 # `library` left this list at Alliances' third wave, when the size guard below

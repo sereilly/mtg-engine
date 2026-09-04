@@ -20,7 +20,7 @@ from ...oracle_types import COUNTERED_SPELL_CONTROLLER, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _filter_payload, _restrictions_beyond
+from ._common import _amount_payload, _filter_payload, _restrictions_beyond
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS)
@@ -495,6 +495,29 @@ def _lower_may(
     # payment creates it, and the ``then`` branch has none of its own to choose.
     if reflexive:
         payload["reflexive"] = reflexive
+    if node.looked_at_top is not None:
+        # "Look at the top two cards of your library. You may sacrifice this
+        # enchantment and pay {2}{G}{G}. …" (Preferred Selection.) What the
+        # offered seat has already seen of their own library when the question
+        # is put — see ``ast.May.looked_at_top``.
+        #
+        # A printed number and the offer's own controller, both required rather
+        # than coerced: a computed count would be a look whose size the prompt
+        # could not name, and any other actor would be one seat shown another
+        # seat's hidden zone (CR 400.2).
+        seen = _amount_payload(node.looked_at_top)
+        if not isinstance(seen, int) or seen <= 0:
+            raise LoweringError(
+                "a look before an offer reads a printed number of cards",
+                node=node,
+            )
+        if node.actor.kind != "you":
+            raise LoweringError(
+                "a look before an offer shows the offered seat their own "
+                "library, and this offer is made to somebody else",
+                node=node,
+            )
+        payload["looked_at_library_top"] = seen
     if not (action or then or otherwise or reflexive or payload.get("option_effects")):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)

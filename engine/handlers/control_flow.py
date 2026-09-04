@@ -1753,17 +1753,34 @@ def _offer_to_seat(
         entry["graded_options"] = [
             mana_cost_label(option) for option in (cost, *alternatives)
         ]
+    # "**Look at the top two cards of your library.** You may sacrifice this
+    # enchantment and pay {2}{G}{G}." (Preferred Selection.) CR 701.16a's look,
+    # carried out here rather than by a step in front of the offer: the seat
+    # being shown the cards is the seat being asked, and the whole point of the
+    # first sentence is that the decision is not made blind. The names ride the
+    # prompt, which is the one channel this engine has for telling one player
+    # something without also asking them a second question.
+    #
+    # Read off the library **now** rather than frozen at lowering time, because
+    # a look is what is there when it happens — and the offer holds priority
+    # (`ChoiceSpec.holds_priority`), so nothing can change the pile between the
+    # look and the pick behind it.
+    looked = int(instruction.payload.get("looked_at_library_top", 0) or 0)
+    seen = [card.name for card in player.library[:looked]] if looked > 0 else []
+    if seen:
+        entry["looked_at"] = seen
+    preamble = f"Top of your library: {', '.join(seen)}. " if seen else ""
     if cost:
         printed = " or ".join(
             mana_cost_label(option) for option in (cost, *alternatives)
         )
-        entry["prompt"] = (
+        entry["prompt"] = preamble + (
             f"Pay {printed} or {life_alternative} life?"
             if life_alternative
             else f"Pay {printed}?"
         )
     elif life_cost:
-        entry["prompt"] = f"Pay {life_cost} life?"
+        entry["prompt"] = f"{preamble}Pay {life_cost} life?"
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.
