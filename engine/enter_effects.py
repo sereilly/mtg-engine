@@ -51,6 +51,18 @@ import re
 #: control change the card exists to cause — the card doing nothing, silently.
 ENTERED_BATTLEFIELD_TURN = "entered_battlefield_turn"
 
+#: "Target creature **you cast this turn**" (Cycle of Life): ``{"seat": …,
+#: "turn": …}``, stamped on a permanent that entered as a resolving *spell*
+#: (CR 701.5a's ``was_cast``).
+#:
+#: Beside the stamp above and distinct from it for the reason that one is
+#: distinct from ``summoning_sickness_turn``: entering and being cast are two
+#: different events, and a reanimated creature has done the first without the
+#: second — which is exactly the creature this phrase does not name. The seat
+#: rides along because the phrase asks about it too; a stamp holding only the
+#: turn would let an opponent's creature answer "you cast".
+CAST_THIS_TURN_STAMP = "cast_by_seat_this_turn"
+
 
 # "This artifact enters tapped." (Nevinyrral's Disk, Time Vault). The mixin
 # probes for this substring and excludes "unless", so a conditional wording

@@ -409,12 +409,18 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
     if described:
         caster = context.caster
         observer = game.players.index(caster) if caster in game.players else None
+        # "Tap target creature **that player** controls." (Delirium.) The seat
+        # is not something the matcher can read off a board — it names the
+        # player some earlier sentence fixed — so it is resolved here, where the
+        # context is, through the one reader of the printed phrase.
+        that_player = frozen_that_player_seat(game, context)
         perm = resolve_target_permanent(
             game,
             context,
             predicate=lambda p: subject_matches(
                 game, p, described, observer=observer,
                 source=context.source_permanent,
+                that_player=that_player,
             ),
             fallback_players=(target, caster),
             fallback_on_invalid_choice=False,

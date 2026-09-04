@@ -212,6 +212,25 @@ class ExileSelf:
 
 
 @dataclass(frozen=True)
+class ReturnSelfToHandCost:
+    """"**Return this enchantment to its owner's hand**: …" (Cycle of Life) —
+    a cost that is a zone change of the ability's own source (CR 118.3).
+
+    Beside :class:`ExileSelf` and for its reason: nothing is chosen, nothing can
+    make the ability unpayable, and there is no record of what was eaten. Its
+    own node rather than a flag on that one because *where the source goes*
+    decides what happens next — an exiled source is gone for the game, a
+    returned one is in a hand and can be cast again, which is the whole of what
+    the card is for.
+
+    CR 602.2b/118.3: the cost is paid as the ability is activated, so the
+    ability resolves with its source already in the hand (CR 603.6, the same
+    rule that lets a sacrificed source resolve from a graveyard).
+    """
+    pass
+
+
+@dataclass(frozen=True)
 class ExileCost:
     """"Exile **a creature you control**" (City of Shadows) / "Exile **a
     creature card from your graveyard**" (Necropolis) — a cost that exiles
@@ -281,5 +300,6 @@ class RemoveCounterCost:
 
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
-    ExileCost, ExileTopOfLibraryCost, RemoveCounterCost, PayAttachedManaCost
+    ExileCost, ExileTopOfLibraryCost, RemoveCounterCost, PayAttachedManaCost,
+    ReturnSelfToHandCost
 ]

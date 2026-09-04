@@ -205,6 +205,14 @@ class ObjectFilter:
     # answered off the permanent's own per-turn record.
     attacked_this_turn: bool | None = None
     could_attack_this_turn: bool | None = None
+    #: "target creature **you cast this turn**" (Cycle of Life). Not a state of
+    #: the permanent and not a zone it came from: CR 701.5a's *cast*, which a
+    #: reanimation and a token both fail while entering the same turn.
+    #:
+    #: Relative to the game and to the asker, like ``controlled_since_turn_start``
+    #: below it: the record is a seat and a turn number, so the pure matcher has
+    #: nothing to compare either against and refuses.
+    cast_by_you_this_turn: bool = False
     # "…**except for creatures the player hasn't controlled continuously since
     # the beginning of the turn**" (Total War). CR 302.6's condition, printed as
     # an exception and therefore *narrowing to* the creatures that have been
@@ -706,6 +714,8 @@ class ObjectFilter:
             payload["not_attacked_this_turn"] = True
         if self.could_attack_this_turn is True:
             payload["could_attack_this_turn"] = True
+        if self.cast_by_you_this_turn:
+            payload["cast_by_you_this_turn"] = True
         if self.controlled_since_turn_start is True:
             payload["controlled_since_turn_start"] = True
         if self.token_only:

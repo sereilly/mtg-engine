@@ -1472,6 +1472,61 @@ def bound_bites_source(game, instruction, context):
     return True, "resolved"
 
 
+@effect_handler("bound_bites_player")
+def bound_bites_player(game, instruction, context):
+    """"Tap target creature that player controls. **That creature deals damage
+    equal to its power to the player.**" (Delirium.)
+
+    ``bound_bites_source`` above with the bitten end swapped for a seat: same
+    biter, read out of the resolution scratchpad rather than chosen again, and
+    the same read of its power at resolution (CR 613's computed value, so a
+    pump or an anthem between the tap and this counts).
+
+    Which seat is the biter's **controller**, and that is the sentence's own
+    reading rather than a convenience. "The player" points back at the player
+    the first sentence named — "target creature **that player** controls" — and
+    the object satisfying that phrase is the creature now in hand. Read through
+    ``controller_index_of`` so it is layer 2's answer (CR 613), not the
+    battlefield list's.
+
+    The damage is dealt **by the creature**, which is the whole reason this is
+    an instruction rather than an ``amount_from`` key on ``deal_damage``: a
+    lifelinking creature gains its controller life for it (CR 702.15b), and a
+    shield answering to "a creature" answers to this.
+
+    A biter that has left the battlefield deals nothing — CR 608.2's
+    last-known information is about *reading* a characteristic, not about
+    acting from a graveyard — and says so rather than damaging the seat for
+    zero.
+    """
+    key = instruction.payload.get("permanents_from")
+    recorded = context.results.get(key) or ()
+    card = context.card
+    for permanent_id in recorded:
+        biter = game.permanent_by_id(permanent_id)
+        if biter is None or not biter.is_creature:
+            game.log.append(f"{card.name}: nothing left to deal the damage")
+            continue
+        seat = game.controller_index_of(biter)
+        if seat is None or not 0 <= seat < len(game.players):
+            game.log.append(f"{card.name}: no player for the damage to land on")
+            continue
+        victim = game.players[seat]
+
+        def _report(dealt: int, victim=victim, biter=biter) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(
+                    f"{biter.card.name} deals {dealt} damage to {victim.name}"
+                )
+
+        game._deal_damage_to_player(
+            victim, max(0, biter.effective_power), source=biter,
+            then=_report, asks=True,
+        )
+    return True, "resolved"
+
+
 @effect_handler("prepare_then_interact")
 def prepare_then_interact(game, instruction, context):
     """"Target creature you control gets +X/+X until end of turn. Then it

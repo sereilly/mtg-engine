@@ -1446,3 +1446,146 @@ def test_the_four_printed_numbers_have_to_agree(set_pool):
 
     assert not compiled.instructions
     assert "do not agree" in (compiled.parse_error or ""), compiled.parse_error
+
+
+# --- W3G4: Superior Numbers, a difference of two board counts ---
+#
+# "Superior Numbers deals damage to target creature equal to the number of
+#  creatures you control in excess of the number of creatures target opponent
+#  controls."
+#
+# One printed quantity with two counted halves and two different seats.
+# `ast.Minus` carries the arithmetic, `count_spec` builds both halves so each
+# means what the same noun phrase means printed on its own, and the subtrahend
+# rides a **scope** (`owner: "target_opponent"`) rather than a controller
+# filter — nothing downstream tests a controller key, so a narrowing there is a
+# count taken on the wrong battlefield.
+#
+# "In excess of" clamps at zero: a board with fewer creatures exceeds the
+# opponent's by nothing (CR 107.1b — there is no negative damage to deal).
+
+import pytest as _w3g4s_pytest  # noqa: E402
+
+from engine import Game as _w3g4s_Game, PlayerState as _w3g4s_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g4s_load,  # noqa: E402
+                                manifest_set_path as _w3g4s_path)
+from engine.grammar import compile_line as _w3g4s_compile  # noqa: E402
+from engine.models import Permanent as _w3g4s_Permanent  # noqa: E402
+
+
+def _w3g4s_lea():
+    return {card.name: card for card in _w3g4s_load(_w3g4s_path("LEA"))}
+
+
+def _w3g4s_board(pool, mine: int, theirs: int, seats: int = 2):
+    """P0 holds the spell with *mine* creatures; the last seat has *theirs*
+    plus the Shivan Dragon this aims at, so the victim is always index 0."""
+    lea = _w3g4s_lea()
+    victim = _w3g4s_Permanent(card=lea["Shivan Dragon"])
+    players = [
+        _w3g4s_PlayerState(
+            name="P0", hand=[pool["Superior Numbers"]],
+            battlefield=[_w3g4s_Permanent(card=lea["Grizzly Bears"])
+                         for _ in range(mine)],
+            library=[lea["Island"]] * 6,
+        )
+    ]
+    for seat in range(1, seats):
+        extra = [victim] if seat == seats - 1 else []
+        players.append(_w3g4s_PlayerState(
+            name=f"P{seat}",
+            battlefield=extra + [_w3g4s_Permanent(card=lea["Hill Giant"])
+                                 for _ in range(theirs if seat == seats - 1 else 0)],
+            library=[lea["Island"]] * 6,
+        ))
+    game = _w3g4s_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, victim
+
+
+@_w3g4s_pytest.mark.parametrize(
+    "mine,theirs,expected",
+    [
+        (4, 0, 3),   # four of mine against the Dragon alone
+        (4, 2, 1),   # …and two more of theirs
+        (1, 3, 0),   # behind on board: "in excess of" is nothing, not -3
+        (2, 1, 0),   # level
+    ],
+)
+def test_w3g4_superior_numbers_is_the_difference_both_ways(
+    set_pool, mine, theirs, expected
+):
+    """The sign is (mine - theirs), and the floor is zero."""
+    pool = set_pool("MIR")
+    game, victim = _w3g4s_board(pool, mine, theirs)
+
+    cast = game.cast_from_hand(
+        0, "Superior Numbers", target_player_index=1, target_permanent_index=0
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert victim.damage_marked == expected, game.log
+
+
+def test_w3g4_superior_numbers_counts_an_opponent_not_the_caster(set_pool):
+    """CR 102.3: a player is never their own opponent.
+
+    The client picks only the creature, so the seat the subtrahend is counted
+    on arrives as the resolution's default — and aiming at one's *own* creature
+    makes that default the caster. Counting the caster's board on both sides of
+    the subtraction is always zero, which is a spell reporting supported and
+    doing nothing; the scope resolves to the first living opponent instead."""
+    pool = set_pool("MIR")
+    lea = _w3g4s_lea()
+    mine = [_w3g4s_Permanent(card=lea["Grizzly Bears"]) for _ in range(3)]
+    game = _w3g4s_Game(players=[
+        _w3g4s_PlayerState(name="P0",
+                           battlefield=[_w3g4s_Permanent(card=lea["Shivan Dragon"])],
+                           library=[lea["Island"]] * 6),
+        _w3g4s_PlayerState(name="P1", library=[lea["Island"]] * 6),
+        _w3g4s_PlayerState(name="P2", hand=[pool["Superior Numbers"]],
+                           battlefield=mine, library=[lea["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    # No seat on the wire, and the creature aimed at is the caster's own.
+    game.cast_from_hand(2, "Superior Numbers", target_permanent_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    # 3 of mine minus the 1 the first opponent controls, not 3 minus 3.
+    assert "dealt 2 damage" in " ".join(game.log), game.log
+
+
+def test_w3g4_superior_numbers_offers_every_creature_as_the_target(set_pool):
+    """"Target creature" narrows nothing — the printed restriction is on the
+    *count*, not on what may be damaged."""
+    pool = set_pool("MIR")
+    game, _ = _w3g4s_board(pool, 2, 1)
+
+    spec = game.cast_target_spec(0, pool["Superior Numbers"])
+
+    assert spec["kind"] == "creature"
+    assert len(spec["valid_targets"]) == 4, spec["valid_targets"]
+
+
+def test_w3g4_a_difference_counted_on_no_named_seat_refuses(set_pool):
+    """The subtrahend's whole content is *whose* board it reads, so a phrase
+    naming a seat no handler can resolve refuses rather than counting the
+    caster's own board — which would make the spell deal zero on a card
+    reporting itself supported."""
+    compiled = _w3g4s_compile(
+        "Probe deals damage to target creature equal to the number of creatures "
+        "you control in excess of the number of creatures you control.",
+        card_name="Probe",
+    )
+
+    assert compiled.parsed
+    assert not compiled.instructions
+    assert "target opponent" in (compiled.lowering_error or ""), (
+        compiled.lowering_error
+    )

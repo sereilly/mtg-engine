@@ -53,15 +53,47 @@ if TYPE_CHECKING:
 #: timestamp order), so :func:`set_base_pt` is what removes the stamp.
 BASE_PT_REVERT_KEY = "base_pt_reverts_after_upkeep"
 
+#: Its twin one step earlier: "…**until your next upkeep**" (Cycle of Life),
+#: which ends as that upkeep *begins* rather than as it ends. Same shape —
+#: ``{"seat": <whose upkeep>, "turn": <game.turn when written>}`` — and swept in
+#: the upkeep step's own ``your_next_upkeep`` loop, beside the keyword, type and
+#: permission grants that answer to the same printed words, so one duration has
+#: one moment however it is spelled.
+#:
+#: Two keys rather than one with a "when" field, because the two are read by two
+#: different steps and neither can see the other's: a single key would make each
+#: sweep test a value it does not own, which is the shape a sweep silently stops
+#: honouring. The stamp's turn number is what keeps an effect applied *during*
+#: an upkeep from ending in that same upkeep.
+BASE_PT_UPKEEP_START_REVERT_KEY = "base_pt_reverts_at_upkeep"
+
+#: Both scheduled reverts, for the writers that supersede whichever is standing.
+_BASE_PT_REVERT_KEYS = (BASE_PT_REVERT_KEY, BASE_PT_UPKEEP_START_REVERT_KEY)
+
 
 def set_base_pt(
-    perm: Permanent, power: int | None, toughness: int | None, *, until_eot: bool = False
+    perm: Permanent,
+    power: int | None,
+    toughness: int | None,
+    *,
+    until_eot: bool = False,
+    reverts_at_next_upkeep_of: int | None = None,
+    turn: int | None = None,
 ) -> None:
     """Layer 7a/7b: set base power and/or toughness ("becomes 0/2", CDAs,
     animation). Pass None for a stat to leave it untouched — Singing Tree's
     "has base power 0 until end of turn" sets only power, letting toughness
     keep tracking whatever else applies. 7c modifications still apply on top
-    of the new base."""
+    of the new base.
+
+    *reverts_at_next_upkeep_of* is the seat whose next upkeep ends this write
+    ("until your next upkeep"), with *turn* the turn it was made on — the pair
+    :data:`BASE_PT_UPKEEP_START_REVERT_KEY` holds. It rides the **persistent**
+    channel rather than a third suffix of its own, because a duration is not a
+    layer: what makes this different from Sorceress Queen's write is when
+    something clears it, and a channel with no sweep is exactly the bug
+    ``TEMPORARY_PT_CHANNELS`` below records.
+    """
     suffix = "_until_eot" if until_eot else ""
     if power is not None:
         perm.metadata[f"absolute_power{suffix}"] = int(power)
@@ -71,8 +103,15 @@ def set_base_pt(
         # A newer persistent write supersedes a scheduled revert: reverting
         # would clear the metadata key the newer effect just wrote, taking the
         # newer effect with it. The caller that wants a revert re-stamps after
-        # writing (engine/handlers/base_pt.py).
-        perm.metadata.pop(BASE_PT_REVERT_KEY, None)
+        # writing (engine/handlers/base_pt.py) — which is what the argument
+        # below does, in the one place that knows the seat and the turn.
+        for key in _BASE_PT_REVERT_KEYS:
+            perm.metadata.pop(key, None)
+        if reverts_at_next_upkeep_of is not None:
+            perm.metadata[BASE_PT_UPKEEP_START_REVERT_KEY] = {
+                "seat": int(reverts_at_next_upkeep_of),
+                "turn": int(turn or 0),
+            }
 
 
 def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
@@ -83,7 +122,8 @@ def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
     else:
         perm.metadata.pop("absolute_power", None)
         perm.metadata.pop("absolute_toughness", None)
-        perm.metadata.pop(BASE_PT_REVERT_KEY, None)
+        for key in _BASE_PT_REVERT_KEYS:
+            perm.metadata.pop(key, None)
 
 
 #: Where a *temporary* layer-7c modification records itself, one metadata pair

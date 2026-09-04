@@ -14,7 +14,7 @@ from ..control import (
 )
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
-from ..enter_effects import ENTERED_BATTLEFIELD_TURN
+from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
@@ -2555,6 +2555,22 @@ class GameHelpersMixin:
         # reason: most entries are not from a zone any card asks about.
         if from_zone is not None:
             permanent.metadata["entered_from_zone"] = from_zone
+        # "Target creature **you cast this turn**" (Cycle of Life). Beside
+        # `entered_from_zone` and for its reason: the question is asked of one
+        # object and a permanent that leaves takes the answer with it (CR 400.7
+        # gives the next one a new identity and a fresh stamp). *Who* and *when*
+        # both, because the phrase asks both — a creature you cast last turn and
+        # one your opponent cast this turn are each excluded, and a stamp
+        # holding only the turn could not say so.
+        #
+        # `was_cast` is what makes this different from ENTERED_BATTLEFIELD_TURN
+        # one function over: a reanimated creature entered this turn and was
+        # never cast (CR 701.5a), which is exactly the creature this phrase does
+        # not name.
+        if was_cast:
+            permanent.metadata[CAST_THIS_TURN_STAMP] = {
+                "seat": controller_index, "turn": self.turn,
+            }
         # CR 400.7: what enters is a *new object*, so it gets a new identity —
         # nothing that held the old id may address it. Stamped before the append
         # so no reader can observe the permanent on the battlefield under an id

@@ -1857,6 +1857,17 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             cost_lower,
         )
     )
+    # "Return this enchantment to its owner's hand" (Cycle of Life) — the same
+    # shape one zone over, anchored the same way and admitting the same nouns,
+    # because which word a card prints for its own type is not a difference the
+    # cost has.
+    return_self_to_hand = bool(
+        re.search(
+            r"\breturn this (artifact|creature|enchantment|permanent|land|token)"
+            r" to its owner's hand\b",
+            cost_lower,
+        )
+    )
     # "Sacrifice a creature" / "Sacrifice another creature" / "Sacrifice a
     # creature with defender" — a *chosen* permanent (Atog, Hobblefiend,
     # Portcullis Vine). The regex only **delimits** the noun phrase, to the end
@@ -2090,7 +2101,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
                 remove_counter_count = number
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
-        sacrifice_filter,
+        return_self_to_hand=return_self_to_hand,
+        sacrifice_filter=sacrifice_filter,
         exile_filter=exile_filter,
         exile_zone=exile_zone,
         exile_zone_owner=exile_zone_owner,

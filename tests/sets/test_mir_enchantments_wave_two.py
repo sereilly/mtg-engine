@@ -1680,3 +1680,178 @@ def test_w3g3_preferred_selection_still_buries_when_the_price_is_unpayable(set_p
     assert enchantment in game.players[0].battlefield
     assert game.players[0].hand == []
     assert game.players[0].library[-1].name == "Mox Jet", game.log
+
+
+# --- W3G4: Cycle of Life, four pieces in one printed line ---
+#
+# "Return this enchantment to its owner's hand: Target creature you cast this
+#  turn has base power and toughness 0/1 until your next upkeep. At the
+#  beginning of your next upkeep, put a +1/+1 counter on that creature."
+#
+# * a **cost** that is a zone change of the source (CR 118.3), so the ability
+#   resolves with its own source already in a hand (CR 603.6);
+# * a target narrowed by CR 701.5a's *cast* — not "you control", not "entered
+#   this turn": a reanimated creature entered without being cast, and one you
+#   cast and then gave away is still one you cast;
+# * a base-P/T rewrite (CR 613 layer 7b) whose duration ends as an upkeep
+#   *begins*, beside Halfdane's stamp which ends as one *ends*;
+# * a CR 603.7 delayed ability about the creature the first half chose, which
+#   reads that choice out of the scratchpad its creating effect froze
+#   (CR 603.7d).
+
+import pytest as _w3g4e_pytest  # noqa: E402
+
+from engine import Game as _w3g4e_Game, PlayerState as _w3g4e_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g4e_load,  # noqa: E402
+                                manifest_set_path as _w3g4e_path)
+from engine.grammar import compile_line as _w3g4e_compile  # noqa: E402
+from engine.models import Permanent as _w3g4e_Permanent  # noqa: E402
+
+
+def _w3g4e_lea():
+    return {card.name: card for card in _w3g4e_load(_w3g4e_path("LEA"))}
+
+
+def _w3g4e_game(pool, *, mine=(), theirs=(), hand=("Shivan Dragon",)):
+    lea = _w3g4e_lea()
+    game = _w3g4e_Game(players=[
+        _w3g4e_PlayerState(
+            name="P1", hand=[lea[name] for name in hand],
+            battlefield=[_w3g4e_Permanent(card=pool["Cycle of Life"]), *mine],
+            library=[lea["Island"]] * 20,
+        ),
+        _w3g4e_PlayerState(name="P2", battlefield=list(theirs),
+                           library=[lea["Island"]] * 20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    return game
+
+
+def _w3g4e_cycle(game):
+    return next(p for p in game.players[0].battlefield
+                if p.card.name == "Cycle of Life")
+
+
+def test_w3g4_cycle_of_life_offers_only_what_you_cast_this_turn(set_pool):
+    """CR 701.5a. The board also holds a creature that was already there and
+    one an opponent controls; neither was cast by this player this turn, and
+    the printed restriction is what says so."""
+    pool = set_pool("MIR")
+    lea = _w3g4e_lea()
+    already = _w3g4e_Permanent(card=lea["Grizzly Bears"])
+    game = _w3g4e_game(pool, mine=[already],
+                       theirs=[_w3g4e_Permanent(card=lea["Hill Giant"])])
+
+    game.cast_from_hand(0, "Shivan Dragon")
+    game.resolve_stack()
+    game._settle()
+
+    cycle = _w3g4e_cycle(game)
+    spec = game.activation_target_spec(
+        0, game.players[0].battlefield.index(cycle)
+    )
+
+    assert {t["name"] for t in spec["valid_targets"]} == {"Shivan Dragon"}, (
+        spec["valid_targets"]
+    )
+
+
+def test_w3g4_cycle_of_life_costs_its_own_return_and_still_resolves(set_pool):
+    """CR 118.3: the cost is paid on activation, so the enchantment is in its
+    owner's hand before the ability resolves — and it resolves anyway
+    (CR 603.6, the rule that lets a sacrificed source resolve from a
+    graveyard)."""
+    pool = set_pool("MIR")
+    game = _w3g4e_game(pool)
+    game.cast_from_hand(0, "Shivan Dragon")
+    game.resolve_stack()
+    game._settle()
+    dragon = next(p for p in game.players[0].battlefield
+                  if p.card.name == "Shivan Dragon")
+    cycle = _w3g4e_cycle(game)
+
+    result = game.activate_permanent_ability(
+        0, "Cycle of Life", target_player_index=0,
+        permanent_index=game.players[0].battlefield.index(cycle),
+        target_permanent_index=game.players[0].battlefield.index(dragon),
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert "Cycle of Life" in [c.name for c in game.players[0].hand], game.log
+    assert not any(p is cycle for p in game.players[0].battlefield)
+    assert (dragon.effective_power, dragon.effective_toughness) == (0, 1), game.log
+
+
+def test_w3g4_cycle_of_life_reverts_and_counters_at_the_next_upkeep(set_pool):
+    """The rewrite ends as the controller's next upkeep *begins* (CR 613's
+    duration, swept beside the keyword and type grants that answer to the same
+    printed words), and the CR 603.7 delayed ability then puts the counter on
+    the creature the first half chose — read out of the scratchpad the creating
+    effect froze (CR 603.7d), because by now that step ran a turn ago."""
+    pool = set_pool("MIR")
+    game = _w3g4e_game(pool)
+    game.cast_from_hand(0, "Shivan Dragon")
+    game.resolve_stack()
+    game._settle()
+    dragon = next(p for p in game.players[0].battlefield
+                  if p.card.name == "Shivan Dragon")
+    cycle = _w3g4e_cycle(game)
+    game.activate_permanent_ability(
+        0, "Cycle of Life", target_player_index=0,
+        permanent_index=game.players[0].battlefield.index(cycle),
+        target_permanent_index=game.players[0].battlefield.index(dragon),
+    )
+    game.resolve_stack()
+    game._settle()
+    assert (dragon.effective_power, dragon.effective_toughness) == (0, 1)
+
+    game.turn += 1
+    game.start_turn(1)
+    game.resolve_stack()
+    game._settle()
+    assert (dragon.effective_power, dragon.effective_toughness) == (0, 1), (
+        "the opponent's upkeep is not 'your next upkeep'"
+    )
+
+    game.turn += 1
+    game.start_turn(0)
+    game.resolve_stack()
+    game._settle()
+
+    # 5/5 printed, plus the +1/+1 counter the delayed ability placed.
+    assert (dragon.effective_power, dragon.effective_toughness) == (6, 6), game.log
+    assert (dragon.power_bonus, dragon.toughness_bonus) == (1, 1), game.log
+
+
+@_w3g4e_pytest.mark.parametrize(
+    "line,fragment",
+    [
+        # A base-P/T rewrite whose duration nothing sweeps: admitted, it would
+        # never end.
+        (
+            "{G}: Target creature has base power and toughness 0/1 until end "
+            "of combat.",
+            "end-of-turn duration",
+        ),
+        # A narrowing the instruction cannot carry: admitted, the restriction
+        # would be enforced by nothing and the ability would rewrite any
+        # creature at all.
+        (
+            "{G}: Target tapped creature has base power and toughness 0/1 "
+            "until end of turn.",
+            "narrowing",
+        ),
+    ],
+)
+def test_w3g4_a_base_pt_rewrite_refuses_what_it_cannot_honour(line, fragment):
+    """The gate that was missing: the payload was built from three named fields
+    and every other restriction on the noun phrase was silently dropped."""
+    compiled = _w3g4e_compile(line, card_name="Probe")
+
+    assert compiled.parsed, compiled.parse_error
+    assert not compiled.instructions
+    assert fragment in (compiled.lowering_error or ""), compiled.lowering_error

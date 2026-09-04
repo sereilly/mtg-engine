@@ -283,7 +283,7 @@ def _parse_counted_amount(
         this_way = accept_this_way_count(stream, filt)
         if this_way is not None:
             return this_way
-        return ast.CountOf(filt)
+        return _accept_excess_of(stream, ast.CountOf(filt))
     stream.reset(mark)
     # "half **the sacrificed creature's power**, rounded down" (Freyalise
     # Supplicant). A characteristic of what the ability's own cost ate, read
@@ -311,6 +311,35 @@ def _parse_counted_amount(
     if chosen is not None:
         return chosen
     return parse_amount(stream, back_reference=back_reference)
+
+
+def _accept_excess_of(stream: TokenStream, counted: ast.Amount) -> ast.Amount:
+    """``<count> **in excess of** <count>`` (Superior Numbers), or *counted*
+    unchanged when the phrase is absent.
+
+    The trailing half of the same "equal to …" clause rather than a clause of
+    its own, which is why it is read here and not by a production: "the number
+    of creatures you control in excess of the number of creatures target
+    opponent controls" is **one** quantity, and a reader that stopped at the
+    first count would leave the rest of the sentence unconsumed — the loud
+    failure the full-consumption rule exists for, and the right one, because a
+    dropped subtrahend is a spell dealing the larger number.
+
+    Only a count may follow, and it is read by re-entering this module's own
+    "the number of …" reader rather than by a copy of it: the two halves of a
+    difference are the same kind of phrase, and a second reader is a second
+    answer to what "the number of Xs a player controls" means.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("in", "excess", "of"):
+        return counted
+    stream.accept_word("the")
+    if not stream.accept_phrase("number", "of"):
+        stream.reset(mark)
+        return counted
+    from .nouns import parse_object_filter
+
+    return ast.Minus(counted, ast.CountOf(parse_object_filter(stream)))
 
 
 def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
@@ -369,7 +398,13 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
         this_way = accept_this_way_count(stream, filt)
         if this_way is not None:
             return this_way
-        return ast.CountOf(filt)
+        # "…**in excess of** the number of …" (Superior Numbers), read through
+        # the same helper `_parse_counted_amount` above reads it through. Two
+        # productions read "the number of <noun phrase>" — this one and that one
+        # — and a trailer taught to only one of them would make which
+        # definitions a card may use depend on which sentence it printed them
+        # in, which is the fork SET_PLAYBOOK records from Revised's round 8.
+        return _accept_excess_of(stream, ast.CountOf(filt))
 
     # "equal to **the sacrificed creature's toughness**" (Life Chisel, Diamond
     # Valley) — a characteristic of the permanent the ability's own *cost* ate,

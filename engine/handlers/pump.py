@@ -19,7 +19,8 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword, remove_keyword
-from ..oracle_types import ATTACHED_PERMANENT_CONTROLLER, COUNTERS_PLACED_THIS_WAY
+from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, BASE_PT_SET_PERMANENTS,
+                            COUNTERS_PLACED_THIS_WAY)
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -1936,6 +1937,22 @@ def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, con
     attacking_only = bool(instruction.payload.get("attacking_only"))
     flying_only = bool(instruction.payload.get("flying_only"))
 
+    from ..subject_filters import subject_matches
+
+    # The narrowings the picker applied, re-asked at resolution through the
+    # one reader of a printed noun phrase: CR 608.2b asks a target's legality
+    # again, and a restriction enforced only by the picker is one a
+    # non-interactive seat walks straight past.
+    described = {
+        key: value
+        for key, value in instruction.payload.items()
+        if key in ("controller", "cast_by_you_this_turn")
+    }
+    observer = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
+
     def _eligible(perm: Permanent) -> bool:
         if not perm.is_creature:
             return False
@@ -1944,6 +1961,10 @@ def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, con
         if attacking_only and not perm.attacking:
             return False
         if flying_only and not game._has_keyword(perm, "flying"):
+            return False
+        if described and not subject_matches(
+            game, perm, described, observer=observer, source=source_permanent,
+        ):
             return False
         return True
 
@@ -1954,6 +1975,29 @@ def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, con
 
     power = instruction.payload.get("power")
     toughness = instruction.payload.get("toughness")
+    # "…**until your next upkeep**" (Cycle of Life). A different moment, not a
+    # different layer, so it rides the persistent 7b channel with the stamp the
+    # upkeep step's sweep reads — and the seat is CR 109.5's controller of the
+    # ability, never the affected permanent's, which is the rule every other
+    # `your_next_upkeep` sweep already follows.
+    # What the rewrite chose, for the sentence behind it — a delayed ability a
+    # turn later, which names "that creature" and picks nothing itself. Written
+    # for every duration, because which one the card printed is not something
+    # the later sentence can see.
+    context.results[BASE_PT_SET_PERMANENTS] = [target_perm.permanent_id]
+    duration = instruction.payload.get("duration")
+    if duration == "your_next_upkeep":
+        caster = context.caster
+        seat = game.players.index(caster) if caster in game.players else 0
+        set_base_pt(
+            target_perm, power, toughness,
+            reverts_at_next_upkeep_of=seat, turn=game.turn,
+        )
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base power and toughness "
+            f"{power}/{toughness} until {caster.name}'s next upkeep"
+        )
+        return True, "resolved"
     set_base_pt(target_perm, power, toughness, until_eot=True)
     # The log names the half the card printed. "…has base **toughness** 1"
     # (Chariot of the Sun) leaves the power standing, which ``set_base_pt``'s

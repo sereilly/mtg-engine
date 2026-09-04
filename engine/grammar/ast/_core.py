@@ -346,6 +346,29 @@ class Plus:
 
 
 @dataclass(frozen=True)
+class Minus:
+    """``the number of creatures you control **in excess of** the number of
+    creatures target opponent controls`` (Superior Numbers) — the difference
+    between two printed quantities.
+
+    :class:`Plus`'s mirror, and a node for that class's reason: neither side is
+    usually a number yet, so the arithmetic cannot be folded at parse time.
+
+    **The difference never goes below zero**, which is what the printed words
+    mean rather than a convenience of the reader: "in excess of" names how much
+    one quantity *exceeds* another, and a board with fewer creatures than the
+    opponent's exceeds it by nothing. Every other subtraction the pool prints
+    behaves the same way — ``BoardCount``'s ``base_over_cards_in_hand`` (The
+    Rack) and ``cards_in_hand_over_base`` (Black Vise) each clamp — so the
+    clamp lives in the arithmetic and not in whatever spends it, and a reader
+    that spent a negative would be spending a number no card can print
+    (CR 107.1b).
+    """
+    left: "Amount"
+    right: "Amount"
+
+
+@dataclass(frozen=True)
 class Times:
     """``twice the number of white creatures that player controls`` (Jovial
     Evil) — a printed quantity multiplied by a printed factor.
@@ -469,7 +492,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

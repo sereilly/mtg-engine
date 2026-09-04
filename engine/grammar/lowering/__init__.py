@@ -109,14 +109,13 @@ from .prevention import (
     _lower_prevent_all,
     _lower_damage_cant_be_prevented,
 )
+from .base_pt import _lower_change_base_pt, _lower_set_base_pt
 from .characteristics import (
     _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
     _lower_double_power,
     _lower_switch_pt,
     _lower_pump,
-    _lower_change_base_pt,
-    _lower_set_base_pt,
     _lower_change_text,
 )
 from .types import (

@@ -1624,6 +1624,35 @@ class AbilityActivationMixin:
                 f"{controller.name} exiled {permanent.card.name} to activate its ability"
             )
 
+        # "Return this enchantment to its owner's hand" (Cycle of Life): the
+        # same two costs one zone over (CR 118.3), paid now, so the ability
+        # resolves with its source in a hand. Through `put_card_into_hand`
+        # rather than an append, because CR 903.9b has no single fire site and
+        # thirty of them is twenty-nine places to forget it.
+        if ability.cost.return_self_to_hand:
+            # Whose hand, asked *before* the removal: CR 108.3's owner is
+            # derived from the base controller, and a permanent no longer on
+            # a battlefield has no seat to derive it from.
+            owner_seat = self.owner_index_of(permanent)
+            self.remove_from_battlefield(permanent)
+            self.put_card_into_hand(
+                self.players[
+                    owner_seat if owner_seat is not None else controller_index
+                ],
+                permanent.card,
+                # CR 614.6: the object leaving is what a
+                # leaves-the-battlefield replacement replaces, and this seam
+                # is handed a ``CardDefinition`` a deck shares between every
+                # copy. Without the keyword the cost would slip past Dreams
+                # of the Dead -- a drawback missed, which is the direction
+                # nobody notices.
+                from_battlefield=permanent,
+            )
+            self.log.append(
+                f"{controller.name} returned {permanent.card.name} to its "
+                "owner's hand to activate its ability"
+            )
+
         # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
         # a cost, paid now — the ability still resolves from the graveyard.
         if ability.cost.sacrifice_self:
@@ -2259,6 +2288,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("discard_last_drawn", "a discard cost"),
         ("exile_self", "an exile-this cost"),
         ("sacrifice_self", "a sacrifice-this cost"),
+        ("return_self_to_hand", "a return-this-to-hand cost"),
         ("exile_filter", "a chosen exile cost"),
         ("discard_cards", "a discard cost"),
         ("discard_at_random", "a random discard cost"),

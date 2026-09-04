@@ -239,6 +239,19 @@ class StackItem:
     # effect handler reads at resolution (e.g. the dead creature's name, the damage
     # amount, the player who was dealt damage, an optional-pay cost).
     trigger_context: dict | None = None
+    # CR 603.7d: what a **delayed** triggered ability's creating effect had
+    # in its resolution scratchpad, frozen when the ability was created.
+    #
+    # Its own field rather than the trigger context above, because the two
+    # are different questions and the readers are told apart by which one
+    # they ask: ``amount_from_trigger`` / ``bound_permanent_id`` are about
+    # the firing *event*, while ``amount_from`` / ``permanents_from`` are
+    # about an earlier step of the same *effect* -- and for a delayed
+    # ability that earlier step ran a turn ago, so its record can only have
+    # travelled here. Left empty the second kind reads nothing and the
+    # ability does nothing: Melee's "remove those creatures from combat"
+    # and Cycle of Life's counter both resolved onto an empty scratchpad.
+    captured_results: dict = field(default_factory=dict)
     # A resolve-time, name-keyed hook (Rod/Cup/Sphere, Verduran Enchantress, Guardian
     # Angel). When set, resolution dispatches to TRIGGER_HOOKS[hook_key] instead of an
     # OracleInstruction, passing hook_event as the captured event payload.

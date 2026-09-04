@@ -126,6 +126,8 @@ class StackResolutionMixin:
         # index is unstable across a removal; the id is the identity (CR 400.7).
         target_permanent_id: int | None = None,
         trigger_context: dict | None = None,
+        # CR 603.7d's frozen scratchpad -- see ``StackItem.captured_results``.
+        captured_results: dict | None = None,
         hook_key: str | None = None,
         hook_event: dict | None = None,
     ) -> None:
@@ -153,6 +155,7 @@ class StackResolutionMixin:
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_id,
                 trigger_context=trigger_context,
+                captured_results=captured_results,
                 hook_key=hook_key,
                 hook_event=hook_event,
             ))
@@ -185,6 +188,7 @@ class StackResolutionMixin:
                     source_permanent=source_permanent,
                     ability_text=ability_text,
                     trigger_context=trigger_context,
+                    captured_results=dict(captured_results or {}),
                     hook_key=hook_key,
                     hook_event=hook_event,
                 )
@@ -681,6 +685,11 @@ class StackResolutionMixin:
                 stack_target=item.target_stack_item,
                 trigger_context=item.trigger_context,
                 choices=item.choices,
+                # CR 603.7d: a delayed ability resolves with the scratchpad
+                # its creating effect had, because the step that recorded
+                # what "that creature" names ran a turn ago. Empty for every
+                # other trigger, which is the scratchpad they already had.
+                results=dict(item.captured_results),
             )
             # CR 603.4: an intervening-if is checked *again* as the ability
             # resolves, and the ability does nothing if it is false. The grammar

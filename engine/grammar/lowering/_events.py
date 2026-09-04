@@ -25,7 +25,8 @@ from __future__ import annotations
 
 from ...oracle_types import PER_OBJECT_SEAT_RECORDS
 
-from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
+from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, BASE_PT_SET_PERMANENTS,
+                             COUNTERS_REMOVED,
                              SEARCHED_PERMANENTS,
                              LAST_TARGET_CONTROLLER,
                              COUNTERS_PLACED_THIS_WAY,
@@ -653,6 +654,19 @@ DAMAGE_RECIPIENT = "damage_recipient"
 #: nothing else in the resolution can say which one it was.
 _UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
 
+#: "Target creature you cast this turn has base power and toughness 0/1 until
+#: your next upkeep. At the beginning of your next upkeep, put a +1/+1 counter
+#: on **that creature**." (Cycle of Life.) The rewrite records which permanent
+#: it chose, for the tap and untap pair's reason exactly: the sentence behind it
+#: names that creature and chooses nothing itself — and here the reader is a
+#: *delayed* ability a whole turn later (CR 603.7c), so a board read at that
+#: moment could not tell the chosen creature from any other 0/1.
+#: Re-exported from ``oracle_types`` under this module's private spelling, the
+#: way ``_COUNTERS_PLACED_THIS_WAY`` below is: one string, two ends of the
+#: pipeline, and a second spelling is what makes a producer gate vacuous while
+#: the handler reads an empty record.
+_BASE_PT_SET_PERMANENTS = BASE_PT_SET_PERMANENTS
+
 #: "…put a paralyzation counter on each creature blocking or blocked by this
 #: creature and tap **those creatures**." (Dread Wight.) The placement records
 #: which permanents it marked, because the three sentences behind it — the tap,
@@ -696,6 +710,7 @@ PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
+    _BASE_PT_SET_PERMANENTS,
     PUT_FROM_HAND_PERMANENTS,
     # What a search put onto the battlefield (Zirilan of the Claw). The
     # reanimation's twin one zone over, and a member of this set for that

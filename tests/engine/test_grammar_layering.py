@@ -548,7 +548,18 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # and cost the thing symmetry is for.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt"]
+# `base_pt` split out of `lowering/characteristics.py` at Mirage's third wave,
+# the second time that module crossed the guard below (`counters` left it the
+# first time). The line is one CR 613 already draws: what stays *modifies* a
+# characteristic -- a pump (7c), a switch (7d), a doubling, a colour, a text
+# change -- and what left *replaces* the printed value (613.4b), which is the
+# only pair of productions in this grammar reaching `pt.set_base_pt`. The name
+# is the one `engine/pt.py` and `engine/handlers/base_pt.py` already carry, so
+# the mirror re-forms rather than forking a third vocabulary.
+# Asymmetric like `life`, `counters` and `tokens` before it: the parse side
+# stays in `effects/characteristics.py`, where a base-P/T sentence is one branch
+# of the verb table, and the guard fired on the *lowering*.
 # `life` split out of `lowering/game.py` at 1,014, the second time that module
 # crossed the guard and along the same seam `tokens` left through one set
 # earlier: what stays in `game` changes the state of the **game** (an extra
@@ -774,7 +785,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1038,6 +1049,16 @@ FAMILY_SHARED = {
     # rather than a family for `_primitives`' reason exactly: `damage.py` reads
     # it, and inside a package a module a family imports cannot itself be one.
     "_amounts",
+    # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
+    # next time that module reached the guard below. The line is the one the
+    # branches had already drawn: everything left in `damage` computes a
+    # **quantity** and hands it to the generic `deal_damage`, whose source is
+    # the spell or the ability, while a bite reads one object's power at
+    # resolution and makes *that object* the source of the damage (CR 119.3) —
+    # which is why each is its own instruction kind rather than an amount key.
+    # A floor for `_amounts`' reason exactly: `damage` reads it and it reads
+    # nothing back.
+    "_bites",
     # `_sacrifices` split out of `lowering/board.py` when a *second* family
     # started charging a printed sacrifice cost: Minion of Leshrac's "unless
     # you sacrifice a creature other than this creature" is the damage family's

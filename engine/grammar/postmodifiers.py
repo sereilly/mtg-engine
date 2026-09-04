@@ -188,6 +188,14 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "attacked", "this", "turn"):
             d.attacked_this_turn = True
             continue
+        # "target creature **you cast this turn**" (Cycle of Life). A narrowing
+        # of the noun phrase like the combat records above it, off a different
+        # record: CR 701.5a's cast, stamped as the permanent entered. Not "you
+        # control" and not "that entered this turn" — a creature you cast and
+        # then gave away is still one you cast, and a reanimated one never was.
+        if stream.accept_phrase("you", "cast", "this", "turn"):
+            d.cast_by_you_this_turn = True
+            continue
         # "destroy all Plains **that weren't chosen this way by any player**"
         # (Raiding Party). A narrowing of the noun phrase rather than an
         # exception clause on the verb, for the reason Season of the Witch's

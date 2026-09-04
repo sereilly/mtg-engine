@@ -25,6 +25,7 @@ from ..layer_bridge import GAINED_TYPES
 from ..models import Permanent
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
+from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
 from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
@@ -816,6 +817,20 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # the end of the previous turn: this turn's own upkeep trigger
             # offers a fresh one, and a record left standing would make the
             # offer meaningless.
+            # "…has base power and toughness 0/1 **until your next upkeep**."
+            # (Cycle of Life.) The same moment and the same seat rule as the
+            # sweeps above, and Halfdane's stamp one step earlier: that one ends
+            # as this seat's upkeep *ends* and is cleared by the draw step,
+            # this one ends as it *begins*. A stamp written during this very
+            # upkeep survives to the next one, which is what keeps an ability
+            # activated in your own upkeep from expiring in the same breath.
+            stamp = perm.metadata.get(BASE_PT_UPKEEP_START_REVERT_KEY)
+            if (
+                isinstance(stamp, dict)
+                and stamp.get("seat") == player_index
+                and int(stamp.get("turn", 0)) < self.turn
+            ):
+                clear_base_pt(perm)
             record = perm.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD)
             if isinstance(record, dict) and record.get("seat") == player_index:
                 perm.metadata.pop(DAMAGE_TO_COUNTER_REMOVAL_RECORD, None)
