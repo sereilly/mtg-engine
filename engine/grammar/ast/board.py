@@ -214,6 +214,39 @@ class GainControl:
 
 
 @dataclass(frozen=True)
+class BidLifeForControl:
+    """``Each player may bid life for control of <subject>.`` (CR 613 layer 2.)
+
+    Illicit Auction's whole printed paragraph, read as one node because the four
+    sentences after the first are the *procedure* rather than four effects: they
+    say who bids first, in what order the offer goes round, when it stops and
+    what the winner pays. Split into a :class:`Sequence` they would each have to
+    be an effect nothing can perform alone — "the bidding ends if the high bid
+    stands" describes no board change at all.
+
+    ``starting_bid`` is the number the printed second sentence names ("You start
+    the bidding with a bid of 0"), carried as data for the reason every other
+    printed number in this AST is: a card opening the bidding at 3 is this
+    sentence with one word changed.
+
+    The auction's *winner* takes the permanent indefinitely (CR 611.2a — the
+    printed "(This effect lasts indefinitely.)" is that default said out loud),
+    so there is no duration field to get wrong: unlike :class:`GainControl`,
+    this sentence has exactly one ending and it is "never".
+    """
+
+    #: Who may bid — the offer's own printed subject ("**Each player** may
+    #: bid…"). Carried rather than assumed, because the sentence prints it and
+    #: a card offering the auction to a narrower set of seats ("each opponent")
+    #: would be a different auction with the same procedure. The lowering
+    #: refuses the sets no round-robin here can walk, so the word cannot be
+    #: read and then dropped.
+    bidders: Recipient
+    subject: Recipient
+    starting_bid: int = 0
+
+
+@dataclass(frozen=True)
 class Attach:
     """``Attach <subject> to <host>`` — the keyword action of CR 701.3.
 

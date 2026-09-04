@@ -787,3 +787,65 @@ def _each_player_optional_tap(
             },
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# What a wrapper carries (moved here from `lowering/categories.py` at the
+# thousand-line guard)
+# ---------------------------------------------------------------------------
+#
+# `categories_of` walks a lowered sequence and has to look *inside* every
+# composer before it can say what a line touches. Which kinds are composers,
+# and under which payload keys each keeps its steps, is a fact about this
+# family — these are the kinds the four lowerings above emit — so it lives
+# here and the category table reads it. Public names rather than the
+# underscore-prefixed ones they carried as module-privates: they have a caller
+# in another module now, and a leading underscore on a name two modules share
+# is a claim that stopped being true.
+# Control-flow wrappers take the categories of whatever they wrap, so gating
+# "damage" is enough to turn on a sequence of damage instructions without
+# inventing a category nobody could reason about.
+#
+# ``may`` is deliberately NOT in here: it gets its own ungated category above,
+# because an offer is not the same switch as the effect behind it. Wrapping it
+# with the others would let "optional" be turned off under a family that is on,
+# which is a card that performs its offer's consequence without asking.
+WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
+    "sequence": ("steps",),
+    "if_then": ("then", "else"),
+    "for_each": ("effect",),
+    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
+    # the same reason ``for_each`` is: what the round *does* is the act it
+    # carries, and the repetition is not an effect of its own.
+    "repeat_offer_round": ("action",),
+}
+
+
+def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions a wrapper carries, or None if it is not one.
+
+    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
+    pairs rather than a bare tuple — the modal shape the pending-choice prompt
+    reads. Its categories are its options', because that is what the card can
+    actually do; giving it a category of its own would say the *choosing* is the
+    effect.
+    """
+    if instruction.kind == "create_delayed_trigger":
+        # A delayed ability's effect is one instruction rather than a list, so
+        # it cannot ride `WRAPPER_KINDS` above — but it is a wrapper all the
+        # same, and an inner effect no category gates must ungate the line that
+        # arms it. An entry with no instruction is an ability that would fire
+        # into nothing, which is the empty-wrapper refusal below.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
+    if instruction.kind == "choose_one":
+        return tuple(
+            mode["instruction"] for mode in instruction.payload.get("modes") or ()
+        )
+    nested_keys = WRAPPER_KINDS.get(instruction.kind)
+    if nested_keys is None:
+        return None
+    nested: tuple[OracleInstruction, ...] = ()
+    for key in nested_keys:
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested

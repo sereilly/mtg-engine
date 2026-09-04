@@ -101,6 +101,7 @@ from .attachments import (
     parse_player_chooses_permanent,
 )
 from .control_changes import (
+    _parse_bid_life_for_control,
     _parse_exchange_control,
     _parse_gain_control,
 )
@@ -235,6 +236,7 @@ __all__ = [
     "_parse_change_text",
     "_parse_becomes",
     "_parse_no_longer_supertype",
+    "_parse_bid_life_for_control",
     "_parse_gain_control",
     "parse_player_chooses_permanent",
     "_parse_return",

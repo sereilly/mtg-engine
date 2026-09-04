@@ -41,6 +41,7 @@ from .phrases import (
 from .effects import (
     parse_block_count_grant,
     _parse_ante,
+    _parse_bid_life_for_control,
     _parse_gain_control,
     _parse_assigns_no_combat_damage,
     _parse_becomes_blocked,
@@ -497,6 +498,17 @@ def parse_subject_verb(
             # which a prompt could be answered) rather than wrapping it in a
             # `May`, which would hide the production from the tap seam that
             # fires it.
+            # "**Each player may bid** life for control of target creature."
+            # (Illicit Auction.) The whole auction — the offer and the four
+            # sentences of procedure behind it — is one production, so it is
+            # reached here rather than through `parse_optional_action`: that
+            # one reads a single sentence, and would leave four unaccounted
+            # for. Non-consuming on refusal, like every other probe in this
+            # chain.
+            if stream.at_word("bid"):
+                auction = _parse_bid_life_for_control(stream, source_spec)
+                if auction is not None:
+                    return auction
             if stream.at_word("add", "adds"):
                 mark_add = stream.mark()
                 try:

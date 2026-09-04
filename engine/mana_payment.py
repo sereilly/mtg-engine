@@ -56,6 +56,62 @@ class ManaPayment:
     tapped: tuple["Permanent", ...] = ()
 
 
+def fungible_colors_headroom(
+    pool: dict[str, int], required: dict[str, int]
+) -> int | None:
+    """Units left over after *pool* pays *required* with every unit fungible for
+    a **colour** (CR 609.4, "you may spend mana as though it were mana of any
+    color"), or None when it cannot pay at all.
+
+    Chromatic Orrery's permission, as the one arithmetic three readers ask.
+    They ask different questions of it -- can this be paid, how much X is
+    affordable, may the client offer the card -- and the answers have to agree,
+    which is exactly what three copies of a payment rule do not do: the
+    permission was honoured by the payment alone, so an {X} spell with a
+    coloured pip inferred X = 0 off a colourless pool and resolved for nothing,
+    and the client greyed out a card the engine would have cast.
+
+    Colourless is a **source** and not a destination. Every unit pays a coloured
+    pip, the Orrery's own {C} included, because that is what the card is for --
+    but a {C} the cost names still wants colourless, since colourless is not a
+    colour (CR 105.1) and the printed permission grants colours. So the
+    colourless the cost names has to survive whatever the pips took, which is
+    the second test below and the only subtle line here.
+
+    The leftover is what an {X} can grow into: X is generic, and under this
+    permission every remaining unit pays generic.
+    """
+    held = {sym: max(0, int(pool.get(sym, 0))) for sym in COLOR_SYMBOLS}
+    total = sum(held.values())
+    colored_pips = sum(int(required.get(sym, 0)) for sym in ("W", "U", "B", "R", "G"))
+    colorless = int(required.get("C", 0))
+    generic = int(required.get("generic", 0))
+    if total < colored_pips + colorless + generic:
+        return None
+    if held["C"] < colorless + max(0, colored_pips - (total - held["C"])):
+        return None
+    return total - colored_pips - colorless - generic
+
+
+def fungible_types_headroom(
+    pool: dict[str, int], required: dict[str, int]
+) -> int | None:
+    """:func:`fungible_colors_headroom` with **colourless in the set** too --
+    CR 106.1b's five colours and colorless, which is what "as though it were
+    mana of any *type*" means (North Star).
+
+    Short where that one is careful, and the difference is the whole of why
+    they are two functions rather than one with a flag: with colorless
+    reachable, a {C} the cost names is payable by a coloured unit, so nothing
+    has to be reserved and no pip can starve one. The payment collapses to a
+    single question about the total.
+    """
+    total = sum(max(0, int(pool.get(sym, 0))) for sym in COLOR_SYMBOLS)
+    owed = sum(int(required.get(sym, 0)) for sym in COLOR_SYMBOLS)
+    owed += int(required.get("generic", 0))
+    return None if total < owed else total - owed
+
+
 def _normalized(required: dict[str, int]) -> dict[str, int]:
     return {
         **{symbol: int(required.get(symbol, 0)) for symbol in COLOR_SYMBOLS},
@@ -274,7 +330,8 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
 
 
 __all__ = [
-    "COLOR_SYMBOLS", "ManaPayment", "generic_cost", "mana_cost_from_symbols",
+    "COLOR_SYMBOLS", "ManaPayment", "fungible_colors_headroom",
+    "fungible_types_headroom", "generic_cost", "mana_cost_from_symbols",
     "mana_cost_label", "plan_payment",
     "total_pips",
     "untapped_mana_lands",

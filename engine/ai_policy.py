@@ -1060,7 +1060,7 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     elif game.enforce_mana_costs:
         pool = _preview_pool_with_all_untapped_lands(game, player)
         required = _cost_for(game, player, card, x_value if x_value is not None else 0)
-        if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+        if _can_pay_cost(pool, required, player):
             score += 3.0  # castable as soon as it reaches hand
         else:
             available = sum(pool.values())
@@ -2073,7 +2073,7 @@ def _max_affordable_x(
 
     for x_value in range(15, -1, -1):
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
-        if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+        if _can_pay_cost(pool, required, player):
             return x_value
     return 0
 
@@ -2096,7 +2096,7 @@ def _plan_taps_for_cost(player: PlayerState, required: dict[str, int]) -> list[i
         if permanent.card.primary_type == "land" and not permanent.tapped
     ]
 
-    if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+    if _can_pay_cost(pool, required, player):
         return []
 
     chosen: list[int] = []
@@ -2113,7 +2113,7 @@ def _plan_taps_for_cost(player: PlayerState, required: dict[str, int]) -> list[i
             pool[produced] = pool.get(produced, 0) + 1
             need -= 1
 
-    while remaining and not _can_pay_cost(pool, required, player.can_spend_white_as_red):
+    while remaining and not _can_pay_cost(pool, required, player):
         best_idx = 0
         best_benefit = -1
         for idx, (_, produced) in enumerate(remaining):
@@ -2127,13 +2127,38 @@ def _plan_taps_for_cost(player: PlayerState, required: dict[str, int]) -> list[i
         chosen.append(land_index)
         pool[produced] = pool.get(produced, 0) + 1
 
-    if not _can_pay_cost(pool, required, player.can_spend_white_as_red):
+    if not _can_pay_cost(pool, required, player):
         return None
 
     return chosen
 
 
-def _can_pay_cost(pool: dict[str, int], required: dict[str, int], can_spend_white_as_red: bool) -> bool:
+def _can_pay_cost(
+    pool: dict[str, int], required: dict[str, int], payer: PlayerState
+) -> bool:
+    """Whether *payer* could pay *required* out of *pool*.
+
+    *pool* is a **preview** — the seat's floating mana plus whatever its
+    untapped lands would make — so it is passed rather than read off the payer;
+    the payer is here for the CR 609.4 spending permissions, which are facts
+    about the seat rather than about the pool.
+
+    Both permissions, from one argument. This took ``can_spend_white_as_red``
+    as a bare bool, so the wider one beside it (Chromatic Orrery's "you may
+    spend mana as though it were mana of any color") was simply not asked, and
+    a seat with a colourless pool judged every coloured spell in its hand
+    uncastable. Nothing breaks visibly when an AI under-reports what it can pay
+    — it just never casts, which is the "a seat doing nothing all game" shape
+    ``simulate_ai_games.py`` counts as a refused cast.
+    """
+    can_spend_white_as_red = payer.can_spend_white_as_red
+    if payer.spends_mana_as_any_color:
+        # Every unit pays a coloured pip and a {C} still wants colourless —
+        # through the engine's own arithmetic, so the AI's answer and the
+        # payment's cannot drift.
+        from .mana_payment import fungible_colors_headroom
+
+        return fungible_colors_headroom(pool, required) is not None
     if pool.get("W", 0) < required.get("W", 0):
         return False
     if pool.get("U", 0) < required.get("U", 0):
