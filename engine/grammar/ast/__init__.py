@@ -197,6 +197,7 @@ from .characteristics import (
 from .board import (
     SacrificeExpansionPermanents,
     DelayedSelfAction,
+    RebalanceLands,
     DoesntUntapWhileSourceTapped,
     DoesntUntapWhileCounter,
     ShuffleGraveyardIntoLibrary,
@@ -431,6 +432,7 @@ __all__ = [
     "ZoneHasCards",
     "SacrificeExpansionPermanents",
     "DelayedSelfAction",
+    "RebalanceLands",
     "DoesntUntapWhileSourceTapped",
     "DoesntUntapWhileCounter",
     "ShuffleGraveyardIntoLibrary",

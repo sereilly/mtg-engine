@@ -863,3 +863,29 @@ class DelayedSelfAction:
     # second node, because the delay — the whole content of this sentence — is
     # identical either way and only the referent differs.
     subject: str = "source"   # source | bound
+
+
+@dataclass(frozen=True)
+class RebalanceLands:
+    """``Each player who controls six or more lands chooses five lands they
+    control and sacrifices the rest. Each player who controls four or fewer
+    lands may search their library for up to X basic land cards and put them
+    onto the battlefield, where X is five minus the number of lands they
+    control. Then each player who searched their library this way shuffles.``
+    (Natural Balance.)
+
+    One node for the whole paragraph, in the shape Transmute Artifact's and
+    Necromentia's already use: none of the three sentences is an effect on its
+    own. The first two narrow a *set of players* by a board count — which
+    nothing else in this grammar reads — and the second's X is defined by a
+    clause of its own sentence plus the first sentence's number; the third
+    names a set only the second produces.
+
+    ``keep`` is the whole of the parameterisation, and that is the finding
+    rather than a convenience. The card prints four numbers and they are one:
+    "six or more" is ``keep + 1``, "four or fewer" is ``keep - 1``, and "five
+    minus the number of lands they control" counts up to ``keep``. Storing four
+    fields would let a printing whose numbers disagreed compile as though one of
+    them were the answer, and it would be a coin-toss which.
+    """
+    keep: int

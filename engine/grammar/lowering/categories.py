@@ -549,6 +549,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "take_ownership_of_exiled": "zones",
     "return_exiled_source_to_graveyard": "zones",
     "transmute_by_sacrifice": "zones",
+    "rebalance_lands": "zones",
     "place_held_card": "zones",
     "look_top_pick_to_hand": "zones",
     "look_top_exile_random": "zones",

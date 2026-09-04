@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 89.0% | 88.6% | 60.9% | 270 |
+| MIR *(measured)* | 335 | 545 | 89.2% | 88.8% | 61.1% | 271 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 310 | 139 | expected a subject |  |
-| 111 | 49 | unrecognized effect verb |  |
+| 110 | 48 | unrecognized effect verb |  |
 | 78 | 33 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3035,6 +3035,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever Márton Stromgald blocks, other blocking creatures get +1/+1 until end of turn for each blocking creature other than Márton Stromgald.`
 - **Nacre Talisman**
   - `Whenever a player casts a white spell, you may pay {3}. If you do, untap target permanent.`
+- **Natural Balance**
+  - `Each player who controls six or more lands chooses five lands they control and sacrifices the rest. Each player who controls four or fewer lands may search their library for up to X basic land cards and put them onto the battlefield, where X is five minus the number of lands they control. Then each player who searched their library this way shuffles.`
 - **Natural Selection**
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`

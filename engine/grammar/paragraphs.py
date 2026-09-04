@@ -84,60 +84,6 @@ def _parse_coin_flip_damage_loop(stream: TokenStream) -> ast.Statement | None:
     return ast.CoinFlipDamageLoop(source, amount)
 
 
-def _parse_ownership_exchange_unless_paid(stream: TokenStream) -> ast.Statement | None:
-    """Bronze Tablet's whole ability, as one statement.
-
-    ``Exile this <noun> and target <phrase>. That player may pay <N> life. If
-    they do, put this card into its owner's graveyard. Otherwise, that player
-    owns this card and you own the other exiled card.``
-
-    Every sentence is required and each one is load-bearing: without the exile
-    there is nothing to exchange, without the payment the exchange is
-    unconditional, and without *both* branches the card either always trades or
-    never does. The life total and the target's noun phrase are payload.
-    """
-    if not stream.accept_phrase("exile", "this"):
-        return None
-    if stream.accept_kind(SELF) is None:
-        if not stream.accept_word(
-            "artifact", "creature", "enchantment", "permanent", "land"
-        ):
-            return None
-    if not stream.accept_phrase("and", "target"):
-        return None
-    try:
-        target = parse_object_filter(stream)
-    except GrammarError:
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("that", "player", "may", "pay"):
-        return None
-    token = stream.peek()
-    if token is None or not str(token.text).isdigit():
-        return None
-    life = int(token.text)
-    stream.advance()
-    if not stream.accept_word("life"):
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("if", "they", "do"):
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "put", "this", "card", "into", "its", "owner", "'s", "graveyard",
-    ):
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_word("otherwise"):
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "that", "player", "owns", "this", "card", "and",
-        "you", "own", "the", "other", "exiled", "card",
-    ):
-        return None
-    return ast.OwnershipExchangeUnlessPaid(life, target)
-
 
 def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | None:
     """``Exile all <filter> from your graveyard until this <permanent> leaves
@@ -717,145 +663,6 @@ def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | 
     return ast.ExchangeGreatestManaValue(tuple(types))
 
 
-def _parse_ante_offer_ownership_exchange(
-    stream: TokenStream,
-) -> ast.Statement | None:
-    """Timmerian Fiends' whole ability, as one statement.
-
-    ``The owner of target <type> may ante the top card of their library. If
-    that player doesn't, exchange ownership of that <type> and this permanent.
-    Put the <type> card into your graveyard and this permanent from anywhere
-    into that player's graveyard. This change in ownership is permanent.``
-
-    The sibling of :func:`_parse_random_reveal_ownership_exchange` below, and
-    every sentence is required for that production's reasons: without the offer
-    the exchange is unconditional, without the two moves the exchange has no
-    effect this engine can see, and without the last sentence the change would
-    be an ordinary until-end-of-turn one.
-
-    The printed **type** is payload and is required to be the same word in all
-    three places it appears. A paragraph that says "target artifact" and then
-    "put the creature card into your graveyard" is not describing one object,
-    and reading it as though it were would bin something the card never named.
-
-    Refuses without consuming, so every other sentence opening "The owner of …"
-    keeps the reading it has today.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("the", "owner", "of", "target"):
-        stream.reset(mark)
-        return None
-    type_word = stream.peek_word()
-    if type_word is None or type_word not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_phrase(
-        "may", "ante", "the", "top", "card", "of", "their", "library"
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("if", "that", "player", "doesn't"):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    if (
-        not stream.accept_phrase("exchange", "ownership", "of", "that", type_word)
-        or not stream.accept_word("and")
-        or stream.accept_kind(SELF) is None
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "put", "the", type_word, "card", "into", "your", "graveyard", "and"
-    ) or stream.accept_kind(SELF) is None:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "from", "anywhere", "into", "that", "player", "'s", "graveyard"
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "this", "change", "in", "ownership", "is", "permanent"
-    ):
-        stream.reset(mark)
-        return None
-    return ast.AnteOfferOwnershipExchange(type_word)
-
-
-def _parse_random_reveal_ownership_exchange(
-    stream: TokenStream,
-) -> ast.Statement | None:
-    """Tempest Efreet's whole ability, as one statement.
-
-    ``Target opponent may pay <N> life. If that player doesn't, they reveal a
-    card at random from their hand. Exchange ownership of the revealed card and
-    this creature. Put the revealed card into your hand and this creature from
-    anywhere into that player's graveyard. This change in ownership is
-    permanent.``
-
-    Every sentence is required. Without the payment the exchange is
-    unconditional; without the reveal there is no card to exchange; without the
-    two moves the exchange has no effect this engine can see, since ownership
-    *is* which player's zone a card is in; and without the last sentence the
-    change would be an ordinary until-end-of-turn one. The life total is
-    payload.
-
-    Refuses without consuming, so every other sentence opening "Target
-    opponent …" keeps the reading it has today.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("target", "opponent", "may", "pay"):
-        stream.reset(mark)
-        return None
-    token = stream.peek()
-    if token is None or not str(token.text).isdigit():
-        stream.reset(mark)
-        return None
-    life = int(token.text)
-    stream.advance()
-    if not stream.accept_word("life"):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("if", "that", "player", "doesn't"):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "they", "reveal", "a", "card", "at", "random", "from", "their", "hand"
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "exchange", "ownership", "of", "the", "revealed", "card", "and"
-    ) or stream.accept_kind(SELF) is None:
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "put", "the", "revealed", "card", "into", "your", "hand", "and"
-    ) or stream.accept_kind(SELF) is None:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "from", "anywhere", "into", "that", "player", "'s", "graveyard"
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "this", "change", "in", "ownership", "is", "permanent"
-    ):
-        stream.reset(mark)
-        return None
-    return ast.RandomRevealOwnershipExchange(life)
-
 
 def _parse_reassign_blockers_between_attackers(
     stream: TokenStream,
@@ -916,3 +723,101 @@ def _parse_reassign_blockers_between_attackers(
             "expected the reassignment that closes the blocked-attacker swap"
         )
     return ast.ReassignBlockersBetweenAttackers(subject)
+
+
+def _parse_rebalance_lands(stream: TokenStream) -> ast.Statement | None:
+    """``Each player who controls six or more lands chooses five lands they
+    control and sacrifices the rest. Each player who controls four or fewer
+    lands may search their library for up to X basic land cards and put them
+    onto the battlefield, where X is five minus the number of lands they
+    control. Then each player who searched their library this way shuffles.``
+    (Natural Balance.)
+
+    Read whole, like every paragraph here, for the reason each of them is: the
+    second sentence's X is defined by the third clause of its own sentence and
+    by the first sentence's number, and the third sentence names a set only the
+    second produces. Sentence by sentence it would be a player-set narrowing
+    nothing implements, an amount with no definition, and a shuffle over
+    nobody.
+
+    **Four printed numbers, one number.** "Six or more" is one over the target,
+    "four or fewer" is one under it, and "five minus the number of lands they
+    control" counts up to it — so the whole card is parameterised by the five it
+    keeps, and the production checks that rather than storing four fields. A
+    printing whose numbers disagreed would be a different card, and taking any
+    one of them as the answer would silently be the wrong one.
+
+    Refuses without consuming, so a sentence merely opening "Each player …"
+    keeps its own reading.
+    """
+    mark = stream.mark()
+
+    def _count() -> int | None:
+        """The next printed number, or None — a word that is not one leaves the
+        cursor where it was for the caller's own reset."""
+        try:
+            amount = parse_amount(stream)
+        except GrammarError:
+            return None
+        return amount.value if isinstance(amount, ast.Fixed) else None
+
+    if not stream.accept_phrase("each", "player", "who", "controls"):
+        stream.reset(mark)
+        return None
+    over = _count()
+    if over is None or not stream.accept_phrase("or", "more", "lands"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("chooses"):
+        stream.reset(mark)
+        return None
+    keep = _count()
+    if keep is None or not stream.accept_phrase(
+        "lands", "they", "control", "and", "sacrifices", "the", "rest"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("each", "player", "who", "controls"):
+        stream.reset(mark)
+        return None
+    under = _count()
+    if under is None or not stream.accept_phrase("or", "fewer", "lands"):
+        stream.reset(mark)
+        return None
+    # Every word of the second sentence is required rather than skipped, and
+    # each names something the handler does: the offer ("may"), whose library,
+    # the ceiling ("up to"), what may be found and where it lands. A production
+    # that shrugged at one of them would let the same words mean a mandatory
+    # search, a search of somebody else's library, or lands put into a hand.
+    if not stream.accept_phrase(
+        "may", "search", "their", "library", "for", "up", "to", "x", "basic",
+        "land", "cards", "and", "put", "them", "onto", "the", "battlefield",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("where", "x", "is"):
+        stream.reset(mark)
+        return None
+    counted_to = _count()
+    if counted_to is None or not stream.accept_phrase(
+        "minus", "the", "number", "of", "lands", "they", "control"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    # CR 701.23h ends a library search with a shuffle, so this sentence is the
+    # tail of the search above rather than an effect of its own — consumed here
+    # for the reason the conditional-shuffle tail is consumed inside the tutor
+    # production, and required, because a printing without it would be claiming
+    # a search that leaves a library ordered.
+    if not stream.accept_phrase(
+        "then", "each", "player", "who", "searched", "their", "library",
+        "this", "way", "shuffles"
+    ):
+        stream.reset(mark)
+        return None
+    if (over, under, counted_to) != (keep + 1, keep - 1, keep):
+        raise stream.error("this rebalancing's four numbers do not agree")
+    return ast.RebalanceLands(keep)

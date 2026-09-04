@@ -72,6 +72,7 @@ from .characteristics import (
 )
 from .board import (
     DelayedSelfAction,
+    RebalanceLands,
     DoesntUntapWhileSourceTapped,
     DoesntUntapWhileCounter,
     SacrificeExpansionPermanents,
@@ -225,7 +226,8 @@ Effect = Union[
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
     DoesntUntapWhileCounter, UntapChosenByPaying,
-    DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
+    DelayedSelfAction, RebalanceLands, Attach, ExchangeControl,
+    ExchangeGreatestManaValue,
     Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem, SkipStep,
