@@ -347,8 +347,27 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"|(?P<damager_subject>[^,]+?)(?P<damager_includes_spells> or spell)?"
      r")"
      r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
-     r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
-     r"|an opponent|a planeswalker|you))?(?=,|$)"),
+     r"(?: to (?:"
+     # "…deals damage to **you or a white creature you control**" (Mangara's
+     # Equity). A recipient that is a seat *or* a permanent, which no single
+     # word in the list below can say: the fixed words all name a player or a
+     # planeswalker, and this sentence names a player and an arbitrary noun
+     # phrase. So the seat word stays a word and the object half is delimited
+     # as a `_subject` group, read by the same noun parser every other narrowed
+     # condition in this table goes through — a card printing "to you or a
+     # creature you control" or "to an opponent or a permanent they control"
+     # is the same trigger with different payload.
+     #
+     # First, and the ordering is this table's usual rule: "you" is a strict
+     # prefix of "you or …", so the fixed list below would claim the seat word
+     # and then fail the comma bound, taking the whole condition down with it.
+     # That is exactly what it did — Mangara's Equity's third sentence compiled
+     # to nothing at all.
+     r"(?P<damage_recipient_seat>you|an opponent) or"
+     r" (?P<damaged_subject>an? [^,]+)"
+     r"|(?P<damage_recipient>a player or planeswalker|a player"
+     r"|an opponent|a planeswalker|you)"
+     r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a
     # creature" (Aisling Leprechaun). One printed sentence joining the two

@@ -882,10 +882,27 @@ def _damage_dealt_filter(
         return False
 
     recipient = event.payload.get("recipient")
+    seat = event.payload.get("defending_player_index")
+    # "…deals damage to **you or a white creature you control**" (Mangara's
+    # Equity). A recipient the sentence describes two ways: one seat word and
+    # one noun phrase. Whichever the event's recipient *is* decides which half
+    # answers, so the two are not ANDed — a player is never a creature you
+    # control, and a creature is never a seat.
+    #
+    # Read before the fixed-word test below, and never beside it: the two keys
+    # cannot both be present (the regex alternates), and asking the union first
+    # is what keeps a union payload from falling through to "no narrowing" and
+    # firing on every point of damage in the game.
+    union_seat = payload.get("damage_recipient_seat")
+    if union_seat is not None:
+        if _is_player(recipient):
+            return bool(_DAMAGE_RECIPIENT_TESTS[union_seat](recipient, seat, observer))
+        return trigger_subject_matches(
+            game, trig, "damaged", recipient, observer=observer, source=permanent,
+        )
     test = _DAMAGE_RECIPIENT_TESTS.get(payload.get("damage_recipient"))
     if test is None:
         return True
-    seat = event.payload.get("defending_player_index")
     return bool(test(recipient, seat, observer))
 
 

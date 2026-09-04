@@ -211,6 +211,12 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # is game-wide and per object, and by resolution the creature may have been
     # removed from combat or destroyed.
     "matching_creature_attacks",
+    # "Whenever a creature of the chosen color deals damage to you …, this
+    # enchantment deals that much damage to **that creature**." (Mangara's
+    # Equity.) CR 120.4b's event, whose one seam (`damage_events._announce`)
+    # freezes the damager's id — the object the words name, which is the *other*
+    # end of the event from the permanent it damaged.
+    "damage_dealt",
 })
 
 

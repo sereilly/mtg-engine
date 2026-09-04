@@ -143,6 +143,7 @@ def _parse_damage_dealt_event(
     """
     mark = stream.mark()
     subject: ast.ObjectFilter | None = None
+    narrowings: tuple[tuple[str, ast.ObjectFilter], ...] = ()
     if stream.at_kind(SELF) or stream.at_word("this"):
         stream.advance()
         if not stream.at_kind(SELF):
@@ -189,7 +190,35 @@ def _parse_damage_dealt_event(
             # narrows away. Refuse the line instead.
             stream.reset(mark)
             return None
-    return ast.TriggerEvent("damage_dealt", word, subject=subject)
+        # "…deals damage to **you or a white creature you control**"
+        # (Mangara's Equity). A seat word and a noun phrase naming one
+        # recipient between them: the table above matched the seat, and the
+        # object half is read here. Left on the stream it fails full-token
+        # consumption and the card loses the whole ability, which is what it
+        # did.
+        #
+        # **Carried, not merely consumed**, which is where this differs from
+        # Justice's "or spell" above: that word narrows nothing the noun parser
+        # reads, and this is a whole printed phrase. `engine/oracle.py`'s table
+        # delimits it as a `damaged_subject` group, so the grammar records it
+        # under the same stem — a phrase one front end consumed and the other
+        # tested is a card whose two halves watch different sets, which is
+        # exactly what `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`
+        # is there to catch.
+        #
+        # All-or-nothing, so "…to you or an opponent" — a union of two seats,
+        # which the condition table does not name — rewinds and leaves the line
+        # refusing rather than silently dropping the second half.
+        union = stream.mark()
+        if stream.accept_word("or"):
+            damaged = parse_subject_filter_at(stream)
+            if damaged is None:
+                stream.reset(union)
+            else:
+                narrowings = (("damaged", damaged),)
+    return ast.TriggerEvent(
+        "damage_dealt", word, subject=subject, narrowings=narrowings
+    )
 
 
 def _accept_land_tapped_for_mana_by_a_player(

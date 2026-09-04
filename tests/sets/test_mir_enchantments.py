@@ -1916,3 +1916,181 @@ def test_w4g4_the_two_option_reader_needs_one_catalog_and_two_words():
     assert _w4g4_two_options(
         "As this enchantment enters, choose black or red, then draw a card."
     ) is None
+
+
+# --- W4G4 (continued): a damage trigger narrowed on both ends ---
+#
+# "Whenever a creature of the chosen color deals damage to you or a white
+# creature you control, this enchantment deals that much damage to that
+# creature." (Mangara's Equity.) CR 120.4b's event with three printed
+# narrowings, every one of them a thing the pool already half-had:
+#
+#  * the **damager** goes through the noun parser like Justice's "a red
+#    creature", now that a chosen-value phrase is a payload it can return;
+#  * the **recipient** is a seat word *or* a noun phrase, which no single word
+#    in `_DAMAGE_RECIPIENT_TESTS` can say - so the seat stays a word and the
+#    object half is a `_subject` group. "you" being a strict prefix of "you
+#    or ..." is what took the whole condition down before: the fixed list
+#    matched the seat and then failed the comma bound;
+#  * "**that much**" is the damage *dealt* (CR 120.4b), which is what a shield
+#    reduces and what a life-total cap does not.
+#
+# And "that creature" names the damager. It lowers to the `event_subject`
+# recipient the bare pronoun "it" already used - two spellings of one
+# back-reference - which needed `damage_events._announce` to freeze the
+# damager's id beside the damaged permanent's. The two are opposite ends of one
+# event, and only one of them had a key.
+
+from engine.handlers._common import (  # noqa: E402
+    apply_damage_to_creature as _w4g4_damage_creature,
+)
+from engine.shields import (Shield as _w4g4_Shield,  # noqa: E402
+                            add_shield as _w4g4_add_shield,
+                            PREVENT_NEXT_N as _w4g4_PREVENT_N)
+from tests.helpers import _mk_card as _w4g4_mk  # noqa: E402
+
+
+def _w4g4_body(name, colour, power=3):
+    return _w4g4_mk(
+        name, "Creature - Ogre", "", power=power, toughness=power, colors=(colour,)
+    )
+
+
+def _w4g4_equity_board(pool, answer):
+    """Mangara's Equity with the colour answered, a white and a green creature
+    under it, and a black and a red creature opposite."""
+    equity = _w4g4_Permanent(card=pool["Mangara's Equity"])
+    mine = {
+        "white": _w4g4_Permanent(card=_w4g4_body("White Bear", "W", power=2)),
+        "green": _w4g4_Permanent(card=_w4g4_body("Green Bear", "G", power=2)),
+    }
+    theirs = {
+        "black": _w4g4_Permanent(card=_w4g4_body("Black Ogre", "B")),
+        "red": _w4g4_Permanent(card=_w4g4_body("Red Ogre", "R")),
+    }
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity, *mine.values()]),
+        _w4g4_PlayerState(name="P2", battlefield=list(theirs.values())),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(equity, 0, 1)
+    assert game.confirm_enter_choice(0, mana_color=answer) is True
+    assert equity.metadata["chosen_color"] == answer
+    return game, equity, mine, theirs
+
+
+def _w4g4_hit(game, damager, victim):
+    """*damager* deals 3 to *victim*, and the trigger behind it resolves."""
+    if isinstance(victim, _w4g4_PlayerState):
+        game._deal_damage_to_player(victim, 3, source=damager)
+    else:
+        _w4g4_damage_creature(game, victim, 3, damager)
+    game.resolve_stack()
+    return damager.damage_marked
+
+
+def test_w4g4_mangaras_equity_compiles_its_third_sentence(set_pool):
+    """Both ends of the condition and the effect between them."""
+    program = _w4g4_compile(set_pool("MIR")["Mangara's Equity"])
+    assert program.supported
+
+    trig = next(
+        t for t in program.triggered_abilities if t.condition.kind == "damage_dealt"
+    )
+    assert trig.condition.payload == {
+        "damage_recipient_seat": "you",
+        "damager_filter": {"type_filter": "creature", "chosen_color": True},
+        "damaged_filter": {
+            "type_filter": "creature", "color_filter": "W", "controller": "you",
+        },
+    }
+    assert trig.instruction.kind == "deal_damage"
+    assert trig.instruction.payload == {
+        "amount_from_trigger": "amount",
+        "recipient": "event_subject",
+        "filter": {"type_filter": "creature"},
+    }
+
+
+@_w4g4_pytest.mark.parametrize("answer", ["B", "R"])
+def test_w4g4_the_damager_must_be_the_chosen_colour(set_pool, answer):
+    """Both answers, because a trigger that fires on either colour passes a
+    test that only ever chose one."""
+    other = "R" if answer == "B" else "B"
+    names = {"B": "black", "R": "red"}
+
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), answer)
+    assert _w4g4_hit(game, theirs[names[answer]], game.players[0]) == 3
+
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), answer)
+    assert _w4g4_hit(game, theirs[names[other]], game.players[0]) == 0
+
+
+def test_w4g4_the_recipient_is_a_seat_or_a_noun_phrase_and_nothing_else(set_pool):
+    """"you **or** a white creature you control" is one recipient described two
+    ways, so whichever the event's recipient *is* decides which half answers.
+    The green creature and the opponent are the two halves' misses."""
+    pool = set_pool("MIR")
+
+    game, _, mine, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], mine["white"]) == 3
+
+    game, _, mine, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], mine["green"]) == 0
+
+    game, _, _, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], game.players[1]) == 0
+
+
+def test_w4g4_that_much_is_the_damage_dealt_not_the_power(set_pool):
+    """CR 120.4b's number. A shield over the recipient reduces what was dealt,
+    and the reflection is that — a read of the creature's power would send
+    three back through a shield that let two through."""
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), "B")
+    _w4g4_add_shield(
+        game.players[0],
+        _w4g4_Shield(kind=_w4g4_PREVENT_N, amount=1, uses=None, source_name="probe"),
+    )
+
+    reflected = _w4g4_hit(game, theirs["black"], game.players[0])
+
+    assert game.players[0].life == 18
+    assert reflected == 2
+
+
+def test_w4g4_an_unprinted_colour_is_refused_not_repaired(set_pool):
+    """White is a legal answer to "choose a color" and is not one here."""
+    equity = _w4g4_Permanent(card=set_pool("MIR")["Mangara's Equity"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity]),
+        _w4g4_PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(equity, 0, 1)
+
+    assert game.pending_enter_choice["entry_choice_options"] == ["B", "R"]
+    assert game.confirm_enter_choice(0, mana_color="W") is False
+    assert equity.metadata["chosen_color"] in ("B", "R")
+    # A board answering neither option falls to the first printed word rather
+    # than to an alphabetical accident.
+    assert equity.metadata["chosen_color"] == "B"
+
+
+def test_w4g4_the_default_is_the_option_the_opponents_answer_most(set_pool):
+    """idiom 8: an option nobody's board answers makes the enchantment inert,
+    which is legal and is not a choice any player would make."""
+    equity = _w4g4_Permanent(card=set_pool("MIR")["Mangara's Equity"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity]),
+        _w4g4_PlayerState(name="P2", battlefield=[
+            _w4g4_Permanent(card=_w4g4_body("Red Ogre", "R")),
+            _w4g4_Permanent(card=_w4g4_body("Other Red Ogre", "R")),
+            _w4g4_Permanent(card=_w4g4_body("Black Ogre", "B")),
+        ]),
+    ])
+    game.enforce_mana_costs = False
+    game._initialize_permanent_state(equity, 0, 1)
+
+    assert equity.metadata["chosen_color"] == "R"
