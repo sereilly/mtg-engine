@@ -48,6 +48,33 @@ from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
 
+
+def _entry_choice_option_allowed(choice: PendingChoice, answer: str) -> bool:
+    """Whether *answer* is one of the options the entering permanent's own
+    sentence printed (CR 614.1c).
+
+    "As this enchantment enters, choose **black or red**" (Mangara's Equity),
+    "…choose **Island or Swamp**" (Roots of Life). Most entry choices name a
+    *catalog* and are bounded by it; these name their options outright, and the
+    list travels on the choice so the picker offers exactly what this refuses
+    to go outside (idiom 9).
+
+    An arming with no list is unbounded by anything but its catalog, which is
+    every other shape of this prompt — so an absent key is a pass rather than a
+    refusal, and the six older armings are untouched.
+
+    A free function rather than a method for the reason the two call sites give:
+    both branches of ``_resolve_enter_choice`` ask it about the same choice, and
+    it needs nothing off the game.
+    """
+    options = choice.data.get("entry_choice_options")
+    if not options:
+        return True
+    return str(answer).strip().lower() in {
+        str(option).strip().lower() for option in options
+    }
+
+
 class PendingChoicesMixin:
     # -- The queue ----------------------------------------------------------
     #
@@ -2909,6 +2936,13 @@ class PendingChoicesMixin:
             permanent = choice.data["permanent"]
             if land_type:
                 word = str(land_type).strip().lower()
+                # "…choose **Island or Swamp**." (Roots of Life.) The sentence
+                # printed the offer, so the catalog is not what bounds the
+                # answer — the two words are. Asked of the same list the picker
+                # was handed (idiom 9), and refused rather than repaired: a
+                # third land type here is a strictly better card.
+                if not _entry_choice_option_allowed(choice, word):
+                    return False
                 if word not in LAND_TYPES:
                     return False
                 if self.is_on_battlefield(permanent):
@@ -3023,6 +3057,11 @@ class PendingChoicesMixin:
             try:
                 color = self._normalize_mana_color(mana_color)
             except ValueError:
+                return False
+            # "…choose **black or red**." (Mangara's Equity.) The land-type
+            # branch's rule one characteristic over: where the sentence printed
+            # the offer, the five colours are not what bounds the answer.
+            if color is not None and not _entry_choice_option_allowed(choice, color):
                 return False
             if color is not None and self.is_on_battlefield(permanent):
                 permanent.metadata["chosen_color"] = color

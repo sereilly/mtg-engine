@@ -35,6 +35,13 @@ from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 DRAW_STEP_SELF_CONDITION = "draw_step_self"
 DRAW_STEP_EACH_CONDITION = "draw_step_each"
 
+#: The payload key narrowing ``draw_step_each`` to a set of seats — "each
+#: **opponent's** draw step" (Malignant Growth). Named here for
+#: ``DRAW_STEP_INTERVENING_IF``'s reason below: `engine/oracle.py`'s pattern
+#: table writes it and this step reads it, and a channel spelled at both ends
+#: is a channel that can be renamed at one.
+DRAW_STEP_SCOPE = "draw_step_scope"
+
 #: The payload key holding a CR 603.4 intervening-if, checked as the trigger
 #: would fire and again as it resolves. Keyed on the payload's *shape* rather
 #: than on a list of instruction kinds, for the reason end_step.py gives: a list
@@ -92,6 +99,19 @@ class DrawStepMixin:
         for controller_index, permanent, trig in scoped:
             if trig.instruction is None:
                 continue
+            # "at the beginning of each **opponent's** draw step" (Malignant
+            # Growth) is `draw_step_each` narrowed by a printed noun, carried as
+            # the condition's `draw_step_scope` payload rather than as a kind of
+            # its own (idiom 19) — the same arrangement `upkeep_scope` has one
+            # step of the turn earlier. Whose opponents is CR 109.5's answer,
+            # the *source's* controller, so the card's own draw step is not one
+            # of them.
+            if (
+                trig.condition.kind == DRAW_STEP_EACH_CONDITION
+                and trig.condition.payload.get(DRAW_STEP_SCOPE) == "opponent"
+                and controller_index == player_index
+            ):
+                continue
             gate = (trig.instruction.payload or {}).get(DRAW_STEP_INTERVENING_IF)
             if gate is not None and not evaluate_condition(
                 self,
@@ -104,7 +124,16 @@ class DrawStepMixin:
                 gate,
             ):
                 continue
-            events.append(make_trigger_event(controller_index, permanent, trig))
+            events.append(make_trigger_event(
+                controller_index, permanent, trig,
+                # The seat *this* firing is about. "That player draws an
+                # additional card" (Malignant Growth) names the player whose
+                # draw step it is, which varies per firing and so cannot be
+                # re-derived at resolution — the upkeep loop freezes the same
+                # key for the same reason, and `_EVENT_SUBJECT_PLAYERS` is what
+                # says a condition may be read that way.
+                trigger_context={"event_subject_player": player_index},
+            ))
         self._enqueue_triggered_batch(events)
 
     def resolve_draw_step(

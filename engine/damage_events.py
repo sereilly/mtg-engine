@@ -457,6 +457,23 @@ def _announce(game, event: dict, dealt: int) -> None:
         # recipient resolver already reads.
         "event_subject_controller": event.get("source_seat"),
     }
+    # "…this enchantment deals that much damage to **that creature**"
+    # (Mangara's Equity). The *damager itself*, not the damaged permanent
+    # `target_permanent_id` below names — two different objects, and the pair
+    # is why this key is its own: the effect behind a damage trigger can act on
+    # either end of the event.
+    #
+    # Frozen here (CR 603.10) and by id, because by resolution the creature may
+    # have been destroyed and an index is not an identity (CR 400.7). Under the
+    # key `handlers/damage.py`'s ``event_subject`` branch, `handlers/pump.py`
+    # and `handlers/destruction.py` already read — one spelling, so a fire site
+    # taught to freeze its subject reaches every reading of "that <noun>" at
+    # once. Only for a *permanent* source: a spell's source is its printed
+    # `CardDefinition` (CR 109.5) with no id, which is exactly the object the
+    # sentence cannot name.
+    subject_id = getattr(source, "permanent_id", None)
+    if subject_id is not None:
+        payload["event_subject_permanent_id"] = subject_id
     if isinstance(recipient, PlayerState):
         # The name every handler in this family already reads out of a trigger
         # context — Nafs Asp's draw-step obligation, Hypnotic Specter's discard.

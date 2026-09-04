@@ -21,7 +21,8 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, LAST_TARGET_CONTROLLER,
+from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
+                           LAST_TARGET_CONTROLLER,
                             REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
@@ -77,7 +78,25 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{drawer.name} drew {drawn} cards")
         return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
-    if drawer_seat is not None:
+    # "…**that player** draws an additional card" (Malignant Growth). A seat a
+    # trigger's fire site froze rather than one this resolution chose, named by
+    # the record it was frozen under — the same key `draw_up_to_cards` reads for
+    # the ceiling spelling of the same sentence. Read before ``context.target``,
+    # which for a trigger that chose nothing holds whatever the resolution was
+    # already carrying; a record nothing wrote is a seat this sentence never
+    # named, so nobody draws.
+    seat_record = instruction.payload.get("drawer_seat_record")
+    if seat_record is not None:
+        recorded = (context.results or {}).get(seat_record)
+        if recorded is None:
+            recorded = (context.trigger_context or {}).get(seat_record)
+        if recorded is None:
+            game.log.append(
+                f"{context.card.name}: nothing recorded which player that was"
+            )
+            return True, "resolved"
+        target = game.players[int(recorded)]
+    elif drawer_seat is not None:
         seat = context.iteration_seats.get(str(drawer_seat))
         if seat is None:
             game.log.append(
@@ -99,6 +118,14 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
         else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
     drawn = game._draw_with_replacements(target, count)
+    # "…then this enchantment deals damage to the player equal to **the number
+    # of cards they drew this way**." (Malignant Growth.) How many really
+    # arrived, which is the only place the sentence behind it can read the
+    # number from: a replacement may have stopped some (CR 614) and an empty
+    # library gives fewer than were asked for. Declared in
+    # ``lowering/_records._PRODUCES``, so a back-reference with no draw in front
+    # of it refuses rather than reading zero.
+    context.results[DREW_COUNT] = drawn
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"
 

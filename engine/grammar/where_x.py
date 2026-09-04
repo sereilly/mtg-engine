@@ -13,6 +13,7 @@ is for.
 """
 
 from . import ast
+from ..oracle_types import DREW_COUNT
 from .amounts import accept_counters_on_source
 from .records import accept_added_base, accept_damage_dealt_this_turn, accept_exiled_for_cost, accept_sacrificed_for_cost
 
@@ -432,4 +433,38 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
         raise stream.error("expected a 'this way' participle after 'they controlled'")
     if stream.accept_phrase("tapped", "this", "way"):
         return ast.CountOfTapsThisWay(filt)
+    # "…equal to the number of cards **they drew this way**." (Malignant
+    # Growth.) The third participle, and the one whose record is a plain number
+    # rather than a set - so it produces the ordinary back-reference
+    # :class:`ast.ThatMuch` every other "this way" *count* produces, and the
+    # producer gate in `_back_reference_payload` is what refuses it under a
+    # sentence with no draw in front of it.
+    #
+    # The noun is checked rather than assumed: a card counting anything but bare
+    # "cards" is asking the record a question it cannot answer - it holds how
+    # many arrived and not what they were - so "the number of creature cards
+    # they drew this way" refuses here instead of counting every card.
+    #
+    # The pronoun is consumed and not compared, which is where this differs from
+    # ``records._SEAT_PRONOUNS``: that table guards a *per-seat* record, where
+    # reading the wrong seat's answer is the failure. This record is one number
+    # written by the one draw the effect performed, so the seat is the step's
+    # and the pronoun only repeats it.
+    drew = stream.mark()
+    if stream.accept_word("they", "you") and stream.accept_phrase("drew", "this", "way"):
+        if filt.is_card and _names_only_cards(filt):
+            return ast.ThatMuch(DREW_COUNT)
+    stream.reset(drew)
     return None
+
+
+def _names_only_cards(filt) -> bool:
+    """Whether *filt* is the bare noun "cards" with nothing narrowing it.
+
+    Read off the dataclass rather than a hand-listed tuple, the way
+    ``_restrictions_beyond`` is: a restriction added to ``ObjectFilter`` after
+    this was written must make the phrase refuse, not slip through.
+    """
+    from .lowering._common import _restrictions_beyond
+
+    return not _restrictions_beyond(filt, frozenset({"is_card"}))

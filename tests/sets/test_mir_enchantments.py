@@ -1735,3 +1735,517 @@ def test_celestial_dawn_spends_white_for_anything_and_nothing_else(set_pool):
     assert game._pay_mana_cost(seat, cost(generic=2)) is True, (
         "colorless mana still pays generic"
     )
+
+
+# --- W4G4: an entry choice the sentence itself narrows (CR 614.1c) ---
+#
+# "As this enchantment enters, choose Island or Swamp." (Roots of Life) and
+# "...choose black or red." (Mangara's Equity) are the CR 614.1c choice the pool
+# already makes six ways, with the *offer* printed on the card instead of named
+# by a catalog. One reader for both, because the two printed words are what say
+# which record the answer lands in.
+#
+# The half of this that was already built is the half worth writing down: the
+# records (`chosen_color`, `chosen_land_type`), the phrases that read them back
+# ("of the chosen color", "of the chosen type"), the matcher resolvers and
+# `TESTABLE_SUBJECT_FILTER_KEYS` all existed. What did not was one entry in
+# `_PAYLOAD_HONOURED_FILTER_FIELDS` - so `subject_filter_payload` refused every
+# phrase carrying one, and Roots of Life's second sentence compiled to **no
+# trigger at all** while the card reported supported and `parse_coverage`
+# claimed the line.
+
+import pytest as _w4g4_pytest  # noqa: E402
+
+from engine import Game as _w4g4_Game, PlayerState as _w4g4_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w4g4_load,  # noqa: E402
+                                manifest_set_path as _w4g4_path)
+from engine.enter_effects import (  # noqa: E402
+    choose_one_of_two_on_enter as _w4g4_two_options,
+    enter_effect_line as _w4g4_entry_line,
+)
+from engine.grammar import subject_filter_payload as _w4g4_subject_payload  # noqa: E402
+from engine.models import Permanent as _w4g4_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w4g4_compile  # noqa: E402
+from engine.subject_filters import (  # noqa: E402
+    TESTABLE_SUBJECT_FILTER_KEYS as _w4g4_TESTABLE,
+)
+
+
+def _w4g4_basics():
+    return {card.name: card for card in _w4g4_load(_w4g4_path("LEA"))}
+
+
+def _w4g4_roots_board(pool, answer=None, opponent_lands=("Island", "Swamp")):
+    """Roots of Life on seat 0 and *opponent_lands* on seat 1, choice answered.
+
+    ``answer=None`` leaves the prompt standing, which is how the default is
+    read: the record is stamped as the permanent enters so a headless or AI
+    seat never blocks, and the prompt only overwrites it.
+    """
+    lea = _w4g4_basics()
+    roots = _w4g4_Permanent(card=pool["Roots of Life"])
+    lands = [_w4g4_Permanent(card=lea[name]) for name in opponent_lands]
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[roots]),
+        _w4g4_PlayerState(name="P2", battlefield=lands),
+    ])
+    game.enforce_mana_costs = False
+    # Interactive, so the choice is *queued* rather than defaulted away at the
+    # arming - a queued prompt is the only one anybody ever answers.
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(roots, 0, 1)
+    if answer is not None:
+        assert game.confirm_enter_choice(0, land_type=answer) is True
+    return game, roots, dict(zip(opponent_lands, lands))
+
+
+def test_w4g4_a_chosen_value_phrase_is_a_payload_the_trigger_table_can_read():
+    """The one-line gap, named directly.
+
+    All three "of the chosen ..." narrowings are in
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` - ``subject_matches`` resolves each off the
+    source and answers it - so a trigger condition delimiting one as a
+    ``_subject`` group must get a payload back rather than a refusal.
+    """
+    described = _w4g4_subject_payload("a land of the chosen type an opponent controls")
+
+    assert described == {
+        "type_filter": "land", "controller": "opponent", "chosen_land_type": True,
+    }
+    assert not set(described) - _w4g4_TESTABLE
+    assert _w4g4_subject_payload("a creature of the chosen color") == {
+        "type_filter": "creature", "chosen_color": True,
+    }
+
+
+def test_w4g4_roots_of_life_compiles_both_of_its_sentences(set_pool):
+    """The entry choice is claimed by the entry-state reader and the sentence
+    behind it is a real trigger - not a card supported on one line of two."""
+    card = set_pool("MIR")["Roots of Life"]
+    program = _w4g4_compile(card)
+
+    assert program.supported
+    assert _w4g4_entry_line(
+        "As this enchantment enters, choose Island or Swamp.", card.name
+    ) == "chooses one of two printed options as it enters"
+    conditions = [trig.condition for trig in program.triggered_abilities]
+    assert [c.kind for c in conditions] == ["permanent_becomes_tapped"]
+    assert conditions[0].payload == {
+        "tapped_filter": {
+            "type_filter": "land", "controller": "opponent", "chosen_land_type": True,
+        }
+    }
+
+
+def test_w4g4_the_entry_prompt_offers_exactly_the_two_printed_words(set_pool):
+    """CR 205.3i's catalog is not what bounds this answer - the sentence is."""
+    game, roots, _ = _w4g4_roots_board(set_pool("MIR"))
+    pending = game.pending_enter_choice
+
+    assert pending["needs_land_type"] is True
+    assert pending["entry_choice_options"] == ["island", "swamp"]
+    # Stamped before the prompt, so a seat that never answers still has a
+    # choice on record rather than an inert enchantment.
+    assert roots.metadata["chosen_land_type"] in ("island", "swamp")
+
+
+def test_w4g4_an_unprinted_land_type_is_refused_not_repaired(set_pool):
+    """A third type here is a strictly better card. Refused with the prompt
+    still standing, so the player can answer it properly."""
+    game, roots, _ = _w4g4_roots_board(set_pool("MIR"))
+
+    assert game.confirm_enter_choice(0, land_type="forest") is False
+    assert roots.metadata["chosen_land_type"] != "forest"
+    assert game.pending_enter_choice is not None
+
+
+@_w4g4_pytest.mark.parametrize("answer", ["island", "swamp"])
+def test_w4g4_the_trigger_follows_the_answer_either_way(set_pool, answer):
+    """Both answers, because a trigger that fires on either type passes a test
+    that only ever chose one."""
+    game, roots, lands = _w4g4_roots_board(set_pool("MIR"), answer=answer)
+    assert roots.metadata["chosen_land_type"] == answer
+
+    gains = {}
+    for name, land in lands.items():
+        before = game.players[0].life
+        game.become_tapped(land)
+        game.resolve_stack()
+        gains[name.lower()] = game.players[0].life - before
+
+    assert gains.pop(answer) == 1
+    assert set(gains.values()) == {0}
+
+
+def test_w4g4_a_permanent_that_has_not_chosen_gains_nothing(set_pool):
+    """The habit ``resolve_static_land_type_change`` records, kept here: an
+    entry choice that was never made must not behave as though every type had
+    been chosen. The matcher refuses on the unresolved key rather than dropping
+    it, which would gain life off every land an opponent taps."""
+    lea = _w4g4_basics()
+    roots = _w4g4_Permanent(card=set_pool("MIR")["Roots of Life"])
+    island = _w4g4_Permanent(card=lea["Island"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[roots]),
+        _w4g4_PlayerState(name="P2", battlefield=[island]),
+    ])
+    game.enforce_mana_costs = False
+    # No `_initialize_permanent_state`: the record is absent, which is what a
+    # permanent that arrived by a road with no entry state looks like.
+    assert "chosen_land_type" not in roots.metadata
+
+    game.become_tapped(island)
+    game.resolve_stack()
+
+    assert game.players[0].life == 20
+
+
+def test_w4g4_the_two_option_reader_needs_one_catalog_and_two_words():
+    """The printed words decide which record the answer lands in, so a pair
+    spanning two catalogs has no record to name and refuses."""
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose Island or Swamp."
+    ) == ("chosen_land_type", ("island", "swamp"))
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose black or red."
+    ) == ("chosen_color", ("B", "R"))
+    # A card nobody printed, in three flavours: mixed catalogs, a repeat (which
+    # is not a choice) and a sentence that says more than the offer.
+    assert _w4g4_two_options("As this enchantment enters, choose black or Swamp.") is None
+    assert _w4g4_two_options("As this enchantment enters, choose black or black.") is None
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose black or red, then draw a card."
+    ) is None
+
+
+# --- W4G4 (continued): a damage trigger narrowed on both ends ---
+#
+# "Whenever a creature of the chosen color deals damage to you or a white
+# creature you control, this enchantment deals that much damage to that
+# creature." (Mangara's Equity.) CR 120.4b's event with three printed
+# narrowings, every one of them a thing the pool already half-had:
+#
+#  * the **damager** goes through the noun parser like Justice's "a red
+#    creature", now that a chosen-value phrase is a payload it can return;
+#  * the **recipient** is a seat word *or* a noun phrase, which no single word
+#    in `_DAMAGE_RECIPIENT_TESTS` can say - so the seat stays a word and the
+#    object half is a `_subject` group. "you" being a strict prefix of "you
+#    or ..." is what took the whole condition down before: the fixed list
+#    matched the seat and then failed the comma bound;
+#  * "**that much**" is the damage *dealt* (CR 120.4b), which is what a shield
+#    reduces and what a life-total cap does not.
+#
+# And "that creature" names the damager. It lowers to the `event_subject`
+# recipient the bare pronoun "it" already used - two spellings of one
+# back-reference - which needed `damage_events._announce` to freeze the
+# damager's id beside the damaged permanent's. The two are opposite ends of one
+# event, and only one of them had a key.
+
+from engine.handlers._common import (  # noqa: E402
+    apply_damage_to_creature as _w4g4_damage_creature,
+)
+from engine.shields import (Shield as _w4g4_Shield,  # noqa: E402
+                            add_shield as _w4g4_add_shield,
+                            PREVENT_NEXT_N as _w4g4_PREVENT_N)
+from tests.helpers import _mk_card as _w4g4_mk  # noqa: E402
+
+
+def _w4g4_body(name, colour, power=3):
+    return _w4g4_mk(
+        name, "Creature - Ogre", "", power=power, toughness=power, colors=(colour,)
+    )
+
+
+def _w4g4_equity_board(pool, answer):
+    """Mangara's Equity with the colour answered, a white and a green creature
+    under it, and a black and a red creature opposite."""
+    equity = _w4g4_Permanent(card=pool["Mangara's Equity"])
+    mine = {
+        "white": _w4g4_Permanent(card=_w4g4_body("White Bear", "W", power=2)),
+        "green": _w4g4_Permanent(card=_w4g4_body("Green Bear", "G", power=2)),
+    }
+    theirs = {
+        "black": _w4g4_Permanent(card=_w4g4_body("Black Ogre", "B")),
+        "red": _w4g4_Permanent(card=_w4g4_body("Red Ogre", "R")),
+    }
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity, *mine.values()]),
+        _w4g4_PlayerState(name="P2", battlefield=list(theirs.values())),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(equity, 0, 1)
+    assert game.confirm_enter_choice(0, mana_color=answer) is True
+    assert equity.metadata["chosen_color"] == answer
+    return game, equity, mine, theirs
+
+
+def _w4g4_hit(game, damager, victim):
+    """*damager* deals 3 to *victim*, and the trigger behind it resolves."""
+    if isinstance(victim, _w4g4_PlayerState):
+        game._deal_damage_to_player(victim, 3, source=damager)
+    else:
+        _w4g4_damage_creature(game, victim, 3, damager)
+    game.resolve_stack()
+    return damager.damage_marked
+
+
+def test_w4g4_mangaras_equity_compiles_its_third_sentence(set_pool):
+    """Both ends of the condition and the effect between them."""
+    program = _w4g4_compile(set_pool("MIR")["Mangara's Equity"])
+    assert program.supported
+
+    trig = next(
+        t for t in program.triggered_abilities if t.condition.kind == "damage_dealt"
+    )
+    assert trig.condition.payload == {
+        "damage_recipient_seat": "you",
+        "damager_filter": {"type_filter": "creature", "chosen_color": True},
+        "damaged_filter": {
+            "type_filter": "creature", "color_filter": "W", "controller": "you",
+        },
+    }
+    assert trig.instruction.kind == "deal_damage"
+    assert trig.instruction.payload == {
+        "amount_from_trigger": "amount",
+        "recipient": "event_subject",
+        "filter": {"type_filter": "creature"},
+    }
+
+
+@_w4g4_pytest.mark.parametrize("answer", ["B", "R"])
+def test_w4g4_the_damager_must_be_the_chosen_colour(set_pool, answer):
+    """Both answers, because a trigger that fires on either colour passes a
+    test that only ever chose one."""
+    other = "R" if answer == "B" else "B"
+    names = {"B": "black", "R": "red"}
+
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), answer)
+    assert _w4g4_hit(game, theirs[names[answer]], game.players[0]) == 3
+
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), answer)
+    assert _w4g4_hit(game, theirs[names[other]], game.players[0]) == 0
+
+
+def test_w4g4_the_recipient_is_a_seat_or_a_noun_phrase_and_nothing_else(set_pool):
+    """"you **or** a white creature you control" is one recipient described two
+    ways, so whichever the event's recipient *is* decides which half answers.
+    The green creature and the opponent are the two halves' misses."""
+    pool = set_pool("MIR")
+
+    game, _, mine, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], mine["white"]) == 3
+
+    game, _, mine, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], mine["green"]) == 0
+
+    game, _, _, theirs = _w4g4_equity_board(pool, "B")
+    assert _w4g4_hit(game, theirs["black"], game.players[1]) == 0
+
+
+def test_w4g4_that_much_is_the_damage_dealt_not_the_power(set_pool):
+    """CR 120.4b's number. A shield over the recipient reduces what was dealt,
+    and the reflection is that — a read of the creature's power would send
+    three back through a shield that let two through."""
+    game, _, _, theirs = _w4g4_equity_board(set_pool("MIR"), "B")
+    _w4g4_add_shield(
+        game.players[0],
+        _w4g4_Shield(kind=_w4g4_PREVENT_N, amount=1, uses=None, source_name="probe"),
+    )
+
+    reflected = _w4g4_hit(game, theirs["black"], game.players[0])
+
+    assert game.players[0].life == 18
+    assert reflected == 2
+
+
+def test_w4g4_an_unprinted_colour_is_refused_not_repaired(set_pool):
+    """White is a legal answer to "choose a color" and is not one here."""
+    equity = _w4g4_Permanent(card=set_pool("MIR")["Mangara's Equity"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity]),
+        _w4g4_PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(equity, 0, 1)
+
+    assert game.pending_enter_choice["entry_choice_options"] == ["B", "R"]
+    assert game.confirm_enter_choice(0, mana_color="W") is False
+    assert equity.metadata["chosen_color"] in ("B", "R")
+    # A board answering neither option falls to the first printed word rather
+    # than to an alphabetical accident.
+    assert equity.metadata["chosen_color"] == "B"
+
+
+def test_w4g4_the_default_is_the_option_the_opponents_answer_most(set_pool):
+    """idiom 8: an option nobody's board answers makes the enchantment inert,
+    which is legal and is not a choice any player would make."""
+    equity = _w4g4_Permanent(card=set_pool("MIR")["Mangara's Equity"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[equity]),
+        _w4g4_PlayerState(name="P2", battlefield=[
+            _w4g4_Permanent(card=_w4g4_body("Red Ogre", "R")),
+            _w4g4_Permanent(card=_w4g4_body("Other Red Ogre", "R")),
+            _w4g4_Permanent(card=_w4g4_body("Black Ogre", "B")),
+        ]),
+    ])
+    game.enforce_mana_costs = False
+    game._initialize_permanent_state(equity, 0, 1)
+
+    assert equity.metadata["chosen_color"] == "R"
+
+
+# --- W4G4 (continued): two effects in one draw-step trigger ---
+#
+# "At the beginning of each opponent's draw step, that player draws an
+# additional card for each growth counter on this enchantment, then this
+# enchantment deals damage to the player equal to the number of cards they drew
+# this way." (Malignant Growth.)
+#
+# Three pieces, none of them fused into a kind:
+#
+#  * the **scope** is payload on `draw_step_each`, exactly as `upkeep_scope` is
+#    one step of the turn earlier - a condition kind is a dispatcher's address,
+#    and spelling the subject into it gives one card its own fire site;
+#  * the **count** is `for each <word> counter on <the source>`, read through
+#    the same `accept_counters_on_source` the where-clause spelling of the
+#    identical phrase already goes through, so the two word orders count the
+#    same thing;
+#  * the two halves compose through `sequence`, and the second reads what the
+#    first *did* - the number that arrived, not the number asked for.
+#
+# And "that player" is the seat the fire site froze. Left to `context.target` a
+# trigger that chooses nothing carries whatever the resolution was holding,
+# which here is the enchantment's own controller: the card would have drawn its
+# controller the cards and dealt its controller the damage.
+
+from engine.named_counters import add_counters as _w4g4_add_counters  # noqa: E402
+
+
+def _w4g4_growth_board(pool, counters, library=40):
+    """Malignant Growth on seat 0 with *counters* growth counters."""
+    lea = _w4g4_basics()
+    growth = _w4g4_Permanent(card=pool["Malignant Growth"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[growth],
+                          library=[lea["Island"]] * 40),
+        _w4g4_PlayerState(name="P2", library=[lea["Forest"]] * library),
+    ])
+    game.enforce_mana_costs = False
+    if counters:
+        _w4g4_add_counters(growth, "growth", counters)
+    return game, growth
+
+
+def _w4g4_draw_step(game, seat):
+    """Run *seat*'s draw-step trigger batch and report what it did to them."""
+    player = game.players[seat]
+    before = (len(player.hand), player.life, len(player.library))
+    game._enqueue_draw_step_triggers(seat)
+    game.resolve_stack()
+    return (
+        len(player.hand) - before[0],
+        before[1] - player.life,
+        before[2] - len(player.library),
+    )
+
+
+def test_w4g4_malignant_growth_compiles_its_third_sentence(set_pool):
+    """Two instructions in a sequence, not one fused kind - and the second
+    reads the first's record rather than recomputing the count."""
+    program = _w4g4_compile(set_pool("MIR")["Malignant Growth"])
+    assert program.supported
+
+    trig = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "draw_step_each"
+    )
+    assert trig.condition.payload == {"draw_step_scope": "opponent"}
+    assert trig.instruction.kind == "sequence"
+    draw, damage = trig.instruction.payload["steps"]
+    assert draw.kind == "draw_target_cards"
+    assert draw.payload == {
+        "amount": "x",
+        "x_from_count": {"source_counters": "growth"},
+        "drawer_seat_record": "event_subject_player",
+    }
+    assert damage.kind == "deal_damage"
+    assert damage.payload == {
+        "amount_from": "drew_count", "recipient": "event_subject_player",
+    }
+
+
+@_w4g4_pytest.mark.parametrize("counters", [0, 1, 2, 3])
+def test_w4g4_the_draw_and_the_damage_both_follow_the_counter_count(set_pool, counters):
+    """A different count each turn, because a trigger sized from one number
+    passes a test that only ever put one counter on it."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), counters)
+
+    drawn, damage, milled = _w4g4_draw_step(game, 1)
+
+    assert (drawn, damage, milled) == (counters, counters, counters)
+
+
+def test_w4g4_the_controllers_own_draw_step_is_not_an_opponents(set_pool):
+    """"each **opponent's** draw step" — whose opponents is CR 109.5's answer,
+    the source's controller, so the card's own draw step is not one of them."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 3)
+
+    assert _w4g4_draw_step(game, 0) == (0, 0, 0)
+
+
+def test_w4g4_the_damage_is_what_was_drawn_not_what_was_asked_for(set_pool):
+    """"the number of cards they drew **this way**" is a record of the step in
+    front of it. Three counters over a two-card library draw two, so two is the
+    damage — a recomputation of the counters would deal three."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 3, library=2)
+
+    drawn, damage, _ = _w4g4_draw_step(game, 1)
+
+    assert (drawn, damage) == (2, 2)
+
+
+def test_w4g4_the_cards_and_the_damage_go_to_the_opponent(set_pool):
+    """The seat the fire site froze, not the one the resolution was carrying:
+    read as ``context.target`` this trigger drew for its own controller."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 2)
+    controller = game.players[0]
+    before = (len(controller.hand), controller.life)
+
+    _w4g4_draw_step(game, 1)
+
+    assert (len(controller.hand), controller.life) == before
+    assert len(game.players[1].hand) == 2
+    assert game.players[1].life == 18
+
+
+def test_w4g4_a_drew_this_way_count_needs_a_draw_in_front_of_it():
+    """idiom 7: a back-reference with no producer names nothing, and a zero is a
+    number the card never printed. The words parse either way; what refuses is
+    the lowering, which is where the producer is known."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "This enchantment deals damage to that player equal to the number of "
+        "cards they drew this way."
+    )
+    with _w4g4_pytest.raises(LoweringError):
+        lower_ability(node, event="draw_step_each")
+
+
+def test_w4g4_the_drew_this_way_count_names_bare_cards_and_nothing_narrower():
+    """The record holds how many arrived, not what they were — so a phrase
+    asking it a question about the cards refuses rather than counting all of
+    them."""
+    from engine.grammar.errors import GrammarError
+    from engine.grammar import parse_line
+
+    with _w4g4_pytest.raises(GrammarError):
+        parse_line(
+            "That player draws two cards, then this enchantment deals damage "
+            "to that player equal to the number of creature cards they drew "
+            "this way."
+        )

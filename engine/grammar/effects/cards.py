@@ -17,6 +17,7 @@ from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
 from ..records import accept_as_many_as
 
+from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
@@ -79,17 +80,35 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
 
 
 def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
-    """``for each color among <objects>`` after a draw, or None.
+    """``for each color among <objects>`` / ``for each <word> counter on <the
+    source>`` after a draw, or None.
 
-    One aggregate today, and the words are what name it — the same way the
+    Two quantities, and the words are what name each — the same way the
     where-clause tells "the number of" from "the greatest power among". A "for
-    each <objects>" with no aggregate word is a plain count and is *not* claimed
-    here: the ordinary noun-phrase reading of it belongs to whatever production
-    already handles a per-each, and adding a second reader is how the two come
-    to disagree.
+    each <objects>" with neither an aggregate word nor a counter is a plain
+    count and is *not* claimed here: the ordinary noun-phrase reading of it
+    belongs to whatever production already handles a per-each, and adding a
+    second reader is how the two come to disagree.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("for", "each", "color", "among"):
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    # "…draws an additional card **for each growth counter on this
+    # enchantment**." (Malignant Growth.) A count of the ability's own source
+    # rather than of a set of objects, read through the same
+    # `accept_counters_on_source` both spellings of "the number of <word>
+    # counters on <the source>" already go through — so the counter word is
+    # payload the whole way down and a card printing any other kind needs
+    # nothing here.
+    #
+    # Before the colour aggregate below because the two cannot collide (a
+    # counter word is not "color among"), and first because it is the reading
+    # a bare word takes: the aggregate spells itself out.
+    counters = accept_counters_on_source(stream)
+    if counters is not None:
+        return counters
+    if not stream.accept_phrase("color", "among"):
         stream.reset(mark)
         return None
     try:

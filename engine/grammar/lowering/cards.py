@@ -553,6 +553,17 @@ def _lower_draw(
         payload: dict[str, object] = {
             "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
         }
+    elif isinstance(node.count, ast.CountersOnSource):
+        # "…draws an additional card **for each growth counter on this
+        # enchantment**." (Malignant Growth.) A number on the ability's own
+        # source, which only a resolution knows — so it travels as the same
+        # ``x_from_count`` spec the where-clause spelling of the identical phrase
+        # produces (`where_x._lower_where_x_counters`), resolved at the one
+        # substitution point. One evaluator, so the two printed word orders
+        # cannot count differently.
+        payload: dict[str, object] = {
+            "amount": "x", X_FROM_COUNT: {"source_counters": node.count.kind},
+        }
     elif isinstance(node.count, ast.ThatMuch):
         # "Target player discards two cards, then draws **as many cards as they
         # discarded this way**." (Forget.) The number is one an earlier step of
@@ -569,6 +580,15 @@ def _lower_draw(
         payload["drawer_seat"] = drawer_seat
     if looped_seats is not None:
         payload["recipient"] = looped_seats
+    if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        # "At the beginning of each opponent's draw step, **that player** draws
+        # an additional card." (Malignant Growth.) The seat the fire site froze
+        # (CR 603.10) — the reading `_lower_mill` takes of the same two words
+        # below, off the record `draw_up_to_cards` already reads for the ceiling
+        # spelling. Without it the draw fell through to ``context.target``, which
+        # for a trigger that chose nothing is whatever the resolution held: this
+        # card would have drawn its own controller the cards.
+        payload["drawer_seat_record"] = EVENT_SUBJECT_PLAYER
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

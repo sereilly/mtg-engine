@@ -14,6 +14,9 @@ from ..enter_effects import (
     chooses_two_land_types_on_enter,
     chooses_creature_type_on_enter,
     chooses_land_type_on_enter,
+    choose_one_of_two_on_enter,
+    CHOSEN_COLOR_KEY,
+    CHOSEN_LAND_TYPE_KEY,
     chooses_two_card_names_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     chooses_opponent_on_enter,
@@ -511,6 +514,62 @@ class PermanentStateMixin:
                 needs_color=False, opponents=[], default_seat=None,
                 default_color=None, needs_land_type=True,
                 default_land_type=permanent.metadata["chosen_land_type"],
+            )
+
+        # "As this enchantment enters, choose **black or red**." (Mangara's
+        # Equity) / "…choose **Island or Swamp**." (Roots of Life.) The same
+        # two choices the branches above make, with the *sentence* naming what
+        # may be chosen instead of a catalog — so it writes the same two
+        # records ("chosen_color", "chosen_land_type") and arms the same two
+        # prompt shapes, narrowed by an options list.
+        #
+        # Narrowed rather than a seventh shape, because the offer is the whole
+        # of the difference: a picker showing five colours where the card
+        # prints two is a strictly better card, and the resolver refusing an
+        # unprinted answer is what makes the picker's list true (idiom 9).
+        #
+        # Asked after the catalog-named readers above, which it does not
+        # collide with — "choose a color" and "choose black or red" share no
+        # cursor — so the position is documentation rather than precedence.
+        # Whole-line rather than the substring probes above, and read through
+        # ``expand_card_lines`` for the reason every other reader of a card's
+        # lines starts there: the pattern is anchored on the end of its
+        # sentence, so what may be chosen cannot be read off a line that says
+        # more.
+        two_options = next(
+            (
+                found
+                for line in expand_card_lines(permanent.effective_card)
+                for found in (choose_one_of_two_on_enter(line, permanent.card.name),)
+                if found is not None
+            ),
+            None,
+        )
+        if two_options is not None:
+            record_key, options = two_options
+            default = self._default_entry_choice_option(
+                caster_index, record_key, options
+            )
+            permanent.metadata[record_key] = default
+            # A static may read either record ("permanents of the chosen
+            # color", "each land of the chosen type"), and the record did not
+            # exist when the entry recalculation ran — so recompute, exactly as
+            # the colour and land-type branches above do.
+            self._recalculate_lord_buffs()
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=record_key == CHOSEN_COLOR_KEY,
+                opponents=[], default_seat=None,
+                default_color=default if record_key == CHOSEN_COLOR_KEY else None,
+                needs_land_type=record_key == CHOSEN_LAND_TYPE_KEY,
+                default_land_type=(
+                    default if record_key == CHOSEN_LAND_TYPE_KEY else None
+                ),
+                # The list the picker offers and the resolver checks against —
+                # one field, read by both, so they cannot come to disagree
+                # about what the sentence printed.
+                entry_choice_options=list(options),
             )
 
         # "As this enchantment enters, **you and an opponent each** choose a
@@ -2025,6 +2084,53 @@ class PermanentStateMixin:
         """
         offered = self._nameable_cards(chooser_index, exclude=exclude)
         return offered[0] if offered else ""
+
+    def _default_entry_choice_option(
+        self, caster_index: int, record_key: str, options: "tuple[str, ...]"
+    ) -> str:
+        """The option a permanent takes when its sentence printed exactly two
+        and nobody chose (Mangara's Equity, Roots of Life).
+
+        One policy for both records, because there is one question: the option
+        *caster_index*'s **opponents** answer most often. That is the stated
+        default for a choice nothing else constrains (idiom 8) and the same
+        reasoning `_default_chosen_land_type` and the colour branch above give
+        — an option nobody's board answers makes the permanent inert, which is
+        legal and is not a choice any player would make.
+
+        A tie, or a board that answers neither, falls to the **first printed**
+        option. That is a word the card itself names rather than an
+        alphabetical accident, and the two are equally good by construction:
+        nothing distinguished them.
+
+        Colours are read through ``_effective_colors`` and types through
+        ``computed_types`` (CR 613), which are the reads ``subject_matches``
+        will make when the record is spent — a default counted off the printed
+        line would pick the option a Magical Hack had already moved.
+        """
+        from ..layer_bridge import computed_types
+
+        counts = {option: 0 for option in options}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                if record_key == CHOSEN_COLOR_KEY:
+                    answered = self._effective_colors(perm)
+                else:
+                    card_types, subtypes = computed_types(perm)
+                    answered = subtypes if "land" in card_types else ()
+                for option in options:
+                    if option in answered:
+                        counts[option] += 1
+        best = max(counts.values())
+        # ``options`` order, not ``max`` over a dict: the first printed option
+        # is the tie-break, and iterating the counts would make it whichever
+        # word happened to be inserted first.
+        for option in options:
+            if counts[option] == best:
+                return option
+        return options[0]
 
     def _default_chosen_land_type(self, caster_index: int) -> str:
         """The land type Shimmer takes when nobody chooses.

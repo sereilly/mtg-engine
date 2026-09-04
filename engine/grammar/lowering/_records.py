@@ -30,6 +30,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
+                             DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
@@ -198,6 +199,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # ``DISCARDED_BY_SEAT``'s reason: a shortfall is one answer per player, and
     # one key would let the last seat to answer decide everybody's life gain.
     "each_player_draws_up_to_cards": DREW_BY_SEAT,
+    # "That player draws an additional card for each growth counter on this
+    # enchantment, **then** this enchantment deals damage to the player equal to
+    # **the number of cards they drew this way**." (Malignant Growth.) How many
+    # really arrived, which is the only place the second half can read the
+    # number from: the count the first half asked for is not the count a
+    # replacement or an empty library let through.
+    "draw_target_cards": DREW_COUNT,
     # "Target player discards two cards, **then draws as many cards as they
     # discarded this way**." (Forget.) The chosen-discard prompt is the same
     # one ``discard_controller_cards`` arms, so it records the same key — what

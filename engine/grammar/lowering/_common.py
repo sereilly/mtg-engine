@@ -147,6 +147,31 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # second card prints ownership *without* control, and under that pairing
     # its narrowing was dropped rather than refused.
     "owner",
+    # "a creature **of the chosen color**" (Mangara's Equity) / "a land **of
+    # the chosen type**" (Roots of Life) / "creatures of the chosen type"
+    # (An-Zerrin Ruins). CR 614.1c's entry choice, recorded on the source and
+    # resolved into an ordinary colour or subtype key by
+    # ``handlers/_common._resolve_chosen_color`` / ``_resolve_chosen_subtype``
+    # before any matcher is asked - so all three are honoured in exactly the
+    # sense ``colors`` and ``subtypes`` above are, and all three are already in
+    # ``TESTABLE_SUBJECT_FILTER_KEYS`` because ``subject_matches`` answers them.
+    #
+    # Left out, every lowering asking ``_restrictions_beyond`` refused a phrase
+    # the payload carries perfectly well - the same **false refusal**
+    # ``owner``, ``any_classes``, ``token_only`` and ``subtype_match`` above
+    # were each added to end. It cost Roots of Life its whole second sentence:
+    # the trigger condition's ``_subject`` group is read through
+    # ``subject_filter_payload``, which refused here, so "whenever a land of the
+    # chosen type an opponent controls becomes tapped" compiled to **no trigger
+    # at all** - while the card still reported supported on the life gain
+    # behind it and `parse_coverage` still claimed the line.
+    #
+    # A caller with no source leaves the key in place and
+    # ``permanent_matches_filter`` refuses every permanent, which is the
+    # direction that cannot widen an effect; a caller naming *cards* is refused
+    # outright by ``card_only_filter``, since none of the three is in
+    # ``CARD_ONLY_FILTER_KEYS``.
+    "chosen_color", "chosen_creature_type", "chosen_land_type",
 })
 
 

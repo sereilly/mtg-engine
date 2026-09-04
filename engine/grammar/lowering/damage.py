@@ -504,6 +504,29 @@ def _lower_damage_shape(
         # would fall through to whatever the resolution context was carrying.
         # The same gate `destroy_bound_permanent` makes of the same quantifier
         # one family over, refusing with the same sentence.
+        if event in _EVENT_SUBJECT_OBJECTS:
+            # "…this enchantment deals that much damage to **that creature**"
+            # (Mangara's Equity), under an ordinary trigger rather than a
+            # delayed one. "That creature" and the bare "it" one branch down
+            # name the same object — the thing the condition was about — so
+            # they lower to the same recipient and re-check the same narrowing.
+            # Two spellings, one reading; the branches differ only in which
+            # word the card printed.
+            #
+            # Read before the delayed-object gate below because the two sets are
+            # disjoint by construction: a delayed ability's object was chosen by
+            # its *opener*, and an ordinary trigger's is the event's own
+            # subject. An event in neither still refuses, which is the point.
+            described = _filter_payload(recipient.filter)
+            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                raise LoweringError(
+                    "the event-subject damage cannot test this restriction",
+                    node=node,
+                )
+            payload["recipient"] = "event_subject"
+            if described:
+                payload["filter"] = described
+            return (OracleInstruction("deal_damage", "", payload),)
         if event not in _BOUND_OBJECT_DELAYED_EVENTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event "

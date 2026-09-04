@@ -211,6 +211,12 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # is game-wide and per object, and by resolution the creature may have been
     # removed from combat or destroyed.
     "matching_creature_attacks",
+    # "Whenever a creature of the chosen color deals damage to you …, this
+    # enchantment deals that much damage to **that creature**." (Mangara's
+    # Equity.) CR 120.4b's event, whose one seam (`damage_events._announce`)
+    # freezes the damager's id — the object the words name, which is the *other*
+    # end of the event from the permanent it damaged.
+    "damage_dealt",
 })
 
 
@@ -292,6 +298,12 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # three-player game is not "the opponent" — so it is frozen by the draw
     # sweep that announces it rather than re-derived at resolution.
     "draws_card",
+    # "At the beginning of each opponent's draw step, **that player** draws an
+    # additional card …" (Malignant Growth). The seat whose draw step it is,
+    # frozen by `phases/draw_step.py`'s enqueue — which seat varies per firing,
+    # exactly as `upkeep_each`'s does, so it cannot be re-derived at resolution
+    # from the source's controller.
+    "draw_step_each",
     # "Whenever an opponent casts an instant spell …, this creature deals 4
     # damage to **that player**" (Ichneumon Druid). The condition names one
     # seat — whoever cast the spell — and nothing chose it, so it is the seat

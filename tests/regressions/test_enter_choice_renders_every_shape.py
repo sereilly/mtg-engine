@@ -44,6 +44,13 @@ _SHAPES = [
     ("An-Zerrin Ruins", "a creature type"),
     ("Illusionary Terrain", "two basic land types"),
     ("Shimmer", "a land type"),
+    # The two shapes whose *offer* the sentence prints rather than a catalog
+    # (W4G4). They reuse the colour and land-type armings with an options list,
+    # so what this guard is checking is that the narrowed arming still renders
+    # — a list on one arming and not the others is exactly the shape that broke
+    # Runed Halo.
+    ("Mangara's Equity", "one of two printed colours"),
+    ("Roots of Life", "one of two printed land types"),
 ]
 
 

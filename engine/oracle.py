@@ -351,8 +351,27 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"|(?P<damager_subject>[^,]+?)(?P<damager_includes_spells> or spell)?"
      r")"
      r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
-     r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
-     r"|an opponent|a planeswalker|you))?(?=,|$)"),
+     r"(?: to (?:"
+     # "…deals damage to **you or a white creature you control**" (Mangara's
+     # Equity). A recipient that is a seat *or* a permanent, which no single
+     # word in the list below can say: the fixed words all name a player or a
+     # planeswalker, and this sentence names a player and an arbitrary noun
+     # phrase. So the seat word stays a word and the object half is delimited
+     # as a `_subject` group, read by the same noun parser every other narrowed
+     # condition in this table goes through — a card printing "to you or a
+     # creature you control" or "to an opponent or a permanent they control"
+     # is the same trigger with different payload.
+     #
+     # First, and the ordering is this table's usual rule: "you" is a strict
+     # prefix of "you or …", so the fixed list below would claim the seat word
+     # and then fail the comma bound, taking the whole condition down with it.
+     # That is exactly what it did — Mangara's Equity's third sentence compiled
+     # to nothing at all.
+     r"(?P<damage_recipient_seat>you|an opponent) or"
+     r" (?P<damaged_subject>an? [^,]+)"
+     r"|(?P<damage_recipient>a player or planeswalker|a player"
+     r"|an opponent|a planeswalker|you)"
+     r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a
     # creature" (Aisling Leprechaun). One printed sentence joining the two
@@ -1187,7 +1206,14 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # (neither is a prefix of the other), but it is listed first to match the
     # upkeep pair's order.
     ("draw_step_self",      r"at the beginning of your draw step"),
-    ("draw_step_each",      r"at the beginning of each player's draw step"),
+    # "each **opponent's** draw step" (Malignant Growth) beside "each
+    # player's". One event asked of a narrower set of seats, so the narrowing
+    # is *payload* and not a second kind — the same shape `upkeep_scope` above
+    # takes, and for its reason (idiom 19): a condition kind is a dispatcher's
+    # address, and spelling the subject into it gives one card its own fire
+    # site. `phases/draw_step.py` reads `draw_step_scope` to decide whether this
+    # firing is one the card names.
+    ("draw_step_each",      r"at the beginning of each (?:(?P<draw_step_scope>opponent|player)'s )?draw step"),
     # "At the beginning of your first main phase" (the M21 Shrine cycle) —
     # CR 505.1a's precombat main phase, which is the only one that is "first".
     # Both printed spellings, because the modern templating says "precombat".
