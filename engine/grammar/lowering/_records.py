@@ -225,6 +225,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # which is the only place the sentence behind it can read the number: by
     # then the store holds zero, so a read of the board would deal none.
     "remove_all_counters_from_target_player": COUNTERS_REMOVED,
+    # "…remove all charge counters from it. **Add {C} for each charge counter
+    # removed this way.**" (Ventifact Bottle.) The same record one object
+    # over: that row empties a *player's* store and this one a permanent's,
+    # and the sentence behind either asks the same question about the number.
+    "remove_all_counters_from_self": COUNTERS_REMOVED,
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.

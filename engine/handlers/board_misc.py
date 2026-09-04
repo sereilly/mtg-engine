@@ -8,7 +8,7 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import (CHOSEN_TARGET_PERMANENTS,
+from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
@@ -1334,7 +1334,14 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     if source is None:
         return True, "resolved"
     counter = str(instruction.payload.get("counter", ""))
-    count = int(instruction.payload.get("count", 1))
+    # "Put **X** charge counters on this artifact." (Ventifact Bottle.) The
+    # cast's announced X, resolved through the same reader every other
+    # amount in this engine uses — a printed number passes through it
+    # unchanged, so every payload written before this is untouched.
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if count <= 0:
+        # X may be announced as zero, which CR 122.1 places no counters for.
+        return True, "resolved"
     total = add_counters(source, counter, count)
     game.log.append(
         f"{source.card.name} gets a {counter} counter ({total} total)"
@@ -1664,9 +1671,19 @@ def remove_all_counters_from_self(game: Game, instruction: OracleInstruction, co
     held = counters_on(permanent, counter)
     if held <= 0:
         context.results["removed_counter"] = False
+        # Zero is a real answer, and it has to be *written*: "add {C} for
+        # each charge counter removed this way" over an empty artifact adds
+        # nothing, and a missing record and a recorded zero must not be told
+        # apart by the sentence behind this one.
+        context.results[COUNTERS_REMOVED] = 0
         game.log.append(f"{permanent.card.name} has no {counter} counters to remove")
         return True, "resolved"
     context.results["removed_counter"] = True
+    # "…remove all charge counters from it. **Add {C} for each charge counter
+    # removed this way.**" (Ventifact Bottle.) How many came off, for the
+    # sentence behind this one: by the time it runs the counters are gone, so
+    # counting the artifact would be the exact complement of what it asks.
+    context.results[COUNTERS_REMOVED] = held
     remove_counters(permanent, counter, held)
     game.log.append(
         f"Removed all {held} {counter} counters from {permanent.card.name}"

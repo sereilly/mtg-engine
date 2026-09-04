@@ -732,6 +732,28 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # a pre-modern printing ("if Fasting has …") reaches the same branch.
     threshold_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_word("has"):
+        # "if this artifact has **a** charge counter on it" (Ventifact
+        # Bottle). The article is English's way of printing "one or more":
+        # the clause is a *presence* test, and a card that had exactly one
+        # counter and a card that had five both satisfy it. Read here rather
+        # than as a number word, because "a" as a count would mean exactly
+        # one — the tighter reading, and the one that would stop the Bottle
+        # emptying after its second activation.
+        article = stream.mark()
+        if stream.accept_word("a", "an"):
+            counter_word = stream.peek_word()
+            if counter_word is not None and counter_word not in (
+                "counter", "counters"
+            ):
+                stream.advance()
+                if (
+                    stream.accept_word("counter", "counters")
+                    and stream.accept_phrase("on", "it")
+                ):
+                    return ast.SourceCounterCount(
+                        counter_word, 1, comparison="at_least"
+                    )
+            stream.reset(article)
         word = stream.peek_word()
         if word is not None and word in NUMBER_WORDS:
             stream.advance()

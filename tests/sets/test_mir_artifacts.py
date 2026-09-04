@@ -135,3 +135,94 @@ def test_razor_pendulum_reads_a_life_total(set_pool):
     game.resolve_end_step(1)
     game.resolve_stack()
     assert game.players[1].life == 6
+
+
+# --- W1G2: an X of a named counter, and the mana it becomes a turn later ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.named_counters import counters_on
+from engine.oracle import compile_card_oracle
+
+
+def _w1g2_bottle(set_pool):
+    bottle = Permanent(card=set_pool("MIR")["Ventifact Bottle"])
+    bottle.metadata["summoning_sickness_turn"] = -99
+    filler = set_pool("MIR")["Femeref Scouts"]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bottle], library=[filler] * 20, life=20),
+        PlayerState(name="P2", library=[filler] * 20, life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    # The activation is sorcery-speed (CR 601.3d), so the game has to be in a
+    # main phase with an empty stack before it will be accepted.
+    game._enter_main_phase(precombat=True)
+    game.resolve_stack()
+    return game, bottle
+
+
+def test_ventifact_bottle_stores_x_charge_counters(set_pool):
+    """"{X}{1}, {T}: Put **X** charge counters on this artifact. Activate only
+    as a sorcery."
+
+    The named-counter placement admitted a *fixed* number only — the P/T branch
+    beside it had learned the cast's announced X and this one had not, so the
+    whole card refused on a value the handler was already able to resolve.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Ventifact Bottle"])
+    assert program.supported, program.reason
+
+    game, bottle = _w1g2_bottle(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Ventifact Bottle", permanent_index=0, x_value=3
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert counters_on(bottle, "charge") == 3, game.log
+
+
+def test_ventifact_bottle_pays_out_at_the_next_first_main_phase(set_pool):
+    """"At the beginning of your first main phase, **if this artifact has a
+    charge counter on it**, tap it and remove all charge counters from it. Add
+    {C} for each charge counter removed this way."
+
+    Two more halves. The intervening-if knew "one or more" and not the article
+    that means the same thing — a presence test, where reading "a" as a count
+    would have meant *exactly* one and emptied the Bottle after its second
+    activation. And "for each charge counter removed **this way**" had one
+    producer, the Mana Batteries' *cost* payment; here the removal is an effect
+    two instructions earlier, so the number is in this resolution's scratchpad
+    and the lowering is what chooses between the two.
+    """
+    game, bottle = _w1g2_bottle(set_pool)
+    game.activate_permanent_ability(
+        0, "Ventifact Bottle", permanent_index=0, x_value=3
+    )
+    game.resolve_stack()
+
+    game.start_next_turn()          # the opponent's turn
+    game.start_next_turn()          # back to the Bottle's controller
+    game._enter_main_phase(precombat=True)
+    game.resolve_stack()
+
+    assert counters_on(bottle, "charge") == 0, game.log
+    assert bottle.tapped, game.log
+    assert game.players[0].mana_pool["C"] == 3, game.log
+
+
+def test_an_empty_ventifact_bottle_does_nothing(set_pool):
+    """CR 603.4: the intervening-if is checked as the trigger would go on the
+    stack, so a Bottle with no counters is not a trigger at all — and taps
+    itself for nothing if it were."""
+    game, bottle = _w1g2_bottle(set_pool)
+
+    game.start_next_turn()
+    game.start_next_turn()
+    game._enter_main_phase(precombat=True)
+    game.resolve_stack()
+
+    assert not bottle.tapped, game.log
+    assert game.players[0].mana_pool["C"] == 0, game.log

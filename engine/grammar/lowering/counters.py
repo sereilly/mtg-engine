@@ -181,12 +181,25 @@ def _lower_put_counter(
     # card's other lines say about them. Only on the source, because that is the
     # only permanent the placement can name without a picker.
     if not is_pt_counter(node.counter) and not node.up_to and _is_source(node.subject):
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError("a named counter is placed a fixed number at a time", node=node)
+        # "{X}{1}, {T}: Put **X** charge counters on this artifact."
+        # (Ventifact Bottle.) The count is the cast's announced X, which is
+        # the same value the P/T branch above already spends and which the
+        # handler resolves through ``context.x_value`` like every other
+        # amount. The refusal below is what a count this branch cannot read
+        # at all still gets.
+        if isinstance(node.count, ast.Fixed):
+            placed: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed = node.count.name
+        else:
+            raise LoweringError(
+                "a named counter is placed a fixed or variable number at a "
+                "time", node=node,
+            )
         return (
             OracleInstruction(
                 "add_named_counter_to_self", "",
-                {"counter": node.counter, "count": node.count.value},
+                {"counter": node.counter, "count": placed},
             ),
         )
     # The same CR 122.1 marker on a permanent the ability **chose** ("put a

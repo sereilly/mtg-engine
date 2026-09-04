@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 74.7% | 69.5% | 43.5% | 195 |
+| MIR *(measured)* | 335 | 545 | 74.9% | 70.1% | 44.0% | 196 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 345 | 174 | expected a subject |  |
+| 344 | 173 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
 | 91 | 51 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
@@ -1351,6 +1351,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
 - **Energy Vortex**
   - `At the beginning of your upkeep, remove all vortex counters from this enchantment.`
+  - `{X}: Put X vortex counters on this enchantment. Activate only during your upkeep.`
 - **Enervate**
   - `Tap target artifact, creature, or land.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -4660,6 +4661,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature blocks or becomes blocked by a non-Wall creature, destroy the other creature at end of combat.`
 - **Venomous Breath**
   - `Choose target creature. At this turn's next end of combat, destroy all creatures that blocked or were blocked by it this turn.`
+- **Ventifact Bottle**
+  - `{X}{1}, {T}: Put X charge counters on this artifact. Activate only as a sorcery.`
+  - `At the beginning of your first main phase, if this artifact has a charge counter on it, tap it and remove all charge counters from it. Add {C} for each charge counter removed this way.`
 - **Verduran Enchantress**
   - `Whenever you cast an enchantment spell, you may draw a card.`
   - `Whenever you cast an enchantment spell, you may draw a card.`

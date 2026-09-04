@@ -459,6 +459,19 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             multiplier = max(0, int((context.choices or {}).get(
                 "counters_removed_for_cost", 0
             )))
+        # The same printed phrase over the other producer: "remove all charge
+        # counters from it. **Add {C} for each charge counter removed this
+        # way.**" (Ventifact Bottle.) An earlier step of this same effect did
+        # the removing, so the number is in the resolution's scratchpad. The
+        # lowering chose between the two, so this is a read and not a
+        # fallback.
+        removed_this_way = instruction.payload.get(
+            "per_each_counter_removed_this_way"
+        )
+        if removed_this_way is not None:
+            multiplier = max(
+                0, int((context.results or {}).get(str(removed_this_way), 0))
+            )
         # "…for each **storage counter on this land**" (City of Shadows). Read
         # off the source now, not off a payment: these counters are still there,
         # and a land with none produces nothing at all — which is the card, and
