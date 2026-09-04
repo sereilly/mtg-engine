@@ -62,6 +62,43 @@ def _walk_specs(node, rewrite, kind=ast.TargetSpec):
     return node
 
 
+def statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
+    """The chosen target a following pronoun sentence refers back to, or None.
+
+    "Put a +1/+1 counter on up to one target creature. **It** gains
+    indestructible until end of turn." — the pronoun names the previous
+    sentence's target, not the ability's source. Walks a Sequence or
+    Conjunction from its last step, because the pronoun binds to the nearest
+    preceding choice.
+    """
+    if isinstance(statement, (ast.Sequence,)):
+        for step in reversed(statement.steps):
+            found = statement_bound_target(step)
+            if found is not None:
+                return found
+        return None
+    if isinstance(statement, ast.Conjunction):
+        for step in reversed(statement.effects):
+            found = statement_bound_target(step)
+            if found is not None:
+                return found
+        return None
+    # "Soul Sear deals 5 damage to target creature or planeswalker. It loses
+    # indestructible…" — the damage sentence's chosen recipient is what the
+    # pronoun names. Recipients live in their own tuple on DealDamage, which
+    # the field scan below cannot see.
+    if isinstance(statement, ast.DealDamage):
+        for recipient in reversed(statement.recipients):
+            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
+                return recipient
+        return None
+    for field_name in ("subject", "target"):
+        candidate = getattr(statement, field_name, None)
+        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
+            return candidate
+    return None
+
+
 def rebind_pronoun_to_condition_target(
     condition: ast.Condition, statement: ast.Statement
 ) -> ast.Statement:
@@ -140,6 +177,39 @@ def rebind_player_pronoun_to_condition_target(
         return target if ref.kind == "that_player" else None
 
     return _walk_specs(statement, _rewrite, ast.PlayerRef)
+
+
+def rebind_counter_pronoun_to_bound_target(
+    statement: ast.Statement, follow: ast.Statement
+) -> ast.Statement:
+    """"Gain control of target creature **and put a -1/-0 counter on it**."
+    (Jabari's Influence.)
+
+    ``pronouns._parse_pronoun_counter_rider`` is this rule at a **sentence
+    boundary** and has been since it was written — its docstring names this
+    card. Joined by "and", the conjunction loop in ``statements`` calls
+    ``parse_statement`` directly and no rider table is consulted, so the same
+    printed clause one punctuation mark over read "it" as the ability's own
+    source: on a spell ``add_counter_to_self`` has no permanent and places
+    nothing at all, and on a permanent it shrinks the source. Neither raises,
+    and the card reports supported either way — which is why this is a
+    substitution and not a refusal.
+
+    Only a bare ``it`` is rebound. "This creature" and "that creature" parse to
+    their own quantifiers and keep their own referents, and
+    :func:`statement_bound_target` only offers a spec the sentence *targeted*
+    (CR 601.2c) — so "Sacrifice a creature and put a +1/+1 counter on it" binds
+    nothing here and keeps the reading it had.
+    """
+    if not isinstance(follow, ast.PutCounter):
+        return follow
+    subject = follow.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "it":
+        return follow
+    bound = statement_bound_target(statement)
+    if bound is None:
+        return follow
+    return replace(follow, subject=bound)
 
 
 def _rebound(node, subject: ast.ObjectFilter):

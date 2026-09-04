@@ -521,6 +521,8 @@ _COVERED_ELSEWHERE = {
     "blocked_source_this_turn":
         "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
+    "attacked_you_this_turn":
+        "test_attacked_you_this_turn_outlives_the_combat_it_names",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "not_attacking": "test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role",
@@ -926,6 +928,49 @@ def test_attacking_you_is_two_questions_not_one(pool):
     )
     assert not subject_matches(game, idle, described, observer=1)
     assert not subject_matches(game, attacker, described)
+
+
+def test_attacked_you_this_turn_outlives_the_combat_it_names(pool):
+    """"target … creature **that attacked you this turn**" (Jabari's Influence).
+
+    The past tense of the key above, and a different question from it in the one
+    way that matters: ``attacking_you`` reads the live combat relation, which
+    end of combat clears — and this card prints "cast this spell only after
+    combat", so the live reading is *always* None by the time it is asked. The
+    record the declaration writes is what answers it.
+
+    Three players again, because the seat is the whole point: a creature that
+    attacked somebody else did not attack you.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, idle]),
+        PlayerState(name="P2"),
+        PlayerState(name="P3"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    # Combat over: the live relation is gone and only the record is left.
+    game.current_turn_phase = "postcombat_main"
+    game.current_step = "postcombat_main"
+    for permanent in game.all_permanents():
+        permanent.attacking = False
+        permanent.defending_player_index = None
+
+    described = {"attacked_you_this_turn": True}
+    assert subject_matches(game, attacker, described, observer=1)
+    assert not subject_matches(game, attacker, described, observer=2), (
+        "attacking somebody else is not attacking you"
+    )
+    assert not subject_matches(game, idle, described, observer=1)
+    assert not subject_matches(game, attacker, described)
+    assert not subject_matches(game, attacker, {"attacking_you": True}, observer=1), (
+        "the live relation is what the record exists to outlive"
+    )
 
 
 def test_controlled_since_turn_start_rejects_a_creature_that_just_arrived(pool):

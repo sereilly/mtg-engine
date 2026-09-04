@@ -184,6 +184,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # a sweep.
     "blocked_source_this_turn",
     "attacking_you",
+    # "…creature **that attacked you this turn**" (Jabari's Influence). The
+    # *record* behind the live relation above, and testable on the same
+    # footing: what it needs beyond the object is the seat asking, which is
+    # exactly what ``observer`` is. Its own key rather than a flag on
+    # ``attacking_you`` because the two read different places — one the live
+    # combat, one a per-turn stamp — and a card printed after combat can only
+    # ask the second.
+    "attacked_you_this_turn",
     # "…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
     # War Machine). A history rather than a characteristic, and one no read of
     # the permanent alone can answer: a tapped permanent looks the same however
@@ -528,6 +536,20 @@ def subject_matches(
     # Both sides through the layer accessors (CR 613), never ``card.power``:
     # Ironclaw Curse's own "-0/-1" is part of the toughness it compares against,
     # and a pumped attacker is over the bound while it is pumped.
+    # "…creature **that attacked you this turn**" (Jabari's Influence). A
+    # record about a *seat*, which the pure matcher refuses outright — so it is
+    # answered here, where the observer is in hand, and stripped before that
+    # matcher runs. Refusing rather than ignoring is what the pure half does
+    # with every seat-relative key, and this is the reader that supplies the
+    # seat.
+    if described.get("attacked_you_this_turn"):
+        from .turn_state import attacked_seat_this_turn
+
+        described = {
+            k: v for k, v in described.items() if k != "attacked_you_this_turn"
+        }
+        if observer is None or not attacked_seat_this_turn(obj, observer):
+            return False
     relative = described.get("characteristic_vs_source")
     if relative:
         described = {

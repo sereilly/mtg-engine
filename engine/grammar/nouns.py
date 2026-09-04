@@ -210,6 +210,9 @@ class _FilterDraft:
     other_than_attached_host: bool = False
     banded_with_source: bool = False
     attacking_you: bool = False
+    # "…creature **that attacked you this turn**" (Jabari's Influence) — see
+    # the field of the same name on ``ast.ObjectFilter``.
+    attacked_you_this_turn: bool = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -859,6 +862,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         other_than_attached_host=d.other_than_attached_host,
         banded_with_source=d.banded_with_source,
         attacking_you=d.attacking_you,
+        attacked_you_this_turn=d.attacked_you_this_turn,
         blocked=d.blocked,
         power=d.power,
         toughness=d.toughness,

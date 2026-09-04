@@ -25,7 +25,7 @@ from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
 from .effects import _parse_create_token, parse_source_damage_lock
-from .pronouns import _statement_bound_target
+from .rebinding import statement_bound_target as _statement_bound_target
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
 from .stream import TokenStream

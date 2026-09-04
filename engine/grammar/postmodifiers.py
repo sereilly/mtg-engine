@@ -328,6 +328,16 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue
+        # "target nonartifact, nonblack creature **that attacked you this
+        # turn**" (Jabari's Influence). The past tense of the clause above and
+        # a different question: that one reads the live combat relation, this
+        # one a record the declaration wrote — and the card printing it may
+        # only be cast *after* combat, where the live relation has been reset.
+        # Read beside its present-tense twin rather than under the general
+        # "that attacked this turn" below, whose prefix it is.
+        if stream.accept_phrase("that", "attacked", "you", "this", "turn"):
+            d.attacked_you_this_turn = True
+            continue
         # "…for each green creature they control **that's attacking**"
         # (Flooded Woodlands, Reclamation). The relative-clause spelling of the
         # bare adjective "attacking", so it sets the same field: two spellings of

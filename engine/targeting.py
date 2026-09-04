@@ -591,6 +591,12 @@ def _narrowing_flags(source: dict) -> dict:
         # against — and the enumerator's for the same reason: the seat choosing
         # is the one it is relative to.
         flags["attacking_you"] = True
+    if source.get("attacked_you_this_turn"):
+        # "target … creature **that attacked you this turn**" (Jabari's
+        # Influence). The record behind the flag above, and carried for its
+        # reason exactly: the seat choosing is the one it is relative to, and
+        # a picker without it offers every creature on the board.
+        flags["attacked_you_this_turn"] = True
     # A printed subtype or supertype narrowing, carried whole under ``filter``
     # — the spec form `spec_only_subtype` already reads and the enumerator
     # already applies through ``subject_matches`` (legality's own loop), so the

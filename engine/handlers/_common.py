@@ -1033,6 +1033,15 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # key would widen "creatures of the chosen type" to every creature.
     if payload.get("chosen_creature_type") or payload.get("chosen_land_type"):
         return False
+    # "…creature **that attacked you this turn**" (Jabari's Influence). The
+    # record names a *seat*, and this function has no observer — it is the pure
+    # half, about one permanent alone. Refused rather than ignored for the
+    # reason above it: ignoring would offer every creature that attacked
+    # anybody, which in a duel is right by coincidence and wrong the moment a
+    # third seat is at the table. ``subject_matches`` holds the observer and
+    # answers it.
+    if payload.get("attacked_you_this_turn"):
+        return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
     # on the permanent itself — the first by the declaration, the second by the

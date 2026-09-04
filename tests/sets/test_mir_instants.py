@@ -1260,3 +1260,112 @@ def test_shallow_grave_with_no_creature_card_does_nothing(set_pool):
 
     assert game.players[0].battlefield == [], game.log
     assert not [e for e in game.delayed_triggers if e.event == "next_end_step"], game.log
+
+
+# --- W2G5: a combat record that outlives the combat (CR 508.1a) ---
+#
+# Jabari's Influence prints two things the engine had no channel for and one it
+# had already written down and never reached.
+#
+# "that attacked you this turn" is the *past tense* of `attacking_you`, and the
+# distinction is the card: `Permanent.defending_player_index` is the live combat
+# relation and end of combat clears it, while this spell may only be cast **after
+# combat** — so the live reading is always None by the time the question is
+# asked. The declaration now stamps whom each attacker was declared against.
+#
+# And "…**and** put a -1/-0 counter on it" is `pronouns._parse_pronoun_counter_
+# rider` — whose docstring names this very card — reached one punctuation mark
+# too late: a conjunction is joined inside `parse_statement` and no rider table
+# is consulted, so the same clause after a full stop put the counter on the
+# target and after "and" put it on the ability's own source. On a spell that is
+# no permanent at all, so the counter simply vanished. Neither raises.
+
+from engine import Game, PlayerState
+from engine.grammar import compile_line
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import _mk_card
+
+
+def _w2g5_jabari_board(set_pool):
+    """Seat 1 attacks seat 0 with one of its two creatures, then combat ends.
+
+    The phase is moved to the postcombat main directly rather than walked,
+    because what this needs is the *state* the card is cast in: combat over,
+    the live attack relation cleared, the turn's record still standing.
+    """
+    pool = set_pool("MIR")
+    raider = Permanent(card=_mk_card("Raider", "Creature - Human", ""))
+    homebody = Permanent(card=_mk_card("Homebody", "Creature - Human", ""))
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Jabari's Influence"]]),
+        PlayerState(name="P2", battlefield=[raider, homebody]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0])[0]
+    game.current_turn_phase = "postcombat_main"
+    game.current_step = "postcombat_main"
+    return game, raider, homebody
+
+
+def test_jabaris_influence_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Jabari's Influence"])
+    assert program.supported, program.reason
+
+
+def test_jabaris_influence_takes_the_creature_that_attacked_you(set_pool):
+    """Both halves in one game: the control change (CR 613 layer 2) and the
+    counter that follows it. The counter is the half that was silent — it lands
+    on the creature the first clause took, not on the spell."""
+    game, raider, _homebody = _w2g5_jabari_board(set_pool)
+
+    cast = game.cast_from_hand(
+        0, "Jabari's Influence", target_player_index=1, target_permanent_index=0
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game.controller_index_of(raider) == 0, game.log
+    assert (raider.effective_power, raider.effective_toughness) == (1, 2), game.log
+
+
+def test_the_creature_that_stayed_home_is_not_a_legal_target(set_pool):
+    """The narrowing is the card. Offered without it, Jabari's Influence is an
+    unconditional Ritual of the Machine for one mana more."""
+    game, _raider, _homebody = _w2g5_jabari_board(set_pool)
+
+    cast = game.cast_from_hand(
+        0, "Jabari's Influence", target_player_index=1, target_permanent_index=1
+    )
+
+    assert not cast.supported
+    assert "no valid target" in cast.details
+
+
+def test_the_conjoined_counter_lands_on_the_target(set_pool):
+    """The rebinding, read off the compiled program: joined by "and", the
+    pronoun used to reach the lowering as the ability's own source and produce
+    ``add_counter_to_self`` — which on a spell places nothing at all while the
+    card reports supported."""
+    joined = compile_line("Gain control of target creature and put a -1/-0 counter on it.")
+    stopped = compile_line("Gain control of target creature. Put a -1/-0 counter on it.")
+
+    assert [i.kind for i in joined.instructions] == [i.kind for i in stopped.instructions]
+    assert joined.instructions[1].kind == "add_counter_to_target"
+
+
+def test_a_pronoun_after_an_untargeted_clause_is_not_rebound(set_pool):
+    """The other direction. ``statement_bound_target`` offers only a spec the
+    sentence *targeted* (CR 601.2c), so "Sacrifice a creature and put a +1/+1
+    counter on it" keeps the reading it had — the rebinding must not invent a
+    referent for a clause that chose nothing."""
+    compiled = compile_line("Sacrifice a creature and put a +1/+1 counter on it.")
+
+    assert compiled.instructions[1].kind == "add_counter_to_self"

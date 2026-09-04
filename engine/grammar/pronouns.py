@@ -25,49 +25,13 @@ from .lexer import PT, QUOTE
 from .effects import _parse_gains, _parse_loses, _parse_put_counter
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
+from .rebinding import statement_bound_target as _statement_bound_target
 from .statements import _parse_condition
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES
 
 
 _RIDER_FOLDED = ast.RawEffect("rider-folded")
-
-
-def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
-    """The chosen target a following pronoun sentence refers back to, or None.
-
-    "Put a +1/+1 counter on up to one target creature. **It** gains
-    indestructible until end of turn." — the pronoun names the previous
-    sentence's target, not the ability's source. Walks a Sequence or
-    Conjunction from its last step, because the pronoun binds to the nearest
-    preceding choice.
-    """
-    if isinstance(statement, (ast.Sequence,)):
-        for step in reversed(statement.steps):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    if isinstance(statement, ast.Conjunction):
-        for step in reversed(statement.effects):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    # "Soul Sear deals 5 damage to target creature or planeswalker. It loses
-    # indestructible…" — the damage sentence's chosen recipient is what the
-    # pronoun names. Recipients live in their own tuple on DealDamage, which
-    # the field scan below cannot see.
-    if isinstance(statement, ast.DealDamage):
-        for recipient in reversed(statement.recipients):
-            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
-                return recipient
-        return None
-    for field_name in ("subject", "target"):
-        candidate = getattr(statement, field_name, None)
-        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
-            return candidate
-    return None
 
 
 def _parse_pronoun_verb_rider(

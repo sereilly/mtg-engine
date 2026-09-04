@@ -443,6 +443,15 @@ class ObjectFilter:
     # a caller with no observer refuses rather than dropping the narrowing,
     # which would offer every attacker in a multiplayer game.
     attacking_you: bool = False
+    # "target nonartifact, nonblack creature **that attacked you this turn**"
+    # (Jabari's Influence). The *history* of the live relation beside it, and
+    # its own field for that distinction exactly: ``attacking_you`` reads
+    # ``Permanent.defending_player_index``, which end of combat clears — and
+    # this card may only be cast *after* combat, so the live field is always
+    # None by the time it is asked. Answered off a per-turn record the
+    # declaration writes, and relative to the seat asking, which is what keeps
+    # it out of the pure matcher.
+    attacked_you_this_turn: bool = False
     # "…all creatures that were **blocked by that creature this turn**"
     # (Glyph of Doom). A history relative to the object a delayed triggered
     # ability was bound to, answered from the block record that creature
@@ -649,6 +658,8 @@ class ObjectFilter:
             payload["banded_with_source"] = True
         if self.attacking_you:
             payload["attacking_you"] = True
+        if self.attacked_you_this_turn:
+            payload["attacked_you_this_turn"] = True
         if self.was_dealt_damage_this_turn:
             payload["dealt_damage_this_turn"] = True
         if self.blocking is True:
