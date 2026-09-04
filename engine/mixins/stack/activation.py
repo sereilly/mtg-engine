@@ -1640,6 +1640,13 @@ class AbilityActivationMixin:
                     owner_seat if owner_seat is not None else controller_index
                 ],
                 permanent.card,
+                # CR 614.6: the object leaving is what a
+                # leaves-the-battlefield replacement replaces, and this seam
+                # is handed a ``CardDefinition`` a deck shares between every
+                # copy. Without the keyword the cost would slip past Dreams
+                # of the Dead -- a drawback missed, which is the direction
+                # nobody notices.
+                from_battlefield=permanent,
             )
             self.log.append(
                 f"{controller.name} returned {permanent.card.name} to its "
