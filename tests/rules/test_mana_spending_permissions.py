@@ -1,23 +1,27 @@
-"""Spending mana "as though it were mana of any color" — CR 609.4b.
+"""Spending mana "as though it were mana of any [type or color]" — CR 609.4b.
 
-Chromatic Orrery's static permission, and the class of bug it was in. A
-spending permission is not one rule at one site: the engine asks "can this cost
-be paid from this pool?" in three places — the payment itself, the {X}
-inference that decides how big an X a caster can announce (CR 107.3), and the
-client's affordability display — and each had its own copy of the arithmetic.
-Only the payment knew about the permission.
+The class, not one card. A spending permission is not one rule at one site:
+the engine asks "can this pool pay this cost?" in four places — the payment
+itself, the {X} inference that decides how big an X a caster may announce
+(CR 107.3), the client's affordability display, and the AI's — and each
+carried its own copy of the arithmetic. Only the payment knew about the
+permissions.
 
-The consequence was silent and in the player's favour twice over. An {X} spell
-with a coloured pip inferred X = 0 off a colourless pool, because the inference
-tested {R} against red mana the pool did not have; the spell then *resolved*
-with X = 0, having spent nothing at all — Fireball for four mana, dealing
-nothing. And the client greyed out the same card, because its own copy of the
-cascade said the same thing.
+Two shipped cards paid for it, and the failures are silent in both directions.
+**Chromatic Orrery** ("You may spend mana as though it were mana of any
+color"): an {X} spell with a coloured pip inferred X = 0 off a colourless pool,
+because the inference tested {R} against red mana the pool did not have — and
+the spell then *cast successfully*, spending nothing and dealing nothing. The
+client greyed the same card out, and an AI seat judged every coloured spell in
+hand uncastable. **North Star** ("For one spell this turn, you may spend mana
+as though it were mana of any type") is the same defect with a bounded
+permission in it, which makes it worse: the payment path *does* know about the
+grant, so the cast went through, **spent the grant** and resolved for X = 0.
 
-The three ask ``mana_payment.fungible_colors_headroom`` now. It answers both
-questions at once — payable at all, and how much is left for an X — because
-they are the same arithmetic read twice, and a second copy is how they came to
-disagree.
+They ask ``mana_payment.fungible_colors_headroom`` and its ``_types`` sibling
+now. Each answers both questions at once — payable at all, and how much is
+left for an X — because they are one arithmetic read twice, and a second copy
+is how the readers came to disagree.
 """
 
 from __future__ import annotations
@@ -185,3 +189,61 @@ def test_the_affordability_display_still_refuses_what_cannot_be_paid():
     # And the pool is untouched by a payment that failed (CR 601.2h: partial
     # payments are not allowed).
     assert payer.mana_pool["G"] == 1
+
+
+# ---------------------------------------------------------------------------
+# The bounded grant: "For one spell this turn…" (North Star)
+# ---------------------------------------------------------------------------
+
+
+def _grant_game(catalog, pool, grant):
+    game = Game(players=[
+        PlayerState(name="P1", hand=[catalog["Fireball"]],
+                    library=[catalog["Mountain"]] * 5),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = True
+    caster = game.players[0]
+    caster.mana_pool = dict(pool)
+    if grant is not None:
+        caster.spend_mana_as_though_grants = [dict(grant)]
+    return game, caster
+
+
+@pytest.mark.cr("107.3", "609.4b")
+@pytest.mark.parametrize("any_type", [True, False])
+def test_x_is_inferred_under_a_bounded_grant(catalog, any_type):
+    """North Star's grant was honoured by the payment and not by the inference,
+    which is the worst possible pairing: X came out 0, the cast went through
+    anyway because the payment *did* know about the grant, and the grant was
+    **spent** on a Fireball that dealt nothing."""
+    game, caster = _grant_game(
+        catalog, _pool(U=4), {"spells": 1, "any_type": any_type}
+    )
+
+    assert game._infer_x_value(caster, "{X}{R}") == 3
+    result = game.cast_from_hand(0, "Fireball", target_player_index=1)
+
+    assert result.supported, result.details
+    assert game.players[1].life == 17
+    assert caster.spend_mana_as_though_grants[0]["spells"] == 0
+
+
+@pytest.mark.cr("107.3", "601.2h")
+def test_a_grant_the_pool_did_not_need_is_not_spent(catalog):
+    """The ratchet on taking the maximum of the two answers.
+
+    Everything but a coloured pip is payable from any unit either way, so the
+    direct answer and the grant's can only differ where a pip is unpayable
+    without the grant — and there the direct answer is 0 and the grant was
+    going to be spent regardless. A board that can pay outright keeps it.
+    """
+    game, caster = _grant_game(
+        catalog, _pool(R=4), {"spells": 1, "any_type": True}
+    )
+
+    assert game._infer_x_value(caster, "{X}{R}") == 3
+    assert game.cast_from_hand(0, "Fireball", target_player_index=1).supported
+
+    assert game.players[1].life == 17
+    assert caster.spend_mana_as_though_grants[0]["spells"] == 1

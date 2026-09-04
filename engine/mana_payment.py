@@ -93,6 +93,25 @@ def fungible_colors_headroom(
     return total - colored_pips - colorless - generic
 
 
+def fungible_types_headroom(
+    pool: dict[str, int], required: dict[str, int]
+) -> int | None:
+    """:func:`fungible_colors_headroom` with **colourless in the set** too --
+    CR 106.1b's five colours and colorless, which is what "as though it were
+    mana of any *type*" means (North Star).
+
+    Short where that one is careful, and the difference is the whole of why
+    they are two functions rather than one with a flag: with colorless
+    reachable, a {C} the cost names is payable by a coloured unit, so nothing
+    has to be reserved and no pip can starve one. The payment collapses to a
+    single question about the total.
+    """
+    total = sum(max(0, int(pool.get(sym, 0))) for sym in COLOR_SYMBOLS)
+    owed = sum(int(required.get(sym, 0)) for sym in COLOR_SYMBOLS)
+    owed += int(required.get("generic", 0))
+    return None if total < owed else total - owed
+
+
 def _normalized(required: dict[str, int]) -> dict[str, int]:
     return {
         **{symbol: int(required.get(symbol, 0)) for symbol in COLOR_SYMBOLS},
@@ -312,7 +331,7 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
 
 __all__ = [
     "COLOR_SYMBOLS", "ManaPayment", "fungible_colors_headroom",
-    "generic_cost", "mana_cost_from_symbols",
+    "fungible_types_headroom", "generic_cost", "mana_cost_from_symbols",
     "mana_cost_label", "plan_payment",
     "total_pips",
     "untapped_mana_lands",

@@ -2596,15 +2596,77 @@ class SpellCastingMixin:
         x_colors: tuple[str, ...] = (), reduction: CostReduction | None = None,
         extra_pips: dict[str, int] | None = None,
     ) -> int:
-        # The reduction is applied before X is inferred, because X is whatever
-        # is left after the rest of the cost is paid — inferring it from the
-        # undiscounted cost would spend the discount on nothing.
-        required = reduce_cost(
+        """The largest X *player* can announce and then pay for (CR 107.3).
+
+        Two answers, and the larger wins: what the pool pays on its own, and
+        what it pays under a CR 609.4b grant the caster is holding ("For one
+        spell this turn, you may spend mana as though it were mana of any
+        type", North Star). The second was not asked at all, so an {X} spell
+        cast under such a grant inferred **X = 0** — and then cast anyway,
+        because the payment path *does* know about the grant: it paid the
+        coloured pip, **spent the grant**, and resolved for nothing. A bounded
+        permission burned on a spell that did nothing.
+
+        Taking the maximum never burns a grant that was not already going to
+        be spent. Everything but a coloured pip is payable from any unit either
+        way, so the two answers can only differ when a pip is unpayable
+        directly — and in that case the direct answer is 0 and the cost cannot
+        be paid without the grant at all.
+        """
+        direct = self._infer_x_from_pool(
+            player, mana_cost, extra_generic, x_colors, reduction, extra_pips,
+        )
+        grant = next(
+            (g for g in player.spend_mana_as_though_grants
+             if int(g.get("spells", 0)) > 0),
+            None,
+        )
+        if grant is None:
+            return direct
+        from ...mana_payment import (fungible_colors_headroom,
+                                     fungible_types_headroom)
+
+        required = self._x_inference_cost(
+            mana_cost, extra_generic, reduction, extra_pips
+        )
+        pool = {
+            symbol: int(player.mana_pool.get(symbol, 0))
+            for symbol in ("W", "U", "B", "R", "G", "C")
+        }
+        headroom = (
+            fungible_types_headroom(pool, required) if grant.get("any_type")
+            else fungible_colors_headroom(pool, required)
+        )
+        return direct if headroom is None else max(direct, headroom)
+
+    def _x_inference_cost(
+        self, mana_cost: str, extra_generic: int,
+        reduction: CostReduction | None, extra_pips: dict[str, int] | None,
+    ) -> dict[str, int]:
+        """The cost X is inferred *against*: everything but X itself.
+
+        The reduction is applied before X is inferred, because X is whatever is
+        left after the rest of the cost is paid — inferring it from the
+        undiscounted cost would spend the discount on nothing. One reader, so
+        the direct answer and the grant's are measured against the same cost.
+        """
+        return reduce_cost(
             self._parse_mana_cost(
                 mana_cost, x_value=0, extra_generic=extra_generic,
                 extra_pips=extra_pips,
             ),
             reduction or CostReduction(),
+        )
+
+    def _infer_x_from_pool(
+        self, player: PlayerState, mana_cost: str, extra_generic: int = 0,
+        x_colors: tuple[str, ...] = (), reduction: CostReduction | None = None,
+        extra_pips: dict[str, int] | None = None,
+    ) -> int:
+        """What the pool alone pays for, under the seat's *standing* spending
+        permissions."""
+        required = self._x_inference_cost(
+            mana_cost, extra_generic, reduction, extra_pips
         )
         temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
 
@@ -2948,10 +3010,15 @@ class SpellCastingMixin:
         starve one. The payment collapses to a single question about the total,
         which is why this is short where that one is careful.
         """
+        from ...mana_payment import fungible_types_headroom
+
         pool = {sym: int(player.mana_pool.get(sym, 0)) for sym in _POOL_SYMBOLS}
         owed = sum(required.get(sym, 0) for sym in _POOL_SYMBOLS)
         owed += required.get("generic", 0)
-        if sum(pool.values()) < owed:
+        # Payable at all is `mana_payment`'s question, for its colour sibling's
+        # reason: the X inference asks the same thing of the same grant, and
+        # two copies of one payment rule are how the two came to disagree.
+        if fungible_types_headroom(pool, required) is None:
             return False
         for sym in _POOL_SYMBOLS:
             spend = min(pool[sym], owed)
