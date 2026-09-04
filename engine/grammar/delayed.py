@@ -559,6 +559,21 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             if subject is not None and stream.accept_phrase("dies", "this", "turn"):
                 event, binds = "bound_permanent_dies", True
             elif subject is not None and stream.accept_phrase(
+                "becomes", "blocked", "this", "turn"
+            ):
+                # "When that creature **becomes blocked** this turn, …"
+                # (Barreling Attack.) CR 509.1h's state, watched about the one
+                # creature the spell chose rather than about a class — which is
+                # what separates it from the printed static "whenever this
+                # creature becomes blocked": that one is an ability of the
+                # creature, and this one is created by a spell that will be in a
+                # graveyard by the time it fires.
+                #
+                # "This turn" is CR 603.7b's stated duration and the ability is
+                # still one-shot: a creature blocked twice in a turn is blocked
+                # in two combats, and the card gives its bonus once.
+                event, binds = "bound_permanent_becomes_blocked", True
+            elif subject is not None and stream.accept_phrase(
                 "leaves", "the", "battlefield"
             ):
                 # "When that creature leaves the battlefield this turn,

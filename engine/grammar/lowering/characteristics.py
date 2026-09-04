@@ -116,6 +116,52 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # source at all. A subject that is neither points a bonus at a permanent
         # nothing refreshes.
         if not _is_global_per_each_buff(node):
+            # "…**it** gets +1/+1 until end of turn for each creature blocking
+            # **it**." (Barreling Attack, in the sentence a delayed ability
+            # carries.) A fourth reading, and the first whose subject is neither
+            # the source nor a class: one sentence, one pronoun, and the object
+            # both name is the creature the effect *targets*. The count is
+            # therefore measured against that permanent rather than against the
+            # ability's own source — which on this card is a spell in a
+            # graveyard by the time the ability fires, and blocks nothing.
+            #
+            # The same rewrite `_resolve_per_each_pronoun` makes for the
+            # source-subject spelling, pointed at the other referent, and the
+            # marker is what tells the handler to defer the count until it has
+            # resolved the target.
+            if (
+                _is_target(node.subject)
+                and node.per_each.blocking_bound_target
+                and node.duration.kind is not None
+            ):
+                duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+                if duration is None:
+                    raise LoweringError(
+                        "no pump handler ends at this duration", node=node
+                    )
+                counted = dataclasses.replace(
+                    node.per_each,
+                    blocking_bound_target=False, blocking_source=True,
+                )
+                payload: dict[str, object] = {
+                    "power": _per_each_amount(
+                        node.power, node.power_negative, node
+                    ),
+                    "toughness": _per_each_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": {
+                        **count_spec(counted, node, offset=_per_each_offset(node)),
+                        "relative_to": "pumped_target",
+                    },
+                    "duration": duration,
+                }
+                _describe_targets(payload, node.subject)
+                return (
+                    OracleInstruction(
+                        "pump_target_creature_until_eot", "", payload
+                    ),
+                )
             if not _is_source(node.subject):
                 raise LoweringError(
                     'a "for each" pump is only a continuous bonus on its own '

@@ -1260,3 +1260,105 @@ def test_shallow_grave_with_no_creature_card_does_nothing(set_pool):
 
     assert game.players[0].battlefield == [], game.log
     assert not [e for e in game.delayed_triggers if e.event == "next_end_step"], game.log
+
+
+# --- W2G1: combat triggers and their bound referents ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1i_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1i_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g1i_barreling(set_pool, blockers: int):
+    """Barreling Attack cast on an attacker, blocked by *blockers* Walls."""
+    attacker = _w2g1i_nosick(Permanent(card=_w2g1i_creature("Ogre", 3, 3)))
+    walls = [
+        _w2g1i_nosick(Permanent(card=_w2g1i_creature(f"Wall{i}", 0, 4)))
+        for i in range(blockers)
+    ]
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[attacker],
+            hand=[set_pool("MIR")["Barreling Attack"]],
+        ),
+        PlayerState(name="P2", battlefield=walls),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.cast_from_hand(
+        0, "Barreling Attack", target_player_index=0, target_permanent_index=0
+    )
+    game.resolve_stack()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    if blockers:
+        assert game.declare_blockers(1, {i: 0 for i in range(blockers)})[0]
+    game.resolve_stack()
+    return game, attacker
+
+
+def test_barreling_attack_arms_a_delayed_trigger_on_its_own_target(set_pool):
+    """"When **that creature** becomes blocked this turn, …"
+
+    CR 509.1h's state watched about one chosen creature rather than about a
+    class -- which is what separates it from the printed "whenever this creature
+    becomes blocked": that one is an ability of the creature, and this one is
+    created by a spell that is in a graveyard by the time it fires (CR 603.7).
+    """
+    program = compile_card_oracle(set_pool("MIR")["Barreling Attack"])
+    assert program.supported, program.reason
+    grant, delay = program.instructions[0].payload["steps"]
+    assert grant.kind == "grant_target_keyword_until_eot"
+    assert delay.payload["event"] == "bound_permanent_becomes_blocked"
+    assert delay.payload["binds_target"] is True
+    assert delay.payload["once"] is True
+
+
+@pytest.mark.parametrize("blockers, power", [(1, 4), (2, 5), (3, 6)])
+def test_barreling_attack_counts_the_creatures_blocking_it(set_pool, blockers, power):
+    """"…**it** gets +1/+1 until end of turn for each creature blocking **it**."
+
+    One sentence, one pronoun, and the object both name is the creature the
+    effect targets -- not the ability's source, which here is a spell in a
+    graveyard and blocks nothing. So the count is deferred until the target is
+    resolved and measured against that permanent, which is the same rewrite the
+    source-subject spelling (Johtull Wurm) already gets.
+    """
+    game, attacker = _w2g1i_barreling(set_pool, blockers)
+
+    assert (attacker.effective_power, attacker.effective_toughness) == (power, power), game.log
+    assert game._has_keyword(attacker, "trample")
+
+
+def test_barreling_attack_gives_nothing_to_an_unblocked_creature(set_pool):
+    """The control: the trample half is unconditional and the pump is not.
+
+    The delayed ability is one-shot with a stated duration, so a creature that
+    is never blocked simply keeps the trample and the entry expires with the
+    turn (CR 603.7b).
+    """
+    game, attacker = _w2g1i_barreling(set_pool, 0)
+
+    assert (attacker.effective_power, attacker.effective_toughness) == (3, 3), game.log
+    assert game._has_keyword(attacker, "trample")

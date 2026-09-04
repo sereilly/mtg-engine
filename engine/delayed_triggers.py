@@ -98,6 +98,15 @@ DELAYED_EVENTS: dict[str, str] = {
     "source_blocks_or_blocked_by": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
+    # "When that creature **becomes blocked** this turn, …" (Barreling Attack).
+    # CR 509.1h's state, about the one creature the creating spell chose — so
+    # the fire site announces it per *attacker* with that attacker named, and
+    # the entry answers only for the one it was bound to.
+    #
+    # Its own event rather than a narrowing of `creature_blocks`: that one is
+    # announced per *blocking* creature and answers to any of them, and this is
+    # the other side of the same declaration about one particular attacker.
+    "bound_permanent_becomes_blocked": "the declare blockers step",
     # "When that creature dies this turn, …" (Reincarnation). The dying
     # permanent is named by `bound_permanent_id`, so the event is the death of
     # *whichever* permanent the creating effect bound.

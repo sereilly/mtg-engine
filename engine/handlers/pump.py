@@ -109,7 +109,18 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     # the Dead): X is defined by a zone count at resolution, not announced.
     # The sign travels separately because the payload's "x" cannot be negated.
     x_count = instruction.payload.get("x_from_count")
-    if x_count is not None:
+    # "…**it** gets +1/+1 until end of turn for each creature blocking **it**."
+    # (Barreling Attack.) One sentence, one pronoun: the creature counted around
+    # is the creature being pumped, and neither is the ability's own source —
+    # the spell that armed the delayed trigger is a card in a graveyard by now
+    # and blocks nothing. So the count is deferred until the target is resolved
+    # and measured against *that* permanent, which is the same rewrite
+    # `_resolve_per_each_pronoun` makes one package over for the sentence whose
+    # subject **is** the source.
+    counted_from_target = (
+        isinstance(x_count, dict) and x_count.get("relative_to") == "pumped_target"
+    )
+    if x_count is not None and not counted_from_target:
         # Through the one evaluator. This used to be a second counter with a
         # second spelling of the spec — hardcoded to the graveyard, reading
         # `card_types` where every other reader says `filter` — so the same
@@ -168,6 +179,21 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )
     if target_perm is not None:
+        if counted_from_target:
+            # The deferred count, now that the object both pronouns name is in
+            # hand. Re-derived here rather than earlier, so a target that has
+            # left (CR 608.2b) never counts at all.
+            x_value = count_from_payload(game, context, x_count, source=target_perm)
+            power_delta = resolve_amount(
+                instruction.payload.get("power", 0), x_value
+            )
+            toughness_delta = resolve_amount(
+                instruction.payload.get("toughness", 0), x_value
+            )
+            if instruction.payload.get("power_negative"):
+                power_delta = -power_delta
+            if instruction.payload.get("toughness_negative"):
+                toughness_delta = -toughness_delta
         # "…until end of combat" (Glyph of Destruction) is the same boost on a
         # different channel, so it is payload rather than a second kind — the
         # word decides which sweep takes it back. Absent means end of turn,

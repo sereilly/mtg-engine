@@ -335,6 +335,7 @@ _EVENT_SUBJECT_OWNERS: frozenset[str] = frozenset({
 _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     "bound_permanent_dies",              # Reincarnation
     "bound_permanent_dealt_damage",      # Glyph of Life
+    "bound_permanent_becomes_blocked",   # Barreling Attack
     "next_end_of_combat",                # Glyph of Doom
     # "Flip a coin at the beginning of the next end step. If you lose the flip,
     # sacrifice **that creature**." (Goblin Kites.) A *step* event that names an

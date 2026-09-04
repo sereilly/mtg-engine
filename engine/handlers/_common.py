@@ -81,6 +81,8 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
 def count_from_payload(
     game: "Game", context: "OracleExecutionContext", spec: dict,
     instruction: "OracleInstruction | None" = None,
+    *,
+    source: "Permanent | None" = None,
 ) -> int:
     """Evaluate an ``x_from_count`` spec at *resolution*.
 
@@ -227,9 +229,19 @@ def count_from_payload(
         )
     else:
         owner = context.target or context.caster
+    # "…for each creature blocking **it**" (Barreling Attack), where "it" is
+    # the creature the same sentence is pumping rather than the ability's own
+    # source — a spell's source is a card on the stack and blocks nothing. The
+    # caller that knows which object the sentence named passes it; everybody
+    # else keeps the source, which is what the relation has always meant.
+    #
+    # ``exclude`` is deliberately left as the source: it implements the printed
+    # word "other" (CR 109.5's own object), which is a different question from
+    # what the relation is measured against.
     return evaluate_count(
         game, owner, spec,
-        exclude=context.source_permanent, source=context.source_permanent,
+        exclude=context.source_permanent,
+        source=context.source_permanent if source is None else source,
     )
 
 

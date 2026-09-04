@@ -465,6 +465,7 @@ class DeclareBlockersStepMixin:
         self._fire_delayed_block_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._fire_delayed_block_pair_triggers(controller_index, assignments)
+        self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:
@@ -1801,6 +1802,34 @@ class DeclareBlockersStepMixin:
                     self.log.append(
                         f"{source.card.name} triggered on becoming blocked (added to stack)"
                     )
+
+    def _fire_delayed_becomes_blocked_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """"When **that creature** becomes blocked this turn, …" (Barreling
+        Attack.)
+
+        The delayed twin of the printed becomes-blocked scan above, and its own
+        pass for that scan's stated reason: a delayed ability belongs to no
+        permanent, so no ``effective_card`` scan can reach it.
+
+        Announced **once per attacker**, which is CR 509.3c's reading — the
+        creating spell's sentence names no blocker back, so there is nothing for
+        a per-blocker firing to be about, and a creature blocked by three would
+        otherwise take the bonus three times. The entry answers only for the
+        attacker it was bound to; `DelayedTrigger.matches` is what checks that.
+        """
+        announced: set[int] = set()
+        for _blocker_idx, _blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            for _attacker_idx, attacker in blocked:
+                if attacker.permanent_id in announced:
+                    continue
+                announced.add(attacker.permanent_id)
+                fire_delayed_triggers(
+                    self, "bound_permanent_becomes_blocked", subject=attacker,
+                )
 
     def _fire_delayed_block_pair_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]
