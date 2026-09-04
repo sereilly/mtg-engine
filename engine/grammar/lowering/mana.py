@@ -8,7 +8,7 @@ ability on a land being tapped (CR 605.1b) is resolved inline by
 never uses the stack.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import COUNTERS_REMOVED, OracleInstruction
 from ...subject_filters import (card_only_filter, object_only_filter,
                                 untestable_filter_keys)
 from .. import ast
@@ -171,7 +171,19 @@ def _lower_add_mana(
             # printed clause that parses, lowers, and multiplies nothing, which
             # on these five cards is a battery that always makes exactly one
             # mana however many counters it just ate.
-            payload["per_each_counter_removed"] = node.per_each_counter_removed
+            # …and the *other* producer of the same printed phrase: "remove
+            # all charge counters from it. Add {C} for each charge counter
+            # removed this way" (Ventifact Bottle) empties the permanent as
+            # an **effect**, not as a cost, so the number is in this
+            # resolution's scratchpad rather than on the activation. Decided
+            # here, where `produced` says which step really ran — a handler
+            # that tried the cost channel and fell back to the scratchpad
+            # would be guessing, and a battery that removed nothing would
+            # silently read a removal from a sentence it never had.
+            if COUNTERS_REMOVED in produced:
+                payload["per_each_counter_removed_this_way"] = COUNTERS_REMOVED
+            else:
+                payload["per_each_counter_removed"] = node.per_each_counter_removed
         if node.per_each_counter_on_source is not None:
             # "…for each **storage counter on this land**" (City of Shadows).
             # Counted off the source at resolution, which is what separates it

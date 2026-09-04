@@ -679,3 +679,404 @@ def test_without_the_cloak_the_soldier_blocks(set_pool):
 
     assert not game._has_keyword(attacker, "phasing")
     assert game.declare_blockers(1, {1: 0})[0]
+
+
+# --- W1G2: a phase-out lock with a sweep behind it (CR 702.26) ---
+#
+# Spatial Binding is the set's one *restriction* on phasing, and the read it
+# needs was already in the engine with nothing writing it: `resolve_phasing_for`
+# has asked `metadata["cant_phase_out"]` since phasing landed, and no card, test
+# or handler had ever set it. So the round is as much about the second reader as
+# the first — CR 702.26a's alternation is only one of the ways a permanent
+# phases out, and a lock enforced there alone is one an activated ability walks
+# straight past.
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.phasing_locks import phase_out_forbidden
+
+
+def _w1g2_binding_board(set_pool):
+    """Spatial Binding on seat 0, a creature with phasing on seat 1."""
+    binding = Permanent(card=set_pool("MIR")["Spatial Binding"])
+    drake = Permanent(card=set_pool("MIR")["Teferi's Drake"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[binding], life=20),
+        PlayerState(name="P2", battlefield=[drake], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game, binding, drake
+
+
+def _w1g2_bind(game):
+    result = game.activate_permanent_ability(
+        0, "Spatial Binding", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+
+def test_spatial_binding_compiles_and_charges_its_life(set_pool):
+    """"**Pay 1 life**: Until your next upkeep, target permanent can't phase
+    out."
+
+    The cost is CR 118.8's and the activation path already charged it; what
+    refused was the effect, on "expected 'be'" — the `can't` production is the
+    combat one, and it reads "can't **be** blocked/regenerated".
+    """
+    program = compile_card_oracle(set_pool("MIR")["Spatial Binding"])
+    assert program.supported, program.reason
+
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    assert game.players[0].life == 19, game.log
+    assert phase_out_forbidden(drake), game.log
+
+
+def test_a_phasing_creature_phases_out_without_the_lock(set_pool):
+    """The baseline the assertion below is only meaningful against: CR 702.26a's
+    alternation happens at the creature's controller's untap step."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+
+    game.start_next_turn()
+
+    assert drake.metadata.get("phased_out") is True, game.log
+
+
+def test_spatial_binding_stops_the_untap_steps_alternation(set_pool):
+    """CR 702.26a's event reads the board before it applies either half, so a
+    locked permanent has to be kept out of the *set* rather than skipped
+    afterwards — one excluded after the sets were taken would still have counted
+    as leaving."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    game.start_next_turn()
+
+    assert drake.metadata.get("phased_out") is None, game.log
+
+
+def test_spatial_binding_stops_a_one_shot_phase_out_too(set_pool):
+    """The reader that did not exist.
+
+    Reality Ripple, Mist Dragon, Vaporous Djinn and Taniwha all phase a
+    permanent out without waiting for an untap step, so a lock enforced only at
+    the alternation is one the target's controller escapes by activating an
+    ability. Asked at ``Game.phase_out_permanent`` — the one transition every
+    phase-out passes through.
+    """
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    assert game.phase_out_permanent(drake) is False
+    assert drake.metadata.get("phased_out") is None, game.log
+
+
+def test_the_lock_ends_at_its_controllers_next_upkeep(set_pool):
+    """"Until **your** next upkeep" is CR 109.5's seat — the Binding's
+    controller, not the locked permanent's — so an opponent's upkeep passes
+    without lifting it and the creature phases out on the untap step after the
+    sweep."""
+    game, _binding, drake = _w1g2_binding_board(set_pool)
+    _w1g2_bind(game)
+
+    game.start_next_turn()          # P2's turn: the lock holds
+    assert phase_out_forbidden(drake), game.log
+    game.start_next_turn()          # P1's upkeep sweeps it
+    assert not phase_out_forbidden(drake), game.log
+    game.start_next_turn()          # P2's untap step: it phases out again
+
+    assert drake.metadata.get("phased_out") is True, game.log
+
+
+# --- W1G2: an Aura's protection from a colour nobody printed ---
+
+
+def _w1g2_warded(set_pool, colour):
+    """A vanilla creature under Ward of Lights, its chosen colour forced."""
+    host = Permanent(card=set_pool("MIR")["Viashino Warrior"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host],
+                    hand=[set_pool("MIR")["Ward of Lights"]], life=20),
+        PlayerState(name="P2", hand=[set_pool("MIR")["Kaervek's Torch"]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    assert game.cast_from_hand(
+        0, "Ward of Lights", target_player_index=0, target_permanent_index=0
+    ).supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    aura = next(p for p in game.players[0].battlefield
+                if p.card.name == "Ward of Lights")
+    aura.metadata["chosen_color"] = colour
+    game._recompute_continuous_effects()
+    game.check_state_based_actions()
+    return game, host, aura
+
+
+def test_ward_of_lights_compiles_with_a_chosen_colour(set_pool):
+    """"Enchanted creature has protection from **the chosen color**. This effect
+    doesn't remove this Aura."
+
+    The Ward cycle's channel read the five printed colour words and nothing
+    else, so a colour the Aura *chose* as it entered had no value to travel
+    under. It reaches the same reader as a sentinel, because that reader already
+    maps words to symbols and is the only one holding the Aura the choice was
+    recorded on.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Ward of Lights"])
+    assert program.supported, program.reason
+
+    game, _host, aura = _w1g2_warded(set_pool, "R")
+    assert aura.metadata.get("chosen_color") == "R"
+
+
+def test_ward_of_lights_stops_a_spell_of_the_chosen_colour(set_pool):
+    """CR 702.16b: a permanent with protection from a colour can't be targeted
+    by a spell of that colour."""
+    game, _host, _aura = _w1g2_warded(set_pool, "R")
+    game.start_next_turn()
+
+    result = game.cast_from_hand(
+        1, "Kaervek's Torch", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported, game.log
+
+
+def test_ward_of_lights_lets_every_other_colour_through(set_pool):
+    """The other direction, and the one that says the choice is being *read*: a
+    grant that answered "yes" to every colour would pass the test above while
+    making the creature untargetable by anything."""
+    game, _host, _aura = _w1g2_warded(set_pool, "W")
+    game.start_next_turn()
+
+    result = game.cast_from_hand(
+        1, "Kaervek's Torch", target_player_index=0, target_permanent_index=0
+    )
+
+    assert result.supported, game.log
+
+
+def test_ward_of_lights_survives_choosing_its_own_colour(set_pool):
+    """"**This effect doesn't remove this Aura.**"
+
+    Ward of Lights is white, so naming white would ordinarily make the Aura
+    unable to enchant what it enchants (CR 303.4h) and CR 704.5m would put it in
+    the graveyard. The printed sentence is the exception, and it is claimed as
+    part of the same line rather than left as unread text.
+    """
+    game, _host, aura = _w1g2_warded(set_pool, "W")
+
+    assert game.is_on_battlefield(aura), game.log
+    assert aura.metadata.get("attached_to") is not None, game.log
+
+
+# --- W1G2: an upkeep offer whose payer is also who gains what it buys ---
+
+
+def test_emberwilde_djinn_hands_itself_to_the_player_who_pays(set_pool):
+    """"At the beginning of each player's upkeep, that player may pay {R}{R} or
+    2 life. If the player does, **they** gain control of this creature."
+
+    Two halves, and each was a hole. CR 118.8's alternative had a life reader
+    and a mana reader and the offered-cost position called only the mana one;
+    and "they" is a seat the *firing event* froze rather than one anything
+    targeted or chose, which the control lowering had no branch for. The seat is
+    read through the same table the offer in front of it already used for its
+    own actor, so the player who pays and the player who gains cannot come
+    apart.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Emberwilde Djinn"])
+    assert program.supported, program.reason
+
+    djinn = Permanent(card=set_pool("MIR")["Emberwilde Djinn"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[djinn], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game.resolve_stack()
+    # P1's own upkeep offers P1 the deal it already has; declining changes
+    # nothing, which is what leaves the next upkeep's assertion meaningful.
+    assert game.confirm_optional_pay(0, "Emberwilde Djinn", accept=False)
+    game.resolve_stack()
+    assert game.controller_index_of(djinn) == 0, game.log
+
+    game.start_next_turn()
+    game.resolve_stack()
+    assert game.confirm_optional_pay(1, "Emberwilde Djinn", accept=True)
+    game.resolve_stack()
+
+    assert game.controller_index_of(djinn) == 1, game.log
+    # No red mana anywhere, so the alternative is what was spent (CR 118.8).
+    assert game.players[1].life == 18, game.log
+    assert game.players[0].life == 20, game.log
+
+
+def test_emberwilde_djinn_stays_put_when_the_offer_is_declined(set_pool):
+    """The decline branch — an offer that moved the creature either way would
+    read identically in the test above."""
+    djinn = Permanent(card=set_pool("MIR")["Emberwilde Djinn"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[djinn], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game.resolve_stack()
+    game.confirm_optional_pay(0, "Emberwilde Djinn", accept=False)
+    game.start_next_turn()
+    game.resolve_stack()
+    assert game.confirm_optional_pay(1, "Emberwilde Djinn", accept=False)
+    game.resolve_stack()
+
+    assert game.controller_index_of(djinn) == 0, game.log
+    assert game.players[1].life == 20, game.log
+
+
+# --- W1G2: two supported cards that were playing the wrong game ---
+#
+# Neither was visible to any instrument. Both compile supported, carry no hollow
+# line and claim every printed sentence; the census, `--hollow-lines` and
+# `parse_coverage` all ask whether a line produced *something*, and these two
+# produced something wrong. Found by reading the compiled programs of this
+# group's family line by line and then giving each card a game.
+
+
+def test_forsaken_wastes_drains_the_player_whose_upkeep_it_is(set_pool):
+    """"At the beginning of each player's upkeep, **that player** loses 1 life."
+
+    The lowering had a branch for "that player" under an event about an
+    **object** (the dead creature's controller, Massacre Wurm) and none for an
+    event about a **player** — so the phrase fell through to the ordinary
+    chosen-target reading, which under a trigger nobody targeted lands on
+    ``context.target``. The Wastes drained the *opponent* on both upkeeps and
+    never its own controller: a strictly one-sided card, compiled clean.
+
+    The same table and the same frozen key the offer above it in that module
+    already read for the same printed word.
+    """
+    wastes = Permanent(card=set_pool("MIR")["Forsaken Wastes"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wastes], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.start_turn(0)
+    game.resolve_stack()
+    assert (game.players[0].life, game.players[1].life) == (19, 20), game.log
+
+    game.start_next_turn()
+    game.resolve_stack()
+    assert (game.players[0].life, game.players[1].life) == (19, 19), game.log
+
+
+def test_mangaras_blessing_gains_its_life_now_not_an_end_step_later(set_pool):
+    """"…you gain 2 life, **and** you return this card from your graveyard to
+    your hand **at the beginning of the next end step**."
+
+    A trailing delay attaches to the clause it follows: Magic prints a
+    whole-sentence delay as an *opener*. Read as governing the whole sentence,
+    the life arrived an end step late — on a card printed to be discarded, the
+    difference between surviving the turn and not.
+    """
+    blessing = set_pool("MIR")["Mangara's Blessing"]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[blessing], life=20),
+        PlayerState(name="P2", hand=[set_pool("MIR")["Stupor"]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+
+    assert game.cast_from_hand(1, "Stupor", target_player_index=0).supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    # The life is the trigger's own step; only the return waits for the end step.
+    assert game.players[0].life == 22, game.log
+    assert [c.name for c in game.players[0].hand] == [], game.log
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].hand] == ["Mangara's Blessing"], game.log
+    assert game.players[0].life == 22, game.log
+
+
+# --- W1G2: borrowing the land an Aura is attached to ---
+
+
+def _w1g2_wellspring(set_pool):
+    """Wellspring cast on a tapped Forest the *opponent* controls."""
+    forest = Permanent(card=set_pool("MIR")["Forest"], tapped=True)
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Wellspring"]], life=20),
+        PlayerState(name="P2", battlefield=[forest], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    assert game.cast_from_hand(
+        0, "Wellspring", target_player_index=1, target_permanent_index=0
+    ).supported
+    game.resolve_stack()
+    return game, forest
+
+
+def test_wellspring_borrows_the_land_as_it_enters(set_pool):
+    """"When this Aura enters, gain control of **enchanted land** until end of
+    turn."
+
+    The Aura's own host is neither a target (an Aura's effect on what it
+    enchants chooses nothing) nor a record an earlier step wrote, so the control
+    lowering refused it outright — "the linked-control handler needs a named
+    target". Only "until end of turn" is admitted: the untimed spelling (Mind
+    Harness' "You control enchanted creature") is a *static* line `auras.py`
+    derives on every recompute and ends by detaching, where a one-shot
+    contribution with no lifetime would outlive the Aura.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Wellspring"])
+    assert program.supported, program.reason
+
+    game, forest = _w1g2_wellspring(set_pool)
+
+    assert game.controller_index_of(forest) == 0, game.log
+    # The entry trigger borrows it; only the upkeep line untaps it.
+    assert forest.tapped, game.log
+
+
+def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
+    """"At the beginning of your upkeep, untap enchanted land. **You gain
+    control of that land** until end of turn."
+
+    Two halves, and the second reads the first. "That land" is the permanent the
+    untap in front of it acted on, and the attached untap wrote no record — the
+    lowering that reads one has existed since Disharmony and had no producer to
+    read. And "**You** gain control" reached the verb table's keyword branch,
+    which refuses with "expected a keyword ability"; CR 101.1 makes the pronoun
+    say nothing the bare imperative did not.
+    """
+    game, forest = _w1g2_wellspring(set_pool)
+
+    game.start_next_turn()          # the opponent's turn — the loan lapses
+    game.start_next_turn()          # back to the Aura's controller
+    game.resolve_stack()
+
+    assert not forest.tapped, game.log
+    assert game.controller_index_of(forest) == 0, game.log

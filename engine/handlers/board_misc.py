@@ -8,7 +8,8 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, LAST_TARGET_CONTROLLER,
+from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
+                            LAST_TARGET_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
@@ -162,7 +163,29 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
                 f"{context.card.name} had no permanent to watch"
             )
             return True, "no object"
-    if payload.get("binds_target"):
+    recorded_key = payload.get("binds_recorded")
+    if recorded_key is not None:
+        # "…**Exile it** at the beginning of the next end step." (Shallow
+        # Grave, Zirilan of the Claw.) CR 603.7c's object, read out of the
+        # record an earlier step of *this* resolution wrote — the permanent
+        # it put onto the battlefield, which nothing targeted and which does
+        # not exist until that step runs.
+        #
+        # An empty record arms **nothing**, for `watches`' reason one branch
+        # up: an unbound entry would answer to the first permanent the event
+        # names, which is the widening every bound payload here prevents.
+        ids = (context.results or {}).get(str(recorded_key))
+        if isinstance(ids, int):
+            ids = (ids,)
+        bound_id = next(
+            (found for found in (ids or ()) if isinstance(found, int)), None
+        )
+        if bound_id is None:
+            game.log.append(
+                f"{context.card.name} had no permanent to be about"
+            )
+            return True, "no object"
+    elif payload.get("binds_target"):
         # The **innermost** binding, not the resolution's target list: inside
         # "for each of those creatures, … destroy that creature at end of
         # combat" (Winter's Chill) the ability is created once per creature and
@@ -1330,7 +1353,14 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     if source is None:
         return True, "resolved"
     counter = str(instruction.payload.get("counter", ""))
-    count = int(instruction.payload.get("count", 1))
+    # "Put **X** charge counters on this artifact." (Ventifact Bottle.) The
+    # cast's announced X, resolved through the same reader every other
+    # amount in this engine uses — a printed number passes through it
+    # unchanged, so every payload written before this is untouched.
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if count <= 0:
+        # X may be announced as zero, which CR 122.1 places no counters for.
+        return True, "resolved"
     total = add_counters(source, counter, count)
     game.log.append(
         f"{source.card.name} gets a {counter} counter ({total} total)"
@@ -1660,9 +1690,19 @@ def remove_all_counters_from_self(game: Game, instruction: OracleInstruction, co
     held = counters_on(permanent, counter)
     if held <= 0:
         context.results["removed_counter"] = False
+        # Zero is a real answer, and it has to be *written*: "add {C} for
+        # each charge counter removed this way" over an empty artifact adds
+        # nothing, and a missing record and a recorded zero must not be told
+        # apart by the sentence behind this one.
+        context.results[COUNTERS_REMOVED] = 0
         game.log.append(f"{permanent.card.name} has no {counter} counters to remove")
         return True, "resolved"
     context.results["removed_counter"] = True
+    # "…remove all charge counters from it. **Add {C} for each charge counter
+    # removed this way.**" (Ventifact Bottle.) How many came off, for the
+    # sentence behind this one: by the time it runs the counters are gone, so
+    # counting the artifact would be the exact complement of what it asks.
+    context.results[COUNTERS_REMOVED] = held
     remove_counters(permanent, counter, held)
     game.log.append(
         f"Removed all {held} {counter} counters from {permanent.card.name}"

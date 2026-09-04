@@ -108,6 +108,16 @@ class EndStepMixin:
         # "At the beginning of **your** next end step, …" (Necropotence). The
         # controller's own, so this one is seated where the line above is not.
         fire_delayed_triggers(self, "controllers_next_end_step", seat=player_index)
+        # "At the beginning of **that turn's** end step, you lose the game."
+        # (Final Fortune.) The end step of the extra turn the creating spell
+        # queued, so it is announced only on an extra turn and only for the
+        # seat taking it — and `EVENTS_AFTER_THIS_TURN` keeps an entry armed
+        # during an extra turn from answering to that same turn's announcement,
+        # which is exactly what a chain of Final Fortunes does.
+        if self.current_turn_is_extra:
+            fire_delayed_triggers(
+                self, "granted_extra_turns_end_step", seat=player_index
+            )
 
         def _delayed_eot_removal(permanent: Permanent) -> bool:
             # Nettling Imp / Siren's Call: destroy creatures that were

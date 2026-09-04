@@ -22,6 +22,7 @@ from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
+from ..phasing_locks import phase_out_forbidden
 from ..replacements import apply_entry_riders, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
 from ..targeting import graveyard_target_spec
@@ -531,6 +532,16 @@ class GameHelpersMixin:
         controller = self.controller_index_of(permanent)
         if controller is None:
             return False
+        # "Target permanent **can't phase out**." (Spatial Binding, CR 702.26.)
+        # Asked here, at the one transition every phase-out passes through, and
+        # not only at the untap step's alternation: an activated phase-out
+        # (Mist Dragon, Vaporous Djinn, Frenetic Efreet) and a one-shot
+        # (Reality Ripple, Taniwha) are the other ways a permanent leaves, and a
+        # lock enforced at the alternation alone is one the target's controller
+        # escapes by activating an ability.
+        if phase_out_forbidden(permanent):
+            self.log.append(f"{permanent.card.name} can't phase out")
+            return False
         moving = [permanent] + [
             aura
             for aura in list(permanent.metadata.get("attached_auras") or [])
@@ -583,8 +594,15 @@ class GameHelpersMixin:
         leaving = [
             perm for perm in self.controlled_by(seat)
             if self._has_keyword(perm, "phasing")
-            and not perm.metadata.get("cant_phase_out")
+            and not phase_out_forbidden(perm)
         ]
+        # The lock is asked twice on purpose. Here it keeps a locked permanent
+        # out of the set the event reads, which is what CR 702.26a's
+        # simultaneity needs — a permanent excluded after the sets were taken
+        # would still have been counted as leaving. `phase_out_permanent` asks
+        # again for every *other* way a permanent phases out. Until Spatial
+        # Binding this read had **no writer anywhere in the engine**, so a
+        # restriction arriving would have been half enforced.
         arriving = list(player.phased_out)
         self.phase_in_for(seat, permanents=arriving)
         for perm in leaving:
@@ -832,6 +850,20 @@ class GameHelpersMixin:
             # the controller the permanent last had; the owner is looked up
             # separately precisely because the two differ under Control Magic.
             player.creatures_died_under_your_control_this_turn += 1
+            # "…for each creature put into **your graveyard** from the
+            # battlefield this turn" (Asmira, Holy Avenger). CR 400.3's seat,
+            # not CR 109.5's: the card goes to its *owner's* graveyard, which is
+            # a different player from the one above whenever the permanent was
+            # stolen. Counted for a token too — CR 111.7 puts it into the
+            # graveyard and only then does the state-based action make it cease
+            # to exist, so the sentence is true of it even though nothing is
+            # there to find afterwards, which is why this is a tally and not a
+            # read of the pile.
+            owner_seat = self.owner_index_of(permanent)
+            grave_owner = (
+                self.players[owner_seat] if owner_seat is not None else player
+            )
+            grave_owner.creatures_put_into_your_graveyard_this_turn += 1
             if next(matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"dies"},

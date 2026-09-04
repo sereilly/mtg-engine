@@ -27,6 +27,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
+from ..readers import _parse_entering_counters
+from ..vocabulary import CARD_TYPES
 from ..records import _parse_for_each_this_way
 
 from ..errors import GrammarError
@@ -132,7 +134,34 @@ def _parse_return(
 
     bound = stream.mark()
     subject: ast.Recipient | None
-    if stream.accept_phrase("that", "card"):
+    # "Return **the top creature card of your graveyard** to the
+    # battlefield." (Shallow Grave.) A card named by its *position* in an
+    # ordered pile (CR 404.3) rather than by a noun phrase, which is why the
+    # shared recipient parser refuses it — the same reason the counter
+    # family reads "the top card of your graveyard" locally one file over.
+    #
+    # Its own quantifier, refused by default everywhere: no lowering accepts
+    # ``"top"`` unless it says so, so a sentence that reaches one fails **by
+    # name** rather than being read as a chosen target the card never offers.
+    top_mark = stream.mark()
+    top_of_graveyard = None
+    if stream.accept_phrase("the", "top"):
+        type_word = stream.peek_word()
+        if type_word is not None and type_word in CARD_TYPES:
+            stream.advance()
+            if stream.accept_phrase("card", "of", "your", "graveyard"):
+                top_of_graveyard = ast.TargetSpec(
+                    "top",
+                    ast.ObjectFilter(
+                        card_types=(type_word,), is_card=True,
+                        zone="graveyard", zone_owner=ast.PlayerRef("you"),
+                    ),
+                )
+    if top_of_graveyard is None:
+        stream.reset(top_mark)
+    if top_of_graveyard is not None:
+        subject = top_of_graveyard
+    elif stream.accept_phrase("that", "card"):
         subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:
         stream.reset(bound)
@@ -159,6 +188,16 @@ def _parse_return(
     entering_tapped = False
     if destination.name == "battlefield" and stream.accept_word("tapped"):
         entering_tapped = True
+
+    # "…to the battlefield **with a +1/+1 counter on it**." (Sand Golem.)
+    # CR 121.2 puts the counters on as part of the move, so the phrase belongs
+    # to the return exactly as "tapped" above does — and through the same
+    # reader the exile uses, so one printed phrase has one meaning. Battlefield
+    # only, for that rider's reason: a card in a hand carries no counters, and
+    # consuming the words into nothing is the bug this grammar refuses.
+    entering_counters: tuple[tuple[str, int], ...] = ()
+    if destination.name == "battlefield":
+        entering_counters = _parse_entering_counters(stream)
 
     # "…to the battlefield **under the control of that creature's owner**."
     # (Reincarnation.) CR 110.2 makes the spell's controller the default, so
@@ -239,6 +278,7 @@ def _parse_return(
             each_from = ast.Zone(each.filter.zone, each.filter.zone_owner)
         return ast.ReturnToZone(
             each, destination, each_from, entering_tapped=entering_tapped,
+            entering_counters=entering_counters,
             under_control_of=under_control_of, repetitions=repetitions,
             actor=actor,
             attached_to=attached_to, losing_subtypes=losing_subtypes,

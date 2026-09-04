@@ -132,9 +132,9 @@ from .keywords import (
     _lower_lose_keyword,
 )
 from .counter_removal import _lower_remove_counter
+from ._counter_stores import _lower_player_gets_counters
 from .counters import (
     _fused_tap_enchanted_then_counters,
-    _lower_player_gets_counters,
     _lower_put_counter,
 )
 from .loops import (
@@ -193,6 +193,7 @@ from .attachments import (
     _lower_choose_permanents,
 )
 from .board import (
+    _lower_cant_phase_out,
     _lower_phase_out,
     _lower_put_on_library_bottom,
     _lower_put_graveyard_top_on_library_bottom,
@@ -418,6 +419,7 @@ __all__ = [
     "_lower_doesnt_untap_while_source_tapped",
     "_lower_tap",
     "_reads_no_return_restriction",
+    "_lower_cant_phase_out",
     "_lower_phase_out",
     "_lower_put_on_library_bottom",
     "_lower_put_graveyard_top_on_library_bottom",

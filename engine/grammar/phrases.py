@@ -26,10 +26,15 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import GToken, MANA, NUMBER, PT, PUNCT, WORD, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
-from .references import parse_target_spec
+# The back-references left for `references` when this module crossed the
+# thousand-line guard — they answer CR 115's question with an earlier step as
+# the referent, which is that module's subject and not this one's word tables.
+# Re-exported under the names this module used, so no caller changed.
+from .references import (PAIR_ORDINALS,  # noqa: F401
+                         _parse_that_object, parse_bound_subject,
+                         parse_pair_ordinal_subject, parse_target_spec)
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
-                         SUBTYPE_INDEX, match_longest)
+from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
 from .keywords import (PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords,
                        parse_keyword_list)
 
@@ -366,131 +371,6 @@ def _accept_number(stream: TokenStream) -> int | None:
         return None
     stream.advance()
     return NUMBER_WORDS[word]
-
-
-#: The two positions a printed *pair* of bound objects is named by. A trigger
-#: that bound one object is referred to as "that creature"; one that bound two
-#: — the halves of a block — names them by order, and the ordinal is the
-#: quantifier rather than a word to skip. Each keeps its own, for the reason
-#: "that" and "those" do: a lowering written for one must fail by name rather
-#: than silently receive the other.
-
-
-PAIR_ORDINALS = ("other", "first")
-
-
-def _accept_pair_ordinal(stream: TokenStream) -> str | None:
-    """``other`` / ``first`` at the cursor, consumed, or None."""
-    word = stream.peek_word()
-    if word in PAIR_ORDINALS:
-        stream.advance()
-        return word
-    return None
-
-
-def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
-    """``the other <card type>`` / ``the first <card type>``, or None.
-
-    The ordinal half of :func:`parse_bound_subject`, reachable on its own
-    because the productions that read a bound object do **not** share one
-    reader: :func:`_parse_that_object` is reached only where a production calls
-    it, never from the shared noun parser, so that "that creature" cannot leak
-    into every line printing the phrase. (It lived in ``effects/board.py`` until
-    the damage family needed it too; the copy left behind there shadowed this
-    one for a round.) The ordinals are named in two families all the same (Infinite
-    Authority destroys one member of the pair and puts a counter on the other),
-    and a second spelling of them is how the two halves of one printed sentence
-    would come to disagree about which creature they meant.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("the"):
-        return None
-    ordinal = _accept_pair_ordinal(stream)
-    if ordinal is None:
-        stream.reset(mark)
-        return None
-    noun = stream.peek_word()
-    if noun is None or noun not in CARD_TYPES:
-        # "Put a -1/-1 counter on **the other**." (Retribution.) The bare
-        # ordinal, with the noun left to the sentence that named the pair —
-        # which is the only place it could come from, since the pair is a set an
-        # earlier sentence chose rather than anything this phrase describes.
-        #
-        # Admitted only at the end of its clause: "the other" followed by a word
-        # this reader has no noun for is a phrase it has not understood, and
-        # consuming two words of it would be the dropped-rider shape the
-        # full-consumption rule exists to make loud.
-        if stream.exhausted or stream.at_punct(".", ",", ";"):
-            return ast.TargetSpec(ordinal, ast.ObjectFilter())
-        stream.reset(mark)
-        return None
-    stream.advance()
-    return ast.TargetSpec(ordinal, ast.ObjectFilter(card_types=(noun,)))
-
-
-def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
-    """``that <card type>`` / ``those <card type>s``, or None if that is not
-    what is at the cursor.
-
-    The plural is a *different quantifier*, not the singular with a count: "that
-    creature" is the one object the previous sentence chose and "those creatures"
-    is however many it chose — which for an "up to N" may be two, one or none.
-    Keeping them apart is what stops a lowering written for one bound object
-    receiving a list.
-
-    Both are refused by default everywhere, which is what makes reading them
-    safe: no lowering accepts "that" or "those" unless it says so
-    (``_is_target`` and ``_names_several_targets`` both answer False), so a
-    sentence reaching one fails **by name** rather than failing to parse. A
-    parse error would blame the subject for a missing production.
-
-    Here rather than in ``statements.py``, where it began, because two families
-    read it now: the sentence subject position, and the *object* position of
-    "prevent all combat damage that would be dealt by **that creature** this
-    turn" (Telekinesis). A fragment two families need is not an effect.
-    """
-    mark = stream.mark()
-    if stream.accept_word("those"):
-        noun = stream.peek_word()
-        singular = noun[:-1] if noun and noun.endswith("s") else noun
-        if singular is None or singular not in CARD_TYPES:
-            stream.reset(mark)
-            return None
-        stream.advance()
-        return ast.TargetSpec("those", ast.ObjectFilter(card_types=(singular,)))
-    # "**The** creature gains …" (Glyph of Delusion) is the same back-reference
-    # as "**that** creature", in the older templating that used the definite
-    # article for it. One production for both, because the referent, the
-    # quantifier and every lowering that accepts one are identical — and because
-    # a sentence whose subject is a bare definite noun phrase has nothing else
-    # it could mean: an effect that acts on "a creature" says so.
-    if not stream.accept_word("that", "the"):
-        return None
-    # "…destroy **the other** creature … put a +1/+1 counter on **the first**
-    # creature." (Infinite Authority.) A sentence under a trigger that bound a
-    # *pair* of objects has two back-references rather than one, and English
-    # names them by position — so the ordinal is the quantifier, not a word to
-    # skip. Each gets its own, for the reason "that" and "those" have separate
-    # ones: a lowering written for one of them must fail by name rather than
-    # receive the other. Nothing accepts either unless it says so, and today
-    # only the block-pair lowerings do.
-    ordinal = _accept_pair_ordinal(stream)
-    noun = stream.peek_word()
-    # "**That permanent** doesn't untap during its controller's untap step…"
-    # (Amber Prison, after "Tap target artifact, creature, or land"). The
-    # generic noun is the restatement with *no* narrowing in it, which is what
-    # a sentence back-referencing a choice across three card types has to
-    # print — "that artifact" would name one of them. It carries no card type
-    # for exactly that reason, and a lowering that reads the field sees the
-    # empty tuple the phrase means rather than a word it would have to test.
-    if noun == "permanent":
-        stream.advance()
-        return ast.TargetSpec(ordinal or "that", ast.ObjectFilter())
-    if noun is None or noun not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    return ast.TargetSpec(ordinal or "that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_duration(stream: TokenStream) -> ast.Duration:
@@ -849,52 +729,6 @@ def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
         stream.reset(mark)
         return None
     return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
-
-
-def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
-    """``that <card type>`` — the object a trigger already named.
-
-    Not a target: the trigger bound it when it fired, so nothing is chosen on
-    resolution. It gets its own quantifier rather than being read as an ordinary
-    noun phrase, so a lowering written for "target creature" can never receive
-    it — the two reach completely different handlers, and the ones that take a
-    bound object read it out of the trigger's context instead of the payload.
-
-    A fragment two effect families ask for by name -- the board family's
-    "destroy that land" and the damage family's "unless they sacrifice that
-    artifact" -- so it lives here rather than in either of them. That is the
-    *only* thing that changed when it moved: it is still reached only where a
-    production calls it, never from the shared noun parser, because the phrase
-    turns up all over the pool ("tap that creature", "that player discards")
-    and letting `parse_recipient` claim it would lower every one of those lines
-    through a filter naming a card type nobody bound.
-    """
-    # "destroy **the other** creature" (Infinite Authority) — the second member
-    # of a pair the trigger bound, read through the shared ordinal production
-    # so the counter clause in the same sentence names it the same way.
-    ordinal = parse_pair_ordinal_subject(stream)
-    if ordinal is not None:
-        return ordinal
-    mark = stream.mark()
-    if not stream.accept_word("that"):
-        return None
-    noun = stream.peek_word()
-    if noun is not None and noun in CARD_TYPES:
-        stream.advance()
-        return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
-    # "destroy that **Wall**" (Battering Ram). A subtype names the bound object
-    # just as a card type does — the trigger that fired required it, so the word
-    # is describing what was bound rather than narrowing a fresh choice. Read
-    # through the vocabulary, so a made-up noun still refuses.
-    matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
-    if matched is not None and matched[0] in CREATURE_TYPES:
-        stream.advance(matched[1])
-        return ast.TargetSpec(
-            "that",
-            ast.ObjectFilter(card_types=("creature",), subtypes=(matched[0],)),
-        )
-    stream.reset(mark)
-    return None
 
 
 def parse_counted_subject(

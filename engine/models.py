@@ -758,6 +758,18 @@ class PlayerState:
     # control": it is one number for the table, so reading it per player would
     # count the opponent's deaths too.
     creatures_died_under_your_control_this_turn: int = 0
+    # Creatures put into *this player's graveyard* from the battlefield this
+    # turn — CR 700.4's "dies", counted by the **owner** of what died rather
+    # than by whoever controlled it. "…for each creature put into your graveyard
+    # from the battlefield this turn" (Asmira, Holy Avenger).
+    #
+    # Its own tally beside the controller-scoped one above, and the two really
+    # do differ: a creature stolen with Control Magic dies under the thief's
+    # control (CR 109.5) and goes to its *owner's* graveyard (CR 400.3), so it
+    # counts for one seat on one field and for the other seat on the other.
+    # Neither is a reading of the graveyard itself, which forgets a token
+    # (CR 111.7) and everything anything has since removed.
+    creatures_put_into_your_graveyard_this_turn: int = 0
     # Whether this seat declared an attacker this turn (CR 508.1). On the seat
     # rather than derived from the board, because a player who attacked and
     # then lost the attacker still attacked this turn — reading

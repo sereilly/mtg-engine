@@ -24,6 +24,7 @@ this one beside `_common` in its `shared` tuple.
 from __future__ import annotations
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
+                             SEARCHED_PERMANENTS,
                              LAST_TARGET_CONTROLLER,
                              COUNTERS_PLACED_THIS_WAY,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
@@ -594,10 +595,24 @@ _COUNTERS_PLACED_THIS_WAY = COUNTERS_PLACED_THIS_WAY
 #: that can name it: the permanent did not exist when the ability was
 #: activated, so nothing on the stack or on the board points at it.
 _REANIMATED_PERMANENTS = "reanimated_permanents"
+#: "Take an extra turn after this one. At the beginning of **that turn's** end
+#: step, you lose the game." (Final Fortune.) The turn the step before it
+#: queued, recorded so the delay behind it has a producer to name: "that turn"
+#: with nothing in front of it that made one is a back-reference to nothing, and
+#: the delayed ability it would arm answers to an event that only ever happens
+#: on somebody's extra turn — inert rather than wrong, which is the failure this
+#: whole registry exists to refuse.
+EXTRA_TURN_GRANTED = "extra_turn_granted"
 
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
+    # What a search put onto the battlefield (Zirilan of the Claw). The
+    # reanimation's twin one zone over, and a member of this set for that
+    # entry's reason: "that creature" behind either step names the permanent
+    # the step created, and a reader that knew only one of them would refuse
+    # the other for no reason a card could see.
+    SEARCHED_PERMANENTS,
 })
 
 

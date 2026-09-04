@@ -397,6 +397,24 @@ def lower_untargeted_return(
         payload: dict[str, object] = {
             "tapped": node.entering_tapped, "functions_from": "graveyard",
         }
+        if node.entering_counters:
+            # "…**with a +1/+1 counter on it**" (Sand Golem). CR 121.2 puts the
+            # counters on as part of the move, so they ride this instruction
+            # rather than becoming a second one: the permanent does not exist
+            # until this handler runs, and a placement behind it would have
+            # nothing to name.
+            #
+            # Refused for a hand, where the exile's own reader would have let
+            # them through: a card in a hand is not a permanent and carries no
+            # counters (CR 122.1), so admitting the phrase would consume words
+            # that then do nothing.
+            if to_hand:
+                raise LoweringError(
+                    "a card returned to a hand carries no counters", node=node
+                )
+            payload["counters"] = {
+                kind: count for kind, count in node.entering_counters
+            }
         if to_hand:
             # Emitted only for the newer reading, so the battlefield spelling's
             # payload stays byte-identical and no behaviour signature moves.

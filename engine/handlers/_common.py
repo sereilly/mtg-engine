@@ -246,10 +246,25 @@ def _damage_dealt_this_turn(game, context, query: dict) -> int:
     The name compared against is the source's *own* — the SELF token the clause
     printed — so no card name reaches this file.
     """
-    from ..damage_ledger import damage_dealt_to_permanent, source_name_of
+    from ..damage_ledger import (
+        damage_dealt_to_permanent, damage_dealt_to_seat, source_name_of,
+    )
 
     base = max(0, int(query.get("base", 0) or 0))
     source = context.source_permanent
+    if query.get("recipient") == "you":
+        # "…for each 1 damage **dealt to you** this turn." (Discordant Spirit.)
+        # The same history and the same window as the permanent read below, over
+        # the ledger's other recipient field — "you" being CR 109.5's controller
+        # of the ability, which is ``context.caster`` for a trigger as much as
+        # for a spell. No source narrowing: the clause prints none, and the
+        # ``source_name`` default that Blazing Effigy needs would count only the
+        # Spirit's own damage, which is none.
+        seat = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        return max(0, base + damage_dealt_to_seat(game, seat))
     if query.get("recipient") != "source" or source is None:
         return base
     permanent_id = getattr(source, "permanent_id", None)
@@ -439,6 +454,15 @@ def evaluate_count(
     history = spec.get("history")
     if history == "creatures_died_under_your_control":
         return int(getattr(owner, "creatures_died_under_your_control_this_turn", 0))
+    if history == "creatures_into_your_graveyard":
+        # "…for each creature put into **your graveyard** from the battlefield
+        # this turn" (Asmira, Holy Avenger). The same window and the same event
+        # as the row above, tallied for CR 400.3's owner instead of CR 109.5's
+        # controller — one creature stolen and killed counts for one seat here
+        # and for the other seat there, which is what the two printed phrases
+        # say. Not a read of the pile: a token was in it for no time at all
+        # (CR 111.7) and anything since could have moved a card out.
+        return int(getattr(owner, "creatures_put_into_your_graveyard_this_turn", 0))
     if history is not None:
         return 0
     # A *named* board count rather than a count of objects in a zone: a player's
@@ -925,6 +949,18 @@ def permanent_state_holds(perm, state: str) -> bool:
         from ..regeneration import REGENERATED_THIS_TURN
 
         return int(perm.metadata.get(REGENERATED_THIS_TURN, 0)) > 0
+    if state == "was_dealt_damage_this_turn":
+        # "At the beginning of each end step, **if this creature was dealt
+        # damage this turn**, put a +0/+1 counter on it." (Wall of Resistance.)
+        # The same key ``dealt_damage_this_turn`` reads as a *filter* on a
+        # candidate (Giant Shark), read here as a question about one named
+        # permanent — one record, so a Wall that was pinged and a Shark's
+        # blocker cannot disagree about what "was dealt damage" means.
+        #
+        # Not ``damage_marked``: regeneration (CR 701.19a) and a toughness
+        # rewrite each wipe that while the damage stays dealt, and the Wall's
+        # counter is owed either way.
+        return bool(perm.metadata.get("was_dealt_damage_this_turn"))
     test = _STATE_TESTS.get(state)
     # A word with no test behind it must not read as False: that is a condition
     # nobody answered wearing the answer "no". Every producer of a state name is

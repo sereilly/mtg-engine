@@ -51,8 +51,18 @@ class CountOfDeaths:
     battlefield, so reading this as the plain filter "creature" would count the
     survivors. The same distinction :class:`DiedThisTurn` draws for a "for
     each" iterator, at the other end of the sentence.
+
+    ``scope`` is *which seat's* history, and the two the pool prints are not the
+    same players: "died **under your control**" (Liliana's Standard Bearer) is
+    CR 109.5's controller and "put into **your graveyard** from the battlefield"
+    (Asmira, Holy Avenger) is CR 400.3's owner, which a stolen creature dying
+    tells apart. Payload rather than a second node, because the question — how
+    many creatures died this turn, seen from one seat — is one question, and two
+    nodes would be two tallies free to drift about what a token or an animated
+    land counts as.
     """
     filter: "ObjectFilter"
+    scope: str = "under_your_control"
 
 
 @dataclass(frozen=True)
@@ -416,8 +426,19 @@ class DamageDealtThisTurn:
     CR 109.5's "**other** sources": an identity comparison against the ability's
     own source, the same narrowing "another creature" already carries.
     """
+    #: ``"source"`` is Blazing Effigy's "dealt **to this creature**"; ``"you"``
+    #: is Discordant Spirit's "dealt **to you** this turn" — the same history
+    #: over the same window, joined on the ledger's recipient *seat* instead of
+    #: its recipient permanent. One node for both, because which end of a damage
+    #: event a clause names is payload here exactly as a printed noun phrase is
+    #: everywhere else in this grammar.
     recipient: str = "source"
-    source_name: str = "self"
+    #: ``None`` is "from any source", which is what a clause printing no "by …"
+    #: phrase means. Spelled out rather than left to the default, because the
+    #: default is the narrowing Blazing Effigy prints: a clause that named no
+    #: source and inherited it would count only the ability's own damage, which
+    #: on Discordant Spirit is none at all.
+    source_name: str | None = "self"
     others_only: bool = False
 
 

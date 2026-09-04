@@ -27,6 +27,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
@@ -40,7 +41,7 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD,
                       _COUNTERS_PLACED_THIS_WAY,
                       _PERMANENTS_GIVEN_COUNTERS,
-                      _REANIMATED_PERMANENTS)
+                      _REANIMATED_PERMANENTS, EXTRA_TURN_GRANTED)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
@@ -225,6 +226,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # which is the only place the sentence behind it can read the number: by
     # then the store holds zero, so a read of the board would deal none.
     "remove_all_counters_from_target_player": COUNTERS_REMOVED,
+    # "…remove all charge counters from it. **Add {C} for each charge counter
+    # removed this way.**" (Ventifact Bottle.) The same record one object
+    # over: that row empties a *player's* store and this one a permanent's,
+    # and the sentence behind either asks the same question about the number.
+    "remove_all_counters_from_self": COUNTERS_REMOVED,
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.
@@ -344,6 +350,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the ability's target is a *card* in a graveyard — so the reanimation is
     # the only step that can say which permanent the sentences behind it name.
     "reanimate_creature": _REANIMATED_PERMANENTS,
+    # "…put that card onto the battlefield, then shuffle. **That Dragon** gains
+    # haste until end of turn. Exile **it** at the beginning of the next end
+    # step." (Zirilan of the Claw.) The reanimation's twin one zone over: the
+    # permanent did not exist when the ability was activated — its subject is a
+    # *card* in a library — so the search is the only step that can say which
+    # permanent the sentences behind it name.
+    "search_library": SEARCHED_PERMANENTS,
+    # "Take an extra turn after this one. At the beginning of **that turn's**
+    # end step, you lose the game." (Final Fortune.) The queued turn, recorded
+    # so the delay behind it has something to refer back to — see
+    # ``_events.EXTRA_TURN_GRANTED``.
+    "grant_extra_turn": EXTRA_TURN_GRANTED,
     # Two records, for the destroy family's reason: "…where X is the number of
     # Islands **tapped this way**" (Monsoon) asks how many the sweep turned, and
     # "**They** don't untap during their controller's next untap step" (Joven's
@@ -390,6 +408,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # attacker that was never tapped is still "it" (CR 611.2c fixes the set
     # when the effect begins) — and both later sentences read the record.
     "untap_target_permanent": "untapped_permanents",
+    # "…untap enchanted land. **You gain control of that land** until end of
+    # turn." (Wellspring.) The Aura's own untap, recorded under the same key
+    # the targeted one above uses: which untap put the permanent there is
+    # not something the sentence behind it can see, so it must not be
+    # something it has to know.
+    "untap_enchanted_creature": "untapped_permanents",
     # "…reveal the top card of your library. **If it's** a creature or land
     # card, draw a card." (Track Down.) The reveal records what it showed and
     # the conditional after it reads that record — not the library, which the

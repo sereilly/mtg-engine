@@ -310,7 +310,14 @@ def lower_statement(
     if isinstance(statement, ast.GainControl):
         # `produced` carries the earlier steps' records: Disharmony's
         # "gain control of that creature" reads what its untap chose.
-        return _lower_gain_control(statement, produced)
+        #
+        # The event carries the *seat* half of the same question: "…**they**
+        # gain control of this creature" (Emberwilde Djinn) names the player
+        # the firing trigger froze, which only the event can say. The **raw**
+        # event, for the reason the two readers above give: the sentence is
+        # printed inside an offer's branch, so it is not the ability's whole
+        # effect and `dispatch_event` is already None there.
+        return _lower_gain_control(statement, produced, event)
 
     if isinstance(statement, ast.ModalNode):
         # Reached only when the head is a *step* of something larger — "Draw a
@@ -619,8 +626,13 @@ def lower_statement(
 
     # In the chain: the event decides whether "that creature gains first
     # strike" names a block pair's other half or nothing at all.
+    #
+    # …and  decides whether it names neither — the permanent an
+    # earlier step of this same effect put onto the battlefield (Shallow Grave,
+    # Zirilan of the Claw), which is a *record* rather than anything the
+    # ability chose.
     if isinstance(statement, ast.GainKeyword):
-        return _lower_gain_keyword(statement, event, event_subject)
+        return _lower_gain_keyword(statement, event, event_subject, produced)
     if isinstance(statement, ast.CreateDelayedTrigger):
         return _lower_create_delayed_trigger(statement, lower_statement(
             # The delay's own noun phrase is the created ability's narrowing —

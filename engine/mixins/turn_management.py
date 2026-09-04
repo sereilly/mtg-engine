@@ -301,6 +301,7 @@ class TurnManagementMixin:
             player.life_gained_this_turn = 0
             player.noncombat_damage_dealt_to_opponents_this_turn = 0
             player.creatures_died_under_your_control_this_turn = 0
+            player.creatures_put_into_your_graveyard_this_turn = 0
             player.spells_cast_this_turn = []
             player.attacked_this_turn = False
         # A static ability whose condition is *whose turn it is* changes truth

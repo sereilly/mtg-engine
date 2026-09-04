@@ -201,6 +201,18 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
     if attached_to is not None:
         game.become_untapped(attached_to)
         game.log.append(f"Untapped {attached_to.card.name} via {card.name}")
+    # "At the beginning of your upkeep, untap enchanted land. **You gain
+    # control of that land** until end of turn." (Wellspring.) What this
+    # step untapped, for the sentence that names it afterwards — the same
+    # record and the same key the targeted untaps beside it already write,
+    # so "that land" reads one thing whichever untap put it there.
+    #
+    # Written on every path, an empty one included: a producer `_PRODUCES`
+    # names has to write whenever it runs, or the sentence behind it acts on
+    # a record from some earlier resolution.
+    context.results["untapped_permanents"] = (
+        (attached_to.permanent_id,) if attached_to is not None else ()
+    )
     return True, "resolved"
 
 

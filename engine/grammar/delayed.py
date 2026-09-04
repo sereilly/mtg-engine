@@ -81,6 +81,15 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # and `delay_binds_an_object` is the answer.
     (("at", "the", "beginning", "of", "the", "next", "end", "step"),
      "next_end_step", True, "until_it_triggers", True),
+    # "…At the beginning of **that turn's** end step, you lose the game."
+    # (Final Fortune.) Read above the two rows below it because "that turn"
+    # is neither of the referents they name: those wait for an end step that
+    # already has a turn, and this one names the turn the sentence in front of
+    # it just queued (CR 500.7). Binds nothing — a step is not an object — and
+    # the lowering refuses the words with no extra-turn grant in front of them,
+    # because "that turn" with no producer names nothing at all.
+    (("at", "the", "beginning", "of", "that", "turn", "'s", "end", "step"),
+     "granted_extra_turns_end_step", True, "until_it_triggers", False),
     # "At the beginning of **your** next end step, …" (Necropotence). Not the
     # row above: that one is the next end step there is, whoever's turn it falls
     # in, and this one waits for one of the controller's own. On an opponent's

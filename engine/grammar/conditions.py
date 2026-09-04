@@ -436,6 +436,34 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.ObjectHasKeyword(keywords, negated=negated)
     stream.reset(keyword_mark)
 
+    # "…**if it's an opponent's turn**" (Discordant Spirit) / "if it's your
+    # turn". Whose turn it is, printed as an intervening-if rather than as the
+    # timing clause `_parse_turn_scoped_static_line` reads ("During your turn,
+    # …") — one question, so it lands on that clause's node and reaches that
+    # clause's evaluator instead of getting a second reading of the same fact.
+    #
+    # "An opponent's turn" is `negated`, and the node's own docstring is the
+    # reason it can be: it warns that "turns other than yours" is not the
+    # phrase "an opponent's turn" and then says what the difference would be —
+    # a seat that is neither you nor an opponent. This engine has none. There
+    # are no teams (CR 810's shared turns are in `rules_progress.EXCLUDED`), so
+    # every seat that is not the ability's controller is an opponent and the
+    # two phrases pick out exactly the same turns. A second node would be two
+    # readers of one fact, free to drift.
+    #
+    # Read **above** the record clauses below, which share the two opening
+    # words: "it's <a card>" consumes an article and asks the noun parser for a
+    # card filter, and "an opponent's turn" is not one. W1G2 wrote it inside
+    # that run and it is here instead, because whose turn it is is a question
+    # about the game *now* — which is the line the split draws.
+    turn_mark = stream.mark()
+    if stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
+        if stream.accept_phrase("your", "turn"):
+            return ast.TurnIsYours()
+        if stream.accept_phrase("an", "opponent", "'s", "turn"):
+            return ast.TurnIsYours(negated=True)
+    stream.reset(turn_mark)
+
     # Every condition answered by looking at a **record** of something already
     # done — "it was a creature card", "a white creature dies this way", "the
     # discarded card was a land card", "a permanent was put into your hand this
@@ -527,6 +555,28 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # a pre-modern printing ("if Fasting has …") reaches the same branch.
     threshold_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_word("has"):
+        # "if this artifact has **a** charge counter on it" (Ventifact
+        # Bottle). The article is English's way of printing "one or more":
+        # the clause is a *presence* test, and a card that had exactly one
+        # counter and a card that had five both satisfy it. Read here rather
+        # than as a number word, because "a" as a count would mean exactly
+        # one — the tighter reading, and the one that would stop the Bottle
+        # emptying after its second activation.
+        article = stream.mark()
+        if stream.accept_word("a", "an"):
+            counter_word = stream.peek_word()
+            if counter_word is not None and counter_word not in (
+                "counter", "counters"
+            ):
+                stream.advance()
+                if (
+                    stream.accept_word("counter", "counters")
+                    and stream.accept_phrase("on", "it")
+                ):
+                    return ast.SourceCounterCount(
+                        counter_word, 1, comparison="at_least"
+                    )
+            stream.reset(article)
         word = stream.peek_word()
         if word is not None and word in NUMBER_WORDS:
             stream.advance()
@@ -739,6 +789,17 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         # combat is still one in the second main phase.
         if stream.accept_phrase("was", "blocked", "this", "turn"):
             return ast.IsState(subject, "was_blocked_this_turn")
+        # "…**was dealt damage this turn**" (Wall of Resistance). The passive
+        # voice, and that is the whole difference from `DealtDamageThisTurn`:
+        # that clause asks what this creature *dealt* and this one asks what was
+        # dealt *to* it. One record already answers it — the flag `deal_damage`
+        # stamps on every recipient at the one damage seam, which the noun
+        # phrase "a creature that has been dealt damage this turn" (Giant Shark)
+        # reads as a filter key. So the condition and the filter are one fact,
+        # and a creature regenerated since still answers yes (CR 701.19a wipes
+        # `damage_marked`, not what was dealt), which is what the words say.
+        if stream.accept_phrase("was", "dealt", "damage", "this", "turn"):
+            return ast.IsState(subject, "was_dealt_damage_this_turn")
         # "…**regenerated this turn**" (Spiny Starfish). A record of the turn
         # like the two above, kept by ``engine/regeneration._apply`` — the one
         # place a regeneration happens — and read here as its presence half.

@@ -451,6 +451,13 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # every player, which the resolution records as one reveal event when
         # the search ends. A search that does not print the word shows nothing.
         reveal=bool(instruction.payload.get("reveal")),
+        # The resolution's own scratchpad, so the search can write down what it
+        # put onto the battlefield: "…put that card onto the battlefield, then
+        # shuffle. **That Dragon** gains haste" (Zirilan of the Claw) names it,
+        # and the search suspends on a prompt — by the time the sentence behind
+        # it runs, the card is one permanent among many. Handed over here
+        # because this is where the resolution and the prompt meet.
+        record=context.results,
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]
@@ -1233,6 +1240,27 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
+    # "Return **the top** creature card of your graveyard to the
+    # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard ordered and
+    # CR 400.4 appends what arrives, so the *top* card is the last entry —
+    # the most recently added — and "the top creature card" is the last one
+    # of them. Nobody chooses, so any index the wire happened to carry is
+    # not this effect's: it is overwritten rather than preferred.
+    if instruction.payload.get("from_top"):
+        idx = next(
+            (
+                slot
+                for slot in range(len(caster.graveyard) - 1, -1, -1)
+                if caster.graveyard[slot].primary_type == "creature"
+            ),
+            None,
+        )
+        if idx is None:
+            game.log.append(
+                f"{context.card.name}: no creature card in the graveyard"
+            )
+            context.results[REANIMATED_PERMANENTS] = ()
+            return True, "resolved"
     any_graveyard = bool(instruction.payload.get("any_graveyard"))
     source_player = caster
     if any_graveyard and context.target is not None:
@@ -1616,13 +1644,28 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
             game.log.append(f"{card.name} returned from the graveyard to hand")
         return True, "resolved"
     tapped = bool(instruction.payload.get("tapped"))
+    arrived = Permanent(card=card, tapped=tapped)
     game._put_permanent_onto_battlefield(
-        game.players.index(caster), Permanent(card=card, tapped=tapped), None
+        game.players.index(caster), arrived, None
     )
     game.log.append(
         f"{card.name} returned from the graveyard to the battlefield"
         + (" tapped" if tapped else "")
     )
+    # "…**with a +1/+1 counter on it**." (Sand Golem.) CR 121.2 puts the
+    # counters on as the permanent arrives, so they go on *this* object rather
+    # than on whatever a later step might find — the permanent is new
+    # (CR 400.7) and no target names it.
+    #
+    # Through the placement seams rather than by poking metadata, so the P/T
+    # pair reaches layer 7d and the CR 704.5q sweep can find it: a counter
+    # placed by hand is a counter nothing can take off.
+    for kind, count in (instruction.payload.get("counters") or {}).items():
+        if str(kind) == "+1/+1":
+            game.place_plus1_counters(arrived, int(count))
+        else:
+            game.place_pt_counters(arrived, str(kind), int(count))
+        game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
     return True, "resolved"
 
 
@@ -3114,6 +3157,51 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
     game.phase_out_permanent(target_perm)
+    return True, "resolved"
+
+
+@effect_handler("forbid_phase_out")
+def forbid_phase_out(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until your next upkeep, target permanent **can't phase out**."
+    (Spatial Binding, CR 702.26.)
+
+    The restriction beside ``phase_out_target``'s action, recorded on the chosen
+    permanent by ``engine/phasing_locks.py`` — which is where the sweep that
+    ends it is named, and which both phase-out paths ask.
+
+    "**Your** next upkeep" is the ability's controller (CR 109.5), not the
+    permanent's, so the seat is frozen here and compared at the sweep. Reading
+    it off the target would let a Binding on an opponent's permanent expire on
+    the wrong turn.
+
+    The printed noun phrase is re-tested at resolution through the same
+    ``subject_matches`` the picker enumerated with, which is Reality Ripple's
+    lesson in this same file: a handler taking the resolver's default predicate
+    declines targets the engine already accepted.
+    """
+    from ..phasing_locks import forbid_phase_out as record_lock
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster) if context.caster in game.players else None
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    record_lock(
+        target_perm,
+        duration=str(instruction.payload.get("duration") or "end_of_turn"),
+        seat=observer,
+    )
+    game.log.append(
+        f"{target_perm.card.name} can't phase out ({context.card.name})"
+    )
     return True, "resolved"
 
 

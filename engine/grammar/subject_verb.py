@@ -33,12 +33,15 @@ from .stream import TokenStream
 from .phrases import (
     _accept_mana_alternatives,
     _parse_can_attack_as_though,
+    _parse_duration,
     _parse_mana_payment,
     parse_bound_subject,
 )
 from .effects import (
+    _accept_life_alternative,
     parse_block_count_grant,
     _parse_ante,
+    _parse_gain_control,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
     _parse_becomes_base_pt,
@@ -206,6 +209,19 @@ def parse_subject_verb(
                 stream, _parse_gets(stream, source_spec), source_target
             ), source_target)
         if token.text in ("gains", "gain"):
+            # "**You** gain control of that land until end of turn."
+            # (Wellspring.) CR 101.1 gives an effect with no printed subject
+            # to the object's controller, so the pronoun says nothing the
+            # bare imperative did not — but the verb table reaches
+            # `_parse_gains`, which expects a keyword and refuses with
+            # "expected a keyword ability". Tried first and non-consuming on
+            # refusal (`_parse_gain_control` returns None unless the line
+            # really opens "gain control"), so "gains flying" and "you gain 3
+            # life" keep the readings they have.
+            if isinstance(source_spec, ast.PlayerRef) and source_spec.kind == "you":
+                control = _parse_gain_control(stream)
+                if control is not None:
+                    return control
             return _with_untap_conjunct(stream, _with_damage_conjunct(
                 stream, _parse_gains(stream, source_spec), source_target
             ), source_target)
@@ -410,8 +426,24 @@ def parse_subject_verb(
                     # "or" is next and would read "{2}" as a second *action*.
                     # What each way buys is read behind the sentence, by
                     # `sentence_clauses._accept_graded_toll_outcomes`.
-                    return ast.May(source_spec, cost=cost,
-                                   cost_alternatives=_accept_mana_alternatives(stream))
+                    # "…may pay {R}{R} **or 2 life**." (Emberwilde Djinn.)
+                    # The other currency of CR 118.8's alternative, and it
+                    # is read here beside the mana one for that reader's
+                    # reason exactly: `_parse_optional_action`'s own "or"
+                    # comes next and would take "2 life" for a second
+                    # *action*. Two readers rather than one because a mana
+                    # alternative is a whole symbol dict and a life one is a
+                    # number — the same split `_accept_life_alternative`
+                    # already documents one clause over.
+                    alternatives = _accept_mana_alternatives(stream)
+                    return ast.May(
+                        source_spec, cost=cost,
+                        cost_alternatives=alternatives,
+                        life_alternative=(
+                            None if alternatives
+                            else _accept_life_alternative(stream)
+                        ),
+                    )
                 except GrammarError:
                     stream.reset(mark_pay)
             # "…its controller **may add** an additional {U}." (Snowfall.) The
@@ -565,6 +597,28 @@ def parse_subject_verb(
             if blocks is not None:
                 return blocks
         if token.text in ("can't", "cannot"):
+            # "…**can't phase out**" (Spatial Binding, CR 702.26). Read ahead of
+            # the combat dispatcher below, which is the `can't` production for
+            # attacking and blocking and refuses everything else with "expected
+            # 'be'" — a refusal naming a word this sentence never prints.
+            #
+            # Beside the `phases out` branch above rather than inside it, for
+            # the reason `auras.py` keeps a keyword removal separate from a
+            # keyword grant: an action and the restriction forbidding it are
+            # opposite contributions, and one production reading both is one
+            # place for the negation to be dropped. Non-consuming on refusal, so
+            # every other `can't` sentence keeps the refusal it has today.
+            phase_mark = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("phase", "out"):
+                # The trailing spelling. The *fronted* one — Spatial Binding's
+                # "Until your next upkeep, target permanent can't phase out" —
+                # arrives through `sentence_clauses._distribute_duration`, which
+                # fills the node's `duration` field after the fact; that is why
+                # the field is a `Duration` node with an empty default rather
+                # than the string the lock itself is keyed by.
+                return ast.CantPhaseOut(source_spec, _parse_duration(stream))
+            stream.reset(phase_mark)
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap
         # step." (Frost Breath.) The verb is checked before dispatching, not

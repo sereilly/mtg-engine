@@ -227,6 +227,26 @@ def damage_dealt_to_permanent(
     return total
 
 
+def damage_dealt_to_seat(game, seat: int | None) -> int:
+    """How much damage was dealt to one **player** this turn, from any source.
+
+    "…put a +1/+1 counter on this creature for each 1 damage dealt to you this
+    turn." (Discordant Spirit.) The permanent query above with the join moved to
+    the other recipient field, and a ledger query rather than a read of the life
+    total for the reason this whole file exists: a life total is the turn's
+    *net*, so a player dealt 4 who then gained 4 has been dealt 4 damage and has
+    lost no life, and the Spirit is owed four counters either way.
+
+    Narrowed by nothing, because the clause narrows by nothing. A parameter this
+    function offered that no caller passed would be a key nobody reads.
+    """
+    if seat is None:
+        return 0
+    return sum(
+        entry.amount for entry in ledger(game).entries if entry.recipient_seat == seat
+    )
+
+
 def damage_dealt_by_cast(game, item) -> int:
     """How much damage one *cast* dealt this turn (CR 109.5's per-cast source)."""
     if item is None:

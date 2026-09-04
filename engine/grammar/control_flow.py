@@ -388,10 +388,15 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         ast.Conditional(ast.SacrificedThisWay(narrowed), branch)
         if narrowed is not None else branch
     )
-    folded = ast.May(
-        actor=may.actor,
-        cost=may.cost,
-        action=may.action,
+    # ``replace``, never a field-by-field rebuild. The offer node carries
+    # nine fields and this fold is about two of them; naming the rest by hand
+    # dropped every one it did not mention, silently — Emberwilde Djinn's
+    # "may pay {R}{R} **or 2 life**" parsed its alternative and lost it here,
+    # and Winter's Chill's graded outcomes would go the same way the day one
+    # of them is printed behind an "if you do". A field added to ``May`` is
+    # carried from now on rather than forgotten at the next fold.
+    folded = replace(
+        may,
         then=accepted if not declined else may.then,
         otherwise=branch if declined else may.otherwise,
     )
@@ -560,13 +565,8 @@ def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool
         stream.reset(mark)
         return False
 
-    folded = ast.May(
-        actor=target.actor,
-        cost=target.cost,
-        action=target.action,
-        then=target.then,
-        otherwise=target.otherwise,
-        reflexive=branch,
-    )
+    # ``replace`` for the reason the fold above states: a rebuild that names
+    # the fields it keeps forgets every field the node grows afterwards.
+    folded = replace(target, reflexive=branch)
     steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
     return True

@@ -19,6 +19,7 @@ dealt") states its own bound and stays behind with the vocabulary.
 from __future__ import annotations
 
 from ..oracle_types import EXILED_THIS_WAY
+from .errors import GrammarError
 from . import ast
 from .lexer import MANA, NUMBER, SELF, WORD
 from .readers import accept_source_reference
@@ -293,6 +294,115 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
         stream.reset(mark)
         return None
     return ast.ThatMuch(key)
+
+
+def _parse_for_each_damage_dealt_to(
+    stream: TokenStream,
+) -> "ast.DamageDealtThisTurn | None":
+    """``for each 1 damage dealt to <player> this turn`` — a trailing repetition
+    clause whose number is a *history*.
+
+    "At the beginning of each end step, … put a +1/+1 counter on this creature
+    **for each 1 damage dealt to you this turn**." (Discordant Spirit.)
+
+    Its own reader beside :func:`_parse_for_each_this_way`, which shares the
+    first three tokens and answers a different question: "this way" counts what
+    the sentence in front of it just did, and this counts what the *turn* did,
+    to a player, from any source at all. The turn's ledger
+    (``engine/damage_ledger.py``) is the record — nothing on a board holds it,
+    because a life total says only what the whole turn came to and a player who
+    gained life in between would read as never having been hit.
+
+    "This turn" is required for :func:`phrases._parse_for_each`'s reason: the
+    ledger's window is the turn, so a clause naming another one is a different
+    number, and letting the words be absent would let them be deleted with no
+    change to the parse. So is the printed unit "1" — the clause is a rate, and
+    "for each 2 damage" is a division this produces no node for.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    unit = stream.peek()
+    if unit is None or unit.kind != NUMBER or unit.text != "1":
+        stream.reset(mark)
+        return None
+    stream.next()
+    if not stream.accept_phrase("damage", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    # Only "you" today. The ledger records the recipient seat of every event, so
+    # "an opponent" is the same read with a different comparison — but no card
+    # in the pool prints it, and a recipient word admitted with no reader behind
+    # it is a narrowing dropped on the floor.
+    if not stream.accept_word("you"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "turn"):
+        stream.reset(mark)
+        return None
+    # ``source_name`` None is "from any source": the clause names none, where
+    # Blazing Effigy's spelling of this node prints "by sources named ~". A
+    # default of ``"self"`` here would silently count only the Spirit's own
+    # damage, which is nothing at all.
+    return ast.DamageDealtThisTurn(recipient="you", source_name=None)
+
+
+def _parse_for_each_put_into_graveyard(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfDeaths | None":
+    """``for each <objects> put into your graveyard from the battlefield this
+    turn`` — CR 700.4's "dies", spelled out, and counted for one seat.
+
+    "…put a +1/+1 counter on ~ **for each creature put into your graveyard from
+    the battlefield this turn**." (Asmira, Holy Avenger.)
+
+    The set-valued twin ``phrases._parse_for_each`` reads the short spelling
+    ("for each creature that died this turn") and produces a *game-wide* window;
+    this one names a graveyard, so it is one seat's tally and lands on
+    :class:`ast.CountOfDeaths` with the owner scope. "From the battlefield" is
+    required rather than defaulted: without it the clause would also count a
+    discard and a mill, which are not deaths and which the tally does not see.
+
+    *parse_filter* is ``nouns.parse_object_filter``, handed down rather than
+    imported: this module sits **below** ``nouns`` in the parse layering, and
+    the inversion is the one ``delayed`` and ``postmodifiers`` already make for
+    the same reason. Reading the noun phrase through the shared parser rather
+    than matching a bare word is what lets the lowering refuse a narrowing the
+    tally cannot apply, instead of the phrase quietly widening back to every
+    creature.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "put", "into", "your", "graveyard", "from", "the", "battlefield",
+        "this", "turn",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CountOfDeaths(filt, scope="into_your_graveyard")
+
+
+def _parse_for_each_history(stream: TokenStream, parse_filter) -> "ast.Amount | None":
+    """Every ``for each …`` clause whose number is a history of *this turn*.
+
+    One dispatcher, so a caller spending such a count reaches all of them at
+    once; each reader below declines with the cursor unmoved, so the order here
+    decides nothing but which refusal a caller sees.
+    """
+    dealt = _parse_for_each_damage_dealt_to(stream)
+    if dealt is not None:
+        return dealt
+    return _parse_for_each_put_into_graveyard(stream, parse_filter)
 
 
 #: The pronoun a "this way" back-reference uses for the seat the verb in front

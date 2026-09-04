@@ -31,7 +31,8 @@ from ..enter_effects import (
     SPEND_ANY_COLOR,
     SPEND_WHITE_AS_RED,
 )
-from ..auras import aura_protection_colors, auras_attached_to
+from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
+                     auras_attached_to)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
@@ -2025,7 +2026,17 @@ class PermanentStateMixin:
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
             for word in aura_protection_colors(aura.effective_card.oracle_text):
-                symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+                if word == CHOSEN_PROTECTION_COLOR:
+                    # "…protection from **the chosen color**." (Ward of
+                    # Lights.) The choice was made as the Aura entered
+                    # (CR 614.12) and is recorded on the Aura as a *symbol*,
+                    # so it skips the word table below. An Aura with no
+                    # choice on it grants nothing rather than a guessed
+                    # colour — protection from a colour nobody named is a
+                    # shield the card never gave.
+                    symbol = aura.metadata.get("chosen_color")
+                else:
+                    symbol = _COLOR_WORD_TO_SYMBOL.get(word)
                 if symbol:
                     qualities.add(("color", symbol))
         # A lord's grant ("Other Cats you control … have protection from Dogs",

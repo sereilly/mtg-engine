@@ -402,6 +402,17 @@ class ReturnToZone:
     # text, which CR 603.6d makes a static ability, and this permanent is not
     # printed with one.
     entering_tapped: bool = False
+    #: "…return this card from your graveyard to the battlefield **with a +1/+1
+    #: counter on it**" (Sand Golem). CR 121.2: the counters are put on as part
+    #: of the move, so they are a property of the return rather than a second
+    #: sentence — the same field :class:`Exile` already carries for the same
+    #: reason, read by the same production, and shaped the same way so the two
+    #: cannot come to mean different things.
+    #:
+    #: On the *move* for ``entering_tapped``'s reason exactly: the permanent
+    #: does not exist until this step runs, so a separate placement instruction
+    #: would have nothing to put a counter on and nothing to name it by.
+    entering_counters: tuple[tuple[str, int], ...] = ()
     # "Return target … creature card from your graveyard to the battlefield.
     # … **If the creature would leave the battlefield, exile it instead of
     # putting it anywhere else.**" (Dreams of the Dead.) A CR 614 replacement
@@ -500,6 +511,35 @@ class PhaseOut:
     parse cannot shed it."""
     subject: Recipient
     cant_phase_in_until_your_next_turn: bool = False
+
+
+@dataclass(frozen=True)
+class CantPhaseOut:
+    """"Until your next upkeep, target permanent **can't phase out**."
+    (Spatial Binding, CR 702.26.)
+
+    The restriction beside :class:`PhaseOut`'s action, and its own node rather
+    than a flag on that one: an effect that phases a permanent out and one that
+    stops it doing so are opposite contributions, and folded together the
+    negation is exactly the sort of word a reader drops — which here would phase
+    out the permanent the card is printed to hold in place.
+
+    The duration is a :class:`Duration` node rather than the string the lock
+    itself is keyed by, so the *fronted* spelling reaches it: "Until your next
+    upkeep, target permanent can't phase out" is read by
+    ``sentence_clauses._distribute_duration``, which fills a statement's
+    ``duration`` field by name. A string field would have raised on
+    ``existing.kind`` there and taken the whole line with it.
+
+    Lowering refuses a bare ``Duration()``. Every lock this engine records
+    carries the sweep that ends it
+    (``engine/phasing_locks.LOCK_DURATIONS``), and a durationless "can't phase
+    out" would be a static ability a derivation table reads rather than a
+    one-shot a resolution writes — read as this node it would never end.
+    """
+
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)
 
 
 @dataclass(frozen=True)

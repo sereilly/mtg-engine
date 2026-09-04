@@ -1,4 +1,4 @@
-"""Lowering counters: putting, removing, and repeating per death (CR 122).
+"""Lowering counter **placements** (CR 122): a marker put on an object.
 
 A counter is a marker placed on an object (CR 122.1); the P/T it may carry is
 a consequence the layers compute, not the effect itself, which is why this is
@@ -6,6 +6,15 @@ its own family on the lowering side — it split out of `characteristics.py`
 when the two together crossed the thousand-line cap. The per-death repetition
 compares its exact subject for equality rather than pattern-matching it, so a
 card with a *narrower* subject cannot silently take the same handler.
+
+Two neighbours have since left along boundaries this docstring used to name,
+and the pattern in both is *what the payload asks for*: removal
+(``counter_removal.py``) asks which kind and whether the number is known yet
+where a placement asks which object and how many, and the counters whose kind
+**is** a store — loyalty and poison (``counter_stores.py``) — ask which store
+tracks that name and nothing at all about an object's characteristics. What is
+left dispatches on the shape of the subject and carries the kind as data, which
+is what makes a card printing a counter nobody has named work for free.
 """
 
 import dataclasses
@@ -30,12 +39,12 @@ from ._common import (
     describe_target_roles,
 )
 from ._records import counts_prevented_damage, names_the_shielded_object
+from ._counter_stores import lower_loyalty_counters
 from ._events import (
     _BOUND_OBJECT_DELAYED_EVENTS,
     CHOSEN_PERMANENT,
     OTHER_CHOSEN_PERMANENT,
     EVENT_SUBJECT_CONTROLLER,
-    frozen_seat_record,
     _EVENT_SUBJECT_OBJECTS,
     _RECORDED_PERMANENTS,
 )
@@ -53,13 +62,6 @@ _COUNTER_CHOOSERS: dict[str, str] = {
     "that_player": EVENT_SUBJECT_CONTROLLER,
 }
 
-
-# The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
-# actually prints ("a Liliana planeswalker you control"): a filter with no card
-# behind it is untested by construction, and `_restrictions_beyond` turns every
-# other field — present today or added to the AST later — into a refusal rather
-# than a silently wider effect.
-_LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
 
 #: The scratchpad key a granted CR 615 shield is recorded under
 #: (``handlers/prevention.PREVENTION_SHIELD_RESULT``), spelled here rather than
@@ -119,73 +121,14 @@ def _lower_put_counter(
                 ),
             }),
         )
-    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
-    # own loyalty lives on the permanent (metadata["loyalty_counters"],
-    # CR 306.5c); a *chosen* permanent's is the same key reached through the
-    # picker below.
+    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.)
+    # CR 306.5c: loyalty is a *store* — a planeswalker's life total and the
+    # price of its abilities — so the whole placement is decided by the
+    # printed kind rather than by the subject, which is why it lives with the
+    # poison placement in `_counter_stores` and is dispatched here, ahead of
+    # every branch below that treats the kind as data.
     if node.counter == "loyalty":
-        if not isinstance(node.count, ast.Fixed) or node.up_to:
-            raise LoweringError("variable loyalty-counter counts have no handler", node=node)
-        if _is_source(node.subject):
-            return (
-                OracleInstruction("add_loyalty_counters", "", {"count": node.count.value}),
-            )
-        # "Put a loyalty counter on a Liliana planeswalker you control."
-        # (Liliana's Scrounger.) A noun phrase with no "target" in it: nothing
-        # was chosen when the ability went on the stack, so the controller picks
-        # at resolution out of what the phrase names then — the same split
-        # `_lower_sacrifice` makes between "sacrifice this creature" and
-        # "sacrifice a creature".
-        if (
-            isinstance(node.subject, ast.TargetSpec)
-            and not node.subject.targeted
-            and node.subject.quantifier not in ("all", "each")
-            and node.subject.count == 1
-        ):
-            filt = node.subject.filter
-            # Two gates, because they catch different halves of the same bug.
-            #
-            # `_restrictions_beyond` reads the **AST**, so a restriction
-            # `to_payload` does not emit at all cannot be dropped on the floor:
-            # "a planeswalker card **in your graveyard**" and "an **enchanted**
-            # planeswalker" both reduce to the same payload as the plain phrase,
-            # and without this they compile into a battlefield picker. The
-            # honoured set is only what the pool prints, per round 43's rule that
-            # a filter with no card behind it is untested by construction.
-            leftovers = _restrictions_beyond(filt, _LOYALTY_PICKER_HONOURED)
-            if leftovers:
-                raise LoweringError(
-                    f"the loyalty-counter picker does not honour {leftovers[0]!r}",
-                    node=node,
-                )
-            if not filt.card_types:
-                raise LoweringError(
-                    "a loyalty-counter picker with no card type would offer "
-                    "every permanent",
-                    node=node,
-                )
-            described = filt.to_payload()
-            # And the load-bearing gate CLAUDE.md names (round 34): a key
-            # `subject_matches` cannot test is one the picker would silently
-            # ignore, which would offer *every* planeswalker where the card names
-            # one subtype. Kept beside the first so widening the honoured set
-            # above can never outrun the matcher.
-            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-                raise LoweringError(
-                    "the loyalty-counter picker cannot test this restriction",
-                    node=node,
-                )
-            return (
-                OracleInstruction(
-                    "add_loyalty_counters_to_chosen", "",
-                    {"count": node.count.value, "filter": described},
-                ),
-            )
-        raise LoweringError(
-            "loyalty counters land on the ability's own source or on one "
-            "permanent its controller chooses",
-            node=node,
-        )
+        return lower_loyalty_counters(node)
     # "Whenever a permanent becomes tapped, put a wind counter on **it**."
     # (Freyalise's Winds.) The pronoun was rebound to the *event's* subject by
     # `rebinding.rebind_pronoun_to_event_subject`, so it is neither the source
@@ -238,12 +181,25 @@ def _lower_put_counter(
     # card's other lines say about them. Only on the source, because that is the
     # only permanent the placement can name without a picker.
     if not is_pt_counter(node.counter) and not node.up_to and _is_source(node.subject):
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError("a named counter is placed a fixed number at a time", node=node)
+        # "{X}{1}, {T}: Put **X** charge counters on this artifact."
+        # (Ventifact Bottle.) The count is the cast's announced X, which is
+        # the same value the P/T branch above already spends and which the
+        # handler resolves through ``context.x_value`` like every other
+        # amount. The refusal below is what a count this branch cannot read
+        # at all still gets.
+        if isinstance(node.count, ast.Fixed):
+            placed: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed = node.count.name
+        else:
+            raise LoweringError(
+                "a named counter is placed a fixed or variable number at a "
+                "time", node=node,
+            )
         return (
             OracleInstruction(
                 "add_named_counter_to_self", "",
-                {"counter": node.counter, "count": node.count.value},
+                {"counter": node.counter, "count": placed},
             ),
         )
     # The same CR 122.1 marker on a permanent the ability **chose** ("put a
@@ -782,6 +738,59 @@ def _lower_put_counter(
                 {"power": 1, "toughness": 1, "count": "trigger_count"},
             ),
         )
+    if isinstance(node.count, ast.DamageDealtThisTurn) and _is_source(node.subject):
+        # "…put a +1/+1 counter on this creature **for each 1 damage dealt to
+        # you this turn**." (Discordant Spirit.) The turn's damage ledger rather
+        # than the resolution scratchpad the branch above reads, and it reaches
+        # the same handler through the channel every computed amount in this
+        # engine already uses: ``x_from_count`` defines the X, and ``count``
+        # spends it. So the number is taken by ``count_from_payload`` — one
+        # evaluator — instead of by a second reader written for this card.
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {
+                    "power": 1, "toughness": 1, "count": "x",
+                    "x_from_count": {
+                        "damage_ledger": {
+                            "recipient": node.count.recipient,
+                            "source_name": node.count.source_name,
+                            "others_only": node.count.others_only,
+                            "base": 0,
+                        },
+                    },
+                },
+            ),
+        )
+    if isinstance(node.count, ast.CountOfDeaths) and _is_source(node.subject):
+        # "…put a +1/+1 counter on ~ **for each creature put into your graveyard
+        # from the battlefield this turn**." (Asmira, Holy Avenger.) The turn's
+        # per-seat death tally, reached through the same `x_from_count` channel
+        # as the ledger branch above and answered by the same `count_from_payload`
+        # `history` key `_lower_where_x_deaths` already spends.
+        #
+        # Only the bare creature filter, and that refusal is
+        # `_lower_where_x_deaths`'s word for word: the tally counts creatures
+        # and nothing narrower, so a narrowing admitted here would be counted as
+        # if it were not there — a counter placed more often than the card says.
+        filt = node.count.filter
+        if (
+            filt.to_payload() != {"type_filter": "creature"}
+            or filt.zone != "battlefield"
+        ):
+            raise LoweringError(
+                "the death tracker counts creatures and cannot be narrowed",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {
+                    "power": 1, "toughness": 1, "count": "x",
+                    "x_from_count": {"history": f"creatures_{node.count.scope}"},
+                },
+            ),
+        )
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
     if _is_source(node.subject):
@@ -957,42 +966,5 @@ def _fused_tap_enchanted_then_counters(
         OracleInstruction(
             "add_named_counter_to_attached", "",
             {"counter": put.counter, "count": count},
-        ),
-    )
-
-
-def _lower_player_gets_counters(
-    node: ast.PlayerGetsCounters, event: str | None
-) -> tuple[OracleInstruction, ...]:
-    """``That player gets a poison counter.`` (Pit Scorpion, and the ability
-    Serpent Generator's tokens carry.)
-
-    Poison is the one player counter with a store behind it
-    (``PlayerState.poison_counters``, read by the CR 704.5c / 122.1f sweep in
-    ``mixins/game_ending.py``), so any other kind refuses by name rather than
-    compiling onto a field nobody sweeps. "That player" is a reading of the
-    trigger that fired — the damaged player's seat, frozen by
-    ``damage_events._announce`` — and "**defending player**" (Swamp Mosquito) is
-    CR 506.2's, frozen by the combat fire site. ``_events.frozen_seat_record``
-    says which record a printed word names, so under an event that froze neither
-    the words name a player nobody recorded and the sentence refuses.
-    """
-    if node.counter != "poison":
-        raise LoweringError(
-            f"no store tracks {node.counter!r} counters on a player", node=node
-        )
-    amount = _amount_payload(node.count)
-    if not isinstance(amount, int) or amount <= 0:
-        raise LoweringError("a player-counter count is a fixed number", node=node)
-    who = frozen_seat_record(node.player.kind, event)
-    if who is None:
-        raise LoweringError(
-            "a player counter lands on the seat the firing event froze, and "
-            "this player reference has none under this event",
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "player_gets_poison_counters", "", {"amount": amount, "player": who},
         ),
     )

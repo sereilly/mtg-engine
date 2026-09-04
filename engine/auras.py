@@ -1710,8 +1710,21 @@ def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
     return match.group("kind"), holder
 
 
+#: The word a protection grant names when the colour was **chosen** rather
+#: than printed: "Enchanted creature has protection from **the chosen
+#: color**." (Ward of Lights.)
+#:
+#: A sixth value in the same channel as the five colour words rather than a
+#: second function, because :func:`aura_protection_colors` already returns
+#: *words* and leaves the mapping to its caller — "it is the one that knows
+#: about text-changing remaps". Resolving a choice is the same kind of
+#: knowledge, and that caller is also the only reader holding the Aura the
+#: choice was recorded on.
+CHOSEN_PROTECTION_COLOR = "chosen"
+
 _PROTECTION_GRANT = re.compile(
-    rf"^{_ATTACHED} {_NOUN} has protection from (?P<color>{_COLORS})\b"
+    rf"^{_ATTACHED} {_NOUN} has protection from "
+    rf"(?P<color>{_COLORS}|the chosen color)\b"
 )
 
 
@@ -1746,12 +1759,20 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
 
     Colour *words*, not mana symbols: the caller maps them, and it is the one
     that knows about text-changing remaps (Sleight of Mind).
+
+    :data:`CHOSEN_PROTECTION_COLOR` is the sixth value, for "protection from
+    **the chosen color**" (Ward of Lights). It travels through this same
+    channel for that mapping reason exactly: the caller holds the Aura, and
+    the choice is recorded on it by "As this Aura enters, choose a color."
     """
     found = set()
     for raw_line in oracle_text.splitlines():
         match = _PROTECTION_GRANT.match(_line_text(raw_line))
         if match is not None:
-            found.add(match.group("color"))
+            word = match.group("color")
+            found.add(
+                CHOSEN_PROTECTION_COLOR if word == "the chosen color" else word
+            )
     return frozenset(found)
 
 
