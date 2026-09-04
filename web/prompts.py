@@ -1165,6 +1165,40 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("graveyard_pile_choice")
+def _graveyard_pile_choice(ctx: PromptContext, choices: list) -> dict:
+    """Ebony Charm: "Exile up to three target cards **from a single
+    graveyard**." Which pile, asked before which cards.
+
+    Only piles that still hold a card the printed phrase names are offered, and
+    they are re-derived through the engine's own candidate rule rather than sent
+    from the armed list — a card can leave a graveyard between the offer and the
+    answer, and a pile offered here is one the pick behind it would find empty.
+    The count of legal cards travels with each option because that is what the
+    choice is actually between.
+    """
+    choice = choices[0]
+    live = ctx.game.live_graveyard_pile_choices(choice)
+    payload = dict(choice.data.get("_payload") or {})
+    from engine.handlers._common import graveyard_card_matches
+
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "options": [
+            {
+                "seat": seat,
+                "name": ctx.game.players[seat].name,
+                "legal_cards": sum(
+                    1 for card in ctx.game.players[seat].graveyard
+                    if graveyard_card_matches(payload, card)
+                ),
+            }
+            for seat in live
+        ],
+    }
+
+
 @prompt_renderer("graveyard_exile_pick")
 def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
     """Rysorian Badger: which cards in the defending player's graveyard go.

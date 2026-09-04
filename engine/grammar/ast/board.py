@@ -94,6 +94,14 @@ class Exile:
     #: hidden from every player, so admitting the words without carrying them
     #: would exile the card in full view of the table.
     face_down: bool = False
+    #: ``…from **a single** graveyard`` (Ebony Charm; Night Soil prints it as a
+    #: cost). Two facts in four words: the pile may be **anybody's**, which
+    #: rides the filter's ``zone``/``zone_owner`` like every other printed zone,
+    #: and every card must come out of the **same** one, which cannot — a filter
+    #: is asked of one card at a time, so the restriction on the *set* rides the
+    #: node. ``ast.ExileCost`` carries the identical field one package over, for
+    #: the identical sentence on the cost side.
+    same_zone: bool = False
 
 
 @dataclass(frozen=True)

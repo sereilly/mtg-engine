@@ -2734,6 +2734,30 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     later step of this same resolution and would read a zero otherwise.
     """
     owner = str(instruction.payload.get("graveyard_owner") or "")
+    caster_index = game.players.index(context.caster)
+    # "…from **a single** graveyard" (Ebony Charm). The pile is not printed;
+    # the chooser names it as the spell resolves, and only where there is a
+    # choice to make. One pile with a legal card in it is not a decision, and
+    # none at all is not a prompt — offering either would be a question with one
+    # answer or with none, which the seat then has to dismiss.
+    if owner == "chosen":
+        piles = game.graveyard_piles_with_a_legal_card(dict(instruction.payload))
+        if not piles:
+            game.log.append(
+                f"{context.card.name}: no graveyard holds a card it can exile"
+            )
+            context.results[EXILED_THIS_WAY_OBJECTS] = []
+            context.results[EXILED_THIS_WAY] = 0
+            return True, "resolved"
+        if len(piles) == 1:
+            game.arm_graveyard_exile_pick(
+                caster_index, piles[0], dict(instruction.payload), context
+            )
+        else:
+            game.arm_graveyard_pile_choice(
+                caster_index, dict(instruction.payload), context
+            )
+        return True, "resolved"
     if owner != "defending_player":
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
@@ -2743,7 +2767,6 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             f"{context.card.name}: no defending player was recorded"
         )
         return True, "resolved"
-    caster_index = game.players.index(context.caster)
     game.arm_graveyard_exile_pick(
         caster_index, seat, dict(instruction.payload), context
     )

@@ -690,6 +690,26 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("graveyard_pile_confirm")
+def _action_graveyard_pile_confirm(session, req, seat_type):
+    # Ebony Charm: which graveyard "a single graveyard" means. The seat is sent
+    # on `chosen_seat` rather than `target_seat` for `player_choice_confirm`'s
+    # reason -- a chosen player is not a target (CR 601.2c declares none) -- and
+    # the engine re-checks it against the piles that still hold a legal card, so
+    # a stale answer is refused rather than applied to an emptied graveyard.
+    pending = next(
+        (c for c in session.game.pending_choices_of("graveyard_pile_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no graveyard pile choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.chosen_seat is None:
+        raise HTTPException(status_code=400, detail="chosen_seat is required")
+    if not session.game.confirm_graveyard_pile_choice(req.seat, req.chosen_seat):
+        raise HTTPException(status_code=400, detail="invalid graveyard choice")
+
+
 @action_handler("graveyard_exile_confirm")
 def _action_graveyard_exile_confirm(session, req, seat_type):
     # Rysorian Badger: the seat picks which cards in the defending player's

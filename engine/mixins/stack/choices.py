@@ -4149,6 +4149,112 @@ class PendingChoicesMixin:
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
 
+    # -- Which graveyard "a single graveyard" means --------------------------
+
+    def graveyard_piles_with_a_legal_card(self, payload: dict) -> list[int]:
+        """The seats whose graveyard holds a card the printed phrase admits.
+
+        The rule rather than the list, for ``arm_graveyard_exile_pick``'s
+        reason: a pile offered here is a pile the pick will then be re-checked
+        against, and two readings of "which cards does this phrase name" is
+        exactly the drift ``graveyard_card_matches`` exists to stop.
+        """
+        from ...handlers._common import graveyard_card_matches
+
+        return [
+            seat for seat, player in enumerate(self.players)
+            if any(graveyard_card_matches(payload, card)
+                   for card in player.graveyard)
+        ]
+
+    def arm_graveyard_pile_choice(
+        self, player_index: int, payload: dict, context
+    ) -> None:
+        """Queue "which graveyard?" for "exile … from **a single** graveyard".
+
+        A prompt of its own rather than a wider ``graveyard_exile_pick``,
+        because the two questions have different answers and different
+        candidate rules — and because answering this one *arms* that one, which
+        is how a chain of decisions stays a single resolution (CR 608.2): the
+        stack object stays put until the last prompt of the chain is answered.
+        """
+        self.arm_pending_choice(
+            "graveyard_pile_choice", player_index,
+            card_name=context.card.name,
+            seats=self.graveyard_piles_with_a_legal_card(payload),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_graveyard_pile_choices(self, choice: PendingChoice) -> list[int]:
+        """The offered piles that are still legal answers.
+
+        Recomputed rather than trusted: a card can leave a graveyard between the
+        offer and the answer (another player's effect in response), and a pile
+        that no longer holds a card the phrase names is a pile the pick behind
+        this would find empty.
+        """
+        offered = set(choice.data.get("seats") or ())
+        return [
+            seat
+            for seat in self.graveyard_piles_with_a_legal_card(
+                dict(choice.data.get("_payload") or {})
+            )
+            if seat in offered
+        ]
+
+    def confirm_graveyard_pile_choice(self, player_index: int, seat) -> bool:
+        return self.resolve_pending_choice(
+            "graveyard_pile_choice", player_index, seat=seat
+        )
+
+    def _resolve_graveyard_pile_choice(self, choice: PendingChoice, seat) -> bool:
+        live = self.live_graveyard_pile_choices(choice)
+        context = choice.data.get("_context")
+        if not live:
+            # Every offered pile has been emptied of legal cards while this was
+            # owed. The sentence carries on having exiled nothing rather than
+            # staying owed a prompt with no answer — and both record keys are
+            # written, because an *absent* key is a back-reference with no
+            # producer, a different thing from a producer that took nothing.
+            if context is not None:
+                context.results[EXILED_THIS_WAY_OBJECTS] = []
+                context.results[EXILED_THIS_WAY] = 0
+            self.discard_pending_choice(choice)
+            return True
+        if not isinstance(seat, int) or seat not in live:
+            return False
+        payload = dict(choice.data.get("_payload") or {})
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: chose "
+            f"{self.players[seat].name}'s graveyard"
+        )
+        # The second half of the chain, armed by the answer to the first. The
+        # prompt this queues stamps the same resolving stack object, so the
+        # object stays on the stack and no step advances until it too is
+        # answered.
+        self.arm_graveyard_exile_pick(
+            choice.player_index, seat, payload, context
+        )
+        return True
+
+    def _default_graveyard_pile_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** live pile, in seat order.
+
+        Not a valuation — seat order is seed-deterministic, which is what AI and
+        headless play need, and ``_default_player_choice`` states the same rule
+        for the same reason. A seat that should choose cleverly needs a weight
+        in ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_graveyard_pile_choices(choice)
+        if not live or not self._resolve_graveyard_pile_choice(choice, live[0]):
+            context = choice.data.get("_context")
+            if context is not None:
+                context.results[EXILED_THIS_WAY_OBJECTS] = []
+                context.results[EXILED_THIS_WAY] = 0
+            self.discard_pending_choice(choice)
+
     # -- Kudzu's reattachment ------------------------------------------------
 
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
@@ -6770,6 +6876,27 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "graveyard_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pile_choice(
+        choice, r.get("seat")
+    ),
+    default=lambda game, choice: game._default_graveyard_pile_choice(choice),
+    action="graveyard_pile_confirm",
+    prompt_key="graveyard_pile_choice",
+    blocked_detail="choose which graveyard to exile from before other actions",
+    # The pick this arms is a later step of the same resolution and reads the
+    # answer, so nothing may run past it (CR 608.2). The chain is what makes
+    # both prompts one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Whose graveyard holds what is public (CR 400.2 makes a graveyard an open
+    # zone), so a seatless viewer may see the question.
+    spectator_visible=True,
 )
 
 register_choice(

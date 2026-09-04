@@ -18,6 +18,8 @@ One call goes upward, the same inversion `subject_verb` itself makes:
 `statements`' job.
 """
 
+import dataclasses
+
 from . import ast
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
@@ -413,14 +415,40 @@ def parse_imperative(
         # table can read in exile and one nobody can, and a production that
         # consumed the words without recording them would exile it face up.
         face_down = bool(stream.accept_phrase("face", "down"))
+        # "Exile up to three target cards **from a single graveyard**." (Ebony
+        # Charm.) The noun parser stops in front of it — "single" is not a zone
+        # owner it knows — so the tail is read here, exactly as
+        # ``costs._parse_costs`` reads the same four words for Night Soil. The
+        # pile half goes on the filter and the sameness half on the node; the
+        # two are separate because a filter is asked of one card at a time and
+        # "all out of one pile" is a fact about the whole set.
+        same_zone = False
+        if stream.accept_phrase("from", "a", "single", "graveyard"):
+            if not isinstance(subject, ast.TargetSpec):
+                raise stream.error(
+                    "expected a counted noun phrase before 'from a single "
+                    "graveyard'"
+                )
+            subject = dataclasses.replace(
+                subject,
+                filter=dataclasses.replace(
+                    subject.filter, zone="graveyard", zone_owner=None,
+                    is_card=True,
+                ),
+            )
+            same_zone = True
         if further:
             return ast.Conjunction(
                 tuple(
-                    ast.Exile(each, duration, counters=counters, face_down=face_down)
+                    ast.Exile(each, duration, counters=counters,
+                              face_down=face_down, same_zone=same_zone)
                     for each in (subject, *further)
                 )
             )
-        return ast.Exile(subject, duration, counters=counters, face_down=face_down)
+        return ast.Exile(
+            subject, duration, counters=counters, face_down=face_down,
+            same_zone=same_zone,
+        )
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     # "Note the type of mana spent to pay this activation cost." (Jeweled

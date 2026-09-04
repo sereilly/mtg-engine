@@ -1260,3 +1260,121 @@ def test_shallow_grave_with_no_creature_card_does_nothing(set_pool):
 
     assert game.players[0].battlefield == [], game.log
     assert not [e for e in game.delayed_triggers if e.event == "next_end_step"], game.log
+
+
+# --- W2G4: "from a single graveyard" is a pile the chooser names ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_charm(set_pool, mine=(), theirs=()):
+    """Ebony Charm in seat 0's hand, with a card in each graveyard by name."""
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Ebony Charm"]],
+            graveyard=[set_pool("MIR")[n] for n in mine], life=20,
+        ),
+        PlayerState(
+            name="P2",
+            graveyard=[set_pool("MIR")[n] for n in theirs], life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    return game
+
+
+def test_ebony_charm_is_supported(set_pool):
+    """The second mode was the whole card's refusal: "from a single graveyard"
+    was read on the **cost** side (Night Soil) and nowhere on the effect side,
+    so the noun parser stopped in front of it and the line died on unconsumed
+    text — which under a modal head makes the whole spell unsupported."""
+    program = compile_card_oracle(set_pool("MIR")["Ebony Charm"])
+    assert program.supported, program.reason
+    assert [mode.instruction.kind for mode in program.modes] == [
+        "sequence", "exile_cards_from_graveyard", "grant_target_keyword_until_eot",
+    ]
+    assert program.modes[1].instruction.payload["graveyard_owner"] == "chosen"
+
+
+def test_ebony_charm_asks_which_graveyard_then_which_cards(set_pool):
+    """Two prompts, one resolution (CR 608.2). The pile is not printed, so the
+    chooser names it — and the cards behind it come out of *that* pile.
+
+    The count is the assertion that matters: "up to three" out of a pile of
+    four takes three, and the other pile is untouched.
+    """
+    game = _w2g4_charm(
+        set_pool,
+        mine=["Dirtwater Wraith"],
+        theirs=["Femeref Knight", "Mtenda Herder", "Sidar Jabari", "Soar"],
+    )
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    pending = [c for c in game.pending_choices]
+    assert [c.kind for c in pending] == ["graveyard_pile_choice"], game.log
+    assert sorted(
+        option for option in game.live_graveyard_pile_choices(pending[0])
+    ) == [0, 1]
+
+    assert game.confirm_graveyard_pile_choice(0, 1)
+    pick = [c for c in game.pending_choices]
+    assert [c.kind for c in pick] == ["graveyard_exile_pick"], game.log
+    assert pick[0].data["owner_index"] == 1
+    assert game.confirm_graveyard_exile_pick(0, [0, 1, 2])
+
+    # Sorted, because the pick pops highest index first — a graveyard is a list
+    # and taking one renumbers everything behind it.
+    assert sorted(c.name for c in game.players[1].exile) == [
+        "Femeref Knight", "Mtenda Herder", "Sidar Jabari",
+    ], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Soar"], game.log
+    # The Charm itself is in that pile by now (CR 608.2m), which is the point:
+    # the other graveyard was never read.
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Dirtwater Wraith", "Ebony Charm",
+    ], game.log
+
+
+def test_ebony_charm_takes_no_pile_choice_when_only_one_pile_qualifies(set_pool):
+    """One pile with a legal card in it is not a decision. Offering the prompt
+    anyway would be a question with a single answer the seat then has to
+    dismiss, and — worse — a second place that decides which piles qualify."""
+    game = _w2g4_charm(set_pool, theirs=["Femeref Knight"])
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["graveyard_exile_pick"]
+    assert game.pending_choices[0].data["owner_index"] == 1
+
+
+def test_ebony_charm_exiles_nothing_when_every_graveyard_is_empty(set_pool):
+    """No pile holds a card the phrase names, so there is no prompt at all —
+    and both record keys are still written. An *absent* key is a
+    back-reference with no producer, which is a different thing from a producer
+    that took nothing."""
+    game = _w2g4_charm(set_pool)
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[0].exile == [] and game.players[1].exile == []
+
+
+def test_ebony_charms_pile_choice_takes_the_first_live_pile_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues either prompt: the resolution has to
+    finish, and the stated default is taken where the effect stands. Seat order
+    rather than a valuation, so a seed reproduces a run exactly."""
+    game = _w2g4_charm(
+        set_pool, mine=["Dirtwater Wraith"], theirs=["Femeref Knight"]
+    )
+    game.interactive_seats = set()
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [c.name for c in game.players[0].exile] == ["Dirtwater Wraith"], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Knight"]
