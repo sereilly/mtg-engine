@@ -368,3 +368,119 @@ def test_w4g1_rapid_fires_window_is_the_same_point_seen_from_the_other_side(
     game.current_turn_phase = "precombat_main"
     assert check_cast_timing(game, 0, before) is None
     assert check_cast_timing(game, 0, after) is not None
+
+
+# W4G1, continued: Lure of Prey's window on what an opponent has cast (CR 601.3)
+
+
+def _w4g1i_prey_game(set_pool):
+    """Lure of Prey in seat 0's hand, a green creature behind it, seat 1 armed
+    with one creature spell and one instant."""
+    pool = set_pool("MIR")
+    lea = set_pool("LEA")
+    game = _w4g1i_Game(players=[
+        _w4g1i_PlayerState(
+            name="P1",
+            hand=[pool["Lure of Prey"], lea["Grizzly Bears"]],
+            library=[pool["Forest"]] * 6,
+        ),
+        _w4g1i_PlayerState(
+            name="P2",
+            hand=[lea["Grizzly Bears"], lea["Lightning Bolt"]],
+            library=[pool["Forest"]] * 6,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def _w4g1i_cast_prey(game):
+    return game.cast_from_hand(0, "Lure of Prey")
+
+
+def test_w4g1_lure_of_prey_is_refused_when_no_opponent_has_cast_a_creature(set_pool):
+    """"Cast this spell only if an opponent cast a creature spell this turn."
+
+    Three boards that all fail the condition for different reasons, because the
+    near misses are what an unenforced restriction looks like: nobody has cast
+    anything, an opponent cast something that is not a creature, and the caster
+    cast the creature themselves ("an **opponent**").
+    """
+    game = _w4g1i_prey_game(set_pool)
+    game.start_turn(1)
+    denial = "can only be cast if an opponent cast a creature spell this turn"
+
+    result = _w4g1i_cast_prey(game)
+    assert result.supported is False and result.details == denial, result
+    assert any(card.name == "Lure of Prey" for card in game.players[0].hand)
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    result = _w4g1i_cast_prey(game)
+    assert result.supported is False and result.details == denial, result
+
+    game.start_turn(0)
+    game.cast_from_hand(0, "Grizzly Bears")
+    result = _w4g1i_cast_prey(game)
+    assert result.supported is False and result.details == denial, (
+        "the caster's own creature spell is not an opponent's"
+    )
+
+
+def test_w4g1_lure_of_prey_is_castable_after_an_opponents_creature_spell(set_pool):
+    """The other end of the window — a restriction that refuses everything
+    passes a test that only checks it refuses."""
+    game = _w4g1i_prey_game(set_pool)
+    game.start_turn(1)
+    game.cast_from_hand(1, "Grizzly Bears")
+
+    result = _w4g1i_cast_prey(game)
+
+    assert result.supported is True, result.details
+    assert not any(card.name == "Lure of Prey" for card in game.players[0].hand)
+
+
+def test_w4g1_lure_of_preys_window_closes_at_the_turn_boundary(set_pool):
+    """"This turn" is the turn, and the record it reads is emptied with the rest
+    of the turn's history. A record that outlived its turn would be a
+    restriction that stopped applying — which is the direction that lets a card
+    be cast when it may not be, and it fails no test that only casts it once."""
+    game = _w4g1i_prey_game(set_pool)
+    game.start_turn(1)
+    game.cast_from_hand(1, "Grizzly Bears")
+    assert _w4g1i_check_prey(game) is None
+
+    game.start_turn(0)
+
+    assert _w4g1i_check_prey(game) == (
+        "can only be cast if an opponent cast a creature spell this turn"
+    )
+
+
+def _w4g1i_check_prey(game):
+    from engine.cast_restrictions import check_cast_timing
+
+    return check_cast_timing(
+        game, 0, "cast this spell only if an opponent cast a creature spell this turn."
+    )
+
+
+def test_w4g1_the_opponent_cast_window_reads_its_noun_phrase(set_pool):
+    """The phrase is payload, not part of the template: a card printed about an
+    artifact spell or a black one is this restriction with one word changed.
+    Read through the same noun parser and card matcher the damage-source row
+    beside it uses, so what the phrase names is one answer."""
+    from engine.cast_restrictions import cast_opponent_cast_line
+
+    assert cast_opponent_cast_line(
+        "cast this spell only if an opponent cast a creature spell this turn"
+    ) == ({"type_filter": "creature"}, "a creature spell")
+    assert cast_opponent_cast_line(
+        "cast this spell only if an opponent cast a black artifact spell this turn"
+    ) == ({"type_filter": "artifact", "color_filter": "B"}, "a black artifact spell")
+    # A quantifier this row does not implement. "no creature spell" and "two or
+    # more" are different conditions, and reading either as presence lifts the
+    # restriction on a turn the card does not name.
+    assert cast_opponent_cast_line(
+        "cast this spell only if an opponent cast two creature spells this turn"
+    ) is None

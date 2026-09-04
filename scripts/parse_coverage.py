@@ -66,6 +66,7 @@ from engine.activation_restrictions import (  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
+                                      cast_opponent_cast_line,
                                       chosen_name_ban_line,
                                       global_cast_ban_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
@@ -278,6 +279,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # the reason above.
     ("cast_restrictions.py (damage-source window)",
      lambda s: cast_damage_source_line(s) is not None),
+    # The same half of CR 601.3 asked about a window of *casts* — "Cast this
+    # spell only if an opponent cast a creature spell this turn." (Lure of
+    # Prey.) Its own channel beside the damage window for that channel's
+    # reason: it is its own row and its own reader, and the claim asks the
+    # reader that answers it.
+    ("cast_restrictions.py (opponent-cast window)",
+     lambda s: cast_opponent_cast_line(s) is not None),
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by
