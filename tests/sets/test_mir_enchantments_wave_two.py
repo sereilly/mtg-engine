@@ -2071,3 +2071,140 @@ def test_w4g3e_the_wastes_still_bleeds_each_player_on_their_upkeep(set_pool):
     game.start_turn(1)
     game.resolve_stack()
     assert [p.life for p in game.players] == [19, 19]
+
+
+# --- Grim Feast ------------------------------------------------------------
+
+def test_w4g3e_grim_feast_compiles_both_of_its_lines(set_pool):
+    """The death trigger carries all three of its printed narrowings: the
+    subject filter, whose graveyard, and where the amount comes from."""
+    program = _w4g3e_compile(set_pool("MIR")["Grim Feast"])
+
+    assert program.supported, program.reason
+    conditions = {
+        trigger.condition.kind: trigger for trigger in program.triggered_abilities
+    }
+    assert set(conditions) == {"upkeep_self", "permanent_dies"}
+    death = conditions["permanent_dies"]
+    assert death.condition.payload == {
+        "dying_graveyard_owner": "an opponent's",
+        "dying_filter": {"type_filter": "creature"},
+    }
+    assert death.instruction.payload == {
+        "amount_from_trigger": "dead_toughness", "recipient": "caster",
+    }
+
+
+@_w4g3e_pytest.mark.parametrize("owner,expected", [(1, 23), (0, 20)])
+def test_w4g3e_grim_feast_pays_only_for_an_opponents_graveyard(
+    set_pool, owner, expected,
+):
+    """"An opponent's graveyard" - and CR 404.1 sends a permanent to its
+    *owner's*, so this is a question about the card's owner rather than about
+    who controlled it. Read as the mirror of Enduring Renewal's "your" rather
+    than as a second condition."""
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])])
+    victim = _w4g3e_Permanent(card=_w4g3e_bear())
+    game.players[owner].battlefield.append(victim)
+    game._recompute_continuous_effects()
+
+    game._permanent_to_graveyard(game.players[owner], victim)
+    game.resolve_stack()
+
+    assert game.players[0].life == expected
+
+
+def test_w4g3e_grim_feast_pays_the_toughness_the_creature_last_had(set_pool):
+    """CR 603.10 / 608.2h: last known information. By the time the trigger
+    resolves the creature is a card in a graveyard with a printed number and no
+    anthem on it, so the amount is frozen at the fire site - a 2/3 under a
+    +2/+2 is worth five, and getting this wrong is invisible until a board
+    changes a toughness."""
+    anthem = _w4g3e_Card(
+        name="Test Anthem", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text="Creatures you control get +2/+2.", colors=(),
+        color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Test Anthem", "type_line": "Enchantment"},
+    )
+    victim = _w4g3e_Permanent(card=_w4g3e_bear())
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])],
+        seat1=[victim, _w4g3e_Permanent(card=anthem)],
+    )
+    assert victim.effective_toughness == 5
+
+    game._permanent_to_graveyard(game.players[1], victim)
+    game.resolve_stack()
+
+    assert game.players[0].life == 25
+
+
+def test_w4g3e_grim_feast_pays_for_a_token(set_pool):
+    """CR 111.7 puts a token into the graveyard before the state-based action
+    makes it cease to exist, so it was put there from the battlefield and the
+    trigger is about it."""
+    token = _w4g3e_Permanent(
+        card=_w4g3e_token("Bear", 2, 4, "Token Creature - Bear")
+    )
+    token.metadata["is_token"] = True
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])],
+        seat1=[token],
+    )
+
+    game._permanent_to_graveyard(game.players[1], token)
+    game.resolve_stack()
+
+    assert game.players[0].life == 24
+
+
+def test_w4g3e_grim_feast_reads_from_the_battlefield_and_a_creature(set_pool):
+    """The other two narrowings, each of which would otherwise pay out. A
+    creature *card* discarded into an opponent's graveyard never was on a
+    battlefield; an artifact that dies was never a creature."""
+    lea = _w4g3e_lea()
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])],
+                       hands=[(1, lea["Grizzly Bears"])])
+    discarded = game.players[1].hand[0]
+    game.take_card_from_hand(game.players[1], discarded)
+    game.put_card_into_graveyard(game.players[1], discarded)
+    game.resolve_stack()
+    assert game.players[0].life == 20, "a card from a hand was never on the battlefield"
+
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])],
+                       seat1=[_w4g3e_Permanent(card=lea["Mox Pearl"])])
+    game._permanent_to_graveyard(game.players[1], game.players[1].battlefield[0])
+    game.resolve_stack()
+    assert game.players[0].life == 20, "a Mox is not a creature"
+
+
+def test_w4g3e_grim_feast_still_bites_its_controller_each_upkeep(set_pool):
+    """The line that already worked, for the reason the Wastes' upkeep test
+    exists: the card's other sentence is where a round breaks something."""
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Grim Feast"])])
+
+    game.start_turn(0)
+    game.resolve_stack()
+
+    assert [p.life for p in game.players] == [19, 20]
+
+
+# --- the pair --------------------------------------------------------------
+
+def test_w4g3e_forsaken_wastes_stops_grim_feast(set_pool):
+    """Both cards on one board, which is the interaction the area owes: the
+    death trigger still fires and still resolves, and the life it would gain
+    does not arrive (CR 101.2 - the "can't" effect wins)."""
+    mir = set_pool("MIR")
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=mir["Grim Feast"]),
+               _w4g3e_Permanent(card=mir["Forsaken Wastes"])],
+        seat1=[_w4g3e_Permanent(card=_w4g3e_bear())],
+    )
+
+    game._permanent_to_graveyard(game.players[1], game.players[1].battlefield[0])
+    game.resolve_stack()
+
+    assert game.players[0].life == 20
+    assert any("Grim Feast" in line and "can't gain life" in line
+               for line in game.log), game.log

@@ -102,6 +102,18 @@ def _life_gain_cap_payload(
         )
     return {"capped_by": terms}
 
+
+#: The trigger-context key each printed characteristic of a **dead** permanent
+#: is frozen under. Two entries rather than a rule, because a fire site records
+#: what it records: a key absent here refuses the back-reference rather than
+#: reading a zero out of a context nothing wrote to — the same discipline
+#: ``_events._EVENT_QUANTITIES`` keeps one module over.
+_DEAD_CHARACTERISTIC_RECORDS: dict[str, str] = {
+    "its_power": "dead_power",
+    "its_toughness": "dead_toughness",
+}
+
+
 def _lower_gain_life(
     node: ast.GainLife,
     produced: frozenset[str] = frozenset(),
@@ -159,15 +171,24 @@ def _lower_gain_life(
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
         recipient = EVENT_SUBJECT_PLAYER
     # "When this creature dies, you gain life equal to **its** power."
-    # (Conclave Mentor.) "It" is the source, which is in a graveyard by the
-    # time this resolves — so the amount is last-known information (CR 603.10)
-    # frozen by the fire site, exactly as Basri's Lieutenant's counter clause
-    # is. Admitted only under a dies trigger, because that is the only event
-    # that records it; anywhere else the back-reference still refuses below.
+    # (Conclave Mentor.) "It" is the dead permanent, which is in a graveyard by
+    # the time this resolves — so the amount is last-known information
+    # (CR 603.10 / 608.2h) frozen by the fire site, exactly as Basri's
+    # Lieutenant's counter clause is. Admitted only under a death trigger,
+    # because those are the only events that record it; anywhere else the
+    # back-reference still refuses below.
+    #
+    # Two characteristics and two events, one branch. "…equal to its
+    # **toughness**" under "whenever a creature is put into an opponent's
+    # graveyard from the battlefield" (Grim Feast) asks the same question about
+    # the same object at the same moment, and splitting it would be two ways of
+    # reading one sentence. The printed characteristic is the payload; the fire
+    # sites freeze both whether or not the card asks, for the reason they
+    # already freeze the power.
     if (
         isinstance(node.amount, ast.ThatMuch)
-        and node.amount.source == "its_power"
-        and event == "dies"
+        and node.amount.source in _DEAD_CHARACTERISTIC_RECORDS
+        and event in ("dies", "permanent_dies")
         and node.player.kind == "you"
         # This shortcut returns before the back-reference branch below, which
         # is the only one that carries a cap, so it declines a capped gain
@@ -177,7 +198,12 @@ def _lower_gain_life(
         return (
             OracleInstruction(
                 "target_gains_life", "",
-                {"amount_from_trigger": "dead_power", "recipient": "caster"},
+                {
+                    "amount_from_trigger": _DEAD_CHARACTERISTIC_RECORDS[
+                        node.amount.source
+                    ],
+                    "recipient": "caster",
+                },
             ),
         )
     # "…you may gain life equal to **its** power" (Delif's Cone), inside a delay

@@ -25,12 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**11 unclaimed sentence(s) across 10 supported card(s).**
+**10 unclaimed sentence(s) across 9 supported card(s).**
 
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
-- **Grim Feast**
-  - `whenever a creature is put into an opponent's graveyard from the battlefield, you gain life equal to its toughness`
 - **Kaervek's Torch**
   - `as long as kaervek's torch is on the stack, spells that target it cost {2} more to cast`
 - **Lure of Prey**

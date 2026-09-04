@@ -259,16 +259,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"
      r", if it (?P<dying_not_sacrificed>wasn't sacrificed)"),
-    # "…is put into **your** graveyard from the battlefield" (Enduring Renewal).
+    # "…is put into **your** graveyard from the battlefield" (Enduring Renewal)
+    # and its mirror, "…into **an opponent's** graveyard…" (Grim Feast).
     # Whose graveyard is a narrowing the *subject* cannot carry: CR 404.1 sends
     # a permanent to its **owner's** graveyard, and who owns it is not a
     # characteristic `subject_matches` reads off a permanent. So it is its own
-    # payload key, tested by the dispatcher against the observer's seat. Before
-    # the unqualified row, whose pattern would otherwise match the same line
-    # with the possessive read as part of nothing and the narrowing dropped —
-    # a trigger firing on the opponent's dying creatures too.
+    # payload key, tested by the dispatcher against the observer's seat — one
+    # key with two values rather than two conditions, because the dispatcher's
+    # question ("is the owner this observer?") is the same one answered either
+    # way round. Before the unqualified row, whose pattern would otherwise match
+    # the same line with the possessive read as part of nothing and the
+    # narrowing dropped — a trigger firing on every graveyard there is.
     ("permanent_dies",
-     r"whenever (?P<dying_subject>an? [^,]+) is put into (?P<dying_graveyard_owner>your) "
+     r"whenever (?P<dying_subject>an? [^,]+) is put into "
+     r"(?P<dying_graveyard_owner>your|an opponent's) "
      r"graveyard from the battlefield"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
