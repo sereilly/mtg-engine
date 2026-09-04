@@ -5,7 +5,7 @@ template has one home on each side — prowess parses in
 `effects/characteristics.py` and lowers in `lowering/characteristics.py`.
 
     _common          payload shapes and the fragments several families need
-    categories       the kind -> category registry the gate reads
+    categories       the kind -> category registry the gate in `lower.py` reads
     damage           dealing it, and preventing it
     redirection      CR 614.9, changing who dealt damage reaches
     fighting         CR 701.14, two creatures damaging each other
@@ -34,7 +34,7 @@ what is missing — never as a lowering that quietly drops the part the engine
 cannot do.
 """
 
-from .categories import INSTRUCTION_CATEGORIES, categories_of
+from .categories import INSTRUCTION_CATEGORIES
 from ._records import _COST_PRODUCES, _PRODUCES
 from .where_x import lower_where_x
 from .conditions import _lower_condition, pronoun_target_referent
@@ -330,7 +330,6 @@ __all__ = [
     "INSTRUCTION_CATEGORIES",
     "_COST_PRODUCES",
     "_PRODUCES",
-    "categories_of",
     "_mentions_x",
     "_refuse_unfused_distinctness",
     "_stamp_x_from_count",

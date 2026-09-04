@@ -30,6 +30,12 @@ live in ``grammar/lowering/``, one module per subject, mirroring
 callers outside the package import them from this module
 (``tests/engine/test_grammar_categories.py``, ``grammar/__init__.py``); moving
 the table did not move its address.
+
+``categories_of`` and the wrapper table it walks came back here at Mirage's
+third wave, when ``lowering/categories.py`` reached the 1,000-line guard on a
+single new kind. The table is what grows with the card pool; the gate over it
+does not, and this file is its only reader — so the split is between a
+registry and its one consumer rather than an arbitrary halving of a dict.
 """
 
 import dataclasses
@@ -43,7 +49,6 @@ from .lowering.sequences import (_lower_steps)
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
-    categories_of,
     _COST_PRODUCES,
     _fused_upkeep_pay_to_untap,
 
@@ -51,6 +56,75 @@ from .lowering import (
     _lower_condition,
 )
 
+
+
+# Control-flow wrappers take the categories of whatever they wrap, so gating
+# "damage" is enough to turn on a sequence of damage instructions without
+# inventing a category nobody could reason about.
+#
+# ``may`` is deliberately NOT in here: it gets its own ungated category above,
+# because an offer is not the same switch as the effect behind it. Wrapping it
+# with the others would let "optional" be turned off under a family that is on,
+# which is a card that performs its offer's consequence without asking.
+_WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
+    "sequence": ("steps",),
+    "if_then": ("then", "else"),
+    "for_each": ("effect",),
+    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
+    # the same reason ``for_each`` is: what the round *does* is the act it
+    # carries, and the repetition is not an effect of its own.
+    "repeat_offer_round": ("action",),
+}
+
+
+def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions a wrapper carries, or None if it is not one.
+
+    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
+    pairs rather than a bare tuple — the modal shape the pending-choice prompt
+    reads. Its categories are its options', because that is what the card can
+    actually do; giving it a category of its own would say the *choosing* is the
+    effect.
+    """
+    if instruction.kind == "create_delayed_trigger":
+        # A delayed ability's effect is one instruction rather than a list, so
+        # it cannot ride `_WRAPPER_KINDS` above — but it is a wrapper all the
+        # same, and an inner effect no category gates must ungate the line that
+        # arms it. An entry with no instruction is an ability that would fire
+        # into nothing, which is the empty-wrapper refusal below.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
+    if instruction.kind == "choose_one":
+        return tuple(
+            mode["instruction"] for mode in instruction.payload.get("modes") or ()
+        )
+    nested_keys = _WRAPPER_KINDS.get(instruction.kind)
+    if nested_keys is None:
+        return None
+    nested: tuple[OracleInstruction, ...] = ()
+    for key in nested_keys:
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested
+
+
+def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
+    """Migration categories covered by a lowered instruction sequence."""
+    found: set[str] = set()
+    for instruction in instructions:
+        nested_keys = _nested_instructions(instruction)
+        if nested_keys is not None:
+            if not nested_keys:
+                return frozenset({"__ungated__"})
+            inner = categories_of(nested_keys)
+            if "__ungated__" in inner:
+                return frozenset({"__ungated__"})
+            found |= inner
+            continue
+        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
+        if category is None:
+            return frozenset({"__ungated__"})
+        found.add(category)
+    return frozenset(found)
 
 #: The node types whose lowering is *only* a name — one AST class, one
 #: function, nothing to decide. These were 78 two-line branches of the chain
