@@ -236,7 +236,6 @@ def _lower_sacrifice(
     node: ast.Sacrifice,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
-    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """Only "sacrifice this <permanent>" has a handler.
 
