@@ -606,11 +606,31 @@ def _lower_prevent_all(
                 "the directional combat shield lasts exactly this turn", node=node
             )
         spec = node.dealt_by
-        if not isinstance(spec, ast.TargetSpec) or spec.quantifier not in ("target", "that"):
+        source_scoped = (
+            isinstance(spec, ast.TargetSpec)
+            and spec.quantifier == "this"
+            and _is_source(spec)
+        )
+        if not isinstance(spec, ast.TargetSpec) or (
+            not source_scoped and spec.quantifier not in ("target", "that")
+        ):
             raise LoweringError(
                 "no handler prevents the damage of an untargeted source", node=node
             )
         payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if source_scoped:
+            # "…prevent all combat damage that would be dealt by **this
+            # creature** this turn." (Mtenda Lion, under its own attack
+            # trigger.) The ability's own source, named by the clause rather
+            # than chosen — so it is a payload key and not a fall-through.
+            #
+            # The fall-through is what makes it one: the handler resolves a
+            # *bound* permanent with every battlefield as its fallback, so an
+            # ability that chose nothing would shield whichever creature the
+            # scan happened to reach first. That is the same silent
+            # mis-aiming ``deal_damage``'s "recipient: source" branch is
+            # written for, one family over.
+            payload["on_source"] = True
         # "…by that creature **and each creature blocking it**." (Feint.) The
         # second conjunct is a set named by a combat relation to the first, so
         # it carries no description of its own and rides as a flag: the handler
@@ -648,10 +668,23 @@ def _lower_prevent_all(
         # ``targets`` description is emitted and the handler shields the
         # ability's one target. A bound object carries no narrowing to honour,
         # which is why a restated adjective refuses rather than being dropped.
-        elif _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+        elif not source_scoped and _restrictions_beyond(
+            spec.filter, frozenset({"card_types"})
+        ):
             raise LoweringError(
                 "a bound object carries no narrowing the shield could honour",
                 node=node,
+            )
+        elif source_scoped and _restrictions_beyond(
+            spec.filter, frozenset({"card_types", "is_source"})
+        ):
+            # The source is named, not described: "this creature" carries the
+            # noun and nothing else. A restated adjective would be a narrowing
+            # of a set with one member in it, which is a sentence no card
+            # prints — so it refuses rather than being dropped, the same rule
+            # the bound-object arm above follows.
+            raise LoweringError(
+                "the source shield reads no narrowing beyond the noun", node=node
             )
         return (
             OracleInstruction("prevent_damage_by_target_until_eot", "", payload),

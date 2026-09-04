@@ -2241,3 +2241,116 @@ def test_zirilan_exiles_the_dragon_at_the_next_end_step(set_pool):
     standing = [p.card.name for p in game.players[0].battlefield]
     assert standing == ["Zirilan of the Claw"], game.log
     assert [c.name for c in game.players[0].exile] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G1: combat triggers and their bound referents ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_creature(name, power, toughness, keywords=()) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=tuple(keywords),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1_island() -> CardDefinition:
+    return CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="", colors=(), color_identity=("U",), keywords=(),
+        produced_mana=("U",),
+        raw={"name": "Island", "type_line": "Basic Land - Island"},
+    )
+
+
+def _w2g1_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g1_combat(*seats) -> Game:
+    """A game sitting in the declare-attackers step, one battlefield per seat."""
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g1_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def _w2g1_lion(set_pool):
+    lion = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mtenda Lion"]))
+    decoy = _w2g1_nosick(Permanent(card=_w2g1_creature("Decoy", 3, 3)))
+    game = _w2g1_combat([lion, decoy], [Permanent(card=_w2g1_island())])
+    assert game.declare_attackers(0, [0, 1])[0]
+    _w2g1_resolve(game)
+    return game, lion
+
+
+def test_mtenda_lion_offers_the_defender_the_toll(set_pool):
+    """"Whenever this creature attacks, defending player may pay {U}."
+
+    CR 506.2's seat, which the declare-attackers announcement already froze --
+    the offer is made to the player being attacked and not to the ability's own
+    controller, and an offer made to nobody is an effect that silently does not
+    happen.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Mtenda Lion"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.instruction.payload["actor"] == "defending_player"
+    assert trig.instruction.payload["cost"] == {"U": 1}
+
+    game, _lion = _w2g1_lion(set_pool)
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in offers] == [1], game.log
+
+
+def test_mtenda_lions_toll_silences_the_lion_and_nothing_else(set_pool):
+    """"…prevent all combat damage that would be dealt by **this creature**."
+
+    The shield is armed on the ability's own source, named rather than chosen.
+    The handler's ordinary path resolves a *bound* permanent with every
+    battlefield as its fallback, so an ability that chose no target would have
+    shielded whichever creature that scan reached first -- here, with a second
+    attacker on the board, that is a visible difference: the Decoy's 3 still
+    gets through.
+    """
+    game, lion = _w2g1_lion(set_pool)
+
+    assert game.confirm_optional_pay(1, accept=True)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.players[1].life == 17, game.log
+
+
+def test_mtenda_lion_hits_for_everything_when_the_toll_is_declined(set_pool):
+    """The control, and the default a non-interactive seat takes."""
+    game, _lion = _w2g1_lion(set_pool)
+
+    assert game.confirm_optional_pay(1, accept=False)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.players[1].life == 15, game.log
