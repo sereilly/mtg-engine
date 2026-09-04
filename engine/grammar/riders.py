@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
+from ..oracle_types import LAST_TARGET_CONTROLLER
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
@@ -87,7 +88,7 @@ def _parse_its_controller_creates_rider(
         stream.reset(mark)
         return None
     assert isinstance(token, ast.CreateToken)
-    return replace(token, recipient="exiled_permanent_controller")
+    return replace(token, recipient=LAST_TARGET_CONTROLLER)
 
 
 def _parse_that_controller_reveals_rider(
@@ -97,9 +98,14 @@ def _parse_that_controller_reveals_rider(
     until they reveal a creature card. That player puts that card onto the
     battlefield, then shuffles the rest into their library.`` (Transmogrify.)
 
+    ``Its controller reveals cards from the top of their library until they
+    reveal a creature card. The player puts that card onto the battlefield,
+    then shuffles all other cards revealed this way into their library.``
+    (Polymorph, behind a destroy rather than an exile.)
+
     The same shape as the "its controller creates a token" rider beside it, and
     for the same reason: "that creature" names the permanent the previous
-    sentence exiled, which is gone by the time this runs, so the library read
+    sentence removed, which is gone by the time this runs, so the library read
     rides the controller that step recorded. Parsed as its own sentence it names
     nobody.
 
@@ -107,11 +113,23 @@ def _parse_that_controller_reveals_rider(
     revealed pile — "that card" is what the reveal stopped on and "the rest" is
     exactly what it turned over first — so parsed apart the last two would
     dangle referents nothing binds.
+
+    **Three phrases have two printed spellings each**, and each pair is read
+    rather than normalized at one end: the possessive that names the removed
+    permanent ("that creature's" / "its"), the article in front of the seat
+    ("that player" / "the player") and the words for the cards the reveal
+    turned over first ("the rest" / "all other cards revealed this way"). None
+    of the three is a difference in what the card does — Polymorph and
+    Transmogrify are the same procedure — so a second production for them
+    would be the same card twice.
     """
     if not steps or _statement_bound_target(steps[-1]) is None:
         return None
     mark = stream.mark()
-    if not stream.accept_phrase("that", "creature", "'s", "controller"):
+    if not (
+        stream.accept_phrase("that", "creature", "'s", "controller")
+        or stream.accept_phrase("its", "controller")
+    ):
         return None
     if not stream.accept_phrase(
         "reveals", "cards", "from", "the", "top", "of", "their", "library",
@@ -132,18 +150,33 @@ def _parse_that_controller_reveals_rider(
     # Every word of the destination and of what happens to the rest. A card
     # that milled the pile instead of shuffling it back is a different card, and
     # the difference does not show until this sentence.
-    if not stream.accept_phrase(
-        "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
+    if not (
+        stream.accept_phrase(
+            "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
+        )
+        or stream.accept_phrase(
+            "the", "player", "puts", "that", "card", "onto", "the", "battlefield",
+        )
     ):
         stream.reset(mark)
         return None
     stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "then", "shuffles", "the", "rest", "into", "their", "library",
+    if not stream.accept_word("then"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("shuffles"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("the", "rest")
+        or stream.accept_phrase("all", "other", "cards", "revealed", "this", "way")
     ):
         stream.reset(mark)
         return None
-    return ast.RevealUntil("exiled_permanent_controller", filt)
+    if not stream.accept_phrase("into", "their", "library"):
+        stream.reset(mark)
+        return None
+    return ast.RevealUntil(LAST_TARGET_CONTROLLER, filt)
 
 
 def _parse_conditional_instead_rider(

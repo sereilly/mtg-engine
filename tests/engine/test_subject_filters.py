@@ -998,21 +998,35 @@ def test_a_supertype_narrows_a_permanent(catalog_by_name, set_pool):
     assert not permanent_matches_filter(plain, described)
 
 
-def test_a_supertype_no_matcher_tests_refuses_the_line():
+def test_token_is_read_as_cr_111_1s_fact_and_not_as_a_supertype():
     """Scryfall reports "token" as a supertype, because a token object's printed
     line reads "Token Creature - Goblin". This engine prints no such word and
-    answers "is this a token?" from the permanent's identity, so a type-line test
-    would match *no* token at all — a restriction silently matching nothing,
-    which is the same failure as one silently matching everything.
+    answers "is this a token?" from the permanent's identity, so a *type-line*
+    test for the word would match no token at all — a restriction silently
+    matching nothing, which is the same failure as one silently matching
+    everything.
 
-    So the field stays set on the AST with no key emitted, and the gate refuses
-    the line rather than charging the half it could read."""
+    That argument is why ``TYPE_LINE_SUPERTYPES`` drops the word for the layer
+    reader, and it used to make the noun parser refuse the phrase outright. The
+    parser now reads it one branch earlier, as the ``token_only`` restriction
+    CR 111.1 makes it — the identity question the docstring above says the
+    engine already answers — so the phrase is honoured rather than refused, and
+    the supertype key it would have emitted is never built.
+
+    The refusal was not a free one: "Sacrifice a **token** named Wood" (Jungle
+    Patrol) lost its whole ability to it, because the singular was eaten as an
+    adjective and the noun phrase was then left with no head. Only the plural
+    ("any number of tokens") ever reached the CR 111.1 branch.
+    """
     from engine.grammar import compile_line, subject_filter_payload
 
-    assert subject_filter_payload("a token creature") is None
+    assert subject_filter_payload("a token creature") == {
+        "token_only": True, "type_filter": "creature",
+    }
+    assert subject_filter_payload("a token") == {"token_only": True}
     compiled = compile_line("Destroy target token creature.")
-    assert compiled.instructions == ()
-    assert "supertypes" in (compiled.lowering_error or "")
+    assert [i.kind for i in compiled.instructions] == ["destroy_target_permanent"]
+    assert compiled.instructions[0].payload["token_only"] is True
 
 
 def test_a_narrowing_that_emits_no_key_is_refused_rather_than_dropped():

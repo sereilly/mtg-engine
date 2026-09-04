@@ -496,3 +496,261 @@ def test_wall_of_corpses_destroys_what_it_is_blocking(set_pool):
 
     assert not game.is_on_battlefield(attacker)
     assert game.is_on_battlefield(bystander), "the relation narrowed the target"
+
+
+# --- W1G4: the zones / cards / library family ---
+
+import pytest as _w1g4_pytest
+
+from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
+from engine.handlers._common import apply_damage_to_creature as _w1g4_damage
+from engine.control import change_control as _w1g4_change_control
+from engine.models import Permanent as _W1G4Permanent
+
+
+def test_gravebane_zombie_goes_on_top_of_its_library_instead_of_dying(set_pool):
+    """"If this creature would die, put it on top of its owner's library
+    instead." (CR 614.)
+
+    Firestorm Phoenix's replacement one zone over, and the three consequences
+    are the ones that make it a replacement rather than a dies-trigger: the
+    graveyard stays empty, the game's "creatures died this turn" tally stays at
+    zero, and the card is the next one its owner draws.
+    """
+    pool = set_pool("MIR")
+    zombie = _W1G4Permanent(card=pool["Gravebane Zombie"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", battlefield=[zombie], library=[pool["Island"]] * 5),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    _w1g4_damage(game, zombie, 5, source=None)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(zombie)
+    assert game.players[0].graveyard == []
+    assert game.players[0].library[0].name == "Gravebane Zombie"
+    assert len(game.players[0].library) == 6
+    assert game.creatures_died_this_turn == 0, "a replaced death is not a death"
+
+
+def test_gravebane_zombie_goes_to_its_owners_library_not_its_controllers(set_pool):
+    """CR 400.3: the card goes to its **owner's** library, which is the
+    difference a stolen Zombie makes -- and the reason the interceptor asks
+    ``owner_index_of`` rather than reading the seat off the payload.
+    """
+    pool = set_pool("MIR")
+    zombie = _W1G4Permanent(card=pool["Gravebane Zombie"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", library=[pool["Island"]] * 5),
+        _W1G4PlayerState(name="P2", battlefield=[zombie], library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w1g4_change_control(zombie, 0, source="w1g4-test")
+    game._sync_control()
+    assert game.controller_index_of(zombie) == 0
+
+    _w1g4_damage(game, zombie, 5, source=None)
+    game.check_state_based_actions()
+
+    assert game.players[1].library[0].name == "Gravebane Zombie"
+    assert len(game.players[0].library) == 5
+
+
+def _w1g4_griffin_board(set_pool, graveyard):
+    """Mtenda Griffin on seat 0's battlefield, with a graveyard to fish in.
+
+    ``current_step`` is stamped rather than stepped to: the ability's "Activate
+    only during your upkeep" clause reads exactly that, and the round is about
+    the *target*, not about the turn structure.
+    """
+    pool = set_pool("MIR")
+    griffin = _W1G4Permanent(card=pool["Mtenda Griffin"])
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", battlefield=[griffin],
+            graveyard=[pool[n] for n in graveyard],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.current_step = "upkeep"
+    return game, griffin
+
+
+def test_mtenda_griffin_returns_a_griffin_card_and_bounces_itself(set_pool):
+    """"{W}, {T}: Return this creature to its owner's hand **and return target
+    Griffin card from your graveyard to your hand**."
+
+    The subtype was refused by the graveyard family's blanket "no return
+    handler honours this restriction" -- the same gate the reanimation's colour
+    was lifted out of a set earlier. It travels as ``graveyard_subtypes`` and is
+    tested by the one predicate the picker, the cast gate and the handler share,
+    so the card is offered exactly what it may take.
+    """
+    game, _ = _w1g4_griffin_board(
+        set_pool, ("Femeref Scouts", "Mtenda Griffin", "Viashino Warrior")
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=1
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Mtenda Griffin", "Mtenda Griffin",
+    ], "the permanent and the graveyard card, one each"
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Femeref Scouts", "Viashino Warrior",
+    ], "exactly one card left the graveyard"
+    assert game.players[0].battlefield == []
+
+
+@_w1g4_pytest.mark.parametrize("slot", [0, 2])
+def test_mtenda_griffin_refuses_a_card_that_is_not_a_griffin(set_pool, slot):
+    """The narrowing in the direction that matters: a dropped subtype would
+    have let the ability fish any creature card out, which is a strictly better
+    card than the one printed and nothing on the board would show it."""
+    game, _ = _w1g4_griffin_board(
+        set_pool, ("Femeref Scouts", "Mtenda Griffin", "Viashino Warrior")
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=slot
+    )
+
+    assert not result.supported
+    assert len(game.players[0].graveyard) == 3
+    assert game.players[0].battlefield, "a refused activation pays nothing"
+
+
+def test_jungle_patrol_sacrifices_its_own_wood_token_for_red_mana(set_pool):
+    """"{1}{G}, {T}: Create a 0/1 green Wall creature token with defender named
+    Wood." / "**Sacrifice a token named Wood**: Add {R}."
+
+    The second ability was lost to a word in fetched data. Scryfall lists
+    "Token" among the supertypes -- a token's printed line really does read
+    "Token Creature - Wall" -- so the noun parser ate the singular as an
+    adjective and the phrase was left with no head noun, refusing with "expected
+    what to sacrifice as a cost". Only the plural ("any number of tokens") ever
+    reached CR 111.1's branch. The word is now read there first, and the
+    printed *name* is what pins the cost.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", battlefield=[_W1G4Permanent(card=pool["Jungle Patrol"])],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=0
+    ).supported
+    game.resolve_stack()
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Jungle Patrol", "Wood",
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=1
+    )
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[0].battlefield] == ["Jungle Patrol"]
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_jungle_patrol_will_not_eat_a_creature_that_is_not_a_wood_token(set_pool):
+    """The name is the narrowing, and a dropped one would let the ability eat
+    any creature on the board for {R} -- a strictly better card with nothing on
+    the board to show it. CR 602.2b: an unpayable cost refuses the activation
+    with nothing spent."""
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1",
+            battlefield=[
+                _W1G4Permanent(card=pool["Jungle Patrol"]),
+                _W1G4Permanent(card=pool["Femeref Scouts"]),
+            ],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Jungle Patrol", permanent_index=0, ability_index=1
+    )
+
+    assert not result.supported
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Jungle Patrol", "Femeref Scouts",
+    ]
+    assert game.players[0].mana_pool["R"] == 0
+
+
+def test_zombie_mob_counts_the_graveyard_before_it_eats_it(set_pool):
+    """"This creature enters with a +1/+1 counter on it **for each creature card
+    in your graveyard**." / "When this creature enters, exile all creature cards
+    from your graveyard."
+
+    Two firsts on one card. The entry counters take their number from a third
+    place -- neither the printed line nor the announced X, but the board as the
+    permanent enters (CR 608.2) -- and the noun phrase goes through the same
+    ``parse_subject_filter`` + ``count_spec`` pair the printed sentence "gets
+    +1/+1 for each creature card in your graveyard" already uses, so the two
+    count the same set. The sweep is over a pile of *cards*, which the
+    battlefield sweep cannot be: CR 613.1 gives a card in a graveyard no
+    computed characteristics for ``subject_matches`` to read.
+
+    The order is the assertion. CR 614.1c applies the counters as the permanent
+    enters and the trigger resolves afterwards, so the Mob is sized by a
+    graveyard it then empties -- and the printed 2/0 is why that matters: with
+    no creature card there it enters and dies.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1", hand=[pool["Zombie Mob"]],
+            graveyard=[pool["Femeref Scouts"], pool["Mana Prism"],
+                       pool["Viashino Warrior"], pool["Island"]],
+            library=[pool["Island"]] * 5,
+        ),
+        _W1G4PlayerState(
+            name="P2", graveyard=[pool["Femeref Scouts"]],
+            library=[pool["Island"]] * 5,
+        ),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Zombie Mob").supported
+    game.resolve_stack()
+
+    mob = game.players[0].battlefield[0]
+    assert (mob.effective_power, mob.effective_toughness) == (4, 2), "2/0 plus two"
+    assert [c.name for c in game.players[0].graveyard] == ["Mana Prism", "Island"]
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Femeref Scouts", "Viashino Warrior",
+    ]
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Scouts"], (
+        "'your graveyard' is one pile"
+    )

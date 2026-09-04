@@ -6,7 +6,8 @@ from ..auras import detach_aura
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
-from ..oracle_types import ATTACHED_PERMANENT_CONTROLLER, PER_OBJECT_SEAT_RECORDS
+from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
+                            PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
 from ._common import (
     frozen_that_player_seat,
@@ -697,7 +698,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         chosen_index = game.battlefield_index_of(victim)
         seat = game.controller_index_of(victim)
         if seat is not None:
-            context.results["last_target_controller_index"] = seat
+            context.results[LAST_TARGET_CONTROLLER] = seat
         # "You gain life equal to **its** mana value." (Divine Offering.)
         # Recorded here, before the destruction, for two reasons: the
         # permanent is gone by the time the next step runs (CR 608.2h), and

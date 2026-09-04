@@ -166,6 +166,7 @@ EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
 #: the other three — a hand, a library, an exile — reach no graveyard at all.
 EXILE_INSTEAD_OF_LEAVING = 10  # Dreams of the Dead
 RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
+LIBRARY_TOP_INSTEAD_OF_DYING = 30  # Gravebane Zombie
 DISCARD_DESTINATION = 10  # Library of Leng
 # Before the two draw replacements that *consume* the event, and for the
 # player's benefit: a doubler applied first turns one draw into two, and the
@@ -1247,6 +1248,66 @@ def _return_to_hand_instead_of_dying(game, payload: dict) -> ReplacementOutcome 
         game.log.append(
             f"{permanent.card.name} returned to {owner.name}'s hand instead of dying, "
             f"revealed and unplayable until their next turn"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
+TOP_OF_LIBRARY_INSTEAD_OF_DYING = (
+    "if this creature would die, put it on top of its owner's library instead"
+)
+
+
+def _applies_top_of_library_instead_of_dying(game, payload: dict) -> bool:
+    """Whether this permanent prints Gravebane Zombie's sentence.
+
+    Pure, as CR 616.1 requires, and the token exclusion is the same one
+    ``_applies_return_to_hand_instead`` makes one screen up: a token put into a
+    library ceases to exist (CR 111.7), so the sentence has nothing to do and
+    the creature would vanish either way — the difference between the two
+    outcomes is invisible, which is exactly when a replacement should decline
+    rather than fire.
+    """
+    permanent = payload["permanent"]
+    if permanent.metadata.get("is_token", False):
+        return False
+    text = (permanent.effective_card.oracle_text or "").lower()
+    return TOP_OF_LIBRARY_INSTEAD_OF_DYING in text
+
+
+@replacement_effect(
+    "would_die",
+    LIBRARY_TOP_INSTEAD_OF_DYING,
+    applies=_applies_top_of_library_instead_of_dying,
+)
+def _top_of_library_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
+    """Gravebane Zombie: "If this creature would die, put it on top of its
+    owner's library instead."
+
+    Firestorm Phoenix's replacement one zone over, and the same three
+    consequences: the permanent never reaches the graveyard, so nothing that
+    watches a death sees one (CR 614) — no dies-trigger and no entry in the
+    game's "creatures died this turn" tally — and the card goes to its
+    **owner's** library rather than its controller's (CR 400.3), which is the
+    difference a stolen Zombie makes.
+
+    Through ``Game.put_card_into_library`` rather than onto the list, because
+    CR 903.9b has no single fire site and a tuck is one of the places it fires;
+    ``from_battlefield`` hands it the permanent so CR 614.6's leave-the-
+    battlefield replacements get their look at the same move (Dreams of the
+    Dead exiles the Zombie instead, and this interceptor must not then also
+    have put it in a library).
+    """
+    permanent = payload["permanent"]
+    owner_seat = game.owner_index_of(permanent)
+    if owner_seat is None:
+        owner_seat = game.players.index(payload["player"])
+    owner = game.players[owner_seat]
+    if game.put_card_into_library(
+        owner, permanent.card, position="top", from_battlefield=permanent
+    ):
+        game.log.append(
+            f"{permanent.card.name} went on top of {owner.name}'s library "
+            f"instead of dying"
         )
     return ReplacementOutcome(replaced=True)
 
@@ -2409,6 +2470,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # one that could not. A claim stopping at the first sentence would be a
     # rider claimed and not executed.
     (DISCARD_INSTEAD_OF_DRAW_TEXT, ""),
+    # _top_of_library_instead_of_dying (Gravebane Zombie): the phrase is the
+    # whole line, and the interceptor performs the whole of it — one destination
+    # and no rider.
+    (TOP_OF_LIBRARY_INSTEAD_OF_DYING, ""),
     # _return_to_hand_instead_of_dying (Firestorm Phoenix): the constant is both
     # printed sentences, because the interceptor performs both — the return and
     # the reveal-and-lock rider behind it (engine/hand_locks.py). A claim

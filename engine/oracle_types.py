@@ -192,11 +192,11 @@ class ActivatedAbilityCost:
     #: empty filter would let the charger eat a land.
     exile_filter: dict | None = None
     #: Which zone that payment comes out of - ``"battlefield"`` (a permanent
-    #: the payer controls) or ``"graveyard"`` (a card in the payer's own).
-    #: Beside the filter rather than inside it because the two enumerate
-    #: different kinds of object, and a matcher for one cannot answer about
-    #: the other (CR 613.1: a card in a zone has no computed characteristics
-    #: at all).
+    #: the payer controls), ``"graveyard"`` (a card in the payer's own) or
+    #: ``"hand"`` (Cadaverous Bloom's "Exile a card from your hand"). Beside
+    #: the filter rather than inside it because the three enumerate different
+    #: kinds of object, and a matcher for one cannot answer about the others
+    #: (CR 613.1: a card in a zone has no computed characteristics at all).
     exile_zone: str = "battlefield"
     #: Whose zone that payment comes out of: ``"you"`` (the payer's own pile,
     #: Necropolis) or ``None`` for **any one player's** ("from a graveyard" /
@@ -706,6 +706,36 @@ CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 #: at opposite ends of the pipeline and a second spelling would make the
 #: producer gate vacuous while the handler read an empty record.
 ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
+
+
+#: The seat a step that **chose a permanent** records: the controller of the
+#: object the previous sentence named, read before that object leaves
+#: (CR 608.2h, last-known information). "Destroy target creature. **Its
+#: controller** loses 2 life" (Liliana, Death Mage), "Exile target creature.
+#: **Its controller** creates a 4/4 white Angel creature token" (Angelic
+#: Ascension), "Destroy target creature. … **Its controller** reveals cards
+#: from the top of their library" (Polymorph) are one referent with three
+#: riders behind it, so they read one record.
+#:
+#: One key rather than two, and that is a correction rather than a convention:
+#: the destroy handler wrote ``last_target_controller_index`` for the life
+#: loss while the exile handler wrote ``exiled_permanent_controller`` for the
+#: token, so "Destroy target creature. Its controller creates a token"
+#: (Afterlife) refused for want of a producer that was sitting one file over
+#: under another name — and "Exile target creature. Its controller loses 2
+#: life" compiled and read a record nobody had written.
+#:
+#: A *spell's* controller is deliberately not this record. See
+#: ``COUNTERED_SPELL_CONTROLLER`` below: a spell on the stack is not a
+#: permanent, it is gone by a different rule (CR 701.5a) and it is recorded by
+#: a different handler.
+#:
+#: Here rather than beside the lowering that gates on it, for
+#: ``ATTACHED_PERMANENT_CONTROLLER``'s reason: three handlers write or read it
+#: and ``grammar/lowering/_records._PRODUCES`` declares it, so a second
+#: spelling makes the producer gate vacuous while a handler reads an empty
+#: record — which is exactly what had happened.
+LAST_TARGET_CONTROLLER = "last_target_controller"
 
 #: The ``deal_damage`` recipient meaning "the controller of the last <noun
 #: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody

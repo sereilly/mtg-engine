@@ -1338,10 +1338,11 @@ def chargeable_exile_payload(described: dict) -> dict | None:
         key: value for key, value in described.items()
         if key not in ("zone", "zone_owner")
     }
-    if zone == "graveyard":
+    if zone in ("graveyard", "hand"):
         # A card in a zone has no computed characteristics (CR 613.1), so the
         # card matcher is what answers here - the same split
-        # ``chargeable_card_filter`` makes for a discard cost.
+        # ``chargeable_card_filter`` makes for a discard cost, and a hand is
+        # the zone that discard already reads.
         return card_only_filter(stripped)
     carried = object_only_filter(
         stripped, carried_separately=frozenset({"exclude_self", "controller"})
@@ -1713,12 +1714,18 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # guessed: a graveyard payment enumerates cards and a battlefield one
     # enumerates permanents, and answering the wrong one exiles nothing while
     # the ability still resolves.
-    exile_zone = (
-        "graveyard"
-        if chosen_exile is not None
-        and "from your graveyard" in chosen_exile.group(1)
-        else "battlefield"
-    )
+    # "…**from your hand**" (Cadaverous Bloom) is the third zone, read off the
+    # same phrase for the same reason the graveyard is: a hand payment
+    # enumerates cards the payer holds, and answering "battlefield" would look
+    # for a permanent that is not there and charge nothing while the ability
+    # still resolved.
+    exile_zone = "battlefield"
+    if chosen_exile is not None:
+        phrase = chosen_exile.group(1)
+        if "from your graveyard" in phrase:
+            exile_zone = "graveyard"
+        elif "from your hand" in phrase:
+            exile_zone = "hand"
     exile_zone_owner: str | None = "you"
     exile_count = 1
     exile_same_zone = False

@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 72.8% | 67.7% | 41.8% | 187 |
+| MIR *(measured)* | 335 | 545 | 74.7% | 70.3% | 44.0% | 198 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 350 | 179 | expected a subject |  |
-| 119 | 57 | unrecognized effect verb |  |
-| 95 | 55 | unconsumed text |  |
+| 348 | 177 | expected a subject |  |
+| 117 | 55 | unrecognized effect verb |  |
+| 92 | 52 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -109,6 +109,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aether Storm**
   - `Pay 4 life: Destroy this enchantment. It can't be regenerated. Any player may activate this ability.`
   - `Pay 4 life: Destroy this enchantment. It can't be regenerated. Any player may activate this ability.`
+- **Afterlife**
+  - `Destroy target creature. It can't be regenerated. Its controller creates a 1/1 white Spirit creature token with flying.`
 - **Agent of Stromgald**
   - `{R}: Add {B}.`
 - **Aggression**
@@ -179,6 +181,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Minotaur creatures get +1/+0.`
 - **Anarchy**
   - `Destroy all white permanents.`
+- **Ancestral Memories**
+  - `Look at the top seven cards of your library. Put two of them into your hand and the rest into your graveyard.`
 - **Ancestral Recall**
   - `Target player draws three cards.`
   - `Target player draws three cards.`
@@ -610,6 +614,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Burnt Offering**
   - `Add X mana in any combination of {B} and/or {R}, where X is the sacrificed creature's mana value.`
+- **Cadaverous Bloom**
+  - `Exile a card from your hand: Add {B}{B} or {G}{G}.`
 - **Cadaverous Knight**
   - `{1}{B}{B}: Regenerate this creature.`
 - **Caged Zombie**
@@ -1174,6 +1180,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked by a nonblack creature, destroy that creature at end of combat.`
 - **Dread Wight**
   - `At end of combat, put a paralyzation counter on each creature blocking or blocked by this creature and tap those creatures. Each of those creatures doesn't untap during its controller's untap step for as long as it has a paralyzation counter on it. Each of those creatures gains "{4}: Remove a paralyzation counter from this creature."`
+- **Dream Cache**
+  - `Draw three cards, then put two cards from your hand both on top of your library or both on the bottom of your library.`
 - **Dream Coat**
   - `{0}: Enchanted creature becomes the color or colors of your choice. Activate only once each turn.`
 - **Dreams of the Dead**
@@ -2134,6 +2142,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
 - **Igneous Golem**
   - `{2}: This creature gains trample until end of turn.`
+- **Illumination**
+  - `Counter target artifact or enchantment spell. Its controller gains life equal to its mana value.`
 - **Illusionary Presence**
   - `At the beginning of your upkeep, choose a land type. This creature gains landwalk of the chosen type until end of turn. (It can't be blocked as long as defending player controls a land of that type.)`
 - **Illusionary Terrain**
@@ -2312,6 +2322,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B} or {G}.`
 - **Jungle Patrol**
   - `{1}{G}, {T}: Create a 0/1 green Wall creature token with defender named Wood.`
+  - `Sacrifice a token named Wood: Add {R}.`
 - **Jungle Troll**
   - `{R}: Regenerate this creature.`
   - `{G}: Regenerate this creature.`
@@ -2588,6 +2599,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 4 life.`
 - **Lim-Dûl's Vault**
   - `Look at the top five cards of your library. As many times as you choose, you may pay 1 life, put those cards on the bottom of your library in any order, then look at the top five cards of your library. Then shuffle and put the last cards you looked at this way on top in any order.`
+- **Lion's Eye Diamond**
+  - `Discard your hand, Sacrifice this artifact: Add three mana of any one color. Activate only as an instant.`
 - **Living Armor**
   - `{T}, Sacrifice this artifact: Put X +0/+1 counters on target creature, where X is that creature's mana value.`
 - **Living Artifact**
@@ -2901,6 +2914,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U}.`
   - `{T}: Add {U}.`
   - `{T}: Add {U}.`
+- **Mtenda Griffin**
+  - `{W}, {T}: Return this creature to its owner's hand and return target Griffin card from your graveyard to your hand. Activate only during your upkeep.`
 - **Mudslide**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. If the player does, untap those creatures.`
 - **Murk Dwellers**
@@ -3101,6 +3116,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pack Leader**
   - `Other Dogs you control get +1/+1.`
   - `Whenever this creature attacks, prevent all combat damage that would be dealt this turn to Dogs you control.`
+- **Painful Memories**
+  - `Look at target opponent's hand and choose a card from it. Put that card on top of that player's library.`
 - **Palladia-Mors**
   - `At the beginning of your upkeep, sacrifice Palladia-Mors unless you pay {R}{G}{W}.`
 - **Palladium Myr**
@@ -3231,6 +3248,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{G}{G}, {T}: Target creature gains flying until end of turn.`
 - **Political Trickery**
   - `Exchange control of target land you control and target land an opponent controls. (This effect lasts indefinitely.)`
+- **Polymorph**
+  - `Destroy target creature. It can't be regenerated. Its controller reveals cards from the top of their library until they reveal a creature card. The player puts that card onto the battlefield, then shuffles all other cards revealed this way into their library.`
 - **Portcullis Vine**
   - `{2}, {T}, Sacrifice a creature with defender: Draw a card.`
 - **Portent**
@@ -3745,6 +3764,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gets +1/+0 until end of turn.`
 - **Sea Troll**
   - `{U}: Regenerate this creature. Activate only if this creature blocked or was blocked by a blue creature this turn.`
+- **Sealed Fate**
+  - `Look at the top X cards of target opponent's library. Exile one of those cards and put the rest back on top of that player's library in any order.`
 - **Searing Spear Askari**
   - `{1}{R}: This creature gains menace until end of turn. (It can't be blocked except by two or more creatures.)`
 - **Seasinger**
@@ -4947,6 +4968,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Other Zombies have "{B}: Regenerate this permanent."`
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
   - `Other Zombies have "{B}: Regenerate this permanent."`
+- **Zombie Mob**
+  - `When this creature enters, exile all creature cards from your graveyard.`
 - **Zuberi, Golden Feather**
   - `Other Griffin creatures get +1/+1.`
 - **Zuran Enchanter**

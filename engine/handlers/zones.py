@@ -21,7 +21,7 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT,
+from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, LAST_TARGET_CONTROLLER,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -2224,7 +2224,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
                 owner_index = controller_index if controller_index is not None else 0
             game.players[owner_index].exile.append(perm.card)
             game.log.append(f"{card.name} exiled {perm.card.name}")
-        # No `exiled_permanent_controller`: the key names *the* controller, and
+        # No `last_target_controller`: the key names *the* controller, and
         # a several-target exile has one per permanent. A later step reading it
         # would silently act on whichever one happened to be written last, so
         # the key is left absent and any card that needs it refuses for want of
@@ -2268,7 +2268,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if context.source_permanent is not None:
         link_exiled_card(context.source_permanent, perm.card, owner_index)
     if controller_index is not None:
-        context.results["exiled_permanent_controller"] = controller_index
+        context.results[LAST_TARGET_CONTROLLER] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
     return True, "resolved"
 
@@ -2516,6 +2516,49 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     owner.exile.append(exiled)
     context.results["exiled_cards"] = [exiled]
     game.log.append(f"{card.name} exiled {exiled.name} from {owner.name}'s graveyard")
+    return True, "resolved"
+
+
+@effect_handler("exile_graveyard_cards")
+def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile all creature cards from your graveyard." (Zombie Mob.)
+
+    The sweep the battlefield one beside it cannot be: CR 613.1 gives a card in
+    a graveyard no computed characteristics at all, so what the noun phrase
+    narrows by is answered by the *card* matcher — the same reader a discard
+    cost and a graveyard target already share.
+
+    Nothing is chosen and nothing is ordered: exile is an unordered zone
+    (CR 406.2 orders no zone but the library and the graveyard), and "all" names
+    the whole matching set. The pile is read once into a list before anything
+    moves, because removing from a list while iterating it skips entries — and
+    a graveyard holds several copies of a popular card under one name, so the
+    survivors are rebuilt by *slot* rather than by value (idiom 11).
+    """
+    payload = instruction.payload
+    if payload.get("graveyard_owner") != "you":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    owner = context.caster
+    described = dict(payload.get("filter") or {})
+    taken_slots = [
+        index for index, card in enumerate(owner.graveyard)
+        if _card_matches_filter(card, described)
+    ]
+    if not taken_slots:
+        game.log.append(f"{context.card.name}: no card in that graveyard to exile")
+        return True, "resolved"
+    taken = [owner.graveyard[index] for index in taken_slots]
+    kept = [
+        card for index, card in enumerate(owner.graveyard)
+        if index not in set(taken_slots)
+    ]
+    owner.graveyard[:] = kept
+    owner.exile.extend(taken)
+    game.log.append(
+        f"{context.card.name} exiled {len(taken)} card(s) from "
+        f"{owner.name}'s graveyard"
+    )
     return True, "resolved"
 
 
@@ -4219,6 +4262,19 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         caster = context.target
     else:
         caster = context.caster
+    # "Look at the top X cards of **target opponent's** library. Exile one of
+    # those cards…" (Sealed Fate.) The pile is the chosen player's and every
+    # decision about it is the caster's — the one shape ``looker`` cannot say,
+    # because there one seat answers both questions. A named pile the spell
+    # never chose does nothing at all, for ``looker``'s reason: reading the
+    # wrong library is worse than the spell fizzling, and the pile is hidden,
+    # so nobody would see it.
+    chooser = caster
+    if payload.get("pile_owner") is not None:
+        if context.target not in game.players:
+            game.log.append(f"{context.card.name}: no player chosen")
+            return True, "resolved"
+        caster = context.target
     # "Look at **that many** cards" (Garruk's Harbinger): the number the firing
     # event carried, frozen by the fire site. An absent record looks at nothing
     # rather than falling back to a count the card never printed.
@@ -4240,11 +4296,16 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
     caster_index = game.players.index(caster)
+    chooser_index = game.players.index(chooser)
     # The narrowing, the optionality and the order the rest go back in all ride
     # the prompt, so what is offered, what an answer is checked against and what
     # a non-interactive seat takes are one rule (``live_look_top_candidates``).
     game.arm_pending_choice(
-        "look_top_pick", caster_index,
+        "look_top_pick", chooser_index,
+        # Whose library is looked through, when that is not the seat answering.
+        # Absent for every card but Sealed Fate, so those prompts carry exactly
+        # the data they always did.
+        **({"pile_index": caster_index} if chooser_index != caster_index else {}),
         top_count=top_count, amount=amount, card_name=context.card.name,
         filter=_merged_pick_filter(payload.get("filters") or ()),
         filters=tuple(payload.get("filters") or ()),
@@ -4252,8 +4313,16 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         rest_order=payload.get("rest_order", "any"),
         rest_destination=payload.get("rest_destination", "library_bottom"),
         pick_destination=payload.get("pick_destination", "hand"),
+        # "Put **two** of them into your hand" (Ancestral Memories): how many
+        # picks are still owed. One is every other card in the family, and the
+        # answer path re-arms the prompt while more are owed — see
+        # `_resolve_look_top_pick`.
+        remaining=max(1, int(payload.get("pick_count", 1))),
     )
-    game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
+    game.log.append(
+        f"{chooser.name} is looking at the top {top_count} cards of "
+        + ("their library" if chooser is caster else f"{caster.name}'s library")
+    )
     return True, "pending_look_top_pick"
 
 
@@ -5538,8 +5607,14 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
         return True, "resolved"
     game.arm_pending_choice(
         "hand_to_library", game.players.index(player), count=actual,
+        # "…both on top of your library **or both on the bottom**" (Dream
+        # Cache). Carried onto the prompt so what the player is offered and
+        # what an answer is checked against are one rule: without the key the
+        # resolver refuses a bottoming answer outright.
+        **({"destination": instruction.payload["destination"]}
+           if instruction.payload.get("destination") else {}),
     )
     game.log.append(
-        f"{player.name} must choose {actual} card(s) to put on top of their library"
+        f"{player.name} must choose {actual} card(s) to put back on their library"
     )
     return True, "pending_hand_to_library"

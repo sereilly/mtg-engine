@@ -18,6 +18,7 @@ from ..enter_effects import (
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
+    enters_with_counted_pt_counters,
     enters_with_x_pt_counters,
     enters_with_x_named_counters,
     choose_number_on_enter,
@@ -768,6 +769,43 @@ class PermanentStateMixin:
             else:
                 permanent.toughness_bonus += x_value
                 permanent.metadata["plus_0_1_counters"] = x_value
+
+        # "…enters with a <kind> counter on it **for each <noun phrase>**"
+        # (Zombie Mob). The third place the number can come from, beside the
+        # printed one and the announced X: the board, counted as the permanent
+        # enters (CR 608.2). ``evaluate_count`` is the same evaluator the
+        # printed sentence "gets +1/+1 for each creature card in your
+        # graveyard" already reaches, so the two count the same set.
+        #
+        # Counted against the *controller's* zones, which is what "your" names
+        # for a permanent entering under a seat, and taken before the counters
+        # go on — the permanent itself is not in a graveyard, so nothing here
+        # can count itself.
+        for raw_line in entry_lines:
+            counted = enters_with_counted_pt_counters(
+                raw_line, permanent.effective_card.name
+            )
+            if counted is None:
+                continue
+            kind, spec = counted
+            from ..handlers._common import evaluate_count
+
+            seat = self.controller_index_of(permanent)
+            owner = self.players[seat if seat is not None else 0]
+            amount = max(0, evaluate_count(self, owner, spec, source=permanent))
+            if amount <= 0:
+                continue
+            if kind == "+1/+1":
+                # Through the seam, for the printed-count loop's reason: an
+                # entry counter is a counter placement and CR 614.1c lets a
+                # replacement modify it.
+                self.place_plus1_counters(permanent, amount)
+            elif kind == "+1/+0":
+                permanent.power_bonus += amount
+                permanent.metadata["plus_1_0_counters"] = amount
+            else:
+                permanent.toughness_bonus += amount
+                permanent.metadata["plus_0_1_counters"] = amount
 
         # copy-as-enter creature
         if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:

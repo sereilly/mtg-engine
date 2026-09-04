@@ -1776,11 +1776,12 @@ class AbilityActivationMixin:
         which makes the ability unactivatable (CR 602.2b) with nothing else
         spent.
 
-        Two zones, one rule. The battlefield enumerates the *permanents the
+        Three zones, one rule. The battlefield enumerates the *permanents the
         payer controls* through the control seam and asks ``subject_matches``,
-        the same predicate the picker offers by. A graveyard enumerates the
-        payer's own pile and asks the card matcher instead, because a card in a
-        zone has no computed characteristics at all (CR 613.1).
+        the same predicate the picker offers by. A graveyard and a hand
+        enumerate the payer's own pile and ask the card matcher instead,
+        because a card in a zone has no computed characteristics at all
+        (CR 613.1).
 
         **Idiom 11**: in a graveyard, two copies of a card are literally one
         object, so the chosen slot is resolved to its card *before* anything
@@ -1793,6 +1794,48 @@ class AbilityActivationMixin:
         """
         described = cost.exile_filter or {}
         wanted = max(1, int(getattr(cost, "exile_count", 1) or 1))
+        if cost.exile_zone == "hand":
+            # "Exile a card from your hand" (Cadaverous Bloom). The payer's own
+            # hand, always: a hand is hidden (CR 400.2), so a cost naming
+            # somebody else's would ask a player to choose a card they cannot
+            # see, and the grammar's gate refuses that phrase for the same
+            # reason.
+            #
+            # Through ``take_card_from_hand``, not a filter over the list: a
+            # deck repeats one immutable ``CardDefinition`` per copy, so every
+            # copy of a card in a hand is the same Python object and an identity
+            # filter removes all of them where this cost eats exactly one.
+            # Resolved to *cards* before anything moves, for the graveyard
+            # branch's reason one screen up — every removal renumbers the slots
+            # behind it.
+            slots = [
+                index for index, card in enumerate(controller.hand)
+                if _card_matches_filter(card, described)
+            ]
+            if len(slots) < wanted:
+                return []
+            named = (
+                [cost_permanent_index]
+                if isinstance(cost_permanent_index, int)
+                and cost_permanent_index in slots
+                else []
+            )
+            chosen_slots: list[int] = []
+            for slot in [*named, *slots]:
+                if len(chosen_slots) >= wanted:
+                    break
+                if slot not in chosen_slots:
+                    chosen_slots.append(slot)
+            taken = [controller.hand[slot] for slot in chosen_slots]
+            for card in taken:
+                self.take_card_from_hand(controller, card)
+                controller.exile.append(card)
+            self.log.append(
+                f"{controller.name} exiled "
+                + ", ".join(card.name for card in taken)
+                + f" from their hand to activate {permanent.card.name}"
+            )
+            return taken
         if cost.exile_zone == "graveyard":
             # Whose pile. "your graveyard" (Necropolis) is one seat;
             # ``exile_zone_owner`` of None is "a graveyard" — anybody's — and

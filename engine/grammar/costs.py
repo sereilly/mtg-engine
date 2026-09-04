@@ -112,7 +112,7 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """
     if filt.is_source:
         return True
-    if not (filt.card_types or filt.subtypes):
+    if not (filt.card_types or filt.subtypes or filt.named):
         # An *unnamed* cost — one whose noun phrase pins neither a card type nor
         # a subtype — would let the charger eat anything on the board, including
         # a land. This is the one narrowing the key set cannot express, because
@@ -126,6 +126,13 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
         # already collect, which is the two-readers-disagree failure this
         # function exists to prevent, in the direction that costs a card its
         # support rather than its narrowing.
+        #
+        # …and so does a **name**: "Sacrifice a token named Wood" (Jungle
+        # Patrol) pins the object harder than any type would (CR 201.2), and
+        # ``named`` is a key ``subject_matches`` tests like any other. The
+        # question this branch asks is "does the phrase name what may be eaten?"
+        # — a name is the strongest yes there is, and the ``token_only`` beside
+        # it narrows further still.
         return False
     # ``controller`` travels beside it, for the reason the comment on the
     # charger gives: a sacrifice is paid from the payer's own battlefield, so
@@ -162,6 +169,28 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
             return False
         if filt.zone_owner is not None and filt.zone_owner.kind != "you":
             return False
+    elif filt.zone == "hand":
+        # "Exile **a card from your hand**" (Cadaverous Bloom). The payer's own
+        # hand and no other: a hand is hidden (CR 400.2), so a cost naming
+        # somebody else's would ask a player to choose a card they cannot see.
+        #
+        # And it returns **here**, before the type check below, because "a
+        # card" is the whole of what this cost names and it is not the
+        # anything-goes phrase that check refuses. That argument is about a
+        # zone the payer does not choose from freely: an untyped battlefield
+        # exile would let the charger eat a land the player would never have
+        # given up. A hand exile eats a card its owner picks out of their own
+        # hand, which is what "a card" says and what the discard cost beside it
+        # has always admitted with no type printed either.
+        if not filt.is_card:
+            return False
+        if filt.zone_owner is None or filt.zone_owner.kind != "you":
+            return False
+        if _restrictions_beyond(
+            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
+        ):
+            return False
+        return chargeable_exile_payload(filt.to_payload()) is not None
     elif filt.zone != "battlefield" or filt.is_card:
         return False
     if not (filt.card_types or filt.subtypes):

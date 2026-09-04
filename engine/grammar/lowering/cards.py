@@ -888,6 +888,12 @@ def _lower_put_hand_cards_on_library(
     and silently so, since both spellings move the same number of cards.
     """
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    # "…**both on top of your library or both on the bottom**" (Dream Cache).
+    # Emitted only when the card offers the choice, so every payload written
+    # before this is byte-identical — and the prompt refuses a bottoming answer
+    # without it, which is what keeps a client from bottoming a Brainstorm.
+    if node.destination != "top":
+        payload["destination"] = node.destination
     if node.whole_hand:
         # "**the cards from** their hand" — how many is a fact about the board
         # at resolution, so the handler counts and the payload only says to.

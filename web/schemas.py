@@ -350,6 +350,11 @@ class GameActionRequest(BaseModel):
     # whole answer at once, because the prompt owes a *set* and a card at a
     # time would leave a half-made choice the engine has no state for.
     hand_indices: list[int] | None = None
+    # "…both on top of your library or **both on the bottom**" (Dream Cache):
+    # which end the chosen cards go on. Beside ``hand_indices`` because it is
+    # the other half of one answer — the cards and the end are chosen together
+    # — and optional because every other printing of that prompt names no end.
+    to_bottom: bool | None = None
     # "Exile up to two target creature cards from defending player's graveyard"
     # (Rysorian Badger): the whole answer at once, for ``hand_indices``' reason
     # — the prompt owes a *set*, and "up to" makes the empty set one of its

@@ -734,6 +734,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # graveyard" (Rysorian Badger) — the counted twin of the row above, whose
     # picks are made through a prompt.
     "exile_cards_from_graveyard": "zones",
+    "exile_graveyard_cards": "zones",
     # "When that creature dies this turn, exile **it**" (Whippoorwill) — the
     # card the delayed ability was bound to, out of the graveyard the death put
     # it in.

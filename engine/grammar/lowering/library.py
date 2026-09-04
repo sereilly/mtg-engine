@@ -15,7 +15,8 @@ this one's, and the cut needed no import in either direction because the call
 graph had already fallen apart there.
 """
 
-from ...oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
+from ...oracle_types import (LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
+                             OracleInstruction)
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter
 from .. import ast
@@ -47,7 +48,7 @@ def _lower_reveal_until(
     there is nobody to read the library of — the effect would silently fall back
     to the caster, which is the opposite player from the one the card names.
     """
-    if node.whose == "exiled_permanent_controller" and node.whose not in produced:
+    if node.whose == LAST_TARGET_CONTROLLER and node.whose not in produced:
         raise LoweringError(
             "\"that creature's controller\" with no exile before it", node=node,
         )
@@ -641,9 +642,34 @@ def _lower_look_top_pick(
         payload.update(_back_reference_payload(node.count, frozenset(), event))
     else:
         amount = _amount_payload(node.count)
-        if not isinstance(amount, int) or amount <= 0:
+        # "…the top **X** cards" (Sealed Fate). The announced value (CR 601.2b),
+        # which the handler resolves against ``context.x_value`` — the same
+        # channel every other counted zone effect reads. Admitted beside a
+        # printed number rather than instead of it: what is refused is a count
+        # this handler has no way to take at all, which is what "the pick takes
+        # a fixed count" was really saying.
+        if amount != "x" and (not isinstance(amount, int) or amount <= 0):
             raise LoweringError("the look-top pick takes a fixed count", node=node)
         payload["amount"] = amount
+    # "Put **two** of them into your hand" (Ancestral Memories). Emitted only
+    # when the card prints a number other than one, so every payload written
+    # before this is byte-identical.
+    picks = _amount_payload(node.pick_count)
+    if not isinstance(picks, int) or picks <= 0:
+        raise LoweringError("the look-top pick takes a fixed pick count", node=node)
+    if picks > 1:
+        # Several picks are a *chain* of one-card prompts (see
+        # ``_resolve_look_top_pick``), and the chain only knows how to put a
+        # card in a hand: "puts one of them back on top of their library"
+        # (Ashnod's Cylix) names a single card by construction, and taking
+        # several to one library position is a shape no card prints. Refused
+        # rather than collapsed, so a card that ever prints it fails loudly.
+        if node.pick_destination != "hand" or node.optional:
+            raise LoweringError(
+                "several picks are taken into a hand, and not optionally",
+                node=node,
+            )
+        payload["pick_count"] = picks
     if node.filters:
         described = [chargeable_card_filter(filt) for filt in node.filters]
         if any(entry is None for entry in described):
@@ -675,6 +701,21 @@ def _lower_look_top_pick(
                 node=node,
             )
         payload["looker"] = "target_player"
+    # "…the top X cards of **target opponent's** library" (Sealed Fate). The
+    # pile is the chosen player's and the decisions are the caster's, which is
+    # the other half of the seat question ``looker`` answers with one word.
+    # Only a chosen seat, for ``looker``'s reason: an unchosen one would send
+    # the look at whichever library the resolution happened to be carrying, and
+    # the pile is hidden, so nobody would see it happen.
+    if node.pile_owner is not None:
+        if node.pile_owner.kind not in ("target_player", "target_opponent"):
+            raise LoweringError(
+                "the look-top pick reads the library of the player the spell "
+                "chose",
+                node=node,
+            )
+        payload["pile_owner"] = node.pile_owner.kind
+        _describe_targets(payload, node.pile_owner)
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
 
 

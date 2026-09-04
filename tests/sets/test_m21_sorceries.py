@@ -1322,7 +1322,7 @@ def test_the_replacement_reaches_the_exiled_creatures_controller(set_pool):
     kinds = [i.kind for i in compiled.instructions]
 
     assert kinds == ["exile_target_permanent", "reveal_until_match"]
-    assert compiled.instructions[1].payload["whose"] == "exiled_permanent_controller"
+    assert compiled.instructions[1].payload["whose"] == "last_target_controller"
 
     # Without the exile in front of it the back-reference names nobody.
     orphan = compile_line(

@@ -32,6 +32,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
+                      LAST_TARGET_CONTROLLER,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
                       EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
@@ -249,12 +250,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # and one of them is wrong — "Exile target artifact. **Its controller**
     # gains life equal to its power" lowers with ``recipient: "target"``, a
     # different seat from the one the sentence names, while
-    # ``exiled_permanent_controller`` (declared right here) is the key that
+    # ``last_target_controller`` (declared right here) is the key that
     # answers it. Widening the fusion to the artifact subject and routing the
     # recipient through that key is a round of its own; until then the words
     # refuse for want of a producer, which is the loud failure.
     "exile_target_permanent": (
-        "exiled_permanent_controller", _EVENT_SUBJECT_TOUGHNESS_RECORD,
+        LAST_TARGET_CONTROLLER, _EVENT_SUBJECT_TOUGHNESS_RECORD,
     ),
     # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
     # The token maker records which permanent it made, which is the only place
@@ -444,9 +445,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # object that no longer exists by the time the token is built — CR 613.1
     # gives a card in a graveyard no computed characteristics at all, so the
     # numbers are frozen where the object still had them (CR 608.2h, idiom 6).
+    # …and the victim's **controller**, which is the same record the exile row
+    # above declares and was written here under a second name. "Destroy target
+    # creature. **Its controller** creates a 1/1 white Spirit creature token"
+    # (Afterlife) and "…**Its controller** reveals cards from the top of their
+    # library" (Polymorph) are the exile's two riders printed behind a destroy,
+    # and both refused for want of a producer that the handler had been writing
+    # all along as ``last_target_controller_index``.
     "destroy_target_permanent": (
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+        LAST_TARGET_CONTROLLER,
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

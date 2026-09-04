@@ -135,3 +135,142 @@ def test_razor_pendulum_reads_a_life_total(set_pool):
     game.resolve_end_step(1)
     game.resolve_stack()
     assert game.players[1].life == 6
+
+
+# --- W1G4: the zones / cards / library family ---
+
+import pytest as _w1g4_pytest
+
+from engine import Game as _W1G4Game, PlayerState as _W1G4PlayerState
+from engine.models import Permanent as _W1G4Permanent
+
+
+def _w1g4_duel(set_pool, *, seat0_battlefield=(), seat0_hand=(), seat0_library=()):
+    """A two-seat game with mana costs off and no interactive seat.
+
+    Every test in this block drives one card end to end rather than reading its
+    compiled program, so the board is set up here once and the assertions are
+    about what actually moved.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(
+            name="P1",
+            battlefield=[_W1G4Permanent(card=pool[n]) for n in seat0_battlefield],
+            hand=[pool[n] for n in seat0_hand],
+            library=[pool[n] for n in (seat0_library or ("Island",) * 5)],
+        ),
+        _W1G4PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    game.enforce_mana_costs = False
+    return game, pool
+
+
+def test_lions_eye_diamond_pays_its_whole_cost_and_makes_three_of_one_colour(set_pool):
+    """"Discard your hand, Sacrifice this artifact: Add three mana of any one
+    color."
+
+    Every piece of this line already worked -- the two-part cost, the hand
+    discard, the any-one-colour mana -- and the card was unsupported for the
+    *sentence after* it. That is the whole finding: the refusal named "expected
+    a subject", which reads as a broken effect clause and is really a missing
+    row in ``engine/activation_restrictions.py``.
+    """
+    game, _ = _w1g4_duel(
+        set_pool,
+        seat0_battlefield=("Lion's Eye Diamond",),
+        seat0_hand=("Island", "Island", "Mountain"),
+    )
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Lion's Eye Diamond", permanent_index=0, mana_color="R"
+    )
+
+    assert result.supported, result.details
+    assert game.players[0].hand == []
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Island", "Island", "Mountain", "Lion's Eye Diamond",
+    ]
+    assert not game.players[0].battlefield
+    assert game.players[0].mana_pool["R"] == 3
+
+
+def test_lions_eye_diamond_is_refused_without_priority(set_pool):
+    """CR 602.5e / CR 304.5: "Activate only as an instant" means the activator
+    must have priority.
+
+    Not a tautology, and this is the assertion that says why. CR 605.3a lets an
+    activated *mana* ability be activated in two windows where nobody has
+    priority -- while a spell's cost is being paid, and whenever a rule asks for
+    a mana payment -- and taking those away is the whole of what the clause
+    does. A row that answered True would be a restriction nothing checks.
+    """
+    game, _ = _w1g4_duel(
+        set_pool,
+        seat0_battlefield=("Lion's Eye Diamond",),
+        seat0_hand=("Island",),
+    )
+    game.start_turn(0)
+    game.priority_player_index = None
+
+    result = game.activate_permanent_ability(
+        0, "Lion's Eye Diamond", permanent_index=0, mana_color="R"
+    )
+
+    assert not result.supported
+    assert "priority" in result.details
+    assert game.players[0].hand, "a refused activation pays nothing"
+    assert game.players[0].battlefield, "…and sacrifices nothing"
+
+
+def test_cadaverous_bloom_exiles_one_card_from_hand_for_two_mana(set_pool):
+    """"Exile a card from your hand: Add {B}{B} or {G}{G}."
+
+    The mana half of this line already worked -- the alternatives are one
+    payload the mana lowering has read since Alliances. What refused was the
+    *cost*: an exile charged out of a **hand**, a third zone beside the
+    battlefield and the graveyard the payment path already enumerated.
+
+    The count is the assertion that matters. A hand repeats one immutable
+    ``CardDefinition`` per copy, so the two Islands here are the same Python
+    object; the payment goes through ``take_card_from_hand`` and eats exactly
+    one of them.
+    """
+    game, _ = _w1g4_duel(
+        set_pool,
+        seat0_battlefield=("Cadaverous Bloom",),
+        seat0_hand=("Island", "Island", "Mana Prism"),
+    )
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Cadaverous Bloom", permanent_index=0, mana_color="B"
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].hand] == ["Island", "Mana Prism"]
+    assert [c.name for c in game.players[0].exile] == ["Island"]
+    assert game.players[0].mana_pool["B"] == 2
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Cadaverous Bloom",
+    ], "the source pays nothing; the hand does"
+
+
+def test_cadaverous_bloom_is_unactivatable_with_an_empty_hand(set_pool):
+    """CR 602.2b: a cost that cannot be paid refuses the activation with
+    nothing spent. Before the hand branch existed the payment fell through to
+    the battlefield one, which exiled the Bloom itself and produced the mana
+    anyway."""
+    game, _ = _w1g4_duel(set_pool, seat0_battlefield=("Cadaverous Bloom",))
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Cadaverous Bloom", permanent_index=0, mana_color="G"
+    )
+
+    assert not result.supported
+    assert game.players[0].mana_pool["G"] == 0
+    assert game.players[0].exile == []
+    assert game.players[0].battlefield, "the Bloom is still there"

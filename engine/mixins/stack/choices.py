@@ -1034,6 +1034,21 @@ class PendingChoicesMixin:
             "look_top_pick", player_index, keep_index=keep_index
         )
 
+    def look_top_pile_index(self, choice: PendingChoice) -> int:
+        """Whose library this prompt is looking through.
+
+        The seat answering, except where the card separates the two: "Look at
+        the top X cards of **target opponent's** library. Exile one of those
+        cards…" (Sealed Fate) puts every decision with the caster and the pile
+        with the opponent. One reader for all three callers — what is offered,
+        what an answer moves, and what the client draws — because a second
+        would be free to show one library and empty another.
+        """
+        pile = choice.data.get("pile_index")
+        if isinstance(pile, int) and 0 <= pile < len(self.players):
+            return pile
+        return choice.player_index
+
     def live_look_top_candidates(self, choice: PendingChoice) -> list[int]:
         """Which of the looked-at positions may be taken, in library order.
 
@@ -1044,7 +1059,7 @@ class PendingChoicesMixin:
         """
         from ...subject_filters import card_matches_any
 
-        caster = self.players[choice.player_index]
+        caster = self.players[self.look_top_pile_index(choice)]
         top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
         # "a creature card **or** Garruk planeswalker card" — the alternatives
         # are OR'd, exactly as a narrowed discard cost's are, because the two
@@ -1063,7 +1078,11 @@ class PendingChoicesMixin:
     def _resolve_look_top_pick(
         self, choice: PendingChoice, keep_index: int | None
     ) -> bool:
-        caster = self.players[choice.player_index]
+        # The pile, which is the seat answering except on Sealed Fate — see
+        # ``look_top_pile_index``. Everything below moves cards in *this*
+        # player's library; who answers the prompt is ``choice.player_index``
+        # and is used only to arm what comes next.
+        caster = self.players[self.look_top_pile_index(choice)]
         top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
         looked = caster.library[:top_count]
 
@@ -1098,10 +1117,14 @@ class PendingChoicesMixin:
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
                 if len(rest) > 1:
-                    seat = self.seat_index(caster)
+                    # Whose library is reordered, and **who orders it**: one
+                    # seat everywhere but Sealed Fate, where the cards go back
+                    # on the opponent's library in an order the caster chooses
+                    # (CR 608.2 makes the spell's controller the actor).
                     self.arm_pending_choice(
-                        "reorder_library", seat,
-                        target_index=seat, top_count=len(rest), may_shuffle=False,
+                        "reorder_library", choice.player_index,
+                        target_index=self.seat_index(caster),
+                        top_count=len(rest), may_shuffle=False,
                     )
                 return
             # "…on the bottom of your library **in a random order**." (Garruk's
@@ -1134,8 +1157,55 @@ class PendingChoicesMixin:
         if keep_index not in self.live_look_top_candidates(choice):
             return False
         kept = caster.library[keep_index]
+        # "Put **two** of them into your hand and the rest into your graveyard."
+        # (Ancestral Memories.) A chain of one-card prompts rather than one
+        # multi-select, for `_rearm_revealed_hand_pick`'s reason exactly: taking
+        # a card renumbers the pile behind it, so a set of indices answered all
+        # at once against the pile as it *was* addresses the wrong cards. Only
+        # the taken card leaves; the rest stay where they are and the next
+        # prompt looks at one fewer.
+        remaining = int(choice.data.get("remaining", 1))
+        if remaining > 1 and top_count > 1:
+            caster.library.pop(keep_index)
+            self.put_card_into_hand(caster, kept)
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{caster.name} put {kept.name} into their hand "
+                f"({remaining - 1} more to take)"
+            )
+            # The keys are listed rather than the whole ``data`` dict passed
+            # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
+            # stamps its own bookkeeping into ``data`` (which stack object is
+            # waiting, which seat caused the prompt), and handing those back as
+            # arguments would re-arm the next link with a stale stamp.
+            self.arm_pending_choice(
+                "look_top_pick", choice.player_index,
+                top_count=top_count - 1,
+                amount=choice.data.get("amount", top_count - 1),
+                card_name=choice.data.get("card_name", ""),
+                filter=dict(choice.data.get("filter") or {}),
+                filters=tuple(choice.data.get("filters") or ()),
+                optional=bool(choice.data.get("optional")),
+                rest_order=choice.data.get("rest_order", "any"),
+                rest_destination=choice.data.get("rest_destination", "library_bottom"),
+                pick_destination=choice.data.get("pick_destination", "hand"),
+                remaining=remaining - 1,
+            )
+            return True
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
+        # "**Exile** one of those cards…" (Sealed Fate). The third printed
+        # destination for the taken card, beside the hand and the library's
+        # top, and the only one that takes it out of the game — read rather
+        # than defaulted, exactly as the other two are.
+        if choice.data.get("pick_destination") == "exile":
+            caster.exile.append(kept)
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[choice.player_index].name} exiled a card from "
+                f"{caster.name}'s library"
+            )
+            return True
         # Where the *kept* card goes, read the same way the rest's destination
         # is. "Puts one of them **back on top of their library**" (Ashnod's
         # Cylix) is this prompt's other printed answer: the card is not drawn,
@@ -1771,6 +1841,24 @@ class PendingChoicesMixin:
         fate = str(choice.data.get("fate", "discard"))
         if fate == "discard":
             return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+        if fate == "library_top":
+            # "Put that card on top of that player's library." (Painful
+            # Memories.) Both seams, and both for the reason they exist: a hand
+            # holds the *same object* for every copy of a card, so the removal
+            # goes through `take_card_from_hand` or it deletes every copy; and
+            # CR 903.9b can divert a card headed for a library, so the arrival
+            # goes through `put_card_into_library`.
+            victim = self.players[victim_index]
+            if not 0 <= hand_index < len(victim.hand):
+                return False
+            card = victim.hand[hand_index]
+            if not self.take_card_from_hand(victim, card):
+                return False
+            self.put_card_into_library(victim, card, position="top")
+            self.log.append(
+                f"{card.name} went on top of {victim.name}'s library"
+            )
+            return True
         if fate != "exile_until_source_leaves":
             return False
         # "Exile that card until this creature leaves the battlefield."
@@ -1795,19 +1883,28 @@ class PendingChoicesMixin:
 
     # -- Hand back onto the library ------------------------------------------
 
-    def confirm_hand_to_library(self, player_index: int, hand_indices: list[int]) -> bool:
+    def confirm_hand_to_library(
+        self, player_index: int, hand_indices: list[int], to_bottom: bool = False
+    ) -> bool:
         """Resolve a pending "put N cards from your hand on top of your library"
         (Brainstorm, Stunted Growth) with the player's chosen cards.
 
         The order of *hand_indices* is the order the card gives them ("in any
         order"): the first named ends up on top.
+
+        *to_bottom* is the second half of Dream Cache's answer — "both on top of
+        your library **or both on the bottom**". It is refused on every other
+        card rather than ignored: a bottomed Brainstorm is a strictly different
+        spell, and nothing on the board would show it.
         """
         return self.resolve_pending_choice(
-            "hand_to_library", player_index, hand_indices=hand_indices
+            "hand_to_library", player_index,
+            hand_indices=hand_indices, to_bottom=to_bottom,
         )
 
     def _resolve_hand_to_library(
-        self, choice: PendingChoice, hand_indices: list[int]
+        self, choice: PendingChoice, hand_indices: list[int],
+        to_bottom: bool = False,
     ) -> bool:
         """Move the chosen cards, last-named first, so the first is on top.
 
@@ -1826,11 +1923,24 @@ class PendingChoicesMixin:
         chosen = [i for i in dict.fromkeys(hand_indices) if 0 <= i < len(hand)][:count]
         if len(chosen) != count:
             return False
+        # "…both on top of your library **or both on the bottom of your
+        # library**" (Dream Cache). Which end is part of the answer, and only
+        # where the card offers it: a bottoming answer on Brainstorm is refused
+        # rather than ignored, because ignoring it would put the cards on top
+        # while the client believed it had bottomed them.
+        offers_either_end = choice.data.get("destination") == "either_end"
+        if to_bottom and not offers_either_end:
+            return False
+        position = "bottom" if to_bottom else "top"
         player = self.players[choice.player_index]
         cards = [hand[index] for index in chosen]
-        for card in reversed(cards):
+        # On the bottom the printed order is the order they are named, because
+        # the first named goes down first; on top it is reversed, so the first
+        # named ends up on top. Both are the same sentence read from the
+        # library's own end.
+        for card in (cards if position == "bottom" else reversed(cards)):
             if self.take_card_from_hand(player, card):
-                self.put_card_into_library(player, card, position="top")
+                self.put_card_into_library(player, card, position=position)
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) CR 701.19 makes the shuffle part of the move
         # rather than a rider on it, so it happens here rather than as a step
@@ -1848,7 +1958,8 @@ class PendingChoicesMixin:
             )
         else:
             self.log.append(
-                f"{player.name} put {len(cards)} card(s) on top of their library"
+                f"{player.name} put {len(cards)} card(s) on the {position} of "
+                f"their library"
             )
         self.discard_pending_choice(choice)
         return True
@@ -5985,7 +6096,7 @@ register_choice(
 register_choice(
     "hand_to_library",
     resolve=lambda game, choice, r: game._resolve_hand_to_library(
-        choice, r["hand_indices"]
+        choice, r["hand_indices"], bool(r.get("to_bottom")),
     ),
     default=lambda game, choice: game._default_hand_to_library(choice),
     action="hand_to_library_confirm",

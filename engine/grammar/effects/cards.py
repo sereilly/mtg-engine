@@ -665,6 +665,25 @@ def _accept_hand_to_library_tail(
     return bool(stream.accept_phrase("in", "any", "order")) or not ordered
 
 
+def _accept_hand_to_either_end_tail(stream: TokenStream) -> bool:
+    """``… both on top of your library or both on the bottom of your library``.
+
+    Dream Cache, and the whole of what makes it a different card: the end is
+    the player's to choose and **both** cards go to the same one, which is what
+    the repeated "both" says. Read as one phrase rather than as an alternation
+    of two destinations, because a sentence that let the cards go to different
+    ends would be a card nobody printed.
+
+    Every word again, for ``_accept_hand_to_library_tail``'s reason: the two
+    destinations are the offer, and one dropped would leave the player a choice
+    with one option in it.
+    """
+    return bool(stream.accept_phrase(
+        "both", "on", "top", "of", "your", "library",
+        "or", "both", "on", "the", "bottom", "of", "your", "library",
+    ))
+
+
 def _parse_put_hand_cards_on_library(
     stream: TokenStream,
 ) -> "ast.PutHandCardsOnLibrary | None":
@@ -683,6 +702,12 @@ def _parse_put_hand_cards_on_library(
     if count is None or not stream.accept_phrase("from", "your", "hand"):
         stream.reset(mark)
         return None
+    # Dream Cache's offer, read before the ordinary tail because it opens on a
+    # word that one does not ("both") and would otherwise fail the line.
+    if _accept_hand_to_either_end_tail(stream):
+        return ast.PutHandCardsOnLibrary(
+            ast.PlayerRef("you"), count, destination="either_end"
+        )
     if not _accept_hand_to_library_tail(stream, "your", ordered=_orderable(count)):
         stream.reset(mark)
         return None

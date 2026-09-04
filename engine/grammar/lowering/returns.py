@@ -276,6 +276,20 @@ def _lower_return_to_zone(
         and filt.colors
     ):
         gated = dataclasses.replace(filt, colors=())
+    # "Return target **Griffin** card from your graveyard to your hand."
+    # (Mtenda Griffin.) The second adjective the graveyard family reads, lifted
+    # here for the colour's reason one branch up rather than weakened inside
+    # the blanket refusal: it travels as ``graveyard_subtypes`` and the picker,
+    # the cast gate and the handler all test it through the one predicate
+    # (``graveyard_card_matches``). Every other zone-change handler goes on
+    # refusing every adjective, because none of them reads one.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "hand"
+        and filt.subtypes
+    ):
+        gated = dataclasses.replace(gated, subtypes=())
     if node.from_zone is not None and _reads_no_return_restriction(gated):
         raise LoweringError("no return handler honours this restriction", node=node)
     # The leave-the-battlefield rider is armed by exactly one handler (the

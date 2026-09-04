@@ -8,7 +8,8 @@ Grouped as "the game and its players" rather than "the board": none of these
 changes what a permanent is, and all of them change the state a player is in.
 """
 
-from ...oracle_types import (OracleInstruction, X_FROM_COUNT,
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
+                             OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
 from ...subject_filters import card_only_filter
 from .. import ast
@@ -96,6 +97,31 @@ def _lower_gain_life(
     event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # "**Its controller** gains life equal to its mana value." (Illumination.)
+    # The controller of the object the previous step acted on, which is neither
+    # of the two seats a life gain normally knows — and by the time this runs
+    # that object is gone (CR 608.2h): a countered spell is a card in a
+    # graveyard, which CR 108.4 gives no controller at all, and a destroyed or
+    # exiled permanent is a new object CR 400.7 gives no seat either.
+    #
+    # It used to fall through to "target", which for a counterspell is the
+    # *spell* and for a destroy is whichever player a targetless resolution
+    # defaults to. No shipped card took that path — Swords to Plowshares, the
+    # pool's only other printing of the sentence, has a fused handler — so it
+    # was a hole rather than a bug, and it is closed in the direction that
+    # refuses: a step that recorded no seat leaves the clause unlowered and
+    # names it, rather than healing somebody the card never mentioned.
+    if node.player.kind == "controller":
+        for record in (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER):
+            if record in produced:
+                recipient = record
+                break
+        else:
+            raise LoweringError(
+                '"its controller" names the object an earlier step of this '
+                "effect chose, and no step here recorded one",
+                node=node,
+            )
     # Read here so every branch below is held to it: the only branch that can
     # carry a cap is the back-reference one, and a branch that silently dropped
     # one would gain the uncapped amount.

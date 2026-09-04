@@ -326,6 +326,31 @@ def _parse_look_other_library_tail(
     ):
         return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
     stream.reset(mark)
+    # "**Exile one of those cards and put the rest back on top of that player's
+    # library in any order.**" (Sealed Fate.) The look-and-pick template over
+    # somebody else's pile: the cards are the opponent's and every decision
+    # about them is the caster's, which is the one thing ``looker`` cannot say
+    # (there the seat answers both questions at once). So it produces the pick
+    # node with ``pile_owner`` set rather than a second node — the procedure is
+    # the same one, over a library that is not the chooser's.
+    #
+    # Every word of both destinations, for this family's standing reason: where
+    # the taken card goes and where the rest go are the whole of what separates
+    # these cards, and a wording that sorted them elsewhere would be a
+    # different card wearing this one's head.
+    exiled = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "exile", "one", "of", "those", "cards", "and", "put", "the", "rest",
+        "back", "on", "top", "of", "that", "player", "'s", "library",
+        "in", "any", "order",
+    ):
+        return ast.LookTopPickToHand(
+            count,
+            pick_destination="exile",
+            rest_destination="library_top",
+            pile_owner=owner,
+        )
+    stream.reset(exiled)
     # "…, **then put them back in any order**." (Natural Selection, Portent.)
     # The looker rearranges the cards they saw, which is the other handler —
     # and the optional shuffle after it is printed shorter here than Visions
@@ -440,6 +465,7 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
             "and", "the", "other", "into", "your", "graveyard",
         ):
             return ast.LookTopPickToHand(count, rest_destination="graveyard")
+
         stream.reset(mark)
         # "Exile four of them at random, **then** put the rest on top of your
         # library in any order." (Orcish Librarian.) Nothing is picked and
@@ -460,8 +486,14 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
             for word in ("in", "any", "order"):
                 stream.expect_word(word)
             return ast.LookTopExileRandom(count, exile_count)
-        for word in ("put", "one", "of"):
-            stream.expect_word(word)
+        stream.expect_word("put")
+        # "Put **two** of them into your hand" (Ancestral Memories). The count
+        # was the literal word "one", so the only card in the pool that takes
+        # more than one failed on the number it printed. Read rather than
+        # defaulted: a card taking one where it says two is a strictly smaller
+        # card, and nothing downstream could notice.
+        picks = parse_amount(stream)
+        stream.expect_word("of")
         # "one of **them**" (Diabolic Vision) and "one of **those cards**" (See
         # the Truth) name the same pile. The pronoun was written into the
         # sequence, so the second spelling refused at the word — a card the
@@ -479,8 +511,22 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         exiled_rest = stream.mark()
         stream.accept_punct(",")
         if stream.accept_phrase("and", "exile", "the", "rest"):
-            return ast.LookTopPickToHand(count, rest_destination="exile")
+            return ast.LookTopPickToHand(
+                count, pick_count=picks, rest_destination="exile"
+            )
         stream.reset(exiled_rest)
+        # "…and the rest **into your graveyard**." (Ancestral Memories.) The
+        # graveyard spelled as a destination for the whole remainder, where
+        # Waker of Waves prints the same fate for a named single card ("the
+        # other"). The preposition differs from the two library ends below —
+        # "into" a graveyard, "on" a library — so it is read here rather than
+        # as a fourth alternative under the shared "on".
+        graveyard_rest = stream.mark()
+        if stream.accept_phrase("and", "the", "rest", "into", "your", "graveyard"):
+            return ast.LookTopPickToHand(
+                count, pick_count=picks, rest_destination="graveyard"
+            )
+        stream.reset(graveyard_rest)
         for word in ("and", "the", "rest", "on"):
             stream.expect_word(word)
         # Where the rest go is the card's own statement and a real difference:
@@ -508,11 +554,14 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
                 stream.expect_word(word)
             return ast.LookTopPickToHand(
                 count,
+                pick_count=picks,
                 rest_destination=rest_destination,
                 all_to_hand_if_cast_elsewhere=True,
             )
         stream.reset(mark)
-        return ast.LookTopPickToHand(count, rest_destination=rest_destination)
+        return ast.LookTopPickToHand(
+            count, pick_count=picks, rest_destination=rest_destination
+        )
     player = parse_player_ref(stream)
     if player is None:
         raise stream.error("expected the player whose hand is looked at")
@@ -538,11 +587,17 @@ def _accept_look_and_choose(
     """The tail of ``Look at <player>'s hand **and choose <N> cards from it.
     That player discards those cards.**`` (Mind Warp.)
 
+    ``…**and choose a card from it. Put that card on top of that player's
+    library.**`` (Painful Memories.) The same template with the other printed
+    ending, which is a field on the node rather than a second production: what
+    the family varies is what becomes of the chosen card, and the choice, the
+    reveal and the picker are identical either way.
+
     Refuses without consuming, so "Look at target player's hand." on its own
-    (Glasses of Urza) keeps the reading it has. Every word of the discard
-    sentence is required: a line that looks and chooses but never says what
-    becomes of the cards is a card that does nothing, and dropping the sentence
-    would make the two indistinguishable.
+    (Glasses of Urza) keeps the reading it has. Every word of the last sentence
+    is required in both endings: a line that looks and chooses but never says
+    what becomes of the cards is a card that does nothing, and dropping the
+    sentence would make the two indistinguishable.
     """
     mark = stream.mark()
     if not stream.accept_phrase("and", "choose"):
@@ -561,6 +616,25 @@ def _accept_look_and_choose(
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    # "**Put that card on top of that player's library.**" (Painful Memories.)
+    # The other printed ending, read before the discard because it opens on the
+    # verb rather than on a player reference. The possessive is required to be
+    # the same back-reference the discard's subject is: a sentence naming
+    # somebody else would look in one hand and stack another player's library.
+    tuck = stream.mark()
+    if stream.accept_phrase("put", "that", "card", "on", "top", "of"):
+        owner = parse_player_ref(stream) if stream.at_word("that", "the") else None
+        if (
+            owner is not None
+            and owner.kind == "that_player"
+            and stream.accept_word("'s")
+            and stream.accept_word("library")
+        ):
+            return ast.RevealHandAndChoose(
+                player, ast.ObjectFilter(is_card=True), fate="library_top",
+                count=count, revealed=False,
+            )
+        stream.reset(tuck)
     # Whose discard, read as a reference rather than as the literal words
     # "that player": Leshrac's Sigil prints "**The player** discards that
     # card", which `parse_player_ref` already reads as the same back-reference

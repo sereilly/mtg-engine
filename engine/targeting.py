@@ -1102,6 +1102,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
         spec["any_card"] = True
     elif payload.get("card_type") not in (None, "creature"):
         spec["card_type"] = payload["card_type"]
+    # "target **Griffin** card" (Mtenda Griffin). Handed over in the key name
+    # `graveyard_card_matches` reads, for the reason the card type beside it is:
+    # a spec that dropped the subtype would offer every creature card in the
+    # pile and the handler's own re-check would then decline what the picker had
+    # just offered.
+    if payload.get("graveyard_subtypes"):
+        spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
     return spec
 
 
