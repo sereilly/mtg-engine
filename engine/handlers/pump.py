@@ -1316,6 +1316,39 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     announce and the effect then declines to affect.
     """
     card = context.card
+    # "…**That creature** gains haste until end of turn." (Shallow Grave,
+    # Zirilan of the Claw.) A set an earlier step of this effect recorded,
+    # by id — not a target, so there is no picker and no noun phrase to
+    # re-check: CR 611.2c fixed the set when the effect began and the record
+    # *is* that set. The same `permanents_from` channel
+    # `grant_target_ability_text` below reads, because the question is the
+    # same one asked of a keyword instead of a quoted line.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        lifetime = grant_lifetime(game, instruction, context)
+        lasting = DURATION_WORDS.get(lifetime["duration"], "")
+        granted = 0
+        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+            permanent = game.permanent_by_id(permanent_id)
+            if permanent is None:
+                # It left between the two steps of one resolution; what comes
+                # back is a different object (CR 400.7) and is not this one.
+                continue
+            for keyword in instruction.payload.get("keywords") or ():
+                # **lifetime rather than the two keys by name: a seated
+                # duration carries a seat and an unseated one carries none, and
+                # naming both would ask for a key that is deliberately absent.
+                grant_keyword(permanent, keyword, **lifetime)
+            granted += 1
+            game.log.append(
+                f"{permanent.card.name} gains "
+                + ", ".join(instruction.payload.get("keywords") or ())
+                + lasting
+            )
+        if not granted:
+            game.log.append(f"{card.name}: nothing was left to grant to")
+        game._refresh_dynamic_creatures()
+        return True, "resolved"
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     source = context.source_permanent
 

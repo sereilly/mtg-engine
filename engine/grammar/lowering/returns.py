@@ -247,9 +247,18 @@ def _lower_return_to_zone(
     untargeted = lower_untargeted_return(node, subject, event, produced)
     if untargeted is not None:
         return untargeted
-    if not _is_target(subject):
+    if not _is_target(subject) and not (
+        isinstance(subject, ast.TargetSpec) and subject.quantifier == "top"
+    ):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.
+        #
+        # "**The top** creature card of your graveyard" (Shallow Grave) is the
+        # one subject here that names a card without choosing one — CR 404.3's
+        # ordered pile, read by position — so it passes to the graveyard branch
+        # below rather than being refused for having no target. Its own
+        # quantifier is what makes that safe: nothing else produces it, and the
+        # branch that reads it refuses every destination but the battlefield.
         raise LoweringError("no handler for returning a non-targeted object", node=node)
     assert isinstance(subject, ast.TargetSpec)
     filt = subject.filter
@@ -335,6 +344,24 @@ def _lower_return_to_zone(
             # keyword grant after a reanimation folds.
             if node.exile_on_leave:
                 payload["exile_on_leave"] = True
+            # "Return **the top** creature card of your graveyard to the
+            # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard an
+            # ordered zone, so the card is named by position and nobody
+            # chooses: the handler takes the most recently added creature
+            # card rather than offering a picker the card never printed.
+            #
+            # A payload rather than a second kind, for the reason the colour
+            # narrowing above is one: what changes is *which* card in the
+            # pile, and everything after it — the arrival, the record the
+            # sentences behind it read — is the same work.
+            if (
+                isinstance(subject, ast.TargetSpec)
+                and subject.quantifier == "top"
+            ):
+                payload["from_top"] = True
+                return (
+                    OracleInstruction("reanimate_creature", "", payload),
+                )
             _record_optional_card_target(payload, subject)
             return (OracleInstruction("reanimate_creature", "", payload),)
 

@@ -27,6 +27,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
@@ -343,6 +344,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the ability's target is a *card* in a graveyard — so the reanimation is
     # the only step that can say which permanent the sentences behind it name.
     "reanimate_creature": _REANIMATED_PERMANENTS,
+    # "…put that card onto the battlefield, then shuffle. **That Dragon** gains
+    # haste until end of turn. Exile **it** at the beginning of the next end
+    # step." (Zirilan of the Claw.) The reanimation's twin one zone over: the
+    # permanent did not exist when the ability was activated — its subject is a
+    # *card* in a library — so the search is the only step that can say which
+    # permanent the sentences behind it name.
+    "search_library": SEARCHED_PERMANENTS,
     # "Take an extra turn after this one. At the beginning of **that turn's**
     # end step, you lose the game." (Final Fortune.) The queued turn, recorded
     # so the delay behind it has something to refer back to — see

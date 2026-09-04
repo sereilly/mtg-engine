@@ -162,7 +162,29 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
                 f"{context.card.name} had no permanent to watch"
             )
             return True, "no object"
-    if payload.get("binds_target"):
+    recorded_key = payload.get("binds_recorded")
+    if recorded_key is not None:
+        # "…**Exile it** at the beginning of the next end step." (Shallow
+        # Grave, Zirilan of the Claw.) CR 603.7c's object, read out of the
+        # record an earlier step of *this* resolution wrote — the permanent
+        # it put onto the battlefield, which nothing targeted and which does
+        # not exist until that step runs.
+        #
+        # An empty record arms **nothing**, for `watches`' reason one branch
+        # up: an unbound entry would answer to the first permanent the event
+        # names, which is the widening every bound payload here prevents.
+        ids = (context.results or {}).get(str(recorded_key))
+        if isinstance(ids, int):
+            ids = (ids,)
+        bound_id = next(
+            (found for found in (ids or ()) if isinstance(found, int)), None
+        )
+        if bound_id is None:
+            game.log.append(
+                f"{context.card.name} had no permanent to be about"
+            )
+            return True, "no object"
+    elif payload.get("binds_target"):
         # The **innermost** binding, not the resolution's target list: inside
         # "for each of those creatures, … destroy that creature at end of
         # combat" (Winter's Chill) the ability is created once per creature and

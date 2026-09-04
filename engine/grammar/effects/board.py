@@ -28,6 +28,7 @@ import dataclasses
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
 from ..readers import _parse_entering_counters
+from ..vocabulary import CARD_TYPES
 from ..records import _parse_for_each_this_way
 
 from ..errors import GrammarError
@@ -133,7 +134,34 @@ def _parse_return(
 
     bound = stream.mark()
     subject: ast.Recipient | None
-    if stream.accept_phrase("that", "card"):
+    # "Return **the top creature card of your graveyard** to the
+    # battlefield." (Shallow Grave.) A card named by its *position* in an
+    # ordered pile (CR 404.3) rather than by a noun phrase, which is why the
+    # shared recipient parser refuses it — the same reason the counter
+    # family reads "the top card of your graveyard" locally one file over.
+    #
+    # Its own quantifier, refused by default everywhere: no lowering accepts
+    # ``"top"`` unless it says so, so a sentence that reaches one fails **by
+    # name** rather than being read as a chosen target the card never offers.
+    top_mark = stream.mark()
+    top_of_graveyard = None
+    if stream.accept_phrase("the", "top"):
+        type_word = stream.peek_word()
+        if type_word is not None and type_word in CARD_TYPES:
+            stream.advance()
+            if stream.accept_phrase("card", "of", "your", "graveyard"):
+                top_of_graveyard = ast.TargetSpec(
+                    "top",
+                    ast.ObjectFilter(
+                        card_types=(type_word,), is_card=True,
+                        zone="graveyard", zone_owner=ast.PlayerRef("you"),
+                    ),
+                )
+    if top_of_graveyard is None:
+        stream.reset(top_mark)
+    if top_of_graveyard is not None:
+        subject = top_of_graveyard
+    elif stream.accept_phrase("that", "card"):
         subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:
         stream.reset(bound)

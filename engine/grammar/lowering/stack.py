@@ -726,6 +726,19 @@ def _names_a_chosen_player(statement) -> bool:
     return False
 
 
+#: Instruction kinds whose object is the permanent an **earlier step of the
+#: same resolution recorded**, rather than a target or the source. A delayed
+#: ability carrying one has to freeze that id as it is created (CR 603.7c),
+#: because the scratchpad it was read from is gone by the time it fires.
+#:
+#: One member today. A set rather than an equality test because the next
+#: printed sentence of this shape ("destroy it at the beginning of the next
+#: end step") is a row here and not a second branch.
+_BOUND_TO_A_RECORDED_PERMANENT: frozenset[str] = frozenset({
+    "exile_bound_permanent",
+})
+
+
 def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
@@ -744,7 +757,7 @@ def _lower_create_delayed_trigger(
     """
     from ...delayed_triggers import DELAYED_EVENTS
 
-    from ._events import EXTRA_TURN_GRANTED
+    from ._events import EXTRA_TURN_GRANTED, _RECORDED_PERMANENTS
 
     if node.event not in DELAYED_EVENTS:
         raise LoweringError(
@@ -816,6 +829,26 @@ def _lower_create_delayed_trigger(
     # one the effect already holds rather than one it targeted — the arming
     # handler reads the id from the source permanent or from the scratchpad the
     # token maker wrote, so nothing is resolved as a target.
+    # "…**Exile it** at the beginning of the next end step." (Shallow Grave,
+    # Zirilan of the Claw.) The delayed ability is about a permanent an
+    # earlier step of this same resolution put onto the battlefield — not a
+    # target (nothing was chosen; the ability's target is a *card*) and not
+    # the source. So the id is frozen when the ability is created, which is
+    # CR 603.7c's own instruction, and the record is the only place the
+    # creating effect can be asked: by fire time its scratchpad is a turn
+    # gone.
+    #
+    # Keyed on the *lowered* effect rather than on the AST, because the
+    # inner lowering is what decided the pronoun names a record — one
+    # decision, read here rather than made a second time and differently.
+    if any(i.kind in _BOUND_TO_A_RECORDED_PERMANENT for i in effect):
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "a delayed ability about a recorded permanent needs exactly "
+                "one earlier step of this effect that recorded one", node=node,
+            )
+        payload["binds_recorded"] = recorded[0]
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

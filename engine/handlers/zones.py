@@ -451,6 +451,13 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # every player, which the resolution records as one reveal event when
         # the search ends. A search that does not print the word shows nothing.
         reveal=bool(instruction.payload.get("reveal")),
+        # The resolution's own scratchpad, so the search can write down what it
+        # put onto the battlefield: "…put that card onto the battlefield, then
+        # shuffle. **That Dragon** gains haste" (Zirilan of the Claw) names it,
+        # and the search suspends on a prompt — by the time the sentence behind
+        # it runs, the card is one permanent among many. Handed over here
+        # because this is where the resolution and the prompt meet.
+        record=context.results,
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]
@@ -1233,6 +1240,27 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
+    # "Return **the top** creature card of your graveyard to the
+    # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard ordered and
+    # CR 400.4 appends what arrives, so the *top* card is the last entry —
+    # the most recently added — and "the top creature card" is the last one
+    # of them. Nobody chooses, so any index the wire happened to carry is
+    # not this effect's: it is overwritten rather than preferred.
+    if instruction.payload.get("from_top"):
+        idx = next(
+            (
+                slot
+                for slot in range(len(caster.graveyard) - 1, -1, -1)
+                if caster.graveyard[slot].primary_type == "creature"
+            ),
+            None,
+        )
+        if idx is None:
+            game.log.append(
+                f"{context.card.name}: no creature card in the graveyard"
+            )
+            context.results[REANIMATED_PERMANENTS] = ()
+            return True, "resolved"
     any_graveyard = bool(instruction.payload.get("any_graveyard"))
     source_player = caster
     if any_graveyard and context.target is not None:

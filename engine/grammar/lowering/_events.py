@@ -24,6 +24,7 @@ this one beside `_common` in its `shared` tuple.
 from __future__ import annotations
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, COUNTERS_REMOVED,
+                             SEARCHED_PERMANENTS,
                              COUNTERS_PLACED_THIS_WAY,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                              HAND_CARDS_TO_LIBRARY)
@@ -605,6 +606,12 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
+    # What a search put onto the battlefield (Zirilan of the Claw). The
+    # reanimation's twin one zone over, and a member of this set for that
+    # entry's reason: "that creature" behind either step names the permanent
+    # the step created, and a reader that knew only one of them would refuse
+    # the other for no reason a card could see.
+    SEARCHED_PERMANENTS,
 })
 
 

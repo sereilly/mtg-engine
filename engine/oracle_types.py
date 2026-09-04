@@ -612,6 +612,24 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 #: ends of the pipeline: the lowering gates the printed phrase on the marker and
 #: the handler writes the objects. This module imports nothing from the engine,
 #: so both can reach it.
+#: What a **search** put onto the battlefield — "…put that card onto the
+#: battlefield, then shuffle. **That Dragon** gains haste until end of turn.
+#: Exile **it** at the beginning of the next end step." (Zirilan of the
+#: Claw.)
+#:
+#: Permanent ids, and one record shape with the reanimation's
+#: (``handlers/zones.REANIMATED_PERMANENTS``) on purpose: a sentence reading
+#: "that creature" should not have to care which step put the permanent
+#: there, so both are members of ``lowering/_events._RECORDED_PERMANENTS``
+#: and every reader asks that set rather than a key.
+#:
+#: Here rather than beside a reader, for ``EXILED_THIS_WAY``'s reason
+#: exactly: the writer is the *pending-choice* resolution (a search suspends
+#: on a prompt, so nothing else can say which permanent it placed) and the
+#: readers are lowerings. This module imports nothing from the engine, so
+#: both ends can reach it.
+SEARCHED_PERMANENTS = "searched_permanents"
+
 EXILED_THIS_WAY = "exiled_this_way"
 EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 

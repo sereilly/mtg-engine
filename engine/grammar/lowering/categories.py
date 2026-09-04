@@ -75,6 +75,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same category.
     "restrict_untap_while_counter": "tapping",
     "arm_self_action_at_next_end_step": "destruction",
+    # "…**Exile it** at the beginning of the next end step." (Zirilan of
+    # the Claw, Shallow Grave.) Beside the two bound removals it is a
+    # sibling of rather than with the exile family: what decides the handler
+    # is that the object is bound, not that the move is an exile.
+    "exile_bound_permanent": "destruction",
     "add_power_counters_to_self": "counters",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
     # The same category as the one-target pump above: what differs is how many

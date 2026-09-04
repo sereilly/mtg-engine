@@ -618,8 +618,13 @@ def lower_statement(
 
     # In the chain: the event decides whether "that creature gains first
     # strike" names a block pair's other half or nothing at all.
+    #
+    # …and  decides whether it names neither — the permanent an
+    # earlier step of this same effect put onto the battlefield (Shallow Grave,
+    # Zirilan of the Claw), which is a *record* rather than anything the
+    # ability chose.
     if isinstance(statement, ast.GainKeyword):
-        return _lower_gain_keyword(statement, event, event_subject)
+        return _lower_gain_keyword(statement, event, event_subject, produced)
     if isinstance(statement, ast.CreateDelayedTrigger):
         return _lower_create_delayed_trigger(statement, lower_statement(
             # The delay's own noun phrase is the created ability's narrowing —

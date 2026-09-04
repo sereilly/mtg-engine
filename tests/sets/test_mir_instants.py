@@ -334,3 +334,110 @@ def test_that_turn_refuses_without_a_grant_in_front_of_it(set_pool):
     assert result.parse_error is None
     assert result.lowering_error is not None
     assert "granted an extra turn" in result.lowering_error
+
+
+# --- W1G2: a permanent an earlier step created, named by the sentences behind it ---
+#
+# Shallow Grave and Zirilan of the Claw print one tail — "That <noun> gains
+# haste until end of turn. Exile it at the beginning of the next end step." —
+# about a permanent *no target chose*: the ability's subject is a card in a
+# graveyard or a library, and the permanent does not exist until the step in
+# front of the tail runs.
+#
+# The quoted-ability grant has read that record since Dreams of the Dead; the
+# keyword grant refused the subject outright, and the exile read the pronoun as
+# the ability's own source — which for a spell is the card itself, so it exiled
+# nothing at all and compiled clean doing it.
+
+from engine.models import Permanent
+
+
+def _w1g2_grave_duel(set_pool, graveyard):
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            hand=[set_pool("MIR")["Shallow Grave"]],
+            graveyard=[set_pool("MIR")[name] for name in graveyard],
+            life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def test_shallow_grave_takes_the_top_creature_card(set_pool):
+    """"Return **the top creature card** of your graveyard to the battlefield."
+
+    CR 404.3 makes a graveyard an ordered zone and CR 400.4 appends what
+    arrives, so the top card is the most recent one — and "the top *creature*
+    card" is the most recent of those. Nobody chooses, which is why the phrase
+    gets its own quantifier rather than being read as a target the card never
+    offered: a picker here would let the caster take whichever creature they
+    liked.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Shallow Grave"])
+    assert program.supported, program.reason
+
+    game = _w1g2_grave_duel(
+        set_pool, ["Femeref Scouts", "Kaervek's Torch", "Viashino Warrior"]
+    )
+    assert game.cast_from_hand(0, "Shallow Grave").supported
+    game.resolve_stack()
+
+    returned = [p.card.name for p in game.players[0].battlefield]
+    assert returned == ["Viashino Warrior"], game.log
+
+
+def test_shallow_grave_grants_haste_to_what_it_returned(set_pool):
+    """"**That creature** gains haste until end of turn."
+
+    Not a target — the spell's subject was a *card* — so the grant reads the
+    record the return wrote. Refused before this round with "unsupported
+    keyword-grant subject", which is one printed pronoun with two answers: the
+    quoted-ability grant beside it had read the same record for two sets.
+    """
+    game = _w1g2_grave_duel(set_pool, ["Viashino Warrior"])
+    game.cast_from_hand(0, "Shallow Grave")
+    game.resolve_stack()
+
+    returned = game.players[0].battlefield[0]
+    assert game._has_keyword(returned, "haste"), game.log
+
+
+def test_shallow_grave_exiles_what_it_returned_not_itself(set_pool):
+    """"**Exile it** at the beginning of the next end step."
+
+    The pronoun reads as the ability's own source everywhere else, and here the
+    source is an instant — so ``exile_self`` exiled nothing while the card
+    reported itself supported. What it names is the permanent the first step
+    put onto the battlefield, and the id is frozen when the delayed ability is
+    *created* (CR 603.7c): by the time it fires, the resolution's scratchpad is
+    long gone.
+    """
+    game = _w1g2_grave_duel(set_pool, ["Viashino Warrior"])
+    game.cast_from_hand(0, "Shallow Grave")
+    game.resolve_stack()
+    returned_id = game.players[0].battlefield[0].permanent_id
+    armed = [e for e in game.delayed_triggers if e.event == "next_end_step"]
+    assert [e.bound_permanent_id for e in armed] == [returned_id], game.log
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert game.players[0].battlefield == [], game.log
+    assert [c.name for c in game.players[0].exile] == ["Viashino Warrior"], game.log
+
+
+def test_shallow_grave_with_no_creature_card_does_nothing(set_pool):
+    """An empty record arms nothing: a delayed ability about no object would
+    otherwise answer to the first permanent the event names, which is the
+    widening every bound payload in this engine exists to prevent."""
+    game = _w1g2_grave_duel(set_pool, ["Kaervek's Torch"])
+    game.cast_from_hand(0, "Shallow Grave")
+    game.resolve_stack()
+
+    assert game.players[0].battlefield == [], game.log
+    assert not [e for e in game.delayed_triggers if e.event == "next_end_step"], game.log

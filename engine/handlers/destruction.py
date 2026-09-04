@@ -994,6 +994,43 @@ def destroy_bound_permanent(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("exile_bound_permanent")
+def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**Exile it** at the beginning of the next end step." (Zirilan of the
+    Claw, Shallow Grave.)
+
+    The object the creating ability bound (CR 603.7c), carried by id in the
+    trigger's context — which here is neither a target nor the source: what
+    the delay is about is the permanent an *earlier step of the same
+    resolution* put onto the battlefield, and by the time this fires that
+    resolution's scratchpad is a turn gone. So the id is frozen when the
+    ability is created and read back here.
+
+    Its own kind beside ``destroy_bound_permanent`` and
+    ``sacrifice_bound_permanent`` for their reason: exiling, destroying and
+    sacrificing are three different events (CR 701.7, 701.21, 406), and a
+    permanent already gone is exiled by nothing — CR 608.2b doing as much as it
+    can rather than a failure.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    owner_seat = game.owner_index_of(victim)
+    owner = game.players[owner_seat] if owner_seat is not None else context.caster
+    game.remove_from_battlefield(victim)
+    if not victim.metadata.get("is_token"):
+        # CR 400.3: a card goes to its owner's exile, whoever controlled it.
+        # A token ceases to exist instead (CR 111.7), which the removal above
+        # already accomplishes.
+        owner.exile.append(victim.card)
+    game.log.append(f"{context.card.name} exiled {victim.card.name}")
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 @effect_handler("sacrifice_bound_permanent")
 def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature leaves the battlefield this turn, **sacrifice that

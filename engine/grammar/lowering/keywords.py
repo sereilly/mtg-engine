@@ -77,6 +77,7 @@ def _lower_gain_keyword(
     node: ast.GainKeyword,
     event: str | None = None,
     event_subject: object | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift). A
     # choice between two effects is `choose_one` — the composition seam
@@ -373,6 +374,50 @@ def _lower_gain_keyword(
             OracleInstruction(
                 "grant_enchanted_keyword_until_eot", "",
                 {"keywords": tuple(node.keywords), "duration": duration},
+            ),
+        )
+    # "…**That creature** gains haste until end of turn." (Shallow Grave;
+    # Zirilan of the Claw prints "that Dragon".) The permanent an earlier
+    # step of this same resolution put onto the battlefield — not a target,
+    # because the ability's target is a *card* in a graveyard or a library
+    # and the permanent did not exist when it was announced.
+    #
+    # The quoted-ability grant beside this one has read the same record since
+    # Dreams of the Dead; the *keyword* grant refused the subject outright,
+    # which is one printed pronoun with two answers. `produced` is the gate,
+    # so with nothing recorded the words keep whatever reading they had.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and (produced & _RECORDED_PERMANENTS)
+    ):
+        # A bound object carries no narrowing to honour: the noun restates
+        # what the step in front of it already found ("that **Dragon**" after
+        # a search for a Dragon), and a subtype re-tested at resolution would
+        # be a second reading of one choice. Anything beyond the printed type
+        # and subtype refuses rather than being dropped.
+        if _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "subtypes"})
+        ):
+            raise LoweringError(
+                "a bound keyword grant reads the permanent an earlier step "
+                "recorded and nothing narrower", node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"that creature\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        return (
+            OracleInstruction(
+                "grant_target_keyword_until_eot", "",
+                {
+                    "keywords": tuple(node.keywords), "duration": duration,
+                    "permanents_from": recorded[0],
+                },
             ),
         )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)

@@ -40,6 +40,7 @@ from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
+from ...oracle_types import SEARCHED_PERMANENTS
 from ...search_filters import landing_seat, search_matches, searched_seat
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -601,6 +602,23 @@ class PendingChoicesMixin:
             self._put_permanent_onto_battlefield(
                 landing_seat(choice.data, choice.player_index), found, None
             )
+            # "…put that card onto the battlefield, then shuffle. **That
+            # Dragon** gains haste until end of turn. Exile **it** at the
+            # beginning of the next end step." (Zirilan of the Claw.) The
+            # sentences behind a search name the permanent it put down, and
+            # this is the only moment anything can say which one that is: the
+            # search suspends on a prompt, so by the time the rest of the
+            # resolution runs the card is one permanent among many.
+            #
+            # Written to the resolution's scratchpad under the key
+            # ``lowering/_records._PRODUCES`` declares for this kind, which
+            # is the same channel a reanimation already uses — one record
+            # shape, so a sentence reading "that creature" cannot care which
+            # step put the permanent there.
+            record = choice.data.get("record")
+            if record is not None:
+                record.setdefault(SEARCHED_PERMANENTS, [])
+                record[SEARCHED_PERMANENTS].append(found.permanent_id)
             # "Then if you control four or more lands, untap that land."
             # (Fabled Passage.) Counted *after* the land has entered, which is
             # when the printed "then" happens — so the land counts itself. Through

@@ -21,7 +21,8 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
-from ._events import (CREATED_TOKEN, EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY,
+from ._events import (_RECORDED_PERMANENTS,
+CREATED_TOKEN, EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY,
                       EXILED_THIS_WAY_OBJECTS, _EVENT_SUBJECT_PLAYERS)
 from ._piles import _SEARCH_EXILE_HONOURED, _linked_exile_filter
 from ._common import (
@@ -286,6 +287,36 @@ def _lower_exile(
     # moved. It gets its own instruction kind for that reason rather than a
     # payload flag on the targeted exile: a handler that resolves a target and
     # one that reads ``context.source_permanent`` share no code beyond the move.
+    # "Return the top creature card of your graveyard to the battlefield. …
+    # **Exile it** at the beginning of the next end step." (Shallow Grave;
+    # Zirilan of the Claw prints the same tail behind a search.) The pronoun
+    # reads as the source everywhere else, and here the source is a spell or
+    # an activated ability — so `exile_self` exiled nothing while the card
+    # compiled clean. What it names is the permanent an earlier step of this
+    # same resolution put onto the battlefield.
+    #
+    # `produced` is the whole gate, and it is what keeps Dark Maze's "Exile
+    # it at the beginning of the next end step" reading as its own source:
+    # nothing in that effect records a permanent, so the branch declines and
+    # the source reading below stands.
+    if (
+        _is_source(subject)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and (produced & _RECORDED_PERMANENTS)
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "an exile of a recorded permanent carries no duration or "
+                "counters", node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "several earlier steps recorded permanents; which one \"it\" names is ambiguous",
+                node=node,
+            )
+        return (OracleInstruction("exile_bound_permanent", "", {}),)
     if _is_source(subject):
         if node.duration.kind is not None:
             raise LoweringError(

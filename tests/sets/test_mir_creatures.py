@@ -724,3 +724,71 @@ def test_sand_golem_returns_with_a_counter_at_the_next_end_step(set_pool):
     assert [p.card.name for p in returned] == ["Sand Golem"], game.log
     # 3/3 printed, so the counter is the whole of the difference.
     assert (returned[0].effective_power, returned[0].effective_toughness) == (4, 4), game.log
+
+
+# --- W1G2: a search names what it found, and the tail behind it ---
+
+
+def _w1g2_zirilan(set_pool, library):
+    zirilan = Permanent(card=set_pool("MIR")["Zirilan of the Claw"])
+    zirilan.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[zirilan],
+            library=[set_pool("MIR")[name] for name in library], life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    result = game.activate_permanent_ability(
+        0, "Zirilan of the Claw", permanent_index=0
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    return game
+
+
+def test_zirilan_puts_a_dragon_onto_the_battlefield_with_haste(set_pool):
+    """"{1}{R}{R}, {T}: Search your library for a Dragon permanent card, put
+    that card onto the battlefield, then shuffle. **That Dragon** gains haste
+    until end of turn. Exile **it** at the beginning of the next end step."
+
+    Two halves were missing. "That Dragon" names a back-reference by *subtype*
+    where the bound-subject reader knew only card types — English distinguishes
+    the object by whatever noun does the job, and the search that found it
+    required exactly this one. And a search suspends on a prompt, so nothing
+    could say which permanent it had placed: the choice resolution now writes
+    the id into the resolution's scratchpad, under the same record shape a
+    reanimation already uses.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Zirilan of the Claw"])
+    assert program.supported, program.reason
+
+    game = _w1g2_zirilan(set_pool, ["Viashino Warrior", "Volcanic Dragon"])
+    found = [p for p in game.players[0].battlefield
+             if p.card.name == "Volcanic Dragon"]
+    assert found, game.log
+    assert game._has_keyword(found[0], "haste"), game.log
+
+
+def test_zirilan_exiles_the_dragon_at_the_next_end_step(set_pool):
+    """The whole point of the card: the Dragon is borrowed, not kept. "It" is
+    the permanent the *search* placed — neither a target (nothing was chosen)
+    nor the ability's own source, which is Zirilan and would have exiled the
+    legend instead."""
+    game = _w1g2_zirilan(set_pool, ["Viashino Warrior", "Volcanic Dragon"])
+    dragon = next(p for p in game.players[0].battlefield
+                  if p.card.name == "Volcanic Dragon")
+    armed = [e for e in game.delayed_triggers if e.event == "next_end_step"]
+    assert [e.bound_permanent_id for e in armed] == [dragon.permanent_id], game.log
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    standing = [p.card.name for p in game.players[0].battlefield]
+    assert standing == ["Zirilan of the Claw"], game.log
+    assert [c.name for c in game.players[0].exile] == ["Volcanic Dragon"], game.log
