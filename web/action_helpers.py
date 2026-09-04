@@ -133,6 +133,10 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # a cost, and overloading one field would make the cost eat the
         # creature the spell was aimed at.
         cost_permanent_index=req.cost_permanent_index,
+        # And the same choice for a cost that eats more than one permanent
+        # (Phyrexian Tribute): one index cannot name two victims, so the id list
+        # the activation path has always forwarded is forwarded here too.
+        cost_permanent_ids=req.cost_permanent_ids,
         cost_hand_index=req.cost_hand_index,
         # CR 118.9's announcement, on its own pair of fields for the reason the
         # cost fields above are on theirs: an alternative cost and an additional

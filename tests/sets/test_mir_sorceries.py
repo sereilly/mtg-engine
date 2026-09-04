@@ -1589,3 +1589,138 @@ def test_w3g4_a_difference_counted_on_no_named_seat_refuses(set_pool):
     assert "target opponent" in (compiled.lowering_error or ""), (
         compiled.lowering_error
     )
+
+
+# --- W4G1: the two costs that are paid before the spell is cast (CR 601.2) ---
+
+from engine import Game as _w4g1s_Game, PlayerState as _w4g1s_PlayerState  # noqa: E402
+from engine.models import Permanent as _w4g1s_Permanent  # noqa: E402
+from tests.helpers import _nosick as _w4g1s_nosick  # noqa: E402
+
+
+def _w4g1s_bears(set_pool, count: int) -> list:
+    lea = set_pool("LEA")
+    made = []
+    for _ in range(count):
+        bear = _w4g1s_Permanent(card=lea["Grizzly Bears"])
+        _w4g1s_nosick(bear)
+        made.append(bear)
+    return made
+
+
+def _w4g1s_tribute_game(set_pool, creatures: int):
+    """Phyrexian Tribute in seat 0's hand, *creatures* creatures beside it, and
+    an artifact of seat 1's for it to point at."""
+    pool = set_pool("MIR")
+    lea = set_pool("LEA")
+    mine = _w4g1s_bears(set_pool, creatures)
+    lotus = _w4g1s_Permanent(card=lea["Black Lotus"])
+    game = _w4g1s_Game(players=[
+        _w4g1s_PlayerState(
+            name="P1", hand=[pool["Phyrexian Tribute"]],
+            library=[pool["Swamp"]] * 6, battlefield=list(mine),
+        ),
+        _w4g1s_PlayerState(
+            name="P2", library=[pool["Swamp"]] * 6, battlefield=[lotus],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    game.start_turn(0)
+    return game, mine, lotus
+
+
+def test_w4g1_phyrexian_tribute_eats_two_creatures(set_pool):
+    """"As an additional cost to cast this spell, sacrifice two creatures."
+
+    Both of them. The cost used to be read as none at all — the noun phrase
+    "two creatures" matched no clause in `cast_costs`, so the whole sentence was
+    unread and the card, already supported on "Destroy target artifact", was
+    cast for its mana alone.
+    """
+    game, mine, lotus = _w4g1s_tribute_game(set_pool, creatures=2)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Tribute", target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported is True, result.details
+    assert list(game.controlled_by(0)) == [], game.log
+    buried = [c.name for c in game.players[0].graveyard]
+    assert buried.count("Grizzly Bears") == 2, game.log
+    assert not game.is_on_battlefield(lotus), "the artifact is still destroyed"
+
+
+def test_w4g1_phyrexian_tribute_is_uncastable_with_one_creature(set_pool):
+    """CR 601.2h: an unpayable cost makes the spell uncastable, not free. One
+    creature is no more a payment than none, which is the whole reason the count
+    is a field rather than part of the phrase — a gate that asked only "is there
+    a creature?" would admit the cast and charge one."""
+    game, mine, lotus = _w4g1s_tribute_game(set_pool, creatures=1)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Tribute", target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported is False, result.details
+    assert "not enough creatures to sacrifice" in result.details, result.details
+    assert any(
+        card.name == "Phyrexian Tribute" for card in game.players[0].hand
+    ), "CR 601.2e rewinds the announcement; the spell was never cast"
+    assert list(game.controlled_by(0)) == mine, "and nothing was sacrificed on the way"
+    assert game.is_on_battlefield(lotus), "and the artifact survives"
+
+
+def test_w4g1_phyrexian_tribute_is_uncastable_with_an_empty_board(set_pool):
+    """The same refusal one creature lower, because a count of two is two
+    separate ways to be short and only one of them is the interesting one."""
+    game, _mine, lotus = _w4g1s_tribute_game(set_pool, creatures=0)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Tribute", target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported is False, result.details
+    assert game.is_on_battlefield(lotus)
+
+
+def test_w4g1_the_payer_names_both_victims_by_id(set_pool):
+    """CR 601.2b: the payer chooses. One index cannot name two permanents, so
+    the counted cost reads the same id list the activation path has always taken
+    — by id and never by slot, because each sacrifice renumbers the battlefield
+    behind it."""
+    game, mine, _lotus = _w4g1s_tribute_game(set_pool, creatures=3)
+    named = [mine[1].permanent_id, mine[2].permanent_id]
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Tribute", target_player_index=1, target_permanent_index=0,
+        cost_permanent_ids=named,
+    )
+
+    assert result.supported is True, result.details
+    survivors = list(game.controlled_by(0))
+    assert [perm.permanent_id for perm in survivors] == [mine[0].permanent_id], (
+        game.log
+    )
+
+
+def test_w4g1_a_singular_sacrifice_cost_still_eats_exactly_one(set_pool):
+    """The counted reader sits in front of the singular one, so this is the
+    regression that matters: `_NUMBER_WORDS` maps "a"/"an"/"one" to 1, and an
+    article read as a count would have turned every printed sacrifice into a
+    one-permanent cost by a different route — or, worse, into a plural noun
+    phrase the parser refuses, which would leave the whole sentence unread and
+    the spell free."""
+    from engine.cast_costs import additional_cost_for_line
+
+    for printed, count in (
+        ("as an additional cost to cast this spell, sacrifice a creature", 1),
+        ("as an additional cost to cast this spell, sacrifice an artifact", 1),
+        ("as an additional cost to cast this spell, sacrifice two creatures", 2),
+        ("as an additional cost to cast this spell, sacrifice three goblins", 3),
+    ):
+        cost = additional_cost_for_line(printed)
+        assert cost is not None, printed
+        assert cost.sacrifice_count == count, printed
+        assert cost.sacrifice_filter is not None, printed

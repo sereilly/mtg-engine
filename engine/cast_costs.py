@@ -29,6 +29,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .oracle_types import _NUMBER_WORDS
 from .subject_filters import filter_head_noun
 
 if TYPE_CHECKING:
@@ -78,6 +79,18 @@ class AdditionalCost:
 
     phrase: str
     sacrifice_filter: dict | None = None
+    #: "…, sacrifice **two** creatures." (Phyrexian Tribute.) How many the
+    #: printed cost eats, in the same field ``ActivatedAbilityCost`` carries it
+    #: in and for the same reason CR 601.2b and CR 602.2b share a vocabulary:
+    #: what may pay a printed sacrifice, and how many of it, is one question
+    #: wherever the sacrifice is printed.
+    #:
+    #: Its own field rather than a count folded into the phrase, because the
+    #: *number* is the whole of what makes such a cost unpayable: one creature
+    #: is no more a payment than none (CR 601.2h), and a gate that asked only
+    #: "is there a creature?" would admit the cast and then charge one -- a
+    #: spell cast for less than it prints, which is this module's whole subject.
+    sacrifice_count: int = 1
     #: "As an additional cost to cast this spell, **exile a creature you
     #: control**." (Soul Exchange.) The same noun-phrase vocabulary one field
     #: up, one zone over -- and its own field for the reason
@@ -152,7 +165,11 @@ class AdditionalCost:
                 + (" any number of times" if offer.repeatable else "")
             )
         if self.sacrifice_filter is not None:
-            parts.append(f"sacrifice a {filter_head_noun(self.sacrifice_filter)}")
+            noun = filter_head_noun(self.sacrifice_filter)
+            parts.append(
+                f"sacrifice a {noun}" if self.sacrifice_count == 1
+                else f"sacrifice {self.sacrifice_count} {noun}s"
+            )
         if self.exile_filter is not None:
             parts.append(f"exile a {filter_head_noun(self.exile_filter)}")
         if self.pay_life_x:
@@ -272,7 +289,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     fields: dict = {
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (),
-        "sacrifice_filter": None, "exile_filter": None,
+        "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
         "optional_mana": (),
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
@@ -313,6 +330,33 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     return None
                 fields["discard_cards"] += 1
                 fields["discard_filters"] = narrowed
+            elif field == "sacrifice":
+                # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
+                # count is printed in front of the noun phrase, which leaves
+                # that phrase the bare plural the noun parser reads with
+                # ``plural=True`` -- the same split ``oracle`` makes for the
+                # identically shaped activation cost, with the same table
+                # reading the word. Anything that is not a number of two or
+                # more falls through to the singular below, which is where "a
+                # creature" has always been read: ``_NUMBER_WORDS`` maps "a",
+                # "an" and "one" to 1, so the article cannot be mistaken for a
+                # count.
+                noun = found.group("noun")
+                count, _, rest = noun.partition(" ")
+                number = (
+                    int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
+                )
+                if number >= 2 and rest:
+                    described = _chargeable_object(rest, field, plural=True)
+                    if described is None:
+                        return None
+                    fields["sacrifice_filter"] = described
+                    fields["sacrifice_count"] = number
+                    break
+                described = _chargeable_object(noun, field)
+                if described is None:
+                    return None
+                fields["sacrifice_filter"] = described
             else:
                 described = _chargeable_object(found.group("noun"), field)
                 if described is None:
@@ -370,7 +414,9 @@ def _optional_mana_offers(
     return tuple(offers) or None
 
 
-def _chargeable_object(phrase: str, action: str) -> dict | None:
+def _chargeable_object(
+    phrase: str, action: str, *, plural: bool = False
+) -> dict | None:
     """The filter payload a "sacrifice/exile <noun phrase>" cost charges, or None.
 
     The **charger's own** reading, not a second one: ``engine/oracle.py`` holds
@@ -389,11 +435,17 @@ def _chargeable_object(phrase: str, action: str) -> dict | None:
     Imported inside the function for the reason every other reader of these does:
     ``engine/oracle.py`` imports this module at load time, so the edge back is
     taken at call time.
+
+    *plural* is what a printed count leaves behind: "sacrifice two **creatures**"
+    is the bare plural, and the noun parser reads a plural only when it is told
+    to -- so the flag travels with the count rather than the reader guessing
+    from the word, which is how "creatures" and "creature" would come to be one
+    phrase.
     """
     from .grammar import subject_filter_payload
     from .oracle import chargeable_exile_payload, chargeable_sacrifice_payload
 
-    described = subject_filter_payload(phrase.strip())
+    described = subject_filter_payload(phrase.strip(), plural=plural)
     if described is None:
         return None
     if described.get("zone") not in (None, "battlefield"):

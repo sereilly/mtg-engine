@@ -390,6 +390,12 @@ class SpellCastingMixin:
         # its cost was collected. A seat that names neither gets the
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        # The same choice for a cost that eats **more than one** permanent
+        # (Phyrexian Tribute's "sacrifice two creatures"): one index cannot name
+        # two victims. By id, never by slot, because each sacrifice renumbers
+        # the battlefield behind it -- the same channel and the same reason
+        # `activate_permanent_ability` takes them.
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         # CR 118.9's choice, forwarded whole for the reason the cost fields
         # above are: dropping it here would resolve the spell having quietly
@@ -420,6 +426,7 @@ class SpellCastingMixin:
             from_zone=from_zone,
             use_free_permission=use_free_permission,
             cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
@@ -661,6 +668,12 @@ class SpellCastingMixin:
         # its cost was collected. A seat that names neither gets the
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        # The same choice for a cost that eats **more than one** permanent
+        # (Phyrexian Tribute's "sacrifice two creatures"): one index cannot name
+        # two victims. By id, never by slot, because each sacrifice renumbers
+        # the battlefield behind it -- the same channel and the same reason
+        # `activate_permanent_ability` takes them.
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         # CR 118.9's choice: whether to pay the spell's printed *alternative*
         # cost rather than its mana cost, and which card in hand pays the exile
@@ -1321,6 +1334,7 @@ class SpellCastingMixin:
         cost_spoils = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
         )
@@ -1574,10 +1588,22 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         for cost in costs:
             if cost.sacrifice_filter is not None:
-                if not self._additional_cost_candidates(caster_index, cost):
+                # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
+                # *count* is what makes such a cost unpayable: one creature is
+                # no more a payment than none, and a gate that asked only
+                # whether one existed would admit the cast and then charge one
+                # -- a spell cast for less than it prints. The same question
+                # `activate_permanent_ability` asks of Goblin Warrens, because
+                # CR 601.2b and CR 602.2b are one announcement step.
+                available = self._additional_cost_candidates(caster_index, cost)
+                wanted = max(1, cost.sacrifice_count)
+                if len(available) < wanted:
+                    noun = filter_head_noun(cost.sacrifice_filter)
+                    shortfall = (
+                        f"no {noun}" if wanted == 1 else f"not enough {noun}s"
+                    )
                     return (
-                        f"{card.name} can't be cast: no "
-                        f"{filter_head_noun(cost.sacrifice_filter)} to "
+                        f"{card.name} can't be cast: {shortfall} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
                     )
             # "…, **exile a creature you control**." (Soul Exchange.) Gated
@@ -1916,6 +1942,7 @@ class SpellCastingMixin:
         cost_permanent_index: int | None,
         cost_hand_card: "CardDefinition | None",
         x_value: int | None = None,
+        cost_permanent_ids: list[int] | None = None,
     ) -> dict:
         """Perform *card*'s printed additional costs, returning what they ate.
 
@@ -1968,27 +1995,55 @@ class SpellCastingMixin:
                         f"{caster.name} exiled {exiled_card.name} to cast {card.name}"
                     )
             if cost.sacrifice_filter is not None:
-                candidates = self._additional_cost_candidates(caster_index, cost)
-                if not candidates:
-                    continue  # gated above; a board that changed since is a no-op
-                named = (
-                    self.permanent_at(caster, cost_permanent_index)
-                    if isinstance(cost_permanent_index, int)
-                    else None
-                )
-                chosen = (
-                    named
+                # Whom the payer named, in the order they named them. Two
+                # channels because a counted cost needs two names and
+                # `cost_permanent_index` can only carry one: the id list is the
+                # same channel every chosen cost permanent arrives on for an
+                # activation, and the single index is what every caller written
+                # before a counted cast cost existed still sends.
+                named: list = [
+                    found
+                    for found in (
+                        self.permanent_by_id(permanent_id)
+                        for permanent_id in (cost_permanent_ids or ())
+                        if isinstance(permanent_id, int)
+                    )
+                    if found is not None
+                ]
+                if not named and isinstance(cost_permanent_index, int):
+                    at_index = self.permanent_at(caster, cost_permanent_index)
+                    if at_index is not None:
+                        named.append(at_index)
+                # Re-enumerated per victim, never sliced off one list: each
+                # sacrifice removes a permanent, and a list held across that
+                # holds an object the board no longer has.
+                for _ in range(max(1, cost.sacrifice_count)):
+                    candidates = self._additional_cost_candidates(caster_index, cost)
+                    if not candidates:
+                        break  # gated above; a board that changed since is a no-op
                     # `in` compares Permanents by value and would match a
                     # look-alike; membership is by identity.
-                    if any(perm is named for perm in candidates)
-                    else self.default_sacrifice_pick(candidates)
-                )
-                name = chosen.card.name
-                if self.sacrifice_permanent(chosen) is not None:
-                    sacrificed = chosen
-                    self.log.append(
-                        f"{caster.name} sacrificed {name} to cast {card.name}"
+                    chosen = next(
+                        (
+                            claimed for claimed in named
+                            if any(perm is claimed for perm in candidates)
+                        ),
+                        None,
                     )
+                    if chosen is None:
+                        chosen = self.default_sacrifice_pick(candidates)
+                    named = [perm for perm in named if perm is not chosen]
+                    name = chosen.card.name
+                    if self.sacrifice_permanent(chosen) is not None:
+                        # The **first**, which is "the sacrificed creature" a
+                        # spell reads back (Soul Exchange). No card in the pool
+                        # reads one back out of a counted cost, and recording
+                        # the last would answer a different question than the
+                        # singular cost has always answered.
+                        sacrificed = sacrificed or chosen
+                        self.log.append(
+                            f"{caster.name} sacrificed {name} to cast {card.name}"
+                        )
             life = cost.life_charged(x_value)
             if life:
                 caster.life -= life
