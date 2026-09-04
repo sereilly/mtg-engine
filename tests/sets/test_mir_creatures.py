@@ -2446,3 +2446,85 @@ def test_a_conjunction_carries_the_triggers_narrowing_to_every_conjunct(set_pool
     assert [i.kind for i in joined.instructions] == [
         i.kind for i in sequenced.instructions
     ]
+
+
+def _w2g1_coral_fighters(set_pool, library):
+    """Coral Fighters attacking into an empty board, run to the unblocked
+    trigger's fire site (the combat damage step, CR 509.1h)."""
+    fighters = _w2g1_nosick(Permanent(card=set_pool("MIR")["Coral Fighters"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[fighters]),
+        PlayerState(name="P2", battlefield=[], library=list(library)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    for _ in range(4):
+        game.advance_combat_phase()
+        if game.pending_choices:
+            break
+    _w2g1_resolve(game)
+    return game
+
+
+def test_coral_fighters_looks_at_the_defenders_top_card(set_pool):
+    """"Look at the top **card** of defending player's library" -- the bare
+    singular, which prints no number and so refused at the noun, and a library
+    owner who is neither "you" nor a target.
+
+    CR 506.2's seat is the one the combat fire site froze, so the offer is made
+    over the right pile without anybody choosing one: read as a target it would
+    have asked for a choice the card never offers.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Coral Fighters"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.instruction.kind == "look_at_library_top_then_bottom"
+    assert trig.instruction.payload["amount"] == 1
+    assert trig.instruction.payload["who"] == "defending_player"
+
+
+def test_coral_fighters_may_bottom_the_card_it_saw(set_pool):
+    """The offer, taken. It is the decision a scry is -- look at the top N and
+    choose which go to the bottom -- over somebody else's pile, so it arms that
+    prompt with the library named rather than assumed to be the chooser's."""
+    library = [
+        _w2g1_creature("Top", 1, 1),
+        _w2g1_creature("Second", 2, 2),
+        _w2g1_creature("Third", 3, 3),
+    ]
+    game = _w2g1_coral_fighters(set_pool, library)
+
+    (offer,) = [c for c in game.pending_choices if c.kind == "scry"]
+    assert offer.player_index == 0, "the attacker's controller decides"
+    assert offer.data["library_index"] == 1, "over the defender's library"
+
+    assert game.confirm_scry(0, [0], 1)
+    assert [c.name for c in game.players[1].library] == ["Second", "Third", "Top"]
+
+
+def test_coral_fighters_may_leave_the_card_where_it_is(set_pool):
+    """"**You may**" -- the other answer, and the one that must not be the
+    handler's own. Keeping the card on top is a legal outcome of the offer and
+    never a legal implementation of it, because the decision is the effect."""
+    library = [
+        _w2g1_creature("Top", 1, 1),
+        _w2g1_creature("Second", 2, 2),
+        _w2g1_creature("Third", 3, 3),
+    ]
+    game = _w2g1_coral_fighters(set_pool, library)
+
+    assert game.confirm_scry(0, [0], 0)
+    assert [c.name for c in game.players[1].library] == ["Top", "Second", "Third"]
+
+
+def test_coral_fighters_does_nothing_against_an_empty_library(set_pool):
+    """CR 701.22b's shape, one card over: nothing to look at is not a draw and
+    no state-based action fires, so the trigger simply resolves."""
+    game = _w2g1_coral_fighters(set_pool, [])
+
+    assert not [c for c in game.pending_choices if c.kind == "scry"], game.log

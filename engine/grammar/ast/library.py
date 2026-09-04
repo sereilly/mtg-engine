@@ -176,6 +176,12 @@ class LookAtLibraryTop:
     #: as one would hand Visions' controller a rearrangement the card does not
     #: give them.
     may_reorder: bool = False
+    #: "**You may put that card on the bottom of that player's library.**"
+    #: (Coral Fighters.) The third offer the template prints, and a third
+    #: handler for the two above's reason: looking, rearranging and bottoming
+    #: are three different things to be allowed to do with what you saw, and a
+    #: card that only looks must never be handed one of the others.
+    may_bottom: bool = False
 
 @dataclass(frozen=True)
 class LookTopPickToHand:

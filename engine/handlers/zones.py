@@ -3092,6 +3092,54 @@ def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionCon
     return True, "pending_scry"
 
 
+@effect_handler("look_at_library_top_then_bottom")
+def look_at_library_top_then_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Look at the top card of defending player's library. You may put that
+    card on the bottom of that player's library." (Coral Fighters.)
+
+    The same decision a scry is — look at the top N and choose which of them go
+    to the bottom — over somebody else's pile, so it arms the same prompt with
+    ``library_index`` naming whose library it is. Not *called* a scry: the card
+    prints no keyword (CR 701.22 arrived long after Mirage) and the pile is not
+    the chooser's, and the instruction says what the sentence says.
+
+    Modelled as a choice for the scry handler's stated reason: leaving the card
+    on top is a legal outcome and never a legal implementation, because the
+    decision is the whole effect.
+
+    Whose library is CR 506.2's defending player, read off what the combat fire
+    site froze — the same key ``discard_target_cards`` reads for the seat its
+    own untargeted sentence names. No record means the attacker left combat
+    before this resolved, and a seat nobody wrote down is not a library to look
+    through.
+    """
+    caster = context.caster
+    seat = None
+    if instruction.payload.get("who") == "defending_player":
+        recorded = (context.trigger_context or {}).get("trigger_defending_player_index")
+        seat = recorded if isinstance(recorded, int) else None
+    elif context.target is not None:
+        seat = game.players.index(context.target)
+    if seat is None or not (0 <= seat < len(game.players)):
+        game.log.append(f"{context.card.name}: no recorded player, no library to look at")
+        return True, "resolved"
+    owner = game.players[seat]
+    amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
+    top_count = min(amount, len(owner.library))
+    if top_count <= 0:
+        game.log.append(f"{context.card.name}: {owner.name}'s library is empty")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "scry", game.players.index(caster),
+        top_count=top_count, amount=amount, card_name=context.card.name,
+        library_index=seat,
+    )
+    game.log.append(
+        f"{caster.name} is looking at the top {top_count} of {owner.name}'s library"
+    )
+    return True, "pending_scry"
+
+
 @effect_handler("return_all_owned_artifacts_to_hand")
 def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Hurkyl's Recall: "Return all artifacts target player owns to their hand."

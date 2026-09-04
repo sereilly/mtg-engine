@@ -326,6 +326,21 @@ def _parse_look_other_library_tail(
     ):
         return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
     stream.reset(mark)
+    # "**You may put that card on the bottom of that player's library.**"
+    # (Coral Fighters.) The other offer this template prints, and the other
+    # direction: Visions offers a shuffle, which the looker takes when the top
+    # is bad, and this offers the one card itself.
+    #
+    # "That player" is read as the very player the look named rather than as a
+    # fresh reference — parsed apart it would have to guess a seat, which is
+    # this production's whole reason for reading the tail at all.
+    bottomed = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "you", "may", "put", "that", "card", "on", "the", "bottom", "of",
+        "that", "player", "'s", "library",
+    ):
+        return ast.LookAtLibraryTop(count, owner, may_bottom=True)
+    stream.reset(bottomed)
     # "**Exile one of those cards and put the rest back on top of that player's
     # library in any order.**" (Sealed Fate.) The look-and-pick template over
     # somebody else's pile: the cards are the opponent's and every decision
@@ -415,8 +430,16 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
             stream.expect_word(word)
         return _parse_look_pick_tail(stream, ast.ThatMuch(None))
     if stream.accept_phrase("the", "top"):
-        count = parse_amount(stream)
-        stream.expect_word("cards")
+        # "Look at the top **card**" (Coral Fighters), beside "the top N
+        # **cards**". The singular prints no number at all, so a reader that
+        # went straight to `parse_amount` refused the line at the noun — the
+        # same one-line gap `_parse_exile_top_of_library` already answers this
+        # way two productions down.
+        if stream.accept_word("card"):
+            count: ast.Amount = ast.Fixed(1)
+        else:
+            count = parse_amount(stream)
+            stream.expect_word("cards")
         stream.expect_word("of")
         # Whose library, read rather than assumed to be the word "your": "the
         # top five cards of **target player's** library" (Visions) is this same

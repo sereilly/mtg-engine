@@ -314,7 +314,14 @@ def _lower_look_at_library_top(
     a substring of the card's oracle text — a card printing the offer in any
     other words would have been given a prompt with the option missing.
     """
-    if node.player.kind != "target_player":
+    # "…of **defending player's** library" (Coral Fighters). CR 506.2's seat,
+    # which the combat fire site froze into the trigger's context — not a
+    # target, so no picker offers it and nothing here describes one. Admitted
+    # only for the bottoming offer below, which is the one card in the pool
+    # printing it: a *targeted* look is a spell's choice and this one is a fact
+    # about a combat, and the handler reads them from different places.
+    defending = node.player.kind == "defending_player"
+    if node.player.kind != "target_player" and not (defending and node.may_bottom):
         raise LoweringError(
             f"no handler looks at the top of {node.player.kind!r}'s library", node=node
         )
@@ -324,7 +331,23 @@ def _lower_look_at_library_top(
         "amount": node.count.value,
         "may_shuffle": node.may_shuffle,
     }
-    payload.update(_targets_only(node.player))
+    if defending:
+        payload["who"] = "defending_player"
+    else:
+        payload.update(_targets_only(node.player))
+    # "**You may put that card on the bottom of that player's library.**"
+    # (Coral Fighters.) Its own kind rather than a flag on the look, for
+    # `may_reorder`'s stated reason one field over: the permission is enforced
+    # where the prompt is answered, so a card that only looks can never be
+    # handed the offer.
+    if node.may_bottom:
+        if node.may_shuffle or node.may_reorder:
+            raise LoweringError(
+                "one look offers one thing to do with what it saw", node=node
+            )
+        return (
+            OracleInstruction("look_at_library_top_then_bottom", "", payload),
+        )
     # "…then put them back in any order" is the *other* handler, not a flag on
     # this one: `may_reorder` is enforced where the prompt is answered, so a
     # card that only looks can never be handed a rearrangement.

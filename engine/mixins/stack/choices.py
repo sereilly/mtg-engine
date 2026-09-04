@@ -1634,21 +1634,28 @@ class PendingChoicesMixin:
         the same total-permutation check ``_resolve_reorder_library`` makes —
         two lists could overlap or omit a card and still look plausible.
         """
-        caster = self.players[choice.player_index]
+        # Whose library, which is not always the chooser's: "look at the top
+        # card of **defending player's** library. You may put that card on the
+        # bottom of that player's library" (Coral Fighters) is this same
+        # decision over somebody else's pile. Absent means the chooser's, which
+        # is every scry (CR 701.22a is about your own library) and every payload
+        # written before the key existed.
+        owner = self.players[choice.data.get("library_index", choice.player_index)]
         top_count = choice.data["top_count"]
         if sorted(card_order) != list(range(top_count)):
             return False
         if not 0 <= bottom_count <= top_count:
             return False
-        looked = caster.library[:top_count]
-        rest = caster.library[top_count:]
+        looked = owner.library[:top_count]
+        rest = owner.library[top_count:]
         kept = [looked[i] for i in card_order[: top_count - bottom_count]]
         bottomed = [looked[i] for i in card_order[top_count - bottom_count :]]
         # The bottomed cards go under everything that was already below the
         # looked-at ones, which is why `rest` sits between the two slices.
-        caster.library = kept + rest + bottomed
+        owner.library = kept + rest + bottomed
         self.log.append(
-            f"{caster.name} scried {top_count} ({bottom_count} to the bottom)"
+            f"{self.players[choice.player_index].name} looked at the top "
+            f"{top_count} of {owner.name}'s library ({bottom_count} to the bottom)"
         )
         self.discard_pending_choice(choice)
         return True
@@ -1657,7 +1664,8 @@ class PendingChoicesMixin:
         from ...ai_policy import choose_scry_arrangement
 
         card_order, bottom_count = choose_scry_arrangement(
-            self, choice.player_index, choice.data["top_count"]
+            self, choice.player_index, choice.data["top_count"],
+            library_index=choice.data.get("library_index"),
         )
         if not self._resolve_scry(choice, card_order, bottom_count):
             self.discard_pending_choice(choice)

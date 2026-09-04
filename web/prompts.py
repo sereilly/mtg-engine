@@ -281,7 +281,7 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
         "pile_seat": pile_seat,
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
-        "cards": [ctx.serialize_card(card) for card in caster.library[:top_count]],
+        "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
     }
 
 
@@ -618,16 +618,20 @@ def _reorder_library(ctx: PromptContext, choices: list) -> dict:
 @prompt_renderer("scry")
 def _scry(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
-    caster = ctx.game.players[choice.player_index]
+    # Whose library the cards come off. Absent is the chooser's, which is every
+    # scry; Coral Fighters looks at the defending player's, and a renderer that
+    # read the chooser's would show the wrong cards for the decision being made.
+    owner = ctx.game.players[choice.data.get("library_index", choice.player_index)]
     top_count = choice.data["top_count"]
     return {
         "caster_seat": choice.player_index,
+        "library_seat": ctx.game.players.index(owner),
         "card_name": choice.data.get("card_name", ""),
         "top_count": top_count,
         # The printed number, which can exceed top_count on a short library —
         # the prompt still says "Scry 3" when only two cards are there.
         "amount": choice.data["amount"],
-        "cards": [ctx.serialize_card(card) for card in caster.library[:top_count]],
+        "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
     }
 
 
