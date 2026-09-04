@@ -214,6 +214,20 @@ def count_from_payload(
     scope = spec.get("owner", "you")
     if scope == "you":
         owner = context.caster
+    elif scope == "target_opponent":
+        # "…the number of creatures **target opponent** controls" (Superior
+        # Numbers). The spell names two targets of different kinds and the
+        # client picks only the object, so the seat arrives as the resolution's
+        # default rather than as an announcement — right in a two-player game,
+        # where CR 601.2c leaves the caster no other legal choice. What this
+        # branch adds over the plain "target" scope beside it is CR 102.3: a
+        # player is never their own opponent, so a default that landed on the
+        # caster is not an answer, and the first living opponent is.
+        chosen = context.target
+        if chosen is None or chosen is context.caster:
+            seats = game.opponents_of(game.players.index(context.caster))
+            chosen = game.players[seats[0]] if seats else context.caster
+        owner = chosen
     elif scope == "event_subject_player":
         # "At the beginning of each opponent's upkeep, … the number of …
         # **they control**" (Psychic Allergy). Nobody chose this seat, so
@@ -238,11 +252,23 @@ def count_from_payload(
     # ``exclude`` is deliberately left as the source: it implements the printed
     # word "other" (CR 109.5's own object), which is a different question from
     # what the relation is measured against.
-    return evaluate_count(
+    counted = evaluate_count(
         game, owner, spec,
         exclude=context.source_permanent,
         source=context.source_permanent if source is None else source,
     )
+    # "…**in excess of** the number of …" (Superior Numbers). The subtrahend is
+    # an ordinary count spec of its own, evaluated by re-entering here rather
+    # than inside `evaluate_count`: that function takes one already-resolved
+    # owner, and the whole content of the phrase is that the two halves are
+    # counted on *different* seats. Clamped at zero, which is what "in excess
+    # of" says (`ast.Minus`) and what every other subtraction in the pool does.
+    subtrahend = spec.get("minus")
+    if isinstance(subtrahend, dict):
+        return max(0, counted - count_from_payload(
+            game, context, subtrahend, instruction, source=source,
+        ))
+    return counted
 
 
 def _damage_dealt_this_turn(game, context, query: dict) -> int:

@@ -34,6 +34,7 @@ from ._amounts import (
     _lower_cost_sacrifice_damage,
     _lower_cost_tap_damage,
     _lower_counted_damage,
+    lower_difference_damage,
 )
 
 from ._bites import lower_bite
@@ -259,6 +260,13 @@ def _lower_damage_shape(
     # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
     # the half above). A characteristic of what the cost ate rather than a count
     # of anything on a board, so it sits beside the count rather than inside it.
+    # "…equal to the number of creatures you control **in excess of** the
+    # number of creatures target opponent controls." (Superior Numbers.) One
+    # quantity with two counted halves, beside the counts above rather than
+    # inside them: the subtrahend is scoped to a *different* seat, which is the
+    # one thing `count_spec` cannot carry on a filter.
+    if isinstance(node.amount, ast.Minus):
+        return lower_difference_damage(node)
     if isinstance(node.amount, ast.SacrificedForCost):
         return _lower_cost_sacrifice_damage(node)
     # "…equal to **the tapped creature's power**" (Unerring Sling) — the same

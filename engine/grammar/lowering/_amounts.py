@@ -225,6 +225,60 @@ def _lower_cost_sacrifice_damage(
     return (OracleInstruction("deal_damage", "", payload),)
 
 
+#: How the subtrahend of a printed difference is *scoped*, when the phrase
+#: narrows it to a player the spell targets. A scope rather than a filter for
+#: `count_spec`'s stated reason — nothing downstream tests a controller key, so
+#: a count narrowed by one is a count taken on the wrong battlefield — and its
+#: own value rather than the plain "target" because CR 102.3 says a player is
+#: never their own opponent: the resolution's fallback seat is not necessarily
+#: one, and this scope is what says so.
+TARGET_OPPONENT_SCOPE = "target_opponent"
+
+
+def lower_difference_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """"…deals damage to target creature equal to the number of creatures you
+    control **in excess of** the number of creatures target opponent controls."
+    (Superior Numbers.)
+
+    One quantity with two halves, so it is one `x_from_count` with the
+    subtrahend nested under it rather than two instructions — there is nothing
+    for a second step to do, and a `sequence` would have to record a number the
+    printed sentence never names.
+
+    Both halves go through :func:`count_spec`, which is the point: a difference
+    of two counts must mean, on each side, exactly what the same noun phrase
+    means printed on its own. The only thing the right-hand side does not share
+    is *whose* board it reads, and that is a scope rather than a narrowing.
+    """
+    amount = node.amount
+    assert isinstance(amount, ast.Minus)
+    if not (
+        isinstance(amount.left, ast.CountOf) and isinstance(amount.right, ast.CountOf)
+    ):
+        raise LoweringError("a printed difference counts two sets", node=node)
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if len(node.recipients) != 1 or not _is_target(node.recipients[0]):
+        raise LoweringError("no handler aims this counted damage", node=node)
+    right = amount.right.filter
+    if right.controller != "target_opponent" or right.zone_owner is not None:
+        # Every other seat the subtrahend could name would be one the handler
+        # cannot resolve, and a scope dropped is the whole board counted — the
+        # spell dealing more damage than it prints while reporting supported.
+        raise LoweringError(
+            "the subtrahend of a difference is counted on a target opponent's "
+            "battlefield",
+            node=node,
+        )
+    spec = count_spec(amount.left.filter, node)
+    subtrahend = count_spec(dataclasses.replace(right, controller=None), node)
+    subtrahend["owner"] = TARGET_OPPONENT_SCOPE
+    spec["minus"] = subtrahend
+    payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: spec}
+    _describe_targets(payload, node.recipients[0])
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
 def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
     """Whether the damage lands on exactly one player reference of *kind*."""
     return (
