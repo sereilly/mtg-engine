@@ -187,6 +187,7 @@ class _FilterDraft:
     without_keywords: list[str] = field(default_factory=list)
     controller: str | None = None
     owned_by: str | None = None
+    owner_or_controller: str | None = None
     tapped: bool | None = None
     attacking: bool | None = None
     blocking: bool | None = None
@@ -838,6 +839,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         created_with_source=d.created_with_source,
         controller=d.controller,
         owner=d.owned_by,
+        owner_or_controller=d.owner_or_controller,
         tapped=d.tapped,
         attacking=d.attacking,
         blocking=d.blocking,

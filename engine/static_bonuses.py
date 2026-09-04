@@ -471,6 +471,22 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
 
         described = condition.get("filter") or {}
         who = condition.get("who", "you")
+        # **The permanent this clause is a pronoun of.** "…as long as **its**
+        # controller controls **another** creature" (Favorable Destiny) says
+        # both halves about the creature the static is about — the enchanted
+        # one for an Aura, the source itself otherwise — and the lowering
+        # stamps ``subject: "attached"`` on exactly the clauses that carry such
+        # a pronoun. One pivot for both halves, because they are one referent:
+        # answering the seat off the host and "another" off the Aura would
+        # count the host as the other creature and hold on a board with just
+        # the one.
+        pivot = source
+        if condition.get("subject") == "attached":
+            from .handlers._common import attached_host
+
+            pivot = attached_host(game, source, last_known=False)
+            if pivot is None:
+                return False
         # "…as long as you control **no** nonartifact, nonwhite creatures"
         # (Angelic Voices) — a printed threshold rather than presence. Read as
         # presence it would be its own negation, which is why the lowering
@@ -482,8 +498,21 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         op = str(condition.get("op") or "ge")
         if wanted is None:
             wanted, op = 1, "ge"
+        pivot_seat: int | None = None
         if who == "you":
             seats = [seat]
+        elif who == "controller":
+            # CR 109.5's seat read off the *permanent* rather than off the
+            # ability: an Aura's controller and its host's controller part
+            # company the moment either is stolen, and this clause follows the
+            # host. Through the control seam, which is the one answer to who
+            # controls a permanent.
+            pivot_seat = (
+                game.controller_index_of(pivot) if pivot is not None else None
+            )
+            if pivot_seat is None:
+                return False
+            seats = [pivot_seat]
         elif who == "opponent":
             seats = [
                 index
@@ -497,7 +526,16 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
             return False
         return _controls_count_holds(
             game, seats, described, int(wanted), op,
-            observer=seat if who == "you" else None, source=source,
+            observer=(
+                seat if who == "you"
+                else pivot_seat if who == "controller"
+                else None
+            ),
+            # The pivot, not the raw source: "another" is CR 109.5 measured
+            # against the permanent the sentence is about. For every clause
+            # that carries no pronoun the two are the same object, so nothing
+            # that worked changes.
+            source=pivot,
         )
     return False
 

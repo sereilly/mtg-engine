@@ -61,6 +61,8 @@ from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
+from engine.activation_restrictions import (  # noqa: E402
+    global_activation_ban_line)
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
@@ -281,6 +283,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # own channel, asking the reader that answers it.
     ("cast_restrictions.py (board-wide ban)",
      lambda s: global_cast_ban_line(s) is not None),
+    # The same shape one rule over — "Activated abilities of creatures can't be
+    # activated." (Cursed Totem), CR 602.5's board half, enforced by
+    # `activation_restrictions.global_activation_ban` from
+    # `mixins/stack/activation.py`. Its own channel beside the cast ban and for
+    # that channel's reason: the reader that answers the line is the one asked.
+    ("activation_restrictions.py (board-wide ban)",
+     lambda s: global_activation_ban_line(s) is not None),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

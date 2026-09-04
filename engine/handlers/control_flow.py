@@ -1015,7 +1015,21 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     permanent = context.source_permanent
     card_name = getattr(context.card, "name", "an effect")
     if permanent is None:
-        game.log.append(f"{card_name}: no permanent to record a colour on")
+        # "Choose a color. X target creatures gain protection from the chosen
+        # color until end of turn." (Prismatic Boon.) A **spell**'s choice has
+        # no permanent to be recorded on, and needs none: the sentence that
+        # reads it back is the next step of this same resolution, and CR 609.3
+        # puts both of them in it. That channel is the resolution's own
+        # ``choices["new_color"]`` — the one "protection from the color of your
+        # choice" has always read — so the colour named on the cast *is* the
+        # colour this sentence asked for. Recording it a second time somewhere
+        # else is the two-answers-to-one-question shape this handler's own
+        # docstring above records removing.
+        named = game._normalize_mana_color((context.choices or {}).get("new_color"))
+        game.log.append(
+            f"{card_name}: {named} chosen" if named
+            else f"{card_name}: no colour was chosen"
+        )
         return True, "resolved"
     seat = game.controller_index_of(permanent)
     if seat is None:

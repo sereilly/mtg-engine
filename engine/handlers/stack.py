@@ -602,6 +602,19 @@ def _redirect_countered_card(game: Game, card, countered, destination: str) -> N
     this pool and is that call site's existing approximation, not one to copy.
     """
     owner = game.players[countered.caster_index]
+    if destination == "exile":
+        # "…exile it instead of putting it into its owner's graveyard."
+        # (Dissipate.) Exile is one shared zone (CR 406.1), so there is no
+        # owner's copy of it to reach and none of the CR 903.9b seams applies —
+        # the rule is about a hand or a library. ``_bin_spell_card`` already
+        # knows the move: the card never touches a graveyard either way, which
+        # is what makes this a replacement of the destination rather than a
+        # graveyard visit somebody then undoes.
+        game._bin_spell_card(
+            owner, countered.card, exile_instead=True,
+            verb=f"was countered by {card.name} and exiled",
+        )
+        return
     if destination == "hand":
         arrived = game.put_card_into_hand(owner, countered.card)
         where = "their hand"

@@ -346,6 +346,78 @@ def _attach_destroyed_this_way(stream: TokenStream, steps: list[ast.Statement]) 
     return True
 
 
+def _attach_no_regeneration(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "A creature destroyed this way can't be regenerated." into the
+    destroy the sentence before it performed (Soul Rend).
+
+    CR 701.15c's rider, which ``_parse_destroy`` already reads when it trails
+    the verb directly ("Destroy target creature. It can't be regenerated.").
+    Soul Rend prints a **condition** between them — "Destroy target creature
+    **if it's white**" — and the sentence layer folds that into a
+    ``Conditional`` *after* the destroy production has finished, so by the time
+    the rider is printed there is a wrapper in the way and the destroy
+    production's own probe has long since rewound.
+
+    So this reaches through the wrapper, and only through one it can name.
+    The alternative is what Soul Rend had: the whole line refuses, a
+    ``spell_pattern`` whitelist marker claims the card anyway, and it resolves
+    doing nothing but drawing the cantrip it also prints.
+
+    The same reader the destroy production uses
+    (``_accept_destroyed_this_way_no_regen``), so the two spellings of the
+    sentence stay one rule — a second copy here is the two-readings shape this
+    grammar keeps removing.
+    """
+    from .effects.board import _accept_destroyed_this_way_no_regen
+
+    last = steps[-1] if steps else None
+    if last is None:
+        return False
+    mark = stream.mark()
+    if not _accept_destroyed_this_way_no_regen(stream):
+        stream.reset(mark)
+        return False
+    folded = _with_no_regeneration(last)
+    if folded is None:
+        # Nothing here destroys anything, so the sentence says something this
+        # cannot place — rewound rather than consumed, which is the
+        # full-consumption invariant refusing the line loudly instead of
+        # dropping a rider.
+        stream.reset(mark)
+        return False
+    steps[-1] = folded
+    return True
+
+
+def _with_no_regeneration(statement: ast.Statement) -> "ast.Statement | None":
+    """*statement* with its destruction marked unregenerable, or None.
+
+    Reaches into a ``Conditional``'s arms because that is the only wrapper a
+    printed card puts between the verb and this rider — "Destroy target
+    creature **if it's white**" — and into both of them, because a card
+    printing an "otherwise, destroy …" arm means the rider about either.
+    Anything else answers None and the caller rewinds.
+    """
+    if isinstance(statement, ast.Destroy):
+        return dataclasses.replace(statement, no_regen=True)
+    if isinstance(statement, ast.Conditional):
+        then = _with_no_regeneration(statement.then)
+        otherwise = (
+            _with_no_regeneration(statement.otherwise)
+            if statement.otherwise is not None else None
+        )
+        if then is None and otherwise is None:
+            return None
+        return dataclasses.replace(
+            statement,
+            then=then if then is not None else statement.then,
+            otherwise=(
+                otherwise if otherwise is not None else statement.otherwise
+            ),
+        )
+    return None
+
+
 def _attach_tap_when_control_lost(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:

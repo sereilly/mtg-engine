@@ -226,6 +226,17 @@ def _parse_countered_destination(
         stream.reset(mark)
         return None, ""
     stream.accept_punct(",")
+    # "…**exile it** instead of putting it into its owner's graveyard."
+    # (Dissipate.) The same CR 614.1 replacement of CR 701.5a's destination
+    # written with the destination as a *verb* rather than as a zone — which is
+    # how Magic prints exile and only exile, because "put it into exile" is not
+    # a sentence the game uses. One branch rather than a second production: the
+    # tail it shares with Memory Lapse is the whole rest of the clause, and a
+    # second production would be a second place the "instead of" half could be
+    # forgotten.
+    if stream.accept_phrase("exile", "it"):
+        _expect_replaced_graveyard(stream)
+        return ast.Zone("exile"), ""
     stream.expect_word("put")
     stream.expect_word("it")
     position = ""
@@ -243,13 +254,34 @@ def _parse_countered_destination(
     elif not stream.accept_word("into"):
         raise stream.error("expected where a countered spell goes instead")
     zone = _parse_zone(stream)
-    # "**instead of into that player's graveyard**" — required, not skipped.
-    # Without it the sentence would be an unconditional move of a card that is
-    # already somewhere else, and the word "instead" is the whole of what makes
-    # this a replacement (CR 614.1) rather than a second effect.
-    for word in ("instead", "of", "into", "that", "player", "'s", "graveyard"):
-        stream.expect_word(word)
+    _expect_replaced_graveyard(stream)
     return zone, position
+
+
+def _expect_replaced_graveyard(stream: TokenStream) -> None:
+    """Consume the "instead of … graveyard" half, in either printed spelling.
+
+    **Required, not skipped.** Without it the sentence would be an
+    unconditional move of a card that is already somewhere else, and the word
+    "instead" is the whole of what makes this a replacement (CR 614.1) rather
+    than a second effect.
+
+    Two spellings, because the two verbs take different grammar: Memory Lapse's
+    "put it on top of its owner's library **instead of into that player's
+    graveyard**" and Dissipate's "exile it **instead of putting it into its
+    owner's graveyard**". They name one destination — CR 404.3's owner's
+    graveyard, which "that player" refers back to — so they are one clause read
+    two ways rather than two clauses.
+    """
+    stream.expect_word("instead")
+    stream.expect_word("of")
+    if stream.accept_phrase("putting", "it"):
+        stream.expect_word("into")
+        for word in ("its", "owner", "'s", "graveyard"):
+            stream.expect_word(word)
+        return
+    for word in ("into", "that", "player", "'s", "graveyard"):
+        stream.expect_word(word)
 
 
 def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":

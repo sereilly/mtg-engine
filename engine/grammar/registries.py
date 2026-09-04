@@ -112,6 +112,21 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if global_cast_ban_line(normalized) is not None:
         return "cast_restrictions"
 
+    # engine/activation_restrictions.py — the *board* half of CR 602.5:
+    # "Activated abilities of creatures can't be activated." (Cursed Totem.)
+    # The cast ban's twin one rule over, claimed the same way and for the same
+    # reason: the line carries no instruction because `global_activation_ban`
+    # runs it off the board's text at every activation, so the claim is asked
+    # of the reader that enforces it and cannot outlive it.
+    # Imported here rather than at module scope: `activation_restrictions`
+    # reaches the engine's own mixins, which import the compiler, which imports
+    # this package — the same lazy shape `lord_buffs` and `land_types` use for
+    # the vocabulary one layer down.
+    from ..activation_restrictions import global_activation_ban_line
+
+    if global_activation_ban_line(normalized) is not None:
+        return "global_activation_ban"
+
     # engine/untap_restrictions.py — CR 502 "don't untap" templates (Stasis,
     # Winter Orb, Smoke, Meekstone, Magnetic Mountain), read by
     # phases/untap_step.py. Its patterns are ^…$ anchored and applied per line,

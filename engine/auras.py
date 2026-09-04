@@ -1320,6 +1320,46 @@ _COMPOUND_INDESTRUCTIBLE = re.compile(
     rf"^enchanted {_NOUN} has indestructible and can't be enchanted by other auras$"
 )
 
+
+#: "Enchanted creature has phasing **and can't be blocked except by Walls**."
+#: (Cloak of Invisibility.) One printed line carrying two effects in two
+#: channels — a layer-6 keyword grant and a CR 506 combat restriction — which is
+#: the shape ``_COMPOUND_INDESTRUCTIBLE`` above and ``_TYPE_ADDITION_GRANT``
+#: already have, and for their reason: each half already has a reader, and the
+#: line matching neither pattern whole is what left the card unsupported with
+#: both of its halves individually working.
+#:
+#: Neither half is spelled out. The keyword run goes to the same
+#: ``_keyword_list`` every other grant uses and the restriction tail goes to
+#: ``combat_restrictions.combat_restriction_for`` — the table that already reads
+#: that sentence when a creature prints it about itself — so a card printing
+#: "has flying and can't be blocked by Walls" is this rule with nothing added.
+#: A tail that table cannot read leaves the whole line unmatched and the card
+#: unsupported, rather than granting the keyword and dropping the restriction:
+#: a restriction the card prints and no combat step asks about is an ability
+#: that works more often than the card allows, which is the quiet direction.
+_KEYWORD_GRANT_AND_RESTRICTION = _LazyPattern(lambda: re.compile(
+    rf"^{_ATTACHED} (?P<noun>{_NOUN}) has "
+    rf"(?P<keyword>(?:{_keyword_alternation()})"
+    rf"(?:(?:, and |, | and )(?:{_keyword_alternation()}))*) "
+    rf"and (?P<restriction>can't .+)$"
+))
+
+
+def _compound_restriction_clause(normalized: str):
+    """The ``(noun, restriction clause)`` a keyword-grant compound carries, or None.
+
+    Split out because both halves of the compound are read by different
+    functions — the keyword by :func:`aura_keyword_grants`, the tail by
+    :func:`aura_combat_restriction` — and a second copy of the pattern in each
+    is exactly the two-lists-one-rule shape this file's other comments record
+    removing.
+    """
+    match = _KEYWORD_GRANT_AND_RESTRICTION.match(normalized)
+    if match is None:
+        return None
+    return match.group("noun"), match.group("restriction")
+
 # "Enchanted creature has shroud as long as it's untapped." (Spectral Cloak.)
 # The same layer-6 grant one line up with a condition on the attached
 # permanent's own state — so the keyword is data, as it already was, and the
@@ -1428,6 +1468,12 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         match = _KEYWORD_GRANT.match(line) or _TYPE_ADDITION_GRANT.match(line)
         if match is not None:
             grants.extend(_keyword_list(match.group("keyword")))
+        elif (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None:
+            # "…has phasing and can't be blocked except by Walls." The keyword
+            # half only; the restriction half is claimed by
+            # :func:`aura_combat_restriction` off the same line, exactly as
+            # Consecrate Land's compound below splits between two readers.
+            grants.extend(_keyword_list(compound.group("keyword")))
         elif _COMPOUND_INDESTRUCTIBLE.match(line):
             # Consecrate Land prints one line carrying two effects. Its trailing
             # clause is claimed separately as a restriction, so matching only
@@ -1781,6 +1827,20 @@ def aura_combat_restriction(line: str):
     from .combat_restrictions import combat_restriction_for
 
     normalized = _line_text(line)
+    # "Enchanted creature has phasing **and can't be blocked except by Walls**."
+    # (Cloak of Invisibility.) The restriction half of a compound line, asked
+    # first because the plain subject match below would hand the whole
+    # sentence — keyword grant included — to a table anchored on "can't", which
+    # answers None and drops a restriction the card prints.
+    compound = _compound_restriction_clause(normalized)
+    if compound is not None:
+        noun, clause = compound
+        restriction = combat_restriction_for(f"this {noun} {clause}")
+        if restriction is None or restriction.kind not in (
+            ENFORCED_ATTACHED_COMBAT_RESTRICTIONS
+        ):
+            return None
+        return restriction
     match = _ATTACHED_SUBJECT.match(normalized)
     if match is None:
         return None

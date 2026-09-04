@@ -478,12 +478,6 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     """
     from ..subject_filters import subject_matches
 
-    symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
-    if symbol is None:
-        game.log.append(
-            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
-        )
-        return True, "resolved"
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = game.players.index(context.caster)
     target = resolve_target_permanent(
@@ -493,6 +487,30 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     )
     if target is None:
         game.log.append(f"{context.card.name}: no valid permanent to recolour")
+        return True, "resolved"
+    if instruction.payload.get("several"):
+        # "Target permanent becomes the color **or colors** of your choice."
+        # (Prismatic Lace.) A *set* is offered, and the activation wire carries
+        # one symbol — so the question goes on the standing queue, the same
+        # prompt Shyft's trigger already uses one branch over. Asked here
+        # rather than read off ``choices["new_color"]`` because a single symbol
+        # is one legal answer to the offer and not the offer itself: taking it
+        # would quietly make "or colors" mean "a color" on every printing.
+        # "**Your** choice" is the spell's controller (CR 109.5), never the
+        # permanent's — Prismatic Lace is aimed at any permanent on the table
+        # and the colour is picked by whoever cast it.
+        game.arm_color_set_choice(
+            observer,
+            permanent=target,
+            card_name=context.card.name,
+            several=True,
+        )
+        return True, "resolved"
+    symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
+    if symbol is None:
+        game.log.append(
+            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
+        )
         return True, "resolved"
     target.metadata["color_override"] = symbol
     game.log.append(f"{target.card.name} became {symbol} ({context.card.name})")

@@ -696,3 +696,347 @@ def test_yare_does_not_reach_the_attacking_players_creatures(set_pool):
         1, "Yare", target_player_index=0, target_permanent_index=0
     )
     assert not result.supported, "an attacker is not a creature the defender controls"
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_vanilla(name: str, power: int = 2, toughness: int = 2,
+                type_line: str = "Creature - Test") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g5_game(pool, hand, battlefield=(), opponent=()):
+    game = Game(players=[
+
+        PlayerState(name="P1", hand=[pool[name] for name in hand],
+                    battlefield=list(battlefield),
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=list(opponent),
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def test_dissipate_exiles_the_spell_it_counters(set_pool):
+    """"Counter target spell. If that spell is countered this way, **exile it**
+    instead of putting it into its owner's graveyard."
+
+    CR 614.1 replacing CR 701.5a's destination, which Memory Lapse's production
+    already carried — written with the destination as a *verb* rather than a
+    zone, because "put it into exile" is not a sentence Magic uses. One branch
+    of that production rather than a second one: the "instead of … graveyard"
+    tail is the whole rest of the clause, and a second production would be a
+    second place to forget the word that makes this a replacement at all.
+    """
+    pool = set_pool("MIR")
+    game = _g5_game(pool, ["Dissipate"])
+    game.players[1].hand.append(pool["Mangara's Blessing"])
+    before = game.players[1].life
+
+    game.queue_from_hand(1, "Mangara's Blessing")
+    counter = game.cast_from_hand(0, "Dissipate", target_stack_index=0)
+    assert counter.supported, counter.details
+    game.resolve_stack()
+
+    # Both halves, because the failure a dropped destination clause causes is
+    # silent: the card in the graveyard is exactly what a plain Counterspell
+    # leaves behind and reads as nothing having gone wrong.
+    assert game.players[1].life == before, "the spell was countered"
+    assert [card.name for card in game.players[1].graveyard] == []
+    assert [getattr(card, "name", card) for card in game.players[1].exile] == [
+        "Mangara's Blessing"
+    ]
+
+
+def test_prismatic_boon_protects_every_creature_it_named(set_pool):
+    """"Choose a color. **X** target creatures gain protection from **the chosen
+    color** until end of turn."
+
+    "The chosen color" is the same question "the color of your choice" asks —
+    CR 609.3 puts both in this resolution, so they name one colour and read one
+    channel. A second keyword string would have been a second answer to it, and
+    the grant handler would have had to learn which sentence had done the
+    asking.
+    """
+    a = Permanent(card=_g5_vanilla("A"))
+    b = Permanent(card=_g5_vanilla("B"))
+    game = _g5_game(set_pool("MIR"), ["Prismatic Boon"], battlefield=[a, b])
+
+    cast = game.cast_from_hand(
+        0, "Prismatic Boon", x_value=2, new_color="R",
+        target_permanent_ids=[a.permanent_id, b.permanent_id],
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game._protection_colors(a) == {"R"}
+    assert game._protection_colors(b) == {"R"}
+
+
+def test_prismatic_lace_offers_a_set_of_colours(set_pool):
+    """"Target permanent becomes the color **or colors** of your choice."
+
+    The one subject of the three that had no path to the set offer: the Aura's
+    host and the source itself both reached ``arm_color_set_choice`` and a
+    *target* refused outright. Asked as a prompt rather than read off the
+    activation's single symbol, because one symbol is a legal answer to the
+    offer and not the offer itself — taking it would quietly make "or colors"
+    mean "a color" on every printing.
+    """
+    host = Permanent(card=_g5_vanilla("Statue", 1, 1, "Artifact Creature - Golem"))
+    game = _g5_game(set_pool("MIR"), ["Prismatic Lace"], battlefield=[host])
+
+    cast = game.cast_from_hand(0, "Prismatic Lace",
+                               target_player_index=0, target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    # A non-interactive seat takes the prompt's stated default at once, which
+    # is a colour — the point being that a colour was *asked for* rather than
+    # read off a cast that never named one.
+    assert game._effective_colors(host), "a colour was chosen and written"
+
+
+def test_a_counter_on_it_lands_on_what_the_sentence_before_chose():
+    """"Gain control of target creature. **Put a -1/-0 counter on it.**"
+
+    A bare "it" is the ability's own source everywhere else, which is what
+    ``parse_recipient`` reads — so this sentence lowered to
+    ``add_counter_to_self`` and the counter went on the wrong permanent, or,
+    for a spell, on nothing at all. Neither raises, which is why the rider
+    exists.
+    """
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Gain control of target creature. Put a -1/-0 counter on it."
+    )
+    kinds = [instruction.kind for instruction in result.instructions]
+    assert kinds == ["gain_control_of_target", "add_counter_to_target"]
+
+
+def test_the_pronoun_rider_leaves_a_named_subject_alone():
+    """"Put a +1/+1 counter on **this creature**" is not the pronoun, and keeps
+    its own referent — the rider fires on ``quantifier == "it"`` alone."""
+    from engine.grammar import compile_line
+
+    result = compile_line("Tap target creature. Put a +1/+1 counter on this creature.")
+    kinds = [instruction.kind for instruction in result.instructions]
+    assert kinds == ["tap_target_permanent", "add_counter_to_self"]
+
+
+def test_ersatz_gnomes_can_be_aimed(set_pool):
+    """"{T}: Target permanent becomes colorless until end of turn."
+
+    A supported card no player could use. The recolour lowering described its
+    targets only for the "one or more target creatures" spelling — the *single*
+    target got no description at all, so ``derive_activation_spec`` had no
+    evidence and the picker offered nothing. The handler reads neither
+    description: it resolves through ``resolve_target_permanents``, which asks
+    the resolution what was chosen, so the missing half was invisible to every
+    test that gave the ability a target by hand.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Ersatz Gnomes"])
+    recolour = next(
+        ability for ability in program.activated_abilities
+        if ability.instruction is not None
+        and ability.instruction.kind == "recolor_targets_until_eot"
+    )
+    assert derive_activation_spec(recolour) == {"kind": "permanent"}
+
+
+def test_soul_rend_actually_destroys_a_white_creature(set_pool):
+    """"Destroy target creature if it's white. A creature destroyed this way
+    can't be regenerated."
+
+    The card was *supported* and did nothing but draw its cantrip: the effect
+    line refused as a whole — CR 701.15c's rider is read by the destroy
+    production only when it trails the verb directly, and the sentence layer had
+    already wrapped this destroy in the "if it's white" conditional — and a
+    ``spell_pattern`` whitelist marker claimed the card anyway.
+    """
+    pool = set_pool("MIR")
+    white = Permanent(card=CardDefinition(
+        name="Cleric", mana_cost="", cmc=0.0, type_line="Creature - Human Cleric",
+        oracle_text="", colors=("W",), color_identity=("W",), keywords=(),
+        produced_mana=(),
+        raw={"name": "Cleric", "type_line": "Creature - Human Cleric",
+             "power": "2", "toughness": "2", "colors": ["W"]},
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Soul Rend"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[white],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    cast = game.cast_from_hand(0, "Soul Rend", target_player_index=1,
+                               target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(white)
+
+
+def test_soul_rend_spares_a_creature_of_another_colour(set_pool):
+    """The condition half. Read as an unconditional destroy the card would be
+    strictly better than the one printed."""
+    pool = set_pool("MIR")
+    green = Permanent(card=CardDefinition(
+        name="Wurm", mana_cost="", cmc=0.0, type_line="Creature - Wurm",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": "Wurm", "type_line": "Creature - Wurm",
+             "power": "4", "toughness": "4", "colors": ["G"]},
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Soul Rend"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[green],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.cast_from_hand(0, "Soul Rend", target_player_index=1,
+                        target_permanent_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.is_on_battlefield(green)
+
+
+def test_early_harvest_untaps_the_seat_the_caster_chose(set_pool):
+    """"**Target player** untaps all basic lands they control."
+
+    Both halves were missing and each hid the other. The noun phrase records
+    the printed subject as ``controller: "that_player"``, which the picker was
+    never told about — so the client sent a bare cast; and the handler read that
+    seat only out of a *trigger's* frozen context (CR 603.10), so even a cast
+    that named one untapped nothing at all and still went to the graveyard.
+    """
+    pool = set_pool("MIR")
+
+    def _tapped(card):
+        permanent = Permanent(card=card)
+        permanent.tapped = True
+        return permanent
+
+    mine = _tapped(pool["Forest"])
+    basic = _tapped(pool["Island"])
+    nonbasic = _tapped(pool["Bad River"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine], hand=[pool["Early Harvest"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[basic, nonbasic],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    cast = game.cast_from_hand(0, "Early Harvest", target_player_index=1)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not basic.tapped, "the chosen seat's basic land untaps"
+    assert nonbasic.tapped, "'basic' is a supertype the sweep still tests"
+    assert mine.tapped, "the caster's own board is not the target's"
+
+
+def _g5_edict_board(set_pool):
+    """Seat 0 with a Forest of its own and seat 1 with an Island."""
+    pool = set_pool("MIR")
+    mine = Permanent(card=pool["Forest"])
+    theirs = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine],
+                    hand=[pool["Telim'Tor's Edict"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[theirs],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    return game, mine, theirs
+
+
+def test_telimtors_edict_exiles_a_permanent_you_own_and_control(set_pool):
+    """"Exile target permanent you **own or control**."
+
+    The union of two relations, which no single ``ObjectFilter`` field states
+    and no *pair* of them states either: setting both is Obelisk of Undoing's
+    "own **and** control", the intersection, which is the smaller set this card
+    is printed to be larger than.
+    """
+    game, mine, _theirs = _g5_edict_board(set_pool)
+
+    cast = game.cast_from_hand(0, "Telim'Tor's Edict",
+                               target_player_index=0, target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(mine)
+
+
+def test_telimtors_edict_declines_a_permanent_that_is_neither(set_pool):
+    """The narrowing, which was enforced in no place at all: the picker's spec
+    for this kind carries no filter, and the exile handler asked the *pure*
+    matcher — which cannot answer a question about a seat and therefore drops
+    it. The Edict exiled anything on the table."""
+    game, _mine, theirs = _g5_edict_board(set_pool)
+
+    game.cast_from_hand(0, "Telim'Tor's Edict",
+                        target_player_index=1, target_permanent_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.is_on_battlefield(theirs)
+
+
+def test_telimtors_edict_reaches_a_permanent_you_control_but_do_not_own(set_pool):
+    """The half "you control" alone would have covered and "you own" alone
+    would not — and the card prints both, so a stolen permanent is a legal
+    target for its thief. It still goes to its **owner's** exile (CR 400.3)."""
+    from engine.control import change_control
+
+    game, _mine, theirs = _g5_edict_board(set_pool)
+    change_control(theirs, 0, source="test")
+    game._sync_control()
+    game._settle()
+
+    index = [p.card.name for p in game.players[0].battlefield].index("Island")
+    cast = game.cast_from_hand(0, "Telim'Tor's Edict",
+                               target_player_index=0, target_permanent_index=index)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(theirs)
+    assert [getattr(card, "name", card) for card in game.players[1].exile] == ["Island"]

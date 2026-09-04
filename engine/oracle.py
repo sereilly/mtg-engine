@@ -4506,6 +4506,25 @@ def _derived_static_claims(
     # unenforced — the direction this whole arrangement exists to prevent.
     if _activation_restrictions_readable(oracle_text):
         claims.append("activation_restrictions")
+    # "Activated abilities of creatures can't be activated." (Cursed Totem.)
+    # The *board* half of CR 602.5, and the same shape as the two claims below
+    # it: the activation path reads the sentence off the board at every
+    # activation, so there is no instruction to produce — and on an artifact
+    # whose whole text is this line, no instruction means the card reports
+    # unsupported however well the ban works.
+    from .activation_restrictions import global_activation_ban_line
+
+    # Its **own** claim name, not "activation_restrictions": that one says
+    # *when* an ability of this card may be activated, which
+    # `_carries_no_behaviour` reads — rightly — as a clause about an ability
+    # rather than as something the permanent does. This sentence is the
+    # opposite: it is the whole of what Cursed Totem does, and it is about
+    # everybody else's abilities.
+    if any(
+        global_activation_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("global_activation_ban")
     # CR 603.2d extra triggers (Sanctum of All). The fire site reads the
     # permanent's own text, so there is no instruction — and without this claim
     # the card would be admitted with the sentence doing nothing, which for a

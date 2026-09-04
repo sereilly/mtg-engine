@@ -9,6 +9,8 @@ Counters are here rather than with the board because what a counter does is
 change a characteristic; where it sits is incidental.
 """
 
+import dataclasses
+
 from .. import ast
 from ..amounts import accept_counters_on_source, accept_fraction_head, accept_life_gain_cap, accept_rounding, expect_pt, parse_amount, parse_equal_to
 from ..records import _parse_for_each_this_way, accept_plus_per_cost_paid
@@ -340,6 +342,36 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             grant, ast.LoseKeyword(subject, lost, loss_duration),
         ))
     stream.reset(loss_mark)
+
+    # "{2}, {T}: Until end of turn, target creature you control **gains flying
+    # and has base toughness 1**." (Chariot of the Sun.) A layer-6 grant joined
+    # to CR 613.4b's base-P/T rewrite — the same join the three arms above make
+    # with a different right-hand side, and under the same duration rule:
+    # whichever half printed one governs both, and the leading spelling this
+    # card uses is distributed over the conjunction by the sentence layer.
+    #
+    # Its own arm rather than a member of the keyword list, for the reason the
+    # loss arm beside it is one: a base P/T is not a word layer 6 holds, and a
+    # list carrying it would be a grant of something that is not an ability.
+    # "base" is checked before dispatching, exactly as the untap conjunct one
+    # module up checks its verb: "gains flying and has flying" opens on the
+    # same two words and is a keyword sentence this arm must not claim.
+    base_mark = stream.mark()
+    if (
+        stream.accept_word("and")
+        and stream.at_word("has", "have")
+        and stream.peek_word(1) == "base"
+    ):
+        base = _parse_has_base_pt(stream, subject)
+        if isinstance(base, ast.SetBasePT):
+            if duration.kind is None and base.duration.kind is not None:
+                grant = ast.GainKeyword(
+                    subject, keywords, base.duration, choose_one=choose_one
+                )
+            elif base.duration.kind is None:
+                base = dataclasses.replace(base, duration=duration)
+            return ast.Conjunction((grant, base))
+    stream.reset(base_mark)
     return grant
 
 
@@ -521,6 +553,15 @@ def _parse_has_base_pt(stream: TokenStream, subject: ast.Recipient) -> ast.State
     """``<subject> has base power [and toughness] N[/N] [duration]``."""
     stream.expect_word("has", "have")
     stream.expect_word("base")
+    # "…**has base toughness 1**." (Chariot of the Sun.) The half CR 613.4b's
+    # rewrite leaves the other stat printed, which is exactly what
+    # ``set_base_pt``'s None already expresses — People of the Woods is the
+    # same asymmetry one file over, where a characteristic-defining ability
+    # names the toughness and the printed power stands. Read before "power" is
+    # demanded, because the word is not there.
+    if stream.accept_word("toughness"):
+        toughness = parse_amount(stream)
+        return ast.SetBasePT(subject, None, toughness, _parse_duration(stream))
     stream.expect_word("power")
 
     if stream.accept_phrase("and", "toughness"):

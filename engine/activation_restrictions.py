@@ -1668,8 +1668,69 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
     return None
 
 
+#: "**Activated abilities of creatures can't be activated.**" (Cursed Totem.)
+#: The board half of CR 602.5, and the exact mirror of
+#: ``cast_restrictions.global_cast_ban``: not a clause the ability prints about
+#: itself but a prohibition one permanent imposes on everybody, so it is read
+#: off the *board* at every activation rather than off the line being activated.
+#:
+#: The card type is payload, so "activated abilities of **artifacts** can't be
+#: activated" needs no code. **No mana-ability exception**: CR 605 makes a mana
+#: ability an activated ability like any other, and this sentence names no
+#: exception — which is the whole of what Cursed Totem does to a Bird of
+#: Paradise. The Aura clause one file over
+#: (``auras``' ``activated_abilities_shut_off``) prints its exception out loud
+#: and is a different sentence.
+_GLOBAL_ACTIVATION_BAN = re.compile(
+    r"^activated abilities of "
+    r"(?P<type>artifacts|creatures|enchantments|lands|planeswalkers) "
+    r"can't be activated$"
+)
+
+
+def global_activation_ban_line(line: str) -> str | None:
+    """The card type *line* forbids anybody from activating abilities of, or None.
+
+    One reader, two callers, exactly as ``global_cast_ban_line`` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and ``mixins/stack/activation.py`` asks it at CR 602.2 so the line is
+    *enforced*. A prohibition that is claimed and not enforced is an artifact
+    reporting supported while every ability it names keeps working — the
+    failure this file's docstring opens on.
+
+    The type is returned in the singular the type readers use, because that is
+    what ``has_type`` answers to; the printed plural is what the sentence
+    spells.
+    """
+    match = _GLOBAL_ACTIVATION_BAN.match(line.strip().lower().rstrip("."))
+    return match.group("type").rstrip("s") if match is not None else None
+
+
+def global_activation_ban(game, permanent) -> str | None:
+    """The name of a permanent forbidding *permanent*'s abilities, or None.
+
+    Every battlefield, and no seat comparison: the sentence names nobody, so it
+    binds everybody including the banning permanent's own controller.
+
+    ``effective_card`` for the reason the cast ban reads it — a type word a
+    CR 613 layer-3 text change rewrote changes which abilities the line stops,
+    and this table should not have to know that text can change. The *affected*
+    permanent's type is asked through ``has_type`` (layer 4), never the printed
+    line, so an animated Swamp is a creature here exactly as it is everywhere
+    else.
+    """
+    for _seat, source in game.permanents_with_controller():
+        for raw_line in (source.effective_card.oracle_text or "").splitlines():
+            banned = global_activation_ban_line(raw_line)
+            if banned is not None and permanent.has_type(banned):
+                return source.card.name
+    return None
+
+
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
+    "global_activation_ban",
+    "global_activation_ban_line",
     "ACTIVATION_TALLY_MARK",
     "ACTIVATION_TALLY_CONDITION",
     "reads_activation_tally",

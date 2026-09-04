@@ -240,6 +240,21 @@ class LordBuffFilter:
     # anthem than the card prints, and here it would hand *every* creature reach
     # including the fliers the sentence excludes.
     without_keywords: tuple[str, ...] = ()
+    # "**Noncreature artifacts** have shroud." (Spectral Guardian.) Which card
+    # type the anthem is about — and CR 613 has never said "creature": layers 6
+    # and 7c apply to every permanent, and it was the *consumer* that required
+    # one, asking ``is_creature`` above every field of this filter. A P/T delta
+    # on a noncreature is simply not read, which is what CR 613.4 already means.
+    #
+    # The default is the creature every printing before this one named, so a
+    # payload written before this field existed rebuilds identically and
+    # ``_lord_buff_matches`` answers exactly what it did.
+    card_types: tuple[str, ...] = ("creature",)
+    # "**Non**creature artifacts" — the exclusion beside it, and its own field
+    # for the reason ``excluded_colors`` is one on ``ObjectFilter``: a negative
+    # is not a narrower positive, and folding the two would make "noncreature
+    # artifact" and "artifact creature" the same phrase.
+    excluded_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -717,6 +732,14 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["with_keywords"] = list(buff.filter.with_keywords)
     if buff.filter.without_keywords:
         payload["without_keywords"] = list(buff.filter.without_keywords)
+    # Emitted only when the sentence names something other than the creature
+    # every anthem before Spectral Guardian was about, so every payload written
+    # before this field existed stays byte-identical — the discipline the
+    # per-counter and lost-keyword fields above already follow.
+    if buff.filter.card_types != ("creature",):
+        payload["card_types"] = list(buff.filter.card_types)
+    if buff.filter.excluded_types:
+        payload["exclude_types"] = list(buff.filter.excluded_types)
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -746,6 +769,8 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             named=payload.get("named"),
             with_keywords=tuple(payload.get("with_keywords") or ()),
             without_keywords=tuple(payload.get("without_keywords") or ()),
+            card_types=tuple(payload.get("card_types") or ("creature",)),
+            excluded_types=tuple(payload.get("exclude_types") or ()),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

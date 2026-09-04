@@ -143,6 +143,16 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     # hands to the picker.
     elif stream.accept_phrase("an", "opponent", "'s"):
         owner = ast.PlayerRef("opponent")
+    # "in **the chosen player's** graveyard" (Haunting Apparition). The seat
+    # the source picked as it entered (CR 614.1c), recorded on that permanent —
+    # so it is a seat nothing about *this* sentence chooses and the reader must
+    # be handed the source to resolve it. Its own kind for that reason: read as
+    # ``owner`` it would count the pile the cards happen to lie in, which for a
+    # graveyard is every seat's, and read as ``you`` it would count the
+    # controller's own. ``ast.PlayerRef`` has documented the kind since Lost
+    # Order of Jarkeld printed the *battlefield* half of the same possessive.
+    elif stream.accept_phrase("the", "chosen", "player", "'s"):
+        owner = ast.PlayerRef("chosen_player")
     # "from **a player's** graveyard" (Lodestone Bauble). The same
     # unchosen seat with no exclusion on it, and ``owner`` is exactly
     # what it means: a card in a graveyard is in the graveyard of the

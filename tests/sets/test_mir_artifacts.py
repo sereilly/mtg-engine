@@ -428,3 +428,219 @@ def test_unerring_sling_reads_a_different_payers_power(set_pool):
     game.resolve_stack()
 
     assert flier.damage_marked == 2, f"the payer's power: {game.log}"
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_bear(name: str = "Bear", power: int = 2, toughness: int = 5) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g5_chariot(set_pool):
+    """Chariot of the Sun on seat 0 beside a 2/5, ready to activate."""
+    pool = set_pool("MIR")
+    chariot = Permanent(card=pool["Chariot of the Sun"])
+    chariot.metadata["summoning_sickness_turn"] = -1
+    bear = Permanent(card=_g5_bear())
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chariot, bear],
+                    library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    return game, bear
+
+
+def test_chariot_of_the_sun_grants_flying_and_rewrites_the_toughness(set_pool):
+    """"{2}, {T}: Until end of turn, target creature you control **gains flying
+    and has base toughness 1**."
+
+    Two things were missing and they are one sentence. ``has base toughness N``
+    had no branch — the production demanded "power", so the toughness-only half
+    of CR 613.4b's rewrite could not be spelled at all, though ``set_base_pt``'s
+    None has expressed it since People of the Woods. And the conjunction is an
+    arm of the grant beside "and gets", "and loses" and "and \\"…\\"", under the
+    same duration rule: whichever half prints one governs both, and the leading
+    "Until end of turn" this card uses is distributed by the sentence layer.
+    """
+    game, bear = _g5_chariot(set_pool)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)
+    assert not game._has_keyword(bear, "flying")
+
+    result = game.activate_permanent_ability(
+        0, "Chariot of the Sun", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game._has_keyword(bear, "flying")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 1), (
+        "the printed power stands; only the toughness is rewritten"
+    )
+
+
+def test_the_chariots_rewrite_ends_with_the_turn(set_pool):
+    """Both halves carry the one printed duration. A base P/T that outlived the
+    turn would be the dropped-rider bug with the sign reversed — the creature
+    stays a 2/1 for good."""
+    game, bear = _g5_chariot(set_pool)
+    game.activate_permanent_ability(
+        0, "Chariot of the Sun", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert not game._has_keyword(bear, "flying")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)
+
+
+def test_cursed_totem_shuts_off_a_creatures_mana_ability(set_pool, catalog_by_name):
+    """"Activated abilities of creatures can't be activated."
+
+    The *board* half of CR 602.5, and the exact mirror of
+    ``cast_restrictions.global_cast_ban`` one rule over: not a clause the
+    ability prints about itself but a prohibition one permanent imposes on
+    everybody, so it is read off the board at every activation.
+    ``activation_denial`` is handed one printed line and rightly asks only
+    about it, which is why this could not live there.
+
+    **No mana-ability exception**, which is the whole of what the card does:
+    CR 605 makes a mana ability an activated ability like any other and the
+    sentence names no exception.
+    """
+    pool = set_pool("MIR")
+    bird = Permanent(card=catalog_by_name["Birds of Paradise"])
+    bird.metadata["summoning_sickness_turn"] = -1
+    mox = Permanent(card=catalog_by_name["Mox Emerald"])
+    mox.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bird, mox],
+                    library=[catalog_by_name["Forest"]] * 5),
+        PlayerState(name="P2", library=[catalog_by_name["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert game.activate_permanent_ability(
+        0, "Birds of Paradise", permanent_index=0
+    ).supported
+
+    game.players[0].battlefield.append(Permanent(card=pool["Cursed Totem"]))
+    game._settle()
+
+    stopped = game.activate_permanent_ability(
+        0, "Birds of Paradise", permanent_index=0
+    )
+    assert not stopped.supported
+    assert "can't be activated" in stopped.details
+
+    # It binds the type the sentence names and nothing else — a Mox is not a
+    # creature, and the prohibition is read off `has_type` like every other
+    # type question in this engine.
+    assert game.activate_permanent_ability(
+        0, "Mox Emerald", permanent_index=1
+    ).supported
+
+
+def test_cursed_totem_binds_its_own_controller_too(set_pool, catalog_by_name):
+    """The sentence names nobody, so it binds everybody — including the seat
+    that played it. Read as "your opponents'" it would be a strictly better
+    card than the one printed."""
+    pool = set_pool("MIR")
+    bird = Permanent(card=catalog_by_name["Birds of Paradise"])
+    bird.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[Permanent(card=pool["Cursed Totem"])],
+                    library=[catalog_by_name["Forest"]] * 5),
+        PlayerState(name="P2", battlefield=[bird],
+                    library=[catalog_by_name["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert not game.activate_permanent_ability(
+        1, "Birds of Paradise", permanent_index=0
+    ).supported
+
+
+def _g5_prison(set_pool):
+    pool = set_pool("MIR")
+    prison = Permanent(card=pool["Amber Prison"])
+    prison.metadata["summoning_sickness_turn"] = -1
+    bear = Permanent(card=CardDefinition(
+        name="Bear", mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": "Bear", "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[prison], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", battlefield=[bear], library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    result = game.activate_permanent_ability(
+        0, "Amber Prison", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    return game, prison, bear
+
+
+def test_amber_prison_holds_its_target_down_while_it_stays_tapped(set_pool):
+    """"Tap target artifact, creature, or land. **That permanent** doesn't
+    untap during its controller's untap step for as long as this artifact
+    remains tapped."
+
+    Every piece of this was already built — Phyrexian Gremlins prints the same
+    linked restriction and Giant Oyster prints it with the duration in front.
+    What refused was two words: ``parse_bound_subject`` reads "that
+    <card type>", and "permanent" is a *generic* noun. It is the right word for
+    this card and not a looser one: a sentence back-referencing a choice across
+    three card types cannot say "that artifact", so the phrase carries no card
+    type at all — which is exactly the narrowing it means.
+    """
+    game, prison, bear = _g5_prison(set_pool)
+    assert bear.tapped and prison.tapped
+
+    game.start_turn(1)
+    game._settle()
+    assert bear.tapped, "the Prison is still tapped"
+
+
+def test_amber_prisons_grip_ends_when_it_untaps(set_pool):
+    """"…for as long as this artifact remains tapped." The restriction is read
+    off the source at the untap step rather than recorded on the creature, so
+    the Prison untapping releases it with nothing to clear."""
+    game, prison, bear = _g5_prison(set_pool)
+
+    prison.tapped = False
+    game.start_turn(1)
+    game._settle()
+
+    assert not bear.tapped

@@ -484,6 +484,12 @@ _COUNTERED_DESTINATIONS = {
     ("library", "top"): "library_top",
     ("library", "bottom"): "library_bottom",
     ("hand", ""): "hand",
+    # "…exile it instead of putting it into its owner's graveyard."
+    # (Dissipate.) Exile is nobody's zone (CR 406.1), so it is the one
+    # destination here with no owner to name — which is why the possessive gate
+    # below has to skip it rather than refuse it for a part the sentence
+    # cannot have.
+    ("exile", ""): "exile",
 }
 
 
@@ -499,7 +505,10 @@ def _countered_destination(node: ast.CounterSpell) -> str:
     """
     zone = node.countered_to
     assert zone is not None
-    if zone.owner is None or zone.owner.kind != "owner":
+    # Exile is a single zone the whole game shares (CR 406.1), so it has no
+    # possessive to check and the gate below would refuse it for a part the
+    # sentence cannot print.
+    if zone.name != "exile" and (zone.owner is None or zone.owner.kind != "owner"):
         raise LoweringError(
             "a countered card is redirected to its owner's zone", node=node
         )

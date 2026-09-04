@@ -259,6 +259,12 @@ def _tap_or_untap_all_matching(
     # stamps its definition on every instruction of the sentence, this sweep
     # included, and the matcher would then be handed a key no filter has.
     described.pop(X_FROM_COUNT, None)
+    # The picker's description, for the same reason: this kind's payload *is*
+    # its filter, so the key that tells `engine/targeting.py` which seat to
+    # offer would otherwise be handed to the matcher as a restriction no filter
+    # has. Emitted only for the chosen-seat spelling (Early Harvest), which is
+    # exactly the case the branch below then resolves.
+    chosen_seat_target = described.pop("targets", None)
     # "…all untapped Islands **that player** controls" (Monsoon). The seat is
     # the one the firing event froze (CR 603.10), not the source's controller —
     # which is the wrong seat on every end step but their own.
@@ -268,7 +274,24 @@ def _tap_or_untap_all_matching(
     # that seat, exactly as ``untap_up_to_matching`` rewrites Mudslide's "they
     # control".
     if described.get("controller") == "that_player":
-        frozen = frozen_that_player_seat(game, context)
+        frozen = None
+        # "**Target player** untaps all basic lands they control." (Early
+        # Harvest.) The other way a "that player" seat is settled: chosen as the
+        # spell was cast (CR 601.2c) rather than frozen by a fire site, so it
+        # sits on the resolution's own target and not in a trigger's context.
+        # `frozen_that_player_seat` reads only the latter and answered None,
+        # which ended the effect and untapped nothing — invisibly, because the
+        # spell still resolved and went to the graveyard.
+        #
+        # Told apart by the description the lowering emits for exactly this
+        # spelling, so a trigger's seat is never looked for on a target nobody
+        # chose.
+        if chosen_seat_target:
+            target = context.target
+            if target in game.players:
+                frozen = game.players.index(target)
+        if frozen is None:
+            frozen = frozen_that_player_seat(game, context)
         if frozen is None:
             return False, "no seat was frozen for 'that player'"
         observer = frozen

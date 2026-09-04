@@ -730,17 +730,22 @@ def _lower_lose_keyword(
         # exactly that record into layer 6 — the cleanup sweep drops only the
         # flagged ones — so nothing new is needed under it.
         #
-        # Admitted only as a trigger's own effect, which is what keeps the
-        # printed *static* line ("Creatures you control lose flying") refusing:
-        # that one is a continuous effect over a set the layer system has to
-        # re-derive every recompute, and executing it once would take the word
-        # away from whatever happened to be on the board at the time.
-        if event is None:
-            raise LoweringError(
-                "a durationless keyword loss outside a trigger is a static "
-                "ability, which needs the CR 613 layers engine",
-                node=node,
-            )
+        # "{0}: This creature loses flying. (This effect lasts indefinitely.)"
+        # (Mist Dragon.) An **activated** ability's own effect is the same
+        # one-shot as the trigger's — CR 611.2 gives an effect with no printed
+        # duration an indefinite one either way — so the gate here is the
+        # subject, not which kind of ability produced the clause.
+        #
+        # It used to be ``event is None``, refusing on the ground that the
+        # printed *static* line is a continuous effect the layer system has to
+        # re-derive. That is true and it is enforced somewhere else: a bare
+        # printed line about the source lowers through
+        # ``statics._lower_lord_effects`` and refuses there with "static
+        # abilities need the CR 613 layers engine", and one about a *set*
+        # ("Creatures you control lose flying") is stopped by the `_is_source`
+        # check immediately below. Nothing but an ability's effect clause
+        # reaches this line, so the trigger test was buying nothing and cost
+        # Mist Dragon the half of its card that turns the flying back off.
         if not _is_source(node.subject):
             raise LoweringError(
                 "the durationless removal reaches the ability's own source",

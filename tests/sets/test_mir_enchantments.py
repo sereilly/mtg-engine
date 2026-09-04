@@ -498,3 +498,184 @@ def test_without_the_chaosphere_neither_half_applies(set_pool):
     assert game._can_block_attacker(flier_blocker, ground_attacker)
     assert not game._has_keyword(ground_blocker, "reach")
     assert not game._can_block_attacker(ground_blocker, flier_attacker)
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+from engine import Game, PlayerState
+from engine.auras import (
+    attach_aura, aura_combat_restriction, aura_keyword_grants, detach_aura,
+)
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_vanilla(name: str, power: int = 2, toughness: int = 2,
+                type_line: str = "Creature - Test") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def test_favorable_destiny_grants_shroud_off_the_hosts_controller(set_pool):
+    """"Enchanted creature has shroud **as long as its controller controls
+    another creature**."
+
+    Two things were missing and they are one referent. ``who: "controller"`` is
+    a *pronoun* seat — CR 109.5 makes the ability the Aura's, so "you control"
+    would be the Aura's controller, and this clause follows the **host's**
+    instead. And "another creature" is CR 109.5's exclusion measured against the
+    same permanent, which the gate refused outright because ``exclude_self`` is
+    out of ``OBJECT_ONLY_FILTER_KEYS`` — a set written for callers that have no
+    source, where this one is handed the permanent the static is about.
+
+    Both halves pivot on the host, and answering them off different objects is
+    what would count the enchanted creature as "the other creature".
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Favorable Destiny"])
+    host = Permanent(card=_g5_vanilla("Host"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[aura, host], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    attach_aura(aura, host)
+    game._settle()
+
+    # Its controller controls the host and nothing else — "another creature" is
+    # false, and reading the exclusion off the Aura instead would make it true.
+    assert not game._has_keyword(host, "shroud")
+
+    friend = Permanent(card=_g5_vanilla("Friend"))
+    game.players[0].battlefield.append(friend)
+    game._settle()
+    assert game._has_keyword(host, "shroud")
+
+    # Derived, not recorded: the second creature leaving takes the grant with it.
+    game.remove_from_battlefield(friend)
+    game._settle()
+    assert not game._has_keyword(host, "shroud")
+
+
+def test_favorable_destiny_reads_the_hosts_seat_not_the_auras(set_pool):
+    """The whole reason ``who: "controller"`` is not a synonym for "you".
+
+    The Aura is on seat 0 and the creature it enchants is on seat 1, so "its
+    controller" is seat 1 — and seat 1's second creature is what switches the
+    grant on, while seat 0's board says nothing about it.
+    """
+    pool = set_pool("MIR")
+    aura = Permanent(card=pool["Favorable Destiny"])
+    host = Permanent(card=_g5_vanilla("Host"))
+    mine = Permanent(card=_g5_vanilla("Mine"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[aura, mine], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", battlefield=[host], library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    attach_aura(aura, host)
+    game._settle()
+
+    assert not game._has_keyword(host, "shroud"), (
+        "seat 0's other creature is not the host's controller's"
+    )
+
+    theirs = Permanent(card=_g5_vanilla("Theirs"))
+    game.players[1].battlefield.append(theirs)
+    game._settle()
+    assert game._has_keyword(host, "shroud")
+
+
+def test_an_anthem_refuses_the_controller_pronoun():
+    """"Its controller" needs one permanent to be the "it" of, and an anthem
+    describes a set — so the seat word the Aura path admits has no referent
+    there. Refused rather than allowed to default to the lord's own seat, which
+    would silently read the clause as the "you control" it exists to be
+    distinguished from."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Creatures get +1/+1 as long as its controller controls another creature."
+    )
+    assert result.instructions == ()
+
+
+def test_cloak_of_invisibility_grants_phasing_and_the_block_restriction(set_pool):
+    """"Enchanted creature has phasing **and** can't be blocked except by Walls."
+
+    Both halves already had readers — the keyword grant is layer 6 and the
+    restriction is ``combat_restrictions``' own table asked with the subject
+    rewritten — and the card was unsupported because the *compound line* matched
+    neither pattern whole. One pattern, both halves captured, each handed to the
+    reader that already owned it.
+    """
+    pool = set_pool("MIR")
+    cloak = pool["Cloak of Invisibility"]
+    assert compile_card_oracle(cloak).supported
+
+    line = cloak.oracle_text.splitlines()[1]
+    assert aura_keyword_grants(line) == ("phasing",)
+    restriction = aura_combat_restriction(line)
+    assert restriction is not None
+    assert restriction.kind == "cant_be_blocked_except_by"
+
+
+def _g5_cloak_combat(set_pool, *, attach: bool):
+    """Seat 0's creature attacking into a Wall and a Soldier, in declare blockers.
+
+    The Aura is attached **after** the untap step on purpose. A permanent with
+    phasing phases out at its controller's next untap step (CR 702.26a), which
+    is round 2's mechanic working — and a creature in the phased-out zone cannot
+    be declared as an attacker, so setting the board up before the turn began
+    would test the alternation instead of the restriction.
+    """
+    pool = set_pool("MIR")
+    cloak = Permanent(card=pool["Cloak of Invisibility"])
+    attacker = Permanent(card=_g5_vanilla("Sneak", 2, 2))
+    wall = Permanent(card=_g5_vanilla("Barricade", 0, 4, "Creature - Wall"))
+    soldier = Permanent(card=_g5_vanilla("Soldier", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, cloak]),
+        PlayerState(name="P2", battlefield=[wall, soldier]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    if attach:
+        attach_aura(cloak, attacker)
+        game._settle()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    return game, attacker
+
+
+def test_cloak_of_invisibility_is_blockable_only_by_a_wall(set_pool):
+    """The restriction half, in a game. A tail the combat table cannot read
+    leaves the whole line unmatched rather than granting the keyword alone —
+    which is why this is asserted at the block and not off the payload."""
+    game, attacker = _g5_cloak_combat(set_pool, attach=True)
+
+    assert game._has_keyword(attacker, "phasing")
+
+    ok, message = game.declare_blockers(1, {1: 0})
+    assert not ok and "cannot block" in message, "a Soldier is not a Wall"
+    assert game.declare_blockers(1, {0: 0})[0]
+
+
+def test_without_the_cloak_the_soldier_blocks(set_pool):
+    """The control arm. Derived on every read, so the restriction exists only
+    while the Aura is attached — there is no flag anyone has to clear."""
+    game, attacker = _g5_cloak_combat(set_pool, attach=False)
+
+    assert not game._has_keyword(attacker, "phasing")
+    assert game.declare_blockers(1, {1: 0})[0]
