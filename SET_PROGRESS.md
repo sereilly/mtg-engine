@@ -25,7 +25,7 @@ Do not edit by hand — re-run the script instead.
 | 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Complete (373/373 supported) |
 | 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Complete (115/115 supported) |
 | 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Complete (144/144 supported) |
-| 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Measured (329/335 supported, not shipped) |
+| 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Measured (331/335 supported, not shipped) |
 | 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Not Implemented |
 | 16 | Fifth Edition | 5ED | 1997-03-24 | 434 | 0 | Complete (434/434 supported) |
 | 17 | Weatherlight | WTH | 1997-06-09 | 167 | 161 | Not Implemented |
