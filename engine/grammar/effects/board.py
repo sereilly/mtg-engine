@@ -35,10 +35,11 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..names import accept_original_expansion
 from ..readers import accept_source_reference
-from ..references import parse_player_ref, parse_recipient
+from ..references import (_parse_further_subjects, parse_player_ref,
+                          parse_recipient)
 from ..stream import TokenStream
 from ..phrases import (
-    _parse_counted_sacrifice, _parse_further_subjects,
+    _parse_counted_sacrifice,
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
     _parse_sacrificed_subject, _parse_that_object, _parse_zone,
 )

@@ -35,8 +35,8 @@ from .paragraphs import (
 from .references import parse_recipient
 from .stream import TokenStream
 from .upkeep import parse_upkeep_paragraph
-from .phrases import (_parse_duration, _parse_further_subjects,
-                      _parse_pay_life)
+from .phrases import _parse_duration, _parse_pay_life
+from .references import _parse_further_subjects
 # ``_parse_entering_counters`` moved down to `readers` when a *return*
 # started printing the same phrase (Sand Golem): `effects` sits below this
 # module in the parse layering and may not reach up for it. Re-exported

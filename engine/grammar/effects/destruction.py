@@ -30,11 +30,11 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..lexer import NUMBER
 from ..nouns import parse_object_filter
-from ..references import parse_player_ref, parse_recipient
+from ..references import (_parse_further_subjects, parse_player_ref,
+                          parse_recipient)
 from ..stream import TokenStream
 from ..phrases import (_accept_number, _parse_counted_sacrifice,
-                       _parse_further_subjects, _parse_mana_payment,
-                       _parse_that_object)
+                       _parse_mana_payment, _parse_that_object)
 
 def _accept_unless_life_cost(stream: TokenStream) -> "ast.Amount | None":
     """The life half of "… unless <player> pays <life>", or None, cursor unmoved.

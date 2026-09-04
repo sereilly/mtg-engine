@@ -839,3 +839,148 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
     stream.reset(phrase)
     stream.reset(mark)
     return None
+
+
+# The union of object references one verb reaches — "Destroy target creature **and
+# target land**", "**Each attacking creature and each blocking creature**
+# doesn't untap …". Here rather than in one of the effect families because four
+# modules read it — `board`, `destruction`, `imperatives` and `subject_verb` —
+# and a fragment two families need is not one family's property. It lived in
+# `effects/board.py` until `destruction` split out of that module and needed it
+# too, which is the coupling the shared-module rule is about.
+#
+# Here rather than in `phrases` one layer up, and the reason is what it reads:
+# `parse_recipient` and `parse_bound_subject` are both defined in this module,
+# and a union of them is a question about object *references* rather than a
+# word table. Every effects family already reaches this layer for the singular
+# form, so the plural costs no new import.
+
+
+def _parse_further_subjects(
+    stream: TokenStream,
+    first: "ast.Recipient | None" = None,
+    *,
+    several_targets: bool = False,
+    before_verb: bool = False,
+) -> list[ast.Recipient]:
+    """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
+
+    "Return to your hand all enchantments you both own and control, all Auras
+    you own attached to permanents you control, and all Auras you own attached
+    to attacking creatures your opponents control." (Remove Enchantments.) One
+    verb over a union of three noun phrases, which no single ``ObjectFilter``
+    says: its keys are AND'd, so the three folded into one would name an
+    enchantment that is simultaneously an Aura on your own permanent and an
+    Aura on an attacking creature of an opponent's — nothing at all.
+
+    So the union lives in the *shape*: the caller builds one statement per
+    phrase and joins them with :class:`ast.Conjunction`, which lowering already
+    turns into a sequence. Two sweeps over overlapping sets are the same
+    outcome as one sweep over their union, because both are idempotent — a
+    permanent already returned is no longer there to return again.
+
+    Returns an empty list with the cursor untouched unless a separator really
+    is followed by another noun phrase, so "destroy target creature **and** you
+    gain 2 life" still reads as two effects rather than failing here.
+    """
+    extra: list[ast.Recipient] = []
+    while True:
+        mark = stream.mark()
+        # A separator is required. Without one, two adjacent noun phrases would
+        # be joined by nothing but the parser's willingness to keep reading.
+        separated = stream.accept_punct(",")
+        separated = stream.accept_word("and") or separated
+        nxt = (
+            parse_recipient(stream)
+            if separated and not stream.at_word("to")
+            else None
+        )
+        # A bound "that <type>" is read by `parse_bound_subject` and by nothing
+        # else — deliberately, because the phrase turns up all over the pool and
+        # the shared noun parser would hand it to every line printing it. So the
+        # union asks for it in the same order the subject position does, and
+        # only where it is safe to: in front of the verb.
+        if nxt is None and separated and before_verb and not stream.at_word("to"):
+            nxt = parse_bound_subject(stream)
+        # Every phrase in the union must name an *object*, which is the shape
+        # this production exists for and the shape it can be sure of. "and" is
+        # the commonest word on a Magic card and most of its uses join two
+        # effects, not two objects: "destroy this artifact **and** it deals
+        # damage to you" (Voodoo Doll) has a perfectly good noun phrase after
+        # the "and", and reading it as a second thing to destroy destroyed the
+        # artifact and dropped the damage. A quantifier is the one signal
+        # available before the verb arrives, so the union takes only the
+        # quantifiers that cannot begin a clause and hands every other "and"
+        # back to the statement parser.
+        #
+        # **"target" is one of them**, and it is the safest of the three:
+        # "Destroy target creature **and target land**" (Fumarole), "Exile this
+        # creature **and target creature** without flying that's attacking you"
+        # (Giant Trap Door Spider). The word starts a noun phrase and nothing
+        # else, and the shape that looks dangerous — "…**and target player**
+        # draws a card" — is excluded by the line above rather than by luck: a
+        # targeted *player* parses to ``ast.PlayerRef``, so it was never a
+        # candidate for this union at all.
+        # **"that <type>" is the fifth, and only in front of the verb.**
+        # "This creature **and that creature** phase out" (Dream Fighter) is a
+        # union of the source and the object its trigger bound. In the object
+        # position the same words are almost always a new clause ("destroy it
+        # **and that creature** gains…"), which is the hazard the whole
+        # quantifier gate is written for — but *before the verb* the caller has
+        # read a subject and no verb yet, so an "and" here cannot be joining two
+        # clauses. That is the caller's own stated reason for probing at all,
+        # and this flag is it said out loud.
+        allowed = ("all", "each", "target", "this")
+        if before_verb:
+            allowed += ("that",)
+        if not isinstance(nxt, ast.TargetSpec) or nxt.quantifier not in allowed:
+            stream.reset(mark)
+            return extra
+        # **"this <type>" is the fourth, and the only one that needs a second
+        # test.** "Destroy it **and this creature** at end of combat" (Goblin
+        # Sappers) is a union; "tap all untapped Islands that player controls
+        # **and this enchantment deals X damage** to the player" (Monsoon) is
+        # two clauses whose second one opens with the very same noun phrase, and
+        # so do Earthbind and Vexing Arcanix. The three quantifiers above cannot
+        # begin a clause, and this one can — a permanent naming itself is the
+        # commonest *subject* on a card.
+        #
+        # So the union takes it only where the phrase ends the sentence: at a
+        # terminator, or in front of the one trailing clause a union may carry
+        # (the "at end of combat" delay, read by the caller). Anything else is a
+        # verb about to arrive, and the "and" belongs to the statement parser.
+        # …and the end-of-sentence test is exactly that hazard, so it is asked
+        # only in the object position: before the verb the phrase is *followed*
+        # by the verb on every line the pool prints, and requiring a terminator
+        # there would refuse every subject union the source opens.
+        if not before_verb and nxt.quantifier == "this" and not (
+            stream.exhausted
+            or stream.at_punct(".", ";", ",")
+            or stream.at_word("at")
+        ):
+            stream.reset(mark)
+            return extra
+        # **At most one targeted phrase in the union, unless the caller can
+        # describe several.** The old reason was flat — the cast picker asks a
+        # spell for one target — and it is still true of a union lowered to a
+        # ``Conjunction``, whose spec comes from the first instruction that
+        # describes targets and leaves the rest picked by nobody. It is *not*
+        # true of a caller that folds the phrases into one statement with an
+        # ordered ``roles`` description, which the picker, the cast gate and the
+        # AI have all read since Glyph of Delusion. So ``several_targets`` is
+        # the claim "my lowering describes every one of these", and only the
+        # destroy production makes it. Unions whose first phrase is the source
+        # ("Exile **this creature** and target creature …") name one target and
+        # are unaffected either way.
+        if (
+            not several_targets
+            and nxt.quantifier == "target"
+            and any(
+                isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
+                for prior in ((first,) if first is not None else ()) + tuple(extra)
+            )
+        ):
+            raise stream.error(
+                "no spell picks two targets from one verb"
+            )
+        extra.append(nxt)

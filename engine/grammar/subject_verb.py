@@ -28,10 +28,9 @@ from .lexer import SELF, WORD
 from .paragraphs import _parse_name_then_reveal_top
 from .conjuncts import _with_damage_conjunct, _with_untap_conjunct
 from .imperatives import parse_imperative
-from .references import parse_recipient
+from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
 from .phrases import (
-    _parse_further_subjects,
     _accept_mana_alternatives,
     _parse_can_attack_as_though,
     _parse_duration,
