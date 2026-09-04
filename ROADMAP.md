@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (323/335 supported, still `measured`)
+## Mirage (MIR) — shipped (335/335, manifest index 13)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1644,53 +1644,134 @@ integrator has to check every cap before the suite rather than after it — and
 the import-hygiene guard is what then catches the bindings each split leaves
 behind, which is the half of that hazard nothing else fails on.
 
-### Where the set stands — after two waves
+### Wave 3 — the last twelve, five groups
 
-**323/335 supported (96.4%), from 184/335 (54.9%) at ingest.** Every gate is
-green, the trackers are current, and each round and each merge is its own commit
-with its own `oracle_diff` reading. The set is **not finished** and is still
-`measured`; Phase 4 has not been attempted.
+Every remaining card was a *system* rather than a template, which is what the
+first two waves bought. All fifteen items landed: twelve cards, the set's one
+hollow card and both picker findings.
 
-**Twelve cards remain, and they are the twelve that are each a system rather
-than a template** — which is the opposite of where wave 2 started and is what
-the two waves bought. There is also exactly one hollow card left (Tombstone
-Stairwell, 3 instruction-less parts) and exactly two picker findings (Sealed
-Fate, Shallow Grave), so the promotion gate's three numbers are 12, 1 and 2.
+Each group found shipped defects beside its own cards. **W3G3's sweep is the one
+to copy**: enumerate every instruction kind that appears as a `may`'s action
+beside an `otherwise`, and ask which have no entry in `_action_is_takeable`. Two
+did not, and four shipped cards were taking an offer nobody could afford —
+Balduvian Horde accepted "sacrifice it unless you discard a card at random" on
+an **empty hand**, discarded zero cards, and stayed on the battlefield for free.
+**W3G1** found Chromatic Orrery and North Star honouring their spending
+permission at one payment site out of four, so an {X} spell inferred X = 0, cast
+successfully, and resolved for nothing. **W3G5** closed both picker findings and
+both were worse than their labels: Sealed Fate reached its handler, logged "no
+player chosen" and resolved **having looked at nothing**, on every cast.
+**W3G2** closed the hollow card and turned 28 open-coded graveyard writes into
+one CR 614 seam — whose guard caught another branch's code an hour after it
+merged.
 
-Wave 3 is briefed against those fifteen items, five groups again, split by what
-the work *is* rather than by printed type:
+**Celestial Dawn was declined, and the decline was the useful half.** W3G1
+compiled a probe card with line 1 replaced and the other two intact: it reported
+**supported**, because a card is supported when *any* of its lines is. So
+landing any single line would have shipped a card that compiles green and does a
+third of what it prints. The three pieces went in as one round: a seat-narrowed
+untyped land-type static, colour over three populations (board, stack, and
+`engine/object_colors.py` — one reader where there were three, each reading the
+printed field and two documenting that as deliberate), and CR 609.4b spending.
+That last one fixed a shipped defect the decline had reported and left: all
+three spending permissions were *stamped* on the seat at entry and never
+cleared, so destroying Sunglasses of Urza left its owner spending white as red
+for the rest of the game.
 
-| Group | Items | What they have in common |
-| --- | --- | --- |
-| W3G1 | Celestial Dawn, Illicit Auction | each a subsystem: layers 4/5 over three populations plus CR 106.6 mana spending; and a bidding round-robin across seats |
-| W3G2 | Forbidden Crypt, Mangara's Tome, Tombstone Stairwell | CR 614 replacements on a draw and on a graveyard-bound card, plus the set's one hollow card — a permanent that reads a record of the tokens it made, after it has left |
-| W3G3 | Tainted Specter, Sabertooth Cobra, Preferred Selection | an offer with a consequence, three times: an *unless* whose alternative is not a payment, a delayed toll at the damaged player's own upkeep, and a look-at whose two branches pick from the same cards |
-| W3G4 | Superior Numbers, Delirium, Cycle of Life | a number or a pronoun read off something else — a difference of two board counts, a back-reference with no producer, and an activation cost that is a zone change |
-| W3G5 | Grinning Totem, Natural Balance, + both picker findings | searching a library, and the set's whole picker debt |
+The line worth remembering: **"only as though it were colorless mana" takes away
+the unit's own colour too.** Written the obvious way round — equality first,
+because "as though it were" only ever adds — the card lets a seat cast
+everything its own lands could have cast anyway, which is most of what the
+restriction exists to stop.
 
-**Delirium is the brief correction already in hand**: it parses cleanly and
-fails in the *lowering*, which is the layer the census could not have told
-anyone. SET_PLAYBOOK's rule — a refusal site is a work-list entry, not a
-diagnosis — was applied to all twelve before the briefs were written, and it
-moved exactly one card between layers.
+### The promotion rehearsal, which found a fourth wave's worth of work
 
-**Nine live engine defects came out of the ten solo rounds**, and the two waves
-added more, every one in code that predates Mirage and every one found by giving
-a card a game rather than by any instrument. The solo nine: the dispatcher-less
-`becomes_target`, flanking applied at declaration, CR 702.26m's skipped phasing
-event, Reality Ripple's and the tuck's pinned creature type, `aura_enchants`
-answering no to a qualified clause and yes to the wrong branch of a union, the
-upkeep step's missing CR 603.4 check, the end step's unseated one, and the
-layer-5 colour channel reading "no colours" as "no override". Wave 1 added nine
-more mis-playing shipped cards, Blaze of Glory (wrong twice) and **Soul Echo (a
-player at −7 life who never lost, forever)** among them; wave 2 added Runed
-Halo making its own game unfetchable, Shimmer's second unchecked round trip, and
-the eighteen `non<colour>` cards.
+Phase 4 step 1 says the rehearsal is implementation work rather than a
+formality. It has never been more true than here.
 
-**Both deliberately-open cards from the solo rounds are closed.** Barbed Foliage
-landed in W2G1 with a duration channel behind `remove_ability_line`; Telim'Tor
-landed in wave 1 with a `with_keywords` narrowing on the global buff.
+**Rehearsed at the wrong end first**, as the playbook says to: the order guard
+fired naming index 13. The prefix guard beside it stayed green — and Mirage is
+the first set where that documented silence has a **named card** behind it.
+Volcanic Geyser is in MIR and M21 and nowhere earlier, so appended wrongly its
+`original_printing` reads `m21`. Appending moves no *existing* card's origin,
+which is all the prefix comparison tests; what moves is the new set's own card.
 
+**A guard that re-spelled the thing it checks reported a working card as
+broken.** The activation-clause census called its reader **without the card's
+name**, so Hakim, Loreweaver's "Activate only if Hakim isn't enchanted" never
+had its self-reference collapsed (CR 201.4). Given a game, the restriction
+denies the ability exactly as printed. That failure looked precisely like a
+finding, which is what makes the class expensive.
+
+**And the rehearsal blocked the promotion, correctly: 13 printed sentences on 11
+cards were unimplemented**, six admitted into the support gate by a *single
+whitelist word* (`gain`, `loses`, `deals`, `prevent the next`). Every one of
+those cards read 335/335 supported with **zero hollow lines**, because a card is
+supported when any of its lines is and `--hollow-lines` only sees a line that
+produced an ability part. `parse_coverage.py` is the one instrument that can see
+this, and it gates on the shipped half alone — so the debt was invisible until
+the manifest entry moved. The manifest went back to `measured` and a fourth wave
+cleared it.
+
+### Wave 4 — the thirteen sentences, four groups
+
+All thirteen implemented, none declined, and it found more live defects than any
+wave before it.
+
+**Every "becomes the target" trigger in the pool was dead in the running app.**
+`_stack_push_object` had three exits and only the last announced targeting — and
+the middle exit is the one **the web layer always takes**, because it resolves
+`target_permanent_ids` off the wire. Warden of the Woods is shipped and manually
+verified; it never fired for a real player. Invisible to every instrument here:
+the cards compile supported, carry no hollow line, claim every sentence, and
+their tests drive the headless path that happens to take the announcing exit.
+
+**Three shipped cards were charging life for casts that never happened.** Terror
+of the Peaks and Pursued Whale deducted their tax above the support gate, the
+timing gate, the target gates and the mana, so every refusal below left the
+caster poorer for a spell never cast — and CR 601.2 is a rewind. Phyrexian Purge
+charged 3 life for a zero-target cast, which the **AI simulator** caught rather
+than a test.
+
+**Roots of Life's second line compiled to no trigger at all**, and the cause was
+one frozenset: three `chosen_*` keys were missing from
+`_PAYLOAD_HONOURED_FILTER_FIELDS` while sitting in
+`TESTABLE_SUBJECT_FILTER_KEYS` and being emitted unconditionally — a false
+refusal of a phrase the payload carries perfectly well, and the fourth of its
+exact kind.
+
+Two of the four briefs were wrong in ways worth recording. The sacrifice cost
+does **not** go on the pending-choice queue (a queued prompt puts the spell on
+the stack before its cost is collected; CR 601.2b's choices arrive *with* the
+action). And "Players can't gain life" is **not** a `REPLACEMENT_LINES` entry:
+CR 119.7 says a replacement that would replace a life gain does nothing, so as
+an interceptor the ban joins CR 616.1's contention set and the affected player
+could take Lich's "draw that many cards instead" first — drawing off a gain the
+rules say never happened.
+
+### Where the set landed
+
+**335/335 supported, 0 hollow lines, 0 picker findings, 0 unclaimed sentences,
+and zero name-keyed hooks added across ten solo rounds and four waves.** The
+pool is **2,181 cards, 100% supported, sixteen sets**; whole-pool hook reliance
+is 2.8% of supported cards.
+
+Mirage is **313 new cards of 335**, with 22 already in the pool — which breaks
+the FEM/HML/ALL run of all-new sets and is why its insert position is
+load-bearing. The deck editor's set filter shows those 313; the other 22 are
+served under their earlier printing, which is "first printing wins" working.
+
+Verified in a browser after promotion: a Mirage card casts and resolves, and
+Celestial Dawn's three lines are visible in the UI itself — Wind-Scarred Crag
+renders as `Land — Plains` producing {W} (CR 305.7 replacing the subtype *and*
+the mana ability), and a Black Knight is drawn in a white frame while the land
+beside it stays colourless. `simulate_ai_games --set MIR` is 12/12 with 588
+interactions and no illegal ones; `--all` is 6/6.
+
+**The in-game verification backlog is the honest remaining delta**: 313 new
+cards, of which a handful auto-pass and some inherit `equivalent` from a passing
+behaviour-class peer. Phase 5 deliberately does not gate promotion on it, and
+the tracker stands at 515 passed / 0 failed / 27 equivalent of 2,181.
 
 ## Alliances (ALL) — shipped
 

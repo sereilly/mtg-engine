@@ -718,9 +718,19 @@ measured set so per-card tests can land as the cards do. **Exit:**
 
 4. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
-   reading the diff it blesses. **And the exit is two numbers, not one**:
-   `--hollow-lines` must also reach zero — **check it every round, not at the
-   end**. Legends reached 310/310 supported with fourteen abilities still
+   reading the diff it blesses. **And the exit is three numbers, not one.**
+   `--hollow-lines` must reach zero — **check it every round, not at the end**
+   — and so must `parse_coverage.py --set <CODE>`'s unclaimed list, which is
+   the one Mirage learned the hard way. It reached 335/335 supported with zero
+   hollow lines and **13 printed sentences on 11 cards that nothing
+   implemented**, six of them admitted into the support gate by a *single
+   whitelist word* (`gain`, `loses`, `deals`, `prevent the next`). Neither of
+   the other two numbers can see that: a card is supported when **any** of its
+   lines is, and `--hollow-lines` only sees a line that produced an ability
+   *part*. And `parse_coverage` gates on the shipped half alone, so for a
+   measured set it is advisory — which means nobody is forced to read it until
+   the promotion, and by then it is a fourth wave of work rather than a round.
+   Read it every round from Phase 3 onward. Legends reached 310/310 supported with fourteen abilities still
    instruction-less, and only Phase 4 caught them; each was a card that
    compiled, reported supported, and did nothing when activated. A card is supported when *any* of its
    lines is, so a set can read 85/85 with three cards doing less than they
@@ -747,7 +757,14 @@ An all-new set's position is invisible to
 `test_appending_a_set_never_changes_an_existing_original_printing` — it shares
 no oracle_id, so no card's origin moves from any position and the prefix
 comparison is green wherever the entry sits. That has now been FEM's, HML's and
-ALL's blind spot. `test_the_shipped_sets_are_in_printing_order` is the one that
+ALL's blind spot — **and Mirage proved it is not only an all-new set's
+problem.** MIR shares 22 cards with earlier sets, so it is not all-new, and the
+prefix guard *still* could not see the wrong insert: appending a set moves no
+**existing** card's origin, which is the only thing that comparison tests. What
+moves is the new set's own card. Volcanic Geyser is in MIR and M21 and nowhere
+earlier, so appended after M21 its `original_printing` reads `m21` and every
+guard stays green. Rehearse the wrong insert at every promotion, all-new or
+not. `test_the_shipped_sets_are_in_printing_order` is the one that
 can fire; append the entry at the wrong end once and watch it, which costs a
 minute and converts an assumption into an observation.
 
@@ -788,6 +805,15 @@ out of this rehearsal and three were *inside* guards written to catch exactly
 that, each inventing a disagreement it then reported. A guard that re-spells
 the thing it checks is the most expensive kind, because its failures look like
 real findings.
+
+Mirage's instance is the sharpest so far and the cheapest to check for: the
+activation-clause census called its reader **without the card's name**, so a
+card naming itself inside its own restriction (CR 201.4) never had the
+self-reference collapsed, and Hakim, Loreweaver's fully-enforced clause was
+reported unenforceable. **When a pool-wide census disagrees with a card, run the
+card first** — the enforcement path and the census must be handed the same
+arguments, and a census that takes fewer of them is reading a different
+sentence.
 
 **A guard that checks a proxy needs the proxy's availability asserted too**, and
 a reprint set is what collects on that. Two fired at 4ED. One proved
@@ -1412,3 +1438,34 @@ consecutive set, this time written into a test's docstring.
 `_cost_picker_spec`'s missing **offer** shape is now owed by two cost kinds
 (the alternative cost from W1G4 and the repeated additional cost from W3G1),
 which is the one item this set added.
+
+### MIR — 2026-09-04
+
+*Phase 3's exit is three numbers now, not two.* Mirage reached 335/335 supported
+with zero hollow lines and **13 printed sentences on 11 cards that nothing
+implemented**, six admitted by a *single whitelist word*. Neither existing number
+can see that class, and `parse_coverage` is advisory for a measured set — so
+nobody is made to read it until the promotion, where it becomes a fourth wave
+instead of a round. Phase 3 step 4 now says read it every round.
+
+*Phase 4's wrong-insert rehearsal is no longer an all-new set's rule.* MIR shares
+22 cards and the prefix guard still could not see the bad position, because
+appending moves no **existing** card's origin — what moves is the new set's own.
+Volcanic Geyser is the named card; the instruction is now unconditional.
+
+*Guards-as-suspects gained its cheapest instance.* A pool-wide census called its
+reader without the card's name, so a card naming itself (CR 201.4) was reported
+unenforceable while working perfectly. Phase 4 now says: when a census disagrees
+with a card, **run the card first** — a census taking fewer arguments than the
+enforcement path is reading a different sentence.
+
+*Two brief-writing errors worth not repeating*, both mine and both about where a
+rule lives: an additional cost does not go on the pending-choice queue (CR
+601.2b's choices arrive *with* the action), and a life-gain prohibition is not a
+CR 614 replacement (CR 119.7 makes such a replacement do nothing, so it must be
+asked *before* the contention set rather than inside it).
+
+*Nothing was drained from Known gaps.* Added: the `_per_recipient_count` name
+collision across `lowering/_amounts.py` and `lowering/_sweeps.py`, and the
+duplicated `described`/`_restrictions_beyond` preamble now in four places in
+`lowering/prevention.py` and in some shape across 16 lowering modules.
