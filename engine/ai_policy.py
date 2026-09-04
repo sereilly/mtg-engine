@@ -999,7 +999,8 @@ def choose_reorder_library_order(
 
 
 def choose_scry_arrangement(
-    game: Game, caster_index: int, top_count: int
+    game: Game, caster_index: int, top_count: int,
+    library_index: int | None = None,
 ) -> tuple[list[int], int]:
     """Decide a scry (CR 701.22a): the arrangement, and how many go to the bottom.
 
@@ -1014,10 +1015,18 @@ def choose_scry_arrangement(
     best-first so the best one is drawn next. Deterministic given the library,
     which the AI-behaviour regression tests require.
     """
-    caster = game.players[caster_index]
+    # Whose library is being looked through, which is not always the chooser's
+    # (Coral Fighters looks at the defending player's). The score below asks
+    # "how good would drawing this be **for its owner**", so over somebody
+    # else's pile the answer is negated: a card that would help them is one to
+    # bury, and keeping the scoring function and flipping its sign is what
+    # stops this becoming a second opinion about the same question.
+    owner_index = caster_index if library_index is None else int(library_index)
+    sign = 1.0 if owner_index == caster_index else -1.0
+    owner = game.players[owner_index]
     scored = [
-        (index, _score_tutor_choice(game, caster_index, card))
-        for index, card in enumerate(caster.library[:top_count])
+        (index, sign * _score_tutor_choice(game, owner_index, card))
+        for index, card in enumerate(owner.library[:top_count])
     ]
     kept = sorted((s for s in scored if s[1] >= 0.0), key=lambda item: item[1], reverse=True)
     bottomed = sorted((s for s in scored if s[1] < 0.0), key=lambda item: item[1], reverse=True)

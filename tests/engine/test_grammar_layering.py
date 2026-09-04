@@ -174,6 +174,11 @@ PARSE_LAYERS = [
     # reading side, which is what makes it a layer rather than a second half.
     "trigger_tables",
     "trigger_subjects",
+    # CR 603.8's state triggers — a condition that is simply *true* rather than
+    # something that happens. The third split off `triggers` and the third along
+    # a line the family already had; `triggers` reaches down for the one name,
+    # and nothing here reads a word table from up there.
+    "state_triggers",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it
@@ -370,7 +375,31 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # The boundary is CR's: a token is an **object the game creates** (CR 111.1),
 # where everything left in `game` changes the state a *player* is in — life,
 # extra turns, winning, losing, ante, the choices a sentence makes.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes"]
+
+# `destruction` joined the parse side the fifth time `effects/board.py` reached
+# the size guard, reusing the name `lowering/destruction.py` has carried since
+# it left the same family one package over — the mirror re-forming rather than
+# forking, after `prevention`, `counters`, `tapping` and `attachments`. That
+# module's own note below records the asymmetry as settled ("the parse side
+# stays in `effects/board.py`, where destroy is one production reading the same
+# noun phrase as the rest"); like `types`' prediction one paragraph up, it was a
+# claim about a *size*, and the size changed. The line is the one the lowering
+# side already drew and it is the CR's own keyword action: destroying a
+# permanent (CR 701.7) is not sacrificing one (CR 701.17), returning one to a
+# hand or phasing one out (CR 702.26), which is what `board` keeps. What travels
+# with the verb is what only the verb prints — the "unless its controller pays"
+# offer and its life half, CR 701.15c's "destroyed this way … can't be
+# regenerated" rider, and the per-payer sweep.
+#
+# **The split moved one fragment down rather than sideways.**
+# `_parse_further_subjects` — the union of noun phrases one verb reaches — was
+# in `board` and is now in `references`, because `destruction` needs it too and
+# a fragment two families need is not one family's property. It went to
+# `references` rather than to `phrases` (where the branch first put it, and
+# where a second group's move would have summed past the guard) because it
+# reads `parse_recipient` and `parse_bound_subject`, both defined there; five
+# modules read it now, `phrases` re-exporting it under its old name.
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -497,7 +526,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # and cost the thing symmetry is for.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
-] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
 # `life` split out of `lowering/game.py` at 1,014, the second time that module
 # crossed the guard and along the same seam `tokens` left through one set
 # earlier: what stays in `game` changes the state of the **game** (an extra
@@ -510,7 +539,7 @@ LOWERING_FAMILIES = [
 # player reference onto a recipient key, which went **down** into `_seats`
 # rather than staying in either: two families reading it is exactly the
 # condition that makes something a floor.
-# Asymmetric like `zones`, `types`, `destruction`, `counter_removal` and
+# Asymmetric like `zones`, `types`, `counter_removal` and
 # `tokens`: the parse side stays in `effects/game.py` and
 # `effects/characteristics.py`, where a life sentence is one branch of the
 # verb table each.
@@ -632,6 +661,14 @@ AST_FAMILIES = [
         # nodes out to match would put a node in one family with both of its
         # readers in another — exactly what `types` records.
         "exile",
+        # `destruction` is the third of that shape, and it arrived on the parse
+        # side after the lowering side had carried it for a set. `Destroy`,
+        # `DestroyUnlessPay` and `DestroyEachUnlessPaid` are things done to a
+        # permanent on the battlefield, and they live in `ast/board.py` beside
+        # the sacrifice, the bounce and the phase-out for that reason. The guard
+        # fired on the readers (`effects/board.py` at 1,007), not on the
+        # inventory.
+        "destruction",
     )
 ]
 # `library` left this list at Alliances' third wave, when the size guard below

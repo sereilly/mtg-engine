@@ -770,6 +770,15 @@ _BOUND_TO_A_RECORDED_PERMANENT: frozenset[str] = frozenset({
 })
 
 
+#: Instruction kinds that address the delayed ability's own bound object
+#: (CR 603.7c) by id. An entry whose effect contains one must bind an
+#: object, whatever the opener's noun phrase looked like — see the read in
+#: :func:`_lower_create_delayed_trigger`.
+_BOUND_TO_THE_DELAYS_OBJECT = frozenset({
+    "destroy_bound_permanent", "sacrifice_bound_permanent",
+})
+
+
 def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
@@ -880,6 +889,22 @@ def _lower_create_delayed_trigger(
                 "one earlier step of this effect that recorded one", node=node,
             )
         payload["binds_recorded"] = recorded[0]
+    # "…that creature's controller **sacrifices it** at end of combat."
+    # (Basalt Golem.) The pronoun spelling of "sacrifice that creature", which
+    # the AST cannot tell apart: the object is named in the *possessive* ("that
+    # creature's controller") and the subject is a bare pronoun, so
+    # `delay_binds_an_object` — which reads the noun phrase's quantifier — sees
+    # no binding and the entry would arm about nothing.
+    #
+    # Keyed on the **lowered** effect for `binds_recorded`'s stated reason one
+    # paragraph up: the inner lowering is what decided the pronoun names the
+    # delay's object, and reading its answer here is that one decision rather
+    # than a second one made differently. The same move
+    # `_lower_activated_delayed_destroy` already makes for `destroy_bound_permanent`.
+    if not node.binds_target and any(
+        i.kind in _BOUND_TO_THE_DELAYS_OBJECT for i in effect
+    ):
+        payload["binds_target"] = True
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

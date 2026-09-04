@@ -14,14 +14,29 @@ teaches a sentence to read what the sentence in front of it did lands here.
 ``lower_statement`` arrives as a **parameter**, for the reason it does one
 module over: a step is a whole sentence, reading one is ``lower.py``'s job, and
 the caller hands its own parser down rather than being imported back.
+
+**A fuser lives with the sequence it folds, not with the verb it folds.**
+``_fused_cost_repeated_destroys`` came here at Mirage's second-wave integration,
+when ``destruction`` crossed the size guard with no branch at fault, and it is
+the same move ``_fused_tap_enchanted_then_counters`` made out of ``counters`` on
+one of those branches. What it reads is a *shape* — an offer step and the steps
+that repeat under it — and the destroy inside is one leaf of that shape. Its one
+piece of destroy-specific data travelled with it, because nothing else read it:
+that is what made this a move rather than a cut.
 """
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import (COST_TARGET_BASE, COST_TARGET_PER,
+                             OracleInstruction)
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._records import primary_produced, produced_keys
+from ..phrases import is_pt_counter
+from ._common import (_describe_several_targets, _filter_payload,
+                      _is_enchanted, _is_target, _names_several_targets,
+                      _restrictions_beyond)
+from ._records import optional_cost_key, primary_produced, produced_keys
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.
 #: The offer's action and its "if you do" consequence are steps of this same
@@ -308,3 +323,243 @@ def _lower_steps(
         instructions += lowered
         previous = step
     return instructions
+
+# A **fusion** of two consecutive steps, which is this module's own subject
+# rather than the counter family's: `_lower_steps` above threads what each step
+# records forward and folds a step into the branch that wrote what it reads, and
+# this is the same question asked about a *pronoun* — "it" after a tap of the
+# enchanted creature names that creature and not the Aura. It left
+# `lowering/counters.py` when that module crossed the thousand-line guard again,
+# and the boundary is the one this function's own docstring already drew: it
+# cites `_lower_steps`' discipline, and the antecedent of a pronoun is a fact
+# about the sequence, not about what the second step happens to place.
+
+
+def _fused_tap_enchanted_then_counters(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Tap enchanted creature and put X sleep counters on it." (Venarian Gold.)
+
+    Fused because of the pronoun. The noun parser reads a bare "it" as the
+    ability's own source, which in this sentence is the *Aura* — so lowered
+    step by step the counters would land on the Aura while the card puts them
+    on the creature it tapped. The antecedent is the step in front of it, and
+    this is the one place that knows what that step was (the same discipline
+    ``_lower_steps`` states for "if you do"), so the pairing is made here:
+    after a tap of the enchanted creature, "it" is that creature.
+
+    Only the pronoun spelling is claimed. "…put three pupa counters on **this
+    Aura**" (Cocoon) names the source outright and lowers step by step to the
+    self placement, exactly as printed. Anything the attached placement cannot
+    honour — an "up to", a doubling rider, a cap, a count that is not a number
+    or X — returns to the generic path, whose refusals name what is missing.
+    """
+    if len(steps) != 2:
+        return None
+    tap, put = steps
+    if not isinstance(tap, ast.Tap) or not _is_enchanted(tap.subject):
+        return None
+    if not isinstance(put, ast.PutCounter):
+        return None
+    subject = put.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_source
+    ):
+        return None
+    if is_pt_counter(put.counter) or put.up_to or put.then_double or put.cap is not None:
+        return None
+    if isinstance(put.count, ast.Fixed):
+        count: object = put.count.value
+    elif isinstance(put.count, ast.Var):
+        count = "x"
+    else:
+        return None
+    return (
+        OracleInstruction("tap_enchanted_creature", "", {}),
+        OracleInstruction(
+            "add_named_counter_to_attached", "",
+            {"counter": put.counter, "count": count},
+        ),
+    )
+
+
+#: The filter keys ``destroy_target_permanent``'s several-target branch tests in
+#: full, and therefore the only ones a fused announcement may narrow by. The
+#: same set the ``_names_several_targets`` branch of :func:`_lower_destroy`
+#: states inline, named once because two readings of "what may a list of destroy
+#: targets be narrowed by" is one reading too many -- and the direction the
+#: second one drifts is a narrowing dropped from a sweep, which destroys
+#: permanents the card does not name.
+_SEVERAL_DESTROY_NARROWINGS = frozenset({
+    "card_types", "supertypes", "subtypes", "colors", "controller",
+    "other_than_source",
+})
+
+
+def _repeated_destroy_clause(
+    step: ast.Statement,
+) -> tuple[str, ast.Destroy, tuple[ast.Statement, ...]] | None:
+    """Split "**for each additional {1}{R} you paid,** destroy another target
+    artifact[, and <rider>]" into (offer, the destroy, the riders).
+
+    None for any other step, which is how the fuser below declines a sentence it
+    does not recognise instead of half-reading one.
+    """
+    if not isinstance(step, ast.ForEach):
+        return None
+    if not isinstance(step.iterator, ast.EachAdditionalCostPaid):
+        return None
+    body = step.effect
+    riders: tuple[ast.Statement, ...] = ()
+    if isinstance(body, ast.Sequence):
+        if not body.steps:
+            return None
+        body, riders = body.steps[0], body.steps[1:]
+    if not isinstance(body, ast.Destroy):
+        return None
+    return step.iterator.symbols, body, riders
+
+
+def _fused_cost_repeated_destroys(
+    steps: tuple[ast.Statement, ...],
+    lower_statement,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Destroy target artifact. **For each additional {1}{R} you paid, destroy
+    another target artifact. For each additional {1}{G} you paid, destroy
+    another target artifact, and you gain 1 life.**" (Primitive Justice.)
+
+    One announcement, not three. CR 601.2b announces the optional additional
+    costs and CR 601.2c then fixes the number of targets -- so by the time the
+    caster is asked what to destroy, the spell wants exactly
+    ``1 + n({1}{R}) + n({1}{G})`` artifacts, and the printed "**another**" makes
+    them distinct (CR 601.2c: "the same target can't be chosen multiple times
+    for any one instance of the word 'target'"). That is a *list*, which
+    ``destroy_target_permanent`` has resolved since Avalanche; what is new here
+    is only where its length comes from.
+
+    Fusing rather than a slot per clause, for :func:`_fused_two_target_pump`'s
+    reason one family over: three targeted destroys lowered as three steps all
+    resolve through ``_one_choice``, which reads the *first* entry of the target
+    list -- so the card would compile supported and destroy one artifact three
+    times. ``_refuse_unfused_distinctness`` refuses exactly that, and says in
+    its own docstring that a shape which grows a fused lowering is claimed above
+    it and never reaches it. This is that shape.
+
+    **The riders keep their loop and move behind the destroy.** "…, and you gain
+    1 life" happens once per {1}{G} paid, so it stays inside a ``for_each`` over
+    that offer; what it loses is its position *between* the destroys. Nothing
+    can observe the difference: no player receives priority inside a resolution
+    (CR 117.3b) and state-based actions are not checked until it ends
+    (CR 704.3), so the only ordering a spell's own steps can expose is one step
+    reading what an earlier one did -- and a life gain reads no artifact.
+
+    **Destroy only**, though the shape is the verb's to share: this is a several
+    -target announcement, and only a handler that resolves a *list* may be given
+    one (``_describe_several_targets`` states the rule and
+    ``_names_several_targets`` enforces it everywhere else). A second verb is one
+    branch here the day its handler reads a list; admitting one now would fuse
+    three targets onto a handler that reads the first.
+
+    Refuses rather than declines where the sentence is *nearly* this shape,
+    because a decline falls through to the unfused refusal and the card is then
+    reported unsupported for the wrong reason:
+
+    * a first clause printing "another" has no prior choice to differ from;
+    * a repeated clause that does **not** print it names a target CR 601.2c
+      would let collide with the first, which is the silent double destroy;
+    * clauses whose noun phrases differ are two announcements rather than one
+      list -- one filter cannot describe both, and the picker would offer
+      whichever noun the fuse happened to keep.
+    """
+    if len(steps) < 2:
+        return None
+    first, rest = steps[0], steps[1:]
+    if not isinstance(first, ast.Destroy) or first.delay or first.also_targets:
+        return None
+    if not _is_target(first.subject):
+        return None
+    repeats = [_repeated_destroy_clause(step) for step in rest]
+    if any(found is None for found in repeats):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        raise LoweringError(
+            'the first clause of a sentence cannot name "another" target',
+            node=first,
+        )
+    per_offer: dict[str, int] = {}
+    riders: list[OracleInstruction] = []
+    for offer, destroy, tail in repeats:
+        if destroy.delay or destroy.also_targets or not _is_target(destroy.subject):
+            return None
+        assert isinstance(destroy.subject, ast.TargetSpec)
+        if not destroy.subject.distinct_from_prior:
+            raise LoweringError(
+                "a destroy repeated per additional payment names a *new* target "
+                'only when it prints "another"', node=destroy,
+            )
+        if (
+            destroy.subject.filter != first.subject.filter
+            or destroy.no_regen != first.no_regen
+        ):
+            raise LoweringError(
+                "the clauses of one target announcement must name one noun "
+                "phrase", node=destroy,
+            )
+        key = optional_cost_key(offer)
+        if key in per_offer:
+            # Two clauses reading back one offer would each add to the count
+            # while the picker showed one number. ``cast_costs`` refuses the
+            # same collision on the announcing side, for the same reason: one
+            # key, one count, and no way to say which clause spent it.
+            raise LoweringError(
+                "one additional cost cannot size two target clauses",
+                node=destroy,
+            )
+        per_offer[key] = 1
+        if tail:
+            riders.append(
+                OracleInstruction(
+                    "for_each", "",
+                    {
+                        "iterator": {"repeat_from_cost": key},
+                        "effect": lower_statement(
+                            ast.Sequence(tail) if len(tail) > 1 else tail[0],
+                            frozenset(), whole_effect=False,
+                        ),
+                    },
+                )
+            )
+    filt = first.subject.filter
+    leftovers = _restrictions_beyond(filt, _SEVERAL_DESTROY_NARROWINGS)
+    if leftovers:
+        raise LoweringError(
+            "the several-target destroy cannot narrow by: " + ", ".join(leftovers),
+            node=first,
+        )
+    described = _filter_payload(filt)
+    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the several-target destroy cannot test this restriction", node=first
+        )
+    payload: dict[str, object] = dict(described)
+    if first.no_regen:
+        payload["bypass_regeneration"] = True
+    payload["targets"] = {
+        "quantifier": first.subject.quantifier,
+        "kind": "object",
+        "filter": _filter_payload(filt),
+        # The size of the announcement as the *arithmetic*, not as a number:
+        # what the caster paid is unknown until they announce it, and the
+        # picker, the cast gate and the AI all resolve it through one reader
+        # (``oracle_types.cost_target_count``).
+        "count": {COST_TARGET_BASE: 1, COST_TARGET_PER: per_offer},
+        # The printed "another" (CR 601.2c), carried rather than folded into the
+        # filter for ``_fused_two_target_pump``'s reason: it is a relation
+        # between slots, not a property of one permanent, so
+        # ``permanent_matches_filter`` could never test it.
+        "distinct": True,
+    }
+    return (OracleInstruction("destroy_target_permanent", "", payload), *riders)

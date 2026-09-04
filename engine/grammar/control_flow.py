@@ -154,6 +154,26 @@ def _accept_restated_sacrifice(
     return True, named
 
 
+def _mandatory_named_actor(statement) -> "ast.PlayerRef | None":
+    """The seat a **mandatory** action names as its actor, or None.
+
+    "That creature's controller sacrifices it at end of combat" (Basalt Golem)
+    names a seat without offering it anything, so "if the player does" has an
+    antecedent even though there is no ``May`` in front of it. The rider still
+    asks a real question — CR 701.17a's sacrifice does not happen if the
+    permanent has already left — which is exactly what ``ItHappened`` tests.
+
+    Read off the statement's own ``player`` field rather than from a list of
+    node types: every action in this grammar that names who performs it carries
+    the seat there, and a list would go stale the day a second one prints the
+    rider.
+    """
+    player = getattr(statement, "player", None)
+    if isinstance(player, ast.PlayerRef) and player.kind != "you":
+        return player
+    return None
+
+
 def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "If you do, …" / "If you don't, …" into the preceding ``May``.
 
@@ -304,6 +324,15 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         # A choice the card offers, not a payment: both branches are real, and
         # which one runs is whether anything was chosen. Handled below.
         pass
+    elif third_person and definite and _mandatory_named_actor(target) is not None:
+        # "That creature's controller **sacrifices** it at end of combat. **If
+        # the player does**, …" (Basalt Golem.) The third admission, beside the
+        # offer and the choice: an action that is not optional and not the
+        # caster's. The rider still asks whether the step took place — a
+        # sacrifice of a creature that has already left does not happen — and
+        # "the player" names the seat the action itself named, which is the same
+        # anaphora the offer reading uses one branch down.
+        pass
     elif third_person and not (
         isinstance(target, ast.May)
         and (
@@ -371,11 +400,32 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         if declined:
             stream.reset(mark)
             return False
-        steps.append(ast.Conditional(
+        rider = ast.Conditional(
             ast.SacrificedThisWay(narrowed) if narrowed is not None
             else ast.ItHappened(),
             branch,
-        ))
+        )
+        if delay is not None:
+            # "…sacrifices it **at end of combat**. If the player does, they
+            # create a … token." (Basalt Golem.) The branch is a sentence of
+            # the *delayed* ability — the unwrap above already says so, and the
+            # rebinding two paragraphs up acts on it — so it goes back inside
+            # rather than beside. Left as a sibling it would run when the
+            # trigger resolved, a whole combat before the sacrifice it asks
+            # about, and read a record nothing had written.
+            #
+            # Appended to the delay's own steps rather than nested under a
+            # second `Sequence`, so `_lower_steps` sees the sacrifice and the
+            # rider as consecutive steps of one effect — which is what lets the
+            # rider read what the step in front of it recorded.
+            inner = delay.effect
+            joined = ast.Sequence(
+                (*inner.steps, rider) if isinstance(inner, ast.Sequence)
+                else (inner, rider)
+            )
+            steps[-1] = replace(delay, effect=joined)
+            return True
+        steps.append(rider)
         return True
 
     may = target

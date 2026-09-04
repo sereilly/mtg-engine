@@ -864,11 +864,23 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
     # (Heroism) names a different creature each time round, and the sentence
     # chooses no target at all — so a read of the resolution's targets would
     # shield whichever creature a fallback happened to find.
-    perm = bound_permanent(
-        game, context,
-        predicate=lambda p: p.is_creature,
-        fallback_players=tuple(game.players),
-    )
+    if instruction.payload.get("on_source"):
+        # "…dealt by **this creature** this turn" (Mtenda Lion). The ability's
+        # own source, named rather than chosen — read here instead of through
+        # the bound resolution below, whose fallback is every battlefield and
+        # would silence whichever creature its scan reached first. A source
+        # that has already left takes no shield and says so, which is CR 608.2b
+        # doing as much as it can.
+        perm = context.source_permanent
+        if perm is None or not game.is_on_battlefield(perm):
+            game.log.append(f"{context.card.name}: its source is gone, nothing is silenced")
+            return True, "resolved"
+    else:
+        perm = bound_permanent(
+            game, context,
+            predicate=lambda p: p.is_creature,
+            fallback_players=tuple(game.players),
+        )
     if perm is None:
         game.log.append(f"{context.card.name}: no creature to silence")
         return True, "resolved"

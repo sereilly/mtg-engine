@@ -447,6 +447,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # wider than it reads, silently. Refusing sends the line on to the delayed
     # reading (`_parse_delayed_attack_trigger`), and a permanent printing it
     # is reported unsupported naming the clause, which is the loud direction.
+    # "Whenever a creature attacks **you**" (Barbed Foliage). CR 506.2's
+    # defending player as a narrowing of the *subject* — the same
+    # `attacking_you` field "target creature that's attacking you" already sets,
+    # folded in by `_resolve_subject_groups` from the empty marker group. Above
+    # the bare row, which is its strict prefix and which claimed it: matched
+    # there, the "you" is left unread and the trigger fires on every attack in
+    # the game, which in a two-player duel is only ever visible in the turn a
+    # player attacks somebody else's planeswalker and in a multiplayer game is
+    # the whole restriction gone. The same silent widening the "and isn't
+    # blocked" lookahead one line down exists to stop.
+    ("matching_creature_attacks",
+     r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"
+     r" (?P<attacker_attacking_you>)you(?![a-z])"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks(?! and isn't blocked)"),
     # Two spellings of one event: the *declaration* (CR 508.1), which is the
@@ -765,6 +778,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # Before the bare row, which is its strict prefix.
     ("opponent_casts_spell",
      r"whenever an opponent casts a (?P<color_word>white|blue|black|red|green) spell"),
+    # "…a spell **that targets you or a creature you control**"
+    # (Reparations). A narrowing on the spell's *targets* rather than on the
+    # spell, so it is a marker group the cast filter reads against what the
+    # announcement froze. Above the bare row, which is its strict prefix and
+    # which claimed it: matched there the clause was left unread and the
+    # enchantment drew a card off every spell an opponent cast, which is the
+    # silent widening this table is ordered longest-first to prevent.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a spell that targets "
+     r"(?P<targets_you_or_your_creature>)you or a creature you control"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell
@@ -2240,6 +2263,17 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         if f"{stem}_includes_source" in payload:
             described = {k: v for k, v in described.items() if k != "exclude_self"}
             del resolved[f"{stem}_includes_source"]
+        # "…attacks **you**" (Barbed Foliage). CR 506.2's defending player,
+        # the same empty-marker-group idiom one paragraph up: present in the
+        # groupdict exactly when that row matched, carrying no text of its own,
+        # and folded into the filter the noun parser already built. Added after
+        # the testability gate above because `attacking_you` is in
+        # `TESTABLE_SUBJECT_FILTER_KEYS` — it is answered by
+        # `subject_filters.subject_matches` like any other key, against the
+        # trigger's own controller.
+        if f"{stem}_attacking_you" in payload:
+            described = {**described, "attacking_you": True}
+            del resolved[f"{stem}_attacking_you"]
         if f"{stem}_includes_spells" in payload and (
             set(described) - _SPELL_UNION_FILTER_KEYS or "color_filter" not in described
         ):

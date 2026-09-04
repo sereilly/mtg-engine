@@ -85,7 +85,7 @@ from .damage_redirects import (
 )
 from .hand_locks import lock_card_in_hand
 from .search_filters import card_has_type
-from .models import PlayerState
+from .models import Permanent, PlayerState
 from .replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -176,6 +176,11 @@ DAMAGE_TO_COUNTER_REMOVAL = 7  # Soul Echo
 # the other. The rule permits either; the default should not be the one that
 # costs the player six life.
 DAMAGE_MULTIPLIER = 700  # Fiery Emancipation
+#: The turn-scoped doubling a spell arms (Blind Fury), one step later than the
+#: static multiplier above. Its own order because it is its own effect: CR 616.1
+#: counts effects, and sharing a number would make the two one contender and
+#: silently drop whichever was asked second.
+COMBAT_DAMAGE_DOUBLER = 710  # Blind Fury
 
 # The results kinds (CR 120.4c) have a space of their own. No shield lives there:
 # prevention stops damage being *dealt*, and by 120.4c it already has been.
@@ -1370,6 +1375,55 @@ def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     amount = payload["amount"]
     game.log.append(
         f"{amount} damage becomes {amount * multiplier} (Fiery Emancipation)"
+    )
+    return ReplacementOutcome(new_amount=amount * multiplier)
+
+
+def _applies_combat_damage_doubler(game, payload: dict) -> bool:
+    """Whether Blind Fury's turn is on and this event is the one it names.
+
+    Every word of the sentence is a narrowing and each is tested here rather
+    than dropped: **combat** damage (a ping ability is not), dealt by a
+    **creature** (a Lightning Bolt is not, and neither is a creature's own
+    activated ability — CR 109.5 makes the source of that ability the
+    permanent, so the test is the *combat* flag rather than the source's type
+    alone), and dealt **to a creature** (the face is not, which is what makes
+    this card a trick for blockers rather than a burn spell).
+    """
+    if not game.combat_damage_doubled_between_creatures:
+        return False
+    if payload["amount"] <= 0 or not payload.get("combat"):
+        return False
+    recipient = payload.get("recipient")
+    source = payload.get("source")
+    if not isinstance(recipient, Permanent) or not recipient.is_creature:
+        return False
+    return isinstance(source, Permanent) and source.is_creature
+
+
+@replacement_effect(
+    "damage_to_creature", COMBAT_DAMAGE_DOUBLER,
+    applies=_applies_combat_damage_doubler,
+)
+def _double_combat_damage_between_creatures(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Blind Fury: "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead."
+
+    A CR 120.4b effect like Fiery Emancipation's, so the bigger number is the
+    damage *dealt*: lifelink gains it, deathtouch and trample read it, and a
+    "deals damage" trigger sees it.
+
+    Two copies square rather than adding, for the reason ``_damage_multiplier``
+    records: each is its own effect at its own moment, and applying them
+    together is the sequence CR 616.1's default choice produces.
+    """
+    multiplier = 2 ** len(game.combat_damage_doubled_between_creatures)
+    amount = payload["amount"]
+    game.log.append(
+        f"{amount} combat damage becomes {amount * multiplier} "
+        f"({game.combat_damage_doubled_between_creatures[0]})"
     )
     return ReplacementOutcome(new_amount=amount * multiplier)
 

@@ -14,6 +14,16 @@ the two read the same recipient, source and duration vocabulary; the lowering
 halves share nothing but the generic helpers every family here uses. That is
 the same asymmetry ``prevention`` records one module over — a lowering half
 that outgrew its parse half. See ``tests/engine/test_grammar_layering.py``.
+
+**The module is CR 614 on a damage event, which is wider than its name**, and
+Mirage's second wave is where that showed. ``_lower_double_combat_damage``
+arrived on one branch and stated the taxonomy — three replacements separated by
+*which half of the event they change*, the recipient here, the amount there,
+whether it happens at all in ``prevention``. ``_lower_damage_becomes_counter_removal``
+came off another and is the fourth: the damage does not happen and something
+else does instead, so it belongs to neither shield nor redirect. It moved here
+at the integration, when ``prevention`` crossed the size guard on nobody's
+branch and the seam was the one already written down.
 """
 
 from ...oracle_types import OracleInstruction
@@ -476,4 +486,59 @@ def _lower_next_damage_redirect(
     _describe_targets(payload, spec)
     return (
         OracleInstruction("redirect_next_damage_to_source_until_eot", "", payload),
+    )
+
+
+def _lower_double_combat_damage(
+    node: ast.DoubleCombatDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Blind Fury: "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead."
+
+    Beside the redirect in this module rather than with the shields: all three
+    are CR 614 replacements on a damage event, and what separates them is which
+    half of the event they change — the recipient here, the amount there, and
+    whether it happens at all in ``prevention``.
+
+    No payload, because the node carries none: the pool prints one wording and
+    every word of it is a narrowing the interceptor tests. A parameter with no
+    second card behind it would be a claim nothing checks.
+    """
+    return (OracleInstruction("double_combat_damage_until_eot", "", {}),)
+
+
+def _lower_damage_becomes_counter_removal(
+    node: "ast.DamageBecomesCounterRemoval",
+) -> tuple[OracleInstruction, ...]:
+    """"For each 1 damage that would be dealt to you until your next upkeep,
+    you remove an echo counter from this enchantment instead." (Soul Echo.)
+
+    Two refusals, and each is a way the sentence could otherwise cover more
+    than it says.
+
+    The player is the ability's **controller**. CR 109.5 makes "you" the
+    ability's controller wherever it is printed, and this sentence is offered
+    to an *opponent* — so reading the seat off the offer would arm the
+    replacement over the wrong player's life total, which is the whole card
+    inverted.
+
+    The duration is required and is "until your next upkeep" alone. It is what
+    the sweep at the top of the upkeep step keys on; a replacement armed with
+    no duration is one nothing ever takes away, and the card would replace
+    every point of damage its controller was ever dealt.
+    """
+    if node.recipient.kind != "you":
+        raise LoweringError(
+            "the counter-removal replacement covers the ability's controller",
+            node=node,
+        )
+    if node.duration.kind != "until_your_next_upkeep":
+        raise LoweringError(
+            "a counter-removal replacement lasts until your next upkeep",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "arm_damage_to_counter_removal", "", {"counter": node.counter},
+        ),
     )

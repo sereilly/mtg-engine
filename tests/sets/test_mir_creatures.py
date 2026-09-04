@@ -2241,3 +2241,341 @@ def test_zirilan_exiles_the_dragon_at_the_next_end_step(set_pool):
     standing = [p.card.name for p in game.players[0].battlefield]
     assert standing == ["Zirilan of the Claw"], game.log
     assert [c.name for c in game.players[0].exile] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G1: combat triggers and their bound referents ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_creature(name, power, toughness, keywords=()) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=tuple(keywords),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1_island() -> CardDefinition:
+    return CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="", colors=(), color_identity=("U",), keywords=(),
+        produced_mana=("U",),
+        raw={"name": "Island", "type_line": "Basic Land - Island"},
+    )
+
+
+def _w2g1_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g1_combat(*seats) -> Game:
+    """A game sitting in the declare-attackers step, one battlefield per seat."""
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g1_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def _w2g1_lion(set_pool):
+    lion = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mtenda Lion"]))
+    decoy = _w2g1_nosick(Permanent(card=_w2g1_creature("Decoy", 3, 3)))
+    game = _w2g1_combat([lion, decoy], [Permanent(card=_w2g1_island())])
+    assert game.declare_attackers(0, [0, 1])[0]
+    _w2g1_resolve(game)
+    return game, lion
+
+
+def test_mtenda_lion_offers_the_defender_the_toll(set_pool):
+    """"Whenever this creature attacks, defending player may pay {U}."
+
+    CR 506.2's seat, which the declare-attackers announcement already froze --
+    the offer is made to the player being attacked and not to the ability's own
+    controller, and an offer made to nobody is an effect that silently does not
+    happen.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Mtenda Lion"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.instruction.payload["actor"] == "defending_player"
+    assert trig.instruction.payload["cost"] == {"U": 1}
+
+    game, _lion = _w2g1_lion(set_pool)
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in offers] == [1], game.log
+
+
+def test_mtenda_lions_toll_silences_the_lion_and_nothing_else(set_pool):
+    """"…prevent all combat damage that would be dealt by **this creature**."
+
+    The shield is armed on the ability's own source, named rather than chosen.
+    The handler's ordinary path resolves a *bound* permanent with every
+    battlefield as its fallback, so an ability that chose no target would have
+    shielded whichever creature that scan reached first -- here, with a second
+    attacker on the board, that is a visible difference: the Decoy's 3 still
+    gets through.
+    """
+    game, lion = _w2g1_lion(set_pool)
+
+    assert game.confirm_optional_pay(1, accept=True)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.players[1].life == 17, game.log
+
+
+def test_mtenda_lion_hits_for_everything_when_the_toll_is_declined(set_pool):
+    """The control, and the default a non-interactive seat takes."""
+    game, _lion = _w2g1_lion(set_pool)
+
+    assert game.confirm_optional_pay(1, accept=False)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.players[1].life == 15, game.log
+
+
+def _w2g1_dream_fighter(set_pool, attacking: bool):
+    """Dream Fighter on one side of a block, with a bystander on the other.
+
+    *attacking* puts the Fighter in the attack and lets an Ogre block it;
+    otherwise the Ogre attacks and the Fighter blocks. The two are different
+    fire sites -- the becomes-blocked half puts the other creature in the stack
+    item's target, the blocks half targets the *blocker* so a self-affecting
+    trigger can find itself -- and the card has to read the same on both.
+    """
+    fighter = _w2g1_nosick(Permanent(card=set_pool("MIR")["Dream Fighter"]))
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    wall = _w2g1_nosick(Permanent(card=_w2g1_creature("Wall", 0, 4)))
+    if attacking:
+        game = _w2g1_combat([fighter], [ogre, wall])
+    else:
+        game = _w2g1_combat([ogre], [fighter, wall])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g1_resolve(game)
+    return game, fighter, ogre, wall
+
+
+def test_dream_fighter_compiles_a_union_of_two_subjects(set_pool):
+    """"**This creature and that creature** phase out."
+
+    A union of noun phrases in the *subject* position, which the parser has read
+    since Spore Cloud -- but only of object-quantified phrases. "That creature"
+    is a bound referent read by ``parse_bound_subject`` and by nothing else, and
+    the union may take it exactly where the caller has read a subject and no verb
+    yet: an "and" that early cannot be joining two clauses.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Dream Fighter"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "creature_blocks_or_blocked_by"
+    steps = trig.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "phase_out_self", "phase_out_block_pair"
+    ]
+
+
+@pytest.mark.parametrize("attacking", [True, False], ids=["blocked", "blocks"])
+def test_dream_fighter_phases_out_both_halves_of_the_block(set_pool, attacking):
+    """CR 509.3a-d's pair, read on both sides.
+
+    The bystander is the control: ``block_pair_permanents`` is the one reader of
+    how the two fire sites bind "that creature", and reading the stack item's
+    target on the *blocks* half would have phased the Fighter out twice and its
+    opponent not at all.
+    """
+    game, fighter, ogre, wall = _w2g1_dream_fighter(set_pool, attacking)
+
+    phased = {
+        perm.card.name
+        for player in game.players for perm in player.phased_out
+    }
+    assert phased == {"Dream Fighter", "Ogre"}, game.log
+    assert wall.card.name in {
+        perm.card.name for player in game.players for perm in player.battlefield
+    }
+
+
+def test_a_conjunction_carries_the_triggers_narrowing_to_every_conjunct(set_pool):
+    """The defect the card found, one layer under it.
+
+    ``lower_statement`` threads a trigger's *kind* into every nested statement
+    and threaded its printed **narrowing** into a ``Sequence`` and not into a
+    ``Conjunction``. The two are the same fact about the same trigger, and
+    without the narrowing ``binds_block_pair`` cannot tell CR 509.3c's bare
+    becomes-blocked firing -- several blockers and no way to say which "that
+    creature" is -- from CR 509.3d's narrowed one. So the identical clause
+    lowered in a sequence and refused in a conjunction.
+    """
+    from engine.grammar import compile_line
+
+    joined = compile_line(
+        "Whenever this creature blocks or becomes blocked by a creature, "
+        "this creature and that creature phase out.",
+        card_name="Dream Fighter",
+    )
+    sequenced = compile_line(
+        "Whenever this creature blocks or becomes blocked by a creature, "
+        "this creature phases out. That creature phases out.",
+        card_name="Dream Fighter",
+    )
+    assert joined.lowering_error is None, joined.lowering_error
+    assert [i.kind for i in joined.instructions] == [
+        i.kind for i in sequenced.instructions
+    ]
+
+
+def _w2g1_coral_fighters(set_pool, library):
+    """Coral Fighters attacking into an empty board, run to the unblocked
+    trigger's fire site (the combat damage step, CR 509.1h)."""
+    fighters = _w2g1_nosick(Permanent(card=set_pool("MIR")["Coral Fighters"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[fighters]),
+        PlayerState(name="P2", battlefield=[], library=list(library)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    for _ in range(4):
+        game.advance_combat_phase()
+        if game.pending_choices:
+            break
+    _w2g1_resolve(game)
+    return game
+
+
+def test_coral_fighters_looks_at_the_defenders_top_card(set_pool):
+    """"Look at the top **card** of defending player's library" -- the bare
+    singular, which prints no number and so refused at the noun, and a library
+    owner who is neither "you" nor a target.
+
+    CR 506.2's seat is the one the combat fire site froze, so the offer is made
+    over the right pile without anybody choosing one: read as a target it would
+    have asked for a choice the card never offers.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Coral Fighters"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.instruction.kind == "look_at_library_top_then_bottom"
+    assert trig.instruction.payload["amount"] == 1
+    assert trig.instruction.payload["who"] == "defending_player"
+
+
+def test_coral_fighters_may_bottom_the_card_it_saw(set_pool):
+    """The offer, taken. It is the decision a scry is -- look at the top N and
+    choose which go to the bottom -- over somebody else's pile, so it arms that
+    prompt with the library named rather than assumed to be the chooser's."""
+    library = [
+        _w2g1_creature("Top", 1, 1),
+        _w2g1_creature("Second", 2, 2),
+        _w2g1_creature("Third", 3, 3),
+    ]
+    game = _w2g1_coral_fighters(set_pool, library)
+
+    (offer,) = [c for c in game.pending_choices if c.kind == "scry"]
+    assert offer.player_index == 0, "the attacker's controller decides"
+    assert offer.data["library_index"] == 1, "over the defender's library"
+
+    assert game.confirm_scry(0, [0], 1)
+    assert [c.name for c in game.players[1].library] == ["Second", "Third", "Top"]
+
+
+def test_coral_fighters_may_leave_the_card_where_it_is(set_pool):
+    """"**You may**" -- the other answer, and the one that must not be the
+    handler's own. Keeping the card on top is a legal outcome of the offer and
+    never a legal implementation of it, because the decision is the effect."""
+    library = [
+        _w2g1_creature("Top", 1, 1),
+        _w2g1_creature("Second", 2, 2),
+        _w2g1_creature("Third", 3, 3),
+    ]
+    game = _w2g1_coral_fighters(set_pool, library)
+
+    assert game.confirm_scry(0, [0], 0)
+    assert [c.name for c in game.players[1].library] == ["Top", "Second", "Third"]
+
+
+def test_coral_fighters_does_nothing_against_an_empty_library(set_pool):
+    """CR 701.22b's shape, one card over: nothing to look at is not a draw and
+    no state-based action fires, so the trigger simply resolves."""
+    game = _w2g1_coral_fighters(set_pool, [])
+
+    assert not [c for c in game.pending_choices if c.kind == "scry"], game.log
+
+
+def test_mindbender_spores_counters_and_locks_what_it_blocked(set_pool):
+    """"…put four fungus counters on **that creature**. **The creature** gains
+    "<untap lock>" and "<upkeep removal>"."
+
+    Both halves name the creature the block trigger froze, and both would have
+    landed on the Spores: on the *blocks* half of the event the stack item's
+    target is the blocking creature itself -- the fire site puts it there so a
+    self-affecting trigger can find itself -- so a target-shaped resolution
+    grants the abilities to the source and reports success.
+
+    The counter word is open vocabulary (CR 122.1): nothing in the rules reacts
+    to a fungus counter, and what it means is what the two granted lines say
+    about it.
+    """
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    spores = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mindbender Spores"]))
+    game = _w2g1_combat([ogre], [spores])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g1_resolve(game)
+
+    assert ogre.metadata.get("fungus_counters") == 4, game.log
+    assert spores.metadata.get("fungus_counters") is None
+    assert "fungus counter" in ogre.effective_card.oracle_text
+    assert "fungus counter" not in spores.effective_card.oracle_text.split("\n")[0]
+
+
+def test_mindbender_spores_keeps_it_tapped_for_four_of_its_turns(set_pool):
+    """The two granted lines together, which is the card: one counter comes off
+    each upkeep and the creature does not untap while any remain."""
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    spores = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mindbender Spores"]))
+    game = _w2g1_combat([ogre], [spores])
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0})
+    _w2g1_resolve(game)
+    for _ in range(3):
+        game.advance_combat_phase()
+
+    seen = []
+    for _ in range(10):
+        game.start_next_turn()
+        game.resolve_stack()
+        if game.active_player_index == 0:
+            seen.append((ogre.metadata.get("fungus_counters"), ogre.tapped))
+
+    assert seen[:5] == [(3, True), (2, True), (1, True), (0, True), (0, False)], game.log

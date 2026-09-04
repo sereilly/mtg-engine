@@ -18,6 +18,14 @@ stayed inline in ``damage.py``. So one printed idiom had two lowerings in two
 files, and they had already drifted: the inline one checked the head noun and
 then *stripped* it, which is why Pyroclasm dealt its 2 to every land on the
 table (see :func:`lower_each_matching_damage`).
+
+:func:`_sweep_kind` followed at Mirage's second-wave integration, when
+``damage.py`` reached the guard again with no branch at fault. It was the last
+of the half-exile: two docstrings here already named it as the thing consulted
+*before* the payload-carrying sweep below, and the module that documents a
+decision is the module that should hold it. It is the same question this file
+answers — which printed recipient set is one batch — asked of the three sets
+that earned a fused kind of their own.
 """
 
 from __future__ import annotations
@@ -251,3 +259,36 @@ def lower_described_set_damage(
             "deal_damage_each_matching", "", {"amount": amount, "filter": described}
         ),
     )
+
+
+def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
+    """Recognize the board-sweep damage shapes as their dedicated handlers.
+
+    These are genuinely different effects, not riders: they damage every player
+    *and* a filtered set of creatures as one state-based-action batch.
+    """
+    hits_players = any(
+        isinstance(r, ast.PlayerRef) and r.kind in ("each_player", "each_opponent")
+        for r in recipients
+    )
+    creature_specs = [
+        r for r in recipients
+        if isinstance(r, ast.TargetSpec) and r.quantifier == "each"
+    ]
+    if len(creature_specs) != 1:
+        return None
+    filt = creature_specs[0].filter
+    if filt.card_types != ("creature",):
+        return None
+
+    if hits_players:
+        if filt.without_keywords == ("flying",):
+            return "earthquake_damage"
+        if filt.with_keywords == ("flying",):
+            return "hurricane_damage"
+        if not filt.with_keywords and not filt.without_keywords:
+            return "deal_damage_each_creature_and_player"
+        return None
+    if filt.attacking and not filt.with_keywords and not filt.without_keywords:
+        return "deal_damage_each_attacking_creature"
+    return None

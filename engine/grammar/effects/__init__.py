@@ -42,6 +42,7 @@ from .prevention import (
     _parse_source_of_choice_effect,
     _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
+    _parse_double_combat_damage,
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
     parse_source_damage_lock,
@@ -81,17 +82,19 @@ from .types import (
     _parse_no_longer_supertype,
 )
 from .board import (
-    _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
-    _parse_destroy,
-    _parse_further_subjects,
     _parse_that_object,
 )
 from .returns import (
     _parse_return,
     _parse_put_source_into_zone,
+)
+from .destruction import (
+    _accept_destroyed_this_way_no_regen,
+    _parse_destroy,
+    _parse_for_each_destroy_unless_paid,
 )
 from .attachments import (
     _parse_attach,
@@ -207,6 +210,7 @@ __all__ = [
     "_parse_source_of_choice_effect",
     "_parse_damage_becomes_counter_removal",
     "_parse_damage_redirect",
+    "_parse_double_combat_damage",
     "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
     "parse_source_damage_lock",
@@ -233,8 +237,8 @@ __all__ = [
     "parse_player_chooses_permanent",
     "_parse_return",
     "_parse_put_source_into_zone",
+    "_accept_destroyed_this_way_no_regen",
     "_parse_destroy",
-    "_parse_further_subjects",
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
     "_parse_linked_untap_restriction",

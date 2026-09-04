@@ -102,6 +102,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("opponent_casts_spell",
      ("an", "opponent", "casts", "a", "spell", "from", "anywhere", "other",
       "than", "their", "hand")),
+    # "…that targets you or a creature you control" (Reparations). The clause
+    # narrows what the *dispatcher* admits rather than what the sentence means,
+    # so the parse side carries the words and `engine/oracle.py`'s table carries
+    # the marker the cast filter reads. Above the bare row for this table's
+    # standing reason: the shorter phrase is a prefix, and matching it would
+    # strand the rest of the condition and fail the line.
+    ("opponent_casts_spell",
+     ("an", "opponent", "casts", "a", "spell", "that", "targets", "you", "or",
+      "a", "creature", "you", "control")),
     ("opponent_casts_spell", ("an", "opponent", "casts", "a", "spell")),
     ("enchantment_cast", ("you", "cast", "an", "enchantment", "spell")),
     ("you_cast_spell", ("you", "cast", "a", "spell")),

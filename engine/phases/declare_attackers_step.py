@@ -1273,7 +1273,17 @@ class DeclareAttackersStepMixin:
         card is named here.
         """
         for attacker in declared:
-            emit(self, "matching_creature_attacks", subject=attacker)
+            emit(
+                self, "matching_creature_attacks", subject=attacker,
+                # The attacker itself, by id (CR 400.7 — an index is not an
+                # identity). A trigger whose effect acts *on* it rather than on
+                # the declaration ("it loses flanking until end of turn",
+                # "…deals 1 damage to it" — Barbed Foliage) reads it here,
+                # frozen at the announcement, because by resolution the
+                # creature may have been removed from combat and a board search
+                # would find a look-alike.
+                event_subject_permanent_id=attacker.permanent_id,
+            )
 
     # ------------------------------------------------------------------
     # Banding declaration (CR 702.22)

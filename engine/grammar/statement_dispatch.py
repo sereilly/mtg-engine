@@ -90,6 +90,7 @@ from .lowering import (
     _lower_prevent_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
+    _lower_phase_out,
     _lower_gain_life,
     _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
@@ -231,8 +232,27 @@ def lower_statement(
         return _lower_damage_unless_pay(statement, dispatch_event, produced)
     if isinstance(statement, ast.LoseKeyword):
         return _lower_lose_keyword(statement, dispatch_event)
+    if isinstance(statement, ast.PhaseOut):
+        # The **unfiltered** event, for `_lower_destroy`'s reason below: the
+        # phase-out asks whether the trigger bound one creature
+        # (CR 509.3c/509.3d), which is a fact about the trigger and true of
+        # every clause under it. Dream Fighter's sentence is a union of two
+        # subjects, so it lowers under a `Conjunction` and would see no event
+        # at all if this were gated on `whole_effect`.
+        return _lower_phase_out(statement, event, event_subject)
     if isinstance(statement, ast.PutCounter):
-        return _lower_put_counter(statement, dispatch_event, produced)
+        # The narrowing travels with the event for `_lower_destroy`'s reason,
+        # and so does the **unfiltered** event beside it: "put four fungus
+        # counters on **that creature**" (Mindbender Spores) asks whether the
+        # block trigger named one creature, which is a fact about the trigger
+        # and true of every clause under it — and that clause is the first of
+        # the trigger's *two* sentences, so it lowers under a `Sequence` and a
+        # `whole_effect` gate would show it no event at all. The filtered event
+        # still travels as its own argument, because the branches that pick a
+        # *dispatch* path by trigger kind read that one.
+        return _lower_put_counter(
+            statement, dispatch_event, produced, event_subject, event
+        )
     if isinstance(statement, ast.PlayerGetsCounters):
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
@@ -256,7 +276,9 @@ def lower_statement(
     # In the chain rather than the name-only table, all three: each acts on what
     # an earlier step recorded, and `produced` refuses when nothing did.
     if isinstance(statement, ast.GainAbilityText):
-        return _lower_gain_ability_text(statement, produced)
+        return _lower_gain_ability_text(
+            statement, produced, event, event_subject
+        )
     # "Untap any number of target creatures. Prevent all combat damage that
     # would be dealt to and dealt by **those creatures** this turn." (Energy
     # Arc.) The shield's recipients are the set the sentence in front of it
@@ -313,8 +335,16 @@ def lower_statement(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
         ):
             return _lower_damage_conjunction(statement)
+        # `event_subject` travels with `event`, exactly as it does for the
+        # `Sequence` branch below: they are the same fact about the same
+        # trigger, and a conjunct that saw only the kind could not tell CR
+        # 509.3c's bare becomes-blocked firing from CR 509.3d's narrowed one —
+        # so "that creature" inside a conjunction refused where the same clause
+        # in a sequence lowered. Dream Fighter's "this creature **and** that
+        # creature phase out" is one conjunction and nothing else.
         return _lower_steps(
-            statement.effects, produced, event, lower_statement=lower_statement
+            statement.effects, produced, event, event_subject,
+            lower_statement=lower_statement,
         )
 
     if isinstance(statement, ast.DestroyUnlessPay):
@@ -405,6 +435,11 @@ def lower_statement(
         # Artifact's sacrifice lowers under a ``May``.
         # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
         # those creatures" names a set an earlier step of this effect chose.
+        # The **unfiltered** event, for `_lower_destroy`'s reason: "that
+        # creature's controller sacrifices **it** at end of combat" (Basalt
+        # Golem) reaches the bound branch through the *delay's* event, which is
+        # a fact about the sentence rather than about where in it the clause
+        # sits.
         return _lower_sacrifice(statement, event, produced)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)

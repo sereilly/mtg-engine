@@ -16,13 +16,14 @@ from __future__ import annotations
 import dataclasses
 
 from ...banding import BANDS_WITH_OTHER
-from ...keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
+from ...keywords import keyword_ability_name
 from ...oracle_types import OracleInstruction
-from ...subject_filters import untestable_filter_keys
+from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
-from ._events import _RECORDED_PERMANENTS, binds_block_pair
+from ._events import (_EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS,
+                      binds_block_pair)
 from ._common import (_describe_several_targets, _describe_targets, _filter_payload,
                       _durationless_reason, _restrictions_beyond, _is_enchanted,
                       _is_source, _is_target, _names_several_targets)
@@ -469,7 +470,10 @@ def _lower_gain_keyword(
 
 
 def _lower_gain_ability_text(
-    node: ast.GainAbilityText, produced: frozenset[str] = frozenset()
+    node: ast.GainAbilityText,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
 
@@ -580,6 +584,24 @@ def _lower_gain_ability_text(
         and node.subject.quantifier == "that"
         and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
     )
+    if bound and binds_block_pair(event, event_subject):
+        # "Whenever this creature blocks a creature, … **the creature** gains
+        # "<ability>" and "<ability>"." (Mindbender Spores.) The other half of
+        # the block, which the trigger froze — never a choice, so the recipient
+        # is neither a target nor a record this effect wrote.
+        #
+        # Read **before** the target-shaped reading below, and that order is the
+        # card: on the *blocks* half of the event the stack item's target is the
+        # blocking creature itself (the fire site puts it there so a
+        # self-affecting trigger can find itself), so the fall-through would
+        # have granted both abilities to the Spores and left the creature it
+        # blocked untouched — a card that reports supported and plays as its own
+        # opposite.
+        payload["on_block_pair"] = True
+        types = tuple(node.subject.filter.card_types)
+        if types:
+            payload["subject_types"] = types
+        return (OracleInstruction("grant_target_ability_text", "", payload),)
     if bound:
         # "Return target … creature card from your graveyard to the
         # battlefield. **That creature** gains "Cumulative upkeep {2}.""
@@ -754,18 +776,17 @@ def _lower_lose_keyword(
             raise LoweringError(
                 f"removing {keyword!r} needs the keyword implemented", node=node
             )
-        # `remove_keyword` writes into layer 6's word set, and a line-derived
-        # ability is not in it — the compiler built the ability out of the
-        # printed line (CR 702.23a). Removing the word would report a removal
-        # and take nothing away, which is the silent half of the same failure
-        # `_check_grantable` refuses on the granting side. No card in the pool
-        # prints one; the day one does, it needs the removal channel built.
-        if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
-            raise LoweringError(
-                f"removing {keyword!r} needs a channel that takes an ability "
-                "the compiler read off the printed line",
-                node=node,
-            )
+        # A line-derived ability (CR 702.23a, CR 702.25a) is not in layer 6's
+        # word set at all — the compiler built the trigger out of the printed
+        # line — so removing the word there would report a removal and take
+        # nothing away. That used to refuse here, with the comment "the day one
+        # does, it needs the removal channel built". Barbed Foliage is that
+        # card, and the channel is ``keywords.remove_ability_keyword``: the
+        # keyword is recorded and ``Permanent.effective_card`` strikes its part
+        # out of the keyword line, so the compiler never makes the trigger.
+        # Which channel a word goes on is the *handler's* decision
+        # (``handlers/pump._remove_one_keyword``), exactly as it is on the
+        # granting side — so nothing here has to know the difference.
     if node.duration.kind is None:
         # "When this creature blocks, **it loses defender**." (Elder Land
         # Wurm.) Durationless and still not a static ability: it is the one-shot
@@ -830,6 +851,44 @@ def _lower_lose_keyword(
                 {"keywords": tuple(node.keywords), "duration": "end_of_turn"},
             ),
         )
+    # "Whenever a creature attacks you, **it** loses flanking until end of
+    # turn." (Barbed Foliage.) The pronoun was rebound to the *event's* subject
+    # by ``rebinding.rebind_pronoun_to_event_subject``, so it is neither the
+    # source nor a target: nothing was chosen and nothing may be, because the
+    # object is the one the event was about.
+    #
+    # Gated on the event, exactly as the counter one family over is: under any
+    # other trigger the same word names an object no fire site recorded, and the
+    # handler would strip a keyword from nothing while the card compiled clean.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
+        and not node.subject.filter.is_source
+    ):
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"it\" names the object the event was about, and this event "
+                "records none",
+                node=node,
+            )
+        described = _filter_payload(node.subject.filter)
+        if object_only_filter(described) is None:
+            # The rebound filter re-states the event's own narrowing, so it is
+            # carried and re-checked rather than dropped — a word consumed and
+            # never read is a word that could be deleted with no change to what
+            # the card does.
+            raise LoweringError(
+                "the removal's subject carries a restriction the resolution "
+                "cannot test", node=node,
+            )
+        payload = {
+            "keywords": tuple(node.keywords),
+            "duration": "end_of_turn",
+            "on_event_subject": True,
+        }
+        if described:
+            payload["filter"] = described
+        return (OracleInstruction("remove_event_subject_keyword", "", payload),)
     if not _is_target(node.subject):
         raise LoweringError("no handler removes a keyword from this subject", node=node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}

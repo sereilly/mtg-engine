@@ -222,6 +222,73 @@ def _without_ability_lines(
 _REMOVED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
+def _without_keyword_parts(
+    card: "CardDefinition", removed: tuple[str, ...]
+) -> "CardDefinition":
+    """*card* with the named keywords struck out of its keyword lines.
+
+    The counterpart of :func:`_without_ability_lines` for a **line-derived**
+    keyword (``keywords.LINE_DERIVED_KEYWORDS``), which cannot be taken away by
+    either of the other two channels: layer 6's word set is not where the
+    compiler looks for a flanking trigger, and matching the whole printed line
+    would have to match its reminder text and would take a second keyword
+    printed beside it ("Shroud, flanking").
+
+    So a keyword *line* is decomposed the way the compiler decomposes one —
+    ``normalize_creature_line`` strips the reminder, commas separate the parts
+    — and only the named parts go. A line with nothing left goes entirely; a
+    line the removal does not touch is left byte for byte, so a card nothing
+    was removed from is the card it was.
+
+    Only a line **every** part of which is a keyword is rewritten. A rules
+    sentence that happens to contain the word ("Whenever a creature without
+    flanking blocks…") is not a keyword line, and rewriting it by comma would
+    be rewriting prose.
+    """
+    from .keywords import keyword_ability_name
+    from .oracle import _is_supported_keyword_line, normalize_creature_line
+
+    key = (id(card), removed)
+    cached = _REMOVED_KEYWORD_CARDS.get(key)
+    if cached is not None:
+        return cached
+    lines: list[str] = []
+    changed = False
+    for line in (card.oracle_text or "").split(chr(10)):
+        if not _is_supported_keyword_line(line):
+            lines.append(line)
+            continue
+        parts = [
+            part.strip()
+            for part in normalize_creature_line(line).split(",")
+            if part.strip()
+        ]
+        kept = [
+            part for part in parts if keyword_ability_name(part) not in removed
+        ]
+        if len(kept) == len(parts):
+            lines.append(line)
+            continue
+        changed = True
+        if kept:
+            lines.append(", ".join(part[:1].upper() + part[1:] for part in kept))
+    if not changed:
+        _REMOVED_KEYWORD_CARDS[key] = card
+        return card
+    keywords = tuple(
+        word for word in card.keywords
+        if keyword_ability_name(word.lower()) not in removed
+    )
+    cached = dataclasses.replace(
+        card, oracle_text=chr(10).join(lines), keywords=keywords
+    )
+    _REMOVED_KEYWORD_CARDS[key] = cached
+    return cached
+
+
+_REMOVED_KEYWORD_CARDS: dict[tuple, "CardDefinition"] = {}
+
+
 # CR 400.7: a permanent that leaves the battlefield and comes back is a *new
 # object*. A stable identity therefore only has to be unique and monotonic —
 # the same requirement CR 613.7's timestamps have — so a monotonic counter is
@@ -449,6 +516,17 @@ class Permanent:
             base = _without_ability_lines(base, removed)
         if granted:
             base = _with_granted_abilities(base, tuple(granted))
+        # …and layer 6's third removal channel, a **line-derived** keyword
+        # (Barbed Foliage's "it loses flanking until end of turn"). Applied
+        # after the grants rather than with the removal above, and that order is
+        # the card: Agility grants flanking as a printed line, so a removal
+        # folded in first would strike a line that is not there yet and leave
+        # the granted one standing.
+        from .keywords import removed_ability_keywords
+
+        stripped = removed_ability_keywords(self)
+        if stripped:
+            base = _without_keyword_parts(base, tuple(sorted(set(stripped))))
         return base
 
     def has_type(self, card_type: str) -> bool:

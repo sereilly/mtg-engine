@@ -1445,6 +1445,24 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
             target, wanted
         ):
             target = None
+    elif instruction.payload.get("on_block_pair"):
+        # "Whenever this creature blocks a creature, put four fungus counters
+        # on **that creature**." (Mindbender Spores.) The other half of the
+        # block the trigger froze, read through the one function that knows how
+        # the two fire sites bind it: on the *blocks* half the stack item's
+        # target is the blocker itself, so the ordinary target resolution below
+        # would put the counters on the source.
+        from ._common import block_pair_permanents
+
+        wanted = instruction.payload.get("filter") or {}
+        target = next(
+            (
+                perm for perm in block_pair_permanents(game, context)
+                if game.is_on_battlefield(perm)
+                and (not wanted or permanent_matches_filter(perm, wanted))
+            ),
+            None,
+        )
     elif subject_role is not None:
         # "Put X glyph counters on target creature that target Wall blocked
         # this turn" (Glyph of Delusion). Two targets of different kinds, so

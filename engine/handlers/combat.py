@@ -556,6 +556,27 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+@effect_handler("double_combat_damage_until_eot")
+def double_combat_damage_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Blind Fury: "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead."
+
+    A CR 614 replacement armed by a resolving *spell*, so there is no permanent
+    for the interceptor to read and the record goes on the game — the same shape
+    the Fog flag below it takes, and appended rather than set for
+    ``_damage_multiplier``'s reason: two copies are two effects and the doubling
+    squares.
+
+    The name is recorded rather than a bare count, so the log names the card
+    that did it.
+    """
+    game.combat_damage_doubled_between_creatures.append(context.card.name)
+    game.log.append(
+        f"{context.card.name}: combat damage between creatures is doubled this turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("prevent_all_combat_damage")
 def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     game.combat_damage_prevented_until_eot = True

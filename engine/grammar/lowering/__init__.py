@@ -84,7 +84,6 @@ from ._amounts import (
     halved_count_spec,
 )
 from .damage import (
-    _sweep_kind,
     _lower_damage,
     _lower_damage_dealt_riders,
     _lower_damage_conjunction,
@@ -100,10 +99,11 @@ from .fighting import (
     _lower_fight,
 )
 from .redirection import (
+    _lower_damage_becomes_counter_removal,
+    _lower_double_combat_damage,
     _lower_redirect_damage,
 )
 from .prevention import (
-    _lower_damage_becomes_counter_removal,
     _lower_prevent_damage,
     _lower_prevent_half,
     _lower_prevent_all,
@@ -134,10 +134,9 @@ from .keywords import (
 )
 from .counter_removal import _lower_move_counter, _lower_remove_counter
 from ._counter_stores import _lower_player_gets_counters
-from .counters import (
-    _fused_tap_enchanted_then_counters,
-    _lower_put_counter,
-)
+from .counters import _lower_put_counter
+from .sequences import (_fused_cost_repeated_destroys,
+                        _fused_tap_enchanted_then_counters)
 from .loops import (
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,
@@ -211,7 +210,6 @@ from .destruction import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
-    _fused_cost_repeated_destroys,
     _lower_for_each_destroyed,
     _lower_delayed_destroy,
 )
@@ -361,7 +359,6 @@ __all__ = [
     "_MANA_KEYS",
     "_full_mana_payload",
     "_REST_OF_TURN",
-    "_sweep_kind",
     "_SWAMPS_THEY_CONTROL",
     "_BOARD_COUNT_DAMAGE",
     "_damaged_player_is",
@@ -385,6 +382,7 @@ __all__ = [
     "_lower_damage_becomes_counter_removal",
     "_lower_prevent_damage",
     "_lower_prevent_half",
+    "_lower_double_combat_damage",
     "_lower_redirect_damage",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",

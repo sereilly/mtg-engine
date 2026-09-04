@@ -37,6 +37,7 @@ from ._amounts import (
 )
 
 from ._sweeps import (
+    _sweep_kind,
     lower_described_set_damage,
     lower_counted_sweep_damage,
     lower_each_matching_damage,
@@ -58,6 +59,7 @@ from ._common import (
 from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_OBJECTS,
     _BOUND_OBJECT_DELAYED_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_CONTROLLER,
@@ -73,41 +75,6 @@ from ._events import (
 # ---------------------------------------------------------------------------
 # Damage
 # ---------------------------------------------------------------------------
-
-
-def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
-    """Recognize the board-sweep damage shapes as their dedicated handlers.
-
-    These are genuinely different effects, not riders: they damage every player
-    *and* a filtered set of creatures as one state-based-action batch.
-    """
-    hits_players = any(
-        isinstance(r, ast.PlayerRef) and r.kind in ("each_player", "each_opponent")
-        for r in recipients
-    )
-    creature_specs = [
-        r for r in recipients
-        if isinstance(r, ast.TargetSpec) and r.quantifier == "each"
-    ]
-    if len(creature_specs) != 1:
-        return None
-    filt = creature_specs[0].filter
-    if filt.card_types != ("creature",):
-        return None
-
-    if hits_players:
-        if filt.without_keywords == ("flying",):
-            return "earthquake_damage"
-        if filt.with_keywords == ("flying",):
-            return "hurricane_damage"
-        if not filt.with_keywords and not filt.without_keywords:
-            return "deal_damage_each_creature_and_player"
-        return None
-    if filt.attacking and not filt.with_keywords and not filt.without_keywords:
-        return "deal_damage_each_attacking_creature"
-    return None
-
-
 
 
 def _lower_halved_damage(
@@ -698,6 +665,36 @@ def _lower_damage_shape(
                 node=node,
             )
         payload["recipient"] = "bound_permanent"
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "it"
+        and not recipient.filter.is_source
+    ):
+        # "Whenever a creature without flying attacks you, this enchantment
+        # deals 1 damage to **it**." (Barbed Foliage.) The pronoun was rebound
+        # to the trigger's own subject by
+        # ``rebinding.rebind_pronoun_to_event_subject``, so it is neither the
+        # source nor a target — nothing was chosen and nothing may be.
+        #
+        # Gated on the event for the bound-object branch's reason one step up:
+        # under a trigger whose fire site froze no object the words name
+        # nothing, and the damage would fall through to whatever the resolution
+        # context happened to be carrying — which for a targetless trigger is a
+        # player's face.
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"it\" names the object the event was about, and this event "
+                "records none",
+                node=node,
+            )
+        described = _filter_payload(recipient.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the event-subject damage cannot test this restriction", node=node
+            )
+        payload["recipient"] = "event_subject"
+        if described:
+            payload["filter"] = described
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_player":
         # "…deals damage … to each player" (Armageddon Clock). Its own recipient
         # rather than a fall-through: the kind used to be listed among the ones

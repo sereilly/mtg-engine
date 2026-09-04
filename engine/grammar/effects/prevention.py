@@ -726,6 +726,38 @@ def _parse_damage_becomes_counter_removal(
         stream.reset(mark)
         return None
     return ast.DamageBecomesCounterRemoval(recipient, str(counter), duration)
+def _parse_double_combat_damage(stream: TokenStream) -> "ast.DoubleCombatDamage | None":
+    """``If a creature would deal combat damage to a creature this turn, it
+    deals double that damage to that creature instead.`` (Blind Fury —
+    CR 614.)
+
+    Beside the redirect below rather than in a family of its own, for this
+    module's own stated reason: one printed sentence returns either node, and
+    two parse modules would be one importing the other.
+
+    **Every word is required**, and each is a narrowing the interceptor tests:
+    "combat" (a ping ability is not), "a creature" on each end (the face is not,
+    which is what makes this a trick for blockers rather than a burn spell), and
+    "this turn". A wording that dropped any of them would be a different card
+    wearing this one's head, so the production refuses rather than reading it as
+    this one — and refuses **without consuming**, so every other "If a creature
+    would …" sentence keeps the reader it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "a", "creature", "would", "deal", "combat", "damage", "to",
+        "a", "creature", "this", "turn",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "it", "deals", "double", "that", "damage", "to", "that", "creature",
+        "instead",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.DoubleCombatDamage()
 
 
 def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":

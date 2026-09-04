@@ -551,6 +551,32 @@ def _before_attackers_are_declared(game: "Game", controller_index: int, source) 
     )
 
 
+def _before_blockers_are_declared(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only before blockers are declared." (Acidic Dagger.)
+
+    One combat step later than the window above, and its own predicate for that
+    one's stated reason: two spellings of "when is it too late" would be two
+    answers, and the one updated later would decide which card could be
+    activated. CR 509.1 declares blockers in the declare-blockers step, so every
+    step up to and including it is still "before" — the attack has been declared
+    by then, which is exactly the window the Dagger wants: its ability names a
+    creature that is about to deal combat damage.
+
+    Read off the same lock the attackers window reads, one step over: the
+    declaration is what closes the window, not the step's arrival.
+    """
+    if game.current_turn_phase in ("beginning", "precombat_main"):
+        return True
+    if game.current_turn_phase != "combat":
+        return False
+    if game.current_step in ("beginning_of_combat", "declare_attackers"):
+        return True
+    return (
+        game.current_step == "declare_blockers"
+        and not game.combat_blockers_locked
+    )
+
+
 def _opponents_turn_before_attackers(game: "Game", controller_index: int, source) -> bool:
     """Nettling Imp -- the same window `cast_restrictions.py` reads for the same
     printed phrase, narrowed to an opponent's turn."""
@@ -1374,6 +1400,16 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only before attackers are declared$"),
         _before_attackers_are_declared,
         "only before attackers are declared",
+    ),
+    # "Activate only before blockers are declared." (Acidic Dagger.) One combat
+    # step later than the pair above, and a row of theirs rather than a tail on
+    # either: the Dagger's ability names a creature that is *about to* deal
+    # combat damage, so it wants the attack already declared and the blocks not
+    # yet — which is a window neither of those two describes.
+    ActivationRestriction(
+        re.compile(r"^activate only before blockers are declared$"),
+        _before_blockers_are_declared,
+        "only before blockers are declared",
     ),
     ActivationRestriction(
         re.compile(r"^activate only if you have exactly seven cards in hand$"),

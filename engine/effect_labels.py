@@ -555,6 +555,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     # through the ordinary keyword grant, so it needs the bucket its siblings
     # above already have.
     "grant_target_keyword_until_eot": "triggered_pump",
+    "remove_event_subject_keyword": "triggered_pump",
     "pump_self": "triggered_pump",
     "pump_target_creature_until_eot": "triggered_pump",
     "tap_any_number_then_pump_self": "triggered_pump",

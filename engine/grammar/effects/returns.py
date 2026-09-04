@@ -10,10 +10,13 @@ opened "Return-to-zone, destroy, sacrifice" — a return names **two** zones, th
 one an object leaves and the one it goes to, and that pair is what picks the
 handler; everything left behind acts on a permanent where it stands.
 
-``_parse_further_subjects`` went down into ``phrases`` rather than travelling
+``_parse_further_subjects`` went down out of ``board`` rather than travelling
 with either half. Both the return here and the destroy left behind read it, and
 a production two families need has no home inside one of them — the same move
-``_expect_counter_kind`` made when ``counters`` left ``characteristics``.
+``_expect_counter_kind`` made when ``counters`` left ``characteristics``. It
+came to rest in ``references`` a wave later, one layer further down again, for
+the reason recorded there; ``phrases`` re-exports it, so the import above still
+reads as it was written.
 """
 
 from .. import ast

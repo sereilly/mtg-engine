@@ -191,6 +191,13 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 #: it" already reads the same key from its own handler.
 _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+    # "Whenever a creature attacks you, **it** loses flanking until end of
+    # turn" / "…this enchantment deals 1 damage to **it**" (Barbed Foliage).
+    # The declared attacker, stamped by `_fire_matching_creature_attacks_triggers`
+    # for the same reason `become_tapped` stamps its subject: the announcement
+    # is game-wide and per object, and by resolution the creature may have been
+    # removed from combat or destroyed.
+    "matching_creature_attacks",
 })
 
 
@@ -348,6 +355,7 @@ _EVENT_SUBJECT_OWNERS: frozenset[str] = frozenset({
 _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     "bound_permanent_dies",              # Reincarnation
     "bound_permanent_dealt_damage",      # Glyph of Life
+    "bound_permanent_becomes_blocked",   # Barreling Attack
     "next_end_of_combat",                # Glyph of Doom
     # "Flip a coin at the beginning of the next end step. If you lose the flip,
     # sacrifice **that creature**." (Goblin Kites.) A *step* event that names an
@@ -374,6 +382,22 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # turn one cleanup step, so the step itself names nobody.
     "next_cleanup_step",
 })
+
+#: Delayed-trigger events whose fire site stamps the **agent** — the object at
+#: the other end of the event from the one the entry is bound to. "Whenever
+#: target creature deals combat damage to **a non-Wall creature** this turn,
+#: destroy **that non-Wall creature**" (Acidic Dagger): the entry is bound to
+#: the damager and the sentence acts on what it damaged.
+#:
+#: Its own table beside `_BOUND_OBJECT_DELAYED_EVENTS` rather than more entries
+#: in it, and for that table's own reason: the two answer different questions
+#: off different frozen keys, and reading one from the other's key is how a
+#: sentence destroys the creature its controller aimed the ability at instead
+#: of the creature it hit.
+_DELAYED_AGENT_EVENTS: frozenset[str] = frozenset({
+    "bound_permanent_deals_combat_damage",   # Acidic Dagger
+})
+
 
 #: The payload key the delayed machinery stamps that object's id under.
 BOUND_PERMANENT_ID = "bound_permanent_id"

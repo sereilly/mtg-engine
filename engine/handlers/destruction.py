@@ -1074,6 +1074,62 @@ def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("destroy_delayed_agent")
+def destroy_delayed_agent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever target creature deals combat damage to a non-Wall creature this
+    turn, destroy **that non-Wall creature**." (Acidic Dagger.)
+
+    ``destroy_bound_permanent``'s twin at the *other* end of the event. The
+    entry is bound to the creature that dealt the damage — that is what the
+    ability targeted — and the words act on what it hit, which the fire site
+    stamps as the event's agent because by resolution the combat damage step is
+    over and nothing on a board says which creature took it.
+
+    The restated noun phrase is re-checked here, for the reason every other
+    re-check in this file exists: the word is carried, so it is read. A creature
+    already gone is destroyed by nothing, which is CR 608.2b doing as much as it
+    can rather than a failure.
+    """
+    from ..delayed_triggers import DELAYED_AGENT_ID
+    from ..subject_filters import subject_matches
+
+    agent_id = (context.trigger_context or {}).get(DELAYED_AGENT_ID)
+    victim = game.permanent_by_id(agent_id) if isinstance(agent_id, int) else None
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    described = _filter_payload_of(instruction)
+    if described and not subject_matches(
+        game, victim, described,
+        observer=game.players.index(context.caster),
+        source=context.source_permanent,
+    ):
+        game.log.append(
+            f"{context.card.name}: {victim.card.name} no longer answers the clause"
+        )
+        return True, "resolved"
+    game._destroy_swept_permanents(
+        game.players[game.controller_index_of(victim) or 0],
+        lambda perm: perm is victim,
+        allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+    )
+    game.log.append(f"{context.card.name} destroyed {victim.card.name}")
+    return True, "resolved"
+
+
+def _filter_payload_of(instruction: OracleInstruction) -> dict:
+    """The printed noun phrase on a bound-object destroy, without the riders.
+
+    ``bypass_regeneration`` rides the same payload and is not part of the
+    phrase; handed to ``subject_matches`` it would be a key no matcher tests,
+    which is the silent-drop this engine refuses everywhere else.
+    """
+    return {
+        key: value for key, value in instruction.payload.items()
+        if key != "bypass_regeneration"
+    }
+
+
 @effect_handler("sacrifice_bound_permanent")
 def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature leaves the battlefield this turn, **sacrifice that
@@ -1091,13 +1147,29 @@ def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, contex
     already gone is sacrificed by nothing, which is CR 608.2b doing as much as
     it can rather than a failure.
     """
+    from ..oracle_types import LAST_TARGET_CONTROLLER
+
+    # "**If the player does**, they create a 0/2 … Wall …" (Basalt Golem). Both
+    # halves of the rider read this step: whether it took place, and whose
+    # creature it was. The seat is recorded **before** the sacrifice, which is
+    # the only moment it can be — by the sentence behind it the creature is a
+    # card in a graveyard (CR 400.7) and its controller is nobody's to read.
+    #
+    # Written as a zero and a None on the path that does nothing, for the reason
+    # ``discard_target_cards`` writes its zero: a missing key and a false one
+    # read the same to the rider, and writing it is what says this step answered.
+    context.results["sacrificed_this_way"] = 0
     victim = game.permanent_by_id(
         (context.trigger_context or {}).get("bound_permanent_id")
     )
     if victim is None or not game.is_on_battlefield(victim):
         game.log.append(f"{context.card.name}: the creature it named is gone")
         return True, "resolved"
+    seat = game.controller_index_of(victim)
+    if isinstance(seat, int):
+        context.results[LAST_TARGET_CONTROLLER] = seat
     game.sacrifice_permanent(victim)
+    context.results["sacrificed_this_way"] = 1
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
     return True, "resolved"
 

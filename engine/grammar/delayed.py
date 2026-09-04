@@ -26,6 +26,7 @@ from . import ast
 from .errors import GrammarError
 from .conditions import _parse_condition
 from .nouns import parse_object_filter
+from .vocabulary import CARD_TYPES
 from .phrases import parse_bound_subject, parse_subject_filter_at
 from .rebinding import rebind_pronoun_to_delay_target
 from .readers import accept_source_reference
@@ -342,6 +343,20 @@ def _delayed_bound_subject(stream: TokenStream) -> "ast.ObjectFilter | None":
     could be deleted with no change to what the card does, and this engine
     does not leave one lying in a payload.
     """
+    # "When **the targeted creature** leaves the battlefield this turn, …"
+    # (Acidic Dagger.) The definite spelling of the same referent: the ability
+    # targeted once (CR 602.2b) and both of its delayed sentences are about that
+    # one creature, so the words name what "that creature" names and reach the
+    # same binding. Read here rather than taught to `parse_bound_subject`,
+    # because "targeted" is a word about *this* ability's announcement and means
+    # nothing on a line that chose nobody.
+    definite = stream.mark()
+    if stream.accept_phrase("the", "targeted"):
+        noun = stream.peek_word()
+        if noun in CARD_TYPES:
+            stream.advance()
+            return ast.ObjectFilter(card_types=(noun,))
+    stream.reset(definite)
     spec = parse_bound_subject(stream)
     if spec is None or spec.quantifier != "that":
         return None
@@ -440,6 +455,52 @@ _BLOCK_PAIR_WINDOWS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("this", "combat"), "end_of_combat"),
     (("this", "turn"), "end_of_turn"),
 )
+
+
+def _parse_targeted_damage_delay(
+    stream: TokenStream,
+) -> "tuple[ast.TargetSpec, ast.ObjectFilter] | None":
+    """``target <noun> deals combat damage to <noun> this turn`` — the opener
+    that **chooses** the creature whose damage it watches (Acidic Dagger).
+
+    :func:`_parse_targeted_combat_delay`'s twin one event over, and the same
+    reason it exists: CR 602.2b picks the target as the ability is activated, so
+    the spec has to travel out of the parse or the picker has nothing to offer
+    and the arming handler nothing to bind.
+
+    The phrase after "to" is the **agent** — the other end of the event — and is
+    read rather than skipped for the reason every narrowing in this grammar is:
+    "a **non-Wall** creature" is what keeps the Dagger from destroying the Wall
+    that stopped it, and a word consumed and never read is a word that could be
+    deleted with no change to what the card does.
+
+    Refuses with the cursor untouched, so every other "whenever" opener keeps
+    its reading.
+    """
+    mark = stream.mark()
+    try:
+        chosen = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if chosen is None or not chosen.targeted or chosen.count != 1:
+        # One permanent per entry, for `_parse_targeted_combat_delay`'s reason:
+        # ``DelayedTrigger`` binds one id.
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("deals", "combat", "damage", "to"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        agent = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if agent is None or not stream.accept_phrase("this", "turn"):
+        stream.reset(mark)
+        return None
+    return chosen, agent
 
 
 def _parse_source_block_pair_delay(
@@ -559,6 +620,21 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             if subject is not None and stream.accept_phrase("dies", "this", "turn"):
                 event, binds = "bound_permanent_dies", True
             elif subject is not None and stream.accept_phrase(
+                "becomes", "blocked", "this", "turn"
+            ):
+                # "When that creature **becomes blocked** this turn, …"
+                # (Barreling Attack.) CR 509.1h's state, watched about the one
+                # creature the spell chose rather than about a class — which is
+                # what separates it from the printed static "whenever this
+                # creature becomes blocked": that one is an ability of the
+                # creature, and this one is created by a spell that will be in a
+                # graveyard by the time it fires.
+                #
+                # "This turn" is CR 603.7b's stated duration and the ability is
+                # still one-shot: a creature blocked twice in a turn is blocked
+                # in two combats, and the card gives its bonus once.
+                event, binds = "bound_permanent_becomes_blocked", True
+            elif subject is not None and stream.accept_phrase(
                 "leaves", "the", "battlefield"
             ):
                 # "When that creature leaves the battlefield this turn,
@@ -587,7 +663,18 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         # turn, …" — "this turn" is CR 603.7b's stated duration, so this one
         # fires every time for as long as it lasts.
         after_whenever = stream.mark()
-        subject = _delayed_bound_subject(stream)
+        # "Whenever **target creature** deals combat damage to a non-Wall
+        # creature this turn, …" (Acidic Dagger.) Read before the bound-subject
+        # openers below: this one *chooses* its object where those name one the
+        # effect already holds, and it declines without consuming — the same
+        # order the "when" branch puts `_parse_targeted_combat_delay` in.
+        aimed = _parse_targeted_damage_delay(stream)
+        if aimed is not None:
+            target, agent = aimed
+            event, binds, once, duration = (
+                "bound_permanent_deals_combat_damage", True, False, "end_of_turn",
+            )
+        subject = None if event is not None else _delayed_bound_subject(stream)
         if subject is not None and stream.accept_phrase("is", "dealt", "damage", "by"):
             # The indefinite article is the noun parser's caller's business
             # everywhere in this grammar: `parse_object_filter` reads the

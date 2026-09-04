@@ -109,7 +109,18 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     # the Dead): X is defined by a zone count at resolution, not announced.
     # The sign travels separately because the payload's "x" cannot be negated.
     x_count = instruction.payload.get("x_from_count")
-    if x_count is not None:
+    # "…**it** gets +1/+1 until end of turn for each creature blocking **it**."
+    # (Barreling Attack.) One sentence, one pronoun: the creature counted around
+    # is the creature being pumped, and neither is the ability's own source —
+    # the spell that armed the delayed trigger is a card in a graveyard by now
+    # and blocks nothing. So the count is deferred until the target is resolved
+    # and measured against *that* permanent, which is the same rewrite
+    # `_resolve_per_each_pronoun` makes one package over for the sentence whose
+    # subject **is** the source.
+    counted_from_target = (
+        isinstance(x_count, dict) and x_count.get("relative_to") == "pumped_target"
+    )
+    if x_count is not None and not counted_from_target:
         # Through the one evaluator. This used to be a second counter with a
         # second spelling of the spec — hardcoded to the graveyard, reading
         # `card_types` where every other reader says `filter` — so the same
@@ -168,6 +179,21 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )
     if target_perm is not None:
+        if counted_from_target:
+            # The deferred count, now that the object both pronouns name is in
+            # hand. Re-derived here rather than earlier, so a target that has
+            # left (CR 608.2b) never counts at all.
+            x_value = count_from_payload(game, context, x_count, source=target_perm)
+            power_delta = resolve_amount(
+                instruction.payload.get("power", 0), x_value
+            )
+            toughness_delta = resolve_amount(
+                instruction.payload.get("toughness", 0), x_value
+            )
+            if instruction.payload.get("power_negative"):
+                power_delta = -power_delta
+            if instruction.payload.get("toughness_negative"):
+                toughness_delta = -toughness_delta
         # "…until end of combat" (Glyph of Destruction) is the same boost on a
         # different channel, so it is payload rather than a second kind — the
         # word decides which sweep takes it back. Absent means end of turn,
@@ -1493,6 +1519,24 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
     in between is a new object when it returns (CR 400.7) and simply misses the
     grant; an empty record is a legal outcome rather than an error.
     """
+    if instruction.payload.get("on_block_pair"):
+        # "Whenever this creature blocks a creature, … the creature gains
+        # "<ability>"." (Mindbender Spores.) The creature the block trigger
+        # froze, read through the one function that knows how the two fire
+        # sites bind it — on the *blocks* half the stack item's target is the
+        # blocker itself, so the ordinary target resolution below would grant
+        # the abilities to the source.
+        from ._common import block_pair_permanents
+
+        granted = 0
+        for permanent in block_pair_permanents(game, context):
+            if not game.is_on_battlefield(permanent):
+                continue
+            _grant_ability_texts(game, permanent, instruction, context)
+            granted += 1
+        if not granted:
+            game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
         granted = 0
@@ -1657,6 +1701,41 @@ _COLOR_SYMBOL_TO_WORD = {
 }
 
 
+def _remove_one_keyword(permanent, keyword: str, *, duration=None, seat=None) -> None:
+    """Take one keyword ability away, on the channel its reader looks at.
+
+    The exact mirror of :func:`_grant_one_keyword`, and it has to be: layer 6's
+    word set is not where a **line-derived** ability lives (CR 702.23a, CR
+    702.25a — the compiler builds the trigger out of the printed keyword line),
+    so ``remove_keyword`` there would record a removal and take nothing away.
+    ``remove_ability_keyword`` strikes the keyword out of the line instead, and
+    ``Permanent.effective_card`` is what applies it.
+
+    Every removal handler in this file routes through here, so which channel a
+    word goes on is decided once — the granting side learned that lesson first,
+    and a second copy of the decision is how a grant and a removal come to
+    disagree about what a permanent says.
+    """
+    from ..keywords import (LINE_DERIVED_KEYWORDS, keyword_ability_name,
+                            remove_ability_keyword)
+
+    if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
+        remove_ability_keyword(permanent, keyword, duration=duration, seat=seat)
+        # …**and** the word, which is the half a line-derived keyword needs
+        # twice. Striking the line stops the compiler making the trigger; the
+        # word is what the *next* creature's "without flanking" filter asks, and
+        # an Aura contributes it to layer 6 directly (Agility grants both, from
+        # the attach timestamp). So a removal that only struck the line would
+        # take Agility's trigger away and leave its enchanted creature still
+        # counting as "with flanking" — the two-representations-one-reader bug
+        # this engine keeps finding, in a keyword instead of a zone. Recorded
+        # second so CR 613.9's ordering is the ordinary one: this removal's
+        # timestamp is later than the attach, so it wins until it expires.
+        remove_keyword(permanent, keyword, duration=duration, seat=seat)
+        return
+    remove_keyword(permanent, keyword, duration=duration, seat=seat)
+
+
 @effect_handler("remove_target_keyword_until_eot")
 def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"It loses indestructible until end of turn." (Soul Sear — the pronoun
@@ -1672,7 +1751,7 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
     keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
-        remove_keyword(target, keyword, duration="end_of_turn")
+        _remove_one_keyword(target, keyword, duration="end_of_turn")
     game.log.append(
         f"{target.card.name} loses {' and '.join(keywords)} until end of turn ({card.name})"
     )
@@ -1713,7 +1792,7 @@ def remove_team_keyword_until_eot(game: Game, instruction: OracleInstruction, co
             ):
                 continue
             for keyword in keywords:
-                remove_keyword(perm, keyword, **lifetime)
+                _remove_one_keyword(perm, keyword, **lifetime)
             stripped += 1
     game._recompute_continuous_effects()
     noun = "permanent(s)" if every_permanent else "creature(s)"
@@ -1744,11 +1823,55 @@ def remove_self_keyword(game: Game, instruction: OracleInstruction, context: Ora
     # key meant and what Elder Land Wurm's defender loss still means.
     duration = instruction.payload.get("duration")
     for keyword in keywords:
-        remove_keyword(source_permanent, keyword, duration=duration)
+        _remove_one_keyword(source_permanent, keyword, duration=duration)
     game._recompute_continuous_effects()
     game.log.append(
         f"{source_permanent.card.name} loses {' and '.join(keywords)}"
         + (" until end of turn" if duration == "end_of_turn" else "")
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_event_subject_keyword")
+def remove_event_subject_keyword(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature attacks you, **it** loses flanking until end of
+    turn." (Barbed Foliage.)
+
+    ``remove_target_keyword_until_eot``'s subject read off the *event* instead
+    of off a target: the trigger chose nothing, so the object is the one the
+    fire site froze (CR 603.10) — by id, because by resolution the attacker may
+    have left and a board search would find a look-alike.
+
+    The printed filter is re-checked here rather than trusted from the
+    announcement, for the reason every other rebound subject is: the words the
+    lowering carried are the words that have to hold when the ability resolves.
+    """
+    from ..subject_filters import subject_matches
+
+    bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+    victim = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    caster_index = game.players.index(context.caster)
+    described = instruction.payload.get("filter")
+    if described and not subject_matches(
+        game, victim, described, observer=caster_index,
+        source=context.source_permanent,
+    ):
+        game.log.append(
+            f"{context.card.name}: {victim.card.name} no longer answers the clause"
+        )
+        return True, "resolved"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    duration = instruction.payload.get("duration")
+    for keyword in keywords:
+        _remove_one_keyword(victim, keyword, duration=duration)
+    game._recompute_continuous_effects()
+    game.log.append(
+        f"{victim.card.name} loses {' and '.join(keywords)}"
+        + (" until end of turn" if duration == "end_of_turn" else "")
+        + f" ({context.card.name})"
     )
     return True, "resolved"
 

@@ -46,6 +46,7 @@ from ._events import (
     OTHER_CHOSEN_PERMANENT,
     EVENT_SUBJECT_CONTROLLER,
     _EVENT_SUBJECT_OBJECTS,
+    binds_block_pair,
     _RECORDED_PERMANENTS,
 )
 
@@ -81,6 +82,9 @@ def _lower_put_counter(
     node: ast.PutCounter,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
+    event_subject: object | None = None,
+    #: The trigger kind unfiltered by `whole_effect` — see the caller.
+    trigger_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     if node.distributed:
         # "Distribute X +1/+1 counters among any number of target creatures."
@@ -717,6 +721,33 @@ def _lower_put_counter(
                 **_filter_payload(node.subject.filter),
             }),
         )
+    # "…put four **fungus** counters on **that creature**." (Mindbender
+    # Spores.) The other half of the block CR 509.3a-d announced, which the
+    # trigger froze — the referent `pump_block_pair` already acts on, and never
+    # a choice. `binds_block_pair` rather than the kind alone, for that
+    # helper's reason: a bare firing has several blockers and no way to say
+    # which one the words name. Named counters only — a P/T pair is
+    # `place_pt_counters`' question and wants that channel.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.up_to
+        and not node.then_double
+        and not is_pt_counter(node.counter)
+        and binds_block_pair(trigger_event, event_subject)
+    ):
+        if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+            raise LoweringError("a bound placement counts a fixed number", node=node)
+        described = _filter_payload(node.subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the counter's subject carries a restriction the resolution "
+                "cannot test", node=node,
+            )
+        return (OracleInstruction("add_named_counter_to_target", "", {
+            "counter": node.counter, "count": node.count.value,
+            "on_block_pair": True, **({"filter": described} if described else {}),
+        }),)
     # "You put a **-1/-1** counter on **each creature that player controls**"
     # (Misfortune). A CR 122.1a counter placed on every member of a set the
     # sentence *describes* rather than chooses (CR 611.2c: the board is read as
@@ -931,53 +962,3 @@ def _lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     if node.count.value != 1:
         payload["count"] = node.count.value
     return (OracleInstruction("add_counter_to_each_matching", "", payload),)
-
-
-def _fused_tap_enchanted_then_counters(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"Tap enchanted creature and put X sleep counters on it." (Venarian Gold.)
-
-    Fused because of the pronoun. The noun parser reads a bare "it" as the
-    ability's own source, which in this sentence is the *Aura* — so lowered
-    step by step the counters would land on the Aura while the card puts them
-    on the creature it tapped. The antecedent is the step in front of it, and
-    this is the one place that knows what that step was (the same discipline
-    ``_lower_steps`` states for "if you do"), so the pairing is made here:
-    after a tap of the enchanted creature, "it" is that creature.
-
-    Only the pronoun spelling is claimed. "…put three pupa counters on **this
-    Aura**" (Cocoon) names the source outright and lowers step by step to the
-    self placement, exactly as printed. Anything the attached placement cannot
-    honour — an "up to", a doubling rider, a cap, a count that is not a number
-    or X — returns to the generic path, whose refusals name what is missing.
-    """
-    if len(steps) != 2:
-        return None
-    tap, put = steps
-    if not isinstance(tap, ast.Tap) or not _is_enchanted(tap.subject):
-        return None
-    if not isinstance(put, ast.PutCounter):
-        return None
-    subject = put.subject
-    if not (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "it"
-        and subject.filter.is_source
-    ):
-        return None
-    if is_pt_counter(put.counter) or put.up_to or put.then_double or put.cap is not None:
-        return None
-    if isinstance(put.count, ast.Fixed):
-        count: object = put.count.value
-    elif isinstance(put.count, ast.Var):
-        count = "x"
-    else:
-        return None
-    return (
-        OracleInstruction("tap_enchanted_creature", "", {}),
-        OracleInstruction(
-            "add_named_counter_to_attached", "",
-            {"counter": put.counter, "count": count},
-        ),
-    )

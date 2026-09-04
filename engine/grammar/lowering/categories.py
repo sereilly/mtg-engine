@@ -157,6 +157,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The same removal aimed at the object the *trigger's event* was about
+    # ("Whenever a creature attacks you, it loses flanking until end of
+    # turn", Barbed Foliage). One family, because what differs is which
+    # object the words name and that is the payload.
+    "remove_event_subject_keyword": "pump",
     # The board-wide negative twin ("All creatures lose flying until end of
     # turn", Whiteout), beside `grant_team_keyword_until_eot`.
     "remove_team_keyword_until_eot": "pump",
@@ -266,6 +271,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…destroy **that creature**" inside a delayed ability (War Barge):
     # the object the creating ability bound, by id, rather than a pick.
     "destroy_bound_permanent": "destruction",
+    # "…destroy **that non-Wall creature**" (Acidic Dagger): the same
+    # destroy at the other end of the event, on the creature the entry was
+    # bound to having damaged rather than on the entry's own object.
+    "destroy_delayed_agent": "destruction",
     # Its sacrifice twin (Phantasmal Mount). CR 701.21a, not CR 701.7 — a
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
@@ -360,6 +369,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
+    # "…it deals **double** that damage to that creature instead" (Blind
+    # Fury). The third half of a damage event a CR 614 replacement can
+    # change, beside the recipient above and the prevention elsewhere:
+    # categorised with the damage it multiplies.
+    "double_combat_damage_until_eot": "damage",
     # The class-scoped, optional one (Blood of the Martyr). Same category
     # for the same reason: what it moves is damage, and being optional and
     # being about a class are payload differences.
@@ -509,6 +523,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "discard_all_matching_cards": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",
+    # "…You may put that card on the bottom of that player's library"
+    # (Coral Fighters): the same look with the one offer that moves a card.
+    "look_at_library_top_then_bottom": "zones",
     # "…, then put them back in any order" (Natural Selection, Portent). The
     # look above with the rearrangement switched on — same prompt, same zone,
     # so the same family.
@@ -624,6 +641,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lands you control phase out").
     "phase_out_self": "zones",
     "phase_out_matching": "zones",
+    # "…and **that creature** phase out" (Dream Fighter): the creature the
+    # block trigger bound, beside the sweep and the source above it.
+    "phase_out_block_pair": "zones",
     # Ending the game (CR 104). Their own category rather than "life": nothing
     # about a life total is involved, and the three outcomes share one set of
     # handlers in engine/handlers/life_and_game.py.
