@@ -1315,6 +1315,53 @@ cards perturbed is the shape this repo refuses, so it went back. Urborg Panther
 needs the *pronoun* rebound — "it" under an ability that targets nothing
 earlier names the source — which is a round of its own.
 
+### Wave 1 — five worktree groups, split by grammar family
+
+After ten serial rounds the set had no big rocks left and 92 of its 108
+remaining cards were blocked by exactly one line each, so the work changed shape
+from "find the next keyword" to "one production per card". That is what a
+fan-out is for. Five groups, one worktree each, split by **grammar family**
+rather than by printed type — combat, turn steps, damage, zones, statics —
+because a split by card type puts every group in `tests/sets/test_mir_creatures.py`
+and in each other's productions.
+
+The five per-set test files were opened on `main` first with the block
+convention in their docstrings (FEM's lesson, applied before the fan-out rather
+than after it), and the between-merges gate was built and verified clean at the
+merge base: missing-name scan **before** the suite, dead-import and
+newly-duplicated-definition scans, the per-set block sweep, the size caps, the
+full suite, `check_all.py`. Integration is serial; the gate runs after every
+merge, never at the end.
+
+#### W1G4 — zones and cards: 227 → 240 supported
+
+Thirteen of twenty-two. **Its correction of its own brief is the yield**, and it
+is the refusal-site lesson four more times: Lion's Eye Diamond refused at
+`expected a subject` and was blocked by its *last* sentence ("Activate only as
+an instant"), one missing `activation_restrictions.py` row, with the whole cost
+already parsing and charging; Jungle Patrol's cost-path refusal was Scryfall
+listing "Token" among the **supertypes**, so the noun parser ate the singular as
+an adjective and the phrase had no head noun; Cadaverous Bloom's mana
+alternatives have been one payload since Alliances and only the hand-exile cost
+was missing; and Afterlife's "no exile in this effect" was not a missing
+producer at all — the destroy handler had been writing that seat all along under
+a second name.
+
+**Five already-supported cards it found silently mis-playing**, every one
+reporting supported while dropping the sentence that *is* the card:
+
+| Card | What it does instead |
+| --- | --- |
+| Tombstone Stairwell | pays escalating cumulative upkeep and never makes a Zombie or destroys one — three of its four triggers have no instruction |
+| Malignant Growth | accumulates growth counters and never makes the opponent draw, never deals the damage |
+| Grim Feast | takes its 1 damage every upkeep and never gains the life — strictly *worse* than printed, against its own controller |
+| Telim'Tor's Edict | draws the delayed card and exiles nothing ("you own **or control**" is a union of two seat relations the matcher ANDs) |
+| Soul Rend | draws the delayed card and destroys nothing (a conditional destroy) |
+
+And two outside its family, from `parse_coverage`: **Aleatory** and **Lure of
+Prey** carry "Cast this spell only …" clauses nothing claims, so nothing
+enforces them and both can be cast at any time.
+
 ### Where the set stands — ten rounds in
 
 **227/335 supported (67.8%), from 184/335 (54.9%) at ingest.** Every gate is
