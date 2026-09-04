@@ -1635,6 +1635,41 @@ _COLOR_SYMBOL_TO_WORD = {
 }
 
 
+def _remove_one_keyword(permanent, keyword: str, *, duration=None, seat=None) -> None:
+    """Take one keyword ability away, on the channel its reader looks at.
+
+    The exact mirror of :func:`_grant_one_keyword`, and it has to be: layer 6's
+    word set is not where a **line-derived** ability lives (CR 702.23a, CR
+    702.25a — the compiler builds the trigger out of the printed keyword line),
+    so ``remove_keyword`` there would record a removal and take nothing away.
+    ``remove_ability_keyword`` strikes the keyword out of the line instead, and
+    ``Permanent.effective_card`` is what applies it.
+
+    Every removal handler in this file routes through here, so which channel a
+    word goes on is decided once — the granting side learned that lesson first,
+    and a second copy of the decision is how a grant and a removal come to
+    disagree about what a permanent says.
+    """
+    from ..keywords import (LINE_DERIVED_KEYWORDS, keyword_ability_name,
+                            remove_ability_keyword)
+
+    if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
+        remove_ability_keyword(permanent, keyword, duration=duration, seat=seat)
+        # …**and** the word, which is the half a line-derived keyword needs
+        # twice. Striking the line stops the compiler making the trigger; the
+        # word is what the *next* creature's "without flanking" filter asks, and
+        # an Aura contributes it to layer 6 directly (Agility grants both, from
+        # the attach timestamp). So a removal that only struck the line would
+        # take Agility's trigger away and leave its enchanted creature still
+        # counting as "with flanking" — the two-representations-one-reader bug
+        # this engine keeps finding, in a keyword instead of a zone. Recorded
+        # second so CR 613.9's ordering is the ordinary one: this removal's
+        # timestamp is later than the attach, so it wins until it expires.
+        remove_keyword(permanent, keyword, duration=duration, seat=seat)
+        return
+    remove_keyword(permanent, keyword, duration=duration, seat=seat)
+
+
 @effect_handler("remove_target_keyword_until_eot")
 def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"It loses indestructible until end of turn." (Soul Sear — the pronoun
@@ -1650,7 +1685,7 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
     keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
-        remove_keyword(target, keyword, duration="end_of_turn")
+        _remove_one_keyword(target, keyword, duration="end_of_turn")
     game.log.append(
         f"{target.card.name} loses {' and '.join(keywords)} until end of turn ({card.name})"
     )
@@ -1691,7 +1726,7 @@ def remove_team_keyword_until_eot(game: Game, instruction: OracleInstruction, co
             ):
                 continue
             for keyword in keywords:
-                remove_keyword(perm, keyword, **lifetime)
+                _remove_one_keyword(perm, keyword, **lifetime)
             stripped += 1
     game._recompute_continuous_effects()
     noun = "permanent(s)" if every_permanent else "creature(s)"
@@ -1722,11 +1757,55 @@ def remove_self_keyword(game: Game, instruction: OracleInstruction, context: Ora
     # key meant and what Elder Land Wurm's defender loss still means.
     duration = instruction.payload.get("duration")
     for keyword in keywords:
-        remove_keyword(source_permanent, keyword, duration=duration)
+        _remove_one_keyword(source_permanent, keyword, duration=duration)
     game._recompute_continuous_effects()
     game.log.append(
         f"{source_permanent.card.name} loses {' and '.join(keywords)}"
         + (" until end of turn" if duration == "end_of_turn" else "")
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_event_subject_keyword")
+def remove_event_subject_keyword(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature attacks you, **it** loses flanking until end of
+    turn." (Barbed Foliage.)
+
+    ``remove_target_keyword_until_eot``'s subject read off the *event* instead
+    of off a target: the trigger chose nothing, so the object is the one the
+    fire site froze (CR 603.10) — by id, because by resolution the attacker may
+    have left and a board search would find a look-alike.
+
+    The printed filter is re-checked here rather than trusted from the
+    announcement, for the reason every other rebound subject is: the words the
+    lowering carried are the words that have to hold when the ability resolves.
+    """
+    from ..subject_filters import subject_matches
+
+    bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+    victim = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    caster_index = game.players.index(context.caster)
+    described = instruction.payload.get("filter")
+    if described and not subject_matches(
+        game, victim, described, observer=caster_index,
+        source=context.source_permanent,
+    ):
+        game.log.append(
+            f"{context.card.name}: {victim.card.name} no longer answers the clause"
+        )
+        return True, "resolved"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    duration = instruction.payload.get("duration")
+    for keyword in keywords:
+        _remove_one_keyword(victim, keyword, duration=duration)
+    game._recompute_continuous_effects()
+    game.log.append(
+        f"{victim.card.name} loses {' and '.join(keywords)}"
+        + (" until end of turn" if duration == "end_of_turn" else "")
+        + f" ({context.card.name})"
     )
     return True, "resolved"
 

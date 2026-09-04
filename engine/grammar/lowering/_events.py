@@ -178,6 +178,13 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 #: it" already reads the same key from its own handler.
 _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+    # "Whenever a creature attacks you, **it** loses flanking until end of
+    # turn" / "…this enchantment deals 1 damage to **it**" (Barbed Foliage).
+    # The declared attacker, stamped by `_fire_matching_creature_attacks_triggers`
+    # for the same reason `become_tapped` stamps its subject: the announcement
+    # is game-wide and per object, and by resolution the creature may have been
+    # removed from combat or destroyed.
+    "matching_creature_attacks",
 })
 
 

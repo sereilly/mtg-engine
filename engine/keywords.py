@@ -79,6 +79,28 @@ GRANTED_ABILITY_LINES = "granted_ability_lines"
 # printed card is never rewritten.
 REMOVED_ABILITY_LINES = "removed_ability_lines"
 
+# The *third* removal channel, and the one a line-derived keyword needs.
+#
+# ``REMOVED_ABILITY_LINES`` above takes a whole printed sentence away by
+# matching it, and ``ABILITY_EFFECTS`` takes a *word* out of layer 6's set. A
+# line-derived keyword (:data:`LINE_DERIVED_KEYWORDS`) is neither: the ability
+# is built by the compiler out of a printed keyword line, so removing the word
+# from layer 6 leaves the trigger compiled and firing, and removing "the line"
+# by matching it would have to match "Flanking (Whenever a creature without
+# flanking blocks this creature, …)" — reminder text and all — and would take
+# the whole line even where the creature prints two keywords on it.
+#
+# So what is recorded here is the **keyword**, and
+# ``Permanent.effective_card`` strikes that part out of every keyword line it
+# has left after the grants are folded in. After the grants, deliberately:
+# Barbed Foliage takes flanking off a creature Agility granted it to, and a
+# removal applied before the grant would leave the granted line standing.
+#
+# Recorded rather than applied, and durationed, for the reason the grant
+# channel beside it is: the sweep that ends it is named by the entry, so no
+# turn step carries a list of what to undo.
+REMOVED_ABILITY_KEYWORDS = "removed_ability_keywords"
+
 #: Which keyword words that applies to. The membership test is not "does it have
 #: a number": it is "does the compiler build this keyword's behaviour out of the
 #: printed line". Prowess and lifelink also have behaviour the layer system does
@@ -426,10 +448,71 @@ def removed_ability_lines(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(REMOVED_ABILITY_LINES) or ())
 
 
+def remove_ability_keyword(
+    perm: Permanent, keyword: str, *, duration: str | None = None,
+    seat: int | None = None,
+) -> None:
+    """Layer 6: *perm* loses a **line-derived** keyword ability.
+
+    The mirror of ``handlers/pump._grant_one_keyword``'s line grant, and the
+    mirror for the same reason: CR 702.25a *defines* flanking as a triggered
+    ability, so the compiler builds it out of the printed line and layer 6's
+    word set is not where its reader looks. Granting one grants the line;
+    removing one has to strike the line's keyword part, which is what
+    :meth:`Permanent.effective_card` does with what is recorded here.
+
+    *duration* names the sweep that will give the ability back, a key of
+    :data:`GRANTED_ABILITY_DURATIONS` — the same table the grant side reads,
+    because "until end of turn" has to mean one moment whichever direction the
+    sentence points.
+    """
+    _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
+    entries = perm.metadata.setdefault(REMOVED_ABILITY_KEYWORDS, [])
+    entry: dict = {"keyword": keyword.lower(), "duration": duration}
+    if seat is not None:
+        entry["seat"] = seat
+    entries.append(entry)
+
+
+def removed_ability_keywords(perm: Permanent) -> tuple[str, ...]:
+    """The line-derived keyword abilities an effect has taken from *perm*."""
+    return tuple(
+        entry["keyword"]
+        for entry in perm.metadata.get(REMOVED_ABILITY_KEYWORDS) or ()
+    )
+
+
+def clear_removed_ability_keywords(
+    perm: Permanent, duration: str, *, seat: int | None = None
+) -> None:
+    """Give back the keyword abilities whose duration is *duration*.
+
+    The third member of the sweep trio called at every duration boundary
+    (:func:`clear_granted_keywords`, :func:`clear_granted_ability_lines`): a
+    removal that outlived its duration would leave the permanent silently short
+    an ability it has back.
+    """
+    entries = perm.metadata.get(REMOVED_ABILITY_KEYWORDS)
+    if not entries:
+        return
+    remaining = [
+        entry for entry in entries if not _expires_at(entry, duration, seat)
+    ]
+    if len(remaining) == len(entries):
+        return
+    if remaining:
+        perm.metadata[REMOVED_ABILITY_KEYWORDS] = remaining
+    else:
+        perm.metadata.pop(REMOVED_ABILITY_KEYWORDS, None)
+
+
 __all__ = [
     "ABILITY_EFFECTS", "DERIVED_GRANTS", "DERIVED_REMOVALS",
     "GRANTED_ABILITY_LINES", "REMOVED_ABILITY_LINES",
+    "REMOVED_ABILITY_KEYWORDS",
     "remove_ability_line", "removed_ability_lines", "normalized_ability_line",
+    "remove_ability_keyword", "removed_ability_keywords",
+    "clear_removed_ability_keywords",
     "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
     "add_derived_removal", "derived_removals",
     "GRANTED_ABILITY_DURATIONS",

@@ -305,6 +305,38 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             return True, "resolved"
         apply_damage_to_creature(game, victim, damage, source_permanent or card)
         return True, "resolved"
+    if instruction.payload.get("recipient") == "event_subject":
+        # "Whenever a creature without flying attacks you, this enchantment
+        # deals 1 damage to **it**." (Barbed Foliage.) The object the *trigger's
+        # event* was about, frozen by the fire site (CR 603.10) — the sibling
+        # of the bound-object branch above it, and its own recipient for the
+        # same reason: the trigger chose nothing, so a fall-through would deal
+        # the damage to whatever the resolution context was carrying, which for
+        # a targetless trigger is a player's face.
+        #
+        # The printed narrowing is re-checked here rather than trusted from the
+        # announcement, so a word the lowering carried is a word the resolution
+        # reads.
+        from ..subject_filters import subject_matches
+
+        bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+        victim = (
+            game.permanent_by_id(bound) if isinstance(bound, int) else None
+        )
+        if victim is None or not game.is_on_battlefield(victim):
+            game.log.append(f"{card.name}: the creature it named is gone")
+            return True, "resolved"
+        described = instruction.payload.get("filter")
+        if described and not subject_matches(
+            game, victim, described,
+            observer=game.players.index(caster), source=source_permanent,
+        ):
+            game.log.append(
+                f"{card.name}: {victim.card.name} no longer answers the clause"
+            )
+            return True, "resolved"
+        apply_damage_to_creature(game, victim, damage, source_permanent or card)
+        return True, "resolved"
     if instruction.payload.get("recipient") == "caster":
         def _report(dealt: int) -> None:
             context.results["damage_dealt"] = dealt

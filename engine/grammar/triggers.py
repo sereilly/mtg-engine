@@ -814,6 +814,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 subject = replace(subject, other_than_source=False)
             for phrase, kind in _SUBJECT_LED_EVENTS:
                 if stream.accept_phrase(*phrase):
+                    # "Whenever a creature attacks **you**" (Barbed Foliage).
+                    # CR 508.1a makes attacking a state of the creature and
+                    # CR 506.2 makes *whom* it attacks the defending player it
+                    # was declared against, so the extra word is a narrowing of
+                    # the subject rather than a second event — the same
+                    # `attacking_you` field the printed relative clause
+                    # ("target creature that's attacking you") already sets, and
+                    # answered against the ability's own controller.
+                    #
+                    # Read here rather than as a second table row because the
+                    # row would have to carry a subject rewrite, and a table
+                    # whose values are two different kinds of thing stops being
+                    # a table. Dropping the word instead would be the silent
+                    # widening this whole file is written to avoid: Barbed
+                    # Foliage would fire on an attack aimed at somebody else.
+                    if kind == "matching_creature_attacks" and stream.accept_word("you"):
+                        subject = replace(subject, attacking_you=True)
                     return ast.TriggerEvent(kind, "whenever", subject=subject)
         stream.reset(mark)
         return _parse_quantified_tap_event(stream)

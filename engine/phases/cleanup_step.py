@@ -14,7 +14,8 @@ from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..keywords import (clear_granted_ability_lines,
-                        clear_granted_keywords)
+                        clear_granted_keywords,
+                        clear_removed_ability_keywords)
 from ..control import end_until_eot_control_changes
 from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
 from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
@@ -185,6 +186,11 @@ class CleanupStepMixin:
                 # keyword listed in _EOT_METADATA_KEYS.
                 clear_granted_keywords(permanent, "end_of_turn")
                 clear_granted_ability_lines(permanent, "end_of_turn")
+                # …and the third channel, a line-derived keyword an effect took
+                # away (Barbed Foliage's "it loses flanking until end of turn").
+                # Beside its two siblings, because a grant and a removal that
+                # share a printed duration have to end at one moment.
+                clear_removed_ability_keywords(permanent, "end_of_turn")
                 # CR 611.2c: an until-end-of-turn control change ends here too.
                 # Dropping the contribution *is* the reversion — the permanent
                 # never moved, so whatever contributions remain simply decide

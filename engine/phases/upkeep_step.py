@@ -17,7 +17,8 @@ from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
 from ..exiled_records import live_records
 from ..keywords import (clear_granted_ability_lines,
-                        clear_granted_keywords)
+                        clear_granted_keywords,
+                        clear_removed_ability_keywords)
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
@@ -798,6 +799,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for perm in self.all_permanents():
             clear_granted_keywords(perm, "your_next_upkeep", seat=player_index)
             clear_granted_ability_lines(perm, "your_next_upkeep", seat=player_index)
+            clear_removed_ability_keywords(
+                perm, "your_next_upkeep", seat=player_index
+            )
             # "**Until your next upkeep**, target permanent can't phase out."
             # (Spatial Binding.) The same moment and the same seat rule as the
             # two grant sweeps above — and *before* CR 702.26a's phasing event,

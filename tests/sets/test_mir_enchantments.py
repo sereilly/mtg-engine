@@ -1080,3 +1080,171 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
     assert not forest.tapped, game.log
     assert game.controller_index_of(forest) == 0, game.log
+
+
+# --- W2G1: combat triggers and their bound referents ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_creature(name, power, toughness, keywords=()) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=tuple(keywords),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g1_combat(*seats) -> Game:
+    """A game sitting in the declare-attackers step, one battlefield per seat."""
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g1_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def test_barbed_foliage_compiles_both_triggers_with_the_defender_narrowing(set_pool):
+    """"Whenever a creature attacks **you**" is CR 506.2's defending player as a
+    narrowing of the trigger's *subject*, and the word had been unread.
+
+    The bare ``matching_creature_attacks`` row is a strict prefix of this one, so
+    before the narrowed row existed the regex matched "whenever a creature
+    attacks" and left "you" in the effect clause -- the silent widening the
+    negative lookahead beside it exists to stop. Both front ends carry it: the
+    grammar sets ``attacking_you`` on the parsed subject and the oracle table
+    folds it in from an empty marker group, so the condition cannot be narrowed
+    on one side of the pipeline and not the other.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Barbed Foliage"])
+
+    assert program.supported, program.reason
+    conditions = [trig.condition for trig in program.triggered_abilities]
+    assert [c.kind for c in conditions] == [
+        "matching_creature_attacks", "matching_creature_attacks"
+    ]
+    assert all(
+        c.payload["attacker_filter"].get("attacking_you") for c in conditions
+    ), conditions
+    # …and the second trigger keeps its own printed narrowing beside it.
+    assert conditions[1].payload["attacker_filter"]["without_keywords"] == ["flying"]
+
+
+def test_barbed_foliage_takes_flanking_off_the_attacker_and_gives_it_back(set_pool):
+    """The first line, and the reason it needed a channel of its own.
+
+    CR 702.25a *defines* flanking as a triggered ability, so the compiler builds
+    it out of the printed keyword line and layer 6's word set is not where its
+    reader looks -- a ``remove_keyword`` there would have recorded a removal and
+    taken nothing away. ``remove_ability_keyword`` strikes the keyword out of the
+    line instead, and the cleanup sweep puts it back (CR 611.2c).
+    """
+    flanker = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mtenda Herder"]))
+    foliage = Permanent(card=set_pool("MIR")["Barbed Foliage"])
+    game = _w2g1_combat([flanker], [foliage])
+
+    assert game._has_keyword(flanker, "flanking")
+    assert game.declare_attackers(0, [0])[0]
+    _w2g1_resolve(game)
+
+    assert not game._has_keyword(flanker, "flanking"), game.log
+    assert "flanking" not in flanker.effective_card.oracle_text.lower()
+
+    game.resolve_cleanup_step(0)
+    assert game._has_keyword(flanker, "flanking")
+    assert "Flanking" in flanker.effective_card.oracle_text
+
+
+def test_barbed_foliage_takes_a_granted_flanking_too(set_pool):
+    """Agility grants flanking as a printed *line* and as the word, so a removal
+    that struck only the line would leave the creature counting as "with
+    flanking" for the next flanker's own filter.
+
+    The order in ``Permanent.effective_card`` is what makes the line half work:
+    the keyword strip runs after the grants are folded in, so it reaches a line
+    that was not there when the removal was recorded.
+    """
+    host = _w2g1_nosick(Permanent(card=_w2g1_creature("Footman", 2, 2)))
+    agility = Permanent(card=set_pool("MIR")["Agility"])
+    foliage = Permanent(card=set_pool("MIR")["Barbed Foliage"])
+    game = _w2g1_combat([host, agility], [foliage])
+    attach_aura(agility, host)
+    game._recompute_continuous_effects()
+
+    assert game._has_keyword(host, "flanking")
+    assert game.declare_attackers(0, [0])[0]
+    _w2g1_resolve(game)
+
+    assert not game._has_keyword(host, "flanking"), game.log
+    assert "flanking" not in host.effective_card.oracle_text.lower()
+
+
+def test_barbed_foliage_pings_the_ground_and_spares_the_flier(set_pool):
+    """The second line: "**it**" is the attacker the event was about, not the
+    enchantment that says the word.
+
+    A bare "it" reads as the ability's own source, which is what it means on a
+    line whose trigger names nothing else; here the pronoun is rebound to the
+    condition's subject, so the damage needed a recipient that says so. Left to
+    fall through, a targetless trigger's damage lands on whatever the resolution
+    context was carrying.
+    """
+    ground = _w2g1_nosick(Permanent(card=_w2g1_creature("Footman", 2, 2)))
+    flier = _w2g1_nosick(
+        Permanent(card=_w2g1_creature("Skyguard", 2, 2, ("Flying",)))
+    )
+    foliage = Permanent(card=set_pool("MIR")["Barbed Foliage"])
+    game = _w2g1_combat([ground, flier], [foliage])
+
+    assert game.declare_attackers(0, [0, 1])[0]
+    _w2g1_resolve(game)
+
+    assert ground.damage_marked == 1, game.log
+    assert flier.damage_marked == 0, game.log
+    assert game.players[1].life == 20
+
+
+def test_barbed_foliage_ignores_an_attack_aimed_at_somebody_else(set_pool):
+    """The narrowing the word "you" is, shown where it is visible: a duel has
+    one defender, so only a third seat can tell "attacks" from "attacks you".
+
+    Dropped, the enchantment would ping a creature attacking a player it is not
+    defending against -- and in a duel that difference never shows, which is
+    exactly why the widening would have shipped.
+    """
+    attacker = _w2g1_nosick(Permanent(card=_w2g1_creature("Footman", 2, 2)))
+    foliage = Permanent(card=set_pool("MIR")["Barbed Foliage"])
+    victim = _w2g1_nosick(Permanent(card=_w2g1_creature("Bystander", 1, 1)))
+    game = _w2g1_combat([attacker], [foliage], [victim])
+
+    # Seat 2 is the defender; the Foliage sits on seat 1's battlefield.
+    assert game.declare_attackers(0, [0], defending_player_index=2)[0]
+    _w2g1_resolve(game)
+
+    assert attacker.damage_marked == 0, game.log
+    assert game._has_keyword(attacker, "flanking") is False  # it never had it

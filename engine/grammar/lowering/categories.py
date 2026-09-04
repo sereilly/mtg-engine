@@ -154,6 +154,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The same removal aimed at the object the *trigger's event* was about
+    # ("Whenever a creature attacks you, it loses flanking until end of
+    # turn", Barbed Foliage). One family, because what differs is which
+    # object the words name and that is the payload.
+    "remove_event_subject_keyword": "pump",
     # The board-wide negative twin ("All creatures lose flying until end of
     # turn", Whiteout), beside `grant_team_keyword_until_eot`.
     "remove_team_keyword_until_eot": "pump",

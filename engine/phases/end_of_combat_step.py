@@ -10,7 +10,8 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 from ..attack_tapping import clear_attack_tap_exemptions
 from ..delayed_triggers import (expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
-from ..keywords import clear_granted_ability_lines, clear_granted_keywords
+from ..keywords import (clear_granted_ability_lines, clear_granted_keywords,
+                        clear_removed_ability_keywords)
 from ..models import Permanent
 from ..pt import remove_temporary_pt
 from ..damage_redirects import clear_redirects
@@ -44,6 +45,7 @@ class EndOfCombatStepMixin:
             # than in a step of its own, because both are the same duration
             # ending and a second sweep site is a second place to forget one.
             clear_granted_ability_lines(permanent, "end_of_combat")
+            clear_removed_ability_keywords(permanent, "end_of_combat")
             clear_granted_keywords(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)

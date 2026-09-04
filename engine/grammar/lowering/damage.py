@@ -55,6 +55,7 @@ from ._common import (
 from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_OBJECTS,
     _BOUND_OBJECT_DELAYED_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_CONTROLLER,
@@ -617,6 +618,36 @@ def _lower_damage_shape(
                 node=node,
             )
         payload["recipient"] = "bound_permanent"
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "it"
+        and not recipient.filter.is_source
+    ):
+        # "Whenever a creature without flying attacks you, this enchantment
+        # deals 1 damage to **it**." (Barbed Foliage.) The pronoun was rebound
+        # to the trigger's own subject by
+        # ``rebinding.rebind_pronoun_to_event_subject``, so it is neither the
+        # source nor a target — nothing was chosen and nothing may be.
+        #
+        # Gated on the event for the bound-object branch's reason one step up:
+        # under a trigger whose fire site froze no object the words name
+        # nothing, and the damage would fall through to whatever the resolution
+        # context happened to be carrying — which for a targetless trigger is a
+        # player's face.
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"it\" names the object the event was about, and this event "
+                "records none",
+                node=node,
+            )
+        described = _filter_payload(recipient.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the event-subject damage cannot test this restriction", node=node
+            )
+        payload["recipient"] = "event_subject"
+        if described:
+            payload["filter"] = described
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_player":
         # "…deals damage … to each player" (Armageddon Clock). Its own recipient
         # rather than a fall-through: the kind used to be listed among the ones
