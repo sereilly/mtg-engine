@@ -615,3 +615,66 @@ def test_mangaras_blessing_gains_its_life_now_not_an_end_step_later(set_pool):
 
     assert [c.name for c in game.players[0].hand] == ["Mangara's Blessing"], game.log
     assert game.players[0].life == 22, game.log
+
+
+# --- W1G2: borrowing the land an Aura is attached to ---
+
+
+def _w1g2_wellspring(set_pool):
+    """Wellspring cast on a tapped Forest the *opponent* controls."""
+    forest = Permanent(card=set_pool("MIR")["Forest"], tapped=True)
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Wellspring"]], life=20),
+        PlayerState(name="P2", battlefield=[forest], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    assert game.cast_from_hand(
+        0, "Wellspring", target_player_index=1, target_permanent_index=0
+    ).supported
+    game.resolve_stack()
+    return game, forest
+
+
+def test_wellspring_borrows_the_land_as_it_enters(set_pool):
+    """"When this Aura enters, gain control of **enchanted land** until end of
+    turn."
+
+    The Aura's own host is neither a target (an Aura's effect on what it
+    enchants chooses nothing) nor a record an earlier step wrote, so the control
+    lowering refused it outright — "the linked-control handler needs a named
+    target". Only "until end of turn" is admitted: the untimed spelling (Mind
+    Harness' "You control enchanted creature") is a *static* line `auras.py`
+    derives on every recompute and ends by detaching, where a one-shot
+    contribution with no lifetime would outlive the Aura.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Wellspring"])
+    assert program.supported, program.reason
+
+    game, forest = _w1g2_wellspring(set_pool)
+
+    assert game.controller_index_of(forest) == 0, game.log
+    # The entry trigger borrows it; only the upkeep line untaps it.
+    assert forest.tapped, game.log
+
+
+def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
+    """"At the beginning of your upkeep, untap enchanted land. **You gain
+    control of that land** until end of turn."
+
+    Two halves, and the second reads the first. "That land" is the permanent the
+    untap in front of it acted on, and the attached untap wrote no record — the
+    lowering that reads one has existed since Disharmony and had no producer to
+    read. And "**You** gain control" reached the verb table's keyword branch,
+    which refuses with "expected a keyword ability"; CR 101.1 makes the pronoun
+    say nothing the bare imperative did not.
+    """
+    game, forest = _w1g2_wellspring(set_pool)
+
+    game.start_next_turn()          # the opponent's turn — the loan lapses
+    game.start_next_turn()          # back to the Aura's controller
+    game.resolve_stack()
+
+    assert not forest.tapped, game.log
+    assert game.controller_index_of(forest) == 0, game.log

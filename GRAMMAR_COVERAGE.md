@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 74.9% | 70.1% | 44.0% | 196 |
+| MIR *(measured)* | 335 | 545 | 75.0% | 70.5% | 44.4% | 197 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 35 | 35 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 11 | 3 | expected a keyword ability |  |
+| 10 | 2 | expected a keyword ability |  |
 | 9 | 3 | expected 'the number of' in a where-clause |  |
 | 9 | 8 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -4825,6 +4825,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature gets +0/+1 as long as an opponent controls an Island.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
+- **Wellspring**
+  - `When this Aura enters, gain control of enchanted land until end of turn.`
+  - `At the beginning of your upkeep, untap enchanted land. You gain control of that land until end of turn.`
 - **Whalebone Glider**
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
 - **Whip Vine**

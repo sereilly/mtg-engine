@@ -407,6 +407,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # attacker that was never tapped is still "it" (CR 611.2c fixes the set
     # when the effect begins) — and both later sentences read the record.
     "untap_target_permanent": "untapped_permanents",
+    # "…untap enchanted land. **You gain control of that land** until end of
+    # turn." (Wellspring.) The Aura's own untap, recorded under the same key
+    # the targeted one above uses: which untap put the permanent there is
+    # not something the sentence behind it can see, so it must not be
+    # something it has to know.
+    "untap_enchanted_creature": "untapped_permanents",
     # "…reveal the top card of your library. **If it's** a creature or land
     # card, draw a card." (Track Down.) The reveal records what it showed and
     # the conditional after it reads that record — not the library, which the

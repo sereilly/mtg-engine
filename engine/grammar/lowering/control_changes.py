@@ -18,7 +18,8 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (_describe_targets, _filter_payload, _is_source, _is_target,
+from ._common import (_describe_targets, _filter_payload, _is_enchanted,
+                      _is_source, _is_target,
                       _restrictions_beyond)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
@@ -351,6 +352,32 @@ def _lower_gain_control(
     # own branch further down — there the seat both picks and receives.
     if node.gained_by is not None and not node.offered:
         return _lower_another_seat_gains_control(node, subject, event)
+    # "When this Aura enters, gain control of **enchanted land** until end
+    # of turn." (Wellspring.) The permanent the Aura is attached to, which
+    # is neither a target (an Aura's effect on its own host chooses nothing)
+    # nor a record an earlier step wrote — so it is its own branch, reached
+    # before every duration branch below for the reason the seat one above
+    # is: what the sentence is *about* is settled before when it ends.
+    #
+    # Only "until end of turn". Mind Harness prints the untimed spelling
+    # ("You control enchanted creature") as a *static* line, which
+    # ``engine/auras.py`` derives on every recompute and ends by detaching —
+    # a one-shot contribution with no lifetime would outlive the Aura.
+    if _is_enchanted(subject):
+        if node.duration != "until_end_of_turn":
+            raise LoweringError(
+                "control of an Aura's host is taken until end of turn; the "
+                "untimed spelling is a static line", node=node,
+            )
+        if node.tap_when_lost:
+            raise LoweringError(
+                "no rider rides the control of an Aura's host", node=node
+            )
+        return (
+            OracleInstruction(
+                "gain_control_until_eot", "", {"attached": True}
+            ),
+        )
     if node.duration == "indefinite":
         # "Gain control of target nonartifact, nonblack creature." (Ritual of
         # the Machine.) The same contribution the until-end-of-turn branch

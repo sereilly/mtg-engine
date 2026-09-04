@@ -21,7 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import (permanent_matches_filter, resolve_target_permanent,
+from ._common import (attached_host, permanent_matches_filter,
+                      resolve_target_permanent,
                       resolve_target_slots)
 from .registry import effect_handler
 
@@ -82,6 +83,35 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     # recorded by id; nothing is chosen here (CR 611.2c fixed the set when
     # the effect began). An empty record is a legal outcome — the earlier
     # step may have found nothing — and is not an error.
+    # "When this Aura enters, gain control of **enchanted land** until end of
+    # turn." (Wellspring.) The Aura's own host: nothing is chosen, so there
+    # is no target to resolve and no noun phrase to re-check — an Aura's
+    # effect on what it enchants names exactly one permanent.
+    #
+    # ``attached_host`` is the same reader every other attached effect uses,
+    # and an Aura attached to nothing takes nothing: CR 704.5m has already
+    # put such an Aura in a graveyard, so this is the resolution finding the
+    # world moved rather than a failure.
+    if instruction.payload.get("attached"):
+        host = attached_host(game, context.source_permanent)
+        if host is None or not game.is_on_battlefield(host):
+            game.log.append(f"{context.card.name}: nothing is enchanted")
+            return True, "resolved"
+        if game.cant_gain_control(host, context.caster):
+            game.log.append(
+                f"{context.card.name}: {host.card.name} can't change controllers"
+            )
+            return True, "resolved"
+        change_control(
+            host, game.players.index(context.caster),
+            source=context.source_permanent, until_eot=until_eot,
+        )
+        game._sync_control()
+        game.log.append(
+            f"{context.caster.name} gains control of {host.card.name} {ends}"
+        )
+        return True, "resolved"
+
     bound_key = instruction.payload.get("permanents_from")
     if bound_key:
         seat = game.players.index(context.caster)

@@ -40,6 +40,7 @@ from .phrases import (
 from .effects import (
     _accept_life_alternative,
     _parse_ante,
+    _parse_gain_control,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
     _parse_becomes_base_pt,
@@ -207,6 +208,19 @@ def parse_subject_verb(
                 stream, _parse_gets(stream, source_spec), source_target
             ), source_target)
         if token.text in ("gains", "gain"):
+            # "**You** gain control of that land until end of turn."
+            # (Wellspring.) CR 101.1 gives an effect with no printed subject
+            # to the object's controller, so the pronoun says nothing the
+            # bare imperative did not — but the verb table reaches
+            # `_parse_gains`, which expects a keyword and refuses with
+            # "expected a keyword ability". Tried first and non-consuming on
+            # refusal (`_parse_gain_control` returns None unless the line
+            # really opens "gain control"), so "gains flying" and "you gain 3
+            # life" keep the readings they have.
+            if isinstance(source_spec, ast.PlayerRef) and source_spec.kind == "you":
+                control = _parse_gain_control(stream)
+                if control is not None:
+                    return control
             return _with_untap_conjunct(stream, _with_damage_conjunct(
                 stream, _parse_gains(stream, source_spec), source_target
             ), source_target)
