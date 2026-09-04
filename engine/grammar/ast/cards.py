@@ -332,8 +332,14 @@ class ExileGraveyard:
     than an :class:`Exile` over a noun phrase: there is nothing to filter, no
     target among the cards, and the count is however many are there when it
     resolves.
+
+    ``player`` is None for "exile **all graveyards**" (Bazaar of Wonders) — the
+    sweep over every seat, which names nobody and targets nothing. A sentinel
+    seat would have been the other way to say it and is the wrong one: "all
+    graveyards" chooses no target (CR 115.1), and a ``PlayerRef`` here is read
+    by the picker as one.
     """
-    player: PlayerRef
+    player: PlayerRef | None
 
 
 @dataclass(frozen=True)

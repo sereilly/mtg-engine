@@ -109,6 +109,12 @@ def _parse_exile_graveyard(stream: TokenStream) -> ast.Statement | None:
     """
     mark = stream.mark()
     stream.expect_word("exile")
+    # "Exile **all graveyards**." (Bazaar of Wonders.) Every pile at once, and
+    # read before the possessive because "all" is not a player reference: the
+    # reader below would refuse it and the sentence would die at a phrase this
+    # production does read.
+    if stream.accept_phrase("all", "graveyards"):
+        return ast.ExileGraveyard(None)
     player = parse_player_ref(stream)
     if (
         isinstance(player, ast.PlayerRef)

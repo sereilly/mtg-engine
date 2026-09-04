@@ -1080,3 +1080,132 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
     assert not forest.tapped, game.log
     assert game.controller_index_of(forest) == 0, game.log
+
+
+# --- W2G4: a sweep with no seat, and a counter priced by a name ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_bazaar(set_pool, graveyard=(), battlefield=()):
+    """Bazaar of Wonders on seat 0, a spell in seat 1's hand to cast into it."""
+    bazaar = Permanent(card=set_pool("MIR")["Bazaar of Wonders"])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[bazaar] + [
+                Permanent(card=set_pool("MIR")[n]) for n in battlefield
+            ],
+            life=20,
+        ),
+        PlayerState(
+            name="P2", hand=[set_pool("MIR")["Femeref Knight"]],
+            graveyard=[set_pool("MIR")[n] for n in graveyard], life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    return game
+
+
+def test_bazaar_of_wonders_is_supported(set_pool):
+    """Both lines were refusals and neither was about the other. "Exile all
+    graveyards" names nobody, and "counter it **if** a card with the same name
+    …" is a disjunction of two clauses comparing against an object the printed
+    text never names."""
+    program = compile_card_oracle(set_pool("MIR")["Bazaar of Wonders"])
+    assert program.supported, program.reason
+    assert program.instructions[0].payload == {"every": True}
+    condition = program.instructions[1].payload["condition"]
+    assert condition["kind"] == "any_of"
+    assert [part["zone"] for part in condition["conditions"]] == [
+        "graveyard", "battlefield",
+    ]
+    assert [part["nontoken"] for part in condition["conditions"]] == [False, True]
+
+
+def test_bazaar_of_wonders_exiles_every_graveyard_as_it_enters(set_pool):
+    """"Exile **all** graveyards" chooses no target (CR 115.1), so the sweep is
+    the *absence* of a target description rather than a sentinel seat — and it
+    reaches its own controller's pile as well as everyone else's."""
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Bazaar of Wonders"]],
+            graveyard=[set_pool("MIR")["Soar"]], life=20,
+        ),
+        PlayerState(
+            name="P2",
+            graveyard=[set_pool("MIR")["Femeref Knight"], set_pool("MIR")["Soar"]],
+            life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game.queue_from_hand(0, "Bazaar of Wonders")
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == [], game.log
+    assert [c.name for c in game.players[0].exile] == ["Soar"], game.log
+    assert [c.name for c in game.players[1].exile] == ["Femeref Knight", "Soar"]
+
+
+def test_bazaar_of_wonders_lets_an_unmatched_spell_resolve(set_pool):
+    """The condition is the card. Read as an unconditional counter it is Nether
+    Void; the assertion is that a spell with no twin anywhere resolves."""
+    game = _w2g4_bazaar(set_pool)
+    game.queue_from_hand(1, "Femeref Knight")
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [
+        "Femeref Knight"
+    ], game.log
+
+
+def test_bazaar_of_wonders_counters_a_spell_named_in_a_graveyard(set_pool):
+    """"…if a card with the same name is in **a** graveyard" — any pile, not
+    the caster's. The name compared against is the spell the trigger fired on,
+    frozen by the cast fire site, because by resolution the spell may have left
+    the stack."""
+    game = _w2g4_bazaar(set_pool, graveyard=["Femeref Knight"])
+    game.queue_from_hand(1, "Femeref Knight")
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Femeref Knight", "Femeref Knight",
+    ], game.log
+
+
+def test_bazaar_of_wonders_counters_a_spell_named_on_the_battlefield(set_pool):
+    """The second half of the disjunction, and the half a card printing only
+    the first would not have. Neither zone is the stack, so the spell being
+    cast is never one of the objects it is compared with."""
+    game = _w2g4_bazaar(set_pool, battlefield=["Femeref Knight"])
+    game.queue_from_hand(1, "Femeref Knight")
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [], game.log
+
+
+def test_bazaar_of_wonders_ignores_a_token_of_the_same_name(set_pool):
+    """"a **nontoken** permanent with the same name" (CR 111). A production
+    that consumed the word and dropped it would counter a spell whose only twin
+    is a token, which is the opposite of what the card prints."""
+    from engine.tokens import make_token_card
+
+    game = _w2g4_bazaar(set_pool)
+    token = Permanent(card=make_token_card("Femeref Knight", 2, 2, "Token Creature — Human Knight"))
+    token.metadata["is_token"] = True
+    game.players[0].battlefield.append(token)
+
+    game.queue_from_hand(1, "Femeref Knight")
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [
+        "Femeref Knight"
+    ], game.log

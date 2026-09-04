@@ -2580,13 +2580,22 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
     ownership lookup — and the list is emptied rather than filtered, because the
     card names no restriction.
     """
-    victim = context.target if context.target is not None else context.caster
-    exiled = list(victim.graveyard)
-    victim.graveyard.clear()
-    victim.exile.extend(exiled)
-    game.log.append(
-        f"{context.card.name} exiled {victim.name}'s graveyard ({len(exiled)} card(s))"
+    # "Exile **all graveyards**." (Bazaar of Wonders.) Every pile, named by
+    # nobody — which is why the payload key is what selects the sweep rather
+    # than a sentinel seat: this sentence chooses no target (CR 115.1), and a
+    # seat here would be one.
+    victims = (
+        list(game.players) if instruction.payload.get("every")
+        else [context.target if context.target is not None else context.caster]
     )
+    for victim in victims:
+        exiled = list(victim.graveyard)
+        victim.graveyard.clear()
+        victim.exile.extend(exiled)
+        game.log.append(
+            f"{context.card.name} exiled {victim.name}'s graveyard "
+            f"({len(exiled)} card(s))"
+        )
     return True, "resolved"
 
 

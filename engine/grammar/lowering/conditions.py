@@ -87,6 +87,13 @@ def _condition_seat(condition, player, event, what: str) -> str:
     return EVENT_SUBJECT_PLAYER
 
 
+#: The events that freeze the object "the same name" is compared against.
+#: Only a cast trigger does today (``cast_card`` in the trigger's context), and
+#: the set is the gate rather than a comment: a condition asking about a name
+#: nobody recorded answers False forever, which is an ability that never fires.
+_SAME_NAME_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
+
+
 def _lower_condition(
     condition: ast.Condition,
     produced: frozenset[str] = frozenset(),
@@ -390,6 +397,36 @@ def _lower_condition(
                 _lower_condition(part, produced, event, referent)
                 for part in condition.conditions
             ],
+        }
+    if isinstance(condition, ast.SomeOf):
+        # The disjunction twin of the conjunction above, and lowered the same
+        # way for the same reason: each part keeps its own kind, so joining two
+        # *different* condition kinds with "or" costs nothing here or in the
+        # evaluator.
+        return {
+            "kind": "any_of",
+            "conditions": [
+                _lower_condition(part, produced, event, referent)
+                for part in condition.conditions
+            ],
+        }
+    if isinstance(condition, ast.SameNamedObject):
+        # "a card **with the same name** is in a graveyard" (Bazaar of Wonders).
+        # The name is the *firing event's* — CR 201.2 compared against the spell
+        # the trigger fired on — so this refuses under any event that does not
+        # freeze one. An unfrozen name reads as no name at all, which would make
+        # the condition answer False on every board and turn Bazaar's counter
+        # into an ability that never fires: a card compiling supported and doing
+        # nothing, which is the failure this whole file's gates exist for.
+        if event not in _SAME_NAME_EVENTS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the name 'the same name' "
+                "compares against"
+            )
+        return {
+            "kind": "same_named_object",
+            "zone": condition.zone,
+            "nontoken": bool(condition.nontoken),
         }
     if isinstance(condition, ast.CountedNumber):
         # "**If the number** is odd" (Chaos Moon). The count in front of it is

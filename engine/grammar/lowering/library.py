@@ -223,7 +223,16 @@ def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction,
 
     The whole zone, so there is no filter to carry and no card to resolve —
     only which player's graveyard, which is the target description.
+
+    "Exile **all graveyards**" (Bazaar of Wonders) is the same move over every
+    seat, and it is the *absence* of a target description that says so: the
+    handler sweeps every player when nothing named one, and the picker asks for
+    nothing because ``targets`` is not there to be read. One kind rather than
+    two, because what happens to each pile is identical — only how many piles
+    differs.
     """
+    if node.player is None:
+        return (OracleInstruction("exile_target_graveyard", "", {"every": True}),)
     return (
         OracleInstruction("exile_target_graveyard", "", _targets_only(node.player)),
     )

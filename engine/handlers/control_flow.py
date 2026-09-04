@@ -163,6 +163,52 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             evaluate_condition(game, context, part) for part in parts
         )
 
+    if kind == "any_of":
+        # Any part, and an empty list is False for ``all_of``'s reason one
+        # clause up: a disjunction that lowered to nothing is a condition nobody
+        # wrote, and `any([])` is already False — the emptiness is stated here so
+        # the two joiners read the same way rather than agreeing by accident.
+        parts = payload.get("conditions") or []
+        return bool(parts) and any(
+            evaluate_condition(game, context, part) for part in parts
+        )
+
+    if kind == "same_named_object":
+        # "…if **a card with the same name** is in a graveyard or **a nontoken
+        # permanent with the same name** is on the battlefield." (Bazaar of
+        # Wonders.) CR 201.2: two objects have the same name when their names
+        # are identical, and the name compared against is the *spell the trigger
+        # fired on* — frozen by the cast fire site, because by the time this
+        # ability resolves the spell may have left the stack.
+        #
+        # The spell itself is never one of the objects it is compared with: it
+        # is on the stack, and neither zone this searches is the stack. A
+        # permanent that entered from that spell **is** one, which is what makes
+        # the enchantment's own second half read the way the card is printed.
+        cast_card = (context.trigger_context or {}).get("cast_card")
+        name = getattr(cast_card, "name", None)
+        if not name:
+            # No event froze one. The lowering refuses this condition outside a
+            # cast trigger, so reaching here means the fire site recorded
+            # nothing — False, rather than a scan for the empty name that every
+            # object would fail anyway.
+            return False
+        if payload.get("zone") == "graveyard":
+            return any(
+                card.name == name
+                for player in game.players
+                for card in player.graveyard
+            )
+        nontoken = bool(payload.get("nontoken"))
+        return any(
+            # ``effective_card`` rather than the printed one: CR 707.2 makes a
+            # copy's name the copied name, so a Clone of the spell being cast
+            # really is an object with the same name (CR 201.2).
+            permanent.effective_card.name == name
+            and not (nontoken and permanent.metadata.get("is_token"))
+            for permanent in game.all_permanents()
+        )
+
     if kind == "self_in_graveyard_with_cards_above":
         # "…if **this card is in your graveyard with a creature card directly
         # above it**" (Death Spark, Krovikan Horror). CR 404.3's order, read

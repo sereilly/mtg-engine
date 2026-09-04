@@ -815,8 +815,14 @@ def lower_statement(
                     # answered from different halves of the resolution context,
                     # and this is the only place both the condition and the
                     # effect it guards are in view.
+                    # The **firing event** travels down too. A trailing "if" is
+                    # still a clause of the ability the event fired, so a
+                    # condition asking about what the event named ("a card with
+                    # the same name", Bazaar of Wonders) has to be able to see
+                    # which event that was — and a condition that cannot see it
+                    # refuses rather than answering about nothing.
                     "condition": _lower_condition(
-                        statement.condition, produced,
+                        statement.condition, produced, event,
                         referent=pronoun_target_referent(then),
                     ),
                     "then": then,
