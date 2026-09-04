@@ -241,3 +241,65 @@ def test_painful_memories_tucks_the_chosen_card_and_takes_only_one_copy(set_pool
     assert game.players[1].library[0].name == "Island"
     assert len(game.players[1].library) == 5
     assert game.players[1].graveyard == [], "a tuck is not a discard"
+
+
+def test_sealed_fate_looks_through_the_opponents_library_and_the_caster_decides(set_pool):
+    """"Look at the top X cards of **target opponent's** library. Exile one of
+    those cards and put the rest back on top of that player's library in any
+    order."
+
+    The look-and-pick template over somebody else's pile, which is the one shape
+    ``looker`` could not say: that field answers "who looks" and "whose library"
+    with one word, because Ashnod's Cylix prints "target player looks at the top
+    three cards of **their** library". Here the two come apart -- the cards are
+    the opponent's and every decision about them is the caster's -- so
+    ``pile_owner`` is its own field and one reader
+    (``Game.look_top_pile_index``) answers it for the offer, the resolution and
+    the client alike.
+
+    Two more firsts ride along: X as the count, and ``exile`` as a destination
+    for the taken card. The exiled card goes to its **owner's** exile
+    (CR 400.3), and the reorder that follows is answered by the caster over the
+    opponent's library.
+    """
+    pool = set_pool("MIR")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P1", hand=[pool["Sealed Fate"]],
+                         library=[pool["Plains"]] * 4),
+        _W1G4PlayerState(name="P2", library=[
+            pool["Femeref Scouts"], pool["Mana Prism"], pool["Viashino Warrior"],
+            pool["Island"], pool["Mountain"],
+        ]),
+    ])
+    game.interactive_seats = {0}
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(
+        0, "Sealed Fate", target_player_index=1, x_value=3
+    ).supported
+    prompt = game.pending_choices[0]
+    assert prompt.player_index == 0, "the caster answers"
+    assert game.look_top_pile_index(prompt) == 1, "the opponent's library is read"
+    assert game.live_look_top_candidates(prompt) == [0, 1, 2]
+
+    assert game.confirm_look_top_pick(0, 1)
+
+    assert [c.name for c in game.players[1].exile] == ["Mana Prism"]
+    assert game.players[0].exile == [], "CR 400.3: its owner's exile"
+    assert [c.name for c in game.players[1].library] == [
+        "Femeref Scouts", "Viashino Warrior", "Island", "Mountain",
+    ], "the rest go back on top, not to a graveyard"
+    assert game.players[0].library == [pool["Plains"]] * 4, (
+        "the caster's own library is untouched"
+    )
+
+    reorder = game.pending_choices[0]
+    assert (reorder.kind, reorder.player_index) == ("reorder_library", 0)
+    assert reorder.data["target_index"] == 1
+    assert game.resolve_pending_choice(
+        "reorder_library", 0, new_order=[1, 0], shuffle=False
+    )
+    assert [c.name for c in game.players[1].library][:2] == [
+        "Viashino Warrior", "Femeref Scouts",
+    ]

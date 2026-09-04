@@ -4262,6 +4262,19 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         caster = context.target
     else:
         caster = context.caster
+    # "Look at the top X cards of **target opponent's** library. Exile one of
+    # those cards…" (Sealed Fate.) The pile is the chosen player's and every
+    # decision about it is the caster's — the one shape ``looker`` cannot say,
+    # because there one seat answers both questions. A named pile the spell
+    # never chose does nothing at all, for ``looker``'s reason: reading the
+    # wrong library is worse than the spell fizzling, and the pile is hidden,
+    # so nobody would see it.
+    chooser = caster
+    if payload.get("pile_owner") is not None:
+        if context.target not in game.players:
+            game.log.append(f"{context.card.name}: no player chosen")
+            return True, "resolved"
+        caster = context.target
     # "Look at **that many** cards" (Garruk's Harbinger): the number the firing
     # event carried, frozen by the fire site. An absent record looks at nothing
     # rather than falling back to a count the card never printed.
@@ -4283,11 +4296,16 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
     caster_index = game.players.index(caster)
+    chooser_index = game.players.index(chooser)
     # The narrowing, the optionality and the order the rest go back in all ride
     # the prompt, so what is offered, what an answer is checked against and what
     # a non-interactive seat takes are one rule (``live_look_top_candidates``).
     game.arm_pending_choice(
-        "look_top_pick", caster_index,
+        "look_top_pick", chooser_index,
+        # Whose library is looked through, when that is not the seat answering.
+        # Absent for every card but Sealed Fate, so those prompts carry exactly
+        # the data they always did.
+        **({"pile_index": caster_index} if chooser_index != caster_index else {}),
         top_count=top_count, amount=amount, card_name=context.card.name,
         filter=_merged_pick_filter(payload.get("filters") or ()),
         filters=tuple(payload.get("filters") or ()),
@@ -4301,7 +4319,10 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         # `_resolve_look_top_pick`.
         remaining=max(1, int(payload.get("pick_count", 1))),
     )
-    game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
+    game.log.append(
+        f"{chooser.name} is looking at the top {top_count} cards of "
+        + ("their library" if chooser is caster else f"{caster.name}'s library")
+    )
     return True, "pending_look_top_pick"
 
 

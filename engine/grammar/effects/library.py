@@ -326,6 +326,31 @@ def _parse_look_other_library_tail(
     ):
         return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
     stream.reset(mark)
+    # "**Exile one of those cards and put the rest back on top of that player's
+    # library in any order.**" (Sealed Fate.) The look-and-pick template over
+    # somebody else's pile: the cards are the opponent's and every decision
+    # about them is the caster's, which is the one thing ``looker`` cannot say
+    # (there the seat answers both questions at once). So it produces the pick
+    # node with ``pile_owner`` set rather than a second node — the procedure is
+    # the same one, over a library that is not the chooser's.
+    #
+    # Every word of both destinations, for this family's standing reason: where
+    # the taken card goes and where the rest go are the whole of what separates
+    # these cards, and a wording that sorted them elsewhere would be a
+    # different card wearing this one's head.
+    exiled = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "exile", "one", "of", "those", "cards", "and", "put", "the", "rest",
+        "back", "on", "top", "of", "that", "player", "'s", "library",
+        "in", "any", "order",
+    ):
+        return ast.LookTopPickToHand(
+            count,
+            pick_destination="exile",
+            rest_destination="library_top",
+            pile_owner=owner,
+        )
+    stream.reset(exiled)
     # "…, **then put them back in any order**." (Natural Selection, Portent.)
     # The looker rearranges the cards they saw, which is the other handler —
     # and the optional shuffle after it is printed shorter here than Visions

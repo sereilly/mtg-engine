@@ -642,7 +642,13 @@ def _lower_look_top_pick(
         payload.update(_back_reference_payload(node.count, frozenset(), event))
     else:
         amount = _amount_payload(node.count)
-        if not isinstance(amount, int) or amount <= 0:
+        # "…the top **X** cards" (Sealed Fate). The announced value (CR 601.2b),
+        # which the handler resolves against ``context.x_value`` — the same
+        # channel every other counted zone effect reads. Admitted beside a
+        # printed number rather than instead of it: what is refused is a count
+        # this handler has no way to take at all, which is what "the pick takes
+        # a fixed count" was really saying.
+        if amount != "x" and (not isinstance(amount, int) or amount <= 0):
             raise LoweringError("the look-top pick takes a fixed count", node=node)
         payload["amount"] = amount
     # "Put **two** of them into your hand" (Ancestral Memories). Emitted only
@@ -695,6 +701,21 @@ def _lower_look_top_pick(
                 node=node,
             )
         payload["looker"] = "target_player"
+    # "…the top X cards of **target opponent's** library" (Sealed Fate). The
+    # pile is the chosen player's and the decisions are the caster's, which is
+    # the other half of the seat question ``looker`` answers with one word.
+    # Only a chosen seat, for ``looker``'s reason: an unchosen one would send
+    # the look at whichever library the resolution happened to be carrying, and
+    # the pile is hidden, so nobody would see it happen.
+    if node.pile_owner is not None:
+        if node.pile_owner.kind not in ("target_player", "target_opponent"):
+            raise LoweringError(
+                "the look-top pick reads the library of the player the spell "
+                "chose",
+                node=node,
+            )
+        payload["pile_owner"] = node.pile_owner.kind
+        _describe_targets(payload, node.pile_owner)
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
 
 

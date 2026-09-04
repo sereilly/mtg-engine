@@ -1034,6 +1034,21 @@ class PendingChoicesMixin:
             "look_top_pick", player_index, keep_index=keep_index
         )
 
+    def look_top_pile_index(self, choice: PendingChoice) -> int:
+        """Whose library this prompt is looking through.
+
+        The seat answering, except where the card separates the two: "Look at
+        the top X cards of **target opponent's** library. Exile one of those
+        cards…" (Sealed Fate) puts every decision with the caster and the pile
+        with the opponent. One reader for all three callers — what is offered,
+        what an answer moves, and what the client draws — because a second
+        would be free to show one library and empty another.
+        """
+        pile = choice.data.get("pile_index")
+        if isinstance(pile, int) and 0 <= pile < len(self.players):
+            return pile
+        return choice.player_index
+
     def live_look_top_candidates(self, choice: PendingChoice) -> list[int]:
         """Which of the looked-at positions may be taken, in library order.
 
@@ -1044,7 +1059,7 @@ class PendingChoicesMixin:
         """
         from ...subject_filters import card_matches_any
 
-        caster = self.players[choice.player_index]
+        caster = self.players[self.look_top_pile_index(choice)]
         top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
         # "a creature card **or** Garruk planeswalker card" — the alternatives
         # are OR'd, exactly as a narrowed discard cost's are, because the two
@@ -1063,7 +1078,11 @@ class PendingChoicesMixin:
     def _resolve_look_top_pick(
         self, choice: PendingChoice, keep_index: int | None
     ) -> bool:
-        caster = self.players[choice.player_index]
+        # The pile, which is the seat answering except on Sealed Fate — see
+        # ``look_top_pile_index``. Everything below moves cards in *this*
+        # player's library; who answers the prompt is ``choice.player_index``
+        # and is used only to arm what comes next.
+        caster = self.players[self.look_top_pile_index(choice)]
         top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
         looked = caster.library[:top_count]
 
@@ -1098,10 +1117,14 @@ class PendingChoicesMixin:
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
                 if len(rest) > 1:
-                    seat = self.seat_index(caster)
+                    # Whose library is reordered, and **who orders it**: one
+                    # seat everywhere but Sealed Fate, where the cards go back
+                    # on the opponent's library in an order the caster chooses
+                    # (CR 608.2 makes the spell's controller the actor).
                     self.arm_pending_choice(
-                        "reorder_library", seat,
-                        target_index=seat, top_count=len(rest), may_shuffle=False,
+                        "reorder_library", choice.player_index,
+                        target_index=self.seat_index(caster),
+                        top_count=len(rest), may_shuffle=False,
                     )
                 return
             # "…on the bottom of your library **in a random order**." (Garruk's
@@ -1171,6 +1194,18 @@ class PendingChoicesMixin:
             return True
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
+        # "**Exile** one of those cards…" (Sealed Fate). The third printed
+        # destination for the taken card, beside the hand and the library's
+        # top, and the only one that takes it out of the game — read rather
+        # than defaulted, exactly as the other two are.
+        if choice.data.get("pick_destination") == "exile":
+            caster.exile.append(kept)
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[choice.player_index].name} exiled a card from "
+                f"{caster.name}'s library"
+            )
+            return True
         # Where the *kept* card goes, read the same way the rest's destination
         # is. "Puts one of them **back on top of their library**" (Ashnod's
         # Cylix) is this prompt's other printed answer: the card is not drawn,

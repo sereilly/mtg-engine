@@ -233,6 +233,15 @@ class LookTopPickToHand:
     #: one where it prints two is a strictly smaller card with nothing to
     #: notice the difference.
     pick_count: Amount = field(default_factory=lambda: Fixed(1))
+    #: **Whose library**, when that is not the looker's own. "Look at the top X
+    #: cards of **target opponent's** library. Exile one of those cards…"
+    #: (Sealed Fate): the pile is the opponent's and every decision about it is
+    #: the spell's controller's. Its own field beside ``looker`` rather than a
+    #: widening of it, because that one answers two questions at once — Ashnod's
+    #: Cylix says "target player looks at the top three cards of **their**
+    #: library", one seat by construction — and a card that separates them is
+    #: separating exactly what that field fuses.
+    pile_owner: "PlayerRef | None" = None
     #: Who looks. None is the effect's own controller, which every card in this
     #: family printed until Ashnod's Cylix — "**Target player** looks at the
     #: top three cards of **their** library". The looker and the library are

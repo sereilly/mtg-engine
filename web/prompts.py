@@ -269,10 +269,16 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     """See the Truth's pick: the looked-at top cards, keep one, the rest go to
     the bottom. Only the owner sees the card faces."""
     choice = choices[0]
-    caster = ctx.game.players[choice.player_index]
+    # Whose library is drawn, through the same reader the engine offers and
+    # resolves with: Sealed Fate looks through the *opponent's* pile while the
+    # caster answers, and a renderer reading the answering seat would show the
+    # chooser their own library and then exile a card out of somebody else's.
+    pile_seat = ctx.game.look_top_pile_index(choice)
+    caster = ctx.game.players[pile_seat]
     top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
     return {
         "caster_seat": choice.player_index,
+        "pile_seat": pile_seat,
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
         "cards": [ctx.serialize_card(card) for card in caster.library[:top_count]],
