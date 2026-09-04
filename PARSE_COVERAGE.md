@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 11 supported card(s).**
+**9 unclaimed sentence(s) across 8 supported card(s).**
 
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
@@ -38,17 +38,10 @@ anything anyone did, and every ingest would arrive red.
   - `as long as kaervek's torch is on the stack, spells that target it cost {2} more to cast`
 - **Lure of Prey**
   - `cast this spell only if an opponent cast a creature spell this turn`
-- **Malignant Growth**
-  - `at the beginning of each opponent's draw step, that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way`
-- **Mangara's Equity**
-  - `as this enchantment enters, choose black or red`
-  - `whenever a creature of the chosen color deals damage to you or a white creature you control, this enchantment deals that much damage to that creature`
 - **Phyrexian Purge**
   - `this spell costs 3 life more to cast for each target`
 - **Phyrexian Tribute**
   - `as an additional cost to cast this spell, sacrifice two creatures`
-- **Roots of Life**
-  - `as this enchantment enters, choose island or swamp`
 - **Torrent of Lava**
   - `as long as torrent of lava is on the stack, each creature has "{t}: prevent the next 1 damage that would be dealt to this creature by torrent of lava this turn."`
 
