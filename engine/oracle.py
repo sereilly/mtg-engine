@@ -4619,6 +4619,19 @@ def _derived_static_claims(
     # working perfectly.
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
+    # CR 113.6b: a static ability that functions while the card is a **spell on
+    # the stack** (Kaervek's Torch's tax on spells that target it, the ability
+    # Torrent of Lava grants each creature). Its behaviour is a cost table and
+    # the affected permanents' effective cards, so there is no instruction to
+    # produce — and both cards print it beside a damage line that compiles, so
+    # without this claim each reported supported doing half of what it prints.
+    from .stack_statics import stack_static_claims_line
+
+    if any(
+        stack_static_claims_line(line, card_name)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("stack_statics")
     # CR 106.6 spending permissions ("You may spend white mana as though it were
     # mana of any color"). The payment paths read the seat's derived permission
     # list at the moment a cost is paid, so there is no instruction -- and on an

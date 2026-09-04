@@ -854,7 +854,19 @@ class SpellCastingMixin:
             if found is not None:
                 aimed_at = [found]
 
-        spell_tax, taxing_names = spell_cost_tax(self, caster_index, card, aimed_at)
+        # …and what it points at **on the stack** (Counterspell naming a
+        # Kaervek's Torch). Resolved here rather than beside the target
+        # validation below, because a static ability of an object on the stack
+        # (CR 113.6b) can tax the spell that targets it and CR 601.2f charges
+        # that before anything is paid. The validation reads this same local.
+        target_stack_item = None
+        if target_stack_index is not None and 0 <= target_stack_index < len(self.stack):
+            target_stack_item = self.stack[target_stack_index]
+        aimed_at_stack = [target_stack_item] if target_stack_item is not None else []
+
+        spell_tax, taxing_names = spell_cost_tax(
+            self, caster_index, card, aimed_at, aimed_at_stack
+        )
         if spell_tax:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
@@ -1026,11 +1038,11 @@ class SpellCastingMixin:
             # has rather than None.
             mode_index = chosen_modes[0].index
 
-        # Resolve an explicitly chosen target spell on the stack (Counterspell,
-        # Fork). target_stack_index indexes into self.stack (bottom-first).
-        target_stack_item = None
-        if target_stack_index is not None and 0 <= target_stack_index < len(self.stack):
-            target_stack_item = self.stack[target_stack_index]
+        # The explicitly chosen target spell on the stack (Counterspell, Fork)
+        # was resolved with the cost above — CR 601.2f charges a tax imposed by
+        # an object on the stack before any mana is paid, so the answer is
+        # needed there and one reading of `target_stack_index` is what keeps
+        # the tax and the validation talking about the same object.
 
         target_ok, target_reason = self._validate_cast_targets(
             card, caster_index, target_player_index, target_permanent_index, target_stack_item,

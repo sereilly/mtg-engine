@@ -76,6 +76,7 @@ from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.stack_statics import stack_static_claims_line  # noqa: E402
 from engine.mana_spending import mana_spending_for  # noqa: E402
 from engine.targeting import (  # noqa: E402
     enchant_graveyard_line, enchant_line_subject,
@@ -861,6 +862,16 @@ def _delayed_trigger_rider_sentences(oracle_text: str) -> set[str]:
 
 
 CARD_CHANNELS: tuple[tuple[str, object], ...] = (
+    (
+        # CR 113.6b: a static ability that functions while the card is a spell
+        # **on the stack** ("As long as Kaervek's Torch is on the stack, …").
+        # A card channel rather than a sentence one, because the subject of the
+        # clause is the card naming *itself* — a sentence-only predicate cannot
+        # tell that from a clause about some other object, and reading the
+        # second would apply an ability whose source this engine cannot find.
+        "stack_statics.py",
+        lambda card, s: stack_static_claims_line(s, card.name),
+    ),
     (
         # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage
         # this turn." One clause, two sentences, and the second is the half the

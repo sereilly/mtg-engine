@@ -211,8 +211,19 @@ _TARGETING_LIFE_TAX = re.compile(
 # different moments — mana at CR 601.2f's cost calculation, life at 601.2h's
 # payment — and reading one as the other would put the wrong number in the
 # wrong place.
+#
+# **Both halves of the scope are payload.** "Spells that target it cost {2} more
+# to cast." (Kaervek's Torch, inside the "as long as this is on the stack"
+# clause ``engine/stack_statics.py`` strips) is the same sentence with the
+# caster restriction unprinted and the source named by a pronoun rather than by
+# its type — and the whole difference between the two cards is which seats are
+# taxed, which ``controller`` already carries. Written as one row rather than a
+# second template, for the reason the subject list above is one row: the
+# pairings of "who casts it" with "what it is called" are quadratic in the
+# phrases that exist, and a card printing a third combination needs no code.
 _TARGETING_MANA_TAX = re.compile(
-    r"spells your opponents cast that target this creature cost "
+    r"spells(?P<controller> your opponents cast)? that target "
+    r"(?:this (?:creature|permanent|artifact|enchantment|land|spell)|it) cost "
     r"\{(?P<amount>\d+)\} more to cast"
 )
 
@@ -284,7 +295,11 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 amount=int(match.group("amount")),
                 applies_to="cast",
                 targets_source=True,
-                controller="opponents",
+                # Only when the sentence prints it. Kaervek's Torch taxes
+                # *every* spell that targets it, its controller's included, and
+                # a default of "opponents" would have let its own controller
+                # counter it for free.
+                controller="opponents" if match.group("controller") else None,
             )
         )
     for match in _ABILITY_TAX.finditer(text):
@@ -553,21 +568,73 @@ def _tax(
     return total, names
 
 
-def spell_cost_tax(
-    game, caster_index: int, card, targeted=(),
+def _stack_tax(
+    game, caster_index: int, card, targeted_stack,
 ) -> tuple[int, list[str]]:
-    """Extra generic mana for casting *card*, plus the taxing permanents' names.
+    """The same tax charged by an object **on the stack** (CR 113.6b).
+
+    "As long as Kaervek's Torch is on the stack, spells that target it cost {2}
+    more to cast." A static ability whose source is a spell, so no scan of any
+    battlefield can find it — ``engine/stack_statics.py`` is what reads the
+    clause, and this is the same per-source loop ``_tax`` runs one zone over.
+
+    Its own loop rather than another branch inside ``_tax`` because the objects
+    are different kinds: ``_tax`` yields ``(seat, Permanent)`` from the control
+    seam and reads each one's *effective* card through the layers, and a stack
+    object has neither. What the two share is the arithmetic and the scoping
+    rules, which are the four checks below in the same order.
+    """
+    from .stack_statics import stack_static_cost_sources
+
+    total = 0
+    names: list[str] = []
+    for item, modifiers in stack_static_cost_sources(getattr(game, "stack", ())):
+        seat = getattr(item, "caster_index", None)
+        for modifier in modifiers:
+            if not _matches(modifier, card):
+                continue
+            if modifier.controller == "you" and seat != caster_index:
+                continue
+            if modifier.controller == "opponents" and seat == caster_index:
+                continue
+            # "…that target **it**": which *object* the spell chose, so the
+            # comparison is by identity against the stack objects it named.
+            # Two copies of one card on the stack are two objects (CR 111.4),
+            # and a spell aimed at one of them is not taxed by the other.
+            if modifier.targets_source and not any(
+                aimed is item for aimed in targeted_stack
+            ):
+                continue
+            total += modifier.amount
+            names.append(item.card.name)
+    return total, names
+
+
+def spell_cost_tax(
+    game, caster_index: int, card, targeted=(), targeted_stack=(),
+) -> tuple[int, list[str]]:
+    """Extra generic mana for casting *card*, plus the taxing objects' names.
 
     *targeted* is what the spell points at, for the modifiers whose scope is a
     fact about the chosen targets ("spells your opponents cast **that target
     this creature**", Pursued Whale). It defaults to empty, which is what makes
     every other caller's answer unchanged: a targets-scoped modifier simply does
     not apply when nothing is aimed at its source.
+
+    *targeted_stack* is the same fact about the other zone — the objects **on
+    the stack** this spell chose (Counterspell naming a Kaervek's Torch). One
+    function rather than two callers, because a caster asking "what does this
+    cost?" must get one answer: a tax only the cast path could see would be a
+    spell the AI declines to cast, or tries to cast and cannot pay for.
     """
-    return _tax(
+    total, names = _tax(
         game, card, "cast", wanted="more", controller_index=caster_index,
         targeted=targeted,
     )
+    stack_total, stack_names = _stack_tax(
+        game, caster_index, card, targeted_stack
+    )
+    return total + stack_total, names + stack_names
 
 
 def spell_symbol_tax(

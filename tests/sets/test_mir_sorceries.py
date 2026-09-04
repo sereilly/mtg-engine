@@ -1589,3 +1589,149 @@ def test_w3g4_a_difference_counted_on_no_named_seat_refuses(set_pool):
     assert "target opponent" in (compiled.lowering_error or ""), (
         compiled.lowering_error
     )
+
+
+# --- W4G2: a static ability that functions while the card is on the stack ---
+
+import pytest as _w4g2_pytest
+
+from engine import Game as _W4G2Game
+from engine import PlayerState as _W4G2PlayerState
+from engine.card_loader import CardDefinition as _W4G2CardDefinition
+from engine.cost_modifiers import spell_cost_tax as _w4g2_spell_cost_tax
+from engine.grammar import parse_line as _w4g2_parse_line
+from engine.grammar.errors import GrammarError as _W4G2GrammarError
+from engine.models import Permanent as _W4G2Permanent
+from engine.oracle import compile_card_oracle as _w4g2_compile
+from engine.stack_statics import stack_static_claims_line as _w4g2_stack_claim
+from engine.stack_statics import stack_static_clause as _w4g2_clause
+
+
+def _w4g2_game(set_pool, *, mine=(), theirs=(), my_hand=(), their_hand=()):
+    """A two-seat board. Mana is left unenforced except where a test says
+    otherwise, because the Torch's tax is the one thing that needs it."""
+    pool = set_pool("MIR")
+    ours = [_W4G2Permanent(card=pool[name]) for name in mine]
+    yours = [_W4G2Permanent(card=pool[name]) for name in theirs]
+    game = _W4G2Game(players=[
+        _W4G2PlayerState(name="P1", battlefield=ours,
+                         hand=[pool[name] for name in my_hand],
+                         library=[pool["Island"]] * 5),
+        _W4G2PlayerState(name="P2", battlefield=yours,
+                         hand=[pool[name] for name in their_hand],
+                         library=[pool["Island"]] * 5),
+    ])
+    game.interactive_seats = set()
+    return game, ours, yours
+
+
+# --- Kaervek's Torch: "spells that target it cost {2} more to cast" ---
+
+
+def test_w4g2_the_torch_taxes_a_counterspell_aimed_at_it(set_pool):
+    """"As long as Kaervek's Torch is on the stack, spells that target it cost
+    {2} more to cast."
+
+    The failure this closes is silent and in the opponent's favour: the card
+    compiled green on its damage line alone, so Memory Lapse answered a Torch
+    for {1}{U} rather than the {3}{U} the card charges. Driven through a real
+    cast with mana enforced, because "the tax was computed" and "the spell
+    actually cost more" are two different claims.
+    """
+    for mana, expected in ((3, False), (4, True)):
+        game, _, _ = _w4g2_game(
+            set_pool, my_hand=["Kaervek's Torch"], their_hand=["Memory Lapse"]
+        )
+        game.enforce_mana_costs = True
+        game.players[0].mana_pool["R"] = 5
+        game.players[1].mana_pool["U"] = 1
+        game.players[1].mana_pool["C"] = mana - 1
+
+        game.queue_from_hand(0, "Kaervek's Torch", target_player_index=1, x_value=2)
+        answer = game.cast_from_hand(1, "Memory Lapse", target_stack_index=0)
+
+        assert answer.supported is expected, (mana, answer.details)
+        assert any("taxed by Kaervek's Torch" in line for line in game.log)
+
+
+def test_w4g2_the_torch_taxes_only_the_spell_that_names_it(set_pool):
+    """"…spells that target **it**" is a fact about which *object* the spell
+    chose, so a second spell on the stack is not taxed for being there."""
+    game, _, _ = _w4g2_game(
+        set_pool, my_hand=["Kaervek's Torch", "Incinerate"],
+        their_hand=["Memory Lapse"],
+    )
+    game.queue_from_hand(0, "Kaervek's Torch", target_player_index=1, x_value=2)
+    game.queue_from_hand(0, "Incinerate", target_player_index=1)
+
+    torch, incinerate = game.stack
+    lapse = set_pool("MIR")["Memory Lapse"]
+
+    assert _w4g2_spell_cost_tax(game, 1, lapse, (), [torch]) == (
+        2, ["Kaervek's Torch"]
+    )
+    assert _w4g2_spell_cost_tax(game, 1, lapse, (), [incinerate]) == (0, [])
+
+
+def test_w4g2_the_torch_taxes_its_own_controller_too(set_pool):
+    """The sentence prints no caster restriction, unlike Pursued Whale's "spells
+    **your opponents cast** that target this creature".
+
+    Defaulting to "opponents" — which is where the template this generalises
+    came from — would have let the Torch's own controller answer it for free.
+    """
+    game, _, _ = _w4g2_game(set_pool, my_hand=["Kaervek's Torch"])
+    game.queue_from_hand(0, "Kaervek's Torch", target_player_index=1, x_value=2)
+    torch = game.stack[0]
+    lapse = set_pool("MIR")["Memory Lapse"]
+
+    assert _w4g2_spell_cost_tax(game, 0, lapse, (), [torch])[0] == 2
+    assert _w4g2_spell_cost_tax(game, 1, lapse, (), [torch])[0] == 2
+
+
+def test_w4g2_the_torch_tax_ends_when_it_leaves_the_stack(set_pool):
+    """CR 113.6b: the ability functions from the stack and nowhere else, so a
+    resolved Torch charges nothing. The tax is derived from the stack on every
+    cast rather than recorded anywhere, which is what makes this true with no
+    flag to clear."""
+    game, _, _ = _w4g2_game(set_pool, my_hand=["Kaervek's Torch"])
+    game.queue_from_hand(0, "Kaervek's Torch", target_player_index=1, x_value=2)
+    torch = game.stack[0]
+    game.resolve_stack()
+    lapse = set_pool("MIR")["Memory Lapse"]
+
+    assert not game.stack
+    assert _w4g2_spell_cost_tax(game, 1, lapse, (), [torch]) == (0, [])
+
+
+# --- the seam itself ---
+
+
+def test_w4g2_a_stack_static_about_another_object_refuses():
+    """"As long as <something else> is on the stack" is an ability with a
+    different source, and nothing here can find that object — so the clause is
+    not read at all rather than being applied from the wrong card."""
+    assert _w4g2_clause(
+        "As long as Kaervek's Torch is on the stack, spells that target it "
+        "cost {2} more to cast.",
+        "Kaervek's Torch",
+    ) == "spells that target it cost {2} more to cast"
+    assert _w4g2_clause(
+        "As long as Black Lotus is on the stack, spells that target it cost "
+        "{2} more to cast.",
+        "Kaervek's Torch",
+    ) is None
+
+
+def test_w4g2_an_unimplemented_stack_static_is_not_claimed():
+    """The claim is the implementing table's own answer, not the prefix's: a
+    clause neither reader implements leaves the card unsupported, which is where
+    an unread sentence belongs."""
+    assert not _w4g2_stack_claim(
+        "As long as this spell is on the stack, you win the game.", "Probe"
+    )
+    assert _w4g2_stack_claim(
+        "As long as this spell is on the stack, spells that target it cost "
+        "{2} more to cast.",
+        "Probe",
+    )
