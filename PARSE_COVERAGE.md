@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**22 unclaimed sentence(s) across 16 supported card(s).**
+**21 unclaimed sentence(s) across 16 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
@@ -36,7 +36,6 @@ anything anyone did, and every ingest would arrive red.
   - `target unblocked attacking creature becomes blocked`
 - **Energy Vortex**
   - `at the beginning of the chosen player's upkeep, this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment`
-  - `{x}: put x vortex counters on this enchantment. activate only during your upkeep`
 - **Forsaken Wastes**
   - `players can't gain life`
   - `whenever this enchantment becomes the target of a spell, that spell's controller loses 5 life`

@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 78.9% | 77.2% | 50.6% | 226 |
+| MIR *(measured)* | 335 | 545 | 81.1% | 80.0% | 53.2% | 236 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 340 | 169 | expected a subject |  |
+| 333 | 162 | expected a subject |  |
 | 114 | 52 | unrecognized effect verb |  |
-| 90 | 45 | unconsumed text |  |
+| 87 | 42 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -56,7 +56,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
-| 5 | 2 | expected a keyword ability |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
@@ -64,6 +63,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
+| 4 | 1 | expected a keyword ability |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
@@ -300,6 +300,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ashnod's Transmogrant**
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
+- **Asmira, Holy Avenger**
+  - `At the beginning of each end step, put a +1/+1 counter on Asmira for each creature put into your graveyard from the battlefield this turn.`
 - **Astrolabe**
   - `{1}, {T}, Sacrifice this artifact: Add two mana of any one color. Draw a card at the beginning of the next turn's upkeep.`
 - **Atog**
@@ -1130,6 +1132,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Discontinuity**
   - `End the turn. (Exile all spells and abilities from the stack, including this card. The player whose turn it is discards down to their maximum hand size. Damage wears off, and "this turn" and "until end of turn" effects end.)`
 - **Discordant Spirit**
+  - `At the beginning of each end step, if it's an opponent's turn, put a +1/+1 counter on this creature for each 1 damage dealt to you this turn.`
   - `At the beginning of your end step, remove all +1/+1 counters from this creature.`
 - **Diseased Vermin**
   - `Whenever this creature deals combat damage to a player, put an infection counter on it.`
@@ -1362,6 +1365,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile this card from your hand: Add {G}.`
 - **Emberwilde Caliph**
   - `Whenever this creature deals damage, you lose that much life.`
+- **Emberwilde Djinn**
+  - `At the beginning of each player's upkeep, that player may pay {R}{R} or 2 life. If the player does, they gain control of this creature.`
 - **Emerald Dragonfly**
   - `{G}{G}: This creature gains first strike until end of turn.`
 - **Enchantment Alteration**
@@ -1378,6 +1383,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
 - **Energy Vortex**
   - `At the beginning of your upkeep, remove all vortex counters from this enchantment.`
+  - `{X}: Put X vortex counters on this enchantment. Activate only during your upkeep.`
 - **Enervate**
   - `Tap target artifact, creature, or land.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -1498,6 +1504,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.`
 - **Fiery Justice**
   - `Fiery Justice deals 5 damage divided as you choose among any number of targets. Target opponent gains 5 life.`
+- **Final Fortune**
+  - `Take an extra turn after this one. At the beginning of that turn's end step, you lose the game.`
 - **Finishing Blow**
   - `Destroy target creature or planeswalker.`
 - **Fire Covenant**
@@ -3734,6 +3742,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your first main phase, each opponent loses X life and you gain X life, where X is the number of Shrines you control.`
 - **Sanctum of Tranquil Light**
   - `{5}{W}: Tap target creature. This ability costs {1} less to activate for each Shrine you control.`
+- **Sand Golem**
+  - `When a spell or ability an opponent controls causes you to discard this card, return this card from your graveyard to the battlefield with a +1/+1 counter on it at the beginning of the next end step.`
 - **Sand Silos**
   - `At the beginning of your upkeep, if this land is tapped, put a storage counter on it.`
   - `{T}, Remove any number of storage counters from this land: Add {U} for each storage counter removed this way.`
@@ -3904,6 +3914,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, {T}: This creature deals 1 damage to any target and 1 damage to you.`
 - **Shadowbane**
   - `The next time a source of your choice would deal damage to you and/or creatures you control this turn, prevent that damage. If damage from a black source is prevented this way, you gain that much life.`
+- **Shallow Grave**
+  - `Return the top creature card of your graveyard to the battlefield. That creature gains haste until end of turn. Exile it at the beginning of the next end step.`
 - **Shambling Strider**
   - `{R}{G}: This creature gets +1/-1 until end of turn.`
 - **Shaper Guildmage**
@@ -4095,6 +4107,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sparkhunter Masticore**
   - `{1}: This creature deals 1 damage to target planeswalker.`
   - `{3}: This creature gains indestructible until end of turn.`
+- **Spatial Binding**
+  - `Pay 1 life: Until your next upkeep, target permanent can't phase out.`
 - **Speaker of the Heavens**
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
 - **Spectral Bears**
@@ -4735,6 +4749,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature blocks or becomes blocked by a non-Wall creature, destroy the other creature at end of combat.`
 - **Venomous Breath**
   - `Choose target creature. At this turn's next end of combat, destroy all creatures that blocked or were blocked by it this turn.`
+- **Ventifact Bottle**
+  - `{X}{1}, {T}: Put X charge counters on this artifact. Activate only as a sorcery.`
+  - `At the beginning of your first main phase, if this artifact has a charge counter on it, tap it and remove all charge counters from it. Add {C} for each charge counter removed this way.`
 - **Verduran Enchantress**
   - `Whenever you cast an enchantment spell, you may draw a card.`
   - `Whenever you cast an enchantment spell, you may draw a card.`
@@ -4841,6 +4858,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: This creature gets +1/+0 until end of turn.`
 - **Wall of Pine Needles**
   - `{G}: Regenerate this creature.`
+- **Wall of Resistance**
+  - `At the beginning of each end step, if this creature was dealt damage this turn, put a +0/+1 counter on it.`
 - **Wall of Roots**
   - `Put a -0/-1 counter on this creature: Add {G}. Activate only once each turn.`
 - **Wall of Runes**
@@ -4896,6 +4915,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
+- **Wellspring**
+  - `When this Aura enters, gain control of enchanted land until end of turn.`
+  - `At the beginning of your upkeep, untap enchanted land. You gain control of that land until end of turn.`
 - **Whalebone Glider**
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
 - **Whip Vine**
@@ -5026,6 +5048,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}{W}: Target Knight creature gets +1/+1 until end of turn.`
 - **Zhalfirin Knight**
   - `{W}{W}: This creature gains first strike until end of turn.`
+- **Zirilan of the Claw**
+  - `{1}{R}{R}, {T}: Search your library for a Dragon permanent card, put that card onto the battlefield, then shuffle. That Dragon gains haste until end of turn. Exile it at the beginning of the next end step.`
 - **Zombie Master**
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
   - `Other Zombies have "{B}: Regenerate this permanent."`
