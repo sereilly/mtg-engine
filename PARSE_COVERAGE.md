@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**24 unclaimed sentence(s) across 18 supported card(s).**
+**23 unclaimed sentence(s) across 17 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
@@ -61,8 +61,6 @@ anything anyone did, and every ingest would arrive red.
   - `as this enchantment enters, choose island or swamp`
 - **Soul Echo**
   - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
-- **Telim'Tor's Edict**
-  - `exile target permanent you own or control`
 - **Tombstone Stairwell**
   - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
   - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`

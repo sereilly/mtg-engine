@@ -491,3 +491,77 @@ def test_early_harvest_untaps_the_seat_the_caster_chose(set_pool):
     assert not basic.tapped, "the chosen seat's basic land untaps"
     assert nonbasic.tapped, "'basic' is a supertype the sweep still tests"
     assert mine.tapped, "the caster's own board is not the target's"
+
+
+def _g5_edict_board(set_pool):
+    """Seat 0 with a Forest of its own and seat 1 with an Island."""
+    pool = set_pool("MIR")
+    mine = Permanent(card=pool["Forest"])
+    theirs = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine],
+                    hand=[pool["Telim'Tor's Edict"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[theirs],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    return game, mine, theirs
+
+
+def test_telimtors_edict_exiles_a_permanent_you_own_and_control(set_pool):
+    """"Exile target permanent you **own or control**."
+
+    The union of two relations, which no single ``ObjectFilter`` field states
+    and no *pair* of them states either: setting both is Obelisk of Undoing's
+    "own **and** control", the intersection, which is the smaller set this card
+    is printed to be larger than.
+    """
+    game, mine, _theirs = _g5_edict_board(set_pool)
+
+    cast = game.cast_from_hand(0, "Telim'Tor's Edict",
+                               target_player_index=0, target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(mine)
+
+
+def test_telimtors_edict_declines_a_permanent_that_is_neither(set_pool):
+    """The narrowing, which was enforced in no place at all: the picker's spec
+    for this kind carries no filter, and the exile handler asked the *pure*
+    matcher — which cannot answer a question about a seat and therefore drops
+    it. The Edict exiled anything on the table."""
+    game, _mine, theirs = _g5_edict_board(set_pool)
+
+    game.cast_from_hand(0, "Telim'Tor's Edict",
+                        target_player_index=1, target_permanent_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.is_on_battlefield(theirs)
+
+
+def test_telimtors_edict_reaches_a_permanent_you_control_but_do_not_own(set_pool):
+    """The half "you control" alone would have covered and "you own" alone
+    would not — and the card prints both, so a stolen permanent is a legal
+    target for its thief. It still goes to its **owner's** exile (CR 400.3)."""
+    from engine.control import change_control
+
+    game, _mine, theirs = _g5_edict_board(set_pool)
+    change_control(theirs, 0, source="test")
+    game._sync_control()
+    game._settle()
+
+    index = [p.card.name for p in game.players[0].battlefield].index("Island")
+    cast = game.cast_from_hand(0, "Telim'Tor's Edict",
+                               target_player_index=0, target_permanent_index=index)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(theirs)
+    assert [getattr(card, "name", card) for card in game.players[1].exile] == ["Island"]

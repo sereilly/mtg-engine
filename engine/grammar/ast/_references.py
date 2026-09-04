@@ -108,6 +108,13 @@ class ObjectFilter:
     # precisely the case this card is printed to exclude. Its own field, so a
     # phrase naming only one of them cannot be read as naming both.
     owner: str | None = None                  # "you"
+    # "Exile target permanent you **own or control**." (Telim'Tor's Edict.) The
+    # *disjunction* of the two fields above, which neither of them and no pair
+    # of them states: setting both would be Obelisk of Undoing's "own **and**
+    # control", the exact set this card is printed to be larger than. Its own
+    # field for that reason, and only "you" — no card in the pool prints the
+    # union about anybody else.
+    owner_or_controller: str | None = None     # "you"
     tapped: bool | None = None
     attacking: bool | None = None
     blocking: bool | None = None
@@ -590,6 +597,8 @@ class ObjectFilter:
         # sweep took the opponent's Auras too.
         if self.owner is not None:
             payload["owner"] = self.owner
+        if self.owner_or_controller is not None:
+            payload["owner_or_controller"] = self.owner_or_controller
         if self.attacking is True:
             payload["attacking_only"] = True
         elif self.attacking is False:

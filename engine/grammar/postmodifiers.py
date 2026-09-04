@@ -69,6 +69,15 @@ def _parse_postmodifiers(
             d.controller = "you"
             d.owned_by = "you"
             continue
+        # "you **own or control**" (Telim'Tor's Edict). Read beside the "both
+        # own and control" branch above and before the bare "you control",
+        # whose prefix it also is: matched there, "or control" would strand
+        # "own" — and, worse, would compile the card as the strictly *smaller*
+        # set, dropping the permanent an opponent has taken from you, which is
+        # half of what this card is for.
+        if stream.accept_phrase("you", "own", "or", "control"):
+            d.owner_or_controller = "you"
+            continue
         if stream.accept_phrase("you", "control"):
             d.controller = "you"
             continue

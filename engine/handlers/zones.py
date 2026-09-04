@@ -2230,10 +2230,30 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
         # the key is left absent and any card that needs it refuses for want of
         # a producer rather than acting on the wrong seat.
         return True, "resolved"
+    # "Exile target permanent **you own or control**." (Telim'Tor's Edict;
+    # Safe Haven prints "you control".) A *relative* narrowing — a question
+    # about a seat rather than about the card — which the pure matcher
+    # deliberately cannot answer and therefore silently drops. The picker's
+    # spec for this kind carries no filter either, so the phrase was enforced
+    # nowhere at all: the Edict exiled any permanent on the table.
+    #
+    # ``subject_matches`` is the one reader of what a printed noun phrase
+    # means, with the resolving controller as "you" (CR 109.5) — idiom 9, the
+    # picker's enumeration is a hint and the resolution re-checks the answer.
+    from ..subject_filters import subject_matches
+
+    described = {key: value for key, value in payload.items() if key != "targets"}
+    observer = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
     perm = resolve_target_permanent(
         game,
         context,
-        predicate=lambda candidate: permanent_matches_filter(candidate, payload),
+        predicate=lambda candidate: subject_matches(
+            game, candidate, described, observer=observer,
+            source=context.source_permanent,
+        ),
     )
     if perm is None:
         game.log.append(f"{card.name}: no valid permanent to exile")

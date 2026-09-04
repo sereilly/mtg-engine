@@ -330,6 +330,48 @@ def test_ownership_is_asked_separately_from_control(pool):
     )
 
 
+def test_own_or_control_is_the_union_of_the_two_seats(pool):
+    """"Exile target permanent you **own or control**." (Telim'Tor's Edict.)
+
+    The *disjunction* of the two keys above, and its own key because no pair of
+    them states it: setting both is Obelisk of Undoing's "own **and** control",
+    the intersection, which is exactly the smaller set this card is printed to
+    be larger than.
+
+    The demonstration is the only board where the three readings come apart — a
+    permanent whose control has moved. Its owner may exile it and so may its
+    thief; a permanent neither owns nor controls is out.
+    """
+    from engine.control import change_control
+
+    stolen = Permanent(card=pool["Grizzly Bears"])
+    thief = Permanent(card=pool["Grizzly Bears"])
+    untouched = Permanent(card=pool["Scryb Sprites"])
+    p1 = PlayerState(name="P1", battlefield=[thief])
+    p2 = PlayerState(name="P2", battlefield=[])
+    game = Game(players=[p1, p2])
+    game._put_permanent_onto_battlefield(1, stolen, None)
+    game._put_permanent_onto_battlefield(1, untouched, None)
+    change_control(stolen, 0, source=thief)
+    game._sync_control()
+
+    described = {"owner_or_controller": "you"}
+    # Seat 0 controls it and does not own it.
+    assert subject_matches(game, stolen, described, observer=0)
+    # Seat 1 owns it and does not control it.
+    assert subject_matches(game, stolen, described, observer=1)
+    # And the intersection reading — the one a pair of the keys above gives —
+    # would answer no to both of those.
+    assert not subject_matches(
+        game, stolen, {"owner": "you", "controller": "you"}, observer=0
+    )
+    # Neither owned nor controlled.
+    assert not subject_matches(game, untouched, described, observer=0)
+    # Relative like both halves: with no observer there is no seat to compare
+    # against, and the answer must be no rather than everything.
+    assert not subject_matches(game, stolen, described)
+
+
 def test_the_relative_keys_refuse_without_the_context_they_need(pool):
     """"You control" and "another" are relative, which is why they are outside
     ``OBJECT_ONLY_FILTER_KEYS``. A caller with no observer and no source must
@@ -421,6 +463,7 @@ _COVERED_ELSEWHERE = {
     "untapped_only": "test_untapped_only_rejects_a_tapped_permanent",
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "owner": "test_ownership_is_asked_separately_from_control",
+    "owner_or_controller": "test_own_or_control_is_the_union_of_the_two_seats",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
     "not_enchanted": "test_not_enchanted_rejects_a_permanent_carrying_an_aura",
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",

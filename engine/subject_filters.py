@@ -135,6 +135,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # *granted* flying is a creature with flying (CR 613.1f), so it escapes a
     # without-flying restriction exactly as a printed flyer does.
     "with_keywords", "without_keywords", "controller", "owner", "exclude_self",
+    # "…you **own or control**" (Telim'Tor's Edict). Relative like the two
+    # beside it — it needs the seat the ability belongs to — and so it is out of
+    # ``OBJECT_ONLY_FILTER_KEYS`` below for their reason.
+    "owner_or_controller",
     # "target permanent **that isn't enchanted**" (Time Elemental). CR 303.4a
     # again: whether an Aura is attached is readable off the permanent alone,
     # so it belongs to the pure half like every other state word.
@@ -211,7 +215,8 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: ``controller_controls`` is out for the same reason as the three below it,
 #: one step further away: a caller with no game cannot read anybody's board.
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
-    "controller", "owner", "exclude_self", "controller_controls",
+    "controller", "owner", "owner_or_controller", "exclude_self",
+    "controller_controls",
     # Out for ``exclude_self``'s reason: the bound is a characteristic of the
     # ability's *source*, and a caller with none would compare against nothing.
     "characteristic_vs_source",
@@ -551,6 +556,24 @@ def subject_matches(
         if owner_seat is None or observer is None:
             return False
         if (owner_seat == observer) != (owner == "you"):
+            return False
+    # "…you **own or control**" (Telim'Tor's Edict). The union of the two tests
+    # above, and asked as one because that is what the sentence says: a
+    # permanent an opponent has stolen from you is still yours to exile, and so
+    # is one you have stolen from them. Testing the two fields separately would
+    # be the *intersection* — Obelisk of Undoing's card, which this one is
+    # printed to be larger than.
+    #
+    # Relative like both halves, so an observer is required and its absence
+    # refuses.
+    either = described.get("owner_or_controller")
+    if either is not None:
+        if observer is None:
+            return False
+        owner_seat = game.owner_index_of(obj)
+        control_seat = game.controller_index_of(obj)
+        mine = owner_seat == observer or control_seat == observer
+        if mine != (either == "you"):
             return False
     # "…the player **has** controlled continuously since the beginning of the
     # turn" (Total War's exemption, stored as the set it leaves behind). The
