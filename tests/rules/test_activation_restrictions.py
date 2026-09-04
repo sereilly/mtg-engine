@@ -185,11 +185,21 @@ def test_602_5_a_restriction_applies_only_to_the_ability_that_prints_it():
 def test_every_printed_activation_clause_in_the_pool_is_readable():
     """The gate half: a clause the table cannot read must make its card
     unsupported rather than admitted with the restriction ignored. Over the
-    whole shipped pool, so a newly ingested set cannot add a silent one."""
+    whole shipped pool, so a newly ingested set cannot add a silent one.
+
+    **With the card's name**, which this guard did not pass until Mirage's
+    promotion and which is the difference between reading the sentence the
+    enforcement path reads and reading a different one. A card may name itself
+    inside the clause (CR 201.4) and every real caller collapses that first;
+    a guard that does not is a second spelling of the thing it checks, and it
+    reported Hakim, Loreweaver's fully-enforced restriction as unenforced. The
+    failure looked exactly like a finding, which is what makes this class
+    expensive.
+    """
     unreadable = {
         clause: card.name
         for card in _CATALOG.values()
-        for clause in unreadable_activation_clauses(card.oracle_text or "")
+        for clause in unreadable_activation_clauses(card.oracle_text or "", card.name)
     }
 
     assert not unreadable, (

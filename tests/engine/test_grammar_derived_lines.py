@@ -214,6 +214,29 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # a measured set's new kind lands the day it ships. Verified in a game
         # rather than from the table — two blockers refused, three allowed.
         "cant_be_blocked_by_fewer_than",
+        # "Creatures with flying can block only creatures with flying."
+        # (Chaosphere.) Mirage's promotion, and the third set in a row to land a
+        # kind here on the day it shipped -- this guard reads the shipped pool,
+        # so a measured set's table-only kind is invisible until then. The
+        # sibling of `can_block_only_with_keyword` above and deliberately *not*
+        # that kind: this one is printed about the board by a permanent that is
+        # neither attacking nor blocking, where that one is printed on the
+        # creature it restricts, and one kind read by both loops would ground
+        # every blocker in the game the moment a Chaosphere was in play.
+        # Verified in a game rather than from the table -- W1G1's
+        # `test_chaosphere_grounds_a_flier_that_wants_to_block_a_ground_creature`
+        # was written a wave before this guard could see the card.
+        "subject_can_block_only",
+        # "This creature can't be blocked by more than one creature."
+        # (Stalking Tiger, CR 509.1b's ceiling.) Round 8 built it as a table row
+        # and gave it a game then; the guard could not see the card until now.
+        "cant_be_blocked_by_more_than",
+        # "If a creature you control attacks, this creature also attacks if
+        # able." (Ekundu Cyclops.) A requirement conditional on *another*
+        # creature's declaration, which is why it is not `must_attack_each_combat`
+        # above: the condition is read at the declaration rather than being a
+        # standing obligation. W1G1's tests drive both branches in a game.
+        "must_attack_if_partner_attacks",
     }
 
     compared = 0

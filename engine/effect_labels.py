@@ -40,6 +40,41 @@ from __future__ import annotations
 # Instruction kind -> label, for an ability the grammar reads in the **activated**
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
+    # --- Mirage, at its promotion ----------------------------------------
+    # Ten kinds that arrived with the set and take the grammar category's
+    # default until they are named here. The default buckets by *grammar
+    # family*, which is not the vocabulary `SimulationResult` and the support
+    # report were built on -- so every one is settled against a shipped
+    # neighbour rather than against its family:
+    #
+    # Civic Guildmage / Shadow Guildmage put a permanent on top of a library,
+    # beside `reorder_target_library_top`'s `activated_library`.
+    "put_target_on_library_top": "activated_library",
+    # Ersatz Gnomes and Raging Spirit change a colour, which Alchor's Tomb
+    # settled as `activated_pump`: the report's word for a permanent changing
+    # what it *is*.
+    "recolor_target_from_text": "activated_pump",
+    "recolor_targets_until_eot": "activated_pump",
+    "recolor_self_until_eot": "activated_pump",
+    # Mist Dragon phases itself out and drops its own keyword. Phasing is a
+    # zone-shaped disappearance rather than a destruction, and the settled word
+    # for a permanent leaving and coming back is `activated_recursion`; the
+    # keyword removal is a layer-6 change to what the permanent *is*.
+    "phase_out_self": "activated_recursion",
+    "remove_self_keyword": "activated_pump",
+    # Spatial Binding stops somebody else phasing out -- a restriction it
+    # imposes on another permanent, which is the `activated_combat` family's
+    # question asked outside combat, so it takes the restriction word.
+    "forbid_phase_out": "activated_restriction",
+    # Subterranean Spirit damages a described set, beside
+    # `deal_damage_each_creature_and_player`.
+    "deal_damage_each_matching": "activated_damage",
+    # Mangara's Tome arms a one-shot draw replacement. A **wrapper**, so it
+    # takes a label naming its shape rather than its leaf's bucket, beside
+    # `create_delayed_trigger` below -- what the replacement eventually does is
+    # the payload's business, and reading it off the leaf is the guess this
+    # table's own note calls wrong in proportion to how well the wrapper works.
+    "arm_draw_replacement": "activated_replacement",
     # --- Homelands ------------------------------------------------------
     # An enchantment any player may destroy by paying life (Aether Storm),
     # the expansion sweep Golgothian Sylex already had a production for
@@ -417,6 +452,25 @@ ACTIVATED_LABELS: dict[str, str] = {
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
 # position (the clause after a trigger condition).
 TRIGGERED_LABELS: dict[str, str] = {
+    # --- Mirage, at its promotion ----------------------------------------
+    # Eleven triggered kinds that fall back to the `spell_pattern` marker until
+    # they are named, each settled against the spelling its family already uses
+    # on the activated side rather than against its grammar category. The one
+    # wrapper among them (Bazaar of Wonders' `if_then`) is in
+    # TRIGGERED_LABELS_BY_CONDITION below, because a wrapper says nothing about
+    # its contents and the condition is the only half of the pair that does.
+    "exile_target_graveyard": "triggered_exile",
+    "exile_graveyard_cards": "triggered_exile",
+    "exile_bound_card": "triggered_exile",
+    "look_at_library_top_then_bottom": "triggered_library",
+    # Phasing is a permanent leaving and coming back, which is the word the
+    # activated side settled on for the same pair of kinds.
+    "phase_out_self": "triggered_recursion",
+    "phase_out_matching": "triggered_recursion",
+    "add_counter_to_each_matching": "triggered_counter",
+    "tap_target_permanent": "triggered_tap",
+    "discard_controller_cards": "triggered_discard",
+    "gain_control_until_eot": "triggered_control",
     # --- Homelands ------------------------------------------------------
     # Two untap denials whose trigger is a combat moment rather than an
     # upkeep (Labyrinth Minotaur blocks, Spectral Bears attacks), the
@@ -671,6 +725,12 @@ TRIGGERED_LABELS: dict[str, str] = {
 # pay-{1}-gain-1-life cycle (Crystal Rod and its four siblings, Soul Net) was
 # never claimed by a rule at all and kept the `spell_pattern` marker.
 TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
+    # Bazaar of Wonders: "Whenever a player casts a spell, counter it if a card
+    # with the same name is in a graveyard...". An `if_then` wrapper, so the
+    # condition is the only half of the pair that says anything -- and what it
+    # says is that this is a counterspell, which is the bucket Mana Vortex's
+    # own cast trigger already takes below.
+    ("spell_cast", "if_then"): "triggered_counterspells",
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
     ("spell_cast", "may"): "spell_pattern",
