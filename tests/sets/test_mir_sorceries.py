@@ -555,3 +555,103 @@ def test_choking_sands_spares_a_basic_lands_controller(set_pool):
 
     assert not game.is_on_battlefield(forest)
     assert game.players[1].life == 20
+
+
+# --- W2G5: a comparison between two life totals (CR 107.1) ---
+#
+# Psychic Transfer needed one condition node and one rebinding, and the second
+# is the half that generalises. ``PlayerLifeIs`` reads *one* seat's life; the
+# number this card compares is the distance between two, which belongs to
+# neither seat — so it is its own node with two player refs and one comparison.
+# And "exchange life totals with **that player**" names the seat the condition
+# in front of it already targeted (CR 601.2c), which is exactly what
+# ``rebind_pronoun_to_condition_target`` does for an *object* pronoun and had no
+# player sibling: left alone the arm reached the lowering as a referent no spell
+# froze, and the exchange refused the line.
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.grammar import compile_line
+from engine.oracle import compile_card_oracle
+
+
+def _w2g5_transfer_game(set_pool, p1_life: int, p2_life: int):
+    card = set_pool("MIR")["Psychic Transfer"]
+    game = Game(players=[
+        PlayerState(name="P1", life=p1_life, hand=[card]),
+        PlayerState(name="P2", life=p2_life),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def test_psychic_transfer_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Psychic Transfer"])
+    assert program.supported, program.reason
+
+
+@pytest.mark.parametrize(
+    "mine,theirs",
+    [(20, 17), (20, 25), (20, 20), (20, 15), (20, 25)],
+)
+def test_psychic_transfer_swaps_inside_the_bound(set_pool, mine, theirs):
+    """"The difference between" is unsigned (CR 107.1 has no negative
+    quantities), so the card reads the same whichever player is ahead. A signed
+    subtraction would make this castable only while its controller was behind —
+    which is a legal-looking card that is not the printed one."""
+    game = _w2g5_transfer_game(set_pool, mine, theirs)
+
+    assert game.cast_from_hand(0, "Psychic Transfer", target_player_index=1).supported
+    game.resolve_stack()
+
+    assert (game.players[0].life, game.players[1].life) == (theirs, mine), game.log
+
+
+def test_psychic_transfer_does_nothing_outside_the_bound(set_pool):
+    """The gate is the card. A condition that answered True regardless would be
+    an unconditional Mirror Universe for one mana less."""
+    game = _w2g5_transfer_game(set_pool, 10, 20)
+
+    assert game.cast_from_hand(0, "Psychic Transfer", target_player_index=1).supported
+    game.resolve_stack()
+
+    assert (game.players[0].life, game.players[1].life) == (10, 20), game.log
+
+
+def test_the_pronoun_names_the_seat_the_condition_targeted(set_pool):
+    """"…exchange life totals with **that player**." The rebinding, read off the
+    compiled program rather than off a board: without it the exchange reaches a
+    referent no spell froze and the whole line refuses, which costs the card
+    while nothing fails."""
+    compiled = compile_line(
+        "If the difference between your life total and target player's life "
+        "total is 5 or less, exchange life totals with that player."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    payload = compiled.instructions[0].payload
+
+    assert payload["condition"] == {
+        "kind": "life_total_difference",
+        "player": "you",
+        "other": "target_player",
+        "op": "le",
+        "value": 5,
+    }
+    assert payload["then"][0].payload == {"recipient": "target"}
+
+
+def test_only_a_targeted_seat_is_rebound(set_pool):
+    """The rebinding rewrites ``that player`` and nothing else. A walk that
+    rewrote "you" as well would put the condition's target where the caster is
+    named — silently, and in a sentence that still compiles."""
+    compiled = compile_line(
+        "If the difference between your life total and target player's life "
+        "total is 5 or less, you gain 2 life."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    gain = compiled.instructions[0].payload["then"][0]
+
+    assert gain.payload.get("recipient") == "caster"

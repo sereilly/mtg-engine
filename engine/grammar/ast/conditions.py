@@ -107,6 +107,27 @@ class PlayerLifeIs:
     """
     player: PlayerRef
     comparison: Comparison
+
+
+@dataclass(frozen=True)
+class LifeTotalDifference:
+    """"If **the difference between your life total and target player's life
+    total is 5 or less**" (Psychic Transfer).
+
+    Two seats and one comparison, where :class:`PlayerLifeIs` above has one
+    seat: the number this compares is not any player's life total but the
+    *distance* between two of them, which no seat owns. Folding it into that
+    node with a second player field would have made every reader ask whether
+    the second seat was set before knowing what it was comparing.
+
+    Unsigned, because "the difference between" is: CR 107.1 has no negative
+    quantities, and the card reads the same whichever player is ahead.
+    """
+    first: PlayerRef
+    second: PlayerRef
+    comparison: Comparison
+
+
 @dataclass(frozen=True)
 class EveryOf:
     """"if you control an Urza's Mine **and** an Urza's Tower" — every part must
@@ -384,6 +405,7 @@ Condition = Union[
     ItIsColor,
     ObjectHasKeyword,
     OnBattlefield,
+    LifeTotalDifference,
     PlayerLifeIs,
     RawCondition,
     SelfInGraveyardWithCardsAbove,

@@ -559,6 +559,30 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             int(player.life), str(payload.get("op", "")), payload.get("value")
         )
 
+    if kind == "life_total_difference":
+        # "If the difference between your life total and target player's life
+        # total is 5 or less" (Psychic Transfer). Both seats through the same
+        # reader the one-seat gate above uses, so "that player" and a target
+        # mean here exactly what they mean there.
+        #
+        # ``abs``: CR 107.1 has no negative quantities and "the difference
+        # between" is unsigned, so the card reads the same whichever player is
+        # ahead. A signed subtraction would make Psychic Transfer castable only
+        # while its controller was behind.
+        #
+        # A seat that resolves to nobody is False, which is the direction
+        # CR 603.4 takes for a check it cannot make — and here it is also the
+        # direction that stops an untargeted cast from swapping totals.
+        player = _condition_player(game, context, payload.get("player"))
+        other = _condition_player(game, context, payload.get("other"))
+        if player is None or other is None:
+            return False
+        return _compare_count(
+            abs(int(player.life) - int(other.life)),
+            str(payload.get("op", "")),
+            payload.get("value"),
+        )
+
     if kind == "milled_this_way":
         # "If one or more creature cards were put into that graveyard this
         # way." (Helm of Obedience.) The record the loop wrote, not the

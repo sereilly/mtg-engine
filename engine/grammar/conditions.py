@@ -70,6 +70,33 @@ _DAMAGE_HISTORY_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
+def _parse_life_total_of(stream: TokenStream) -> "ast.PlayerRef | None":
+    """``<player>'s life total`` — one operand of a life comparison.
+
+    Both spellings of the possessive, for the reason the zone-count clause
+    below carries both: "your" is a determiner ``parse_player_ref`` does not
+    read at all, and "target player's" is that reader plus an apostrophe. A
+    fragment rather than an arm of the clause above it because the sentence
+    prints it twice, and two copies would be two answers to which seats a life
+    comparison may name.
+
+    Returns None with the cursor where it was, so the caller can rewind the
+    whole clause rather than the half it consumed.
+    """
+    mark = stream.mark()
+    if stream.accept_word("your"):
+        who: "ast.PlayerRef | None" = ast.PlayerRef("you")
+    else:
+        who = parse_player_ref(stream)
+        if who is None or not stream.accept_word("'s"):
+            stream.reset(mark)
+            return None
+    if not stream.accept_phrase("life", "total"):
+        stream.reset(mark)
+        return None
+    return who
+
+
 def _parse_condition(stream: TokenStream) -> ast.Condition:
     """One condition, or several joined by "and".
 
@@ -172,6 +199,22 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                         stream.reset(after)
                 return ast.EnteredFrom(zone, or_cast=or_cast)
     stream.reset(mark)
+
+    # "if **the difference between your life total and target player's life
+    # total is 5 or less**" (Psychic Transfer). Read before the zone count and
+    # the player reference below because it opens on "the", which neither of
+    # them can start on — and the two life totals inside it are possessives,
+    # which ``parse_player_ref`` does not read, so a fragment reader is needed
+    # either way.
+    diff_mark = stream.mark()
+    if stream.accept_phrase("the", "difference", "between"):
+        first = _parse_life_total_of(stream)
+        if first is not None and stream.accept_word("and"):
+            second = _parse_life_total_of(stream)
+            if second is not None and stream.accept_word("is"):
+                comparison = parse_comparison(stream)
+                return ast.LifeTotalDifference(first, second, comparison)
+    stream.reset(diff_mark)
 
     # "if **your library has ten or more cards in it**" (Phyrexian Portal).
     # How tall a pile is, which is a different question from every other clause
