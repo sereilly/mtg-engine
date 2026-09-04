@@ -2094,3 +2094,158 @@ def test_w4g4_the_default_is_the_option_the_opponents_answer_most(set_pool):
     game._initialize_permanent_state(equity, 0, 1)
 
     assert equity.metadata["chosen_color"] == "R"
+
+
+# --- W4G4 (continued): two effects in one draw-step trigger ---
+#
+# "At the beginning of each opponent's draw step, that player draws an
+# additional card for each growth counter on this enchantment, then this
+# enchantment deals damage to the player equal to the number of cards they drew
+# this way." (Malignant Growth.)
+#
+# Three pieces, none of them fused into a kind:
+#
+#  * the **scope** is payload on `draw_step_each`, exactly as `upkeep_scope` is
+#    one step of the turn earlier - a condition kind is a dispatcher's address,
+#    and spelling the subject into it gives one card its own fire site;
+#  * the **count** is `for each <word> counter on <the source>`, read through
+#    the same `accept_counters_on_source` the where-clause spelling of the
+#    identical phrase already goes through, so the two word orders count the
+#    same thing;
+#  * the two halves compose through `sequence`, and the second reads what the
+#    first *did* - the number that arrived, not the number asked for.
+#
+# And "that player" is the seat the fire site froze. Left to `context.target` a
+# trigger that chooses nothing carries whatever the resolution was holding,
+# which here is the enchantment's own controller: the card would have drawn its
+# controller the cards and dealt its controller the damage.
+
+from engine.named_counters import add_counters as _w4g4_add_counters  # noqa: E402
+
+
+def _w4g4_growth_board(pool, counters, library=40):
+    """Malignant Growth on seat 0 with *counters* growth counters."""
+    lea = _w4g4_basics()
+    growth = _w4g4_Permanent(card=pool["Malignant Growth"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[growth],
+                          library=[lea["Island"]] * 40),
+        _w4g4_PlayerState(name="P2", library=[lea["Forest"]] * library),
+    ])
+    game.enforce_mana_costs = False
+    if counters:
+        _w4g4_add_counters(growth, "growth", counters)
+    return game, growth
+
+
+def _w4g4_draw_step(game, seat):
+    """Run *seat*'s draw-step trigger batch and report what it did to them."""
+    player = game.players[seat]
+    before = (len(player.hand), player.life, len(player.library))
+    game._enqueue_draw_step_triggers(seat)
+    game.resolve_stack()
+    return (
+        len(player.hand) - before[0],
+        before[1] - player.life,
+        before[2] - len(player.library),
+    )
+
+
+def test_w4g4_malignant_growth_compiles_its_third_sentence(set_pool):
+    """Two instructions in a sequence, not one fused kind - and the second
+    reads the first's record rather than recomputing the count."""
+    program = _w4g4_compile(set_pool("MIR")["Malignant Growth"])
+    assert program.supported
+
+    trig = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "draw_step_each"
+    )
+    assert trig.condition.payload == {"draw_step_scope": "opponent"}
+    assert trig.instruction.kind == "sequence"
+    draw, damage = trig.instruction.payload["steps"]
+    assert draw.kind == "draw_target_cards"
+    assert draw.payload == {
+        "amount": "x",
+        "x_from_count": {"source_counters": "growth"},
+        "drawer_seat_record": "event_subject_player",
+    }
+    assert damage.kind == "deal_damage"
+    assert damage.payload == {
+        "amount_from": "drew_count", "recipient": "event_subject_player",
+    }
+
+
+@_w4g4_pytest.mark.parametrize("counters", [0, 1, 2, 3])
+def test_w4g4_the_draw_and_the_damage_both_follow_the_counter_count(set_pool, counters):
+    """A different count each turn, because a trigger sized from one number
+    passes a test that only ever put one counter on it."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), counters)
+
+    drawn, damage, milled = _w4g4_draw_step(game, 1)
+
+    assert (drawn, damage, milled) == (counters, counters, counters)
+
+
+def test_w4g4_the_controllers_own_draw_step_is_not_an_opponents(set_pool):
+    """"each **opponent's** draw step" — whose opponents is CR 109.5's answer,
+    the source's controller, so the card's own draw step is not one of them."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 3)
+
+    assert _w4g4_draw_step(game, 0) == (0, 0, 0)
+
+
+def test_w4g4_the_damage_is_what_was_drawn_not_what_was_asked_for(set_pool):
+    """"the number of cards they drew **this way**" is a record of the step in
+    front of it. Three counters over a two-card library draw two, so two is the
+    damage — a recomputation of the counters would deal three."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 3, library=2)
+
+    drawn, damage, _ = _w4g4_draw_step(game, 1)
+
+    assert (drawn, damage) == (2, 2)
+
+
+def test_w4g4_the_cards_and_the_damage_go_to_the_opponent(set_pool):
+    """The seat the fire site froze, not the one the resolution was carrying:
+    read as ``context.target`` this trigger drew for its own controller."""
+    game, _ = _w4g4_growth_board(set_pool("MIR"), 2)
+    controller = game.players[0]
+    before = (len(controller.hand), controller.life)
+
+    _w4g4_draw_step(game, 1)
+
+    assert (len(controller.hand), controller.life) == before
+    assert len(game.players[1].hand) == 2
+    assert game.players[1].life == 18
+
+
+def test_w4g4_a_drew_this_way_count_needs_a_draw_in_front_of_it():
+    """idiom 7: a back-reference with no producer names nothing, and a zero is a
+    number the card never printed. The words parse either way; what refuses is
+    the lowering, which is where the producer is known."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "This enchantment deals damage to that player equal to the number of "
+        "cards they drew this way."
+    )
+    with _w4g4_pytest.raises(LoweringError):
+        lower_ability(node, event="draw_step_each")
+
+
+def test_w4g4_the_drew_this_way_count_names_bare_cards_and_nothing_narrower():
+    """The record holds how many arrived, not what they were — so a phrase
+    asking it a question about the cards refuses rather than counting all of
+    them."""
+    from engine.grammar.errors import GrammarError
+    from engine.grammar import parse_line
+
+    with _w4g4_pytest.raises(GrammarError):
+        parse_line(
+            "That player draws two cards, then this enchantment deals damage "
+            "to that player equal to the number of creature cards they drew "
+            "this way."
+        )

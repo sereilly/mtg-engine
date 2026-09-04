@@ -1193,7 +1193,14 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # (neither is a prefix of the other), but it is listed first to match the
     # upkeep pair's order.
     ("draw_step_self",      r"at the beginning of your draw step"),
-    ("draw_step_each",      r"at the beginning of each player's draw step"),
+    # "each **opponent's** draw step" (Malignant Growth) beside "each
+    # player's". One event asked of a narrower set of seats, so the narrowing
+    # is *payload* and not a second kind — the same shape `upkeep_scope` above
+    # takes, and for its reason (idiom 19): a condition kind is a dispatcher's
+    # address, and spelling the subject into it gives one card its own fire
+    # site. `phases/draw_step.py` reads `draw_step_scope` to decide whether this
+    # firing is one the card names.
+    ("draw_step_each",      r"at the beginning of each (?:(?P<draw_step_scope>opponent|player)'s )?draw step"),
     # "At the beginning of your first main phase" (the M21 Shrine cycle) —
     # CR 505.1a's precombat main phase, which is the only one that is "first".
     # Both printed spellings, because the modern templating says "precombat".

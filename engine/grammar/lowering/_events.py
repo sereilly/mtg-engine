@@ -298,6 +298,12 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # three-player game is not "the opponent" — so it is frozen by the draw
     # sweep that announces it rather than re-derived at resolution.
     "draws_card",
+    # "At the beginning of each opponent's draw step, **that player** draws an
+    # additional card …" (Malignant Growth). The seat whose draw step it is,
+    # frozen by `phases/draw_step.py`'s enqueue — which seat varies per firing,
+    # exactly as `upkeep_each`'s does, so it cannot be re-derived at resolution
+    # from the source's controller.
+    "draw_step_each",
     # "Whenever an opponent casts an instant spell …, this creature deals 4
     # damage to **that player**" (Ichneumon Druid). The condition names one
     # seat — whoever cast the spell — and nothing chose it, so it is the seat

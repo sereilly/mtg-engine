@@ -48,6 +48,20 @@ DISCARDED_BY_SEAT = "discarded_by_seat"
 # decide everybody's life gain.
 DREW_BY_SEAT = "drew_by_seat"
 
+# "…then this enchantment deals damage to the player equal to **the number of
+# cards they drew this way**." (Malignant Growth.) The scalar twin of the
+# per-seat tally above: one draw, one seat, one number - the same shape
+# ``discarded_count`` has for the single-seat discard beside the per-seat one,
+# and separate for that pair's reason. A trigger drawing for one player and a
+# spell drawing for everybody are two sentences, and a shared key would let one
+# seat's answer be read as another's.
+#
+# Here rather than beside either end because both ends spell it: the handler
+# writes it, ``lowering/_records`` declares it and ``grammar/records`` reads it
+# back, and a second spelling is what makes a producer gate vacuous while the
+# amount reads an empty record.
+DREW_COUNT = "drew_count"
+
 # "Target player reveals their hand. **For each blue instant card revealed this
 # way**, …" (Sirocco.) The cards a hand reveal showed, as cards: the sentence
 # behind it narrows by colour and card type, which the *names* the client is
