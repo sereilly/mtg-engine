@@ -150,6 +150,7 @@ from .stack import (
     _UNPAID_PENALTIES,
     _parse_unpaid_penalty_sentence,
     _parse_activation_restriction,
+    _parse_x_spend_restriction,
     _parse_cost_x_definition,
 )
 from .combat import (
@@ -282,6 +283,7 @@ __all__ = [
     "_UNPAID_PENALTIES",
     "_parse_unpaid_penalty_sentence",
     "_parse_activation_restriction",
+    "_parse_x_spend_restriction",
     "_parse_cost_x_definition",
     "_parse_cant_attack_or_block",
     "_parse_assigns_no_combat_damage",

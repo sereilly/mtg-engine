@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**25 unclaimed sentence(s) across 19 supported card(s).**
+**24 unclaimed sentence(s) across 18 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
@@ -55,8 +55,6 @@ anything anyone did, and every ingest would arrive red.
   - `this spell costs 3 life more to cast for each target`
 - **Phyrexian Tribute**
   - `as an additional cost to cast this spell, sacrifice two creatures`
-- **Prismatic Circle**
-  - `{1}: the next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage`
 - **Roots of Life**
   - `as this enchantment enters, choose island or swamp`
 - **Soul Echo**
@@ -275,7 +273,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | static-line table | 379 |
 | keyword table | 357 |
 | aura enchant noun (oracle_instructions attach) | 147 |
-| card_hooks bespoke (name-keyed) | 94 |
+| card_hooks bespoke (name-keyed) | 93 |
 | activation_restrictions.py | 75 |
 | aura static (oracle_instructions/permanent_state) | 52 |
 | auras.py (attached effect) | 44 |

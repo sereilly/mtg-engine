@@ -319,6 +319,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "upkeep_damage_unless_cost": "damage",
     "grant_half_prevention_shield": "prevention",
     "grant_whole_prevention_shield": "prevention",
+    # CR 615.5's additional effect: the same absorption with a sentence
+    # after it. `grant_reverse_damage_shield` reached the engine through a
+    # name-keyed hook until Mirage printed a second rider on the same
+    # sentence, which is what made it a production; it is declared here now
+    # because the grammar emits it.
+    "grant_reverse_damage_shield": "prevention",
+    "grant_exile_prevention_shield": "prevention",
+    "grant_team_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.

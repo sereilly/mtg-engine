@@ -9,6 +9,10 @@ from ..shields import (
     make_capped_charge,
     make_capped_source,
     make_color_shield,
+    make_exile_charge,
+    make_exile_source,
+    make_team_charge,
+    make_team_source,
     make_half_charge,
     make_half_source,
     make_life_gain_charge,
@@ -160,6 +164,22 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     prevention_colors = tuple(
         instruction.payload.get("prevention_colors") or ()
     ) or ((prevention_color,) if prevention_color else ())
+    if instruction.payload.get("prevention_color_chosen"):
+        # "…a source of your choice **of the chosen color**" (Prismatic
+        # Circle). The colour is not in the sentence: it is what this permanent
+        # recorded as it entered (CR 614.1c), read here rather than at damage
+        # time because CR 615.9 rechecks the *source* against a property the
+        # shield already holds — and the property was fixed when this ability
+        # resolved.
+        #
+        # Nothing recorded arms nothing, the reading
+        # ``prevention._resolved_chosen_color`` takes of the same phrase on the
+        # static side: a shield naming no colour would answer to every source,
+        # which is the widest possible reading of a sentence that names one.
+        recorded = (
+            getattr(context.source_permanent, "metadata", {}) or {}
+        ).get("chosen_color")
+        prevention_colors = (str(recorded),) if recorded else ()
     # Circle of Protection: Artifacts — the same Circle keyed on a card type.
     # Its own branch rather than a widened colour one: `make_color_shield` sets
     # the colour field, and a shield holding a card type in it would be
@@ -314,6 +334,88 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
     else:
         add_shield(caster, make_life_gain_charge(granted_by))
         game.log.append(f"{caster.name} armed a Reverse Damage shield")
+    return True, "resolved"
+
+
+@effect_handler("grant_team_prevention_shield")
+def grant_team_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Shadowbane: "The next time a source of your choice would deal damage to
+    you and/or creatures you control this turn, prevent that damage. If damage
+    from a black source is prevented this way, you gain that much life."
+
+    The same choice its siblings make — a permanent on any battlefield, or a
+    spell on the stack matched by the ``CardDefinition`` it will deal its damage
+    with (CR 615.8). What differs is where the shield can be *found*: it covers
+    a printed set of permanents as well as its caster, so it records the phrase
+    and `prevention._class_shields` asks that phrase about each damaged
+    permanent.
+
+    The seat is recorded with the phrase, because "creatures **you** control" is
+    the caster's "you" (CR 109.5) and by damage time the resolution is long
+    over.
+    """
+    caster = context.caster
+    granted_by = context.card.name if context.card else None
+    recipients = dict(instruction.payload.get("recipients") or {})
+    rider_colors = tuple(instruction.payload.get("rider_colors") or ())
+    seat = game.players.index(caster) if caster in game.players else None
+    if context.stack_target is not None:
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_players=()
+        )
+    if chosen is not None:
+        add_shield(
+            caster,
+            make_team_source(chosen, recipients, seat, rider_colors, granted_by),
+        )
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} will prevent the next damage from "
+            f"{getattr(source_card, 'name', 'a source')} to them or their creatures"
+        )
+    else:
+        add_shield(
+            caster, make_team_charge(recipients, seat, rider_colors, granted_by)
+        )
+        game.log.append(
+            f"{caster.name} will prevent the next damage dealt to them or their "
+            "creatures"
+        )
+    return True, "resolved"
+
+
+@effect_handler("grant_exile_prevention_shield")
+def grant_exile_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Bone Mask: "{2}, {T}: The next time a source of your choice would deal
+    damage to you this turn, prevent that damage. Exile cards from the top of
+    your library equal to the damage prevented this way."
+
+    Reverse Damage's shield with a different sentence after it (CR 615.5), so
+    it makes the same choice its three siblings make — a permanent on any
+    battlefield, or a spell on the stack matched by the ``CardDefinition`` it
+    will deal its damage with. What differs is only what the interceptor does
+    once it has absorbed, which is what ``Shield.kind`` selects.
+    """
+    caster = context.caster
+    granted_by = context.card.name if context.card else None
+    if context.stack_target is not None:
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_players=()
+        )
+    if chosen is not None:
+        add_shield(caster, make_exile_source(chosen, granted_by))
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} will prevent the next damage from "
+            f"{getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        add_shield(caster, make_exile_charge(granted_by))
+        game.log.append(f"{caster.name} will prevent the next damage dealt to them")
     return True, "resolved"
 
 

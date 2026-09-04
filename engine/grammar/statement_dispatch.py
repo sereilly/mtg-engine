@@ -30,8 +30,9 @@ from .errors import LoweringError
 from .lowering._events import CHOSEN_PLAYER, LOOP_BOUND_PLAYER
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
-    _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
+    _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
+from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
     _lower_for_each_cost_paid,

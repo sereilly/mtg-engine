@@ -306,6 +306,35 @@ class GameEndingMixin:
                         changed = True
                         break
 
+            # "When this creature has flying, sacrifice it." (Floodgate.) The
+            # fifth state trigger here, and the keyword twin of the power
+            # threshold above: a Wall that gains flying is a Wall that has
+            # stopped being what the card is about, and the sacrifice is how it
+            # says so.
+            #
+            # Here for that row's reason exactly — a keyword can arrive from an
+            # Aura, an Equipment, a board-wide static, a granted ability or a
+            # layer effect ending, and a list of those fire sites goes stale
+            # (idiom 3). The sweep asks the state, which is what CR 603.8 says
+            # the trigger watches. `_has_keyword` is the layer-6 read, so a
+            # granted keyword counts exactly as a printed one does (CR 613.1).
+            for seat, player in enumerate(self.players):
+                for perm in list(self.controlled_by(player)):
+                    for trig in matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"source_has_keyword"},
+                        instruction_kinds={"sacrifice_self"},
+                    ):
+                        keyword = trig.condition.payload.get("keyword_name")
+                        if not keyword or not self._has_keyword(perm, str(keyword)):
+                            continue
+                        self.sacrifice_permanent(perm)
+                        self.log.append(
+                            f"{perm.card.name} sacrificed (it has {keyword})"
+                        )
+                        changed = True
+                        break
+
             # "Sacrifice the creature when you lose control of this creature."
             # (Seraph, Krovikan Vampire.) CR 603.7's delayed trigger over an
             # event with no single fire site — a permanent leaves, a control

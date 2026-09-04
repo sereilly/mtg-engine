@@ -157,6 +157,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature's power is 7 or greater",
         "when this creature's power is 7 or greater",
     ),
+    # Floodgate. The keyword twin of the row above, in the same table for the
+    # same reason: the card prints "when" and the row lives where both printed
+    # words reach it.
+    "source_has_keyword": (
+        "whenever this creature has flying",
+        "when this creature has flying",
+    ),
     # Thought Lash. Same table and same reason: the card prints "when" and the
     # row lives where both words reach it.
     "cumulative_upkeep_unpaid": (

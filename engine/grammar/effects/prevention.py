@@ -268,6 +268,101 @@ def _finish_named_source_shield(
     )
 
 
+#: CR 615.5's additional effect, keyed by the verb that opens it. A closed table
+#: rather than a nested statement parse, for the reason
+#: ``ast.PreventDamage.prevented_rider`` gives: the rider's quantity does not
+#: exist until the shield has absorbed something, so it runs from the
+#: interceptor rather than as a lowered step — and the interceptor is what the
+#: name selects. A card printing a third rider adds a row here, a shield kind
+#: and the code behind it, and is refused until it does.
+#: Each row is the rider's name, the sentence as printed **after the
+#: prevention** (which then spells its amount "equal to the damage prevented
+#: this way"), and the sentence as printed **after a condition** — where the
+#: condition already said which damage this is about, so the amount is the
+#: pronoun "that much". ``None`` for a rider no card prints conditionally.
+_PREVENTED_THIS_WAY_RIDERS: tuple[
+    tuple[str, tuple[str, ...], "tuple[str, ...] | None"], ...
+] = (
+    ("gain_life", ("you", "gain", "life"), ("you", "gain", "that", "much", "life")),
+    (
+        "exile_from_library",
+        ("exile", "cards", "from", "the", "top", "of", "your", "library"),
+        None,
+    ),
+)
+
+
+def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider | None":
+    """``. <effect> equal to the damage prevented this way.`` — the sentence a
+    shield's own card prints after the prevention (CR 615.5).
+
+    "You gain life equal to the damage prevented this way" (Reverse Damage) and
+    "Exile cards from the top of your library equal to the damage prevented this
+    way" (Bone Mask). One production, because everything from "equal to" onward
+    is the same clause and the amount is the same number — what the two cards do
+    with it is the row above.
+
+    Read here rather than as a sentence of its own for
+    :func:`_parse_instead_rider`'s reason one screen up: it refers to an amount
+    that does not exist yet, so a statement layer that split them would run it
+    over zero.
+
+    Refuses with the cursor untouched, so a prevention followed by any other
+    sentence keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    # "**If damage from a black source is prevented this way,** you gain that
+    # much life." (Shadowbane.) The same rider with a condition in front of it
+    # and the quantity spelled "that much" instead of repeating the clause —
+    # one production, because everything it decides is the same: what happens
+    # after the prevention, and how big it is.
+    colours: tuple[str, ...] = ()
+    conditional = False
+    condition_mark = stream.mark()
+    if stream.accept_phrase("if", "damage", "from"):
+        stream.accept_word("a", "an")
+        token = stream.peek()
+        word = str(token.text).lower() if token is not None else ""
+        while word in COLOR_WORDS:
+            colours += (COLOR_WORDS[word],)
+            stream.advance()
+            if not stream.accept_word("or"):
+                break
+            token = stream.peek()
+            word = str(token.text).lower() if token is not None else ""
+        if not colours or not stream.accept_phrase(
+            "source", "is", "prevented", "this", "way"
+        ):
+            stream.reset(mark)
+            return None
+        stream.accept_punct(",")
+        conditional = True
+    else:
+        stream.reset(condition_mark)
+    for name, printed, after_condition in _PREVENTED_THIS_WAY_RIDERS:
+        if conditional:
+            # The condition already said which damage the rider is about, so the
+            # amount is the pronoun rather than a repeat of the clause. One
+            # spelling per row, never both: a sentence readable two ways is a
+            # sentence whose reading depends on which branch was tried first.
+            if after_condition is not None and stream.accept_phrase(*after_condition):
+                stream.accept_punct(".")
+                return ast.PreventedRider(name, colours)
+            continue
+        if stream.accept_phrase(*printed):
+            if stream.accept_phrase(
+                "equal", "to", "the", "damage", "prevented", "this", "way"
+            ):
+                stream.accept_punct(".")
+                return ast.PreventedRider(name)
+            stream.reset(mark)
+            return None
+    stream.reset(mark)
+    return None
+
+
 def _parse_source_of_choice_effect(
     stream: TokenStream,
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -339,13 +434,44 @@ def _parse_source_of_choice_effect(
     if not stream.accept_word("source"):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("of", "your", "choice", "would", "deal", "damage", "to"):
+    if not stream.accept_phrase("of", "your", "choice"):
+        stream.reset(mark)
+        return None
+    # "a source of your choice **of the chosen color**" (Prismatic Circle). The
+    # same Circle narrowing read one branch above, with the colour deferred to
+    # what the permanent recorded as it entered (CR 614.1c) instead of printed
+    # in the sentence — so it is read here, after "of your choice", because
+    # that is where this card prints it and the branch above reads a colour
+    # *word*, which "the chosen color" is not.
+    #
+    # Refused alongside a printed colour rather than folded in: "a red source
+    # of your choice of the chosen color" names two properties, and a shield
+    # records one (CR 615.9 rechecks *the* recorded property).
+    chosen_color = bool(stream.accept_phrase("of", "the", "chosen", "color"))
+    if chosen_color and (colours or card_type):
+        raise stream.error("a shield records one source property, not two")
+    if not stream.accept_phrase("would", "deal", "damage", "to"):
         stream.reset(mark)
         return None
     recipient = parse_recipient(stream)
     if recipient is None:
         stream.reset(mark)
         return None
+    # "…would deal damage to **you and/or creatures you control** this turn"
+    # (Shadowbane). One shield over several recipients, joined by the printed
+    # "and/or" — CR 615.1's shield goes around whatever the effect is affecting,
+    # and here that is a player *and* a described set. The loop backtracks, so
+    # an "and" that introduces something else is left for whatever follows.
+    others: list[ast.Recipient] = []
+    while True:
+        conjunct = stream.mark()
+        if not (stream.accept_phrase("and", "or") or stream.accept_word("and")):
+            break
+        further = parse_recipient(stream)
+        if further is None:
+            stream.reset(conjunct)
+            break
+        others.append(further)
     duration = _parse_duration(stream)
     stream.accept_punct(",")
     if stream.accept_phrase("that", "damage", "is", "dealt", "to"):
@@ -381,7 +507,7 @@ def _parse_source_of_choice_effect(
                 rounding = "up"
             elif not stream.accept_word("down"):
                 raise stream.error("expected 'up' or 'down' after 'rounded'")
-        if colours or card_type:
+        if colours or card_type or chosen_color:
             # A shield that records a property *and* halves is a card nobody has
             # printed; refusing names the gap rather than dropping one half.
             raise stream.error("no shield both narrows its source and halves")
@@ -394,13 +520,26 @@ def _parse_source_of_choice_effect(
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
+    # "…prevent that damage. **You gain life equal to the damage prevented this
+    # way.**" (Reverse Damage.) CR 615.5's additional effect, read as part of
+    # this sentence — see :func:`_parse_prevented_this_way_rider`.
+    rider = _parse_prevented_this_way_rider(stream)
     if colours:
         filt = ast.ObjectFilter(colors=tuple(colours))
     elif card_type:
         filt = ast.ObjectFilter(card_types=(card_type,))
+    elif chosen_color:
+        # Not a member of ``colors``: the colour is not in the sentence at all,
+        # and folding it in would need a sentinel every ``colors`` reader would
+        # then have to know about — the argument ``ObjectFilter.chosen_color``
+        # already carries for the noun-phrase side.
+        filt = ast.ObjectFilter(chosen_color=True)
     else:
         filt = ast.ObjectFilter()
-    return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
+    return ast.PreventDamage(
+        ast.Fixed(1), to=recipient, from_filter=filt, prevented_rider=rider,
+        to_others=tuple(others),
+    )
 
 
 def _parse_damage_cant_be_prevented(

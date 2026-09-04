@@ -158,6 +158,63 @@ def lower_each_matching_damage(
     return (OracleInstruction("deal_damage_each_matching", "", payload),)
 
 
+def lower_counted_sweep_damage(
+    node: ast.DealDamage, recipient: ast.TargetSpec
+) -> tuple[OracleInstruction, ...]:
+    """"…it deals damage to **each nonblue creature without flying** equal to
+    half the number of Islands you control, rounded down." (Floodgate.)
+
+    The two sweeps above with a *counted* amount instead of a printed one. Both
+    of them refuse one outright ("a creature sweep cannot carry a computed
+    damage amount"), and that refusal was about the amount reaching the handler:
+    they emit ``amount`` as a literal and ``deal_damage_each_matching`` resolves
+    it against ``context.x_value``.
+
+    Which is exactly the channel a count already travels on.
+    ``X_FROM_COUNT`` is evaluated at the single dispatch point
+    (``mixins/oracle_instructions``) and substituted into the context's X
+    *before* any handler runs, so a sweep asking for ``"x"`` gets the number the
+    same way every counted single-recipient damage does — one number for the
+    whole resolution, which is what CR 611.2c's fixed set wants.
+
+    The set's own refusals are the two sweeps' unchanged: creatures only
+    (CR 120.1a — damage marked on anything else is never read), and every key of
+    the printed noun phrase testable by ``subject_matches``, because a narrowing
+    the matcher drops burns a strictly larger board than the card prints.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    assert isinstance(node.amount, ast.CountOf)
+    if node.per_each is not None or node.riders != ast.DamageRiders():
+        raise LoweringError(
+            "a counted sweep carries no multiplier and no riders", node=node
+        )
+    if recipient.filter.card_types != ("creature",):
+        raise LoweringError(
+            "only a creature sweep is damaged by the printed noun phrase",
+            node=node,
+        )
+    described = _filter_payload(recipient.filter)
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if leftover:
+        raise LoweringError(
+            "the damage sweep cannot narrow by: " + ", ".join(sorted(leftover)),
+            node=node,
+        )
+    from ...oracle_types import X_FROM_COUNT
+
+    return (
+        OracleInstruction(
+            "deal_damage_each_matching", "",
+            {
+                "amount": "x",
+                "filter": described,
+                X_FROM_COUNT: count_spec(node.amount.filter, node),
+            },
+        ),
+    )
+
+
 def lower_described_set_damage(
     node, recipient, amount, computed: bool
 ) -> tuple[OracleInstruction, ...]:

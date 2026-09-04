@@ -754,3 +754,214 @@ def test_zombie_mob_counts_the_graveyard_before_it_eats_it(set_pool):
     assert [c.name for c in game.players[1].graveyard] == ["Femeref Scouts"], (
         "'your graveyard' is one pile"
     )
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game as _W1G3Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def _w1g3_tap_all(game, player, lands, color):
+    for land in lands:
+        assert game.tap_land_for_mana(
+            0, land.card.name, color,
+            permanent_index=player.battlefield.index(land),
+        )
+
+
+def _w1g3_hellkite_board(set_pool, land_name, land_count):
+    pool = set_pool("MIR")
+    hellkite = _W1G3Permanent(card=pool["Crimson Hellkite"])
+    lands = [_W1G3Permanent(card=pool[land_name]) for _ in range(land_count)]
+    victim = _W1G3Permanent(card=pool["Wild Elephant"])       # 3/3
+    p1 = _W1G3PlayerState(name="P1", battlefield=[hellkite, *lands],
+                          library=[pool[land_name]] * 10, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim],
+                          library=[pool[land_name]] * 10, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _w1g3_tap_all(game, p1, lands, "R" if land_name == "Mountain" else "G")
+    return game, hellkite, victim
+
+
+def test_crimson_hellkite_spends_red_mana_on_x(set_pool):
+    """"{X}, {T}: This creature deals X damage to target creature. **Spend only
+    red mana on X.**"
+
+    The whole line refused to parse before this round, so the ability did not
+    exist. Two halves land together, because a restriction the grammar consumes
+    and nothing charges is an ability that works more often than the card
+    allows: the sentence is claimed, and the X pips are charged as {R}.
+    """
+    game, hellkite, victim = _w1g3_hellkite_board(set_pool, "Mountain", 2)
+
+    result = game.activate_permanent_ability(
+        0, "Crimson Hellkite", x_value=2,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert victim.damage_marked == 2
+    assert hellkite.tapped
+
+
+def test_crimson_hellkite_refuses_to_pay_x_from_the_wrong_colour(set_pool):
+    """The other direction, without which the test above passes for an ability
+    that charges X as generic mana — which is every colour at once."""
+    game, hellkite, victim = _w1g3_hellkite_board(set_pool, "Forest", 2)
+
+    result = game.activate_permanent_ability(
+        0, "Crimson Hellkite", x_value=2,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not result.supported, (
+        "two Forests paid an X the card says only red mana may pay "
+        f"— log: {game.log}"
+    )
+    assert victim.damage_marked == 0
+    assert not hellkite.tapped, "CR 602.2b: nothing is paid by a refused activation"
+
+
+def test_burning_palm_efreet_grounds_the_creature_it_damaged(set_pool):
+    """"{1}{R}{R}: This creature deals 2 damage to target creature with flying
+    **and that creature loses flying** until end of turn."
+
+    Vertigo prints the identical two clauses with a full stop between them and
+    has played correctly since Ice Age: the sentence loop probes the pronoun
+    rider between sentences. Joined with "and" the conjunction loop never
+    reaches it, so "that creature" fell through to the bare-noun reading and
+    the lowering refused — one printed word from a card that works.
+
+    The keyword is gone from the creature that was damaged, and the ability
+    picked its target once: both instructions carry the same description.
+    """
+    pool = set_pool("MIR")
+    efreet = _W1G3Permanent(card=pool["Burning Palm Efreet"])
+    drake = _W1G3Permanent(card=pool["Azimaet Drake"])        # 1/3 flier
+    wyvern = _W1G3Permanent(card=pool["Cerulean Wyvern"])     # 3/3 flier
+    p1 = _W1G3PlayerState(name="P1", battlefield=[efreet], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[drake, wyvern], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.activate_permanent_ability(
+        0, "Burning Palm Efreet",
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert drake.damage_marked == 2
+    assert not drake.has_keyword("flying"), (
+        f"the loss missed the creature the ability damaged: {game.log}"
+    )
+    assert wyvern.damage_marked == 0
+    assert wyvern.has_keyword("flying"), "one target, not every flier"
+
+
+def test_abyssal_hunter_bites_the_creature_it_tapped(set_pool):
+    """"{B}, {T}: Tap target creature. This creature deals damage equal to its
+    power **to that creature**."
+
+    The same cross-clause pronoun one node type over, and the same one-word
+    difference: Tracker and Karplusan Yeti print "…equal to its power to
+    **target** creature" and have worked since Ice Age, while this card names
+    the creature the sentence in front of it chose and refused at lowering for
+    want of a producer for ``its_power``.
+
+    A second creature on the board makes the test about the *binding*: only the
+    tapped one is bitten, so the ability did not fall through to whatever the
+    resolution context was carrying.
+    """
+    pool = set_pool("MIR")
+    hunter = _W1G3Permanent(card=pool["Abyssal Hunter"])
+    victim = _W1G3Permanent(card=pool["Wild Elephant"])       # 3/3
+    bystander = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[hunter], life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim, bystander], life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.activate_permanent_ability(
+        0, "Abyssal Hunter",
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert victim.tapped
+    assert victim.damage_marked == hunter.effective_power > 0
+    assert not bystander.tapped
+    assert bystander.damage_marked == 0
+
+
+def test_floodgate_sacrifices_itself_the_moment_it_has_flying(set_pool):
+    """"When this creature has flying, sacrifice it." (CR 603.8.)
+
+    The fifth state trigger in the state-based sweep and the keyword twin of
+    Phyrexian Devourer's power threshold — swept rather than fired from a call
+    site, because a keyword can arrive from an Aura, an Equipment, a board-wide
+    static or a layer effect ending, and a list of those sites goes stale.
+    """
+    pool = set_pool("MIR")
+    gate = _W1G3Permanent(card=pool["Floodgate"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[gate], life=20)
+    p2 = _W1G3PlayerState(name="P2", life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game._settle()
+    assert game.is_on_battlefield(gate), "a Wall without flying stays"
+
+    from engine.keywords import grant_keyword
+
+    grant_keyword(gate, "flying", duration="end_of_turn")
+    game._settle()
+
+    assert not game.is_on_battlefield(gate), (
+        f"the state trigger never fired: {game.log}"
+    )
+
+
+def test_floodgate_counts_islands_when_it_leaves(set_pool):
+    """"When this creature leaves the battlefield, it deals damage to each
+    nonblue creature without flying equal to **half the number of Islands you
+    control, rounded down**."
+
+    A *counted* sweep, which both sweep lowerings refused outright ("a creature
+    sweep cannot carry a computed damage amount"). The refusal was about the
+    amount reaching the handler — and `x_from_count` is substituted into the
+    resolution's X at the single dispatch point, before any handler runs, so a
+    sweep asking for "x" gets the number exactly as a single recipient does.
+
+    The three creatures separate the three narrowings: blue is spared, a flier
+    is spared, and the ground non-blue creature takes half of five Islands.
+    """
+    pool = set_pool("MIR")
+    gate = _W1G3Permanent(card=pool["Floodgate"])
+    islands = [_W1G3Permanent(card=pool["Island"]) for _ in range(5)]
+    ground = _W1G3Permanent(card=pool["Zhalfirin Commander"])   # white, no flying
+    flier = _W1G3Permanent(card=pool["Cerulean Wyvern"])        # blue flier
+    blue_ground = _W1G3Permanent(card=pool["Wall of Corpses"])  # black wall
+    p1 = _W1G3PlayerState(name="P1", battlefield=[gate, *islands], life=20)
+    p2 = _W1G3PlayerState(
+        name="P2", battlefield=[ground, flier, blue_ground], life=20
+    )
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.sacrifice_permanent(gate)
+    game._settle()
+
+    assert ground.damage_marked == 2, f"half of five Islands: {game.log}"
+    assert flier.damage_marked == 0, "flying is spared"
+    assert blue_ground.damage_marked == 2, "black is not blue"

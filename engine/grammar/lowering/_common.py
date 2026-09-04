@@ -573,7 +573,19 @@ def describe_independent_target_roles(
     roles: list[dict[str, object]] = []
     for spec in specs:
         filter_payload = _filter_payload(spec.filter)
-        noun = filter_payload.get("type_filter")
+        # "Destroy target **Plains** and target white creature." (Reign of
+        # Chaos.) The printed noun of a slot is not always a card type: a
+        # subtype names one just as well, and it is the word the caster is
+        # asked for. The type is preferred where both are printed ("target
+        # Griffin **creature**"), because that is the head of the phrase.
+        #
+        # A fallback rather than a second reader: the role name is only ever a
+        # label and a key, and every narrowing the slot enforces is in the
+        # filter beside it — which ``subject_matches`` tests by subtype exactly
+        # as it tests by type.
+        noun = filter_payload.get("type_filter") or filter_payload.get(
+            "subtype_filter"
+        )
         if not isinstance(noun, str):
             raise LoweringError(
                 "a target role needs a printed noun to be asked for", node=spec

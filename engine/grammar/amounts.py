@@ -15,7 +15,8 @@ from .lexer import MANA, NUMBER, PT, WORD
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
 from .records import (accept_damage_dealt_by_chosen_cast,
-                      accept_exiled_for_cost, accept_sacrificed_for_cost)
+                      accept_exiled_for_cost, accept_sacrificed_for_cost,
+                      accept_tapped_for_cost)
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -295,7 +296,9 @@ def _parse_counted_amount(
     # The leading "the" is this reader's, exactly as it is one function up.
     channel = stream.mark()
     stream.accept_word("the")
-    for accept_channel in (accept_sacrificed_for_cost, accept_exiled_for_cost):
+    for accept_channel in (
+        accept_sacrificed_for_cost, accept_exiled_for_cost, accept_tapped_for_cost,
+    ):
         payment = accept_channel(stream)
         if payment is not None:
             return payment
@@ -391,6 +394,13 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if sacrificed is not None:
         return sacrificed
 
+    # "…equal to **the tapped creature's power**" (Unerring Sling) — the third
+    # payment channel, read here beside its two siblings and through the same
+    # kind of named reader for their reason: two front ends read the phrase.
+    tapped = accept_tapped_for_cost(stream)
+    if tapped is not None:
+        return tapped
+
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
         # says the number is the one *this effect* produced rather than any
@@ -456,7 +466,21 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     # A different referent from "its power" above and so a different key: read
     # as that one it would deal the Dragon's own power, which is a number the
     # card never mentions.
-    if stream.accept_phrase("that", "creature", "'s", "power"):
+    # "…equal to **the creature's** power" (Cinder Cloud, Kaervek's Purge). The
+    # definite article is the same back-reference under the other determiner —
+    # ``references.py`` has read "**the** creature's controller" beside "that
+    # creature's controller" since Creature Bond, and a possessive whose two
+    # spellings meant two referents would be a fork in a fragment.
+    # …and "equal to **the** creature's power" (Cinder Cloud, Kaervek's Purge),
+    # which arrives here with the article already eaten by the
+    # ``accept_word("the")`` above — so the branch reads the possessive alone.
+    # The definite article is the same back-reference under the other
+    # determiner: ``references.py`` has read "**the** creature's controller"
+    # beside "that creature's controller" since Creature Bond, and a possessive
+    # whose two spellings meant two referents would be a fork in a fragment.
+    if stream.accept_phrase("that", "creature", "'s", "power") or (
+        stream.accept_phrase("creature", "'s", "power")
+    ):
         return ast.ThatMuch("event_subject_power")
 
     # "…and its toughness is equal to **that creature's toughness**" (Broken

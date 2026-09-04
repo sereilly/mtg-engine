@@ -194,6 +194,27 @@ class ExiledForCost:
 
 
 @dataclass(frozen=True)
+class TappedForCost:
+    """A characteristic of what the ability's **own cost** tapped — "This
+    artifact deals damage equal to **the tapped creature's power** to target
+    attacking or blocking creature with flying" (Unerring Sling).
+
+    :class:`SacrificedForCost`'s third sibling, and the odd one of the three:
+    the creature is still on the battlefield when the effect reads it, so this
+    is not last-known information but a plain *back-reference* — "the tapped
+    creature" names the one the cost tapped, and a board scan at resolution
+    would name whichever untapped creature its controller happens to have
+    tapped since. That is exactly the argument ``untapped_for_cost`` already
+    makes on the same channel for Benthic Explorers' land.
+
+    Its own node for :class:`ExiledForCost`'s reason: the three read different
+    records written by different payments, and a card printing two of them would
+    have them disagree.
+    """
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
 class TotalPowerSacrificedThisWay:
     """"…where X is **the total power of the creatures sacrificed this way**"
     (Sword of the Ages).
@@ -418,7 +439,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

@@ -382,3 +382,108 @@ def test_a_card_that_names_no_end_refuses_a_bottoming_answer(set_pool, catalog_b
     assert game.cast_from_hand(0, "Brainstorm").supported
     assert not game.confirm_hand_to_library(0, [0, 1], to_bottom=True)
     assert game.confirm_hand_to_library(0, [0, 1])
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def _w1g3_cast(set_pool, spell, own=(), theirs=(), **kwargs):
+    """Cast *spell* from seat 0 with the named permanents on each battlefield."""
+    pool = set_pool("MIR")
+    mine = [_W1G3Permanent(card=pool[name]) for name in own]
+    yours = [_W1G3Permanent(card=pool[name]) for name in theirs]
+    game = Game(players=[
+        _W1G3PlayerState(name="P1", battlefield=mine, hand=[pool[spell]],
+                         library=[pool["Island"]] * 5),
+        _W1G3PlayerState(name="P2", battlefield=yours,
+                         library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    result = game.cast_from_hand(0, spell, **kwargs)
+    assert result.supported, result.details
+    game.resolve_stack()
+    return game, mine, yours
+
+
+def test_kaerveks_hex_deals_the_additional_point_only_to_green(set_pool):
+    """"deals 1 damage to each nonblack creature **and an additional 1 damage
+    to each green creature**."
+
+    The rider is a second damage clause, so a green nonblack creature takes
+    both points and a green creature is not exempted from the first. The black
+    creature takes neither, which is what makes this a test of the *first*
+    clause's narrowing as well: a reader that dropped "nonblack" would kill it.
+    """
+    game, mine, yours = _w1g3_cast(
+        set_pool, "Kaervek's Hex",
+        own=["Zhalfirin Commander"],       # white, 2/2 — first clause only
+        theirs=["Cadaverous Knight",       # black — neither clause
+                "Wild Elephant"],          # green 3/3 — both clauses
+    )
+
+    assert mine[0].damage_marked == 1
+    assert yours[0].damage_marked == 0
+    assert yours[1].damage_marked == 2
+
+
+def test_tropical_storm_reads_the_other_printed_word_order(set_pool):
+    """"deals X damage to each creature with flying **and 1 additional damage
+    to each blue creature**."
+
+    The same rider with "additional" printed after the number instead of before
+    it. Both spellings reach one production: a blue flier takes X+1, a blue
+    ground creature takes only the 1, and a non-blue ground creature takes
+    nothing at all — the third is what proves the first clause kept its
+    ``with_keywords`` narrowing rather than becoming a board sweep.
+    """
+    game, mine, yours = _w1g3_cast(
+        set_pool, "Tropical Storm",
+        own=["Zhalfirin Commander"],       # white, no flying — neither clause
+        theirs=["Wall of Corpses",         # black, no flying — neither
+                "Azimaet Drake"],          # blue 1/3 flier — both clauses
+        x_value=1,
+    )
+
+    assert mine[0].damage_marked == 0
+    assert yours[0].damage_marked == 0
+    assert yours[1].damage_marked == 2
+
+
+def test_reign_of_chaos_asks_for_a_land_by_its_printed_subtype(set_pool):
+    """"Destroy target **Plains** and target white creature."
+
+    Two independent target roles, which the picker has read since Fumarole —
+    the only thing refusing this card was the *name* of the first slot, because
+    "Plains" is a subtype and the role namer read card types alone. The land is
+    destroyed by the slot that names it and the untargeted Island is not, which
+    is what proves the slot kept its filter rather than becoming "any land".
+    """
+    pool = set_pool("MIR")
+    plains = _W1G3Permanent(card=pool["Plains"])
+    island = _W1G3Permanent(card=pool["Island"])
+    knight = _W1G3Permanent(card=pool["Zhalfirin Commander"])   # white
+    zombie = _W1G3Permanent(card=pool["Cadaverous Knight"])     # black
+    game = Game(players=[
+        _W1G3PlayerState(name="P1", hand=[pool["Reign of Chaos"]],
+                         library=[pool["Island"]] * 5),
+        _W1G3PlayerState(name="P2", battlefield=[plains, island, knight, zombie],
+                         library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.cast_from_hand(
+        0, "Reign of Chaos", mode_index=0,
+        target_permanent_ids=[plains.permanent_id, knight.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert not game.is_on_battlefield(plains)
+    assert not game.is_on_battlefield(knight)
+    assert game.is_on_battlefield(island)
+    assert game.is_on_battlefield(zombie)

@@ -71,7 +71,8 @@ from .pt import remove_plus1_counters
 from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_GAIN_LIFE, PREVENT_HALF, PREVENT_FROM_COLOR,
                       PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
-                      PREVENT_NEXT_N, PREVENT_WHOLE, Shield, drop_spent, shields_on)
+                      PREVENT_NEXT_N, PREVENT_WHOLE, PREVENT_AND_EXILE,
+                      PREVENT_TEAM, Shield, drop_spent, shields_on)
 
 # Order bands. Blanket combat shields run first: they are flags rather than
 # charges, so applying one costs the recipient nothing, and letting it go first
@@ -128,6 +129,17 @@ SOURCE_HALF = 150
 GENERIC_HALF = 160  # the same shield with no source recorded
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
+# "…prevent that damage. Exile cards from the top of your library equal to the
+# damage prevented this way." (Bone Mask.) CR 615.5's other rider, beside
+# Reverse Damage's and just behind it: both absorb the whole instance, and the
+# one that *pays* its controller is the shield a seat spends first. CR 616.1e
+# permits any order; this is the default a non-interactive seat takes.
+SOURCE_EXILE_SHIELD = 305
+# "…prevent that damage. If damage from a black source is prevented this way,
+# you gain that much life." (Shadowbane.) The third CR 615.5 rider, beside the
+# other two: all three absorb the whole instance from one chosen source and
+# differ only in what they do afterwards.
+SOURCE_TEAM_SHIELD = 307
 # "…prevent that damage", with nothing after it (Pentagram of the Ages). The
 # same absorption as Reverse Damage's shield against the same chosen source, so
 # it sits beside it — behind, because Reverse Damage's rider gains its
@@ -135,6 +147,8 @@ SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
 # CR 616.1e permits any order; this is the default a non-interactive seat takes.
 SOURCE_WHOLE = 310
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
+GENERIC_EXILE_SHIELD = 405  # Bone Mask with no chosen source
+GENERIC_TEAM_SHIELD = 407  # Shadowbane with no chosen source
 GENERIC_WHOLE = 410  # the same rider-less shield with no source recorded
 COLOR_SHIELD = 500  # Circle of Protection
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
@@ -508,6 +522,45 @@ def _object_targets_recipient(game, recipient) -> bool:
     return bool(chosen) and permanent_id in chosen[-1]
 
 
+def _class_shields(game, recipient) -> list[Shield]:
+    """The shields that watch *recipient* by a printed **noun phrase** rather
+    than by hanging off it, oldest first.
+
+    A shield normally lives on the recipient it protects, which is what makes it
+    findable at all. "…would deal damage to you **and/or creatures you
+    control**" (Shadowbane) names a phrase instead, and a phrase is not an
+    object: the creatures it covers include ones that have not entered the
+    battlefield yet, so there is nothing to hang it on and nothing to update
+    when one arrives. So it lives on the seat it also protects, in the same
+    collection, and is matched by asking the phrase about each damaged
+    permanent.
+
+    The exact twin of ``damage_redirects.class_redirects``, which the redirect
+    side has had since Blood of the Martyr — and it keeps the sweeps and the
+    lifetimes as they were, because the cleanup step already clears every
+    player's shields.
+
+    Only a permanent can be watched this way. The player half of the phrase is
+    the seat the shield already hangs off, so asking a ``PlayerState`` here
+    would find the same shield twice.
+    """
+    if not hasattr(recipient, "metadata"):
+        return []
+    from .subject_filters import subject_matches
+
+    found: list[Shield] = []
+    for player in game.players:
+        for shield in shields_on(player):
+            if shield.recipients is None:
+                continue
+            if subject_matches(
+                game, recipient, dict(shield.recipients),
+                observer=shield.filter_seat,
+            ):
+                found.append(shield)
+    return found
+
+
 def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     """Shields of *kind* on the event's recipient that could modify this event.
 
@@ -518,7 +571,12 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     """
     recipient = event["recipient"]
     amount = event["amount"]
-    for shield in shields_on(recipient):
+    # The recipient's own collection, plus — when the recipient is a permanent
+    # — the class-scoped shields sitting on a *seat* whose printed phrase names
+    # it. A team shield covers its holder as well as the phrase ("**you** and/or
+    # creatures you control"), so it is not excluded from the holder's own list;
+    # and a permanent is never in that list, so nothing is counted twice.
+    for shield in list(shields_on(recipient)) + _class_shields(game, recipient):
         if shield.kind != kind or shield.spent:
             continue
         if chosen is not None and (shield.source is not None) != chosen:
@@ -776,6 +834,104 @@ def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and gained as life."""
     return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, rider=_gain_prevented_life)
+
+
+def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) -> None:
+    """Bone Mask's rider (CR 615.5): the prevention happens first, then cards
+    equal to what it absorbed leave the top of the shielded player's library.
+
+    The recipient's own library, because "your library" is the shield holder's
+    and this shield only ever sits on a player (``player_only`` below). An empty
+    library exiles what is there and no more — running out is not a loss until
+    a draw is attempted (CR 104.3c), and this is not a draw.
+    """
+    recipient = event["recipient"]
+    taken = min(prevented, len(recipient.library))
+    exiled = [recipient.library.pop(0) for _ in range(taken)]
+    recipient.exile.extend(exiled)
+    game.log.append(
+        f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
+        f"{recipient.name}"
+        + (
+            ", exiling " + ", ".join(card.name for card in exiled)
+            if exiled else ", with no cards left to exile"
+        )
+    )
+
+
+@prevention_effect(
+    SOURCE_EXILE_SHIELD, applies=_arms(PREVENT_AND_EXILE, chosen=True, player_only=True)
+)
+def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Bone Mask: the whole instance from the chosen source, and then the
+    library pays for it."""
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=True, rider=_exile_for_prevented)
+
+
+@prevention_effect(
+    GENERIC_EXILE_SHIELD,
+    applies=_arms(PREVENT_AND_EXILE, chosen=False, player_only=True),
+)
+def _exile_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """The same shield armed without recording a chosen source (AI / headless):
+    the next damage event from any source is prevented and paid for."""
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=False, rider=_exile_for_prevented)
+
+
+def _gain_life_if_rider_colour(
+    game, event: dict, used: list[Shield], prevented: int
+) -> None:
+    """Shadowbane's rider (CR 615.5): the prevention happens first, then the
+    life gain — but only when the source was one of the colours the shield
+    recorded.
+
+    The colour is rechecked against the source *now* rather than when the shield
+    was armed (CR 615.9's reading, applied to the rider's own condition): a
+    source that has changed colour since is tested by what it is now.
+
+    The life goes to the shield's holder, not to the damage's recipient: "you
+    gain that much life" is the caster's sentence and the recipient may be one
+    of their creatures.
+    """
+    shield = used[0]
+    holder = (
+        game.players[shield.filter_seat]
+        if shield.filter_seat is not None
+        and 0 <= shield.filter_seat < len(game.players)
+        else event["recipient"]
+    )
+    recipient = event["recipient"]
+    game.log.append(
+        f"{shield.source_name or 'A shield'} prevented {prevented} damage to "
+        f"{getattr(recipient, 'name', None) or recipient.card.name}"
+    )
+    if not shield.rider_colors:
+        game._gain_life(holder, prevented, source_name=shield.source_name)
+        return
+    if set(shield.rider_colors) & set(damage_source_colors(game, event.get("source"))):
+        game._gain_life(holder, prevented, source_name=shield.source_name)
+
+
+@prevention_effect(
+    SOURCE_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=True)
+)
+def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Shadowbane: the whole instance from the chosen source, wherever on this
+    player's side it was headed."""
+    return _spend(
+        game, event, PREVENT_TEAM, chosen=True, rider=_gain_life_if_rider_colour
+    )
+
+
+@prevention_effect(
+    GENERIC_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=False)
+)
+def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """The same shield cast without recording a chosen source (AI / headless):
+    the next damage event from any source is prevented."""
+    return _spend(
+        game, event, PREVENT_TEAM, chosen=False, rider=_gain_life_if_rider_colour
+    )
 
 
 def _log_whole_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

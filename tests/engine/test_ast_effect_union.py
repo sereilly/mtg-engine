@@ -46,6 +46,13 @@ _NOT_STATEMENTS = {
     # `_lower_gain_life` folds the whole tuple into the gain's payload and
     # nothing dispatches on it.
     "LifeGainCap",
+    # A field of PreventDamage — CR 615.5's sentence *after* the prevention
+    # ("you gain life equal to the damage prevented this way"). Not a step of
+    # its own and deliberately so: its quantity does not exist until the shield
+    # has absorbed something, so it runs from the interceptor rather than as a
+    # lowered instruction. `_lower_prevent_damage` folds it into which shield is
+    # armed and nothing dispatches on it.
+    "PreventedRider",
 }
 
 

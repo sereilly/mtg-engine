@@ -77,6 +77,26 @@ PREVENT_AND_GAIN_LIFE = "prevent_and_gain_life"
 #: ``PREVENT_AND_GAIN_LIFE``, because ``kind`` names the interceptor that
 #: consumes the shield and gaining life is what that interceptor does.
 PREVENT_WHOLE = "prevent_whole"
+#: "…prevent that damage. **Exile cards from the top of your library equal to
+#: the damage prevented this way.**" (Bone Mask.) CR 615.5's additional effect
+#: again, one effect over from ``PREVENT_AND_GAIN_LIFE`` — its own kind rather
+#: than a flag on that one for the reason ``kind`` exists: it names the
+#: interceptor that consumes the shield, and what the interceptor does after
+#: absorbing is the whole difference between these two cards.
+PREVENT_AND_EXILE = "prevent_and_exile"
+#: "The next time a source of your choice would deal damage to **you and/or
+#: creatures you control** this turn, prevent that damage. If damage from a
+#: black source is prevented this way, you gain that much life." (Shadowbane.)
+#:
+#: The first shield in the pool whose recipient is a player *and* a described
+#: set of permanents, which is why it is a kind of its own rather than the
+#: whole-instance shield with another flag: `_live` finds a shield by asking the
+#: recipient for its own collection, and a shield covering permanents nobody has
+#: hung it on has to be found some other way (`recipients` below, and
+#: `prevention._class_shields` — the exact twin of
+#: `damage_redirects.class_redirects`, which the redirect side has had since
+#: Blood of the Martyr).
+PREVENT_TEAM = "prevent_team"
 #: "The next time a <colour> source of your choice would deal damage to you this
 #: turn, prevent that damage" (CR 615.9's rechecked property).
 PREVENT_FROM_COLOR = "prevent_from_color"
@@ -143,6 +163,24 @@ class Shield:
     #: needs, captured when the shield was armed (CR 109.5).
     source_filter: dict | None = None
     filter_seat: int | None = None
+    #: "…would deal damage to you **and/or creatures you control**"
+    #: (Shadowbane). The printed noun phrase naming the *permanents* this shield
+    #: also covers, beyond the player it hangs off. A class has no object to
+    #: hang a record on — the creatures it covers include ones that have not
+    #: entered yet — so the shield lives on the seat and is reached by asking
+    #: the phrase about each damaged permanent, which is exactly the shape
+    #: ``DamageRedirect.recipients`` already has one module over.
+    #:
+    #: ``filter_seat`` is this phrase's observer too ("creatures **you**
+    #: control", CR 109.5); the two narrowings a shield can carry never both
+    #: appear in the pool, and the seat means the same thing for either.
+    recipients: dict | None = None
+    #: "**If damage from a black source** is prevented this way, you gain that
+    #: much life." (Shadowbane.) The colours of the *source* that make the
+    #: shield's CR 615.5 rider fire — deliberately not ``colors`` beside it:
+    #: that field decides whether the shield applies **at all**, and this card
+    #: prevents every colour's damage and pays for only one.
+    rider_colors: tuple[str, ...] = ()
     #: "…a spell or ability **that targets that creature**" (Silhouette). Not a
     #: description of the source — the source may be anything the spell causes
     #: to deal the damage — but of what the *resolving object* chose, which
@@ -473,6 +511,44 @@ def make_life_gain_source(source, source_name: str | None = None) -> Shield:
 
 def make_life_gain_charge(source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
+
+
+def make_team_source(
+    source, recipients: dict, seat: int | None, rider_colors: tuple[str, ...],
+    source_name: str | None = None,
+) -> Shield:
+    """Shadowbane's shield against the source its controller chose, covering
+    that controller and the permanents the printed phrase names."""
+    return Shield(
+        kind=PREVENT_TEAM, uses=1, source=source, recipients=dict(recipients),
+        filter_seat=seat, rider_colors=tuple(rider_colors),
+        source_name=source_name,
+    )
+
+
+def make_team_charge(
+    recipients: dict, seat: int | None, rider_colors: tuple[str, ...],
+    source_name: str | None = None,
+) -> Shield:
+    """The same shield with no source recorded — the AI/headless cast, exactly
+    as Reverse Damage, Dark Sphere and Forcefield each keep one."""
+    return Shield(
+        kind=PREVENT_TEAM, uses=1, recipients=dict(recipients), filter_seat=seat,
+        rider_colors=tuple(rider_colors), source_name=source_name,
+    )
+
+
+def make_exile_source(source, source_name: str | None = None) -> Shield:
+    """Bone Mask's shield against the source its controller chose."""
+    return Shield(
+        kind=PREVENT_AND_EXILE, uses=1, source=source, source_name=source_name
+    )
+
+
+def make_exile_charge(source_name: str | None = None) -> Shield:
+    """The same shield with no source recorded — the AI/headless activation,
+    exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
+    return Shield(kind=PREVENT_AND_EXILE, uses=1, source_name=source_name)
 
 
 def make_whole_source(source, source_name: str | None = None) -> Shield:

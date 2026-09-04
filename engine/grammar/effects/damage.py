@@ -327,7 +327,23 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     stream.accept_punct(",")
     if stream.accept_word("and"):
         try:
+            # "…and **an additional 1** damage to each green creature"
+            # (Kaervek's Hex); "…and **1 additional** damage to each blue
+            # creature" (Tropical Storm). Two printed spellings of one word that
+            # narrows nothing: the clause after it is the ordinary second damage
+            # clause this branch already reads, and "additional" is the card
+            # telling the reader that a creature described by both phrases takes
+            # both amounts — which a conjunction of two clauses already means.
+            # So it is consumed and no flag survives it; a flag nothing reads is
+            # the second copy of a fact the node shape already carries.
+            #
+            # One spelling or the other, never both: "an additional 1
+            # additional damage" is not a printing, and accepting it would let
+            # the reader claim a sentence no card has.
+            fronted = bool(stream.accept_phrase("an", "additional"))
             second_amount = parse_amount(stream)
+            if not fronted:
+                stream.accept_word("additional")
             stream.expect_word("damage")
             second_amount = _accept_rounding_rider(stream, second_amount)
             stream.expect_word("to")

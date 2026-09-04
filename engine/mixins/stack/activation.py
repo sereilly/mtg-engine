@@ -29,6 +29,7 @@ from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
+from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
@@ -1227,9 +1228,27 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
         if x_value and x_symbols:
-            required_cost["generic"] = (
-                required_cost.get("generic", 0) + int(x_value) * x_symbols
-            )
+            # "Spend only red mana on X." (Crimson Hellkite.) The X pips are
+            # charged as that colour rather than as generic, which is the whole
+            # of the restriction: a generic pip is payable from any source, so
+            # a clause consumed by the grammar and dropped here would be an
+            # ability that works from a pool the card forbids.
+            #
+            # Read off the raw ability line, the same text
+            # ``_parse_x_spend_restriction`` handed to this reader, so the
+            # sentence the grammar consumed and the cost this charges cannot
+            # come apart. Exactly one colour reaches here: the grammar refuses
+            # the "and/or" pair, whose split is a choice this path cannot ask.
+            x_colors = x_spend_colors_from_text(ability.source_line or "")
+            if len(x_colors) == 1:
+                symbol = x_colors[0]
+                required_cost[symbol] = (
+                    required_cost.get(symbol, 0) + int(x_value) * x_symbols
+                )
+            else:
+                required_cost["generic"] = (
+                    required_cost.get("generic", 0) + int(x_value) * x_symbols
+                )
         # "Activated abilities cost an additional "Sacrifice a Swamp" to
         # activate for each black mana symbol in their activation costs."
         # (Drought.) The cast path's twin, asked of the *printed* activation
@@ -1651,6 +1670,9 @@ class AbilityActivationMixin:
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
                         "untapped_for_cost": untap_cost_permanent,
+                        "tapped_for_cost": (
+                            tap_cost_permanents[0] if tap_cost_permanents else None
+                        ),
                         "discarded_for_cost": (
                             list(discard_cost_cards)
                             + (
@@ -1720,6 +1742,19 @@ class AbilityActivationMixin:
                     # board scan at resolution would name whichever one matches
                     # now (CR 608.2h).
                     "untapped_for_cost": untap_cost_permanent,
+                    # "…deals damage equal to **the tapped creature's** power"
+                    # (Unerring Sling). Beside the untap record and for its
+                    # reason exactly: still on the battlefield, carried rather
+                    # than re-found, because a board scan at resolution would
+                    # name whichever creature its controller tapped since.
+                    #
+                    # The first of the chosen set, because the printed cost taps
+                    # one; a card taping several and then naming "the tapped
+                    # creature" is a sentence nobody has printed, and the
+                    # lowering is what would have to decide which it meant.
+                    "tapped_for_cost": (
+                        tap_cost_permanents[0] if tap_cost_permanents else None
+                    ),
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
                     # card" (Land's Edge) is asked once the card is already in

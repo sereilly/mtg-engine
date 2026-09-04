@@ -428,12 +428,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'the chosen label':
             _line('left_right_combat_division', 'triggered_combat'),
     },
-    'Reverse Damage': {
-        'the next time a source of your choice would deal damage to you this '
-        'turn, prevent that damage. you gain life equal to the damage prevented '
-        'this way':
-            _line('grant_reverse_damage_shield', 'spell_pattern'),
-    },
     'Reverse Polarity': {
         'you gain x life, where x is twice the damage dealt to you so far this '
         'turn by artifacts':
