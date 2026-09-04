@@ -1395,3 +1395,144 @@ def test_energy_vortex_offers_nothing_to_the_controller(set_pool):
     # enchantment" — the half that already worked, and the reason the toll is
     # read at resolution rather than when the trigger was put on the stack.
     assert counters_on(vortex, "vortex") == 0, game.log
+
+
+def _w2g2_soul_echo(set_pool, x: int):
+    """Soul Echo on the battlefield with *x* echo counters, its first upkeep
+    resolved and the offer answered."""
+    pool = set_pool("MIR")
+    echo = Permanent(card=pool["Soul Echo"])
+    # "This enchantment enters with X echo counters on it" reads the announced
+    # X (CR 601.2b) off the cast, which is the one thing a hand-built permanent
+    # has to be given.
+    echo.metadata["cast_x_value"] = x
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Plains"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Plains"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, echo, None)
+    game._settle()
+    return game, echo
+
+
+def test_soul_echo_enters_with_its_announced_x(set_pool):
+    """The half the census called hollow and the engine had all along.
+
+    ``enters_with_x_named_counters`` has read this sentence since Iceberg; what
+    was missing was everything downstream of it, so the counters went on and
+    nothing ever took one off.
+    """
+    _game, echo = _w2g2_soul_echo(set_pool, 3)
+    assert counters_on(echo, "echo") == 3
+
+
+def test_soul_echo_turns_damage_into_counters_and_then_stops(set_pool):
+    """The card end to end, and the bug it was hiding.
+
+    "You don't lose the game for having 0 or less life" was live; the upkeep
+    trigger that would sacrifice the enchantment was unsupported and the
+    counters had nothing to remove them — so a player at −7 life never lost,
+    for ever.
+
+    The offer is CR 614's replacement, made to an **opponent** and covering the
+    ability's *controller* (CR 109.5's "you"), and it takes one counter per
+    point of damage. As much as possible (CR 614.6): a store smaller than the
+    damage gives up what it has and the rest is dealt, which is what makes the
+    card finite.
+    """
+    game, echo = _w2g2_soul_echo(set_pool, 3)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    game._deal_damage_to_player(game.players[0], 2)
+    assert game.players[0].life == 20, game.log
+    assert counters_on(echo, "echo") == 1
+
+    # Five more against one counter: one point becomes a counter and four are
+    # dealt.
+    game._deal_damage_to_player(game.players[0], 5)
+    assert counters_on(echo, "echo") == 0
+    assert game.players[0].life == 16, game.log
+
+    # …and from here it is an ordinary damage event again.
+    game._deal_damage_to_player(game.players[0], 3)
+    assert game.players[0].life == 13, game.log
+
+
+def test_soul_echo_stops_protecting_once_its_counters_are_gone(set_pool):
+    """The whole point of the card, and the exact bug: below zero life the
+    static holds while the enchantment is there, and the upkeep trigger takes
+    the enchantment away the moment its store is empty (CR 704.5a then ends the
+    game).
+    """
+    game, echo = _w2g2_soul_echo(set_pool, 2)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    game._deal_damage_to_player(game.players[0], 27)
+    game.check_state_based_actions()
+    assert game.players[0].life == -5
+    assert not any("lost the game" in line for line in game.log), game.log
+
+    game.start_next_turn()
+    game.start_next_turn()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert echo not in game.players[0].battlefield, game.log
+    assert any("lost the game" in line for line in game.log), game.log
+
+
+def test_soul_echo_offers_a_fresh_replacement_every_upkeep(set_pool):
+    """"…until your next upkeep" is swept at the top of that upkeep, before the
+    trigger that offers a new one — the rule every other duration of this
+    spelling already follows there.
+
+    Without the sweep the record would stand for ever and the opponent's
+    decision would be made once, on the first upkeep, for the rest of the game.
+    """
+    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    game, echo = _w2g2_soul_echo(set_pool, 4)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD) == {
+        "counter": "echo", "seat": 0,
+    }
+
+    game.start_next_turn()          # the opponent's turn — the record stands
+    assert DAMAGE_TO_COUNTER_REMOVAL_RECORD in echo.metadata, game.log
+
+    game.start_next_turn()          # back to the controller: swept, then re-armed
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata.get(DAMAGE_TO_COUNTER_REMOVAL_RECORD) == {
+        "counter": "echo", "seat": 0,
+    }, game.log
+
+
+def test_the_counter_replacement_covers_only_the_abilitys_controller(set_pool):
+    """CR 109.5: "you" is the ability's controller wherever it is printed, and
+    this sentence is printed inside an offer made to somebody else.
+
+    Read off the offer instead, Soul Echo would spend its counters on damage
+    dealt to the opponent — the whole card inverted — so the lowering pins the
+    seat and the arming handler records it.
+    """
+    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    game, echo = _w2g2_soul_echo(set_pool, 3)
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    assert echo.metadata[DAMAGE_TO_COUNTER_REMOVAL_RECORD]["seat"] == 0
+
+    # Damage to the seat that was *offered* the choice is ordinary damage.
+    game._deal_damage_to_player(game.players[1], 3)
+    assert game.players[1].life == 17, game.log
+    assert counters_on(echo, "echo") == 3

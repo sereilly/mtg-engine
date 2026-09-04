@@ -170,6 +170,27 @@ class DamageUnlessPay:
 
 
 @dataclass(frozen=True)
+class DamageBecomesCounterRemoval:
+    """``For each 1 damage that would be dealt to you until your next upkeep,
+    you remove an echo counter from this enchantment instead.`` (Soul Echo.)
+
+    CR 614's replacement, and **not** a prevention: the damage is replaced by
+    another action rather than reduced to nothing, so "damage that can't be
+    prevented" still becomes counters. Sharing :class:`PreventDamage`'s node
+    would put the two one boolean apart in the AST and one mistake apart in
+    every reader, which is the argument :class:`RedirectDamage` below makes
+    about the same pair.
+
+    Per **1** damage, which is the whole shape of the card: a five-point burn
+    spell takes five counters off, and a source with fewer counters than that
+    absorbs as much as it can (CR 614.6).
+    """
+    recipient: PlayerRef
+    counter: str
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class RedirectDamage:
     """"All damage that would be dealt to you this turn by <source> is dealt to
     <recipient> instead." (Shimian Night Stalker, Nova Pentacle — CR 614.9.)

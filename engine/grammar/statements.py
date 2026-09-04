@@ -29,7 +29,8 @@ from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_pronoun_to_condition_target)
 from .phrases import (_accept_conjoined_life_cost, _parse_duration,
                       _parse_mana_payment)
-from .effects import (_parse_untap_chosen_by_paying,
+from .effects import (_parse_damage_becomes_counter_removal,
+                      _parse_untap_chosen_by_paying,
                       _parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage, _parse_cast_permission,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
@@ -473,6 +474,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         as_though = _parse_spend_mana_as_though(stream)
         if as_though is not None:
             return as_though
+        # "For each 1 damage that would be dealt to you until your next upkeep,
+        # you remove an echo counter from this enchantment instead." (Soul
+        # Echo.) CR 614's replacement, opening with the same two words as the
+        # ordinary per-object loop below — so it is read here and refuses
+        # without consuming, leaving "for each" every reading it had.
+        becomes_counters = _parse_damage_becomes_counter_removal(stream)
+        if becomes_counters is not None:
+            return becomes_counters
 
     # "Attacking doesn't cause creatures you control to tap this combat if
     # Johan is untapped." (Johan.) A sentence whose subject is a gerund, which

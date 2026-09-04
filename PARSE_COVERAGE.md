@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**18 unclaimed sentence(s) across 14 supported card(s).**
+**17 unclaimed sentence(s) across 13 supported card(s).**
 
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
@@ -51,8 +51,6 @@ anything anyone did, and every ingest would arrive red.
   - `as an additional cost to cast this spell, sacrifice two creatures`
 - **Roots of Life**
   - `as this enchantment enters, choose island or swamp`
-- **Soul Echo**
-  - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
 - **Tombstone Stairwell**
   - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
   - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`

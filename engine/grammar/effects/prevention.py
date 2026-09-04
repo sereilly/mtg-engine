@@ -20,9 +20,10 @@ printed", and the name is the half of it the pool mostly prints.
 
 from .. import ast
 from ..amounts import parse_amount
-from ..references import parse_recipient
+from ..references import parse_player_ref, parse_recipient
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..lexer import NUMBER
 from ..readers import accept_source_reference
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
@@ -629,6 +630,84 @@ def parse_source_damage_lock(stream: TokenStream) -> bool:
         stream.reset(mark)
         return False
     return True
+
+
+def _parse_damage_becomes_counter_removal(
+    stream: TokenStream,
+) -> "ast.DamageBecomesCounterRemoval | None":
+    """``For each 1 damage that would be dealt to <player> <duration>, <player>
+    remove(s) a <kind> counter from <source> instead.`` (Soul Echo.)
+
+    CR 614's replacement, tried beside the redirect below because it is the
+    same kind of sentence — one *about* a damage event rather than one dealing
+    damage — and refused without consuming for the same reason: "For each …"
+    opens the ordinary per-object loop too, and a production that ate its first
+    two words would take every one of those lines with it.
+
+    Both halves of the sentence name the same player, and both are required to
+    agree: an effect draining one player's counters for damage dealt to another
+    is a card this does not implement, and admitting it with the second player
+    dropped is how the wrong seat pays.
+
+    The **source is the ability's own permanent**, which every printing of this
+    sentence says out loud. It has to be: the counters and the sacrifice that
+    reads them are the same card's, and a wording naming another permanent
+    would be a store nothing in this effect can find.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    # The printed "1" is a NUMBER token, not a word — and it is required
+    # rather than read as a quantity: this replacement removes one counter per
+    # point, and a card printing "for each 2 damage" would be a different
+    # exchange rate the handler does not carry.
+    one = stream.peek()
+    if one is None or one.kind != NUMBER or one.text != "1":
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("damage", "that", "would", "be", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    recipient = parse_player_ref(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    payer = parse_player_ref(stream)
+    if payer is None or payer.kind != recipient.kind:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("removes", "remove"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    counter = stream.peek_word()
+    if counter is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("from"):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    # "…**instead**" is CR 614's word and the whole difference from a
+    # prevention, so it is required rather than optional: without it the
+    # sentence says the counter comes off *as well as* the damage.
+    if not stream.accept_word("instead"):
+        stream.reset(mark)
+        return None
+    return ast.DamageBecomesCounterRemoval(recipient, str(counter), duration)
 
 
 def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":

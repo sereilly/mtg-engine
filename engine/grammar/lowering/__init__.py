@@ -103,6 +103,7 @@ from .redirection import (
     _lower_redirect_damage,
 )
 from .prevention import (
+    _lower_damage_becomes_counter_removal,
     _lower_prevent_damage,
     _lower_prevent_half,
     _lower_prevent_all,
@@ -377,6 +378,7 @@ __all__ = [
     "_lower_coin_flip_stakes_loop",
     "_lower_damage_this_game_history",
     "_lower_damage_cant_be_prevented",
+    "_lower_damage_becomes_counter_removal",
     "_lower_prevent_damage",
     "_lower_prevent_half",
     "_lower_redirect_damage",

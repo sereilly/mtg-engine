@@ -44,6 +44,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "coin_flip_damage_loop": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
+    # Soul Echo. In the damage category because what the sentence is about is a
+    # damage event — the counters are the substitution, not the subject.
+    "arm_damage_to_counter_removal": "damage",
     "self_damage_unless_pay": "damage",
     # Dispatched by the (trigger condition, instruction kind) registry in
     # engine/phases/upkeep_effects.py rather than by EFFECT_HANDLERS, so they

@@ -446,6 +446,28 @@ def parse_subject_verb(
                     )
                 except GrammarError:
                     stream.reset(mark_pay)
+            # "Target opponent **may choose that** for each 1 damage that would
+            # be dealt to you …" (Soul Echo.) An offer with no price at all:
+            # what the seat is being asked is whether the sentence behind
+            # "that" happens. The words are the offer, so they are consumed and
+            # the clause behind them becomes the offered *action* — which is
+            # what puts it on the ordinary optional-choice queue with the
+            # ability's controller as the one it happens to.
+            #
+            # Distinct from the "you may **choose to** have it …" spelling one
+            # module over, which is the same offer written about the *actor*;
+            # here the chooser and the affected player are different seats, and
+            # that is the whole reason the card prints a subject.
+            if stream.at_word("choose") and stream.peek_word(1) == "that":
+                mark_choose = stream.mark()
+                stream.advance(2)
+                try:
+                    return ast.May(
+                        source_spec,
+                        action=parse_optional_action(stream),
+                    )
+                except GrammarError:
+                    stream.reset(mark_choose)
             # "…its controller **may add** an additional {U}." (Snowfall.) The
             # offer of a *mana production* to a seat the enclosing trigger
             # bound. Routed to the same production the un-offered spelling one

@@ -1158,6 +1158,46 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("arm_damage_to_counter_removal")
+def arm_damage_to_counter_removal(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Soul Echo: "…target opponent may choose that for each 1 damage that
+    would be dealt to you until your next upkeep, you remove an echo counter
+    from this enchantment instead."
+
+    Arms the CR 614 replacement `engine/replacements.py` applies. The record
+    goes on the **permanent**, not on the seat it covers: the counters it
+    spends live there, CR 122.2 takes them with the permanent when it leaves,
+    and a record on the player would outlive the store and replace damage with
+    nothing.
+
+    The seat is the ability's *controller* (CR 109.5) even though the offer was
+    made to an opponent — "you" in the sentence behind "may choose that" is
+    still the ability's own controller, and the lowering refuses any other
+    reading rather than letting the wrong life total be covered.
+
+    The duration needs no field: the sweep at the top of the upkeep step drops
+    every record naming the seat whose upkeep it is, which is exactly "until
+    your next upkeep".
+    """
+    from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{context.card.name}: no permanent to spend counters from")
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    source.metadata[DAMAGE_TO_COUNTER_REMOVAL_RECORD] = {
+        "counter": str(instruction.payload.get("counter", "")),
+        "seat": seat,
+    }
+    game.log.append(
+        f"Damage to {game.players[seat].name} will remove "
+        f"{instruction.payload.get('counter')} counters from {source.card.name} "
+        "until their next upkeep"
+    )
+    return True, "resolved"
+
+
 @effect_handler("deal_damage_and_opponent_choice")
 def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Cuombajj Witches: "{T}: This creature deals 1 damage to any target and
