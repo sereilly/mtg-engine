@@ -811,12 +811,22 @@ promotion, found from the other side. The release-line note below still
 applies to the rest of the core-set line.
 
 **Alliances shipped 2026-09-02** — the section below is its ingest estimate,
-kept because its predictions were graded in the retrospective. **The next work
-set is Mirage (MIR), then Visions and Weatherlight, and only then 6ED**, whose
-152 new cards are their reprints: a core set ingested before its sources
+kept because its predictions were graded in the retrospective.
+
+**Mirage shipped 2026-09-04**, at index 13, 335/335 and 313 new to the pool.
+**The next work set is Visions (VIS), then Weatherlight, and only then 6ED**,
+whose 152 new cards are their reprints: a core set ingested before its sources
 arrives carrying cards nothing supports with their origins mis-stamped. Re-run
 the census table above before choosing — the last three re-fetches were all
-stale by the time they were read.
+stale by the time they were read, and Mirage's own row was pre-ICE when the
+work started.
+
+**Read Mirage's journal entry before briefing the next ingest.** Its four waves
+turned on one fact the census cannot show: `support_report` and
+`--hollow-lines` both read *done* while 13 printed sentences did nothing,
+because a card is supported when any of its lines is. `parse_coverage --set
+<CODE>` is the third number and it is advisory for a measured set — read it from
+the first backlog round, not at the promotion.
 
 **Alliances (ALL), as estimated at ingest.** It **inserted at index 12** (released
 1996-06-10, after HML's 1995-10-01 and before 5ED's 1997-03-24), it closes the
