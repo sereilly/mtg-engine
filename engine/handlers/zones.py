@@ -1334,6 +1334,92 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("reanimate_aura_onto_source")
+def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return target Aura card from your graveyard to the battlefield
+    **attached to Hakim**." (Hakim, Loreweaver.)
+
+    Its own handler rather than a rider on ``reanimate_creature``, because
+    CR 303.4f makes the attachment part of the entry rather than a step after
+    it: an Aura that entered attached to nothing is what CR 704.5m puts
+    straight back in the graveyard, so a version that put the card down and
+    then attached would be a card that works only when nothing looks in
+    between.
+
+    **The host is the ability's own source and nothing else.** It is read off
+    ``context.source_permanent`` rather than off the board, because a permanent
+    that has left between activation and resolution has no host to offer
+    (CR 608.2b) — and picking some other creature would be an Aura landing
+    where the card never said.
+
+    Legality is ``auras.aura_attach_refusal``, the one predicate the cast gate,
+    the CR 704.5m sweep and the two other resolutions ask. CR 303.4j: an
+    attachment that would be illegal simply does not happen, and here that
+    means the card stays in the graveyard — putting it onto the battlefield
+    unattached would be strictly worse than not resolving, since the sweep
+    would bin it and the card would be gone.
+    """
+    from ..auras import attach_aura, aura_attach_refusal
+
+    caster = context.caster
+    host = context.source_permanent
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{context.card.name}: nothing to attach the Aura to")
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    spec = dict(instruction.payload)
+    idx = context.target_permanent_index
+    if not (
+        isinstance(idx, int)
+        and 0 <= idx < len(caster.graveyard)
+        and graveyard_card_matches(spec, caster.graveyard[idx])
+    ):
+        # The same order every other reanimation falls back through: an AI seat
+        # announces the ability without naming a slot, so the first legal card
+        # in the pile is the one this takes. A re-check rather than a trust,
+        # for the reason `reanimate_creature` re-checks: a picker and a
+        # resolution that disagree are a target the player may announce and the
+        # effect then declines.
+        idx = next(
+            (
+                slot
+                for slot, card in enumerate(caster.graveyard)
+                if graveyard_card_matches(spec, card)
+            ),
+            None,
+        )
+    if idx is None:
+        game.log.append(f"{context.card.name}: no Aura card in the graveyard")
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    aura_card = caster.graveyard[idx]
+    arrival = Permanent(card=aura_card)
+    refusal = aura_attach_refusal(game, arrival, host)
+    if refusal is not None:
+        game.log.append(
+            f"{context.card.name}: {aura_card.name} cannot enchant "
+            f"{host.card.name} ({refusal})"
+        )
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    caster.graveyard.pop(idx)
+    game._put_permanent_onto_battlefield(
+        game.seat_index(caster), arrival, None, from_zone="graveyard"
+    )
+    attach_aura(arrival, host)
+    # CR 704.5m is asked at once, the way the attach handler asks it: layer
+    # contributions are computed on read, so nothing has to be refreshed — but
+    # an Aura that arrived on a host it may not stay on has to go now rather
+    # than at the next sweep.
+    game.check_state_based_actions()
+    context.results[REANIMATED_PERMANENTS] = (arrival.permanent_id,)
+    game.log.append(
+        f"{aura_card.name} returned to the battlefield attached to "
+        f"{host.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("return_bound_card_to_owners_hand")
 def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return that card to its owner's hand." (Puppet Master.)

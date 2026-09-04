@@ -1293,6 +1293,24 @@ def _reanimation_spec(payload: dict) -> dict:
     return spec
 
 
+def _graveyard_aura_spec(payload: dict) -> dict:
+    """"Return target **Aura** card from your graveyard to the battlefield"
+    (Hakim, Loreweaver).
+
+    The graveyard picker with the payload handed straight over, in the key
+    names ``graveyard_card_matches`` reads — the same arrangement
+    :func:`_reanimation_spec` makes and for the same reason: the handler
+    re-checks the card it is given against this exact payload, so a spec that
+    narrowed differently would offer an Aura the resolution then declines.
+    """
+    spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    if payload.get("card_type"):
+        spec["card_type"] = payload["card_type"]
+    if payload.get("graveyard_subtypes"):
+        spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
+    return spec
+
+
 def _forced_sacrifice_spec(payload: dict) -> dict | None:
     """Who a "sacrifices a creature" effect asks is what decides whether it
     targets at all.
@@ -1399,6 +1417,10 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "reanimate_creature": _reanimation_spec,
+    # Hakim, Loreweaver. The same graveyard picker, narrowed by the payload
+    # the handler re-checks against — one predicate, so the Auras offered are
+    # exactly the Auras the resolution will take.
+    "reanimate_aura_onto_source": _graveyard_aura_spec,
     "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,

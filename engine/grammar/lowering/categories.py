@@ -776,6 +776,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # cast time. Same category, so GRAMMAR_CATEGORIES is unchanged.
     "return_chosen_cards_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
+    # "Return target Aura card from your graveyard to the battlefield
+    # attached to Hakim." The same zone change with CR 303.4f's attachment
+    # folded into the entry, so the category is unchanged and
+    # GRAMMAR_CATEGORIES gains nothing.
+    "reanimate_aura_onto_source": "zones",
     "reanimate_bound_card": "zones",
     # A card returning *itself* from the graveyard (Silversmote Ghoul). Same
     # category as every other zone change: what differs is which object moves,

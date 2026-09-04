@@ -15,7 +15,7 @@ subject and nobody else's.
 """
 
 from .. import ast
-from ..lexer import DASH, WORD
+from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
@@ -586,8 +586,21 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     # Consume the remainder of the sentence verbatim; the enforcing code reads
     # the original text, so the grammar only has to account for the tokens --
     # but only once that code has said it can read the sentence at all.
+    #
+    # A SELF token is rendered as the phrase rather than as the name the lexer
+    # collapsed. "Activate only if **Hakim** isn't enchanted" reaches the
+    # enforcement path as printed text and reaches *this* path as tokens, and
+    # the two have to hand `activation_restrictions` the same sentence or the
+    # gate and the grammar disagree about which cards are readable — so both
+    # sides say `_SELF_SUBJECT`, the enforcement path by collapsing the name and
+    # this one by never having it.
+    from ...activation_restrictions import _SELF_SUBJECT
+
     while not stream.exhausted and not stream.at_punct("."):
-        words.append(str(stream.next().text))
+        token = stream.next()
+        words.append(
+            _SELF_SUBJECT if token.kind == SELF else str(token.text)
+        )
     sentence = " ".join(words).replace(" '", "'")
     if not activation_restriction_line(sentence):
         stream.reset(mark)

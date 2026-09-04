@@ -170,6 +170,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     "put_graveyard_card_on_library_bottom": "activated_recursion",
     "put_top_of_graveyard_on_library_bottom": "activated_recursion",
     "reanimate_creature": "activated_recursion",
+    # Hakim, Loreweaver. The graveyard stops holding the Aura, which is what
+    # the bucket above is for; that it arrives attached is the same answer.
+    "reanimate_aura_onto_source": "activated_recursion",
     "exile_target_graveyard": "activated_recursion",
     # "Until end of turn, you may cast …" (Idol of Endurance). Not any of the
     # above: nothing moves and nothing changes characteristics — the ability's

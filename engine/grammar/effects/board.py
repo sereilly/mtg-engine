@@ -236,12 +236,20 @@ def _parse_return(
     # step of the sentence wrote one.
     attached_to: str | None = None
     if destination.name == "battlefield" and stream.accept_phrase("attached", "to"):
-        if not (
+        if (
             stream.accept_phrase("that", "creature")
             or stream.accept_phrase("that", "permanent")
         ):
+            attached_to = "chosen"
+        # "…to the battlefield **attached to Hakim**." (Hakim, Loreweaver.) The
+        # ability's own source rather than something an earlier step chose, and
+        # a second referent rather than a second reading of "chosen": nothing
+        # earlier in this sentence picks a host, so the scratchpad key would be
+        # read and found empty, and the Aura would arrive attached to nothing.
+        elif accept_source_reference(stream):
+            attached_to = "source"
+        else:
             raise stream.error("expected the permanent it is attached to")
-        attached_to = "chosen"
 
     # "…as a **non-Aura** enchantment." (Takklemaggot.) A layer-4 type change
     # (CR 613.1d) on the permanent the move creates. Read as "non-<subtype>

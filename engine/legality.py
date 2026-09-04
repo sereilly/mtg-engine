@@ -295,6 +295,7 @@ _TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
 _QUANTIFIERLESS_TARGET_KINDS = frozenset({
     "grant_banding_to_target", "counter_stack_ability",
     "reanimate_creature", "reanimate_creature_to_battlefield",
+    "reanimate_aura_onto_source",
     "return_creature_from_graveyard_to_hand", "exile_target_graveyard_card",
     "put_graveyard_card_on_library_bottom", "put_graveyard_cards_on_library_top",
 })

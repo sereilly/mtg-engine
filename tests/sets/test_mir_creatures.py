@@ -2241,3 +2241,169 @@ def test_zirilan_exiles_the_dragon_at_the_next_end_step(set_pool):
     standing = [p.card.name for p in game.players[0].battlefield]
     assert standing == ["Zirilan of the Claw"], game.log
     assert [c.name for c in game.players[0].exile] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G4: an Aura reanimated onto the ability's own source ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.activation_restrictions import activation_denial
+
+
+def _w2g4_hakim(set_pool, graveyard=(), attached=None):
+    """Hakim on seat 0 with *graveyard* in his controller's pile.
+
+    *attached* is an Aura card name already enchanting him, for the half of the
+    ability's restriction that is about the board rather than about the step.
+    """
+    hakim = Permanent(card=set_pool("MIR")["Hakim, Loreweaver"])
+    hakim.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[hakim],
+            graveyard=[set_pool("MIR")[name] for name in graveyard],
+            life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    if attached is not None:
+        from engine.auras import attach_aura
+
+        aura = Permanent(card=set_pool("MIR")[attached])
+        game.players[0].battlefield.append(aura)
+        attach_aura(aura, hakim)
+    game.start_turn(0)
+    return game, hakim
+
+
+def test_hakim_is_supported(set_pool):
+    """Three lines, and two of them refused on the same defect: the lexer
+    collapses a card's own name to a SELF token and the "attached to" reader
+    listed only "it" and "that creature", so **any** card printing "attached to
+    <its own name>" refused its whole line on unconsumed text."""
+    program = compile_card_oracle(set_pool("MIR")["Hakim, Loreweaver"])
+    assert program.supported, program.reason
+    kinds = [ability.instruction.kind for ability in program.activated_abilities]
+    assert kinds == ["reanimate_aura_onto_source", "destroy_all_matching"]
+
+
+def test_hakim_returns_an_aura_from_the_graveyard_onto_himself(set_pool):
+    """"{U}{U}: Return target Aura card from your graveyard to the battlefield
+    attached to Hakim."
+
+    CR 303.4f: the attachment is part of the *entry*, so the Aura has to arrive
+    already on him — one that entered attached to nothing is what CR 704.5m
+    puts straight back into the graveyard.
+    """
+    game, hakim = _w2g4_hakim(set_pool, graveyard=["Soar"])
+    game.current_step = "upkeep"
+    result = game.activate_permanent_ability(
+        0, "Hakim, Loreweaver", permanent_index=0,
+        ability_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == [], game.log
+    soar = [p for p in game.players[0].battlefield if p.card.name == "Soar"]
+    assert len(soar) == 1, game.log
+    assert soar[0].metadata.get("attached_to") is hakim, game.log
+    assert [a.card.name for a in hakim.metadata.get("attached_auras")] == ["Soar"]
+
+
+def test_hakim_leaves_an_aura_he_cannot_legally_enchant_in_the_graveyard(set_pool):
+    """CR 303.4j: an attachment that would be illegal simply does not happen.
+
+    Wellspring is an Aura card, so the picker offers it and the activation gate
+    admits it — the refusal has to come at the move, from the same predicate
+    every other attach path asks (``auras.aura_attach_refusal``): "Enchant
+    **land**" is not a Wizard. Putting it onto the battlefield unattached would
+    be strictly worse than not resolving, because the CR 704.5m sweep would bin
+    it and the card would be gone from the game.
+    """
+    game, hakim = _w2g4_hakim(set_pool, graveyard=["Wellspring"])
+    game.current_step = "upkeep"
+    result = game.activate_permanent_ability(
+        0, "Hakim, Loreweaver", permanent_index=0,
+        ability_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == ["Wellspring"], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Hakim, Loreweaver"
+    ], game.log
+
+
+def test_hakim_destroys_only_the_auras_on_himself(set_pool):
+    """"{U}{U}, {T}: Destroy all Auras attached to Hakim."
+
+    The narrowing is the whole sentence. Read as a bare "all Auras" it is a
+    board wipe, and the phrase parsed as a noun *filter* ("attached to a
+    creature") is the same wipe wearing the card's words — so the assertion is
+    that the opponent's Aura, on their own creature, survives.
+    """
+    game, hakim = _w2g4_hakim(set_pool, attached="Soar")
+    theirs = Permanent(card=set_pool("MIR")["Zhalfirin Knight"])
+    game.players[1].battlefield.append(theirs)
+    from engine.auras import attach_aura
+
+    their_aura = Permanent(card=set_pool("MIR")["Soar"])
+    game.players[1].battlefield.append(their_aura)
+    attach_aura(their_aura, theirs)
+
+    result = game.activate_permanent_ability(
+        0, "Hakim, Loreweaver", permanent_index=0, ability_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Hakim, Loreweaver"
+    ], game.log
+    assert sorted(p.card.name for p in game.players[1].battlefield) == [
+        "Soar", "Zhalfirin Knight",
+    ], game.log
+
+
+def test_hakim_may_not_reanimate_while_he_is_enchanted(set_pool):
+    """"Activate only during your upkeep and **only if Hakim isn't enchanted**."
+
+    A restriction is only done when something enforces it, and a card naming
+    itself is the shape that silently was not: the row is written for "this
+    <noun>" and the printed clause says "Hakim", so the clause matched nothing
+    and the ability was usable every upkeep however many Auras he wore.
+    """
+    game, hakim = _w2g4_hakim(set_pool, graveyard=["Soar"], attached="Ward of Lights")
+    game.current_step = "upkeep"
+    line = compile_card_oracle(
+        set_pool("MIR")["Hakim, Loreweaver"]
+    ).activated_abilities[0].source_line
+
+    assert activation_denial(game, 0, hakim, line) == "it is enchanted"
+    result = game.activate_permanent_ability(
+        0, "Hakim, Loreweaver", permanent_index=0,
+        ability_index=0, target_permanent_index=0,
+    )
+    assert not result.supported, result.details
+    assert [c.name for c in game.players[0].graveyard] == ["Soar"], game.log
+
+
+def test_hakims_upkeep_clause_is_still_enforced_beside_it(set_pool):
+    """The sentence conjoins two rules and both have to bite. The one that is
+    *not* new is the one a fix to the other can quietly drop: `_conjuncts`
+    splits on "and only", so a row written for the whole sentence would have
+    read one rule and left the timing unenforced."""
+    game, hakim = _w2g4_hakim(set_pool, graveyard=["Soar"])
+    line = compile_card_oracle(
+        set_pool("MIR")["Hakim, Loreweaver"]
+    ).activated_abilities[0].source_line
+
+    game.current_step = "precombat_main"
+    assert activation_denial(game, 0, hakim, line) is not None
+    game.current_step = "upkeep"
+    assert activation_denial(game, 0, hakim, line) is None
