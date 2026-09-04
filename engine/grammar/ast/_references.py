@@ -191,6 +191,15 @@ class ObjectFilter:
     # narrows by, and one field meaning either would leave the matcher
     # guessing. Emitted, and answered only by a reader holding the source.
     chosen_creature_type: bool = False
+    # "Each **land** of the chosen type" (Shimmer). The same CR 614.1c choice
+    # a third characteristic over, and its own field for ``chosen_color``'s
+    # reason rather than a value of the one above: the *catalog* the word came
+    # from is what the choice recorded, and a land type stored under a creature
+    # type's name is a lie the next reader trips on. Which key the noun phrase
+    # produces is decided by its head noun — "land of the chosen type" is this
+    # one, everything else is the creature type — because the sentence spells
+    # the catalog exactly once, in the head.
+    chosen_land_type: bool = False
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch): two questions about one combat, both
     # answered off the permanent's own per-turn record.
@@ -678,6 +687,8 @@ class ObjectFilter:
             payload["chosen_color"] = True
         if self.chosen_creature_type:
             payload["chosen_creature_type"] = True
+        if self.chosen_land_type:
+            payload["chosen_land_type"] = True
         if self.attacked_this_turn is True:
             payload["attacked_this_turn"] = True
         elif self.attacked_this_turn is False:

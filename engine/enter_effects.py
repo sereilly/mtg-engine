@@ -146,6 +146,34 @@ def chooses_two_land_types_on_enter(text: str) -> bool:
     return bool(_CHOOSE_TWO_LAND_TYPES_ON_ENTER_RE.search(text or ""))
 
 
+#: "As this enchantment enters, choose **a land type**." (Shimmer.) The
+#: *fourth* quality this one sentence can name, beside a colour, a creature
+#: type and the ordered pair of basic land types above — and a different
+#: catalog from that pair, not a singular of it: CR 205.3i's land types
+#: include Desert and Urza's, which no "basic land type" clause may name.
+#:
+#: Matched by shape like the three above, so the printed noun is data.
+#:
+#: Read **before** the two-basic-land-types probe would matter and after it in
+#: :func:`enter_effect_line`, because neither phrase is a prefix of the other:
+#: "choose two basic land types" and "choose a land type" share no cursor.
+_CHOOSE_LAND_TYPE_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose a land type"
+)
+
+
+def chooses_land_type_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for a land type as the permanent
+    enters.
+
+    A substring probe like the colour one above, because the mixin asks it of
+    the card's whole normalized text; :func:`enter_effect_line` asks the
+    whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    return bool(_CHOOSE_LAND_TYPE_ON_ENTER_RE.search(text or ""))
+
+
 #: "As this enchantment enters, choose **a creature type**." (An-Zerrin Ruins.)
 #: The third quality this sentence can name, beside a colour and a pair of basic
 #: land types — and matched by shape for their reason, so the printed noun is
@@ -971,6 +999,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses two basic land types as it enters"
     if chooses_creature_type_on_enter(normalized):
         return "chooses a creature type as it enters"
+    if chooses_land_type_on_enter(normalized):
+        return "chooses a land type as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -1006,6 +1036,7 @@ __all__ = [
     "chooses_color_on_enter",
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",
+    "chooses_land_type_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",

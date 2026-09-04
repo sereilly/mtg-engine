@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .handlers._common import (_comparison_holds, _resolve_chosen_color,
-                               _resolve_chosen_creature_type,
+                               _resolve_chosen_subtype,
                                permanent_matches_filter)
 
 if TYPE_CHECKING:
@@ -93,6 +93,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # reason, and resolved into the ordinary subtype key before the pure
     # matcher is asked.
     "chosen_creature_type",
+    # "Each **land** of the chosen type" (Shimmer). The same recorded choice a
+    # third characteristic over — CR 205.3i's land types rather than
+    # CR 205.3m's creature types — needing the same source and resolved through
+    # the same helper into the same ordinary subtype key.
+    "chosen_land_type",
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch). Per-turn records the permanent carries,
     # frozen when the combat asked the question — so they are answerable from
@@ -531,7 +536,7 @@ def subject_matches(
         if source is None or not _source_relative_bound_holds(obj, relative, source):
             return False
     described = _resolve_chosen_color(described, source)
-    described = _resolve_chosen_creature_type(described, source)
+    described = _resolve_chosen_subtype(described, source)
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")

@@ -816,6 +816,21 @@ def _action_enter_choice_confirm(session, req, seat_type):
     # either. The word travels as itself rather than as a colour: CR 205.3m's
     # catalog has no five-way encoding to borrow, and the engine checks it
     # against the same vocabulary the prompt offered.
+    # "…choose a land type." (Shimmer.) A third shape of this prompt that
+    # names no seat. The word travels as itself for the creature type's
+    # reason: CR 205.3i's catalog has no five-way encoding to borrow once the
+    # nonbasic types are in it, and the engine checks it against the same
+    # vocabulary the prompt offered.
+    if pending.get("needs_land_type"):
+        if not req.chosen_land_type:
+            raise HTTPException(
+                status_code=400, detail="chosen_land_type is required"
+            )
+        if not session.game.confirm_enter_choice(
+            req.seat, land_type=req.chosen_land_type
+        ):
+            raise HTTPException(status_code=400, detail="invalid enter choice")
+        return
     if pending.get("needs_creature_type"):
         if not req.creature_type:
             raise HTTPException(

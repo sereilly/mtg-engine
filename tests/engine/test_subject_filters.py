@@ -260,6 +260,46 @@ def test_chosen_creature_type_is_read_off_the_ability_s_source(pool):
     assert not subject_matches(game, bears, {"chosen_creature_type": True})
 
 
+def test_chosen_land_type_is_read_off_the_ability_s_source(pool):
+    """"Each land **of the chosen type**" (Shimmer).
+
+    The third of these, and the one that shows why they are three keys rather
+    than one: the phrase "of the chosen type" is identical on An-Zerrin Ruins
+    and on Shimmer, and the *catalog* the word came from is spelled only in the
+    head noun -- CR 205.3m's creature types there, CR 205.3i's land types here.
+    Two choices recorded under one name would let a Shimmer naming Desert
+    answer a sentence asking for a creature type.
+
+    Without a source it refuses every permanent, for the reason its two
+    siblings do: a dropped narrowing here phases out every land on the board.
+    """
+    forest = Permanent(card=pool["Forest"])
+    island = Permanent(card=pool["Island"])
+    shimmer = Permanent(
+        card=pool["Grizzly Bears"], metadata={"chosen_land_type": "forest"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[forest, island, shimmer]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, forest, {"type_filter": "land"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, forest, {"chosen_land_type": True}, source=shimmer)
+    assert not subject_matches(game, island, {"chosen_land_type": True}, source=shimmer)
+    assert not subject_matches(game, forest, {"chosen_land_type": True})
+    # The two keys do not answer for each other: the word is recorded under the
+    # catalog it was chosen from, and a reader asking the other one finds
+    # nothing rather than the wrong thing.
+    assert not subject_matches(
+        game, forest, {"chosen_creature_type": True}, source=shimmer
+    )
+
+
 def test_the_combat_records_are_read_off_the_permanent(pool):
     """"…creatures **that didn't attack this turn**, except for creatures
     **that couldn't attack**." (Season of the Witch.)
@@ -471,6 +511,8 @@ _COVERED_ELSEWHERE = {
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
     "chosen_creature_type":
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
+    "chosen_land_type":
+        "test_chosen_land_type_is_read_off_the_ability_s_source",
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",

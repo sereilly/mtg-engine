@@ -152,7 +152,18 @@ def _parse_postmodifiers(
         # outright, and the readers that do hold one resolve it into the
         # ordinary subtype key before matching.
         if stream.accept_phrase("of", "the", "chosen", "type"):
-            d.chosen_creature_type = True
+            # Which catalog the chosen word came from is spelled once, in the
+            # **head noun**: "Each *land* of the chosen type" (Shimmer) is a
+            # land type (CR 205.3i) and "*Creatures* of the chosen type"
+            # (An-Zerrin Ruins) a creature type (CR 205.3m). The phrase itself
+            # is identical, so reading it as one key would store Shimmer's
+            # Desert under a creature type's name — and the two choices are
+            # recorded separately on the source, which is what the reader
+            # holding that source resolves them from.
+            if "land" in d.card_types:
+                d.chosen_land_type = True
+            else:
+                d.chosen_creature_type = True
             continue
         # "all untapped creatures **that didn't attack this turn**, **except
         # for creatures that couldn't attack**" (Season of the Witch). Two

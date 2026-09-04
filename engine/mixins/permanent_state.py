@@ -13,6 +13,7 @@ from ..enter_effects import (
     chooses_color_on_enter,
     chooses_two_land_types_on_enter,
     chooses_creature_type_on_enter,
+    chooses_land_type_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     chooses_opponent_on_enter,
     COPY_ARTIFACT_ON_ENTER,
@@ -486,6 +487,30 @@ class PermanentStateMixin:
                 needs_color=False, opponents=[], default_seat=None,
                 default_color=None, needs_creature_type=True,
                 default_creature_type=permanent.metadata["chosen_creature_type"],
+            )
+
+        # "As this enchantment enters, choose **a land type**." (Shimmer.) The
+        # fourth quality this one sentence names, and a different catalog from
+        # the *basic* pair above: CR 205.3i's land types include Desert and
+        # Urza's, which no "basic land type" clause may name. Armed exactly as
+        # the creature type is, with the record stamped first so an AI or
+        # headless controller never blocks.
+        #
+        # The static beside it reads the record ("Each land of the chosen type
+        # has phasing"), and the record did not exist when the entry
+        # recalculation ran — so recompute, the way Illusionary Terrain's pair
+        # and Jihad's anthem both do.
+        if chooses_land_type_on_enter(text):
+            permanent.metadata["chosen_land_type"] = (
+                self._default_chosen_land_type(caster_index)
+            )
+            self._recalculate_lord_buffs()
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=False, opponents=[], default_seat=None,
+                default_color=None, needs_land_type=True,
+                default_land_type=permanent.metadata["chosen_land_type"],
             )
 
         # "As this enchantment enters, choose a card name." (Runed Halo.) The
@@ -1802,6 +1827,42 @@ class PermanentStateMixin:
             return "human"
         return max(sorted(counts), key=lambda word: counts[word])
 
+    def _default_chosen_land_type(self, caster_index: int) -> str:
+        """The land type Shimmer takes when nobody chooses.
+
+        The type *caster_index*'s opponents control most of — the choice a
+        player would make with the card, and the reason a default is stated
+        rather than left to the first word of a catalog (idiom 8): a type
+        nobody controls makes the enchantment inert, which is legal and
+        pointless.
+
+        Read through ``computed_types`` (CR 613 layer 4) rather than off the
+        printed type line, so a land some earlier effect turned into a Swamp
+        counts as a Swamp — the same read ``subject_matches`` will make when
+        the static is applied. ``basic_land_types`` would answer only for the
+        five basics, and this choice ranges over every land type there is.
+
+        "Island" when no opponent controls a land at all: any word is a legal
+        choice there, and it is the type the pool prints most.
+        """
+        from ..grammar.vocabulary import LAND_TYPES
+        from ..layer_bridge import computed_types
+
+        counts: dict[str, int] = {}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                card_types, subtypes = computed_types(perm)
+                if "land" not in card_types:
+                    continue
+                for subtype in subtypes:
+                    if subtype in LAND_TYPES:
+                        counts[subtype] = counts.get(subtype, 0) + 1
+        if not counts:
+            return "island"
+        return max(sorted(counts), key=lambda word: counts[word])
+
     def _default_terrain_land_types(self, caster_index: int) -> tuple[str, str]:
         """The ordered pair Illusionary Terrain takes when nobody chooses.
 
@@ -1982,6 +2043,20 @@ class PermanentStateMixin:
         # joins, with nothing to add back or subtract (CR 613.5).
         if any(target_perm.has_keyword(word) for word in filt.without_keywords):
             return False
+        # "Each land **of the chosen type** has phasing." (Shimmer.) The one
+        # field of this filter whose word is not in the sentence: it was chosen
+        # as *source_perm* entered (CR 614.1c) and recorded there, so this is
+        # the only reader that can answer it — which is exactly why the pure
+        # matcher one file over refuses the key outright.
+        #
+        # Through ``has_type`` like every other type read here (CR 613 layer 4),
+        # so a land Phantasmal Terrain turned into an Island is an Island. No
+        # word recorded yet means the anthem reaches nothing, which is the safe
+        # direction: dropping the narrowing would phase out every land there is.
+        if filt.chosen_land_type:
+            word = getattr(source_perm, "metadata", {}).get("chosen_land_type")
+            if not word or not target_perm.has_type(str(word)):
+                return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:

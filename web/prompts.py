@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.grammar.phrases import BASIC_LAND_WORDS
-from engine.grammar.vocabulary import CREATURE_TYPES
+from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
@@ -1254,6 +1254,16 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
             sorted(CREATURE_TYPES) if data.get("needs_creature_type") else []
         ),
         "default_creature_type": data.get("default_creature_type"),
+        # "…choose a land type." (Shimmer.) A sixth shape of this one prompt:
+        # one word out of CR 205.3i's catalog, with no seat and no colour, and
+        # the *whole* catalog rather than the five basics the ordered pair
+        # above draws from. Offered from the same vocabulary the resolver
+        # checks the answer against (idiom 9).
+        "needs_land_type": bool(data.get("needs_land_type")),
+        "chosen_land_types": (
+            sorted(LAND_TYPES) if data.get("needs_land_type") else []
+        ),
+        "default_land_type": data.get("default_land_type"),
     }
 
 

@@ -398,33 +398,42 @@ def _resolve_chosen_color(filt: dict, source) -> dict:
     return resolved
 
 
-def _resolve_chosen_creature_type(filt: dict, source) -> dict:
-    """*filt* with a ``chosen_creature_type`` narrowing turned into a subtype key.
+#: The two narrowings "of the chosen type" can be, and where each one's word is
+#: recorded on the source. Both are CR 614.1c choices made as the permanent
+#: entered and both resolve to ``subtype_filter``; what separates them is the
+#: *catalog* the word came from, which the sentence spells in its head noun —
+#: CR 205.3m's creature types for An-Zerrin Ruins, CR 205.3i's land types for
+#: Shimmer. One resolver rather than two, because two would be one idea spelled
+#: twice with a metadata key changed.
+_CHOSEN_SUBTYPE_KEYS = ("chosen_creature_type", "chosen_land_type")
 
-    The creature type a card chose as it entered (CR 614.1c, CR 205.3m) is
-    recorded on the permanent, not in the sentence — so "of the chosen type"
-    can only be answered by a reader holding that permanent. The sibling of
+
+def _resolve_chosen_subtype(filt: dict, source) -> dict:
+    """*filt* with a "of the chosen type" narrowing turned into a subtype key.
+
+    The type a card chose as it entered (CR 614.1c) is recorded on the
+    permanent, not in the sentence — so "of the chosen type" can only be
+    answered by a reader holding that permanent. The sibling of
     :func:`_resolve_chosen_color` one characteristic over, and it resolves the
     same way: into the ordinary key every matcher already reads, which for a
-    creature type is ``subtype_filter`` and so goes through CR 613 layer 4 like
-    any other type question.
+    subtype is ``subtype_filter`` and so goes through CR 613 layer 4 like any
+    other type question.
 
     Callers without a source leave the key in place and
     ``permanent_matches_filter`` refuses every permanent, which is the safe
     direction: a dropped narrowing would hold the whole board down.
     """
-    if not filt.get("chosen_creature_type"):
-        return filt
-    word = (
-        getattr(source, "metadata", {}).get("chosen_creature_type")
-        if source else None
-    )
-    if not word:
-        return filt
-    resolved = dict(filt)
-    resolved.pop("chosen_creature_type", None)
-    resolved["subtype_filter"] = word
-    return resolved
+    for key in _CHOSEN_SUBTYPE_KEYS:
+        if not filt.get(key):
+            continue
+        word = getattr(source, "metadata", {}).get(key) if source else None
+        if not word:
+            continue
+        resolved = dict(filt)
+        resolved.pop(key, None)
+        resolved["subtype_filter"] = word
+        return resolved
+    return filt
 
 
 def evaluate_count(
@@ -564,7 +573,7 @@ def evaluate_count(
         # resolution one line up for the same reason: the type was picked as
         # *source* entered and lives on that permanent, and the pure matcher
         # refuses the unresolved key so a caller with no source counts nothing.
-        filt = _resolve_chosen_creature_type(filt, source)
+        filt = _resolve_chosen_subtype(filt, source)
         scanned = game.all_permanents() if every_seat else game.controlled_by(seat)
         matched = [
             perm for perm in scanned
@@ -1022,7 +1031,7 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # characteristic over, refused here for the identical reason: the record
     # lives on the *source*, this function is the pure half, and ignoring the
     # key would widen "creatures of the chosen type" to every creature.
-    if payload.get("chosen_creature_type"):
+    if payload.get("chosen_creature_type") or payload.get("chosen_land_type"):
         return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped

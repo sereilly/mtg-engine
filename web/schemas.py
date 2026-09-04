@@ -513,6 +513,14 @@ class GameActionRequest(BaseModel):
     # set, so the engine checks the answer against `data/vocabulary` (the same
     # list the prompt offers) rather than a copy frozen into the wire format.
     creature_type: str | None = None
+    # Shimmer: the land type the controller chose as the permanent entered,
+    # sent with `enter_choice_confirm`. Its own field rather than `land_type`
+    # above: that one is Phantasmal Terrain's five-way Literal, and CR 205.3i's
+    # catalog is eighteen words and grows with every set — widening it would
+    # loosen the wire check on a prompt whose choice really is one of five.
+    # Checked against `data/vocabulary` (the list the prompt offers), like the
+    # creature type it sits beside.
+    chosen_land_type: str | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.
