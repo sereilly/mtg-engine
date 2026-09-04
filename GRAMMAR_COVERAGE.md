@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 90.8% | 90.5% | 62.4% | 277 |
+| MIR *(measured)* | 335 | 545 | 91.2% | 91.0% | 62.9% | 280 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 302 | 133 | expected a subject |  |
 | 109 | 47 | unrecognized effect verb |  |
-| 77 | 32 | unconsumed text |  |
-| 34 | 34 | unrecognized activation cost |  |
+| 76 | 31 | unconsumed text |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
+| 33 | 33 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 9 | 8 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -1003,6 +1003,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
+- **Cycle of Life**
+  - `Return this enchantment to its owner's hand: Target creature you cast this turn has base power and toughness 0/1 until your next upkeep. At the beginning of your next upkeep, put a +1/+1 counter on that creature.`
 - **Cyclopean Mummy**
   - `When this creature dies, exile it.`
   - `When this creature dies, exile it.`
@@ -1100,6 +1102,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Delif's Cube**
   - `{2}, {T}: This turn, when target creature you control attacks and isn't blocked, it assigns no combat damage this turn and you put a cube counter on this artifact.`
   - `{2}, Remove a cube counter from this artifact: Regenerate target creature.`
+- **Delirium**
+  - `Tap target creature that player controls. That creature deals damage equal to its power to the player. Prevent all combat damage that would be dealt to and dealt by the creature this turn.`
 - **Demonic Attorney**
   - `Each player antes the top card of their library.`
   - `Each player antes the top card of their library.`
@@ -4350,6 +4354,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, Sacrifice a snow land: Prevent all combat damage that would be dealt this turn.`
 - **Sunweb**
   - `This creature can't block creatures with power 2 or less.`
+- **Superior Numbers**
+  - `Superior Numbers deals damage to target creature equal to the number of creatures you control in excess of the number of creatures target opponent controls.`
 - **Suq'Ata Firewalker**
   - `{T}: This creature deals 1 damage to any target.`
 - **Sure Strike**
