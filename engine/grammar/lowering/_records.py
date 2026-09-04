@@ -34,6 +34,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
+                      _BASE_PT_SET_PERMANENTS,
                       PUT_FROM_HAND_PERMANENTS,
                       LAST_TARGET_CONTROLLER,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
@@ -404,6 +405,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # every iteration, into the one key — the sentence that reads it is one
     # question about all of the answers.
     "choose_permanents": CHOSEN_THIS_WAY_OBJECTS,
+    # "Target creature you cast this turn **has base power and toughness 0/1**
+    # …. At the beginning of your next upkeep, put a +1/+1 counter on **that
+    # creature**." (Cycle of Life.) The rewrite records what it chose, because
+    # the sentence behind it is a delayed ability that fires a turn later and
+    # chooses nothing of its own.
+    "set_base_pt_target_until_eot": _BASE_PT_SET_PERMANENTS,
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap
     # names its own attachment rather than a target, so it is a different

@@ -448,6 +448,26 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 raise stream.error(f"unsupported mana symbol {token.text!r}")
             stream.accept_punct(",")
             continue
+        if stream.at_word("return"):
+            # "**Return this enchantment to its owner's hand**" (Cycle of Life)
+            # — CR 118.3's cost that is a zone change of the source. Read
+            # through the same noun parser every other cost object uses, so
+            # "return this artifact" and "return a creature you control" cannot
+            # come out as the same empty filter; only the source is charged
+            # today, and anything else refuses rather than being charged as the
+            # source.
+            mark = stream.mark()
+            stream.advance()
+            returned = _parse_cost_object(stream, "return")
+            if (
+                returned.is_source
+                and stream.accept_phrase("to", "its", "owner", "'s", "hand")
+            ):
+                costs.append(ast.ReturnSelfToHandCost())
+                stream.accept_punct(",")
+                continue
+            stream.reset(mark)
+            raise stream.error("unrecognized activation cost")
         if stream.accept_word("sacrifice"):
             # "Sacrifice **two** Goblins" (Goblin Warrens). The count is printed
             # in front of the phrase, which leaves the phrase itself the bare

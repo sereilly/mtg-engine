@@ -538,6 +538,8 @@ _COVERED_ELSEWHERE = {
     "banded_with_source": "test_banded_with_source_names_only_the_band",
     "characteristic_vs_source":
         "test_a_source_relative_bound_is_read_through_the_layers",
+    "cast_by_you_this_turn":
+        "test_cast_by_you_this_turn_reads_a_seat_and_a_turn",
 }
 
 
@@ -1077,6 +1079,54 @@ def test_a_source_relative_bound_is_read_through_the_layers(pool):
     # bound although nothing printed on it changed.
     add_pt_modifier(source, 0, -1)
     assert subject_matches(game, one_power, described, source=source)
+
+
+def test_cast_by_you_this_turn_reads_a_seat_and_a_turn(pool):
+    """"target creature **you cast this turn**" (Cycle of Life) — CR 701.5a.
+
+    Both halves of the stamp, because the phrase asks both. A creature the
+    *opponent* cast this turn and one **you** cast last turn each fail it, and a
+    matcher reading only one half would admit whichever the other excludes.
+
+    Not "entered this turn": a reanimated creature entered without ever having
+    been a spell, and it carries no stamp at all — which is why the record is
+    written by the entry path only under CR 701.5a's ``was_cast``.
+    """
+    from engine.enter_effects import CAST_THIS_TURN_STAMP
+
+    mine = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 0, "turn": 3}},
+    )
+    last_turn = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 0, "turn": 2}},
+    )
+    theirs = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 1, "turn": 3}},
+    )
+    reanimated = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine, last_turn, reanimated]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.turn = 3
+    described = {"cast_by_you_this_turn": True}
+
+    assert subject_matches(game, mine, described, observer=0)
+    assert not subject_matches(game, last_turn, described, observer=0), (
+        "the turn half"
+    )
+    assert not subject_matches(game, theirs, described, observer=0), (
+        "the seat half"
+    )
+    assert not subject_matches(game, reanimated, described, observer=0), (
+        "entering is not being cast (CR 701.5a)"
+    )
+    assert not subject_matches(game, mine, described), (
+        "with no observer there is no seat to compare against"
+    )
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

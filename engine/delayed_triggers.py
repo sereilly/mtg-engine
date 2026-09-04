@@ -510,6 +510,13 @@ class DelayedTrigger:
             # which leaves the stack item exactly as it was.
             "target_player_index": self.bound_player_index,
             "trigger_context": context,
+            # CR 603.7d again, on the channel the *effect*-scoped readers
+            # ask. ``permanents_from`` and ``amount_from`` mean "a step of
+            # this same effect recorded it", and for a delayed ability that
+            # step is the one that created it -- so the frozen scratchpad
+            # goes back where those readers look, as well as into the
+            # trigger context the event-scoped readers ask.
+            "captured_results": dict(self.captured),
         }
 
 

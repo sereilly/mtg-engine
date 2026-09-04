@@ -526,7 +526,18 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # and cost the thing symmetry is for.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
-] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt"]
+# `base_pt` split out of `lowering/characteristics.py` at Mirage's third wave,
+# the second time that module crossed the guard below (`counters` left it the
+# first time). The line is one CR 613 already draws: what stays *modifies* a
+# characteristic -- a pump (7c), a switch (7d), a doubling, a colour, a text
+# change -- and what left *replaces* the printed value (613.4b), which is the
+# only pair of productions in this grammar reaching `pt.set_base_pt`. The name
+# is the one `engine/pt.py` and `engine/handlers/base_pt.py` already carry, so
+# the mirror re-forms rather than forking a third vocabulary.
+# Asymmetric like `life`, `counters` and `tokens` before it: the parse side
+# stays in `effects/characteristics.py`, where a base-P/T sentence is one branch
+# of the verb table, and the guard fired on the *lowering*.
 # `life` split out of `lowering/game.py` at 1,014, the second time that module
 # crossed the guard and along the same seam `tokens` left through one set
 # earlier: what stays in `game` changes the state of the **game** (an extra

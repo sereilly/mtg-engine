@@ -179,6 +179,13 @@ class ActivatedAbilityCost:
     # activating sacrifices the source permanent as part of the cost, so the
     # ability still resolves after it has left the battlefield (CR 603.6).
     sacrifice_self: bool = False
+    # Cycle of Life: "Return this enchantment to its owner's hand: …" — the two
+    # above one zone over (CR 118.3). Its own field rather than a value on
+    # theirs because *where the source goes* is the whole difference: an exiled
+    # source is gone for the game and a returned one can be cast again, which is
+    # what the card is for. Like both of them, the ability resolves with its
+    # source already gone (CR 603.6).
+    return_self_to_hand: bool = False
     # Hobblefiend: "{1}, Sacrifice another creature: …" — a *chosen* permanent
     # rather than the source. The whole printed noun phrase is payload, so one
     # field covers every card printed this way, "a creature **with defender**"
@@ -676,6 +683,17 @@ TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 #: sentences, and folding a per-counter list into it would make a creature with
 #: two counters two members of a set those sentences mean once.
 COUNTERS_PLACED_THIS_WAY = "counters_placed_this_way"
+
+#: "Target creature you cast this turn has base power and toughness 0/1 until
+#: your next upkeep. At the beginning of your next upkeep, put a +1/+1 counter
+#: on **that creature**." (Cycle of Life.) The permanent the rewrite chose.
+#:
+#: Here rather than beside either reader, for ``COUNTERS_PLACED_THIS_WAY``'s
+#: stated reason: the lowering gates the pronoun on the marker and the handler
+#: writes the permanent, and the two sit at opposite ends of the pipeline. The
+#: reader is a *delayed* ability a whole turn later (CR 603.7c), so nothing on
+#: the board at that moment could tell the chosen creature from any other 0/1.
+BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 
 #: What "**chosen this way**" names (Raiding Party). The permanents a
 #: resolution-time pick named, accumulated across every iteration and every

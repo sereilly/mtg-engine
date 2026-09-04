@@ -482,7 +482,15 @@ def _narrowing_flags(source: dict) -> dict:
     # wider-than-printed reading CR 602.2b exists to refuse before anything is
     # paid. `unblocked_attacker` beside it in the enumerator is Forcefield's
     # spelling of the other half.
-    for key in ("attacking_only", "blocked_only", "blocking_only", "flying_only"):
+    for key in (
+        "attacking_only", "blocked_only", "blocking_only", "flying_only",
+        # "target creature **you cast this turn**" (Cycle of Life). Here rather
+        # than left to the instruction's own filter for ``blocked_only``'s
+        # stated reason: a narrowing the picker does not apply is one the
+        # player can announce past, and CR 602.2b refuses the activation
+        # before anything is paid rather than after.
+        "cast_by_you_this_turn",
+    ):
         if source.get(key):
             flags[key] = True
     # Carried by value, not flattened to a flag: "attacking or blocking" and

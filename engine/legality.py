@@ -1454,6 +1454,18 @@ class LegalityMixin:
                 # "Sacrifice **another** …" — the source cannot pay for itself.
                 if spec.get("exclude_source") and perm is source_permanent:
                     continue
+                # "target creature **you cast this turn**" (Cycle of Life).
+                # CR 701.5a's cast, asked through ``subject_matches`` -- the
+                # one reader of a printed noun phrase -- so the picker and
+                # the resolution cannot disagree about which creatures answer
+                # it. Here rather than in ``_permanent_matches_target_kind``
+                # because the phrase names a *seat*, and that method is
+                # handed no observer to compare one against.
+                if spec.get("cast_by_you_this_turn") and not subject_matches(
+                    self, perm, {"cast_by_you_this_turn": True},
+                    observer=caster_index, source=source_permanent,
+                ):
+                    continue
                 # "…to **another** target creature" on an Aura (Farrel's
                 # Mantle): the creature excluded is the one the source is
                 # attached to, which is the one that will deal the damage.

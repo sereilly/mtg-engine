@@ -111,6 +111,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # layer-6 keyword questions — and refused by the pure matcher, which has no
     # game to compare against.
     "controlled_since_turn_start",
+    # "target creature **you cast this turn**" (Cycle of Life). CR 701.5a's
+    # cast, stamped on the permanent as it entered — and the second key here
+    # the *object* cannot answer alone, for ``controlled_since_turn_start``'s
+    # reason exactly: the record is a seat and a turn number, and both halves
+    # are comparisons against something outside the permanent. Tested below and
+    # refused by the pure matcher.
+    "cast_by_you_this_turn",
     # "target **attacking** creature" (Disharmony's untap). CR 508.1a makes
     # attacking a state of the permanent itself, so it is answerable from the
     # object alone — ``Permanent.attacking`` is stamped at declaration and
@@ -237,6 +244,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     "controller", "owner", "owner_or_controller", "exclude_self",
     "controller_controls",
+    # Out for ``controller``'s reason: "you cast this turn" is half a seat
+    # test, and a caller with no observer would compare the stamp's seat
+    # against nothing. Refusing the line is the direction that cannot widen
+    # the set; admitting it would let a sweep with no observer take every
+    # creature, the caster's and the opponents' alike.
+    "cast_by_you_this_turn",
     # Out for ``exclude_self``'s reason: the bound is a characteristic of the
     # ability's *source*, and a caller with none would compare against nothing.
     "characteristic_vs_source",
@@ -654,6 +667,20 @@ def subject_matches(
     # it cannot attack.
     if described.get("controlled_since_turn_start"):
         if not game._controlled_since_turn_start(obj):
+            return False
+    # "…**you cast this turn**" (Cycle of Life). Both halves of the stamp are
+    # compared, because the phrase asks both: an opponent's creature and one of
+    # your own from last turn each fail, and a stamp read for only the turn
+    # would admit the first while a stamp read for only the seat would admit the
+    # second. An observer is required for the seat half, and its absence refuses
+    # — the direction every relative key here takes.
+    if described.get("cast_by_you_this_turn"):
+        from .enter_effects import CAST_THIS_TURN_STAMP
+
+        stamp = obj.metadata.get(CAST_THIS_TURN_STAMP)
+        if observer is None or not isinstance(stamp, dict):
+            return False
+        if stamp.get("seat") != observer or stamp.get("turn") != game.turn:
             return False
     # Keywords are asked of layer 6, so a creature *granted* defender answers a
     # defender-narrowed filter exactly as a printed one does.
