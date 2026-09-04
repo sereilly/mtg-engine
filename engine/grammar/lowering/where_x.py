@@ -526,7 +526,7 @@ def _records_within(instructions: tuple[OracleInstruction, ...]) -> frozenset[st
     """
     keys: set[str] = set()
     for instruction in instructions:
-        keys |= produced_keys(instruction.kind)
+        keys |= produced_keys(instruction)
         for key in ("steps", "then", "else", "otherwise", "action"):
             nested = instruction.payload.get(key)
             if (

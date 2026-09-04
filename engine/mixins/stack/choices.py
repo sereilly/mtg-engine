@@ -658,6 +658,7 @@ class PendingChoicesMixin:
             # player whose library it came out of — which is `caster` here, the
             # *searched* seat rather than the searching one.
             caster.exile.append(card)
+            self._record_search_exile(choice.data, card)
         else:
             self.put_card_into_hand(caster, card)
         self.log.append(
@@ -795,7 +796,7 @@ class PendingChoicesMixin:
         if len(set(slots)) <= 1:
             for card in cards:
                 destination, tapped = slots[0]
-                self._place_found_card(landing, card, destination, tapped)
+                self._place_found_card(landing, card, destination, tapped, data)
             return
         self.arm_pending_choice(
             "search_destination", seat,
@@ -810,9 +811,36 @@ class PendingChoicesMixin:
             # where" is still not necessarily the seat the cards go to.
             landing_seat=landing,
             _cards=list(cards),
+            # And the resolution's scratchpad, for the same reason: a find that
+            # is about to be *exiled* has to be written down where "you may play
+            # that card" reads it, and this prompt is where the exile happens
+            # once the slots differ. Absent on every search that records
+            # nothing, which is what `_record_search_exile` answers to.
+            record=data.get("record"),
         )
 
-    def _place_found_card(self, seat: int, card, destination: str, tapped: bool) -> None:
+    def _record_search_exile(self, data: dict, card) -> None:
+        """Write down a card this search **exiled**, for the sentence behind it.
+
+        "…and exile it. … Until the beginning of your next upkeep, you may play
+        that card." (Grinning Totem.) The permission names the card the search
+        put in exile, and nothing else can say which one that is: the zone holds
+        whatever else has gone there, and two copies of a card in a deck are the
+        same immutable object, so a name match would find the wrong one.
+
+        Under the one key every "cards exiled this way" in this engine reads
+        (`lowering/_records._PRODUCES`), so a sentence saying it needs no reader
+        of its own — and only the *exile* destination writes it, because a
+        search that put its find in a hand exiled nothing.
+        """
+        record = data.get("record")
+        if record is None:
+            return
+        record.setdefault("exiled_cards", []).append(card)
+
+    def _place_found_card(
+        self, seat: int, card, destination: str, tapped: bool, data: dict | None = None
+    ) -> None:
         """One found card landing where the print sent it.
 
         *seat* is whose zone receives it, which is not always the seat that
@@ -820,6 +848,10 @@ class PendingChoicesMixin:
         them" (Jester's Cap) puts them in that player's exile, because CR 400.3
         sends an object to its **owner's** zone and the owner is the player
         whose library it came out of.
+
+        *data* is the prompt's own dict, carried only so an exile can be
+        recorded through the same seam the single-find path uses; a caller with
+        nothing to record passes none.
         """
         caster = self.players[seat]
         if destination == "battlefield":
@@ -830,6 +862,8 @@ class PendingChoicesMixin:
             )
         elif destination == "exile":
             caster.exile.append(card)
+            if data is not None:
+                self._record_search_exile(data, card)
         else:
             self.put_card_into_hand(caster, card)
         where = (
@@ -864,7 +898,8 @@ class PendingChoicesMixin:
         for card, slot_index in zip(cards, assignments):
             slot = slots[slot_index]
             self._place_found_card(
-                landing, card, slot["destination"], bool(slot.get("tapped"))
+                landing, card, slot["destination"], bool(slot.get("tapped")),
+                choice.data,
             )
         self.discard_pending_choice(choice)
         return True

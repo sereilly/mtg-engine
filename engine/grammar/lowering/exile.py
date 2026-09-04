@@ -907,3 +907,45 @@ def _lower_transmute_by_sacrifice(
             {"sacrifice_filter": sacrificed, "search_filter": found},
         ),
     )
+
+
+def _lower_put_exiled_card_into_zone(
+    node: "ast.PutExiledCardIntoZone", produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """``Put that card into your hand.`` (Necropotence, inside its delay.)
+    ``If you haven't played it, put it into its owner's graveyard.``
+    (Grinning Totem, inside its delay.)
+
+    Here rather than in the dispatch chain for the reason every other lowering
+    is in a family: the chain routes, and the *rules* about which destination a
+    handler implements are exile's business. It moves an object out of the
+    exile zone, which is this module's own line.
+    """
+    # The producer gate every back-reference makes: "that card" / "it" names
+    # what a step of this same effect exiled, and a sentence with no exile
+    # behind it would put nothing anywhere while the card compiled supported.
+    if "exiled_cards" not in produced:
+        raise LoweringError(
+            "'that card' names a card no step of this effect exiled", node=node
+        )
+    zone = node.zone
+    owner = zone.owner.kind if zone.owner is not None else None
+    # Two destinations, and the possessive each is printed with is part of it.
+    # "Put that card into **your** hand" (Necropotence) is the caster's; "put it
+    # into **its owner's** graveyard" (Grinning Totem) is the card's owner's,
+    # which is a different seat the moment the card came out of somebody else's
+    # library — CR 400.3, and the whole reason that card can be played from a
+    # pile the caster does not own. A third spelling refuses rather than landing
+    # the card in a zone no handler implements.
+    if zone.name == "hand" and owner == "you":
+        payload: dict[str, object] = {"zone": "hand"}
+    elif zone.name == "graveyard" and owner in ("owner", "you"):
+        payload = {"zone": "graveyard"}
+    else:
+        raise LoweringError(
+            f"no handler puts an exiled card into {owner!r}'s {zone.name}",
+            node=node,
+        )
+    if node.only_if_unplayed:
+        payload["only_if_unplayed"] = True
+    return (OracleInstruction("put_exiled_cards_into_zone", "", payload),)

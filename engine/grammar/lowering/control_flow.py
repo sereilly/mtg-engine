@@ -322,7 +322,7 @@ def _lower_may(
     # compile where nothing will have written it, and an unwritten quantity
     # reads as zero.
     after_action = produced | {
-        key for instruction in action for key in produced_keys(instruction.kind)
+        key for instruction in action for key in produced_keys(instruction)
     }
     then = lower_statement(node.then, after_action, event=inner_event, event_subject=event_subject, whole_effect=False) if node.then else ()
     otherwise = lower_statement(node.otherwise, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.otherwise else ()

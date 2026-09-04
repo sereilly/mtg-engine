@@ -76,8 +76,14 @@ def test_a_grant_shows_up_in_castable_from_zones_and_casts_through_the_api():
         cards=[spell], duration=None, exile_instead=True, source_name="Test Grant",
     )
     entries = _state(sid)["castable_from_zones"]
+    # ``owner_seat`` is whose copy of the zone the index is into. It is the
+    # viewer's own on every grant but the cross-seat one (Grinning Totem exiles
+    # a card into the *searched* player's exile and hands the permission to the
+    # searcher), and it is stated on every entry rather than only on that one so
+    # the client has a single rule to read.
     assert entries == [
-        {"zone": "graveyard", "index": 0, "name": "Test Ember", "free": False, "source": "Test Grant"}
+        {"zone": "graveyard", "index": 0, "name": "Test Ember", "free": False,
+         "source": "Test Grant", "owner_seat": 0}
     ]
     # The opponent's view carries no permission — it is seat 0's, not a
     # property of the card.

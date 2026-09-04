@@ -46,6 +46,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
 from .sacrifices import _parse_counted_sacrifice
+from .effects.exile import _parse_bin_unplayed_exiled_card
 from .effects.stack import _parse_conditional_retarget
 from .effects.cards import _parse_for_each_revealed_discard
 
@@ -544,6 +545,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # for — and refuses without consuming, so every other "if" keeps its
     # reading.
     if stream.at_word("if"):
+        # "If you haven't played it, put it into its owner's graveyard."
+        # (Grinning Totem, inside its delay.) Read here rather than as an
+        # ordinary conditional because the condition is what binds the pronoun
+        # in its arm: "put it into its owner's graveyard" on its own is All
+        # Hallow's Eve's sentence about the ability's own source, and nothing
+        # else in the words tells the two referents apart. Refuses without
+        # consuming, so every other "If …" keeps its reading.
+        binned = _parse_bin_unplayed_exiled_card(stream)
+        if binned is not None:
+            return binned
         # "If target spell has only one target and that target is a creature,
         # change that spell's target to another creature." (Meddle.) Read here
         # for the reason the two below it are: what looks like a condition is

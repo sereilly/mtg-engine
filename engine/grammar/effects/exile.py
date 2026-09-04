@@ -26,12 +26,21 @@ from ..stream import TokenStream
 
 def _parse_put_exiled_card_into_hand(
     stream: TokenStream,
-) -> "ast.PutExiledCardIntoHand | None":
+) -> "ast.PutExiledCardIntoZone | None":
     """``Put that card into your hand.`` (Necropotence.)
 
     Refuses without consuming, like every other "put" production beside it, so
     the counter reading keeps its own refusal site. "That card" is the one an
     earlier step of this same effect exiled; lowering demands the producer.
+
+    Only the **hand** spelling, and only with "that card" as the referent. The
+    node carries a zone now (Grinning Totem prints a graveyard), but widening
+    *this* production to match would take "put it into your graveyard" away
+    from :func:`_parse_put_source_into_zone`, which is All Hallow's Eve's
+    sentence about its own source — one printed clause, two referents, and
+    nothing in the words tells them apart. The other destination is read by
+    :func:`_parse_bin_unplayed_exiled_card` below, whose condition clause is
+    what binds the pronoun.
     """
     mark = stream.mark()
     stream.expect_word("put")
@@ -42,7 +51,50 @@ def _parse_put_exiled_card_into_hand(
     if zone.name != "hand" or zone.owner is None:
         stream.reset(mark)
         return None
-    return ast.PutExiledCardIntoHand(zone.owner)
+    return ast.PutExiledCardIntoZone(zone)
+
+
+def _parse_bin_unplayed_exiled_card(
+    stream: TokenStream,
+) -> "ast.PutExiledCardIntoZone | None":
+    """``If you haven't played it, put it into its owner's graveyard.``
+    (Grinning Totem, inside its delayed ability.)
+
+    The condition and its consequent are **one** production rather than an
+    ordinary conditional over a "put" sentence, because the condition is what
+    says who "it" is. On its own, "put it into its owner's graveyard" is
+    already a sentence this grammar reads — :func:`_parse_put_source_into_zone`
+    takes it as the ability moving its own source (All Hallow's Eve) — and
+    nothing in the remaining words distinguishes the two readings. Reading them
+    together is the only place the pronoun has an antecedent: "you haven't
+    played **it**" can only be about a card an earlier step of this same effect
+    made playable, which is a card it exiled, and the lowering demands that
+    producer.
+
+    Refuses without consuming, beside the other "If …" productions in
+    ``statements.py`` and for their reason: every other conditional keeps the
+    reading it has.
+
+    The condition is not dropped. It is what the move already *is* — a card the
+    player played is not in exile any more, and this instruction only moves a
+    card out of exile — so it rides the node as a word rather than as a second
+    test, and the handler's log says which case it took.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return None
+    # "you haven't played it". The lexer keeps the contraction whole, so the
+    # negation is one word here rather than the two-token spelling a possessive
+    # takes ("owner" + "'s") three lines down.
+    if not stream.accept_phrase("you", "haven't", "played", "it"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("put", "it", "into"):
+        raise stream.error("expected what happens to the card that was not played")
+    zone = _parse_zone(stream)
+    return ast.PutExiledCardIntoZone(zone, only_if_unplayed=True)
 
 
 def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":

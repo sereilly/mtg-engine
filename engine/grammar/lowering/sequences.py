@@ -81,7 +81,7 @@ def _records_produced(
     twice, once per fold target, because the answer decides which branch a later
     step belongs in.
     """
-    keys = set(produced_keys(instruction.kind))
+    keys = set(produced_keys(instruction))
     if instruction.kind == "may":
         for branch in branches:
             for nested in instruction.payload.get(branch) or ():

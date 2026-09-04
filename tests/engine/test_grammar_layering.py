@@ -653,7 +653,7 @@ AST_FAMILIES = [
         # family and both of its readers in another.
         "types",
         # `exile` is the same shape as `types`, one package over. The nodes the
-        # five exile productions build — `PutExiledCardIntoHand`,
+        # five exile productions build — `PutExiledCardIntoZone`,
         # `ExileBoundCard`, `ExileGraveyard`, `PutExiledWithSource` — are cards
         # in a zone, and they live in `ast/cards.py` beside every other card
         # node because that is what they *are*. The guard fired on the readers

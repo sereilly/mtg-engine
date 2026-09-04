@@ -601,7 +601,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_bound_card_from_graveyard": "zones",
     # Necropotence again, the other half: what its own exile put aside comes
     # back at its controller\'s next end step.
-    "put_exiled_cards_into_hand": "zones",
+    "put_exiled_cards_into_zone": "zones",
     # Forgotten Lore: an opponent picks out of your graveyard, again for
     # each payment, and the pick the loop stopped on is the one you keep.
     "repeated_graveyard_pick": "zones",

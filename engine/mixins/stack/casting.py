@@ -729,19 +729,37 @@ class SpellCastingMixin:
         else:
             if from_zone not in ("graveyard", "exile"):
                 raise ValueError(f"cannot cast from {from_zone!r}")
+            # Whose copy of the zone. The caster's own on every grant but one:
+            # "Search target opponent's library for a card and exile it. … you
+            # may play that card" (Grinning Totem) leaves the card in the
+            # *searched* player's exile (CR 400.3) and gives the permission to
+            # the searcher, so the pile and the player come apart. Own pile
+            # first, so a card the caster could already play is still found in
+            # the order it was found before.
+            seats = [caster_index] + [
+                seat for seat in range(len(self.players)) if seat != caster_index
+            ]
             source_zone = getattr(caster, from_zone)
             hand_index = None
-            for i, candidate in enumerate(source_zone):
-                if candidate.name != card_name:
-                    continue
-                if hand_index is None:
-                    hand_index = i
-                grant = permission_for(
-                    self, caster_index, candidate, from_zone,
-                    as_land=candidate.primary_type == "land",
-                )
-                if grant is not None:
-                    hand_index, permission = i, grant
+            for seat in seats:
+                pile = getattr(self.players[seat], from_zone)
+                for i, candidate in enumerate(pile):
+                    if candidate.name != card_name:
+                        continue
+                    if hand_index is None and seat == caster_index:
+                        # The fallback that names the refusal below, and only
+                        # out of the caster's own pile: "no effect allows
+                        # playing that card from *your* exile" is what the
+                        # player asked about.
+                        hand_index = i
+                    grant = permission_for(
+                        self, caster_index, candidate, from_zone,
+                        as_land=candidate.primary_type == "land",
+                    )
+                    if grant is not None and grant.zone_seat == seat:
+                        source_zone, hand_index, permission = pile, i, grant
+                        break
+                if permission is not None:
                     break
             if hand_index is None:
                 raise ValueError(f"Card not in {from_zone}: {card_name}")
@@ -1321,7 +1339,15 @@ class SpellCastingMixin:
             # anywhere above returned before here and costs nothing.
             self.record_commander_cast(caster_index, card)
         if from_zone != "hand":
-            self.log.append(f"{card.name} cast from {caster.name}'s {from_zone}")
+            # Whose pile it left, which is not always the caster's: a grant may
+            # open somebody else's exile (Grinning Totem). The permission is the
+            # only thing that knows, so it is asked rather than assumed.
+            pile_seat = (
+                permission.zone_seat if permission is not None else caster_index
+            )
+            self.log.append(
+                f"{card.name} cast from {self.players[pile_seat].name}'s {from_zone}"
+            )
 
         if card.primary_type != "land":
             # Determine which stack spell this one targets. An explicit choice
