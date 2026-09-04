@@ -1011,3 +1011,202 @@ def test_they_control_needs_a_distributed_subject(set_pool):
 
     assert not compiled.instructions
     assert "names no seat" in (compiled.lowering_error or ""), compiled.lowering_error
+
+
+# --- W3G1: Illicit Auction, the round of offers ---
+
+import pytest as _w3g1_pytest
+
+from engine import Game as _w3g1_Game, PlayerState as _w3g1_PlayerState
+from engine.grammar.errors import GrammarError as _w3g1_GrammarError
+from engine.grammar.parser import parse_line as _w3g1_parse_line
+from engine.models import Permanent as _w3g1_Permanent
+from engine.oracle import compile_card_oracle as _w3g1_compile
+
+
+def _w3g1_board(set_pool, *, interactive=(), lives=(20, 20)):
+    """A board with the auction in P1's hand and P2's creature to bid for."""
+    pool = set_pool("MIR")
+    victim = _w3g1_Permanent(card=pool["Femeref Knight"])
+    game = _w3g1_Game(players=[
+        _w3g1_PlayerState(name="P1", hand=[pool["Illicit Auction"]],
+                          library=[pool["Island"]] * 5),
+        _w3g1_PlayerState(name="P2", battlefield=[victim],
+                          library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    for seat, life in enumerate(lives):
+        game.players[seat].life = life
+    return game, victim
+
+
+def _w3g1_cast(game):
+    result = game.cast_from_hand(
+        0, "Illicit Auction", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    return result
+
+
+def _w3g1_cast_on_the_stack(game):
+    """The *interactive* path: the spell is queued and both seats pass, so it
+    resolves through `pass_priority` rather than through `_settle`.
+
+    Which matters here and nowhere else in this file: `_settle` is the headless
+    loop and pops the object before its prompts are drained, so only this route
+    can show the spell being held on the stack while a bid is owed.
+    """
+    game.active_player_index = 0
+    assert game.queue_from_hand(
+        0, "Illicit Auction", target_player_index=1, target_permanent_index=0
+    ).supported
+    game.start_priority_window(0)
+    game.pass_priority(0)
+    return game.pass_priority(1)
+
+
+def test_illicit_auction_is_supported_with_one_instruction(set_pool):
+    """The whole paragraph is one effect, not five.
+
+    Four of the printed sentences are the auction's *procedure* — who opens the
+    bidding, in what order it goes round, when it stops, what the winner pays —
+    and none of them is a board change on its own. A lowering that made each a
+    step would have four steps nothing could perform.
+    """
+    program = _w3g1_compile(set_pool("MIR")["Illicit Auction"])
+
+    assert program.supported
+    kinds = [i.kind for i in program.instructions]
+    assert kinds.count("bid_life_for_control") == 1
+    payload = next(
+        i.payload for i in program.instructions if i.kind == "bid_life_for_control"
+    )
+    # The opening bid is read off the printed sentence rather than assumed.
+    assert payload["starting_bid"] == 0
+    assert payload["targets"]["filter"] == {"type_filter": "creature"}
+
+
+def test_the_procedure_sentences_are_required(set_pool):
+    """The four sentences behind the offer are load-bearing.
+
+    A card that said "each player may bid life for control of target creature"
+    and then described a *different* procedure would be a different card, and
+    admitting it here would be the dropped-rider bug with a whole paragraph in
+    it. The production refuses rather than reading its own procedure into text
+    that does not print it.
+    """
+    with _w3g1_pytest.raises(_w3g1_GrammarError):
+        _w3g1_parse_line("Each player may bid life for control of target creature.")
+    with _w3g1_pytest.raises(_w3g1_GrammarError):
+        _w3g1_parse_line(
+            "Each player may bid life for control of target creature. "
+            "You start the bidding with a bid of 0. "
+            "In reverse turn order, each player may top the high bid. "
+            "The bidding ends if the high bid stands. "
+            "The high bidder loses life equal to the high bid and gains "
+            "control of the creature."
+        )
+
+
+def test_the_opening_bid_of_zero_wins_when_nobody_tops_it(set_pool):
+    """Every other seat is a non-interactive default, which passes — so the
+    caster takes the creature for nothing, which is what the card says happens
+    when the high bid stands at 0."""
+    game, victim = _w3g1_board(set_pool)
+
+    _w3g1_cast(game)
+
+    assert game.controller_index_of(victim) == 0
+    assert [p.life for p in game.players] == [20, 20]
+    assert game.pending_choices == []
+
+
+def test_a_seat_that_tops_the_bid_pays_and_takes_the_creature(set_pool):
+    game, victim = _w3g1_board(set_pool, interactive={1})
+    _w3g1_cast(game)
+
+    assert game.confirm_bid_life(1, 5)
+
+    assert game.controller_index_of(victim) == 1
+    assert [p.life for p in game.players] == [20, 15]
+    assert game.pending_choices == []
+
+
+def test_the_bidding_goes_round_until_the_high_bid_stands(set_pool):
+    """A raise puts everyone else back in: P2 bids 5, P1 tops with 7, and P2 is
+    asked again before the auction can end."""
+    game, victim = _w3g1_board(set_pool, interactive={0, 1})
+    _w3g1_cast(game)
+
+    assert [c.player_index for c in game.pending_choices] == [1]
+    assert game.confirm_bid_life(1, 5)
+    # The raise re-opens the round for the seat that had already bid 0.
+    assert [c.player_index for c in game.pending_choices] == [0]
+    assert game.confirm_bid_life(0, 7)
+    # And P1's raise re-opens it for P2, who had the high bid a moment ago.
+    assert [c.player_index for c in game.pending_choices] == [1]
+    assert game.confirm_bid_life(1, None)
+
+    assert game.pending_choices == []
+    assert game.controller_index_of(victim) == 0
+    assert [p.life for p in game.players] == [13, 20]
+
+
+def test_a_bid_that_does_not_top_the_high_bid_is_refused(set_pool):
+    """The printed restriction, enforced rather than clamped. "Top the high
+    bid" is what the offer says, so a bid at or under it is not a smaller
+    answer — it is not an answer, and the prompt stays owed."""
+    game, _victim = _w3g1_board(set_pool, interactive={0, 1})
+    _w3g1_cast(game)
+    assert game.confirm_bid_life(1, 5)
+
+    assert game.confirm_bid_life(0, 5) is False
+    assert game.confirm_bid_life(0, 4) is False
+    assert game.confirm_bid_life(0, "seven") is False
+
+    assert [(c.player_index, c.data["high_bid"]) for c in game.pending_choices] == [(0, 5)]
+
+
+def test_a_bid_above_a_life_total_is_legal_and_lethal(set_pool):
+    """No ceiling, because the card prints none.
+
+    CR 118.3's "a player can't pay a cost without the resources" is about a
+    *payment*; the winner **loses** life, so bidding past a life total is a
+    legal answer that simply kills the bidder at the next state-based check
+    (CR 704.5a).
+    """
+    game, victim = _w3g1_board(set_pool, interactive={1}, lives=(20, 4))
+    _w3g1_cast(game)
+
+    assert game.confirm_bid_life(1, 9)
+
+    assert game.players[1].life == -5
+    assert game.controller_index_of(victim) == 1
+
+
+def test_the_spell_waits_on_the_stack_while_a_bid_is_owed(set_pool):
+    """CR 608.2 / CR 117.3b: the auction is one resolution.
+
+    The spell stays on the stack, the seat that owes the bid holds priority,
+    and the card reaches the graveyard only with the last answer (CR 608.2n) —
+    which is what the prompt registry's ``_stack_item`` link buys.
+    """
+    game, victim = _w3g1_board(set_pool, interactive={0, 1})
+
+    assert _w3g1_cast_on_the_stack(game) == "awaiting_choice"
+
+    assert [item.card.name for item in game.stack] == ["Illicit Auction"]
+    assert [c.kind for c in game.pending_choices] == ["bid_life"]
+    assert game.priority_player_index == 1
+    assert "Illicit Auction resolved and moved to graveyard" not in game.log
+
+    assert game.confirm_bid_life(1, 3)
+    # Answering one offer arms the next, and the object is still held.
+    assert [item.card.name for item in game.stack] == ["Illicit Auction"]
+    assert game.confirm_bid_life(0, None)
+
+    assert game.stack == []
+    assert [c.name for c in game.players[0].graveyard] == ["Illicit Auction"]
+    assert game.controller_index_of(victim) == 1
+    assert game.players[1].life == 17

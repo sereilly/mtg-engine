@@ -9,6 +9,15 @@ instruction whose kind is missing here can be lowered but never gated on.
 grammar, a category left off does not route its lines elsewhere — it costs
 those cards their support, which is why the equality is a test and not a
 convention.
+
+**Which kinds are wrappers is `lowering/control_flow.py`'s**, not this module's.
+The table used to sit at the bottom of this file, and the split came at the
+thousand-line guard: the half that grows with the pool is the registry above,
+and the half that has been stable is the walk over `sequence` / `if_then` /
+`for_each` — which are exactly the kinds that family *produces*. Reusing the
+family name rather than inventing a module for the walk is the same move
+`by_node` recorded at Fallen Empires: the table is a registry either way, and
+what a wrapper carries belongs beside what builds one.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
@@ -16,6 +25,8 @@ from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from ...oracle_types import OracleInstruction
+from .control_changes import BID_LIFE_FOR_CONTROL_KIND
+from .control_flow import nested_instructions
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     # "If the creature deals damage to a creature this turn, the creature
@@ -414,6 +425,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "mark_text_modified": "text_change",
     "gain_control_of_target": "control",
     "gain_control_until_eot": "control",
+    # An auction for one permanent's control (Illicit Auction). The same
+    # category as the steals above, because where the permanent ends up is
+    # what the sentence is about — the bidding is how the seat is chosen, not
+    # a second thing the card does.
+    BID_LIFE_FOR_CONTROL_KIND: "control",
     # "Target opponent gains control of this creature." (Chaos Lord.) The same
     # family read from the other end — the permanent hands itself over rather
     # than taking something — so the same category.
@@ -920,7 +936,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # separate question: which player, then which of their spells.
     "choose_cast_this_turn": "chosen_players",
     "create_emblem": "tokens",
-    # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
+    # Optional actions. Parsed and lowered, not switched on — see
+    # `control_flow.WRAPPER_KINDS`.
     "may": "optional",
     # "Unless an opponent pays {2}, …" (Scarwood Bandits) — the same family
     # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
@@ -929,60 +946,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 }
 
 
-# Control-flow wrappers take the categories of whatever they wrap, so gating
-# "damage" is enough to turn on a sequence of damage instructions without
-# inventing a category nobody could reason about.
-#
-# ``may`` is deliberately NOT in here: it gets its own ungated category above,
-# because an offer is not the same switch as the effect behind it. Wrapping it
-# with the others would let "optional" be turned off under a family that is on,
-# which is a card that performs its offer's consequence without asking.
-_WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
-    "sequence": ("steps",),
-    "if_then": ("then", "else"),
-    "for_each": ("effect",),
-    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
-    # the same reason ``for_each`` is: what the round *does* is the act it
-    # carries, and the repetition is not an effect of its own.
-    "repeat_offer_round": ("action",),
-}
-
-
-def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
-    """The instructions a wrapper carries, or None if it is not one.
-
-    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
-    pairs rather than a bare tuple — the modal shape the pending-choice prompt
-    reads. Its categories are its options', because that is what the card can
-    actually do; giving it a category of its own would say the *choosing* is the
-    effect.
-    """
-    if instruction.kind == "create_delayed_trigger":
-        # A delayed ability's effect is one instruction rather than a list, so
-        # it cannot ride `_WRAPPER_KINDS` above — but it is a wrapper all the
-        # same, and an inner effect no category gates must ungate the line that
-        # arms it. An entry with no instruction is an ability that would fire
-        # into nothing, which is the empty-wrapper refusal below.
-        inner = instruction.payload.get("instruction")
-        return (inner,) if inner is not None else ()
-    if instruction.kind == "choose_one":
-        return tuple(
-            mode["instruction"] for mode in instruction.payload.get("modes") or ()
-        )
-    nested_keys = _WRAPPER_KINDS.get(instruction.kind)
-    if nested_keys is None:
-        return None
-    nested: tuple[OracleInstruction, ...] = ()
-    for key in nested_keys:
-        nested += tuple(instruction.payload.get(key) or ())
-    return nested
-
-
 def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
     """Migration categories covered by a lowered instruction sequence."""
     found: set[str] = set()
     for instruction in instructions:
-        nested_keys = _nested_instructions(instruction)
+        nested_keys = nested_instructions(instruction)
         if nested_keys is not None:
             if not nested_keys:
                 return frozenset({"__ungated__"})

@@ -585,3 +585,52 @@ def _lower_gain_control(
     described = _linked_steal_filter(node, subject)
     described["link_conditions"] = ["you_control_source"]
     return (OracleInstruction("steal_target_linked_to_source", "", described),)
+
+
+#: The instruction an auction for a permanent's control lowers to. One kind for
+#: the whole template: who bids, what they bid for and the opening number are
+#: payload, so a second card printing the same procedure needs no dispatch.
+BID_LIFE_FOR_CONTROL_KIND = "bid_life_for_control"
+
+
+def _lower_bid_life_for_control(
+    node: ast.BidLifeForControl,
+) -> tuple[OracleInstruction, ...]:
+    """``Each player may bid life for control of target creature.`` and its
+    procedure (Illicit Auction).
+
+    The target is described exactly as the indefinite steal above describes
+    its own, and for the same two reasons: the picker enumerates the printed
+    noun phrase, and the handler re-checks it at resolution (CR 608.2b). What
+    is different is only *who* ends up with it — the high bidder rather than
+    the resolving object's controller — and that is decided while the spell
+    resolves rather than by this payload.
+
+    Two narrowings refuse rather than being dropped. The bidding must be
+    offered to **each player**: the round-robin the handler walks is turn
+    order over every seat, and a sentence naming a smaller set would be read
+    as offering it to everybody. And the subject must be a **named target**,
+    because the auction's winner takes one permanent and nothing here could
+    choose which of several it was.
+    """
+    if not isinstance(node.bidders, ast.PlayerRef) or node.bidders.kind != "each_player":
+        raise LoweringError(
+            "the only auction the engine runs is offered to each player",
+            node=node,
+        )
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or not _is_target(subject):
+        raise LoweringError("the auction needs a named target", node=node)
+    described = _filter_payload(subject.filter)
+    controller = described.get("controller")
+    if controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
+        raise LoweringError(
+            "the auction cannot test this restriction", node=node
+        )
+    if object_only_filter(
+        described, carried_separately=frozenset({"controller"})
+    ) is None:
+        raise LoweringError("the auction cannot test this restriction", node=node)
+    _describe_targets(described, subject)
+    described["starting_bid"] = int(node.starting_bid)
+    return (OracleInstruction(BID_LIFE_FOR_CONTROL_KIND, "", described),)

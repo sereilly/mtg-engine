@@ -214,6 +214,7 @@ from .destruction import (
     _lower_delayed_destroy,
 )
 from .control_changes import (
+    _lower_bid_life_for_control,
     _lower_exchange_control,
     _lower_gain_control,
 )
@@ -444,6 +445,7 @@ __all__ = [
     "_lower_regenerate",
     "_lower_destroy_unless_pay",
     "_lower_sacrifice_unless_pay",
+    "_lower_bid_life_for_control",
     "_lower_gain_control",
     "_lower_sacrifice",
     "_lower_sacrifice_expansion_permanents",

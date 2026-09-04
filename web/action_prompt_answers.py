@@ -962,6 +962,30 @@ def _action_number_choice_confirm(session, req, seat_type):
     if not session.game.confirm_number_choice(req.seat, req.number):
         raise HTTPException(status_code=400, detail="no number choice is pending for you")
 
+@action_handler("bid_life_confirm")
+def _action_bid_life_confirm(session, req, seat_type):
+    # Illicit Auction: the seat tops the standing bid. Zero is not an answer
+    # here -- the offer is to *top* the high bid, and declining is the separate
+    # `bid_life_pass` below, so an absent number is a malformed bid rather than
+    # a pass.
+    if req.number is None:
+        raise HTTPException(status_code=400, detail="number is required")
+    if not session.game.confirm_bid_life(req.seat, req.number):
+        raise HTTPException(
+            status_code=400, detail="no bid of that size is pending for you"
+        )
+
+
+@action_handler("bid_life_pass")
+def _action_bid_life_pass(session, req, seat_type):
+    # The printed "may": declining the auction is an answer, and the round
+    # cannot move on until every seat has given one.
+    if not session.game.confirm_bid_life(req.seat, None):
+        raise HTTPException(
+            status_code=400, detail="no bidding is pending for you"
+        )
+
+
 @action_handler("draw_up_to_confirm")
 def _action_draw_up_to_confirm(session, req, seat_type):
     # Truce: "each player may draw up to two cards" — the answer is how many.

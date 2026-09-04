@@ -308,6 +308,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # sentence uses. Shapeshifter arms the same kind at the end of what it
         # is part of, where suspending costs nothing.
         "number_choice",
+        # "In turn order, each player may top the high bid. ... The high bidder
+        # loses life equal to the high bid and gains control of the creature."
+        # (Illicit Auction): the answer decides who is asked next and, when the
+        # round runs out, which seat pays and takes the creature -- both steps
+        # of the same resolution, armed by the answer to the one before them.
+        "bid_life",
         # "Attach target Aura … to **another permanent of that type**"
         # (Enchantment Alteration): the attach behind the choice is a later step
         # of the same sentence and reads the answer out of `results`. Only an

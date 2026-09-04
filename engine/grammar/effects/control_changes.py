@@ -15,9 +15,11 @@ where these two only ever answer "and whose is it now?".
 from __future__ import annotations
 
 from .. import ast
+from ..lexer import NUMBER
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..phrases import _accept_self_reference, _parse_that_object
+from ..vocabulary import NUMBER_WORDS
 
 
 def _parse_gain_control(
@@ -113,6 +115,99 @@ def _parse_gain_control(
             )
         return ast.GainControl(subject, "while_you_control_source_tapped")
     return ast.GainControl(subject, "while_you_control_source")
+
+
+def _parse_bid_life_for_control(
+    stream: TokenStream, bidders: "ast.Recipient"
+) -> "ast.BidLifeForControl | None":
+    """``<each player> may bid life for control of <subject>.`` and the four
+    sentences of procedure behind it (Illicit Auction).
+
+    Reached from the ``may`` dispatcher with the offer's subject already read,
+    so the words this consumes start at "bid".
+
+    **It reads past the full stops on purpose.** The four sentences after the
+    first are not effects — "the bidding ends if the high bid stands" changes
+    no board — they are the auction's rules, and the handler performs exactly
+    them. Left to the sentence loop each would have to become a step nothing
+    could execute; read here they are what makes the first sentence mean
+    something specific. The `phases out` branch in ``subject_verb`` already
+    crosses a sentence boundary for the same reason: the rider is the effect.
+
+    Every one of them is **required**, and a differently-worded procedure
+    refuses the line rather than being read as this one. An auction whose bids
+    go round in a different order, or whose winner pays something other than
+    the high bid, is a different card — and admitting it here would be the
+    dropped-rider bug with a whole paragraph in it.
+
+    Returns None with the cursor untouched when the sentence is not this one:
+    "may bid" opens nothing else today, but a production that consumed on
+    refusal would replace some future sentence's own error with this one's.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("bid", "life", "for", "control", "of"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what the bidding is for")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that opens the bidding")
+    # "You start the bidding with a bid of **0**." The opening bid is the
+    # printed number, not a constant: a card that started the bidding at 3
+    # would be this same auction, and the handler reads the value off the
+    # payload rather than assuming zero.
+    if not stream.accept_phrase("you", "start", "the", "bidding", "with", "a", "bid", "of"):
+        raise stream.error("expected 'you start the bidding with a bid of N'")
+    token = stream.peek()
+    if token is not None and token.kind == NUMBER:
+        stream.advance()
+        starting_bid = int(token.text)
+    else:
+        word = NUMBER_WORDS.get(stream.peek_word() or "")
+        if word is None:
+            raise stream.error("expected the number the bidding starts at")
+        stream.advance()
+        starting_bid = int(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that orders the bidding")
+    # The three procedural sentences, in the printed order. Each is spelled out
+    # rather than skipped to the end of the line: what the handler implements is
+    # this procedure, and a line that says something else about the order, the
+    # ending or the price must fail loudly.
+    if not stream.accept_phrase("in", "turn", "order"):
+        raise stream.error("expected 'in turn order'")
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "each", "player", "may", "top", "the", "high", "bid"
+    ):
+        raise stream.error("expected 'each player may top the high bid'")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that ends the bidding")
+    if not stream.accept_phrase(
+        "the", "bidding", "ends", "if", "the", "high", "bid", "stands"
+    ):
+        raise stream.error("expected 'the bidding ends if the high bid stands'")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that pays for the creature")
+    if not stream.accept_phrase(
+        "the", "high", "bidder", "loses", "life", "equal", "to", "the", "high",
+        "bid", "and", "gains", "control", "of", "the",
+    ):
+        raise stream.error(
+            "expected 'the high bidder loses life equal to the high bid and "
+            "gains control of the …'"
+        )
+    # The head noun the last sentence repeats ("…gains control of the
+    # **creature**"). Consumed as one word rather than checked against the
+    # subject's own noun, because the two are the same object by construction
+    # and a comparison would only decide which spelling of it is canonical —
+    # but it has to be *consumed*, or the whole-line rule fails the card.
+    if stream.peek_word() is None:
+        raise stream.error("expected the noun the winner gains control of")
+    stream.advance()
+    stream.accept_punct(".")
+    return ast.BidLifeForControl(bidders, subject, starting_bid=starting_bid)
 
 
 def _parse_exchange_control(stream: TokenStream) -> ast.Statement:

@@ -2278,6 +2278,173 @@ class PendingChoicesMixin:
             choice, choice.data.get("default_number", choice.data.get("minimum", 0))
         )
 
+    # -- "Each player may bid life for control of ..." -----------------------
+
+    def begin_life_auction(
+        self, *, card_name: str, permanent_id: int, opening_bidder: int,
+        starting_bid: int, order: list[int],
+    ) -> None:
+        """Open Illicit Auction's round of offers.
+
+        The whole auction is a **chain of prompts**, not a loop inside a
+        handler, and that is what makes it work at all: a bid is a decision one
+        seat owes, and the only way this engine holds a resolution open across a
+        decision is the pending-choice queue (CR 608.2, CR 117.3b). The spell
+        stays on the stack until the last offer is answered, because
+        ``arm_pending_choice`` stamps the object each prompt belongs to and
+        ``_release_stack_item`` will not pop it while one is queued.
+
+        *order* is CR 101.4's turn order, computed once by the handler and
+        carried unchanged from prompt to prompt -- the round-robin only ever
+        rotates it, so who bids after whom cannot change halfway through.
+        """
+        self._offer_next_bid({
+            "card_name": card_name,
+            "permanent_id": int(permanent_id),
+            "high_bid": int(starting_bid),
+            "high_bidder": int(opening_bidder),
+            "order": [int(seat) for seat in order],
+            "to_ask": self._bidders_after(order, opening_bidder),
+        })
+
+    @staticmethod
+    def _bidders_after(order, high_bidder: int) -> list[int]:
+        """Everyone who still has to be asked before the high bid stands.
+
+        *order* read as a cycle from the seat after *high_bidder*, with the high
+        bidder himself left out: "each player may **top** the high bid" is an
+        offer to beat somebody else's number, and nobody tops their own. Rebuilt
+        from scratch after every raise, which is exactly what "the bidding ends
+        if the high bid stands" means -- a raise puts everyone else back in.
+        """
+        seats = [int(seat) for seat in order]
+        if high_bidder not in seats:
+            return seats
+        start = seats.index(high_bidder)
+        return [seats[(start + offset) % len(seats)] for offset in range(1, len(seats))]
+
+    def _offer_next_bid(self, data: dict) -> None:
+        """Ask the next seat in the round, or settle the auction.
+
+        The one place the round advances, so a pass, a raise and the opening all
+        reach the same three lines. A seat that has left the game since the
+        round began is skipped rather than asked (CR 800.4a).
+        """
+        to_ask = [int(seat) for seat in data.get("to_ask") or ()]
+        while to_ask:
+            seat = to_ask[0]
+            if not (0 <= seat < len(self.players)) or self.players[seat].lost:
+                to_ask = to_ask[1:]
+                continue
+            self.arm_pending_choice(
+                "bid_life", seat, **{**data, "to_ask": to_ask}
+            )
+            return
+        self._settle_life_auction(data)
+
+    def confirm_bid_life(self, player_index: int, number: int | None = None) -> bool:
+        """Answer the auction with a bid, or with ``None`` to pass."""
+        return self.resolve_pending_choice("bid_life", player_index, number=number)
+
+    def _resolve_bid_life(self, choice: PendingChoice, number) -> bool:
+        """Record one seat's answer and move the round on.
+
+        ``None`` is a pass -- the printed "**may**". Anything else has to *top*
+        the high bid, and a number that does not is a **rejection** rather than
+        a clamp, for ``_resolve_number_choice``'s reason one prompt over: the
+        offer names what a legal answer is, and repairing one silently would let
+        a client bid 2 against a standing 5 and be told it worked.
+
+        No ceiling. The card prints none, and CR 118.3's "a player can't pay a
+        cost without the resources" does not apply -- the winner **loses** life
+        rather than paying it, so bidding more than a life total is legal and
+        simply fatal. The prompt offers the survivable bids; the rule is here.
+        """
+        data = dict(choice.data)
+        seat = choice.player_index
+        high_bid = int(data.get("high_bid", 0))
+        player = self.players[seat]
+        if number is None:
+            self.log.append(f"{data.get('card_name')}: {player.name} passes")
+            data["to_ask"] = [
+                int(other) for other in (data.get("to_ask") or ()) if int(other) != seat
+            ]
+        else:
+            try:
+                value = int(number)
+            except (TypeError, ValueError):
+                return False
+            if value <= high_bid:
+                return False
+            data["high_bid"] = value
+            data["high_bidder"] = seat
+            data["to_ask"] = self._bidders_after(data.get("order") or (), seat)
+            self.log.append(
+                f"{data.get('card_name')}: {player.name} bids {value} life"
+            )
+        self.discard_pending_choice(choice)
+        self._offer_next_bid(data)
+        return True
+
+    def _default_bid_life(self, choice: PendingChoice) -> bool:
+        """A seat nobody asks **passes**.
+
+        "May" makes declining a real answer, and it is the only one a default
+        can take honestly here: what a creature is worth in life is a valuation,
+        and an automatic bid is a seat choosing to lose life -- at a high enough
+        standing bid, choosing to lose the game -- for a judgement nobody made.
+        The same reading ``_default_draw_up_to`` states from the other side: a
+        default never picks the answer that loses the game.
+        """
+        return self._resolve_bid_life(choice, None)
+
+    def _settle_life_auction(self, data: dict) -> None:
+        """The last printed sentence: the high bidder pays and takes it.
+
+        Both halves happen here rather than in the handler, because until the
+        last offer is answered nobody knows which seat either applies to.
+
+        The life is **lost**, not paid (CR 118.3b's payment is the other thing),
+        so it goes through the ordinary subtraction every other loss in this
+        engine makes and the state-based check that follows the resolution can
+        end the game on it.
+
+        The control change is a CR 613 layer-2 contribution with no duration --
+        the printed "(This effect lasts indefinitely.)" is CR 611.2a's default
+        said out loud -- so nothing ever ends it and there is nothing to put
+        back. A permanent that left while the bidding ran is simply gone
+        (CR 400.7): the bid is still owed, which is the honest reading of a
+        sentence whose two halves are joined by "and".
+        """
+        from ...control import change_control
+
+        card_name = str(data.get("card_name") or "")
+        winner_index = int(data.get("high_bidder", 0))
+        amount = int(data.get("high_bid", 0))
+        winner = self.players[winner_index]
+        if amount:
+            before = winner.life
+            winner.life -= amount
+            self.log.append(
+                f"{card_name}: {winner.name} loses {amount} life "
+                f"({before} -> {winner.life})"
+            )
+        permanent = self.permanent_by_id(int(data.get("permanent_id", -1)))
+        if permanent is None:
+            self.log.append(f"{card_name}: the creature is no longer there")
+            return
+        if self.cant_gain_control(permanent, winner):
+            self.log.append(
+                f"{card_name}: {permanent.card.name} can't change controllers"
+            )
+            return
+        change_control(permanent, winner_index, source=card_name)
+        self._sync_control()
+        self.log.append(
+            f"{card_name}: {winner.name} wins the bidding at {amount} and gains "
+            f"control of {permanent.card.name}"
+        )
+
     # -- "As this enters, choose an opponent [and a color]" -------------------
 
     def confirm_name_and_strip(self, player_index: int, card_name: str) -> bool:
@@ -7066,6 +7233,35 @@ register_choice(
     # answer ("create **that many** … tokens"), so the loop it is a step of has
     # to stop until the number exists. Shapeshifter's two armings sit at the end
     # of what they are part of, so suspending costs them nothing.
+    suspends=True,
+)
+
+register_choice(
+    "bid_life",
+    resolve=lambda game, choice, r: game._resolve_bid_life(choice, r.get("number")),
+    default=lambda game, choice: game._default_bid_life(choice),
+    action="bid_life_confirm",
+    # Passing is a second *answer*, not a way around the prompt -- the same
+    # shape a search's "fail to find" takes. It has to be an action of its own
+    # because the bid is a number and there is no number that means "no".
+    also_answers=("bid_life_pass",),
+    prompt_key="bid_life",
+    blocked_detail="answer the bidding before other actions",
+    # The spell is resolving and the board is mid-effect: whoever wins has not
+    # lost the life or taken the creature yet, so nobody should be acting on
+    # what they can see (CR 608.2).
+    blocks_every_seat=True,
+    # The offer is made in the open -- every seat can see what the standing bid
+    # is, which is the whole of what makes the next offer a decision.
+    spectator_visible=True,
+    # A non-interactive seat never queues it: the auction is one resolution and
+    # it has to finish, so the stated default (pass) is taken where the offer
+    # stands. Without this an AI or headless seat would hold the spell on the
+    # stack for the rest of the game.
+    default_at_arm=True,
+    # The two printed sentences behind the bidding -- the life loss and the
+    # control change -- are performed by the *last* answer, so no later step of
+    # this resolution may run before it (CR 608.2).
     suspends=True,
 )
 

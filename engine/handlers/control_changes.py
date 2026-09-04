@@ -684,3 +684,58 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
         f"{first.card.name} and {second.card.name}"
     )
     return True, "resolved"
+
+
+@effect_handler("bid_life_for_control")
+def bid_life_for_control(
+    game: "Game", instruction: "OracleInstruction",
+    context: "OracleExecutionContext",
+) -> tuple[bool, str]:
+    """"Each player may bid life for control of target creature." (Illicit
+    Auction.)
+
+    The target is re-checked exactly as the steals above re-check theirs
+    (CR 608.2b), through ``subject_matches`` with this resolution's seat and
+    source — so the set the picker offered and the set this accepts are one
+    function's answer.
+
+    What is new is the round-robin, and it is not run here: the offer is a
+    prompt, and a prompt is answered by a seat rather than by a handler.
+    ``begin_life_auction`` arms the first one and each answer arms the next,
+    which is what keeps one resolution open across every bid (CR 608.2,
+    CR 117.3b). This function therefore ends after arming, and the life loss
+    and the control change happen when the last offer is answered.
+
+    The ask order is ``_offered_seats``' — the one reader of "each player, in
+    turn order" (CR 101.4) — computed here because this is where the context
+    that answers it lives, and carried on the prompt so every round of the
+    auction walks the same list. A second definition of turn order inside the
+    auction would be a second opinion about who bids after whom.
+    """
+    from ..subject_filters import subject_matches
+    from .control_flow import _offered_seats
+
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no valid creature to bid for")
+        return True, "resolved"
+    order = _offered_seats(game, "each_player", context)
+    if not order:  # pragma: no cover - a game with no seats left
+        return True, "resolved"
+    game.begin_life_auction(
+        card_name=context.card.name,
+        permanent_id=target.permanent_id,
+        opening_bidder=observer,
+        starting_bid=int(instruction.payload.get("starting_bid", 0)),
+        order=order,
+    )
+    return True, "resolved"

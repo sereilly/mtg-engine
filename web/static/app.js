@@ -2436,6 +2436,16 @@ function getDrawUpToInfo(state = currentState) {
   return info;
 }
 
+// Illicit Auction: "each player may top the high bid". The seat that owes the
+// answer is the one the server named, so the prompt is filtered on that rather
+// than on whose turn it is -- the bidding goes round every seat.
+function getBidLifeInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.bid_life;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Shapeshifter: "choose a number between 0 and 7", as it enters and again at
 // each of its controller's upkeeps.
 function getNumberChoiceInfo(state = currentState) {
@@ -4852,6 +4862,61 @@ function renderDrawChoiceModals(state) {
       `Choose a card you own from outside the game to put into your hand ` +
       `(${n} available).`,
   });
+}
+
+// Illicit Auction: "Each player may bid life for control of target creature."
+// One button per bid this seat could survive, plus the pass the printed "may"
+// makes a real answer -- and the pass is always offered, even when there is no
+// bid the seat could live through, because declining is what the card asks.
+function applyBidLifePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "";
+  title.textContent = "Bid life";
+  body.textContent =
+    `${cardName}: the high bid is ${info.high_bid} life ` +
+    `(${info.high_bidder_name}). You have ${info.life} life.`;
+  const bids = (info.options || [])
+    .map(
+      (n) =>
+        `<button type="button" class="prompt-choice-btn" data-bid="${escapeHtml(String(n))}">` +
+        `Bid ${escapeHtml(String(n))} life</button>`
+    )
+    .join("");
+  steps.innerHTML =
+    `<div class="prompt-choice-column">${bids}` +
+    `<button type="button" class="prompt-choice-btn" data-bid-pass="1">Pass</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-bid]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "bid_life_confirm",
+        number: Number(btn.dataset.bid),
+      });
+    });
+  });
+  const passBtn = steps.querySelector("[data-bid-pass]");
+  if (passBtn) {
+    passBtn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "bid_life_pass" });
+    });
+  }
 }
 
 // Shapeshifter: "Choose a number between 0 and 7." The range is the card's, so
@@ -8352,6 +8417,12 @@ function renderActivationPrompt() {
   const drawUpToInfo = getDrawUpToInfo();
   if (drawUpToInfo) {
     applyDrawUpToPrompt(drawUpToInfo);
+    return;
+  }
+
+  const bidLifeInfo = getBidLifeInfo();
+  if (bidLifeInfo) {
+    applyBidLifePrompt(bidLifeInfo);
     return;
   }
 

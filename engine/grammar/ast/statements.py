@@ -83,6 +83,7 @@ from .board import (
     ExileUntilLeavesOrUntaps,
     PutSourceIntoZone,
     Attach,
+    BidLifeForControl,
     ExchangeControl,
     ExchangeGreatestManaValue,
     GainControl,
@@ -260,7 +261,7 @@ Effect = Union[
     AssignsNoCombatDamage,
     RemoveFromCombat, BecomeBlocked, ChooseBlocksForDefenders,
     ReassignBlockersBetweenAttackers,
-    ChangeText, GainControl, RawEffect,
+    ChangeText, GainControl, BidLifeForControl, RawEffect,
 ]
 # `CombatRestriction` was absent from this union for as long as it existed: it
 # was defined *after* `__all__` at the bottom of the pre-split `ast.py`, so the

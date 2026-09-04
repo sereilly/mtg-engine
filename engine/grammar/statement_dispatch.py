@@ -85,6 +85,7 @@ from .lowering import (
     _lower_for_each_short_of_this_way,
     _lower_choose_permanent,
     _lower_choose_permanents,
+    _lower_bid_life_for_control,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_prevent_damage,
@@ -363,6 +364,13 @@ def lower_statement(
         # printed inside an offer's branch, so it is not the ability's whole
         # effect and `dispatch_event` is already None there.
         return _lower_gain_control(statement, produced, event)
+
+    if isinstance(statement, ast.BidLifeForControl):
+        # Illicit Auction. Beside the control change above rather than inside
+        # it: what the two share is where the permanent ends up, and what
+        # differs is that this one has to run an auction first to find out
+        # whose it becomes.
+        return _lower_bid_life_for_control(statement)
 
     if isinstance(statement, ast.ModalNode):
         # Reached only when the head is a *step* of something larger — "Draw a

@@ -899,6 +899,33 @@ def _draw_up_to(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("bid_life")
+def _bid_life(ctx: PromptContext, choices: list) -> dict:
+    """Illicit Auction: what the standing bid is and what this seat may say.
+
+    The buttons stop at the seat's own life total, and the engine deliberately
+    does **not**: the card prints no ceiling and the winner *loses* the life
+    rather than paying it, so a bid above a life total is legal and lethal.
+    What the offer shows is every bid this seat could survive, which is the
+    range a client has any business proposing on its own.
+    """
+    choice = choices[0]
+    data = choice.data
+    high = int(data.get("high_bid", 0))
+    holder = int(data.get("high_bidder", 0))
+    life = ctx.game.players[choice.player_index].life
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data.get("card_name", ""),
+        "high_bid": high,
+        "high_bidder": holder,
+        "high_bidder_name": ctx.game.players[holder].name,
+        "minimum": high + 1,
+        "life": life,
+        "options": list(range(high + 1, life + 1)),
+    }
+
+
 @prompt_renderer("number_choice")
 def _number_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data
