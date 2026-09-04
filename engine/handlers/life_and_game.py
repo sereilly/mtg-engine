@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from ._common import (bound_permanent, count_from_payload, evaluate_count,
                       resolve_amount)
 from ..exiled_records import source_object
+from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
@@ -336,6 +337,18 @@ def exchange_life_totals(game: Game, instruction: OracleInstruction, context: Or
         )
         return True, "resolved"
     my_total, their_total = mine.life, theirs.life
+    # CR 119.7: a player who can't gain life "can't make an exchange such that
+    # the player's life total would become higher; in that case, the exchange
+    # won't happen". The whole exchange, not the gaining half — CR 701.12a makes
+    # it one action, so letting the losing side move alone would turn Mirror
+    # Universe into a one-way donation.
+    for player, wanted in ((mine, their_total), (theirs, my_total)):
+        if wanted > player.life and life_gain_banned(game, player):
+            game.log.append(
+                f"{card.name}: {player.name} can't gain life, so the life "
+                f"totals are not exchanged"
+            )
+            return True, "resolved"
     for player, wanted in ((mine, their_total), (theirs, my_total)):
         before = player.life
         if wanted > before:

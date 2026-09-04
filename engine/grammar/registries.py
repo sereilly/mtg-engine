@@ -41,6 +41,7 @@ from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
+from ..life_prohibitions import life_gain_ban_line
 from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
 from ..replacements import replacement_claims_line
@@ -272,6 +273,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # readers ask the implementer.
     if replacement_claims_line(line):
         return "replacements"
+
+    # engine/life_prohibitions.py — "Players can't gain life." (Forsaken
+    # Wastes, CR 119.7.) Not a replacement and deliberately not listed with
+    # them: the rule takes the event away rather than exchanging it, so
+    # `Game._gain_life` asks the module before it gathers CR 614's contenders.
+    # Nothing to lower either way, and the matcher asked here is the one that
+    # seam reads.
+    if life_gain_ban_line(line) is not None:
+        return "life_prohibitions"
 
     # engine/prevention.py — CR 615 shields. The same arrangement one layer
     # over: a permanent's *static* prevention applies from its own text at

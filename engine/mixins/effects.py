@@ -11,6 +11,7 @@ from ..auras import attached_subject_triggers
 from ..auras import aura_enchants
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import emit
+from ..life_prohibitions import life_gain_banned
 from ..land_play_allowance import (
     LandPlayAllowance, land_play_allowance_for, lands_cannot_be_played,
 )
@@ -1132,8 +1133,19 @@ class EffectsMixin:
         *after* the replacements and after the record, because CR 614 can change
         the number or take the gain away entirely: a life gain that was replaced
         never happened, and one whose amount was raised is that larger event.
+
+        A **prohibition** is asked first and separately (CR 119.7) — see
+        ``engine/life_prohibitions.py`` for why "Players can't gain life" is not
+        one of the replacements below.
         """
         if amount <= 0:
+            return
+        if life_gain_banned(self, target):
+            banned_source = f" from {source_name}" if source_name else ""
+            self.log.append(
+                f"{target.name} can't gain life{banned_source} "
+                f"({amount} not gained; life stays {target.life})"
+            )
             return
         consumed, payload = apply_replacements(
             self, "life_gain",

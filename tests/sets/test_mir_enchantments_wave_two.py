@@ -1855,3 +1855,219 @@ def test_w3g4_a_base_pt_rewrite_refuses_what_it_cannot_honour(line, fragment):
     assert compiled.parsed, compiled.parse_error
     assert not compiled.instructions
     assert fragment in (compiled.lowering_error or ""), compiled.lowering_error
+
+
+# --- W4G3: Forsaken Wastes and Grim Feast, the three unimplemented lines ---
+#
+# Both cards reported supported on one line each while a second (and, for the
+# Wastes, a third) printed sentence had nothing behind it. What went in:
+# `engine/life_prohibitions.py` (CR 119.7's ban, asked at the one life-gain
+# seam *before* CR 614's contenders), the object-class narrowing on
+# `self_becomes_target` plus the seat its announcement now freezes, and
+# `permanent_dies`' graveyard-owner key read both ways round with the dead
+# permanent's last-known toughness beside it.
+
+import pytest as _w4g3e_pytest  # noqa: E402
+
+from engine import Game as _w4g3e_Game, PlayerState as _w4g3e_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w4g3e_load,  # noqa: E402
+                                manifest_set_path as _w4g3e_path)
+from engine.models import CardDefinition as _w4g3e_Card  # noqa: E402
+from engine.models import Permanent as _w4g3e_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w4g3e_compile  # noqa: E402
+from engine.tokens import make_token_card as _w4g3e_token  # noqa: E402
+
+
+def _w4g3e_lea():
+    return {card.name: card for card in _w4g3e_load(_w4g3e_path("LEA"))}
+
+
+def _w4g3e_game(seat0=(), seat1=(), hands=(), libraries=8):
+    """A two-seat board with *seat0* / *seat1* already in play.
+
+    ``hands`` is ``(seat, card)`` pairs. Every seat gets a library so a draw
+    replacement has something to take, and no seat is interactive so a prompt
+    takes its default instead of waiting.
+    """
+    lea = _w4g3e_lea()
+    game = _w4g3e_Game(players=[
+        _w4g3e_PlayerState(name="P1", battlefield=list(seat0),
+                           library=[lea["Forest"]] * libraries),
+        _w4g3e_PlayerState(name="P2", battlefield=list(seat1),
+                           library=[lea["Forest"]] * libraries),
+    ])
+    for seat, card in hands:
+        game.players[seat].hand.append(card)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._recompute_continuous_effects()
+    return game
+
+
+def _w4g3e_bear(power=2, toughness=3, name="Test Bear"):
+    return _w4g3e_Card(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+# --- Forsaken Wastes -------------------------------------------------------
+
+def test_w4g3e_forsaken_wastes_compiles_all_three_of_its_lines(set_pool):
+    """The card reported supported on its upkeep line alone. Both of the other
+    two are now accounted for: the ban through the derived-static claim (a
+    rule this shape produces no instruction, so the support gate has to read
+    the table that carries it out), and the targeting trigger as a real
+    triggered ability with the printed narrowing as payload."""
+    program = _w4g3e_compile(set_pool("MIR")["Forsaken Wastes"])
+
+    assert program.supported, program.reason
+    assert any(
+        instruction.kind == "derived_static_rule"
+        and instruction.value == "life_prohibitions"
+        for instruction in program.instructions
+    ), "the ban is claimed by the table that enforces it"
+
+    conditions = {
+        trigger.condition.kind: trigger for trigger in program.triggered_abilities
+    }
+    assert set(conditions) == {"upkeep_each", "self_becomes_target"}
+    targeted = conditions["self_becomes_target"]
+    assert targeted.condition.payload == {"targeted_by": "a spell"}
+    assert targeted.instruction.payload == {
+        "amount": 5, "recipient": "event_subject_player",
+    }
+
+
+def test_w4g3e_the_wastes_locks_both_seats_including_its_own(set_pool):
+    """"Players", so the enchantment stops its controller too. A lock read off
+    the gaining player's own permanents would have been a one-sided card, which
+    is the narrowing this pool keeps producing."""
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Forsaken Wastes"])])
+
+    game._gain_life(game.players[0], 3, "a test")
+    game._gain_life(game.players[1], 4, "a test")
+
+    assert [p.life for p in game.players] == [20, 20]
+    assert [p.life_gained_this_turn for p in game.players] == [0, 0]
+
+
+def test_w4g3e_the_lock_reaches_a_spell_a_trigger_and_lifelink(set_pool):
+    """Three different gain paths, because a lock wired to one path is the bug.
+
+    They arrive at the seam from three directions - a resolving spell, a
+    triggered ability, and combat damage - and the reason one check covers all
+    three is that `Game._gain_life` is the only place a life total rises.
+    """
+    mir, lea = set_pool("MIR"), _w4g3e_lea()
+
+    def wastes():
+        return _w4g3e_Permanent(card=mir["Forsaken Wastes"])
+
+    # A resolving spell.
+    game = _w4g3e_game(seat0=[wastes()], hands=[(1, lea["Stream of Life"])])
+    game.cast_from_hand(1, "Stream of Life", target_player_index=1, x_value=4)
+    game.resolve_stack()
+    assert game.players[1].life == 20
+
+    # A triggered ability (Grim Feast's own gain, which is the pair below).
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=mir["Grim Feast"]), wastes()],
+        seat1=[_w4g3e_Permanent(card=_w4g3e_bear())],
+    )
+    game._permanent_to_graveyard(game.players[1], game.players[1].battlefield[0])
+    game.resolve_stack()
+    assert game.players[0].life == 20
+
+    # Combat damage with lifelink (CR 702.15b), whose gain is not a spell at
+    # all and is the path a lock wired to one resolution would have missed.
+    linker = _w4g3e_Card(
+        name="Test Linker", mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="Lifelink", colors=(), color_identity=(),
+        keywords=("Lifelink",), produced_mana=(),
+        raw={"name": "Test Linker", "type_line": "Creature - Bear",
+             "power": "3", "toughness": "3"},
+    )
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=linker), wastes()])
+    game._deal_damage_to_player(
+        game.players[1], 3, source=game.players[0].battlefield[0],
+    )
+    assert [p.life for p in game.players] == [20, 17]
+
+
+def test_w4g3e_the_lock_lifts_with_the_enchantment(set_pool):
+    """A continuous effect and not a stamp: nothing is written onto the player,
+    so the gain works again the moment the enchantment leaves."""
+    wastes = _w4g3e_Permanent(card=set_pool("MIR")["Forsaken Wastes"])
+    game = _w4g3e_game(seat0=[wastes])
+
+    game._gain_life(game.players[0], 3, "a test")
+    assert game.players[0].life == 20
+
+    game.remove_from_battlefield(wastes)
+    game._gain_life(game.players[0], 3, "a test")
+    assert game.players[0].life == 23
+
+
+@_w4g3e_pytest.mark.parametrize("caster,expected", [(0, [15, 20]), (1, [20, 15])])
+def test_w4g3e_targeting_the_wastes_costs_the_spells_controller_five(
+    set_pool, caster, expected,
+):
+    """"That spell's controller", which is the seat the *event* froze rather
+    than the enchantment's own controller - so pointing your own Disenchant at
+    your own Wastes costs you the five."""
+    lea = _w4g3e_lea()
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Forsaken Wastes"])],
+        hands=[(caster, lea["Disenchant"])],
+    )
+
+    game.cast_from_hand(caster, "Disenchant", target_player_index=0,
+                        target_permanent_index=0)
+    game.resolve_stack()
+
+    assert [p.life for p in game.players] == expected
+
+
+def test_w4g3e_an_ability_pointed_at_the_wastes_costs_nothing(set_pool):
+    """"...the target of **a spell**", so an activated ability is not it. The
+    narrowing is the whole difference between this card and Warden of the
+    Woods, and a narrowing nothing enforces is an ability that fires more often
+    than the card allows."""
+    pointer = _w4g3e_Card(
+        name="Test Pointer", mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="{T}: Destroy target enchantment.", colors=(),
+        color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Test Pointer", "type_line": "Artifact"},
+    )
+    pointer_perm = _w4g3e_Permanent(card=pointer)
+    pointer_perm.summoning_sick = False
+    game = _w4g3e_game(
+        seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Forsaken Wastes"])],
+        seat1=[pointer_perm],
+    )
+
+    game.activate_permanent_ability(1, "Test Pointer", target_player_index=0,
+                                    target_permanent_index=0)
+    game.resolve_stack()
+
+    assert [p.life for p in game.players] == [20, 20]
+    assert not game.players[0].battlefield, "the ability still destroyed it"
+
+
+def test_w4g3e_the_wastes_still_bleeds_each_player_on_their_upkeep(set_pool):
+    """The line that already worked, kept green beside the two that did not -
+    three sentences on one card is three chances for a round to break the one
+    it was not looking at."""
+    game = _w4g3e_game(seat0=[_w4g3e_Permanent(card=set_pool("MIR")["Forsaken Wastes"])])
+
+    game.start_turn(0)
+    game.resolve_stack()
+    assert [p.life for p in game.players] == [19, 20]
+
+    game.start_turn(1)
+    game.resolve_stack()
+    assert [p.life for p in game.players] == [19, 19]

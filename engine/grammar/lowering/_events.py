@@ -313,6 +313,16 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # moment) — so the fire site is still holding the seat when it executes
     # the instruction, which is the freeze.
     "land_tapped_for_mana",
+    # "Whenever this enchantment becomes the target of a spell, **that spell's
+    # controller** loses 5 life" (Forsaken Wastes). CR 603.2's event names the
+    # object that did the targeting and nothing on a board can recover its
+    # controller once it has resolved or been countered, so the seat exists only
+    # on the event `_announce_targeting` announces — which is what makes this a
+    # row here rather than a fall-back to the ability's own controller. Without
+    # it "that spell's controller" lowered to a bare recipient and the 5 life
+    # came off whoever a targetless resolution defaults to, which in a duel is
+    # the opponent whether they cast the spell or not.
+    "self_becomes_target",
     # "At the beginning of the upkeep of enchanted <noun>'s controller, …
     # **that player** …" (the punishment Auras: Cursed Land, Feedback,
     # Maddening Wind, Mind Whip, Wanderlust, Warp Artifact, Curse Artifact).
