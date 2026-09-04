@@ -542,3 +542,76 @@ def test_emberwilde_djinn_stays_put_when_the_offer_is_declined(set_pool):
 
     assert game.controller_index_of(djinn) == 0, game.log
     assert game.players[1].life == 20, game.log
+
+
+# --- W1G2: two supported cards that were playing the wrong game ---
+#
+# Neither was visible to any instrument. Both compile supported, carry no hollow
+# line and claim every printed sentence; the census, `--hollow-lines` and
+# `parse_coverage` all ask whether a line produced *something*, and these two
+# produced something wrong. Found by reading the compiled programs of this
+# group's family line by line and then giving each card a game.
+
+
+def test_forsaken_wastes_drains_the_player_whose_upkeep_it_is(set_pool):
+    """"At the beginning of each player's upkeep, **that player** loses 1 life."
+
+    The lowering had a branch for "that player" under an event about an
+    **object** (the dead creature's controller, Massacre Wurm) and none for an
+    event about a **player** — so the phrase fell through to the ordinary
+    chosen-target reading, which under a trigger nobody targeted lands on
+    ``context.target``. The Wastes drained the *opponent* on both upkeeps and
+    never its own controller: a strictly one-sided card, compiled clean.
+
+    The same table and the same frozen key the offer above it in that module
+    already read for the same printed word.
+    """
+    wastes = Permanent(card=set_pool("MIR")["Forsaken Wastes"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wastes], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.start_turn(0)
+    game.resolve_stack()
+    assert (game.players[0].life, game.players[1].life) == (19, 20), game.log
+
+    game.start_next_turn()
+    game.resolve_stack()
+    assert (game.players[0].life, game.players[1].life) == (19, 19), game.log
+
+
+def test_mangaras_blessing_gains_its_life_now_not_an_end_step_later(set_pool):
+    """"…you gain 2 life, **and** you return this card from your graveyard to
+    your hand **at the beginning of the next end step**."
+
+    A trailing delay attaches to the clause it follows: Magic prints a
+    whole-sentence delay as an *opener*. Read as governing the whole sentence,
+    the life arrived an end step late — on a card printed to be discarded, the
+    difference between surviving the turn and not.
+    """
+    blessing = set_pool("MIR")["Mangara's Blessing"]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[blessing], life=20),
+        PlayerState(name="P2", hand=[set_pool("MIR")["Stupor"]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+
+    assert game.cast_from_hand(1, "Stupor", target_player_index=0).supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    # The life is the trigger's own step; only the return waits for the end step.
+    assert game.players[0].life == 22, game.log
+    assert [c.name for c in game.players[0].hand] == [], game.log
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].hand] == ["Mangara's Blessing"], game.log
+    assert game.players[0].life == 22, game.log

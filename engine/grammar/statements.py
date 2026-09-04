@@ -147,6 +147,28 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
                 "a delayed sentence's X must say when it is counted"
             )
     statement = resolve_that_turn(statement) or statement
+    # "…you gain 2 life, **and** you return this card from your graveyard to
+    # your hand **at the beginning of the next end step**." (Mangara's
+    # Blessing.) A trailing delay attaches to the clause it follows, not to
+    # the whole sentence: Magic prints a whole-sentence delay as an *opener*
+    # ("At the beginning of …, do X"), which is what `_DELAYED_OPENERS`
+    # reads. So the steps in front of the last one stay where they are, and
+    # the Blessing gains its 2 life as the trigger resolves rather than an
+    # end step later — which on a card printed to be discarded is the
+    # difference between surviving the turn and not.
+    #
+    # Only a sequence built **inside one sentence** is split here, which is
+    # the only kind that reaches this point: sentences separated by a full
+    # stop are joined one layer up, by `_statements_from_sentences`, after
+    # each has already been through this function.
+    #
+    # Split **before** `fold_flip_stakes` below, and that order is the whole
+    # of its safety: that fold *creates* a sequence by pulling the sentence
+    # behind the delay into it (Goblin Kites), and a split run afterwards
+    # would leave the coin flip happening now and delay only the sacrifice.
+    leading: tuple = ()
+    if isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
+        leading, statement = statement.steps[:-1], statement.steps[-1]
     # "Flip a coin at the beginning of the next end step. **If you lose the
     # flip, sacrifice that creature.**" (Goblin Kites.) The sentence behind the
     # delay reads a value only the delayed effect produces, so it belongs inside
@@ -177,7 +199,10 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
         delayed = dataclasses.replace(statement, effect=_delay(statement.effect))
     else:
         delayed = _delay(statement)
-    return _accept_conjunct_after_delay(stream, delayed)
+    joined = _accept_conjunct_after_delay(stream, delayed)
+    # The steps the delay does not govern, back in front of it and in the
+    # order they were printed.
+    return ast.Sequence((*leading, joined)) if leading else joined
 
 
 def _accept_conjunct_after_delay(

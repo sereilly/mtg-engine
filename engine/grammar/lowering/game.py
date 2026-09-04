@@ -514,6 +514,21 @@ def _lower_lose_life(
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
         payload["recipient"] = "event_subject_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
+    # "**That player**" after an event that was about a **player** rather
+    # than an object: the seat whose upkeep, end step or draw it was, frozen
+    # by the fire site. This branch was missing, and the fall-through below
+    # is what it fell to — the ordinary chosen-target reading, which under a
+    # trigger nobody targeted lands on ``context.target``. Forsaken Wastes
+    # ("at the beginning of each player's upkeep, that player loses 1 life")
+    # therefore drained the *opponent* on both upkeeps and never its own
+    # controller: a strictly one-sided card, compiled clean.
+    #
+    # The same table and the same key the offer above it (line 108) already
+    # reads for the same printed word, which is what makes the miss visible
+    # in hindsight — one module, one phrase, two answers.
+    if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        payload["recipient"] = EVENT_SUBJECT_PLAYER
+        return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
         return (OracleInstruction("target_loses_life", "", payload),)
     # "Destroy target creature. Its controller loses 2 life." (Liliana, Death

@@ -190,6 +190,22 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded controller, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "event_subject_player":
+        # "That player" after an event about a **player**: whose upkeep, end
+        # step or draw the firing was, frozen into the trigger's context by
+        # the fire site (CR 603.10). The seat varies per firing — "each
+        # player's upkeep" is a different player every turn — so nothing on
+        # a board can answer it and the ability's own controller is the one
+        # seat it is certainly not.
+        #
+        # No recorded seat loses nobody life, for the reason the branch above
+        # gives: an effect aimed at a player nobody recorded is one that
+        # should not happen rather than one that happens to the caster.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "defending_player":
         # "… and **defending player** loses 2 life." (Keeper of Tresserhorn.)
         # CR 506.2's seat, read from the key the combat fire sites stamp rather
