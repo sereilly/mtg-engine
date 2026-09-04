@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**348 / 612 tracked rules covered (56%)** — 1931 tests, 0 unannotated.
+**350 / 612 tracked rules covered (57%)** — 1946 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -22,13 +22,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
 | [111. Tokens](#111-tokens) | 5/13 | 38% |
 | [112. Spells](#112-spells) | 0/4 | 0% |
-| [113. Abilities](#113-abilities) | 2/12 | 16% |
+| [113. Abilities](#113-abilities) | 3/12 | 25% |
 | [114. Emblems](#114-emblems) | 5/5 | 100% |
 | [115. Targets](#115-targets) | 8/10 | 80% |
 | [116. Special Actions](#116-special-actions) | 3/3 | 100% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 10/14 | 71% |
-| [119. Life](#119-life) | 3/10 | 30% |
+| [119. Life](#119-life) | 4/10 | 40% |
 | [120. Damage](#120-damage) | 5/10 | 50% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 4/9 | 44% |
@@ -114,7 +114,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 101. The Magic Golden Rules
 
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
-- [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(1 tests)*
+- [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
 - [ ] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ...
 - [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(2 tests)*
 
@@ -241,7 +241,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **113.1** An ability can be one of three things:
 - [ ] **113.2** Abilities can affect the objects they’re on. They can also affect other objects and/or players.
-- [ ] **113.3** There are four general categories of abilities:
+- [x] **113.3** There are four general categories of abilities: *(1 tests)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(6 tests, subrules bm)*
@@ -311,9 +311,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
 - [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
 - [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(9 tests, subrules b)*
-- [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(4 tests)*
+- [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(5 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
-- [ ] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the...
+- [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
 - [ ] **119.8** If an effect says that a player can’t lose life, that player can’t make an exchange such that the...
 - [x] **119.9** Some triggered abilities are written, “Whenever [a player] gains life, . . . .” Such abilities ar... *(3 tests)*
 - [ ] **119.10** Some replacement effects are written, “If [a player] would gain life, . . . .” Such abilities are...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(184 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(186 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(12 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -672,7 +672,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(27 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(28 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(31 tests, subrules ac)*
@@ -680,7 +680,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(16 tests, subrules bd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(21 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(28 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
@@ -852,7 +852,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(4 tests, subrules ab)*
 - [x] **701.9** Discard *(4 tests, subrules ac)*
-- [x] **701.12** Exchange *(6 tests, subrules ab)*
+- [x] **701.12** Exchange *(7 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(4 tests, subrules abd)*
 - [x] **701.17** Mill *(5 tests, subrules a)*
