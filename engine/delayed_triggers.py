@@ -134,6 +134,21 @@ DELAYED_EVENTS: dict[str, str] = {
     # turn, …" (Glyph of Life). Repeating: CR 603.7b's "unless it
     # has a stated duration", and "this turn" is that duration.
     "bound_permanent_dealt_damage": "the damage event's announcement",
+    # "Whenever target creature **deals** combat damage to a non-Wall creature
+    # this turn, destroy that non-Wall creature." (Acidic Dagger.) The mirror of
+    # the row above with the two ends of the event swapped: there the entry is
+    # bound to what *took* the damage and the noun phrase describes what dealt
+    # it, here the entry is bound to what *dealt* it and the phrase describes
+    # what took it.
+    #
+    # And it is the first event whose effect acts on the **agent** rather than
+    # on the object the entry is about, which is why the fire site stamps that
+    # creature's id: "that non-Wall creature" is the one damaged, and by the
+    # time the ability resolves the combat damage step has moved on.
+    #
+    # Announced from the same seam, and only for *combat* damage — a creature's
+    # ping ability is not what this card watches.
+    "bound_permanent_deals_combat_damage": "the damage event's announcement",
     # "At the beginning of your next main phase, …" (Mana Drain). Either main
     # phase of the controller's — the next one there is.
     "controllers_next_main_phase": "the main phase entry",
@@ -229,6 +244,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # place either happens, which is why the announcement is there.
     "source_regenerates": "the shield branch of engine/regeneration.py",
 }
+
+
+#: The trigger-context key a fire site stamps the event's **agent** under —
+#: the object at the other end of the event from the one the entry is bound to
+#: ("a non-Wall creature" in Acidic Dagger's "target creature deals combat
+#: damage to a non-Wall creature"). One constant, because the fire site writes
+#: it and the handler reads it, and two copies of a string is how they come
+#: apart.
+#:
+#: An agent used to be *matched* and never carried: `agent_filter` decides
+#: whether the entry answers and nothing could then act on the creature it
+#: answered about.
+DELAYED_AGENT_ID = "delayed_agent_permanent_id"
 
 
 #: How long an armed entry that has not fired survives. "This turn" wording

@@ -847,3 +847,141 @@ def test_basalt_golem_makes_no_wall_when_the_creature_is_already_gone(set_pool):
         game.resolve_stack()
 
     assert [p.card.name for p in game.players[1].battlefield] == ["Bystander"], game.log
+
+
+def _w2g1a_wall(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Wall",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1a_dagger(set_pool, blocker: CardDefinition | None):
+    """The Dagger and an attacker of its controller's, in the declare-blockers
+    step with the ability already activated on that attacker."""
+    dagger = Permanent(card=set_pool("MIR")["Acidic Dagger"])
+    dagger.summoning_sick = False
+    attacker = Permanent(card=_w2g1a_creature("Ogre", 3, 3))
+    attacker.summoning_sick = False
+    theirs = []
+    if blocker is not None:
+        blocking = Permanent(card=blocker)
+        blocking.summoning_sick = False
+        theirs.append(blocking)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[dagger, attacker]),
+        PlayerState(name="P2", battlefield=theirs),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [1])[0]
+    game.advance_combat_phase()
+    return game, dagger, attacker
+
+
+def test_acidic_dagger_destroys_what_its_target_damaged(set_pool):
+    """"Whenever target creature deals combat damage to a non-Wall creature this
+    turn, destroy **that non-Wall creature**."
+
+    The event has two objects and the sentence acts on the one the entry is
+    *not* bound to: the ability targets the creature that will deal the damage,
+    and the words name what it hit. An agent used to be matched and never
+    carried -- ``agent_filter`` decided whether the entry answered and nothing
+    could then act on the creature it answered about -- so the fire site stamps
+    the agent's id and the destroy reads it.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Acidic Dagger"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    damage_delay, leaves_delay = ability.instruction.payload["steps"]
+    assert damage_delay.payload["event"] == "bound_permanent_deals_combat_damage"
+    assert damage_delay.payload["instruction"].kind == "destroy_delayed_agent"
+    assert damage_delay.payload["agent_filter"]["exclude_subtypes"] == ["wall"]
+    assert leaves_delay.payload["event"] == "bound_permanent_leaves_battlefield"
+
+    game, _dagger, _attacker = _w2g1a_dagger(
+        set_pool, _w2g1a_creature("Bear", 2, 5)
+    )
+    game.activate_permanent_ability(
+        0, "Acidic Dagger", target_player_index=0, target_permanent_index=1
+    )
+    game.resolve_stack()
+    assert game.declare_blockers(1, {0: 1})[0]
+    game.resolve_stack()
+    for _ in range(3):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Bear"], game.log
+
+
+def test_acidic_dagger_spares_a_wall(set_pool):
+    """"…to a **non-Wall** creature". The narrowing is what stops the Dagger
+    killing the Wall that held its attacker, and it is read on both ends: as the
+    entry's agent filter, so a Wall never fires it, and again at resolution."""
+    game, _dagger, _attacker = _w2g1a_dagger(
+        set_pool, _w2g1a_wall("Stone Wall", 0, 6)
+    )
+    game.activate_permanent_ability(
+        0, "Acidic Dagger", target_player_index=0, target_permanent_index=1
+    )
+    game.resolve_stack()
+    assert game.declare_blockers(1, {0: 1})[0]
+    game.resolve_stack()
+    for _ in range(3):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == ["Stone Wall"], game.log
+    assert not game.players[1].graveyard
+
+
+def test_acidic_dagger_goes_when_the_creature_it_named_does(set_pool):
+    """"When **the targeted creature** leaves the battlefield this turn,
+    sacrifice this artifact."
+
+    The definite spelling of the same referent "that creature" carries: the
+    ability targeted once (CR 602.2b), so both of its delayed sentences are
+    about that one creature and reach the same binding.
+    """
+    game, dagger, attacker = _w2g1a_dagger(set_pool, None)
+    game.activate_permanent_ability(
+        0, "Acidic Dagger", target_player_index=0, target_permanent_index=1
+    )
+    game.resolve_stack()
+    assert [e.bound_permanent_id for e in game.delayed_triggers] == [
+        attacker.permanent_id, attacker.permanent_id
+    ], game.log
+
+    game.remove_from_battlefield(attacker)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].graveyard] == ["Acidic Dagger"], game.log
+
+
+def test_acidic_dagger_cannot_be_activated_once_blockers_are_declared(set_pool):
+    """"Activate only before blockers are declared."
+
+    One combat step later than the window Norritt prints, and its own predicate
+    for that one's stated reason: two spellings of "when is it too late" would
+    be two answers. The declaration is what closes it, not the step's arrival --
+    the Dagger is meant to be usable *in* the declare-blockers step, before the
+    defending player has committed.
+    """
+    game, _dagger, _attacker = _w2g1a_dagger(
+        set_pool, _w2g1a_creature("Bear", 2, 5)
+    )
+    assert game.declare_blockers(1, {0: 1})[0]
+    game.resolve_stack()
+
+    result = game.activate_permanent_ability(
+        0, "Acidic Dagger", target_player_index=0, target_permanent_index=1
+    )
+    assert "only before blockers are declared" in result.details, result

@@ -442,7 +442,7 @@ def _announce(game, event: dict, dealt: int) -> None:
     controller's seat.
     """
     from .events import emit
-    from .delayed_triggers import fire_delayed_triggers
+    from .delayed_triggers import DELAYED_AGENT_ID, fire_delayed_triggers
 
     recipient = event["recipient"]
     source = event.get("source")
@@ -531,6 +531,25 @@ def _announce(game, event: dict, dealt: int) -> None:
             agent=source if isinstance(source, Permanent) else None,
             trigger_context={"damage_dealt": dealt},
         )
+        # "Whenever target creature **deals** combat damage to a non-Wall
+        # creature this turn, destroy that non-Wall creature." (Acidic Dagger.)
+        # The same seam with the two ends of the event swapped, and *combat*
+        # damage only — the word is the card's, and a creature's ping ability
+        # deals damage that is not combat damage (CR 510.2).
+        #
+        # The agent's id rides along because this is the first delayed event
+        # whose effect acts on the agent rather than on the object the entry is
+        # about: by the time the ability resolves the damage step is over and
+        # nothing on a board says which creature took it.
+        if event.get("combat") and isinstance(source, Permanent):
+            fire_delayed_triggers(
+                game, "bound_permanent_deals_combat_damage",
+                subject=source, agent=recipient,
+                trigger_context={
+                    "damage_dealt": dealt,
+                    DELAYED_AGENT_ID: recipient.permanent_id,
+                },
+            )
 
 
 def _process_results(game, event: dict, dealt: int) -> int:

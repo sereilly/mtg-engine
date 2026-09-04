@@ -264,6 +264,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…destroy **that creature**" inside a delayed ability (War Barge):
     # the object the creating ability bound, by id, rather than a pick.
     "destroy_bound_permanent": "destruction",
+    # "…destroy **that non-Wall creature**" (Acidic Dagger): the same
+    # destroy at the other end of the event, on the creature the entry was
+    # bound to having damaged rather than on the entry's own object.
+    "destroy_delayed_agent": "destruction",
     # Its sacrifice twin (Phantasmal Mount). CR 701.21a, not CR 701.7 — a
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.

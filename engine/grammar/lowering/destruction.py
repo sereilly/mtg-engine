@@ -29,7 +29,8 @@ from ._common import (describe_independent_target_roles, _describe_several_targe
                       is_mana_value_x)
 from ._records import optional_cost_key
 from ._events import (_RECORDED_PERMANENTS, _EVENT_SUBJECT_PLAYERS,
-                      EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent,
+                      EVENT_SUBJECT_PLAYER, _DELAYED_AGENT_EVENTS,
+                      binds_block_pair, names_attached_permanent,
                       CHOSEN_PERMANENT, _BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -389,6 +390,20 @@ def _lower_destroy(
         # have theirs: routed through the targeted destroy the ability would ask
         # for a choice the card never offered, and then destroy whichever
         # permanent the resolution context happened to carry.
+        # "Whenever target creature deals combat damage to a non-Wall creature
+        # this turn, destroy **that non-Wall creature**." (Acidic Dagger.) The
+        # event has two objects and the words name the *other* one: the entry is
+        # bound to the creature that dealt the damage, and the phrase restates
+        # the one that took it. Read before the bound branch below, which would
+        # destroy the Dagger's own target — the creature its controller aimed
+        # the ability at, which is the opposite of what the card does.
+        if event in _DELAYED_AGENT_EVENTS:
+            agent_payload = _filter_payload(filt)
+            if node.no_regen:
+                agent_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_delayed_agent", "", agent_payload),
+            )
         if event in _BOUND_OBJECT_DELAYED_EVENTS:
             bound_payload = _filter_payload(filt)
             if node.no_regen:

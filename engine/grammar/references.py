@@ -823,5 +823,19 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
             "that",
             ast.ObjectFilter(card_types=("creature",), subtypes=(matched[0],)),
         )
+    # "destroy that **non-Wall** creature" (Acidic Dagger). The restated noun
+    # phrase again, with the negation the trigger's own phrase carried — the
+    # words describe the object that was bound rather than narrowing a fresh
+    # choice, exactly as the subtype above does. Read through the noun parser so
+    # every shape of phrase reaches one reader, and only where a card type ends
+    # it: "that" followed by anything the noun parser cannot finish is not this.
+    phrase = stream.mark()
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        described = None
+    if described is not None and described.card_types:
+        return ast.TargetSpec("that", described)
+    stream.reset(phrase)
     stream.reset(mark)
     return None

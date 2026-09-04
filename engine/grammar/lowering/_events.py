@@ -363,6 +363,22 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     "next_cleanup_step",
 })
 
+#: Delayed-trigger events whose fire site stamps the **agent** — the object at
+#: the other end of the event from the one the entry is bound to. "Whenever
+#: target creature deals combat damage to **a non-Wall creature** this turn,
+#: destroy **that non-Wall creature**" (Acidic Dagger): the entry is bound to
+#: the damager and the sentence acts on what it damaged.
+#:
+#: Its own table beside `_BOUND_OBJECT_DELAYED_EVENTS` rather than more entries
+#: in it, and for that table's own reason: the two answer different questions
+#: off different frozen keys, and reading one from the other's key is how a
+#: sentence destroys the creature its controller aimed the ability at instead
+#: of the creature it hit.
+_DELAYED_AGENT_EVENTS: frozenset[str] = frozenset({
+    "bound_permanent_deals_combat_damage",   # Acidic Dagger
+})
+
+
 #: The payload key the delayed machinery stamps that object's id under.
 BOUND_PERMANENT_ID = "bound_permanent_id"
 
