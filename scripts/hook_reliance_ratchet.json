@@ -1,29 +1,29 @@
 {
   "ceilings": {
     "2ED": {
-      "entries_per_100_supported_cards": 13.4,
-      "hooked_cards_pct_of_supported": 12.0,
-      "hooked_lines_pct_of_supported": 8.5
+      "entries_per_100_supported_cards": 13.0,
+      "hooked_cards_pct_of_supported": 11.6,
+      "hooked_lines_pct_of_supported": 8.2
     },
     "3ED": {
-      "entries_per_100_supported_cards": 10.8,
-      "hooked_cards_pct_of_supported": 9.8,
-      "hooked_lines_pct_of_supported": 7.2
+      "entries_per_100_supported_cards": 10.5,
+      "hooked_cards_pct_of_supported": 9.5,
+      "hooked_lines_pct_of_supported": 6.9
     },
     "4ED": {
-      "entries_per_100_supported_cards": 6.2,
-      "hooked_cards_pct_of_supported": 5.7,
-      "hooked_lines_pct_of_supported": 3.8
+      "entries_per_100_supported_cards": 6.0,
+      "hooked_cards_pct_of_supported": 5.4,
+      "hooked_lines_pct_of_supported": 3.7
     },
     "5ED": {
-      "entries_per_100_supported_cards": 3.0,
-      "hooked_cards_pct_of_supported": 2.8,
-      "hooked_lines_pct_of_supported": 1.7
+      "entries_per_100_supported_cards": 2.8,
+      "hooked_cards_pct_of_supported": 2.5,
+      "hooked_lines_pct_of_supported": 1.6
     },
     "<pool>": {
-      "entries_per_100_supported_cards": 3.6,
-      "hooked_cards_pct_of_supported": 3.3,
-      "hooked_lines_pct_of_supported": 2.0
+      "entries_per_100_supported_cards": 3.0,
+      "hooked_cards_pct_of_supported": 2.8,
+      "hooked_lines_pct_of_supported": 1.6
     },
     "ALL": {
       "entries_per_100_supported_cards": 0.0,
@@ -61,14 +61,14 @@
       "hooked_lines_pct_of_supported": 0.0
     },
     "LEA": {
-      "entries_per_100_supported_cards": 13.4,
-      "hooked_cards_pct_of_supported": 12.1,
-      "hooked_lines_pct_of_supported": 8.5
+      "entries_per_100_supported_cards": 13.1,
+      "hooked_cards_pct_of_supported": 11.7,
+      "hooked_lines_pct_of_supported": 8.2
     },
     "LEB": {
-      "entries_per_100_supported_cards": 13.4,
-      "hooked_cards_pct_of_supported": 12.0,
-      "hooked_lines_pct_of_supported": 8.5
+      "entries_per_100_supported_cards": 13.0,
+      "hooked_cards_pct_of_supported": 11.6,
+      "hooked_lines_pct_of_supported": 8.2
     },
     "LEG": {
       "entries_per_100_supported_cards": 0.6,
@@ -78,6 +78,11 @@
     "M21": {
       "entries_per_100_supported_cards": 0.0,
       "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
+    "MIR": {
+      "entries_per_100_supported_cards": 0.3,
+      "hooked_cards_pct_of_supported": 0.3,
       "hooked_lines_pct_of_supported": 0.0
     }
   }

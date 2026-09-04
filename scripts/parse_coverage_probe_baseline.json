@@ -14,12 +14,33 @@
   ]
  },
  {
+  "card": "Acidic Dagger",
+  "clause": "whenever target creature deals combat damage to a non-wall creature this turn, destroy that non-wall creature. when the targeted creature leaves the battlefield this turn, sacrifice this artifact",
+  "ignored": [
+   "targeted"
+  ]
+ },
+ {
   "card": "All Hallow's Eve",
   "clause": "if this card is exiled with a scream counter on it, remove a scream counter from it. if there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield",
   "ignored": [
    "card",
    "more",
    "all"
+  ]
+ },
+ {
+  "card": "Amber Prison",
+  "clause": "tap target artifact, creature, or land. that permanent doesn't untap during its controller's untap step for as long as this artifact remains tapped",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Amulet of Unmaking",
+  "clause": "exile target artifact, creature, or land",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -107,6 +128,20 @@
   ]
  },
  {
+  "card": "Blind Fury",
+  "clause": "all creatures lose trample until end of turn. if a creature would deal combat damage to a creature this turn, it deals double that damage to that creature instead",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Blinding Light",
+  "clause": "tap all nonwhite creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Blood of the Martyr",
   "clause": "until end of turn, if damage would be dealt to any creature, you may have that damage dealt to you instead",
   "ignored": [
@@ -155,6 +190,13 @@
   "clause": "search your graveyard and library for any number of red instant and/or sorcery cards, exile them, then shuffle. you may cast them this turn. add six {r}",
   "ignored": [
    "and/or"
+  ]
+ },
+ {
+  "card": "Cinder Cloud",
+  "clause": "destroy target creature. if a white creature dies this way, cinder cloud deals damage to that creature's controller equal to the creature's power",
+  "ignored": [
+   "cinder"
   ]
  },
  {
@@ -278,6 +320,13 @@
   ]
  },
  {
+  "card": "Early Harvest",
+  "clause": "target player untaps all basic lands they control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Eater of the Dead",
   "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
   "ignored": [
@@ -285,10 +334,24 @@
   ]
  },
  {
+  "card": "Ebony Charm",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Elder Druid",
   "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Energy Vortex",
+  "clause": "this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -376,6 +439,14 @@
   "clause": "destroy all plains",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Floodgate",
+  "clause": "it deals damage to each nonblue creature without flying equal to half the number of islands you control, rounded down",
+  "ignored": [
+   "each",
+   "down"
   ]
  },
  {
@@ -493,6 +564,20 @@
   ]
  },
  {
+  "card": "Hakim, Loreweaver",
+  "clause": "destroy all auras attached to hakim",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Harbinger of Night",
+  "clause": "put a -1/-1 counter on each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Hazezon Tamar",
   "clause": "exile all sand warriors",
   "ignored": [
@@ -577,6 +662,13 @@
   ]
  },
  {
+  "card": "Ivory Charm",
+  "clause": "all creatures get -2/-0 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Johan",
   "clause": "you may have johan gain \"johan can't attack\" until end of combat. if you do, attacking doesn't cause creatures you control to tap this combat if johan is untapped",
   "ignored": [
@@ -591,11 +683,26 @@
   ]
  },
  {
+  "card": "Jolt",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Joven's Ferrets",
   "clause": "tap all creatures that blocked this creature this turn. they don't untap during their controller's next untap step",
   "ignored": [
    "all",
    "creature"
+  ]
+ },
+ {
+  "card": "Kaervek's Hex",
+  "clause": "kaervek's hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature",
+  "ignored": [
+   "each",
+   "each"
   ]
  },
  {
@@ -632,6 +739,14 @@
   "clause": "target opponent loses 2 life for each creature card in their graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Malignant Growth",
+  "clause": "that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way",
+  "ignored": [
+   "additional",
+   "enchantment,"
   ]
  },
  {
@@ -798,6 +913,13 @@
   ]
  },
  {
+  "card": "Reality Ripple",
+  "clause": "target artifact, creature, or land phases out",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Remove Enchantments",
   "clause": "return to your hand all enchantments you both own and control, all auras you own attached to permanents you control, and all auras you own attached to attacking creatures your opponents control. then destroy all other enchantments you control, all other auras attached to permanents you control, and all other auras attached to attacking creatures your opponents control",
   "ignored": [
@@ -866,6 +988,13 @@
   ]
  },
  {
+  "card": "Savage Twister",
+  "clause": "savage twister deals x damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Scarab of the Unseen",
   "clause": "return all auras attached to target permanent you own to their owners' hands. draw a card at the beginning of the next turn's upkeep",
   "ignored": [
@@ -887,6 +1016,13 @@
   ]
  },
  {
+  "card": "Seeds of Innocence",
+  "clause": "destroy all artifacts. they can't be regenerated. the controller of each of those artifacts gains life equal to its mana value",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Sengir Autocrat",
   "clause": "exile all serf tokens",
   "ignored": [
@@ -898,6 +1034,13 @@
   "clause": "change this creature's base toughness to 1 plus the power of target creature blocking or blocked by this creature",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Serene Heart",
+  "clause": "destroy all auras",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -965,6 +1108,20 @@
   ]
  },
  {
+  "card": "Soul Echo",
+  "clause": "sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Soulshriek",
+  "clause": "target creature you control gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard. sacrifice that creature at the beginning of the next end step",
+  "ignored": [
+   "cards"
+  ]
+ },
+ {
   "card": "Spiny Starfish",
   "clause": "if this creature regenerated this turn, create a 0/1 blue starfish creature token for each time it regenerated this turn",
   "ignored": [
@@ -1016,6 +1173,13 @@
   ]
  },
  {
+  "card": "Subterranean Spirit",
+  "clause": "this creature deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Suffocation",
   "clause": "suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn",
   "ignored": [
@@ -1035,6 +1199,20 @@
   "clause": "you may draw two additional cards. if you do, choose two cards in your hand drawn this turn. for each of those cards, pay 4 life or put the card on top of your library",
   "ignored": [
    "additional"
+  ]
+ },
+ {
+  "card": "Taniwha",
+  "clause": "all lands you control phase out",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Telim'Tor",
+  "clause": "all attacking creatures with flanking get +1/+1 until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1067,6 +1245,28 @@
   ]
  },
  {
+  "card": "Tombstone Stairwell",
+  "clause": "destroy all tokens created with this enchantment. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tombstone Stairwell",
+  "clause": "if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard",
+  "ignored": [
+   "enchantment",
+   "card"
+  ]
+ },
+ {
+  "card": "Torrent of Lava",
+  "clause": "torrent of lava deals x damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Total War",
   "clause": "destroy all untapped non-wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn",
   "ignored": [
@@ -1088,10 +1288,26 @@
   ]
  },
  {
+  "card": "Tranquil Domain",
+  "clause": "destroy all non-aura enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tranquility",
   "clause": "destroy all enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Tropical Storm",
+  "clause": "tropical storm deals x damage to each creature with flying and 1 additional damage to each blue creature",
+  "ignored": [
+   "each",
+   "additional",
+   "each"
   ]
  },
  {
@@ -1151,6 +1367,13 @@
   ]
  },
  {
+  "card": "Ventifact Bottle",
+  "clause": "if this artifact has a charge counter on it, tap it and remove all charge counters from it. add {c} for each charge counter removed this way",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Vexing Arcanix",
   "clause": "target player chooses a card name, then reveals the top card of their library. if that card has the chosen name, that player puts it into their hand. otherwise, they put it into their graveyard and this artifact deals 2 damage to them",
   "ignored": [
@@ -1174,6 +1397,13 @@
  {
   "card": "Wall of Caltrops",
   "clause": "if at least one other wall creature is blocking that creature and no non-wall creatures are blocking that creature, this creature gains banding until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Wall of Resistance",
+  "clause": "if this creature was dealt damage this turn, put a +0/+1 counter on it",
   "ignored": [
    "creature"
   ]
@@ -1245,6 +1475,27 @@
  {
   "card": "Wrath of Marit Lage",
   "clause": "tap all red creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Zhalfirin Commander",
+  "clause": "target knight creature gets +1/+1 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Zirilan of the Claw",
+  "clause": "search your library for a dragon permanent card, put that card onto the battlefield, then shuffle. that dragon gains haste until end of turn. exile it at the beginning of the next end step",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Zombie Mob",
+  "clause": "exile all creature cards from your graveyard",
   "ignored": [
    "all"
   ]

@@ -11,17 +11,19 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
-Alliances (144), Fifth Edition (434) and Core Set 2021 (285), 1,869 unique
-cards, all classified as supported.
-**Fifteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Alliances (144), Mirage (335), Fifth Edition (434) and Core Set 2021 (285),
+2,181 unique cards, all classified as supported.
+**Sixteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
 smallest work set yet, 102 cards of which every single one was new. Homelands
 is the second set after FEM to bring nothing but new cards — 115 of 115, with
 zero overlap with the 1,610 already here, and Alliances is the **third**: 144
-of 144 new, sharing not one oracle_id with 5ED or M21. Which is why the per-set
-totals sum to far more than 1,869 — they are printings. Alliances is also the
+of 144 new, sharing not one oracle_id with 5ED or M21. **Mirage breaks that
+run** — 313 of its 335 are new and 22 were already here, which makes it the
+first set since 4ED whose insert position can move a card's origin. Which is why
+the per-set totals sum to far more than 2,181 — they are printings. Alliances is also the
 first set to reach 100% with **zero name-keyed hooks**, across all 144. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
@@ -36,9 +38,9 @@ load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
-67.6%, Homelands at 66.1%, Fifth Edition at 100% and Alliances at 43.1%, and
-all ten were promoted to `sets` once every card was, which is the role working
-as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1% and Mirage
+at 54.9%, and all eleven were promoted to `sets` once every card was, which is
+the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -48,12 +50,20 @@ fired on the first real entry. **Alliances paid it a third time, from inside a
 test's docstring**: a guard listing the pool's divided-target cards asserted
 equality against a list whose comment said "Alliances is still `measured`" —
 a fact about today's roles written as an invariant, so it failed at the
-promotion for the one reason that is not a finding. The next ingested set goes
-there first.
+promotion for the one reason that is not a finding. **Mirage paid it a fourth
+time, and most expensively**: its promotion rehearsal found 13 printed sentences
+on 11 cards that nothing implemented, six of them admitted into the support gate
+by a *single whitelist word*. Every one of those cards read 335/335 supported
+with zero hollow lines, because a card is supported when **any** of its lines
+is. `parse_coverage.py` is the only instrument that can see it and it gates on
+the shipped half alone — so the debt was invisible until the entry moved, which
+is precisely what the rehearsal is for. It took a fourth wave to clear. The next
+ingested set goes there first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
 went in at index 4, Legends at index 6, The Dark at index 7, Fallen Empires at
-index 8, Fourth Edition at index 9 and Fifth Edition at index 12, each *between*
+index 8, Fourth Edition at index 9, Fifth Edition at index 12 and Mirage at
+index 13 — the last of those pushing 5ED along to 14 — each *between*
 the sets it was printed between rather than being appended — `CardDefinition.original_printing` is the first entry in
 `printings`, so appending would have left the 19 cards Antiquities shares with
 Revised reading `3ed`, and Golgothian Sylex ("each nontoken permanent with a
@@ -62,14 +72,22 @@ one of them. `test_appending_a_set_never_changes_an_existing_original_printing`
 compares prefixes of the ordering, so inserting is legal and reordering what is
 already there is not.
 
-**That prefix guard is silent for a reprint set, so the order is also asserted
-directly.** It checks the *consequence* — no card's origin moves — and a set
+**That prefix guard is silent for a reprint set — and for an all-new one — so
+the order is also asserted directly.** It checks the *consequence* — no card's origin moves — and a set
 whose every card already has an earlier printing cannot become anyone's origin
 from any position. Verified at the 4ED promotion by appending it after M21: the
 whole suite stayed green with the set four places out of order.
 `test_manifest_roles.test_the_shipped_sets_are_in_printing_order` compares the
 `released` dates the entries already carry, which is the invariant itself
 rather than a second list to maintain.
+
+**Mirage is where that silence acquired a named card.** Rehearsed at the wrong
+end, the prefix guard stayed green while **Volcanic Geyser** — in MIR and M21
+and nowhere earlier — would have had its origin read `m21`. Appending a set
+moves no *existing* card's origin, which is exactly what the prefix comparison
+tests, so the failure is invisible to it by construction: what moves is the
+**new** set's own card. Rehearsing the wrong insert costs a minute and converts
+that from an assumption into an observation; do it at every promotion.
 
 **A measured set is nameable by the reporting scripts** — `--set <CODE>` works,
 and the label says "measured, not shipped" so its numbers can't be read as

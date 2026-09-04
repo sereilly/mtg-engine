@@ -11,6 +11,7 @@
     "Dwarven Trader",
     "Earth Elemental",
     "Elvish Ranger",
+    "Femeref Scouts",
     "Fire Elemental",
     "Garruk's Gorehorn",
     "Goblin Hero",
@@ -45,6 +46,7 @@
     "Tobias Andrion",
     "Tor Giant",
     "Torsten Von Ursus",
+    "Viashino Warrior",
     "Vodalian Soldiers",
     "Walking Corpse",
     "Water Elemental",
@@ -55,11 +57,29 @@
     "Azure Drake",
     "Bird Maiden",
     "Concordia Pegasus",
+    "Feral Shadow",
     "Flying Men",
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites",
     "Willow Faerie"
+  ],
+  [
+    "Blistering Barrier",
+    "Glacial Wall",
+    "Wall of Earth",
+    "Wall of Heat",
+    "Wall of Ice",
+    "Wall of Stone",
+    "Wall of Wood"
+  ],
+  [
+    "Abbey Gargoyles",
+    "Cerulean Wyvern",
+    "Hazerider Drake",
+    "Melesse Spirit",
+    "Sea Sprite",
+    "Windreaper Falcon"
   ],
   [
     "Benalish Hero",
@@ -76,14 +96,6 @@
     "Ramirez DePietro",
     "Sabretooth Tiger",
     "Stone-Throwing Devils"
-  ],
-  [
-    "Glacial Wall",
-    "Wall of Earth",
-    "Wall of Heat",
-    "Wall of Ice",
-    "Wall of Stone",
-    "Wall of Wood"
   ],
   [
     "Adventurers' Guildhouse",
@@ -128,6 +140,13 @@
     "Circle of Protection: White"
   ],
   [
+    "Crash of Rhinos",
+    "Iron Tusk Elephant",
+    "Moorish Cavalry",
+    "War Mammoth",
+    "Wild Elephant"
+  ],
+  [
     "Crystal Rod",
     "Iron Star",
     "Ivory Cup",
@@ -156,6 +175,12 @@
     "Onyx Talisman"
   ],
   [
+    "Death Speakers",
+    "Ihsan's Shade",
+    "Karoo Meerkat",
+    "Repentant Blacksmith"
+  ],
+  [
     "Deathlace",
     "Lifelace",
     "Purelace",
@@ -172,14 +197,19 @@
     "Holy Day"
   ],
   [
-    "Death Speakers",
-    "Ihsan's Shade",
-    "Repentant Blacksmith"
-  ],
-  [
     "Devouring Deep",
     "Pale Bears",
     "Segovian Leviathan"
+  ],
+  [
+    "Drowned",
+    "Restless Dead",
+    "Walking Dead"
+  ],
+  [
+    "Fetid Horror",
+    "Frozen Shade",
+    "Hoar Shade"
   ],
   [
     "Granite Gargoyle",
@@ -195,10 +225,6 @@
     "Spirit Shield",
     "Tawnos's Weaponry",
     "Zelyon Sword"
-  ],
-  [
-    "Abbey Gargoyles",
-    "Sea Sprite"
   ],
   [
     "Adarkar Sentinel",
@@ -227,6 +253,10 @@
   [
     "Bad Moon",
     "Crusade"
+  ],
+  [
+    "Bay Falcon",
+    "Zephyr Falcon"
   ],
   [
     "Black Knight",
@@ -273,12 +303,24 @@
     "Sea Serpent"
   ],
   [
-    "Drowned",
-    "Walking Dead"
+    "Dwarven Nomad",
+    "Dwarven Warriors"
+  ],
+  [
+    "Ekundu Griffin",
+    "Thunder Spirit"
+  ],
+  [
+    "El-Hajj\u00e2j",
+    "Zebra Unicorn"
   ],
   [
     "Essence Flare",
     "Unstable Mutation"
+  ],
+  [
+    "Femeref Healer",
+    "Samite Healer"
   ],
   [
     "Flame Spirit",
@@ -293,16 +335,16 @@
     "Snow-Covered Forest"
   ],
   [
-    "Frozen Shade",
-    "Hoar Shade"
-  ],
-  [
     "Fyndhorn Elves",
     "Llanowar Elves"
   ],
   [
     "Giant Growth",
     "Titanic Growth"
+  ],
+  [
+    "Giant Mantis",
+    "Giant Spider"
   ],
   [
     "Goblin Mutant",
@@ -329,8 +371,16 @@
     "Kaysa"
   ],
   [
+    "Johtull Wurm",
+    "Jungle Wurm"
+  ],
+  [
     "Juniper Order Druid",
     "Ley Druid"
+  ],
+  [
+    "Juz\u00e1m Djinn",
+    "Nettletooth Djinn"
   ],
   [
     "Kjeldoran Phalanx",
@@ -345,12 +395,24 @@
     "Order of the Ebon Hand"
   ],
   [
-    "Moorish Cavalry",
-    "War Mammoth"
+    "Krovikan Fetish",
+    "Ritual of Steel"
+  ],
+  [
+    "Mesa Falcon",
+    "Pearl Dragon"
+  ],
+  [
+    "Mesa Pegasus",
+    "Teremko Griffin"
   ],
   [
     "Mountain",
     "Snow-Covered Mountain"
+  ],
+  [
+    "Noble Elephant",
+    "War Elephant"
   ],
   [
     "Orcish Artillery",
@@ -379,6 +441,10 @@
   [
     "Resurrection",
     "Rise Again"
+  ],
+  [
+    "Rock Basilisk",
+    "Thicket Basilisk"
   ],
   [
     "Snow-Covered Swamp",
