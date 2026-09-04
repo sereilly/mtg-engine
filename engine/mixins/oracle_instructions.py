@@ -230,6 +230,7 @@ class OracleInstructionsMixin:
 
     def _apply_spell_cast_any_triggers(
         self, caster_index: int, card: CardDefinition, cast_from_zone: str = "hand",
+        item=None,
     ) -> None:
         """Fire "whenever a player casts a [color] spell" triggers on any
         player's battlefield (the Rod/Cup/Sphere cycle).
@@ -265,10 +266,23 @@ class OracleInstructionsMixin:
         # filter asks it while deciding whether the trigger fires, the effect
         # asks the *frozen* context while resolving — and the second is the one
         # a per-seat key has to survive into.
+        # …and what the spell pointed at (CR 601.2c), for a trigger that
+        # watches for one aimed at its own controller ("a spell that targets you
+        # or a creature you control" — Reparations). Frozen here because here is
+        # where it is knowable: the targets are settled as the object goes on
+        # the stack, and by resolution the spell may have been countered or its
+        # target may have left. Every cast announces them; only a trigger that
+        # narrows on them reads them.
+        targeted_seats, targeted_ids = ((), ())
+        if item is not None:
+            from ..targeting import spell_targets
+
+            targeted_seats, targeted_ids = spell_targets(self, item)
         emit(
             self, "opponent_casts_spell", subject=card, caster_index=caster_index,
             cast_from_zone=cast_from_zone, cast_card=card,
             event_subject_player=caster_index,
+            targeted_seats=targeted_seats, targeted_permanent_ids=targeted_ids,
         )
 
     def _apply_self_resolved_hook(

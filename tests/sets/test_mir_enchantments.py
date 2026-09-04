@@ -1248,3 +1248,95 @@ def test_barbed_foliage_ignores_an_attack_aimed_at_somebody_else(set_pool):
 
     assert attacker.damage_marked == 0, game.log
     assert game._has_keyword(attacker, "flanking") is False  # it never had it
+
+
+def _w2g1_reparations(set_pool, catalog_by_name, spell: str, mine_extra=()):
+    """Reparations on seat 1's battlefield, with *spell* in seat 0's hand.
+
+    The spell comes from the shipped catalog and the enchantment from MIR,
+    which is still ``measured`` -- ``catalog_by_name`` is the shipped pool and
+    does not carry it.
+    """
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[_w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))],
+            hand=[catalog_by_name[spell]],
+        ),
+        PlayerState(
+            name="P2",
+            battlefield=[Permanent(card=set_pool("MIR")["Reparations"]), *mine_extra],
+            library=[_w2g1_creature("Top", 1, 1) for _ in range(5)],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game
+
+
+def test_reparations_narrows_on_what_the_spell_targets(set_pool):
+    """"Whenever an opponent casts a spell **that targets you or a creature you
+    control**."
+
+    The bare ``opponent_casts_spell`` row is a strict prefix of this condition
+    and claimed it, leaving the clause unread -- an enchantment that drew a card
+    off every spell an opponent cast. The narrowing is not about the spell at
+    all, so it rides as a marker the cast filter reads against what the
+    announcement froze (CR 601.2c settles a spell's targets as it goes on the
+    stack, and by resolution the spell may have been countered).
+    """
+    program = compile_card_oracle(set_pool("MIR")["Reparations"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert "targets_you_or_your_creature" in trig.condition.payload
+    assert trig.condition.raw_text.endswith("you or a creature you control")
+
+
+@pytest.mark.parametrize(
+    "spell, kwargs, mine_extra, fires",
+    [
+        ("Lightning Bolt", {"target_player_index": 1}, 0, True),
+        ("Lightning Bolt", {"target_player_index": 0, "target_permanent_index": 0}, 0, False),
+        ("Lightning Bolt", {"target_player_index": 1, "target_permanent_index": 1}, 1, True),
+        ("Wrath of God", {}, 0, False),
+    ],
+    ids=["my face", "their own creature", "my creature", "targets nothing"],
+)
+def test_reparations_fires_only_on_a_spell_aimed_at_its_controller(
+    set_pool, catalog_by_name, spell, kwargs, mine_extra, fires
+):
+    """The four readings the clause distinguishes, in a game.
+
+    "You" is the trigger's own controller (CR 109.5), which is what keeps the
+    enchantment silent while its opponents shoot at each other -- and a spell
+    that targets nothing at all fires it never. The middle case is the one the
+    unread clause got wrong: ``target_player_index`` beside a permanent index is
+    a *battlefield* rather than a target, so a filter that read the field would
+    have drawn off every removal spell pointed at anybody.
+    """
+    extra = [
+        _w2g1_nosick(Permanent(card=_w2g1_creature("Bear", 2, 2)))
+        for _ in range(mine_extra)
+    ]
+    game = _w2g1_reparations(set_pool, catalog_by_name, spell, mine_extra=extra)
+
+    game.queue_from_hand(0, spell, **kwargs)
+    game.resolve_stack()
+
+    offered = [c for c in game.pending_choices if c.player_index == 1]
+    assert bool(offered) is fires, game.log
+
+
+def test_reparations_draws_when_its_controller_takes_the_offer(set_pool, catalog_by_name):
+    """"…you **may** draw a card" -- the offer goes to the enchantment's
+    controller, who is not the player whose turn it is."""
+    game = _w2g1_reparations(set_pool, catalog_by_name, "Lightning Bolt")
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.resolve_stack()
+    assert game.confirm_optional_pay(1, accept=True)
+
+    assert len(game.players[1].hand) == 1, game.log
+    assert len(game.players[1].library) == 4

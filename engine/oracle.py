@@ -764,6 +764,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # Before the bare row, which is its strict prefix.
     ("opponent_casts_spell",
      r"whenever an opponent casts a (?P<color_word>white|blue|black|red|green) spell"),
+    # "…a spell **that targets you or a creature you control**"
+    # (Reparations). A narrowing on the spell's *targets* rather than on the
+    # spell, so it is a marker group the cast filter reads against what the
+    # announcement froze. Above the bare row, which is its strict prefix and
+    # which claimed it: matched there the clause was left unread and the
+    # enchantment drew a card off every spell an opponent cast, which is the
+    # silent widening this table is ordered longest-first to prevent.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a spell that targets "
+     r"(?P<targets_you_or_your_creature>)you or a creature you control"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell

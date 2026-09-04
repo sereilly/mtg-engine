@@ -2384,6 +2384,71 @@ def _lone_permanent_target(game, item) -> int | None:
     return None if found is None else game.permanent_id_of(found)
 
 
+def spell_targets(game, item) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Every seat and every permanent a spell on the stack chose (CR 601.2c).
+
+    ``(seats, permanent_ids)``. :func:`single_spell_target`'s question without
+    the CR 115.9a count on it: that one answers "what is this spell's *only*
+    target", for a retarget that has to know there is just one, and refuses
+    everything it cannot be certain about. This one answers "what did it point
+    at at all", which is what a trigger watching for a spell aimed at its
+    controller asks (Reparations), and it is allowed to name several.
+
+    The two hazards are the ones that function documents, met the same way:
+
+    * ``target_player_index`` is a **battlefield** beside a permanent index, not
+      a target, so a seat is believed only when the card's compiled program says
+      the spell can target a player at all. Read the field regardless and
+      Reparations would draw off every removal spell pointed at anybody.
+    * a **divided** spell records each of its targets separately, so both kinds
+      are read out of that record rather than off the two scalar fields.
+
+    Permanent targets are taken by id from the same stamp
+    ``_announce_targeting`` reads, because a slot renumbers (CR 400.7) and the
+    ids are settled before any trigger is announced.
+    """
+    from .oracle import compile_card_oracle
+
+    card = getattr(item, "card", None)
+    if card is None or getattr(item, "ability_instruction", None) is not None:
+        return (), ()
+    seats: list[int] = []
+    permanents: list[int] = []
+    living = range(len(game.players))
+
+    divided = (getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS)
+    if divided:
+        for entry in divided:
+            seat, permanent_index, _share = divided_entry(entry)
+            if permanent_index is None:
+                if int(seat) in living and int(seat) not in seats:
+                    seats.append(int(seat))
+                continue
+            found = game.permanent_at(int(seat), permanent_index)
+            if found is not None and found.permanent_id not in permanents:
+                permanents.append(found.permanent_id)
+        return tuple(seats), tuple(permanents)
+
+    ids = getattr(item, "target_permanent_id", None)
+    for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+        if isinstance(permanent_id, int) and permanent_id not in permanents:
+            permanents.append(permanent_id)
+    if permanents:
+        return (), tuple(permanents)
+
+    seat = getattr(item, "target_player_index", None)
+    if seat is None or seat not in living:
+        return (), ()
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+    if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
+        return (), ()
+    if spec.get("land_filter"):
+        # Volcanic Eruption's "X target Mountains": the seat beside them is a
+        # battlefield, exactly as it is above.
+        return (), ()
+    return (int(seat),), ()
+
+
 def single_spell_target(game, item) -> dict | None:
     """What a spell on the stack chose as its **only** target (CR 115.9a /
     CR 115.9c), or None when it chose several, chose something this engine

@@ -1411,7 +1411,9 @@ class SpellCastingMixin:
             # casts of one sorcery are one entry there and two here. Backdraft's
             # "one of those sorcery spells" is a choice **between** them.
             record_cast(self, spell_item)
-            self._apply_spell_cast_any_triggers(caster_index, card, from_zone)
+            self._apply_spell_cast_any_triggers(
+                caster_index, card, from_zone, item=spell_item
+            )
             self._apply_cast_triggers(caster_index, card)
             # "An opponent chooses one —" (CR 700.2e): the other player chooses
             # "when the spell's controller normally would", which is CR 601.2b.

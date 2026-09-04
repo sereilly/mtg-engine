@@ -578,6 +578,26 @@ def _opponent_cast_filter(
         ]
         if len(matching) <= exempt:
             return False
+    # "…a spell **that targets you or a creature you control**"
+    # (Reparations). A narrowing on what the spell *pointed at*, which nothing
+    # on the board can answer once the spell has resolved — so it is read off
+    # what the cast announcement froze (CR 601.2c settles the targets as the
+    # object goes on the stack). "You" is the trigger's own controller
+    # (CR 109.5), which is what keeps the enchantment silent while its opponents
+    # shoot at each other.
+    if "targets_you_or_your_creature" in trig.condition.payload:
+        observer = game.players.index(_controller_of(game, permanent))
+        if observer not in (event.payload.get("targeted_seats") or ()):
+            mine = [
+                found
+                for permanent_id in event.payload.get("targeted_permanent_ids") or ()
+                for found in (game.permanent_by_id(permanent_id),)
+                if found is not None
+                and found.is_creature
+                and game.controls(observer, found)
+            ]
+            if not mine:
+                return False
     # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
     # the other two cast kinds use.
     return _cast_narrowing_admits(game, permanent, trig, card)
