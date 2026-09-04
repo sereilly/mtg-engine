@@ -21,6 +21,8 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ..phrases import is_pt_counter
+from ._common import _is_enchanted
 from ._records import primary_produced, produced_keys
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.
@@ -292,3 +294,63 @@ def _lower_steps(
         instructions += lowered
         previous = step
     return instructions
+
+# A **fusion** of two consecutive steps, which is this module's own subject
+# rather than the counter family's: `_lower_steps` above threads what each step
+# records forward and folds a step into the branch that wrote what it reads, and
+# this is the same question asked about a *pronoun* — "it" after a tap of the
+# enchanted creature names that creature and not the Aura. It left
+# `lowering/counters.py` when that module crossed the thousand-line guard again,
+# and the boundary is the one this function's own docstring already drew: it
+# cites `_lower_steps`' discipline, and the antecedent of a pronoun is a fact
+# about the sequence, not about what the second step happens to place.
+
+
+def _fused_tap_enchanted_then_counters(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Tap enchanted creature and put X sleep counters on it." (Venarian Gold.)
+
+    Fused because of the pronoun. The noun parser reads a bare "it" as the
+    ability's own source, which in this sentence is the *Aura* — so lowered
+    step by step the counters would land on the Aura while the card puts them
+    on the creature it tapped. The antecedent is the step in front of it, and
+    this is the one place that knows what that step was (the same discipline
+    ``_lower_steps`` states for "if you do"), so the pairing is made here:
+    after a tap of the enchanted creature, "it" is that creature.
+
+    Only the pronoun spelling is claimed. "…put three pupa counters on **this
+    Aura**" (Cocoon) names the source outright and lowers step by step to the
+    self placement, exactly as printed. Anything the attached placement cannot
+    honour — an "up to", a doubling rider, a cap, a count that is not a number
+    or X — returns to the generic path, whose refusals name what is missing.
+    """
+    if len(steps) != 2:
+        return None
+    tap, put = steps
+    if not isinstance(tap, ast.Tap) or not _is_enchanted(tap.subject):
+        return None
+    if not isinstance(put, ast.PutCounter):
+        return None
+    subject = put.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_source
+    ):
+        return None
+    if is_pt_counter(put.counter) or put.up_to or put.then_double or put.cap is not None:
+        return None
+    if isinstance(put.count, ast.Fixed):
+        count: object = put.count.value
+    elif isinstance(put.count, ast.Var):
+        count = "x"
+    else:
+        return None
+    return (
+        OracleInstruction("tap_enchanted_creature", "", {}),
+        OracleInstruction(
+            "add_named_counter_to_attached", "",
+            {"counter": put.counter, "count": count},
+        ),
+    )

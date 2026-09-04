@@ -228,7 +228,18 @@ def lower_statement(
         # at all if this were gated on `whole_effect`.
         return _lower_phase_out(statement, event, event_subject)
     if isinstance(statement, ast.PutCounter):
-        return _lower_put_counter(statement, dispatch_event, produced)
+        # The narrowing travels with the event for `_lower_destroy`'s reason,
+        # and so does the **unfiltered** event beside it: "put four fungus
+        # counters on **that creature**" (Mindbender Spores) asks whether the
+        # block trigger named one creature, which is a fact about the trigger
+        # and true of every clause under it — and that clause is the first of
+        # the trigger's *two* sentences, so it lowers under a `Sequence` and a
+        # `whole_effect` gate would show it no event at all. The filtered event
+        # still travels as its own argument, because the branches that pick a
+        # *dispatch* path by trigger kind read that one.
+        return _lower_put_counter(
+            statement, dispatch_event, produced, event_subject, event
+        )
     if isinstance(statement, ast.PlayerGetsCounters):
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
@@ -250,7 +261,9 @@ def lower_statement(
     # In the chain rather than the name-only table, all three: each acts on what
     # an earlier step recorded, and `produced` refuses when nothing did.
     if isinstance(statement, ast.GainAbilityText):
-        return _lower_gain_ability_text(statement, produced)
+        return _lower_gain_ability_text(
+            statement, produced, event, event_subject
+        )
     # "Untap any number of target creatures. Prevent all combat damage that
     # would be dealt to and dealt by **those creatures** this turn." (Energy
     # Arc.) The shield's recipients are the set the sentence in front of it

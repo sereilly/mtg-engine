@@ -1471,6 +1471,24 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
     in between is a new object when it returns (CR 400.7) and simply misses the
     grant; an empty record is a legal outcome rather than an error.
     """
+    if instruction.payload.get("on_block_pair"):
+        # "Whenever this creature blocks a creature, … the creature gains
+        # "<ability>"." (Mindbender Spores.) The creature the block trigger
+        # froze, read through the one function that knows how the two fire
+        # sites bind it — on the *blocks* half the stack item's target is the
+        # blocker itself, so the ordinary target resolution below would grant
+        # the abilities to the source.
+        from ._common import block_pair_permanents
+
+        granted = 0
+        for permanent in block_pair_permanents(game, context):
+            if not game.is_on_battlefield(permanent):
+                continue
+            _grant_ability_texts(game, permanent, instruction, context)
+            granted += 1
+        if not granted:
+            game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
         granted = 0

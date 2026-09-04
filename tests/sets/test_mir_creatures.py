@@ -2528,3 +2528,54 @@ def test_coral_fighters_does_nothing_against_an_empty_library(set_pool):
     game = _w2g1_coral_fighters(set_pool, [])
 
     assert not [c for c in game.pending_choices if c.kind == "scry"], game.log
+
+
+def test_mindbender_spores_counters_and_locks_what_it_blocked(set_pool):
+    """"…put four fungus counters on **that creature**. **The creature** gains
+    "<untap lock>" and "<upkeep removal>"."
+
+    Both halves name the creature the block trigger froze, and both would have
+    landed on the Spores: on the *blocks* half of the event the stack item's
+    target is the blocking creature itself -- the fire site puts it there so a
+    self-affecting trigger can find itself -- so a target-shaped resolution
+    grants the abilities to the source and reports success.
+
+    The counter word is open vocabulary (CR 122.1): nothing in the rules reacts
+    to a fungus counter, and what it means is what the two granted lines say
+    about it.
+    """
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    spores = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mindbender Spores"]))
+    game = _w2g1_combat([ogre], [spores])
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g1_resolve(game)
+
+    assert ogre.metadata.get("fungus_counters") == 4, game.log
+    assert spores.metadata.get("fungus_counters") is None
+    assert "fungus counter" in ogre.effective_card.oracle_text
+    assert "fungus counter" not in spores.effective_card.oracle_text.split("\n")[0]
+
+
+def test_mindbender_spores_keeps_it_tapped_for_four_of_its_turns(set_pool):
+    """The two granted lines together, which is the card: one counter comes off
+    each upkeep and the creature does not untap while any remain."""
+    ogre = _w2g1_nosick(Permanent(card=_w2g1_creature("Ogre", 3, 3)))
+    spores = _w2g1_nosick(Permanent(card=set_pool("MIR")["Mindbender Spores"]))
+    game = _w2g1_combat([ogre], [spores])
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0})
+    _w2g1_resolve(game)
+    for _ in range(3):
+        game.advance_combat_phase()
+
+    seen = []
+    for _ in range(10):
+        game.start_next_turn()
+        game.resolve_stack()
+        if game.active_player_index == 0:
+            seen.append((ogre.metadata.get("fungus_counters"), ogre.tapped))
+
+    assert seen[:5] == [(3, True), (2, True), (1, True), (0, True), (0, False)], game.log

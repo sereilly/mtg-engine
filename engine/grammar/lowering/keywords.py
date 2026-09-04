@@ -470,7 +470,10 @@ def _lower_gain_keyword(
 
 
 def _lower_gain_ability_text(
-    node: ast.GainAbilityText, produced: frozenset[str] = frozenset()
+    node: ast.GainAbilityText,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
 
@@ -581,6 +584,24 @@ def _lower_gain_ability_text(
         and node.subject.quantifier == "that"
         and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
     )
+    if bound and binds_block_pair(event, event_subject):
+        # "Whenever this creature blocks a creature, … **the creature** gains
+        # "<ability>" and "<ability>"." (Mindbender Spores.) The other half of
+        # the block, which the trigger froze — never a choice, so the recipient
+        # is neither a target nor a record this effect wrote.
+        #
+        # Read **before** the target-shaped reading below, and that order is the
+        # card: on the *blocks* half of the event the stack item's target is the
+        # blocking creature itself (the fire site puts it there so a
+        # self-affecting trigger can find itself), so the fall-through would
+        # have granted both abilities to the Spores and left the creature it
+        # blocked untouched — a card that reports supported and plays as its own
+        # opposite.
+        payload["on_block_pair"] = True
+        types = tuple(node.subject.filter.card_types)
+        if types:
+            payload["subject_types"] = types
+        return (OracleInstruction("grant_target_ability_text", "", payload),)
     if bound:
         # "Return target … creature card from your graveyard to the
         # battlefield. **That creature** gains "Cumulative upkeep {2}.""
