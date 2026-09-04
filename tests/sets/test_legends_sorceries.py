@@ -1625,8 +1625,9 @@ def test_psychic_purge_punishes_the_opponent_who_made_you_discard_it(
     set_pool, catalog_by_name
 ):
     """"When a spell or ability an opponent controls causes you to discard this
-    card, that player loses 5 life." (CR 113.6d: an ability that functions from
-    the hand.)
+    card, that player loses 5 life." (CR 113.6: a *sorcery* whose ability would
+    otherwise function only on the stack, and whose trigger condition can be met
+    only in a hand — not CR 113.6d, which is about a modified cost to cast.)
 
     Nothing announced it before this round — the condition parsed on neither
     front end, so the card was a 1-damage sorcery with a dead second line. The

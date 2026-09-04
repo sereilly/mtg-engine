@@ -2,7 +2,9 @@
 
 Three printed permissions that share one question — *what is on top of whose
 library, and who may see or play it?* — and each is a static ability of a
-permanent (CR 113.6d), derived from its text while it is on the battlefield:
+permanent (CR 113.6's *default*, not one of its lettered exceptions: an ability
+of a permanent functions while it is on the battlefield), derived from its text
+while it is there:
 
 * "Play with the top card of your library revealed." (Conspicuous Snoop.) The
   card is a *public* object (CR 400.2): visible to every player.

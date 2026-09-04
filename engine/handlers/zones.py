@@ -724,7 +724,9 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     else:
         game.put_card_into_graveyard(player, card)
         game.log.append(f"{player.name} discarded {card.name}")
-    # The discarded card's own trigger (CR 113.6d, Psychic Purge). This is the
+    # The discarded card's own trigger (CR 113.6, Psychic Purge — a sorcery
+    # whose ability would otherwise function only on the stack, and whose
+    # trigger condition can only be met in a hand). This is the
     # *second* place a card is discarded — `Game._discard_card` is the other —
     # and the two differ because this one already performed Library of Leng's
     # replacement itself, by offering the destination. So the announcement is

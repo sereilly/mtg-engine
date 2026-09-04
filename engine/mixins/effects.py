@@ -1030,7 +1030,7 @@ class EffectsMixin:
 
         "Whenever **you** discard a card, exile that card from your graveyard."
         (Necropotence.) Separate from ``_announce_discard_triggers`` beside it,
-        which is CR 113.6d's ability *of the discarded card* and asks a
+        which is CR 113.6's ability *of the discarded card* and asks a
         different question of a different object — this one walks the board.
 
         Both discard seams call it, and that is the whole point: a discard is
@@ -1071,7 +1071,13 @@ class EffectsMixin:
     def _announce_discard_triggers(
         self, player: PlayerState, card, cause_seat: int | None = None
     ) -> None:
-        """CR 113.6d: a triggered ability of the discarded card itself.
+        """CR 113.6: a triggered ability of the discarded card itself.
+
+        Psychic Purge is a *sorcery*, so CR 113.6's default would have its
+        abilities function only on the stack. This one is an exception no
+        lettered subrule names: the trigger condition can be met only while the
+        card is in a hand, so that is where it functions. Not CR 113.6d, which
+        is about an alternative or modified cost to cast the object.
 
         "When a spell or ability an opponent controls causes you to discard this
         card, that player loses 5 life." (Psychic Purge.) The ability functions

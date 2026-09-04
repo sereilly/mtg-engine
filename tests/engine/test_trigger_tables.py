@@ -251,7 +251,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # Legends' two, added at its promotion. Both are announced away from a call
     # site — the first from the record `named_counters.remove_counters` writes
     # (removal has four sites), the second from the discard seam, which is the
-    # only place a card's own from-hand trigger (CR 113.6d) is in view.
+    # only place a card's own from-hand trigger (CR 113.6) is in view.
     # Both printed voices, because the kind now has a pattern for each: the
     # active one Divine Intervention prints and the passive one Orcish Mine
     # does. One example would leave the second pattern unexercised by the

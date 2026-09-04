@@ -1132,7 +1132,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"when the last (?P<counter_kind>[a-z]+) counter is removed from this "
      r"(?:artifact|aura|creature|enchantment|permanent|land)"),
     # "When a spell or ability an opponent controls causes you to discard this
-    # card, …" (Psychic Purge.) CR 113.6d: an ability that functions from the
+    # card, …" (Psychic Purge.) CR 113.6: an ability that functions from the
     # hand. The one discard seam (`Game._discard_card`) is what announces it,
     # and CR 109.5's "an opponent" is read off the seat resolving the spell or
     # ability that caused the discard.
@@ -3834,7 +3834,8 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # "Play with the top card of your library revealed." / "…you may cast Goblin
     # spells from the top of your library." (Conspicuous Snoop, Radha.) Static
     # permissions read off the permanent's own text while it is in play
-    # (CR 113.6d), so like every table above they need no instruction.
+    # (CR 113.6's default for a permanent, not one of its exceptions), so like
+    # every table above they need no instruction.
     from .library_top import library_top_line
 
     if library_top_line(normalized):

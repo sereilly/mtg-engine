@@ -1129,7 +1129,8 @@ def test_demonic_embrace_from_hand_costs_no_extra(set_pool):
 
 def test_demonic_embrace_from_the_graveyard_pays_life_and_a_card(set_pool):
     """The permission is a static ability of the card while it sits in the zone
-    (CR 113.6d) — nothing grants it and nothing takes it away, so it is derived
+    (CR 113.6f — an ability modifying what zones the object may be cast from)
+    — nothing grants it and nothing takes it away, so it is derived
     from the text rather than stored on ``game.cast_permissions``."""
     from engine.auras import auras_attached_to
 

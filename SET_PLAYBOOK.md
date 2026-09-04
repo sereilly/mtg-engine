@@ -344,6 +344,24 @@ broken — but it is one name for two facts across two floor modules, and the
 duplicate-definition sweep cannot flag it because it was already true before the
 wave. A rename by whoever next touches either module.
 
+**Added at MIR's Phase 6: the testable-keys preamble is copied, and the copy is
+load-bearing.** Three places in `lowering/prevention.py` open with the same two
+lines — `described = _filter_payload(x)` then `if not described or
+set(described) - TESTABLE_SUBJECT_FILTER_KEYS: raise LoweringError(...)` — and
+the looser form of the same question (`_restrictions_beyond`, or an inline set
+difference) appears across **32** of the lowering modules in several spellings.
+It is not a duplicate *definition*, so the merge scans cannot see it, and every
+copy is correct today.
+
+What makes it a gap rather than a style note is the direction it fails in. The
+check is what stops a narrowing the matcher cannot test from being silently
+dropped, which is the same failure `TESTABLE_SUBJECT_FILTER_KEYS` exists to
+prevent — so a copy that drifts admits a card and then ignores half its noun
+phrase. W4G2 declined to fold it because at `prevention.py`'s size the helper
+costs more lines than it saves; that argument expires the moment that module is
+split. **Fold it into `_common` as part of the next `lowering/prevention.py`
+split**, which the size guard will force soon (see below).
+
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
 result, grown by four promotions — with derived `equivalent` named as the lever
@@ -401,7 +419,17 @@ instruments current.
    its own. A creature type or keyword the vocabulary has never heard of does
    not fail loudly later — it refuses to parse in a way that looks exactly
    like a grammar gap, and gets debugged as one.
-3. Clear anything above in Known gaps marked for Phase 0.
+3. **Read the size-guard headroom before briefing anyone**:
+   `python scripts/check_all.py --caps`. It fails nothing and is not a gate —
+   the point is that the *gate* only fires once a module is already over, and
+   by then the work that crossed the line is usually two groups' additions
+   summed at integration, where the seam has to be found with none of the work
+   in hand. Mirage crossed five caps that way across two waves, every one on
+   nobody's branch. A module a few lines from a cap is a module the next set
+   will breach on arrival: either split it now, while nothing is in flight and
+   the family boundary is the only question, or brief the group that owns that
+   area to expect the split as part of its round.
+4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
 
@@ -1465,7 +1493,9 @@ rule lives: an additional cost does not go on the pending-choice queue (CR
 CR 614 replacement (CR 119.7 makes such a replacement do nothing, so it must be
 asked *before* the contention set rather than inside it).
 
-*Nothing was drained from Known gaps.* Added: the `_per_recipient_count` name
-collision across `lowering/_amounts.py` and `lowering/_sweeps.py`, and the
-duplicated `described`/`_restrictions_beyond` preamble now in four places in
-`lowering/prevention.py` and in some shape across 16 lowering modules.
+*Nothing was drained from Known gaps.* One item added: the testable-keys
+preamble, copied three times inside `lowering/prevention.py` with the looser
+form across 32 lowering modules — invisible to the merge scans because it is not
+a duplicate *definition*, and load-bearing because a drifted copy drops a
+narrowing the matcher cannot test. (`_per_recipient_count` was already logged at
+wave 1, not here.)

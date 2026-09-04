@@ -108,3 +108,57 @@ def test_a_stale_report_fails_the_check(tmp_path, monkeypatch):
         report_path.read_text(encoding="utf-8") + "drift", encoding="utf-8"
     )
     assert module.main(["--check"]) == 1  # stale report fails
+
+# --- the size-guard headroom report -----------------------------------------
+#
+# `--caps` is advisory and fails nothing, which is exactly why its numbers need
+# holding down: a cap it reports against is a *second copy* of the number the
+# real guard enforces, and a second copy that nothing checks is the failure
+# class this repo keeps finding. So the caps are read back out of the guards
+# that own them rather than trusted.
+
+_GRAMMAR_CAP = re.compile(r"splitlines\(\)\) > (\d+)")
+_TEST_FILE_CAP = re.compile(r"limit = (\d[\d_]*)")
+
+
+def _declared_caps() -> dict[str, int]:
+    return {label: cap for label, cap, _root, _glob in check_all.SIZE_GUARDS}
+
+
+def test_the_headroom_report_uses_the_caps_the_guards_enforce():
+    """Both numbers, read out of the tests that own them.
+
+    A cap raised in one place and not the other would make the report cheerful
+    about a module the guard is about to fail on — advisory output that is
+    wrong is worse than none, because it is read *instead* of checking.
+    """
+    layering = (REPO / "tests" / "engine" / "test_grammar_layering.py").read_text(
+        encoding="utf-8"
+    )
+    convention = (REPO / "tests" / "engine" / "test_set_test_convention.py").read_text(
+        encoding="utf-8"
+    )
+
+    grammar_caps = {int(n) for n in _GRAMMAR_CAP.findall(layering)}
+    assert grammar_caps == {1000}, (
+        f"expected one grammar size cap in test_grammar_layering.py, found {grammar_caps}"
+    )
+    test_caps = {int(n.replace("_", "")) for n in _TEST_FILE_CAP.findall(convention)}
+    assert 2600 in test_caps, (
+        "test_set_test_convention.py no longer states a 2,600-line limit; "
+        f"found {test_caps}"
+    )
+
+    declared = _declared_caps()
+    assert declared["grammar modules"] == grammar_caps.pop()
+    assert declared["per-set test files"] == 2600
+
+
+def test_the_headroom_report_looks_where_the_guards_look():
+    """The globs, too — a report scanning a directory the guard does not (or
+    missing one it does) is the same drift wearing a different hat."""
+    roots = {label: (root, glob) for label, _cap, root, glob in check_all.SIZE_GUARDS}
+    assert roots["grammar modules"] == ("engine/grammar", "**/*.py")
+    assert roots["per-set test files"] == ("tests/sets", "test_*.py")
+    for _label, _cap, root, glob in check_all.SIZE_GUARDS:
+        assert list((REPO / root).glob(glob)), f"{root}/{glob} matches nothing"

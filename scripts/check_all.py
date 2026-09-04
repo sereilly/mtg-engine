@@ -11,6 +11,15 @@ ci.yml and fails if the two lists drift, so the YAML stays authoritative.
 ``--freshness`` additionally regenerates the trackers whose staleness the
 ``--check`` guards do not see and fails if that dirties the tree — off by
 default because a mid-round tree is legitimately dirty.
+
+``--caps`` reports how much room the size guards have left. It fails nothing:
+the guard in ``tests/engine/test_grammar_layering.py`` is what fails, and it
+fails only once a module is already over. The number worth knowing *before* a
+set starts is how many modules are one round away from that, because a cap
+crossed at integration is the expensive kind — it fires on nobody's branch,
+with two groups' additions summed, and the integrator has to find the seam with
+none of the work in hand. Mirage crossed five that way across two waves.
+Derived on every run, so it cannot go stale the way a written-down list would.
 """
 
 from __future__ import annotations
@@ -58,6 +67,41 @@ def _run(name: str, argv: list[str]) -> tuple[str, float, subprocess.CompletedPr
     return name, time.monotonic() - started, result
 
 
+#: How close to a cap counts as "one round away". Not tuned: it is roughly what
+#: a single group added to a single module in Mirage's waves, so a module inside
+#: it is one group's work from breaching.
+CAP_MARGIN = 30
+
+#: The size guards, as (label, cap, root, glob). A cap written here and in the
+#: guard is a second copy of one number, which is the failure class this repo
+#: hunts — so ``tests/engine/test_check_all.py`` reads both and fails if they
+#: disagree.
+SIZE_GUARDS: list[tuple[str, int, str, str]] = [
+    ("grammar modules", 1000, "engine/grammar", "**/*.py"),
+    ("per-set test files", 2600, "tests/sets", "test_*.py"),
+]
+
+
+def report_caps() -> None:
+    """Print every module within :data:`CAP_MARGIN` of its size guard."""
+    print()
+    print("Size-guard headroom (advisory — nothing here fails):")
+    for label, cap, root, pattern in SIZE_GUARDS:
+        base = REPO_ROOT / root
+        rows = []
+        for path in sorted(base.glob(pattern)):
+            count = len(path.read_text(encoding="utf-8").splitlines())
+            if count > cap - CAP_MARGIN:
+                rows.append((count, path.relative_to(REPO_ROOT).as_posix()))
+        rows.sort(reverse=True)
+        over = [r for r in rows if r[0] > cap]
+        print(f"  {label} (cap {cap:,}): {len(rows)} within {CAP_MARGIN}, "
+              f"{len(over)} already over")
+        for count, name in rows:
+            flag = "OVER" if count > cap else f"{cap - count:>4} left"
+            print(f"    {count:5,}  {flag}  {name}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -75,11 +119,23 @@ def build_parser() -> argparse.ArgumentParser:
             "on a tree you are about to commit or merge."
         ),
     )
+    parser.add_argument(
+        "--caps",
+        action="store_true",
+        help=(
+            "Also report which modules are within a round's work of a size "
+            "guard. Advisory: it fails nothing, and it exists so a set can be "
+            "briefed knowing where the next integration-time split will land."
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.caps:
+        report_caps()
 
     rows: list[tuple[str, float, subprocess.CompletedProcess]] = []
     for name, cmd in COMMANDS:

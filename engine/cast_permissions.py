@@ -149,7 +149,9 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
 #: A permission the card grants **itself**, rather than one an effect handed it.
 #: Every grant above is a `CastPermission` an effect put on `game.cast_permissions`
 #: and something later takes away; this one is a static ability of the card
-#: while it sits in the zone (CR 113.6d), so there is nothing to grant, nothing
+#: while it sits in the zone (CR 113.6f — an ability modifying what zones that
+#: particular object may be cast from functions everywhere; the additional cost
+#: riding it is CR 113.6d's half), so there is nothing to grant, nothing
 #: to expire, and no state at all — it is derived from the text on demand, the
 #: same shape `cast_restrictions.py` uses for a printed timing gate.
 _SELF_PERMISSION = re.compile(
