@@ -690,6 +690,24 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("library_end_confirm")
+def _action_library_end_confirm(session, req, seat_type):
+    # Ether Well: top or bottom. `to_bottom` is the field Dream Cache's answer
+    # already carries for the same question one zone over -- a second field
+    # meaning "which end of a library" would be a second answer to it.
+    pending = next(
+        (c for c in session.game.pending_choices_of("library_end_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no library end choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_library_end_choice(
+        req.seat, bool(req.to_bottom)
+    ):
+        raise HTTPException(status_code=400, detail="invalid library end choice")
+
+
 @action_handler("graveyard_pile_confirm")
 def _action_graveyard_pile_confirm(session, req, seat_type):
     # Ebony Charm: which graveyard "a single graveyard" means. The seat is sent

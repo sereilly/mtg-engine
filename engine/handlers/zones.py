@@ -3424,6 +3424,23 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
         return True, "resolved"
     owner_idx = game.owner_index_of(target_perm)
     owner = game.players[owner_idx] if owner_idx is not None else context.caster
+    # "If that creature is **red**, you may put it on the bottom of its owner's
+    # library **instead**." (Ether Well.) One move with two possible ends, so
+    # the colour is asked *before* anything moves and the prompt performs the
+    # move — putting it on top and then moving it would be two zone changes
+    # where the card describes one. The colour is read through layer 5
+    # (``effective_colors``), not off the printed card: a creature a Painter's
+    # Servant has made red is red (CR 613), and the printed line is not.
+    colors = tuple(instruction.payload.get("bottom_instead_colors") or ())
+    if colors and any(
+        color in target_perm.effective_colors for color in colors
+    ):
+        game.arm_library_end_choice(
+            game.players.index(context.caster), target_perm, owner_idx
+            if owner_idx is not None else game.players.index(context.caster),
+            context,
+        )
+        return True, "resolved"
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(

@@ -572,6 +572,15 @@ class PutOnLibraryTop:
     #: the lowering refuses the mismatch outright for that reason — but it can
     #: only refuse it if the parse kept both halves.
     to_owner: str = "owner"
+    #: "If that creature is **red**, you may put it on the bottom of its owner's
+    #: library **instead**." (Ether Well.) The colours the printed condition
+    #: names, and whether the swap is optional. Carried on this node rather than
+    #: read as a second sentence because "instead" makes it one move with two
+    #: possible ends — two statements would put the card on top and then move it
+    #: again, which is a second zone change nothing on the card describes and
+    #: which any "whenever a card is put on top" trigger would see twice.
+    bottom_instead_colors: tuple[str, ...] = ()
+    bottom_instead_optional: bool = False
 
 
 @dataclass(frozen=True)

@@ -4166,6 +4166,73 @@ class PendingChoicesMixin:
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
 
+    # -- Which end of a library a tuck puts its card on ----------------------
+
+    def arm_library_end_choice(
+        self, player_index: int, permanent, owner_index: int, context
+    ) -> None:
+        """Queue "top or bottom?" for a tuck whose card qualifies for the swap.
+
+        The **permanent** travels rather than the card, so the answer moves the
+        object this resolution resolved: two copies of one card in a library are
+        the same ``CardDefinition``, and a card is not addressable while a
+        permanent still is (CR 400.7).
+        """
+        self.arm_pending_choice(
+            "library_end_choice", player_index,
+            card_name=context.card.name,
+            moved_name=permanent.card.name,
+            owner_index=int(owner_index),
+            owner_name=self.players[int(owner_index)].name,
+            _permanent=permanent,
+            _context=context,
+        )
+
+    def confirm_library_end_choice(self, player_index: int, to_bottom) -> bool:
+        return self.resolve_pending_choice(
+            "library_end_choice", player_index, to_bottom=to_bottom
+        )
+
+    def _resolve_library_end_choice(self, choice: PendingChoice, to_bottom) -> bool:
+        """Move the permanent to the end the seat named.
+
+        The move happens **here** rather than before the prompt, because "put it
+        on the bottom **instead**" is one zone change with two possible ends: a
+        version that tucked on top and then moved the card would be two zone
+        changes, which is one more than the card describes and one more than any
+        watcher should see.
+        """
+        permanent = choice.data.get("_permanent")
+        if permanent is None or not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed. CR 608.2b: the effect does as
+            # much as it can, which here is nothing.
+            self.discard_pending_choice(choice)
+            return True
+        owner = self.players[int(choice.data["owner_index"])]
+        self.remove_from_battlefield(permanent)
+        self._remove_aura_effects(permanent)
+        position = "bottom" if to_bottom else "top"
+        self.put_card_into_library(
+            owner, permanent.card, position, from_battlefield=permanent
+        )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: "
+            f"{permanent.card.name} put on {position} of {owner.name}'s library"
+        )
+        return True
+
+    def _default_library_end_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **bottom**.
+
+        The offer costs its controller nothing and buries the card deeper, so
+        it is a gift under "take gifts, pay tolls, make no trades" — and it is
+        deterministic, which is what AI and headless play need. A seat that
+        should weigh the two ends needs a weight in ``engine/ai_valuation.py``,
+        not a branch here.
+        """
+        self._resolve_library_end_choice(choice, True)
+
     # -- Which graveyard "a single graveyard" means --------------------------
 
     def graveyard_piles_with_a_legal_card(self, payload: dict) -> list[int]:
@@ -6893,6 +6960,28 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "library_end_choice",
+    resolve=lambda game, choice, r: game._resolve_library_end_choice(
+        choice, bool(r.get("to_bottom"))
+    ),
+    default=lambda game, choice: game._default_library_end_choice(choice),
+    action="library_end_confirm",
+    prompt_key="library_end_choice",
+    blocked_detail="choose which end of the library before other actions",
+    # **Not** ``suspends``: the move *is* the answer and it is the last step of
+    # the sentence, so nothing behind it reads the record — which is the whole
+    # of what that field claims. ``blocked_detail`` is what makes the game wait
+    # (CR 608.2), and the permanent is still on the battlefield until the answer
+    # arrives, which is why no action may run in between.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Which end of a library a card went to is public (both ends of CR 401.1's
+    # ordered zone are announced), so a seatless viewer may see the question.
+    spectator_visible=True,
 )
 
 register_choice(

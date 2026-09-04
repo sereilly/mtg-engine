@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2500,6 +2500,16 @@ function getPlayerChoiceInfo(state = currentState) {
   return info;
 }
 
+// Ether Well: "If that creature is red, you may put it on the bottom of its
+// owner's library instead." The permanent is still on the battlefield while
+// this is owed - the move is what the answer performs.
+function getLibraryEndChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.library_end_choice;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Ebony Charm: "Exile up to three target cards from **a single graveyard**."
 // Which pile, asked before which cards - and only when more than one pile holds
 // a card the phrase names, because one candidate is not a decision.
@@ -3416,7 +3426,7 @@ function isAnyPromptActive(state = currentState) {
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
   if (getEntryExileInfo(state)) return true;
-  if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
+  if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -3448,7 +3458,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5007,6 +5017,25 @@ function applyPlayerChoicePrompt(info) {
     field: "chosen_seat",
     labelOf: (option) => option.name,
   });
+}
+
+function applyLibraryEndPrompt(info) {
+  // `index` is the field the shared button prompt reads for anything that is
+  // not a seat, and 0/1 is what `to_bottom` means on the wire - top first,
+  // because that is the end the card puts the creature on by default.
+  applyChoiceButtonPrompt(
+    {
+      ...info,
+      prompt: `Put ${info.moved_name} on which end of ${info.owner_name}'s library?`,
+      options: [{ index: 0, label: "Top" }, { index: 1, label: "Bottom" }],
+    },
+    {
+      title: "Choose an end of the library",
+      action: "library_end_confirm",
+      field: "to_bottom",
+      labelOf: (option) => option.label,
+    },
+  );
 }
 
 function applyGraveyardPilePrompt(info) {
@@ -8247,6 +8276,12 @@ function renderActivationPrompt() {
   const playerChoiceInfo = getPlayerChoiceInfo();
   if (playerChoiceInfo) {
     applyPlayerChoicePrompt(playerChoiceInfo);
+    return;
+  }
+
+  const libraryEndInfo = getLibraryEndChoiceInfo();
+  if (libraryEndInfo) {
+    applyLibraryEndPrompt(libraryEndInfo);
     return;
   }
 

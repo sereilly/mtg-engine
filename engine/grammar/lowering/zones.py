@@ -50,6 +50,14 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
         isinstance(node.target, ast.TargetSpec)
         and (node.target.filter.zone == "graveyard" or node.target.filter.is_card)
     ):
+        if node.bottom_instead_colors:
+            # The rider is read by the battlefield tuck alone; this handler
+            # moves several cards at once and has no one object to ask about.
+            # Refused rather than dropped, for the reason the branch that
+            # carries it gives.
+            raise LoweringError(
+                "the graveyard tuck reads no end swap", node=node
+            )
         return _lower_graveyard_cards_on_library_top(node)
     if not _is_target(node.target):
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
@@ -79,6 +87,17 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
         raise LoweringError(
             "the tuck cannot narrow by: " + ", ".join(sorted(leftover)), node=node
         )
+    # "If that creature is red, **you may put it on the bottom** of its owner's
+    # library instead." (Ether Well.) One move with two possible ends, so the
+    # rider is payload on the same instruction — and it is carried or the line
+    # refuses, because a consumed-and-dropped rider here is a card that never
+    # offers the choice it prints.
+    if node.bottom_instead_colors:
+        if not node.bottom_instead_optional:  # pragma: no cover - parse refuses
+            raise LoweringError(
+                "only an offered end swap is implemented", node=node
+            )
+        payload["bottom_instead_colors"] = list(node.bottom_instead_colors)
     return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 

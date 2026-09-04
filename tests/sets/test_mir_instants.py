@@ -1490,3 +1490,105 @@ def test_flash_declining_the_first_offer_puts_nothing_down(set_pool):
     assert [c.kind for c in game.pending_choices] == [], game.log
     assert [p.card.name for p in game.players[0].battlefield] == [], game.log
     assert [c.name for c in game.players[0].hand] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G4: one tuck with two possible ends ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_ether_well(set_pool, victim, interactive=True):
+    """Ether Well in seat 0's hand against *victim* on seat 1's battlefield."""
+    creature = Permanent(card=set_pool("MIR")[victim])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Ether Well"]], life=20),
+        PlayerState(
+            name="P2", battlefield=[creature],
+            library=[set_pool("MIR")["Wall of Corpses"]], life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    return game, creature
+
+
+def test_ether_well_is_supported(set_pool):
+    """The rider was the refusal, and dropping it would have been worse than
+    refusing: a production that consumed "you may put it on the bottom …
+    instead" without carrying it is a card that never offers the choice it
+    prints."""
+    program = compile_card_oracle(set_pool("MIR")["Ether Well"])
+    assert program.supported, program.reason
+    assert program.instructions[0].payload["bottom_instead_colors"] == ["R"]
+
+
+def test_ether_well_tucks_a_nonred_creature_with_no_question_asked(set_pool):
+    """The condition is a condition. A blue creature never reaches the offer,
+    so the spell resolves in one step and the card goes on top."""
+    game, creature = _w2g4_ether_well(set_pool, "Merfolk Raiders")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[1].battlefield == [], game.log
+    assert [c.name for c in game.players[1].library][:1] == [
+        "Merfolk Raiders"
+    ], game.log
+
+
+def test_ether_well_offers_the_bottom_for_a_red_creature(set_pool):
+    """"…you may put it on the bottom of its owner's library **instead**."
+
+    One move with two possible ends, which is why the prompt happens *before*
+    anything moves: tucking on top and then moving the card would be two zone
+    changes where the card describes one.
+    """
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["library_end_choice"]
+    assert game.players[1].battlefield == [creature], game.log
+
+    assert game.confirm_library_end_choice(0, True)
+    assert game.players[1].battlefield == [], game.log
+    assert [c.name for c in game.players[1].library][-1] == "Viashino Warrior"
+
+
+def test_ether_wells_offer_can_be_declined_for_the_printed_top(set_pool):
+    """The "may" is real: answering "top" is the card's own default, and the
+    creature goes where the first sentence says."""
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert game.confirm_library_end_choice(0, False)
+    assert [c.name for c in game.players[1].library][0] == "Viashino Warrior"
+
+
+def test_ether_well_reads_the_colour_off_layer_five(set_pool):
+    """CR 613: a creature's colour is what the layers say it is, not what its
+    card prints. A blue Merfolk that an effect has made red qualifies for the
+    swap, and reading the printed line instead would never offer it."""
+    game, creature = _w2g4_ether_well(set_pool, "Merfolk Raiders")
+    creature.metadata["color_override"] = ("R",)
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert "R" in creature.effective_colors, creature.metadata
+    assert [c.kind for c in game.pending_choices] == ["library_end_choice"], game.log
+
+
+def test_ether_wells_offer_defaults_to_the_bottom_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues the prompt: the resolution has to
+    finish, and the stated default is the bottom — the offer costs its
+    controller nothing and buries the card deeper."""
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior", interactive=False)
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [c.name for c in game.players[1].library][-1] == "Viashino Warrior"

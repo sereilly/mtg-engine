@@ -1165,6 +1165,24 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("library_end_choice")
+def _library_end_choice(ctx: PromptContext, choices: list) -> dict:
+    """Ether Well: "If that creature is red, you may put it on the bottom of
+    its owner's library instead."
+
+    The permanent is still on the battlefield while this is owed — the move is
+    what the answer performs — so the card being moved is named rather than
+    pointed at by a zone position that does not exist yet.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "moved_name": choice.data.get("moved_name", ""),
+        "owner_name": choice.data.get("owner_name", ""),
+    }
+
+
 @prompt_renderer("graveyard_pile_choice")
 def _graveyard_pile_choice(ctx: PromptContext, choices: list) -> dict:
     """Ebony Charm: "Exile up to three target cards **from a single
