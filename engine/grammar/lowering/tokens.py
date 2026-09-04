@@ -292,12 +292,23 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
         # than falling back to the caster — which would be the same card with
         # the wrong board counted, and silent.
         filt = node.per_each
-        per_recipient = filt.controller == "that_player"
+        # Two ways one printed clause names the distributed player: "for each
+        # untapped Forest **they control**" narrows by controller (Waiting in
+        # the Weeds), and "for each creature card in **their** graveyard" names
+        # a zone owner (Tombstone Stairwell). Same sentence shape, same seat,
+        # two fields — so both are read, and reading only the first would take
+        # the graveyard count on the caster's pile for every player.
+        owner_kind = filt.zone_owner.kind if filt.zone_owner is not None else None
+        per_recipient = filt.controller == "that_player" or owner_kind == "owner"
         if per_recipient and node.recipient_players is None:
             raise LoweringError(
                 "'they control' names no seat without a distributed subject",
                 node=node,
             )
+        # ``count_spec`` reads the zone owner off the filter and the evaluator
+        # reads the pile off the player it is handed — which is the recipient
+        # here — so the possessive needs no stripping, only the controller
+        # does.
         if not per_recipient and filt.controller not in (None, "you"):
             raise LoweringError(
                 f"a token count cannot be narrowed to the "

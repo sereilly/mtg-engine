@@ -1330,3 +1330,53 @@ def test_a_named_land_cannot_be_played_either(set_pool):
 
     assert not refused.supported
     assert "Null Chamber" in refused.details, refused.details
+
+
+# --- W2G5 (continued): the multiplier at its other printed position ---
+#
+# "When a round extends a fragment production, look for the other one first."
+# Waiting in the Weeds prints "…token **for each** untapped Forest they control"
+# with nothing after the token spec; Tombstone Stairwell prints "…token **named
+# Tombspawn** for each creature card in their graveyard", and the name parser
+# ran to the end of the line — so it swallowed the multiplier and called the
+# token "Tombspawn For Each Creature Card In Their Graveyard", one per player,
+# where the card makes one per creature card.
+#
+# Tombstone Stairwell does not collect this yet: its trigger line refuses one
+# layer up, on the intervening-if ("at the beginning of each upkeep, **if this
+# enchantment is on the battlefield**"), and `oracle_diff` reports no card moved.
+# What it buys is the production this branch added being right at *both* printed
+# positions rather than at the one the first card happened to use.
+
+from engine.grammar import compile_line as _w2g5_compile_line
+
+
+def test_a_token_name_does_not_swallow_the_multiplier():
+    """The name and the count are two clauses, and the name is read first. No
+    token Magic prints is named "… for each …", so stopping the run there costs
+    nothing — and leaving it unbounded costs the whole count."""
+    compiled = _w2g5_compile_line(
+        "Each player creates a 2/2 black Zombie creature token with haste named "
+        "Tombspawn for each creature card in their graveyard."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+    payload = compiled.instructions[0].payload
+
+    assert payload["name"] == "Tombspawn"
+    assert payload["count"]["per_recipient"] is True
+    assert payload["count"]["per_each"]["zone"] == "graveyard"
+
+
+def test_the_zone_possessive_names_the_recipient_too():
+    """One printed clause names the distributed player two ways: "they
+    **control**" narrows by controller and "**their** graveyard" names a zone
+    owner. Reading only the first would take the graveyard count on the
+    caster's pile for every player — the same number for everyone, and the
+    caster's."""
+    compiled = _w2g5_compile_line(
+        "Each player creates a 1/1 white Soldier creature token for each "
+        "creature card in their graveyard."
+    )
+    assert compiled.instructions, compiled.parse_error or compiled.lowering_error
+
+    assert compiled.instructions[0].payload["count"]["per_recipient"] is True
