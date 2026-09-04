@@ -365,3 +365,129 @@ def test_the_pronoun_rider_leaves_a_named_subject_alone():
     result = compile_line("Tap target creature. Put a +1/+1 counter on this creature.")
     kinds = [instruction.kind for instruction in result.instructions]
     assert kinds == ["tap_target_permanent", "add_counter_to_self"]
+
+
+def test_ersatz_gnomes_can_be_aimed(set_pool):
+    """"{T}: Target permanent becomes colorless until end of turn."
+
+    A supported card no player could use. The recolour lowering described its
+    targets only for the "one or more target creatures" spelling — the *single*
+    target got no description at all, so ``derive_activation_spec`` had no
+    evidence and the picker offered nothing. The handler reads neither
+    description: it resolves through ``resolve_target_permanents``, which asks
+    the resolution what was chosen, so the missing half was invisible to every
+    test that gave the ability a target by hand.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Ersatz Gnomes"])
+    recolour = next(
+        ability for ability in program.activated_abilities
+        if ability.instruction is not None
+        and ability.instruction.kind == "recolor_targets_until_eot"
+    )
+    assert derive_activation_spec(recolour) == {"kind": "permanent"}
+
+
+def test_soul_rend_actually_destroys_a_white_creature(set_pool):
+    """"Destroy target creature if it's white. A creature destroyed this way
+    can't be regenerated."
+
+    The card was *supported* and did nothing but draw its cantrip: the effect
+    line refused as a whole — CR 701.15c's rider is read by the destroy
+    production only when it trails the verb directly, and the sentence layer had
+    already wrapped this destroy in the "if it's white" conditional — and a
+    ``spell_pattern`` whitelist marker claimed the card anyway.
+    """
+    pool = set_pool("MIR")
+    white = Permanent(card=CardDefinition(
+        name="Cleric", mana_cost="", cmc=0.0, type_line="Creature - Human Cleric",
+        oracle_text="", colors=("W",), color_identity=("W",), keywords=(),
+        produced_mana=(),
+        raw={"name": "Cleric", "type_line": "Creature - Human Cleric",
+             "power": "2", "toughness": "2", "colors": ["W"]},
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Soul Rend"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[white],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    cast = game.cast_from_hand(0, "Soul Rend", target_player_index=1,
+                               target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(white)
+
+
+def test_soul_rend_spares_a_creature_of_another_colour(set_pool):
+    """The condition half. Read as an unconditional destroy the card would be
+    strictly better than the one printed."""
+    pool = set_pool("MIR")
+    green = Permanent(card=CardDefinition(
+        name="Wurm", mana_cost="", cmc=0.0, type_line="Creature - Wurm",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": "Wurm", "type_line": "Creature - Wurm",
+             "power": "4", "toughness": "4", "colors": ["G"]},
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Soul Rend"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[green],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.cast_from_hand(0, "Soul Rend", target_player_index=1,
+                        target_permanent_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.is_on_battlefield(green)
+
+
+def test_early_harvest_untaps_the_seat_the_caster_chose(set_pool):
+    """"**Target player** untaps all basic lands they control."
+
+    Both halves were missing and each hid the other. The noun phrase records
+    the printed subject as ``controller: "that_player"``, which the picker was
+    never told about — so the client sent a bare cast; and the handler read that
+    seat only out of a *trigger's* frozen context (CR 603.10), so even a cast
+    that named one untapped nothing at all and still went to the graveyard.
+    """
+    pool = set_pool("MIR")
+
+    def _tapped(card):
+        permanent = Permanent(card=card)
+        permanent.tapped = True
+        return permanent
+
+    mine = _tapped(pool["Forest"])
+    basic = _tapped(pool["Island"])
+    nonbasic = _tapped(pool["Bad River"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine], hand=[pool["Early Harvest"]],
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[basic, nonbasic],
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    cast = game.cast_from_hand(0, "Early Harvest", target_player_index=1)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not basic.tapped, "the chosen seat's basic land untaps"
+    assert nonbasic.tapped, "'basic' is a supertype the sweep still tests"
+    assert mine.tapped, "the caster's own board is not the target's"

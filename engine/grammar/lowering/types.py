@@ -366,6 +366,25 @@ def _lower_become_color(
         payload: dict[str, object] = {"target_color": node.color}
         if _names_several_targets(node.subject):
             _describe_several_targets(payload, node.subject)
+        else:
+            # "{T}: **Target permanent** becomes colorless until end of turn."
+            # (Ersatz Gnomes.) The single-target spelling was described to
+            # nobody, so `derive_activation_spec` had no evidence, the picker
+            # offered nothing and the ability could not be aimed at all — a
+            # supported card no player can use, which is what
+            # `scripts/picker_sweep.py` exists to find.
+            #
+            # The several-target spelling beside it has always been described.
+            # The handler reads neither: it resolves through
+            # `resolve_target_permanents`, which asks the *context* for what was
+            # chosen, so this description is the picker's evidence and nothing
+            # else's — which is exactly why its absence was silent.
+            #
+            # Unlike the durationless Lace branch below, this one can be
+            # described: "becomes <colour> until end of turn" is printed about
+            # permanents, never about the "spell or permanent" union that
+            # branch's comment refuses for.
+            _describe_targets(payload, node.subject)
         return (OracleInstruction("recolor_targets_until_eot", "", payload),)
     if node.duration.kind is not None:
         raise LoweringError(

@@ -54,7 +54,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do)
-from .riders import (_attach_destroyed_this_way,
+from .riders import (_attach_destroyed_this_way, _attach_no_regeneration,
     _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .static_lines import (_looks_static, _parse_leading_static_condition_line,
                            _parse_static_condition_line,
@@ -508,6 +508,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # you." (Cosmic Horror.) A consequence of what the sentence before
             # it did, not a step.
             if _attach_destroyed_this_way(stream, steps):
+                stream.accept_punct(".")
+                continue
+            # "A creature destroyed this way can't be regenerated." (Soul Rend.)
+            # CR 701.15c's rider on a destroy the sentence layer has already
+            # wrapped in a conditional, which is why the destroy production's
+            # own probe of the same words could not reach it.
+            if _attach_no_regeneration(stream, steps):
                 stream.accept_punct(".")
                 continue
             # "If this spell's additional cost was paid, this effect doesn't

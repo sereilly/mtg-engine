@@ -25,15 +25,13 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**26 unclaimed sentence(s) across 20 supported card(s).**
+**24 unclaimed sentence(s) across 18 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
   - `when this enchantment has no +1/+1 counters on it, sacrifice it`
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
-- **Cursed Totem**
-  - `activated abilities of creatures can't be activated`
 - **Dazzling Beauty**
   - `target unblocked attacking creature becomes blocked`
 - **Energy Vortex**
@@ -63,8 +61,6 @@ anything anyone did, and every ingest would arrive red.
   - `as this enchantment enters, choose island or swamp`
 - **Soul Echo**
   - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
-- **Soul Rend**
-  - `a creature destroyed this way can't be regenerated`
 - **Telim'Tor's Edict**
   - `exile target permanent you own or control`
 - **Tombstone Stairwell**

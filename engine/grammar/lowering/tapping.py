@@ -335,6 +335,21 @@ def _lower_tap(
                 "the tap/untap sweep cannot test this restriction", node=node
             )
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
+        # "**Target player** untaps all basic lands they control." (Early
+        # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
+        # noun phrase records it as `controller: "that_player"` — which the
+        # handler resolves at resolution and the picker was never told about,
+        # so the spell had no seat to aim at and the client sent a bare cast.
+        #
+        # Only outside a trigger. Under one, "that player" is the seat the fire
+        # site froze (CR 603.10, Monsoon's "all untapped Islands that player
+        # controls") and nobody chooses it — describing it there would raise a
+        # picker in front of an ability that has already been given its seat.
+        if described.get("controller") == "that_player" and event is None:
+            described = {
+                **described,
+                "targets": {"quantifier": "target", "kind": "player"},
+            }
         return (OracleInstruction(kind, "", described),)
     if _names_several_targets(spec):
         # "Tap up to two target creatures." (Frost Breath.) The same instruction
