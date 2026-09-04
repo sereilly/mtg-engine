@@ -132,6 +132,89 @@ def chooses_color_on_enter(text: str) -> bool:
     """
     return bool(_CHOOSE_COLOR_ON_ENTER_RE.search(text or ""))
 
+#: "As this enchantment enters, choose **black or red**." (Mangara's Equity) /
+#: "As this enchantment enters, choose **Island or Swamp**." (Roots of Life.)
+#: The same CR 614.1c choice as the colour and land-type readers around it, with
+#: the card printing the **options** instead of naming a catalog: the choice is
+#: still one word, still recorded under the same key, and still read back by "of
+#: the chosen color" / "of the chosen type" — what differs is that the sentence
+#: has already narrowed what may be chosen.
+#:
+#: One reader for both, and the catalog the two printed words come from is what
+#: says which record they write. Two readers would be one idea spelled twice
+#: with a metadata key changed — the argument ``_CHOSEN_SUBTYPE_KEYS`` makes one
+#: module over — and a card printing "choose Forest or Plains" or "choose white
+#: or green" then needs no code at all.
+#:
+#: Both words must come from the **same** catalog. A mixed pair ("choose black
+#: or Swamp") is a sentence nobody prints, and admitting it would have to guess
+#: which record the answer lands in.
+_CHOOSE_ONE_OF_TWO_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose (?P<first>[a-z']+) or (?P<second>[a-z']+)$"
+)
+
+#: What the pair of printed words can name, mapped to the metadata key the
+#: choice is recorded under — the same two keys ``chooses_color_on_enter`` and
+#: ``chooses_land_type_on_enter`` above write, because this is those choices
+#: with the offer narrowed rather than a third kind of record.
+#
+#: Deliberately out of ``__all__``, beside :data:`ENTERED_BATTLEFIELD_TURN` and
+#: :data:`CAST_THIS_TURN_STAMP` and for their reason: what this module exports
+#: is a *phrase*, one string per behaviour, and
+#: ``test_the_entry_phrases_have_exactly_one_spelling`` holds the mixin to not
+#: re-spelling one. A metadata key is the other kind of shared string — a
+#: channel the mixin writes and a matcher reads — and the mixin has spelled
+#: both of these since the catalog-named choices were built.
+CHOSEN_COLOR_KEY = "chosen_color"
+CHOSEN_LAND_TYPE_KEY = "chosen_land_type"
+
+
+@lru_cache(maxsize=None)
+def _entry_choice_catalogs() -> "tuple[tuple[str, dict[str, str]], ...]":
+    """``(metadata key, printed word -> recorded value)`` for each catalog a
+    two-option entry choice may draw from.
+
+    Built from ``data/vocabulary`` and the shared colour table rather than
+    listed here, so a land type the pool gains is offerable without an edit.
+    Imported lazily for :func:`_land_types`' reason one module over: the grammar
+    package imports engine-level derivation modules, so a module-level import
+    would close a cycle.
+    """
+    from .grammar.vocabulary import COLOR_WORDS, LAND_TYPES
+
+    return (
+        (CHOSEN_COLOR_KEY, dict(COLOR_WORDS)),
+        (CHOSEN_LAND_TYPE_KEY, {word: word for word in LAND_TYPES}),
+    )
+
+
+def choose_one_of_two_on_enter(
+    line: str, card_name: str | None = None
+) -> "tuple[str, tuple[str, str]] | None":
+    """``(metadata key, the two recorded options)``, or None.
+
+    Read by the entry state that arms the prompt *and* by the support gate
+    (through :func:`enter_effect_line`), like every other reader in this file,
+    so what is offered and what is claimed cannot drift. The options travel with
+    the key because the prompt has to offer exactly them and the resolver has to
+    refuse everything else — a picker offering the whole catalog where the card
+    prints two words is a strictly better card, silently.
+
+    Two identical words refuse: "choose black or black" is not a choice, and a
+    sentence nobody prints is one this rule has not read.
+    """
+    match = _CHOOSE_ONE_OF_TWO_ON_ENTER_RE.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    first, second = match.group("first"), match.group("second")
+    if first == second:
+        return None
+    for key, catalog in _entry_choice_catalogs():
+        if first in catalog and second in catalog:
+            return key, (catalog[first], catalog[second])
+    return None
+
+
 #: "As this enchantment enters, choose **two basic land types**." (Illusionary
 #: Terrain.) An *ordered pair* — the static line beside it names "the first
 #: chosen type" and "the second chosen type" — which is what separates it from
@@ -1035,6 +1118,13 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses an opponent as it enters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
+    # "…choose **black or red**" / "…choose **Island or Swamp**". The same
+    # choice with the offer narrowed by the sentence, so it is claimed beside
+    # the catalog-named ones rather than under them — neither phrase is a
+    # prefix of the other ("a color" and "black or red" share no cursor), so
+    # the position here is documentation and not precedence.
+    if choose_one_of_two_on_enter(normalized) is not None:
+        return "chooses one of two printed options as it enters"
     if chooses_two_land_types_on_enter(normalized):
         return "chooses two basic land types as it enters"
     if chooses_creature_type_on_enter(normalized):
@@ -1076,6 +1166,7 @@ __all__ = [
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
     "chooses_opponent_on_enter",
     "chooses_color_on_enter",
+    "choose_one_of_two_on_enter",
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",
     "chooses_land_type_on_enter",

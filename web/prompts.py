@@ -1387,6 +1387,13 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
     """
     data = choices[0].data
     needs_color = bool(data.get("needs_color"))
+    # "…choose **black or red**" / "…choose **Island or Swamp**" (Mangara's
+    # Equity, Roots of Life). Two shapes of this prompt whose *offer* the
+    # sentence prints rather than a catalog. The list is on the arming and is
+    # the same one `_entry_choice_option_allowed` refuses to go outside, so the
+    # picker cannot show a word the answer path would decline (idiom 9); with
+    # no such list the catalog bounds the answer, which is every other arming.
+    printed_options = [str(option) for option in (data.get("entry_choice_options") or ())]
     return {
         "card_name": data["card_name"],
         "needs_color": needs_color,
@@ -1396,7 +1403,9 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
         ],
         "default_seat": data.get("default_seat"),
         "default_color": data.get("default_color"),
-        "colors": ["W", "U", "B", "R", "G"] if needs_color else [],
+        "colors": (
+            (printed_options or ["W", "U", "B", "R", "G"]) if needs_color else []
+        ),
         # "…choose a card name." (Runed Halo.) A name rather than a quality:
         # CR 202.1 lets a player name any card, so the offered list is what the
         # chooser can actually see rather than a catalog, and the answer is not
@@ -1431,7 +1440,8 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
         # checks the answer against (idiom 9).
         "needs_land_type": bool(data.get("needs_land_type")),
         "chosen_land_types": (
-            sorted(LAND_TYPES) if data.get("needs_land_type") else []
+            (printed_options or sorted(LAND_TYPES))
+            if data.get("needs_land_type") else []
         ),
         "default_land_type": data.get("default_land_type"),
     }

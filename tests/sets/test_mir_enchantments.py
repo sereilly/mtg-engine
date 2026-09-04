@@ -1735,3 +1735,184 @@ def test_celestial_dawn_spends_white_for_anything_and_nothing_else(set_pool):
     assert game._pay_mana_cost(seat, cost(generic=2)) is True, (
         "colorless mana still pays generic"
     )
+
+
+# --- W4G4: an entry choice the sentence itself narrows (CR 614.1c) ---
+#
+# "As this enchantment enters, choose Island or Swamp." (Roots of Life) and
+# "...choose black or red." (Mangara's Equity) are the CR 614.1c choice the pool
+# already makes six ways, with the *offer* printed on the card instead of named
+# by a catalog. One reader for both, because the two printed words are what say
+# which record the answer lands in.
+#
+# The half of this that was already built is the half worth writing down: the
+# records (`chosen_color`, `chosen_land_type`), the phrases that read them back
+# ("of the chosen color", "of the chosen type"), the matcher resolvers and
+# `TESTABLE_SUBJECT_FILTER_KEYS` all existed. What did not was one entry in
+# `_PAYLOAD_HONOURED_FILTER_FIELDS` - so `subject_filter_payload` refused every
+# phrase carrying one, and Roots of Life's second sentence compiled to **no
+# trigger at all** while the card reported supported and `parse_coverage`
+# claimed the line.
+
+import pytest as _w4g4_pytest  # noqa: E402
+
+from engine import Game as _w4g4_Game, PlayerState as _w4g4_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w4g4_load,  # noqa: E402
+                                manifest_set_path as _w4g4_path)
+from engine.enter_effects import (  # noqa: E402
+    choose_one_of_two_on_enter as _w4g4_two_options,
+    enter_effect_line as _w4g4_entry_line,
+)
+from engine.grammar import subject_filter_payload as _w4g4_subject_payload  # noqa: E402
+from engine.models import Permanent as _w4g4_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w4g4_compile  # noqa: E402
+from engine.subject_filters import (  # noqa: E402
+    TESTABLE_SUBJECT_FILTER_KEYS as _w4g4_TESTABLE,
+)
+
+
+def _w4g4_basics():
+    return {card.name: card for card in _w4g4_load(_w4g4_path("LEA"))}
+
+
+def _w4g4_roots_board(pool, answer=None, opponent_lands=("Island", "Swamp")):
+    """Roots of Life on seat 0 and *opponent_lands* on seat 1, choice answered.
+
+    ``answer=None`` leaves the prompt standing, which is how the default is
+    read: the record is stamped as the permanent enters so a headless or AI
+    seat never blocks, and the prompt only overwrites it.
+    """
+    lea = _w4g4_basics()
+    roots = _w4g4_Permanent(card=pool["Roots of Life"])
+    lands = [_w4g4_Permanent(card=lea[name]) for name in opponent_lands]
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[roots]),
+        _w4g4_PlayerState(name="P2", battlefield=lands),
+    ])
+    game.enforce_mana_costs = False
+    # Interactive, so the choice is *queued* rather than defaulted away at the
+    # arming - a queued prompt is the only one anybody ever answers.
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(roots, 0, 1)
+    if answer is not None:
+        assert game.confirm_enter_choice(0, land_type=answer) is True
+    return game, roots, dict(zip(opponent_lands, lands))
+
+
+def test_w4g4_a_chosen_value_phrase_is_a_payload_the_trigger_table_can_read():
+    """The one-line gap, named directly.
+
+    All three "of the chosen ..." narrowings are in
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` - ``subject_matches`` resolves each off the
+    source and answers it - so a trigger condition delimiting one as a
+    ``_subject`` group must get a payload back rather than a refusal.
+    """
+    described = _w4g4_subject_payload("a land of the chosen type an opponent controls")
+
+    assert described == {
+        "type_filter": "land", "controller": "opponent", "chosen_land_type": True,
+    }
+    assert not set(described) - _w4g4_TESTABLE
+    assert _w4g4_subject_payload("a creature of the chosen color") == {
+        "type_filter": "creature", "chosen_color": True,
+    }
+
+
+def test_w4g4_roots_of_life_compiles_both_of_its_sentences(set_pool):
+    """The entry choice is claimed by the entry-state reader and the sentence
+    behind it is a real trigger - not a card supported on one line of two."""
+    card = set_pool("MIR")["Roots of Life"]
+    program = _w4g4_compile(card)
+
+    assert program.supported
+    assert _w4g4_entry_line(
+        "As this enchantment enters, choose Island or Swamp.", card.name
+    ) == "chooses one of two printed options as it enters"
+    conditions = [trig.condition for trig in program.triggered_abilities]
+    assert [c.kind for c in conditions] == ["permanent_becomes_tapped"]
+    assert conditions[0].payload == {
+        "tapped_filter": {
+            "type_filter": "land", "controller": "opponent", "chosen_land_type": True,
+        }
+    }
+
+
+def test_w4g4_the_entry_prompt_offers_exactly_the_two_printed_words(set_pool):
+    """CR 205.3i's catalog is not what bounds this answer - the sentence is."""
+    game, roots, _ = _w4g4_roots_board(set_pool("MIR"))
+    pending = game.pending_enter_choice
+
+    assert pending["needs_land_type"] is True
+    assert pending["entry_choice_options"] == ["island", "swamp"]
+    # Stamped before the prompt, so a seat that never answers still has a
+    # choice on record rather than an inert enchantment.
+    assert roots.metadata["chosen_land_type"] in ("island", "swamp")
+
+
+def test_w4g4_an_unprinted_land_type_is_refused_not_repaired(set_pool):
+    """A third type here is a strictly better card. Refused with the prompt
+    still standing, so the player can answer it properly."""
+    game, roots, _ = _w4g4_roots_board(set_pool("MIR"))
+
+    assert game.confirm_enter_choice(0, land_type="forest") is False
+    assert roots.metadata["chosen_land_type"] != "forest"
+    assert game.pending_enter_choice is not None
+
+
+@_w4g4_pytest.mark.parametrize("answer", ["island", "swamp"])
+def test_w4g4_the_trigger_follows_the_answer_either_way(set_pool, answer):
+    """Both answers, because a trigger that fires on either type passes a test
+    that only ever chose one."""
+    game, roots, lands = _w4g4_roots_board(set_pool("MIR"), answer=answer)
+    assert roots.metadata["chosen_land_type"] == answer
+
+    gains = {}
+    for name, land in lands.items():
+        before = game.players[0].life
+        game.become_tapped(land)
+        game.resolve_stack()
+        gains[name.lower()] = game.players[0].life - before
+
+    assert gains.pop(answer) == 1
+    assert set(gains.values()) == {0}
+
+
+def test_w4g4_a_permanent_that_has_not_chosen_gains_nothing(set_pool):
+    """The habit ``resolve_static_land_type_change`` records, kept here: an
+    entry choice that was never made must not behave as though every type had
+    been chosen. The matcher refuses on the unresolved key rather than dropping
+    it, which would gain life off every land an opponent taps."""
+    lea = _w4g4_basics()
+    roots = _w4g4_Permanent(card=set_pool("MIR")["Roots of Life"])
+    island = _w4g4_Permanent(card=lea["Island"])
+    game = _w4g4_Game(players=[
+        _w4g4_PlayerState(name="P1", battlefield=[roots]),
+        _w4g4_PlayerState(name="P2", battlefield=[island]),
+    ])
+    game.enforce_mana_costs = False
+    # No `_initialize_permanent_state`: the record is absent, which is what a
+    # permanent that arrived by a road with no entry state looks like.
+    assert "chosen_land_type" not in roots.metadata
+
+    game.become_tapped(island)
+    game.resolve_stack()
+
+    assert game.players[0].life == 20
+
+
+def test_w4g4_the_two_option_reader_needs_one_catalog_and_two_words():
+    """The printed words decide which record the answer lands in, so a pair
+    spanning two catalogs has no record to name and refuses."""
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose Island or Swamp."
+    ) == ("chosen_land_type", ("island", "swamp"))
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose black or red."
+    ) == ("chosen_color", ("B", "R"))
+    # A card nobody printed, in three flavours: mixed catalogs, a repeat (which
+    # is not a choice) and a sentence that says more than the offer.
+    assert _w4g4_two_options("As this enchantment enters, choose black or Swamp.") is None
+    assert _w4g4_two_options("As this enchantment enters, choose black or black.") is None
+    assert _w4g4_two_options(
+        "As this enchantment enters, choose black or red, then draw a card."
+    ) is None
