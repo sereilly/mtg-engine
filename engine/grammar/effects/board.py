@@ -39,7 +39,8 @@ from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import (
-    _accept_life_alternative, _accept_number, _accept_unless_life_cost,
+    _accept_life_alternative, _accept_number, _accept_per_counter_multiplier,
+    _accept_unless_life_cost,
     _parse_counted_sacrifice,
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
     _parse_sacrificed_subject, _parse_that_object, _parse_zone,
@@ -538,29 +539,6 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             for each in (subject, *further)
         ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
-
-
-def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
-    """``for each <word> counter on it`` trailing a printed cost, or None.
-
-    "Destroy this creature unless you pay {1} **for each music counter on it**"
-    — the ability Musician grants: CR 702.24a's escalation with the keyword's
-    name taken off it. The counter word is payload, so a card printing a
-    different one needs no production. Returns None with the cursor untouched,
-    because a flat cost must keep reading exactly as it did.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
-    word = stream.peek_word()
-    if word is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_word("counter") or not stream.accept_phrase("on", "it"):
-        stream.reset(mark)
-        return None
-    return str(word)
 
 
 def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:

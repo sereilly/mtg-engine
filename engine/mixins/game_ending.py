@@ -1009,6 +1009,46 @@ class GameEndingMixin:
         # belongs — there is no call site to hang it on, and CR 603.8 says it
         # fires only once until the state stops matching, which is why the
         # permanent remembers that it announced.
+        # "When this enchantment has no +1/+1 counters on it, sacrifice it."
+        # (Afiya Grove.) The mirror state of the threshold sweep below, and it
+        # shares that sweep's CR 603.8 bookkeeping: it fires once and does not
+        # fire again until the permanent has such a counter to lose.
+        #
+        # It cannot be an *event* on the removal seam the way
+        # ``last_counter_removed`` is, and the difference is the card: Afiya
+        # Grove can reach zero without any removal at all — a counter placed on
+        # it by nothing, or a permanent that entered empty — and CR 603.8 says
+        # the state is what fires it either way.
+        for permanent in list(self.all_permanents()):
+            for trig in compile_card_oracle(
+                permanent.effective_card
+            ).triggered_abilities:
+                if trig.condition.kind != "source_has_no_counters":
+                    continue
+                kind = str(trig.condition.payload.get("counter_kind", ""))
+                announced = permanent.metadata.get("_state_trigger_announced") or set()
+                key = ("empty", kind)
+                if counters_on(permanent, kind) > 0:
+                    if key in announced:
+                        permanent.metadata["_state_trigger_announced"] = announced - {key}
+                    continue
+                if key in announced:
+                    continue
+                permanent.metadata["_state_trigger_announced"] = announced | {key}
+                seat = self.controller_index_of(permanent)
+                if seat is None or trig.instruction is None:
+                    continue
+                self._enqueue_triggered_batch([{
+                    "controller_index": seat,
+                    "source_permanent": permanent,
+                    "card": permanent.card,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                    "trigger_context": {},
+                }])
+                any_changed = True
+
         for permanent in list(self.all_permanents()):
             for trig in compile_card_oracle(
                 permanent.effective_card

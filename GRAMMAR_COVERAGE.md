@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 81.1% | 80.0% | 53.2% | 236 |
+| MIR *(measured)* | 335 | 545 | 82.0% | 80.9% | 54.1% | 238 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 333 | 162 | expected a subject |  |
+| 331 | 160 | expected a subject |  |
 | 114 | 52 | unrecognized effect verb |  |
-| 87 | 42 | unconsumed text |  |
+| 85 | 40 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -111,6 +111,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aether Storm**
   - `Pay 4 life: Destroy this enchantment. It can't be regenerated. Any player may activate this ability.`
   - `Pay 4 life: Destroy this enchantment. It can't be regenerated. Any player may activate this ability.`
+- **Afiya Grove**
+  - `At the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature.`
+  - `When this enchantment has no +1/+1 counters on it, sacrifice it.`
 - **Afterlife**
   - `Destroy target creature. It can't be regenerated. Its controller creates a 1/1 white Spirit creature token with flying.`
 - **Agent of Stromgald**
@@ -1383,6 +1386,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
 - **Energy Vortex**
   - `At the beginning of your upkeep, remove all vortex counters from this enchantment.`
+  - `At the beginning of the chosen player's upkeep, this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment.`
   - `{X}: Put X vortex counters on this enchantment. Activate only during your upkeep.`
 - **Enervate**
   - `Tap target artifact, creature, or land.`
@@ -3397,6 +3401,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+- **Purgatory**
+  - `Whenever a nontoken creature is put into your graveyard from the battlefield, exile that card.`
+  - `At the beginning of your upkeep, you may pay {4} and 2 life. If you do, return a card exiled with this enchantment to the battlefield.`
 - **Pursued Whale**
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
 - **Pyknite**

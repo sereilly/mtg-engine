@@ -381,6 +381,28 @@ def _parse_state_trigger_event(
     # and its payload to the dispatcher, and a copy carried here would be free
     # to disagree with it. It is *checked* against the vocabulary rather than
     # skipped, so "has three heads" refuses the line instead of claiming it.
+    # "When **this enchantment has no +1/+1 counters on it**, sacrifice it."
+    # (Afiya Grove.) The empty-store state, read here for the reason the
+    # keyword branch below it states: both front ends see the whole line, and a
+    # condition only one of them reads leaves the other refusing the effect.
+    #
+    # Above the keyword branch, whose vocabulary test would refuse "no" and
+    # rewind — the same order `engine/oracle.py`'s table takes for the same
+    # pair, so the two front ends read the sentence the same way round.
+    #
+    # The counter kind is consumed and dropped: `engine/oracle.py`'s table
+    # supplies the payload the sweep dispatches on, and a copy carried here
+    # would be free to disagree with it.
+    empty_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase("has", "no"):
+        if stream.peek() is not None:
+            stream.advance()
+            if stream.accept_word("counters", "counter") and stream.accept_phrase(
+                "on", "it"
+            ):
+                return ast.TriggerEvent("source_has_no_counters", word)
+    stream.reset(empty_mark)
+
     keyword_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_word("has"):
         word_token = stream.peek_word()

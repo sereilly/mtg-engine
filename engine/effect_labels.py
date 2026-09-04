@@ -617,6 +617,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `upkeep_effect`: that label belongs to the pay-or-consequence upkeep
     # registry, and these are ordinary triggers that go on the stack, where the
     # prefix is read.
+    "move_counter_from_self": "triggered_counter",
     "remove_counter_from_self": "triggered_counter",
     "remove_all_counters_from_self": "triggered_counter",
     "remove_counter_from_attached": "triggered_counter",

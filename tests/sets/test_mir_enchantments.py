@@ -1087,6 +1087,7 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 from engine import Game, PlayerState
 from engine.auras import attach_aura, aura_color_grants, detach_aura
 from engine.linked_exile import linked_entries
+from engine.named_counters import add_counters, counters_on, remove_counters
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
@@ -1252,3 +1253,145 @@ def test_purgatory_returns_the_card_under_its_controllers_control(set_pool):
     # And no "you own" narrowing, which Purgatory does not print: its pile is
     # every card the enchantment exiled.
     assert "owned_by_chooser" not in step.payload
+
+
+def test_afiya_grove_moves_a_counter_each_upkeep_and_dies_empty(set_pool):
+    """Three lines, of which the engine used to run one: it entered with three
+    +1/+1 counters and then did nothing at all, for ever.
+
+    The upkeep line is CR 121.6's **move** — one action, not a removal and a
+    placement — and the last line is CR 603.8's state trigger in the direction
+    the threshold sweep could not express: the store being *empty*.
+    """
+    pool = set_pool("MIR")
+    grove = Permanent(card=pool["Afiya Grove"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Forest"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, grove, None)
+    game._put_permanent_onto_battlefield(0, bear, None)
+    game._settle()
+
+    assert counters_on(grove, "+1/+1") == 3
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+    for expected in (2, 1, 0):
+        game.start_next_turn()
+        if game.active_player_index != 0:
+            game.start_next_turn()
+        game.auto_resolve_pending_choices()
+        game.resolve_stack()
+        game._settle()
+        assert counters_on(grove, "+1/+1") == expected, game.log
+
+    # The counter really moved: what the Grove lost the Bear gained, and the
+    # P/T came with it (CR 122.1a).
+    assert (bear.effective_power, bear.effective_toughness) == (5, 5), game.log
+
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert grove not in game.players[0].battlefield, game.log
+    assert "Afiya Grove" in [c.name for c in game.players[0].graveyard]
+
+
+def test_afiya_grove_moves_nothing_when_it_has_nothing(set_pool):
+    """CR 121.6: with no counter on the source the move does not happen — to
+    **either** end.
+
+    The direction that matters: written as a ``sequence`` of the removal and
+    the placement beside it, an empty Grove would still put a counter on the
+    target, and its own last line would then never fire because it would be
+    sacrificed the turn it emptied and grow the board every turn until then.
+    """
+    pool = set_pool("MIR")
+    grove = Permanent(card=pool["Afiya Grove"])
+    bear = Permanent(card=_w2g2_vanilla("Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Forest"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Forest"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, grove, None)
+    game._put_permanent_onto_battlefield(0, bear, None)
+    game._settle()
+    remove_counters(grove, "+1/+1", 3)
+    assert counters_on(grove, "+1/+1") == 0
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2), game.log
+    assert counters_on(bear, "+1/+1") == 0
+
+
+def test_energy_vortex_tolls_the_chosen_player_per_counter(set_pool):
+    """"At the beginning of **the chosen player's** upkeep, this enchantment
+    deals 3 damage to that player unless they pay {1} **for each vortex
+    counter** on this enchantment."
+
+    Two things stood between this and firing, and both were gates written when
+    ``upkeep_self`` was the only upkeep condition either pay-or-else flow could
+    reach: the lowering refused every other upkeep condition outright, and the
+    per-counter escalation had a reader only behind a *destruction*. The seat
+    was never the problem — the upkeep step has frozen it on every ordinary
+    firing since Takklemaggot.
+
+    The price is read at resolution (CR 608.2), which is what makes the card
+    work: its own upkeep trigger strips the counters a step earlier on its
+    controller's turn, so the toll is whatever was put back since.
+    """
+    pool = set_pool("MIR")
+    vortex = Permanent(card=pool["Energy Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Island"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, vortex, None)
+    game._settle()
+
+    # "As this enchantment enters, choose an opponent."
+    assert vortex.metadata.get("chosen_player_index") == 1
+    add_counters(vortex, "vortex", 2)
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    # Two counters, so the offer is {2}; P2 has no mana and takes the damage.
+    assert any("may pay {2}" in line for line in game.log), game.log
+    assert game.players[1].life == 17, game.log
+    # The counters are not spent by the toll — only the controller's own upkeep
+    # trigger removes them.
+    assert counters_on(vortex, "vortex") == 2
+
+
+def test_energy_vortex_offers_nothing_to_the_controller(set_pool):
+    """The seat is the one the enters-choice recorded, not the ability's
+    controller — so the Vortex's own upkeep brings the counter wipe and no
+    toll at all.
+    """
+    pool = set_pool("MIR")
+    vortex = Permanent(card=pool["Energy Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", library=[pool["Island"]] * 20, life=20),
+        PlayerState(name="P2", library=[pool["Island"]] * 20, life=20),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, vortex, None)
+    game._settle()
+    add_counters(vortex, "vortex", 3)
+
+    game.start_turn(0)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+
+    assert game.players[0].life == 20, game.log
+    # "At the beginning of your upkeep, remove all vortex counters from this
+    # enchantment" — the half that already worked, and the reason the toll is
+    # read at resolution rather than when the trigger was put on the stack.
+    assert counters_on(vortex, "vortex") == 0, game.log

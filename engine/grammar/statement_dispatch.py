@@ -98,6 +98,7 @@ from .lowering import (
     _lower_put_counter,
     _lower_put_onto_battlefield,
     _lower_reveal_until,
+    _lower_move_counter,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -224,6 +225,8 @@ def lower_statement(
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
+    if isinstance(statement, ast.MoveCounter):
+        return _lower_move_counter(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):

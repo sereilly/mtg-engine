@@ -131,7 +131,7 @@ from .keywords import (
     _lower_gain_keyword,
     _lower_lose_keyword,
 )
-from .counter_removal import _lower_remove_counter
+from .counter_removal import _lower_move_counter, _lower_remove_counter
 from ._counter_stores import _lower_player_gets_counters
 from .counters import (
     _fused_tap_enchanted_then_counters,
@@ -397,6 +397,7 @@ __all__ = [
     "_PER_DEATH_COUNTERS",
     "_PER_DEATH_SUBJECT",
     "_ANY_CREATURE_DIED",
+    "_lower_move_counter",
     "_lower_remove_counter",
     "_lower_for_each",
     "_lower_become_color",

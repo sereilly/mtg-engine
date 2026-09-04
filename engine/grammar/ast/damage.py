@@ -160,6 +160,13 @@ class DamageUnlessPay:
     damage: DealDamage
     payer: PlayerRef
     cost: ManaCost
+    #: "…unless they pay {1} **for each vortex counter on this enchantment**."
+    #: (Energy Vortex.) The counter word the printed cost is multiplied by, or
+    #: None for a flat one. Payload rather than a second node, exactly as the
+    #: identical clause behind a destruction already is (``DestroyUnlessPay
+    #: .per_counter``): the cost is read at resolution either way, and a card
+    #: printing a different counter word needs no production.
+    per_counter: str | None = None
 
 
 @dataclass(frozen=True)

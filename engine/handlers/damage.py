@@ -1085,6 +1085,22 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     cost = int(instruction.payload.get("cost", 0))
+    per_counter = instruction.payload.get("cost_per_counter")
+    if per_counter:
+        # "…unless they pay {1} **for each vortex counter on this
+        # enchantment**." (Energy Vortex.) CR 608.2: the price is read now,
+        # not when the ability went on the stack — the counters are what the
+        # rest of the card is about, and its own upkeep trigger removes them
+        # all a step earlier on its controller's turn.
+        #
+        # A source that has left takes its counters with it (CR 122.2), which
+        # leaves the price at zero — the offer is free and the damage does not
+        # happen, which is CR 608.2's "as much as possible" rather than a
+        # reason to skip the prompt.
+        from ..named_counters import counters_on
+
+        source = context.source_permanent
+        cost *= counters_on(source, str(per_counter)) if source is not None else 0
     seat = game.players.index(caster)
     if instruction.payload.get("payer") == "event_subject_player":
         # "…deals 2 damage to **that player** unless they pay {2}" (Soul

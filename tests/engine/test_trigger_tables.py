@@ -157,6 +157,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature's power is 7 or greater",
         "when this creature's power is 7 or greater",
     ),
+    # Afiya Grove. The empty-store state, above the keyword row for the reason
+    # the row itself gives — "has **no** +1/+1 counters" would otherwise read
+    # as having a keyword called "no" — and in this table for the reason every
+    # state trigger is: the card prints "when" and a kind lives in one table.
+    "source_has_no_counters": (
+        "whenever this enchantment has no +1/+1 counters on it",
+        "when this enchantment has no +1/+1 counters on it",
+    ),
     # Floodgate. The keyword twin of the row above, in the same table for the
     # same reason: the card prints "when" and the row lives where both printed
     # words reach it.

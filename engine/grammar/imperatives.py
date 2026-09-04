@@ -91,6 +91,7 @@ from .effects import (
     parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_put_source_into_zone,
+    _parse_move_counter,
     _parse_remove_counter,
     _parse_remove_from_combat,
     _parse_return,
@@ -278,6 +279,15 @@ def parse_imperative(
         return _parse_double(stream)
     if stream.at_word("switch"):
         return _parse_switch_pt(stream)
+    if stream.at_word("move"):
+        # "Move a +1/+1 counter from this enchantment onto target creature."
+        # (Afiya Grove.) Non-consuming on refusal, so the counter-less "move"
+        # sentences keep failing on their own missing production rather than on
+        # a counter kind they never mentioned — `_parse_remove_counter`'s rule
+        # one verb over.
+        moved = _parse_move_counter(stream)
+        if moved is not None:
+            return moved
     if stream.at_word("remove"):
         removal = _parse_remove_counter(stream)
         if removal is not None:

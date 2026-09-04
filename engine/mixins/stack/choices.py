@@ -5333,22 +5333,36 @@ class PendingChoicesMixin:
         # reserve to spend — so the stated policy is the one a player at a
         # healthy life total would take: pay, unless it would be lethal.
         life_cost = int(entry.get("life_cost", 0) or 0)
-        floating = (
-            (True if player.life > life_cost else None)
-            if life_cost
-            else next(
-                (
-                    plan
-                    for cost in (
-                        entry.get("cost") or {},
-                        *(entry.get("cost_alternatives") or ()),
-                    )
-                    for plan in (plan_payment(player.mana_pool, (), cost),)
-                    if plan is not None
-                ),
-                None,
-            )
+        mana_covered = next(
+            (
+                plan
+                for cost in (
+                    entry.get("cost") or {},
+                    *(entry.get("cost_alternatives") or ()),
+                )
+                for plan in (plan_payment(player.mana_pool, (), cost),)
+                if plan is not None
+            ),
+            None,
         )
+        if not life_cost:
+            floating = mana_covered
+        elif not entry.get("cost"):
+            # A life cost with no mana half (Bronze Tablet). No "already
+            # floating" reading — nothing is held in reserve to spend — so the
+            # policy is the one a player at a healthy life total would take.
+            floating = True if player.life > life_cost else None
+        else:
+            # "You may pay {4} **and** 2 life." (Purgatory.) One offer with two
+            # prices, so neither branch above answers it: the life is judged the
+            # way the branch above judges it, and the mana still has to clear
+            # the floating-mana rule — otherwise the policy would tap four lands
+            # for an offer it has just said it would not tap one for.
+            floating = (
+                True
+                if player.life > life_cost and mana_covered is not None
+                else None
+            )
         # A graded offer needs the policy to say *which* option as well as
         # whether to pay, because each buys something different (Winter's
         # Chill). The same policy one step further: the last option the floating

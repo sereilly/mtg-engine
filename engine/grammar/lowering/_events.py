@@ -233,6 +233,13 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "At the beginning of **the chosen player's** upkeep, this enchantment
+    # deals 3 damage to **that player** …" (Energy Vortex). The seat an earlier
+    # effect chose and the permanent recorded, frozen into the trigger's
+    # context by the upkeep loop exactly as `upkeep_each`'s is — the loop
+    # stamps ``event_subject_player`` on every ordinary upkeep firing, and this
+    # condition is one of the four it names a seat for.
+    "upkeep_chosen",
     # "When a player doesn't pay this enchantment's cumulative upkeep,
     # **that player** exiles all cards from their library." (Thought Lash.)
     # Nothing on a board records who declined to pay, so the seat exists only

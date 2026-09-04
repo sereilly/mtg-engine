@@ -26,6 +26,7 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import GToken, MANA, NUMBER, PT, PUNCT, WORD, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
+from .readers import accept_source_reference
 # The back-references left for `references` when this module crossed the
 # thousand-line guard — they answer CR 115's question with an earlier step as
 # the referent, which is that module's subject and not this one's word tables.
@@ -645,6 +646,42 @@ def _accept_conjoined_life_cost(stream: TokenStream) -> "ast.Amount | None":
         return amount
     stream.reset(mark)
     return None
+
+
+def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
+    """``for each <word> counter on <the source>`` trailing a printed cost, or
+    None with the cursor untouched.
+
+    "Destroy this creature unless you pay {1} **for each music counter on it**"
+    — the ability Musician grants: CR 702.24a's escalation with the keyword's
+    name taken off it — and "…unless they pay {1} **for each vortex counter on
+    this enchantment**" (Energy Vortex), which is the same clause with the
+    source spelled out. Both go through ``accept_source_reference``, the one
+    reader of that phrase, so the two spellings cannot come apart.
+
+    The counter word is payload, so a card printing a different one needs no
+    production. Returns None with the cursor untouched, because a flat cost
+    must keep reading exactly as it did.
+
+    Here in ``phrases`` rather than in either family: it is a fragment the
+    destruction productions and the damage ones both read, and a fragment two
+    families need goes in ``phrases`` — never in one of them.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    word = stream.peek_word()
+    if word is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("counter", "counters") or not stream.accept_word("on"):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    return str(word)
 
 
 def _parse_card_alternatives(
