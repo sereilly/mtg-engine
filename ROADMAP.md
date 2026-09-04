@@ -1362,6 +1362,83 @@ And two outside its family, from `parse_coverage`: **Aleatory** and **Lure of
 Prey** carry "Cast this spell only …" clauses nothing claims, so nothing
 enforces them and both can be cast at any time.
 
+#### W1G3 — damage and prevention: a hook **retired**
+
+Thirteen of twenty-one, and the direction that matters: Bone Mask prints Reverse
+Damage's whole sentence with a different rider, so CR 615.5's rider became a
+production and `card_hooks['Reverse Damage']` died. The proof it was a duplicate
+is that Reverse Damage's compiled program is byte-identical after the deletion.
+
+Its four audits for silently mis-playing shipped cards all came back **false
+positives**, and each was closed by giving the card a game rather than by
+reading a payload: Gaseous Form stops combat damage in both directions and
+Demonic Torment in one, which is what they print; Earthquake spares the flier
+and Hurricane the ground creature. That is how an audit should close.
+
+Brief corrections: Burning Palm Efreet's "no handler removes a keyword" was a
+true statement and the wrong diagnosis — Vertigo prints the identical clauses
+with a full stop and has worked since Ice Age, and joined with "and" the
+conjunction loop never reaches the pronoun rider. One printed word. And
+Floodgate's two refusals had stated reasons that had **stopped being true**.
+
+#### W1G1 — combat: two live bugs in a shipped card
+
+Eleven of twenty, including the two cards round 1 and round 10 had left open.
+Round 10 declined `blocking_source` because making it an emitted, testable key
+bought no card and perturbed three; this branch made the same change *with two
+cards behind it*, which is exactly what that decline said it needed.
+
+**Blaze of Glory was wrong twice, and had been since it shipped.** "Target
+creature defending player controls" reached the picker as a bare creature spec
+and the seat was enforced nowhere else, so the attacking player could grant the
+permission to their own creature and the spell reported success. And its two
+"this turn" flags were written by the handler, read by the blockers step and the
+AI, and cleared by nothing — one cast made a creature able to block every
+attacker, and *obliged* to, for the rest of the game.
+
+The differential earned its keep on the way: reading "the" as a possessive
+article made the where-clause parser swallow the "the" of "the number of", and
+the noun parser's refusal escaped instead of rewinding — **26 shipped cards**
+lost their where-clause, and nothing else would have said so.
+
+#### W1G5 — statics and characteristics: four cards that were "supported"
+
+Seventeen: thirteen from its list and four the picker sweep had flagged. **Three
+of those four were supported only on their cantrip line** — Soul Rend, Telim'Tor's
+Edict and Dazzling Beauty each print "Draw a card at the beginning of the next
+turn's upkeep" beside their real effect, the cantrip compiled, the effect
+compiled to nothing, and the card reported supported. Early Harvest resolved,
+went to the graveyard and untapped nothing on every cast. The picker finding was
+the symptom; the defect was one layer down.
+
+Two more it found by reading compiled programs: `exile_target_permanent` ignored
+every relative narrowing (it asked the pure matcher while the picker derived a
+bare permanent spec), and "put a counter on it" after a targeted step lowered to
+`add_counter_to_self` — the counter landed on the ability's source, or on
+nothing when the source was a spell. Neither raised.
+
+#### The integration, and what it cost
+
+Four merges, each through the full gate. **The two hazards SET_PLAYBOOK names
+both fired.** Two per-set test files came back as *two* conflict regions rather
+than one, because both branches' helpers end with the same lines and git read
+them as common context — a naive union would have spliced one group's helper
+body onto the other's signature, so all of them were reconstructed from the
+merge base (base + ours-tail + theirs-tail, both sides asserted to start with
+the base byte for byte) and then swept: every block of every branch present.
+And W1G1 and W1G5 each added a *different* field to `LordBuffFilter` and to both
+halves of its round trip; git presented each side as a rewrite of the same three
+places, and taking either would have silently dropped the other's card.
+
+`engine/grammar/conditions.py` crossed the thousand-line guard at integration on
+nobody's branch, four groups' additions merely summing — the guard surfacing a
+boundary that was already there. The record-asking half moved down into
+`condition_clauses.py`, the cut `ast/conditions.py` and `ast/records.py` already
+draw one package over. The missing-name scan then named **six** bindings the
+move left behind, before the suite ran.
+
+**After four merges: 227 → 276 of 335 supported, 59 left.**
+
 ### Where the set stands — ten rounds in
 
 **227/335 supported (67.8%), from 184/335 (54.9%) at ingest.** Every gate is
