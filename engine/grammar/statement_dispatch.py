@@ -88,6 +88,7 @@ from .lowering import (
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_gain_life,
+    _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
     _lower_play_with_hand_revealed,
     _lower_reveal_hand_and_choose,
@@ -401,6 +402,13 @@ def lower_statement(
         return _lower_sacrifice(statement, event, produced)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
+    if isinstance(statement, ast.DiscardRevealedMatchingUnlessPayLife):
+        # The plural, and in the chain beside the singular for its reason: the
+        # record an earlier step wrote is the whole of the gate, so the lowering
+        # needs `produced` and cannot sit in the name-only table.
+        return _lower_discard_revealed_matching_unless_pay_life(
+            statement, produced
+        )
     if isinstance(statement, ast.LookTopPickToHand):
         return _lower_look_top_pick(statement, event)
 

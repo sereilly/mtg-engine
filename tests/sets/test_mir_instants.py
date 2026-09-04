@@ -1784,3 +1784,104 @@ def test_mind_bend_defaults_to_the_first_offered_vocabulary_for_an_ai_seat(set_p
     game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R", interactive=False)
     assert [c.kind for c in game.pending_choices] == [], game.log
     assert "nonred" in perm.effective_card.oracle_text
+
+
+# --- W2G4: one offer per card a reveal showed ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_sirocco(set_pool, hand, life=20, interactive=True):
+    """Sirocco in seat 0's hand aimed at seat 1, whose hand is *hand*."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Sirocco"]], life=20),
+        PlayerState(
+            name="P2", hand=[set_pool("MIR")[n] for n in hand], life=life,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1} if interactive else set()
+    game.start_turn(0)
+    game.queue_from_hand(0, "Sirocco", target_player_index=1)
+    game.resolve_stack()
+    return game
+
+
+def test_sirocco_is_supported(set_pool):
+    """The reveal had to start recording what it showed, as *cards*: the
+    sentence behind it narrows by colour and card type, which the names the
+    client is sent cannot be asked."""
+    program = compile_card_oracle(set_pool("MIR")["Sirocco"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "reveal_hand", "discard_revealed_matching_unless_pay_life",
+    ]
+    assert steps[1].payload["filter"] == {
+        "type_filter": "instant", "color_filter": "U",
+    }
+    assert steps[1].payload["life"] == 4
+
+
+def test_sirocco_offers_one_payment_per_matching_card(set_pool):
+    """"**For each** blue instant card revealed this way" — one offer per card,
+    answered independently, and only the declined ones go. The Knight is
+    neither blue nor an instant and is never named."""
+    game = _w2g4_sirocco(
+        set_pool, ["Boomerang", "Dissipate", "Femeref Knight"]
+    )
+    assert [c.data["prompt"] for c in game.pending_choices] == [
+        "Pay 4 life to keep Boomerang?", "Pay 4 life to keep Dissipate?",
+    ], game.log
+
+    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=False)
+
+    assert [c.name for c in game.players[1].hand] == [
+        "Boomerang", "Femeref Knight",
+    ], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Dissipate"]
+    assert game.players[1].life == 16, game.log
+
+
+def test_sirocco_discards_both_copies_of_one_card_one_at_a_time(set_pool):
+    """A hand is the one zone where two copies of a card are the same Python
+    object, so a discard that filtered by identity would empty the hand on the
+    first answer. Each offer takes exactly one, through
+    ``Game.take_card_from_hand``."""
+    game = _w2g4_sirocco(set_pool, ["Boomerang", "Boomerang"])
+    assert len(game.pending_choices) == 2, game.log
+
+    assert game.confirm_optional_pay(1, accept=False)
+    assert [c.name for c in game.players[1].hand] == ["Boomerang"], game.log
+
+    assert game.confirm_optional_pay(1, accept=False)
+    assert game.players[1].hand == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Boomerang", "Boomerang",
+    ], game.log
+
+
+def test_sirocco_discards_outright_when_the_life_cannot_be_paid(set_pool):
+    """CR 119.4: a player may pay life only with a life total at least the
+    amount, so a seat at 2 is never offered the choice — the card simply goes,
+    which is what the sentence says happens when the cost is not paid."""
+    game = _w2g4_sirocco(set_pool, ["Boomerang"], life=2)
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[1].hand == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Boomerang"]
+    assert game.players[1].life == 2, game.log
+
+
+def test_sirocco_names_nothing_in_a_hand_with_no_blue_instant(set_pool):
+    """The narrowing is the card. Read as "for each card revealed this way" it
+    is a very different spell, and the assertion is that a hand of the wrong
+    cards is left alone entirely."""
+    game = _w2g4_sirocco(set_pool, ["Femeref Knight", "Kaervek's Hex"])
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert sorted(c.name for c in game.players[1].hand) == [
+        "Femeref Knight", "Kaervek's Hex",
+    ], game.log

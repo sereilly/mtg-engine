@@ -611,6 +611,7 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 #: permanent until this step made it.
 PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,

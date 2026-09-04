@@ -22,6 +22,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, LAST_TARGET_CONTROLLER,
+                            REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -2441,6 +2442,12 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
         (i for i, seated in enumerate(game.players) if seated is victim), None
     )
     names = [held.name for held in victim.hand]
+    # "**For each blue instant card revealed this way**, …" (Sirocco.) What was
+    # shown, as cards rather than names: the sentence behind this one narrows by
+    # colour and card type, and a list of names cannot be asked either. Written
+    # even for an empty hand, because an absent key is a back-reference with no
+    # producer — a different thing from a reveal that showed nothing.
+    context.results[REVEALED_HAND_CARDS] = list(victim.hand)
     if seat is not None:
         game.record_reveal(seat, names)
     game.log.append(
@@ -5698,6 +5705,12 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
 #: discard by value would take whichever one ``list.remove`` reached first.
 REVEALED_HAND_INDEX = "revealed_card_hand_index"
 
+#: Which of a revealed hand's cards *one* of Sirocco's offers is about. Private
+#: to a single offer's branch context — the resolution's own scratchpad is
+#: shared, and a key written into it per offer would leave every branch reading
+#: whichever was armed last.
+_DISCARDED_REVEALED_CARD = "discarded_revealed_card"
+
 
 @effect_handler("reveal_random_card_from_hand")
 def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -5805,6 +5818,99 @@ def discard_revealed_unless_pay_life(game: Game, instruction: OracleInstruction,
         _context=paying_context,
         prompt=f"Pay {amount} life to keep {card.name}?",
     )
+    return True, "resolved"
+
+
+@effect_handler("discard_revealed_matching_unless_pay_life")
+def discard_revealed_matching_unless_pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"For each blue instant card revealed this way, that player discards that
+    card unless they pay 4 life." (Sirocco.)
+
+    The plural of ``discard_revealed_unless_pay_life``: one offer per card the
+    reveal in front of this one showed that the printed phrase names, all on the
+    same ``optional_pay`` queue, so the spell stays on the stack until the last
+    is answered (CR 608.2, CR 117.3b) and ``web/prompts.py``'s three loops
+    render, gate and default them exactly as they do a single one.
+
+    **Each offer carries its own card**, in a *copy* of the resolution's
+    scratchpad: ``results`` is one dict for the whole resolution, so writing the
+    card into it per offer would leave every branch reading whichever was armed
+    last. Nothing after this sentence reads the record, which is what makes the
+    copy free.
+
+    The discard names the card rather than a slot. Two copies of one card in a
+    hand are the same Python object and the pile renumbers as cards leave, so
+    the slot the reveal saw is stale by the second answer —
+    ``Game.take_card_from_hand`` removes exactly one, by an index found through
+    identity.
+
+    CR 119.4: a player may pay life only with a life total at least the amount,
+    so a seat that cannot pay is never offered the choice — it simply discards,
+    which is what the sentence says happens when the cost is not paid.
+    """
+    from .life_and_game import can_pay_life
+
+    victim = context.target if context.target is not None else context.caster
+    seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
+    revealed = context.results.get(REVEALED_HAND_CARDS)
+    if seat is None or not revealed:
+        return True, "resolved"
+    described = dict(instruction.payload.get("filter") or {})
+    amount = int(instruction.payload.get("life", 0))
+    # Re-checked here rather than trusted from the lowering, for the reason
+    # every other handler re-checks: the payload describes what the card said,
+    # and this is the reader that decides which cards are offered.
+    matching = [
+        card for card in revealed if _card_matches_filter(card, described)
+    ]
+    for card in matching:
+        paying = dataclasses.replace(
+            context, caster=victim,
+            results={**context.results, _DISCARDED_REVEALED_CARD: card},
+        )
+        discard = (
+            _OracleInstruction("discard_bound_revealed_card", "", {}),
+        )
+        if not can_pay_life(victim, amount):
+            game._execute_oracle_instruction(discard[0], paying)
+            continue
+        game.arm_pending_choice(
+            "optional_pay", seat,
+            card_name=context.card.name if context.card is not None else "",
+            cost={},
+            life=0,
+            _source_permanent=context.source_permanent,
+            _on_accept=(_OracleInstruction("pay_life", "", {"amount": amount}),),
+            _on_decline=discard,
+            _on_reflexive=(),
+            _context=paying,
+            prompt=f"Pay {amount} life to keep {card.name}?",
+        )
+    return True, "resolved"
+
+
+@effect_handler("discard_bound_revealed_card")
+def discard_bound_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The declined branch of one of Sirocco's offers.
+
+    The card is named rather than pointed at by a slot, which is the whole
+    difference from ``discard_revealed_card`` beside it: that one is about the
+    single card a reveal showed and the slot is what says *which copy*, where
+    this one is one of several offers whose answers arrive in any order and
+    renumber the pile as they land. ``Game.take_card_from_hand`` removes exactly
+    one, by an index found through identity — a hand is the one zone where two
+    copies of a card are the same object, so a filter by identity would remove
+    both.
+    """
+    victim = context.target if context.target is not None else context.caster
+    card = context.results.get(_DISCARDED_REVEALED_CARD)
+    if card is None:
+        return True, "resolved"
+    if not game.take_card_from_hand(victim, card):
+        game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
+        return True, "resolved"
+    victim.graveyard.append(card)
+    game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 
 

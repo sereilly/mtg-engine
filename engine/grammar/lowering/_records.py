@@ -27,6 +27,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
@@ -426,6 +427,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # card, draw a card." (Track Down.) The reveal records what it showed and
     # the conditional after it reads that record — not the library, which the
     # draw in its own branch would have changed underneath it.
+    # "Target player reveals their hand." (Sirocco, Inquisition, Amnesia.) What
+    # was shown, for the sentence that narrows it — see
+    # ``_events.REVEALED_HAND_CARDS``.
+    "reveal_hand": REVEALED_HAND_CARDS,
     "reveal_top_of_library": "revealed_card",
     # "Target player reveals a card at random from their hand." (Wand of
     # Ith.) The same record, from a different zone: the sentences behind it

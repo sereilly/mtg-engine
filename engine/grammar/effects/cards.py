@@ -638,6 +638,66 @@ def _parse_discard_revealed_unless_pay_life(
     return ast.DiscardRevealedUnlessPayLife(player, amount=amount)
 
 
+def _parse_for_each_revealed_discard(
+    stream: TokenStream,
+) -> "ast.DiscardRevealedMatchingUnlessPayLife | None":
+    """``For each <filter> card revealed this way, <player> discards that card
+    unless they pay <N> life.`` (Sirocco.)
+
+    One production for the whole sentence rather than a general loop, for the
+    reason :class:`ast.DiscardRevealedUnlessPayLife` is fused: the offer and its
+    penalty are one prompt, and here they are one prompt *per card* out of a set
+    the handler already holds. A ``ForEach`` around the singular node would have
+    to bind "that card" for every turn of the loop, which nothing else in the
+    pool asks for and which the offer's suspension would have to be resumable
+    through.
+
+    Every word is required and the whole thing refuses without consuming. The
+    "this way" window is what makes the set the cards the *sentence in front*
+    revealed rather than every card in a hand, and a production that dropped it
+    would discard a hand the spell never showed.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        filt.is_card
+        and stream.accept_phrase("revealed", "this", "way")
+        and stream.accept_punct(",")
+    ):
+        stream.reset(mark)
+        return None
+    player = parse_player_ref(stream)
+    if player is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("discards", "discard"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("that", "card")
+        and stream.accept_word("unless")
+        and stream.accept_word("they", "he", "she")
+        and stream.accept_word("pay", "pays")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return ast.DiscardRevealedMatchingUnlessPayLife(player, filt, amount)
+
+
 def _accept_hand_to_library_tail(
     stream: TokenStream, possessive: str, *, ordered: bool = True
 ) -> bool:

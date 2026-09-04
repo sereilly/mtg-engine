@@ -16,7 +16,7 @@ graph had already fallen apart there.
 """
 
 from ...oracle_types import (LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
-                             OracleInstruction)
+                             REVEALED_HAND_CARDS, OracleInstruction)
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter
 from .. import ast
@@ -24,6 +24,7 @@ from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
     chargeable_card_filter,
+    dropped_narrowings,
     _amount_payload,
     _describe_targets,
     _is_target,
@@ -166,6 +167,56 @@ def _lower_discard_revealed_unless_pay_life(
         payload["life"] = amount
     return (
         OracleInstruction("discard_revealed_unless_pay_life", "", payload),
+    )
+
+
+def _lower_discard_revealed_matching_unless_pay_life(
+    node: "ast.DiscardRevealedMatchingUnlessPayLife", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"For each blue instant card revealed this way, **that player discards
+    that card unless they pay 4 life**." (Sirocco.)
+
+    ``produced`` is the gate, and it names the *hand* reveal rather than the
+    single-card one: "this way" is the set the sentence in front showed, and
+    with no reveal behind it the loop would walk an empty record and the spell
+    would silently do nothing.
+
+    The narrowing is carried or the line refuses. Every key has to be one
+    ``card_matches_filter`` answers — the objects are cards in a hand, so
+    nothing about the battlefield is in the question, and a dropped adjective
+    here is a spell discarding cards its own text did not name.
+    """
+    if REVEALED_HAND_CARDS not in produced:
+        raise LoweringError(
+            "'revealed this way' with nothing in this effect that revealed a "
+            "hand", node=node,
+        )
+    if node.player.kind not in ("target_player", "that_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} discard the revealed cards",
+            node=node,
+        )
+    # ``to_payload`` directly, not ``_filter_payload``: that reader refuses
+    # every card-scoped filter by construction, because the handlers it feeds
+    # search the battlefield. These objects are cards in a hand, so the gate is
+    # ``card_only_filter`` instead — and ``dropped_narrowings`` beside it,
+    # because a phrase that left no key at all would widen the discard to every
+    # card the reveal showed.
+    payload = node.filter.to_payload()
+    described = card_only_filter(payload)
+    lost = dropped_narrowings(node.filter, payload)
+    if described is None or lost:
+        raise LoweringError(
+            "the revealed-card discard cannot test that phrase", node=node
+        )
+    amount = _amount_payload(node.amount)
+    if not isinstance(amount, int) or amount < 0:
+        raise LoweringError("a life payment is a printed number", node=node)
+    return (
+        OracleInstruction(
+            "discard_revealed_matching_unless_pay_life", "",
+            {"filter": described, "life": amount},
+        ),
     )
 
 

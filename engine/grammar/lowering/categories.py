@@ -493,6 +493,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # are one instruction because the branch acts on a card only the offer knows
     # — the same reason `unless_player_pays` carries its own unpaid steps.
     "discard_revealed_unless_pay_life": "zones",
+    # Sirocco: the plural of the row above, one offer per revealed card the
+    # printed phrase names. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "discard_revealed_matching_unless_pay_life": "zones",
+    "discard_bound_revealed_card": "zones",
     # "…discards **all nonland cards**" (Amnesia). A discard like the counted
     # ones beside it; only who picks differs, and here nobody does.
     "discard_all_matching_cards": "zones",

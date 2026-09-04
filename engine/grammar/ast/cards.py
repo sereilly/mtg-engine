@@ -227,6 +227,28 @@ class DiscardRevealedUnlessPayLife:
 
 
 @dataclass(frozen=True)
+class DiscardRevealedMatchingUnlessPayLife:
+    """``For each <filter> card revealed this way, that player discards that
+    card unless they pay <N> life.`` (Sirocco.)
+
+    The plural of :class:`DiscardRevealedUnlessPayLife`, and one node rather
+    than a loop around that one for the reason that one is fused at all: the
+    offer and its penalty are a single prompt, and here they are a prompt *per
+    card* out of a set the handler already has in hand. A general loop would
+    have to bind "that card" for each turn of it, which no other sentence in the
+    pool asks for.
+
+    ``filter`` is the printed narrowing ("blue instant card"), asked of a card
+    rather than of a permanent — the objects are in a hand, so nothing about the
+    battlefield is in the question.
+    """
+
+    player: PlayerRef
+    filter: "ObjectFilter"
+    amount: Amount
+
+
+@dataclass(frozen=True)
 class RevealHandAndChoose:
     """``Target opponent reveals their hand. You choose a <filter> card from
     it. That player discards that card.`` (Duress.)

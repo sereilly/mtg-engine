@@ -42,6 +42,7 @@ from .effects import (_parse_untap_chosen_by_paying,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.stack import _parse_conditional_retarget
+from .effects.cards import _parse_for_each_revealed_discard
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +352,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     per_count = _parse_leading_count_scale(_parse_statement_body, stream)
     if per_count is not None:
         return per_count
+    # "**For each blue instant card revealed this way,** that player discards
+    # that card unless they pay 4 life." (Sirocco.) Read before the general
+    # leading loop below, which would take the noun phrase and then fail the
+    # line on a body it has no reading for — the discard names "that card",
+    # which is one turn of a loop rather than a subject anything else parses.
+    # Refuses without consuming, so every other "For each …" keeps its reading.
+    revealed_discard = _parse_for_each_revealed_discard(stream)
+    if revealed_discard is not None:
+        return revealed_discard
     per_death = _parse_leading_for_each(_parse_statement_body, stream)
     if per_death is not None:
         # The repeated act may be printed as a choice of two ("pay 4 life **or**

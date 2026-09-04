@@ -48,6 +48,18 @@ DISCARDED_BY_SEAT = "discarded_by_seat"
 # decide everybody's life gain.
 DREW_BY_SEAT = "drew_by_seat"
 
+# "Target player reveals their hand. **For each blue instant card revealed this
+# way**, …" (Sirocco.) The cards a hand reveal showed, as cards: the sentence
+# behind it narrows by colour and card type, which the *names* the client is
+# sent cannot be asked. Here rather than beside either end for the reason above
+# — the handler writes it and a lowering gates on it, and this module imports
+# nothing from the engine so both can reach it.
+#
+# Separate from ``revealed_card``, which holds the single card a top-of-library
+# or random-from-hand reveal named: one is a set and the other is an object, and
+# a reader handed the wrong one would ask a list what its mana value is.
+REVEALED_HAND_CARDS = "revealed_hand_cards"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as
