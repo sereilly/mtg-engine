@@ -197,6 +197,22 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
             game.log.append(f"{context.card.name}: no opponent was chosen")
             return True, "resolved"
         recipient = game.players[seat]
+    elif who == "event_subject_player":
+        # "At the beginning of **each player's** upkeep, that player may pay
+        # … **they** gain control of this creature." (Emberwilde Djinn.)
+        # Nobody chose and nobody targeted: the seat is whose upkeep the
+        # firing was, frozen into the trigger's context by the upkeep step
+        # (CR 603.10) — the same key the offer in front of this instruction
+        # armed its prompt on, so the player who paid and the player who
+        # gains control are one seat by construction.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # No frozen seat means the trigger did not record one. Falling
+            # back to the caster would hand the creature to the player the
+            # sentence has just named as somebody else.
+            game.log.append(f"{context.card.name}: no seat was recorded")
+            return True, "resolved"
+        recipient = game.players[seat]
     else:
         return False, f"unsupported control recipient {who!r}"
     if recipient is None or recipient not in game.players:

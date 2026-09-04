@@ -20,7 +20,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_targets, _filter_payload, _is_source, _is_target,
                       _restrictions_beyond)
-from ._events import CHOSEN_PERMANENT, CHOSEN_PLAYER, _UNTAPPED_PERMANENTS
+from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
+                      _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
 
 
 def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
@@ -213,6 +214,16 @@ def _lower_offered_steal(
 #: the whole of what makes this list a claim rather than a filter: a seat word
 #: nobody resolves would hand the permanent to whichever player an empty lookup
 #: defaults to, which is the ability doing something the card never said.
+#: "At the beginning of each player's upkeep, that player may pay {R}{R} or
+#: 2 life. If the player does, **they** gain control of this creature."
+#: (Emberwilde Djinn.) A seat the *firing event* named rather than one the
+#: resolution chose, so it is neither a named gainer below (nothing targeted
+#: it) nor a chosen one above (nobody picks).
+#: ``_events._EVENT_SUBJECT_PLAYERS`` is what says an event really froze one,
+#: so under any other trigger the word names a player nobody recorded and the
+#: sentence refuses.
+_EVENT_GAINERS = frozenset({"that_player", "they"})
+
 _NAMED_GAINERS = frozenset({"target_opponent", "target_player", "you"})
 
 #: The seats a control change may be handed to by a phrase that names **no**
@@ -226,7 +237,7 @@ _CHOSEN_GAINERS = {"opponent": "Choose an opponent to gain control of this perma
 
 
 def _lower_another_seat_gains_control(
-    node: ast.GainControl, subject: ast.TargetSpec
+    node: ast.GainControl, subject: ast.TargetSpec, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent gains control of this creature." (Chaos Lord.)
 
@@ -251,6 +262,25 @@ def _lower_another_seat_gains_control(
         )
     assert node.gained_by is not None
     who = node.gained_by.kind
+    if who in _EVENT_GAINERS:
+        # The seat the *firing event* froze, gated on the one table that says
+        # which events freeze one — so this sentence under a trigger that
+        # froze nobody refuses here rather than handing the permanent to
+        # whichever player the resolution happened to be carrying. The same
+        # gate and the same key the offer in front of it already reads for
+        # its own actor, so the player who pays and the player who gains
+        # cannot come apart.
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "a control change to \"that player\" needs a trigger whose "
+                "event freezes a seat", node=node,
+            )
+        return (
+            OracleInstruction(
+                "give_control_of_source_to_player", "",
+                {"who": EVENT_SUBJECT_PLAYER},
+            ),
+        )
     prompt = _CHOSEN_GAINERS.get(who)
     if prompt is not None:
         # Two steps for one sentence, the same shape ``choose_permanent`` +
@@ -277,7 +307,7 @@ def _lower_another_seat_gains_control(
 
 
 def _lower_gain_control(
-    node: ast.GainControl, produced: frozenset[str]
+    node: ast.GainControl, produced: frozenset[str], event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """``Gain control of <subject> <duration>.``
 
@@ -320,7 +350,7 @@ def _lower_gain_control(
     # (``node.offered``, Infernal Denizen) is a different sentence and keeps its
     # own branch further down — there the seat both picks and receives.
     if node.gained_by is not None and not node.offered:
-        return _lower_another_seat_gains_control(node, subject)
+        return _lower_another_seat_gains_control(node, subject, event)
     if node.duration == "indefinite":
         # "Gain control of target nonartifact, nonblack creature." (Ritual of
         # the Machine.) The same contribution the until-end-of-turn branch

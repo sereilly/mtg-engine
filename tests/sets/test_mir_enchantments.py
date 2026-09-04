@@ -390,3 +390,155 @@ def test_the_lock_ends_at_its_controllers_next_upkeep(set_pool):
     game.start_next_turn()          # P2's untap step: it phases out again
 
     assert drake.metadata.get("phased_out") is True, game.log
+
+
+# --- W1G2: an Aura's protection from a colour nobody printed ---
+
+
+def _w1g2_warded(set_pool, colour):
+    """A vanilla creature under Ward of Lights, its chosen colour forced."""
+    host = Permanent(card=set_pool("MIR")["Viashino Warrior"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host],
+                    hand=[set_pool("MIR")["Ward of Lights"]], life=20),
+        PlayerState(name="P2", hand=[set_pool("MIR")["Kaervek's Torch"]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    assert game.cast_from_hand(
+        0, "Ward of Lights", target_player_index=0, target_permanent_index=0
+    ).supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    aura = next(p for p in game.players[0].battlefield
+                if p.card.name == "Ward of Lights")
+    aura.metadata["chosen_color"] = colour
+    game._recompute_continuous_effects()
+    game.check_state_based_actions()
+    return game, host, aura
+
+
+def test_ward_of_lights_compiles_with_a_chosen_colour(set_pool):
+    """"Enchanted creature has protection from **the chosen color**. This effect
+    doesn't remove this Aura."
+
+    The Ward cycle's channel read the five printed colour words and nothing
+    else, so a colour the Aura *chose* as it entered had no value to travel
+    under. It reaches the same reader as a sentinel, because that reader already
+    maps words to symbols and is the only one holding the Aura the choice was
+    recorded on.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Ward of Lights"])
+    assert program.supported, program.reason
+
+    game, _host, aura = _w1g2_warded(set_pool, "R")
+    assert aura.metadata.get("chosen_color") == "R"
+
+
+def test_ward_of_lights_stops_a_spell_of_the_chosen_colour(set_pool):
+    """CR 702.16b: a permanent with protection from a colour can't be targeted
+    by a spell of that colour."""
+    game, _host, _aura = _w1g2_warded(set_pool, "R")
+    game.start_next_turn()
+
+    result = game.cast_from_hand(
+        1, "Kaervek's Torch", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported, game.log
+
+
+def test_ward_of_lights_lets_every_other_colour_through(set_pool):
+    """The other direction, and the one that says the choice is being *read*: a
+    grant that answered "yes" to every colour would pass the test above while
+    making the creature untargetable by anything."""
+    game, _host, _aura = _w1g2_warded(set_pool, "W")
+    game.start_next_turn()
+
+    result = game.cast_from_hand(
+        1, "Kaervek's Torch", target_player_index=0, target_permanent_index=0
+    )
+
+    assert result.supported, game.log
+
+
+def test_ward_of_lights_survives_choosing_its_own_colour(set_pool):
+    """"**This effect doesn't remove this Aura.**"
+
+    Ward of Lights is white, so naming white would ordinarily make the Aura
+    unable to enchant what it enchants (CR 303.4h) and CR 704.5m would put it in
+    the graveyard. The printed sentence is the exception, and it is claimed as
+    part of the same line rather than left as unread text.
+    """
+    game, _host, aura = _w1g2_warded(set_pool, "W")
+
+    assert game.is_on_battlefield(aura), game.log
+    assert aura.metadata.get("attached_to") is not None, game.log
+
+
+# --- W1G2: an upkeep offer whose payer is also who gains what it buys ---
+
+
+def test_emberwilde_djinn_hands_itself_to_the_player_who_pays(set_pool):
+    """"At the beginning of each player's upkeep, that player may pay {R}{R} or
+    2 life. If the player does, **they** gain control of this creature."
+
+    Two halves, and each was a hole. CR 118.8's alternative had a life reader
+    and a mana reader and the offered-cost position called only the mana one;
+    and "they" is a seat the *firing event* froze rather than one anything
+    targeted or chose, which the control lowering had no branch for. The seat is
+    read through the same table the offer in front of it already used for its
+    own actor, so the player who pays and the player who gains cannot come
+    apart.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Emberwilde Djinn"])
+    assert program.supported, program.reason
+
+    djinn = Permanent(card=set_pool("MIR")["Emberwilde Djinn"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[djinn], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game.resolve_stack()
+    # P1's own upkeep offers P1 the deal it already has; declining changes
+    # nothing, which is what leaves the next upkeep's assertion meaningful.
+    assert game.confirm_optional_pay(0, "Emberwilde Djinn", accept=False)
+    game.resolve_stack()
+    assert game.controller_index_of(djinn) == 0, game.log
+
+    game.start_next_turn()
+    game.resolve_stack()
+    assert game.confirm_optional_pay(1, "Emberwilde Djinn", accept=True)
+    game.resolve_stack()
+
+    assert game.controller_index_of(djinn) == 1, game.log
+    # No red mana anywhere, so the alternative is what was spent (CR 118.8).
+    assert game.players[1].life == 18, game.log
+    assert game.players[0].life == 20, game.log
+
+
+def test_emberwilde_djinn_stays_put_when_the_offer_is_declined(set_pool):
+    """The decline branch — an offer that moved the creature either way would
+    read identically in the test above."""
+    djinn = Permanent(card=set_pool("MIR")["Emberwilde Djinn"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[djinn], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game.resolve_stack()
+    game.confirm_optional_pay(0, "Emberwilde Djinn", accept=False)
+    game.start_next_turn()
+    game.resolve_stack()
+    assert game.confirm_optional_pay(1, "Emberwilde Djinn", accept=False)
+    game.resolve_stack()
+
+    assert game.controller_index_of(djinn) == 0, game.log
+    assert game.players[1].life == 20, game.log

@@ -38,6 +38,7 @@ from .phrases import (
     parse_bound_subject,
 )
 from .effects import (
+    _accept_life_alternative,
     _parse_ante,
     _parse_assigns_no_combat_damage,
     _parse_becomes,
@@ -410,8 +411,24 @@ def parse_subject_verb(
                     # "or" is next and would read "{2}" as a second *action*.
                     # What each way buys is read behind the sentence, by
                     # `sentence_clauses._accept_graded_toll_outcomes`.
-                    return ast.May(source_spec, cost=cost,
-                                   cost_alternatives=_accept_mana_alternatives(stream))
+                    # "…may pay {R}{R} **or 2 life**." (Emberwilde Djinn.)
+                    # The other currency of CR 118.8's alternative, and it
+                    # is read here beside the mana one for that reader's
+                    # reason exactly: `_parse_optional_action`'s own "or"
+                    # comes next and would take "2 life" for a second
+                    # *action*. Two readers rather than one because a mana
+                    # alternative is a whole symbol dict and a life one is a
+                    # number — the same split `_accept_life_alternative`
+                    # already documents one clause over.
+                    alternatives = _accept_mana_alternatives(stream)
+                    return ast.May(
+                        source_spec, cost=cost,
+                        cost_alternatives=alternatives,
+                        life_alternative=(
+                            None if alternatives
+                            else _accept_life_alternative(stream)
+                        ),
+                    )
                 except GrammarError:
                     stream.reset(mark_pay)
             # "…its controller **may add** an additional {U}." (Snowfall.) The
