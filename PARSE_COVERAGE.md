@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1867**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **171**
+- With deletion-probe findings (ignored words): **172**
 
 ## Measured sets — reported, not gated
 
@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**24 unclaimed sentence(s) across 18 supported card(s).**
+**22 unclaimed sentence(s) across 16 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
@@ -59,10 +59,6 @@ anything anyone did, and every ingest would arrive red.
   - `as this enchantment enters, choose island or swamp`
 - **Soul Echo**
   - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
-- **Soul Rend**
-  - `a creature destroyed this way can't be regenerated`
-- **Telim'Tor's Edict**
-  - `exile target permanent you own or control`
 - **Tombstone Stairwell**
   - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
   - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`
@@ -165,6 +161,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Icatian Moneychanger | `you gain 1 life for each credit counter on this creature` | creature |
 | Icatian Skirmishers | `all creatures banded with it gain first strike until end of turn` | all |
 | Icatian Store | `if this land is tapped, put a storage counter on it` | land |
+| Icequake | `destroy target land. if that land was a snow land, icequake deals 1 da` | land, |
 | Icy Manipulator | `tap target artifact, creature, or land` | or |
 | Infuse | `untap target artifact, creature, or land` | or |
 | Johan | `you may have johan gain "johan can't attack" until end of combat. if y` | have |

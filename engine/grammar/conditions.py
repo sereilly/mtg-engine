@@ -26,13 +26,12 @@ from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec
-from .phrases import (_accept_self_reference, _parse_duration,
-                      _parse_keywords, parse_bound_subject)
-from .condition_clauses import (_accept_it_is,
+from .phrases import _parse_duration, _parse_keywords
+from .condition_clauses import (_accept_record_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS, NUMBER_WORDS
+from .vocabulary import NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -97,50 +96,6 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             stream.reset(mark)
             break
     return first if len(parts) == 1 else ast.EveryOf(tuple(parts))
-
-
-def _accept_quality_with_implied_noun(
-    stream: TokenStream, noun: str
-) -> "ast.ObjectFilter | None":
-    """The filter "was **nonbasic**" states about a *noun* named earlier.
-
-    "If that land was nonbasic, …" (Choking Sands) prints the quality without
-    its head noun, because the sentence supplied one two words back. The
-    adjective run is lifted out, the noun put on the end, and the rebuilt
-    phrase handed to :func:`parse_object_filter` — the **same** reader the
-    spelled-out "a nonbasic land" beside it goes through, which is what keeps
-    the two spellings one restriction rather than two readings of an adjective.
-
-    Non-consuming on refusal, and the run stops at the first non-word token —
-    for this clause the comma before the consequence — so a quality this cannot
-    read leaves the condition to the readers behind it rather than swallowing
-    the rest of the sentence.
-    """
-    from .lexer import tokenize
-
-    start = stream.mark()
-    count = 0
-    while stream.peek_word(count) is not None:
-        count += 1
-    if count == 0:
-        return None
-    phrase = stream.text_between(start, start + count)
-    if not phrase:
-        return None
-    rebuilt = f"a {phrase} {noun}"
-    lexed = tokenize(rebuilt)
-    if not lexed.tokens:
-        return None
-    inner = TokenStream(lexed.tokens, rebuilt)
-    inner.accept_word("a")
-    try:
-        filt = parse_object_filter(inner)
-    except GrammarError:
-        return None
-    if not inner.exhausted:
-        return None
-    stream.advance(count)
-    return filt
 
 
 def _parse_single_condition(stream: TokenStream) -> ast.Condition:
@@ -481,254 +436,23 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.ObjectHasKeyword(keywords, negated=negated)
     stream.reset(keyword_mark)
 
-    # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
-    # flip above and unlike everything below it: no read of the board can answer
-    # it, because the card it asks about has already left the zone the effect
-    # took it from (CR 608.2h). Which object "it" names is lowering's question,
-    # not the parser's — the parser cannot see the sentence in front of it.
+    # Every condition answered by looking at a **record** of something already
+    # done — "it was a creature card", "a white creature dies this way", "the
+    # discarded card was a land card", "a permanent was put into your hand this
+    # turn" — is read below, in ``condition_clauses``. The dispatcher keeps the
+    # conditions answered by looking at the game *now*.
     #
-    # Guarded and reset, because "it was" is **not** unambiguous: "if it **was
-    # blocked this turn**" (Fyndhorn Druid) opens with the same two words and is
-    # a question about a combat record, not about a card that left a zone. This
-    # branch used to consume the pronoun unconditionally and let the noun parser
-    # raise, so that clause failed as "expected a subject" — a refusal naming
-    # the wrong layer — and no later production could ever see it.
-    it_was_mark = stream.mark()
-    if stream.accept_phrase("it", "was"):
-        stream.accept_word("a", "an")
-        try:
-            return ast.ItWas(parse_object_filter(stream))
-        except GrammarError:
-            pass
-    stream.reset(it_was_mark)
+    # The cut is the one ``ast/conditions.py`` and ``ast/records.py`` already
+    # draw one package over, and the one this module's floor already describes:
+    # a clause reader takes a sentence, reads it to its end, and is
+    # non-consuming on refusal so the next branch keeps its say. It was taken
+    # when the module crossed the thousand-line guard at a wave's *integration*,
+    # on nobody's branch — four groups' additions merely summed, which is the
+    # guard surfacing a family boundary that was already there.
+    recorded = _accept_record_condition(stream)
+    if recorded is not None:
+        return recorded
 
-    # "Exile the top card of your library. **If that card is a land card**, …"
-    # (Chaos Harlequin.) The same back-reference with the pronoun's noun spelled
-    # out, exactly as "that <noun> was …" further down spells out the destroy's
-    # — so it is the same node rather than a second one: which object it names is
-    # still the lowering's question, and the lowering still refuses unless a step
-    # in front of it exiled something.
-    #
-    # **Present tense, and only present tense.** The card is in exile, a zone it
-    # has not left again, so "is" is what the card prints and no printed type
-    # changed on the way there. The past-tense spelling is left to
-    # ``DestroyedTargetWas`` below, whose production reads "that <noun> was" for
-    # any noun: taking "that card was" here would steal that clause from it for
-    # a sentence no card in the pool prints.
-    that_card = stream.mark()
-    if stream.accept_phrase("that", "card", "is"):
-        stream.accept_word("a", "an")
-        try:
-            return ast.ItWas(parse_object_filter(stream))
-        except GrammarError:
-            pass
-    stream.reset(that_card)
-
-    # "if **the discarded card** was a land card" (Land's Edge). The same
-    # past-tense back-reference as the clause above, naming its producer in
-    # words instead of with a pronoun — which is why it is a separate node: the
-    # sentence says *which* record it means, and reading it as "it" would let
-    # the condition answer off whatever an earlier step happened to write.
-    if stream.accept_phrase("the", "discarded", "card", "was"):
-        stream.accept_word("a", "an")
-        return ast.DiscardedCardWas(parse_object_filter(stream))
-
-    # "if **the exiled creature was a Thrull**" (Soul Exchange); "if **the
-    # sacrificed creature was a Thrull**" (Ebon Praetor). The same past-tense
-    # back-reference as the two above, naming a *cost* channel instead of a step
-    # of the effect: CR 601.2h paid it before the object was on the stack, so
-    # the answer is the record the payment kept (CR 608.2h).
-    #
-    # One production for both verbs, because they are one printed template with
-    # the verb changed — and the noun after it is read and dropped the way
-    # "that <noun> was …" drops its repeated noun: it names the object the cost
-    # ate, which the channel already says.
-    #
-    # Both tenses. "…**if the exiled card is a snow land**" (Storm Elemental) is
-    # the same question about the same record: the card is sitting in exile, so
-    # what it *is* and what it *was* are one printed type line — and a second
-    # node for the second tense would be two readers of one channel, which is
-    # the drift this production was written as one branch to avoid.
-    cost_mark = stream.mark()
-    if stream.accept_word("the"):
-        verb = stream.peek_word()
-        if verb in ("sacrificed", "exiled") and stream.peek_word(2) in ("was", "is"):
-            stream.advance(3)
-            stream.accept_word("a", "an")
-            try:
-                return ast.CostObjectWas(str(verb), parse_object_filter(stream))
-            except GrammarError:
-                pass
-    stream.reset(cost_mark)
-
-    # "if it's a creature or land card" (Track Down) — the present-tense twin of
-    # the clause above, and a different question: that one asks what an object
-    # *was* before it left a zone, this one asks what a card revealed by an
-    # earlier sentence of this same effect *is*. Different producers, so
-    # different nodes.
-    #
-    # Guarded and reset, unlike the past-tense branch, because "it's" is not
-    # unambiguous the way "it was" is: "This creature gets +0/+3 **as long as
-    # it's untapped**" (Giant Tortoise) opens with the same two words and is a
-    # state test, not a card test. So this branch takes the sentence only when a
-    # noun phrase naming card *types* follows, and hands it back otherwise.
-    it_mark = stream.mark()
-    # "If it **isn't** a land card, …" (Wand of Ith) is the same test read the
-    # other way, so it is the same branch carrying the word rather than a
-    # second one — two readings of one record are two places for it to drift.
-    negated = bool(stream.at_word("it")) and _accept_it_is(stream, negated=True)
-    if negated or stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
-        # "…**if it's red**" (Hydroblast, Pyroblast). A bare colour word, read
-        # before the article below because that is what separates the two
-        # clauses sharing these two words: "if it's **a** red creature card"
-        # keeps its article and is a question about a revealed card, where this
-        # is a question about the object the effect targets. The colour is
-        # consumed against `COLOR_WORDS` rather than through the noun parser,
-        # which needs a head noun and would refuse the phrase outright.
-        colour = stream.peek_word()
-        if colour in COLOR_WORDS:
-            stream.advance()
-            return ast.ItIsColor(COLOR_WORDS[colour], negated=negated)
-        stream.accept_word("a", "an")
-        try:
-            revealed_filter = parse_object_filter(stream)
-        except GrammarError:
-            revealed_filter = None
-        if revealed_filter is not None and revealed_filter.card_types:
-            return ast.RevealedCardIs(revealed_filter, negated=negated)
-    stream.reset(it_mark)
-
-    # "if **one or more creature cards were put into that graveyard this
-    # way**" (Helm of Obedience). A back-reference to the set the loop in front
-    # of it recorded, read before the bound-subject clause below because both
-    # open on a noun phrase and only this one opens on the printed floor.
-    milled_mark = stream.mark()
-    if stream.accept_phrase("one", "or", "more"):
-        try:
-            milled_filter = parse_object_filter(stream)
-        except GrammarError:
-            milled_filter = None
-        if milled_filter is not None and stream.accept_phrase(
-            "were", "put", "into", "that", "graveyard", "this", "way"
-        ):
-            return ast.MilledThisWay(milled_filter)
-    stream.reset(milled_mark)
-
-    # "if **a white creature dies this way**" (Cinder Cloud), "if **that
-    # creature dies this way**" (Kaervek's Purge). The present tense, asked in
-    # the same resolution as the destroy in front of it — which is what makes it
-    # a different clause from Infinite Authority's past tense below: that one is
-    # checked at the next end step about a destruction an earlier step *armed*,
-    # and this one is about what the sentence before it just did.
-    #
-    # One node with the loop spelling ("for each creature that died this way"),
-    # because it names the same set: `ast.DiedThisWay` is the destroy family's
-    # own record, and a second node for the same record would be a second
-    # answer to which objects the words mean.
-    #
-    # Read **before** the past tense below, whose "that <noun>" opening this
-    # shares: tried second, the bound reader would consume "that creature" and
-    # then fail on "dies", taking the whole condition with it.
-    dies_mark = stream.mark()
-    stream.accept_word("a", "an")
-    try:
-        dying = parse_object_filter(stream)
-    except GrammarError:
-        dying = None
-    if dying is not None and stream.accept_phrase("dies", "this", "way"):
-        return ast.DiedThisWay(dying)
-    stream.reset(dies_mark)
-    if stream.accept_word("that"):
-        # "if **that creature** dies this way" — the bound spelling, whose noun
-        # is the one the destroy in front of it used. The noun is consumed and
-        # dropped for the reason the past-tense reader below drops its own: the
-        # object is whatever that step recorded, and the lowering is what checks
-        # a step in front of it destroyed something.
-        bound_noun = stream.mark()
-        try:
-            named = parse_object_filter(stream)
-        except GrammarError:
-            named = None
-        if named is not None and stream.accept_phrase("dies", "this", "way"):
-            return ast.DiedThisWay(named)
-        stream.reset(bound_noun)
-        stream.reset(dies_mark)
-
-    # "if **that creature was destroyed this way**" (Infinite Authority). The
-    # bound object is read through the shared reader rather than skipped: the
-    # sentence is checked at the next end step, long after the destruction it
-    # asks about, and which creature it names is the whole question.
-    this_way = stream.mark()
-    bound = parse_bound_subject(stream)
-    if bound is not None and stream.accept_phrase("was", "destroyed", "this", "way"):
-        return ast.DestroyedThisWay(bound.filter)
-    stream.reset(this_way)
-
-    # "if **that land** was a snow land" (Icequake, Thermokarst). The same
-    # past tense as the pronoun further up, naming its referent with the noun
-    # the destroy in front of it used — and asked of a *permanent*, so the whole
-    # noun phrase is read rather than a printed type line. The repeated noun is
-    # consumed and dropped: it is the object the earlier step chose, and
-    # lowering is what checks a step in front of it destroyed one.
-    #
-    # **Read after "that <noun> was destroyed this way"**, whose prefix this is:
-    # tried first it would consume "that creature was" and then fail on
-    # "destroyed this way", and Infinite Authority's condition would stop
-    # parsing. The filter parse is guarded for the same reason — a `that …
-    # was …` opening that is some other clause has to rewind rather than raise
-    # out of the whole condition.
-    that_mark = stream.mark()
-    if stream.accept_word("that"):
-        noun = stream.peek_word()
-        if noun is not None and stream.peek_word(1) == "was":
-            stream.advance(2)
-            stream.accept_word("a", "an")
-            quality_mark = stream.mark()
-            try:
-                return ast.DestroyedTargetWas(parse_object_filter(stream))
-            except GrammarError:
-                pass
-            stream.reset(quality_mark)
-            # "if that land was **nonbasic**" (Choking Sands) — the same
-            # question with the head noun left out, because the sentence said
-            # it two words earlier. Read only after the spelled-out form above
-            # refuses, and answered by putting the noun back rather than by a
-            # second reader of the adjective: the rebuilt phrase goes to the
-            # same `parse_subject_filter` every printed noun phrase does, so
-            # "nonbasic" narrows a land exactly as "a nonbasic land" would.
-            implied = _accept_quality_with_implied_noun(stream, noun)
-            if implied is not None:
-                return ast.DestroyedTargetWas(implied)
-    stream.reset(that_mark)
-    stream.reset(this_way)
-
-    # "if a creature **dealt damage by this creature this turn** died"
-    # (Krovikan Vampire). Read before the bare spelling below it — the two share
-    # their first two words and differ in everything that follows — and read as
-    # its own condition rather than as a filter on that one, because the
-    # relation has no payload form and would be dropped (see the node).
-    relation = stream.mark()
-    if stream.accept_phrase("a", "creature", "dealt", "damage", "by"):
-        if _accept_self_reference(stream) and stream.accept_phrase(
-            "this", "turn", "died"
-        ):
-            _parse_duration(stream)
-            return ast.DamagedBySourceDiedThisTurn()
-    stream.reset(relation)
-
-    if stream.accept_phrase("a", "creature", "died"):
-        _parse_duration(stream)
-        return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
-
-    # "if a permanent was put into your hand from the battlefield this turn"
-    # (Barrin, Tolarian Archmage). Every word is read: "from the battlefield"
-    # is what keeps a draw or a graveyard return from satisfying it.
-    if stream.accept_phrase(
-        "a", "permanent", "was", "put", "into", "your", "hand",
-        "from", "the", "battlefield",
-    ):
-        _parse_duration(stream)
-        return ast.ReturnedToHandThisTurn()
 
     # "if **this card is exiled with a scream counter on it**" (All Hallow's
     # Eve). CR 603.4's intervening-if over an object in exile — the one zone

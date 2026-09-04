@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 77.2% | 74.9% | 48.6% | 219 |
+| MIR *(measured)* | 335 | 545 | 78.9% | 77.2% | 50.6% | 226 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 341 | 170 | expected a subject |  |
-| 116 | 54 | unrecognized effect verb |  |
-| 95 | 50 | unconsumed text |  |
+| 340 | 169 | expected a subject |  |
+| 114 | 52 | unrecognized effect verb |  |
+| 90 | 45 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -157,6 +157,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
 - **Altar of Bone**
   - `Search your library for a creature card, reveal it, put it into your hand, then shuffle.`
+- **Amber Prison**
+  - `{4}, {T}: Tap target artifact, creature, or land. That permanent doesn't untap during its controller's untap step for as long as this artifact remains tapped.`
 - **Ambush**
   - `Blocking creatures gain first strike until end of turn.`
 - **Amnesia**
@@ -725,6 +727,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures without flying have reach. (They can block creatures with flying.)`
 - **Charcoal Diamond**
   - `{T}: Add {B}.`
+- **Chariot of the Sun**
+  - `{2}, {T}: Until end of turn, target creature you control gains flying and has base toughness 1.`
+- **Choking Sands**
+  - `Destroy target non-Swamp land. If that land was nonbasic, Choking Sands deals 2 damage to the land's controller.`
 - **Chromatic Armor**
   - `{X}: Put a sleight counter on this Aura and choose a color. X is the number of sleight counters on this Aura.`
 - **Chromatic Orrery**
@@ -1158,6 +1164,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
+- **Dissipate**
+  - `Counter target spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.`
 - **Divine Intervention**
   - `At the beginning of your upkeep, remove an intervention counter from this enchantment.`
   - `When you remove the last intervention counter from this enchantment, the game is a draw.`
@@ -1444,6 +1452,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• You draw three cards.`
 - **Favorable Destiny**
   - `Enchanted creature gets +1/+2 as long as it's white.`
+  - `Enchanted creature has shroud as long as its controller controls another creature. (It can't be the target of spells or abilities.)`
 - **Feast or Famine**
   - `• Create a 2/2 black Zombie creature token.`
   - `• Destroy target nonartifact, nonblack creature. It can't be regenerated.`
@@ -2902,6 +2911,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put up to three target cards from an opponent's graveyard on top of their library in any order.`
 - **Mist Dragon**
   - `{0}: This creature gains flying. (This effect lasts indefinitely.)`
+  - `{0}: This creature loses flying. (This effect lasts indefinitely.)`
   - `{3}{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
@@ -3333,8 +3343,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a +1/+1 counter on this creature. Then you may pay {X}, where X is the number of +1/+1 counters on it. If you don't, tap this creature and it deals X damage to you.`
 - **Princess Lucrezia**
   - `{T}: Add {U}.`
+- **Prismatic Boon**
+  - `Choose a color. X target creatures gain protection from the chosen color until end of turn.`
 - **Prismatic Circle**
   - `{1}: The next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage.`
+- **Prismatic Lace**
+  - `Target permanent becomes the color or colors of your choice. (This effect lasts indefinitely.)`
 - **Prismite**
   - `{2}: Add one mana of any color.`
 - **Prodigal Sorcerer**
@@ -4072,6 +4086,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
 - **Soul Rend**
+  - `Destroy target creature if it's white. A creature destroyed this way can't be regenerated.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Soul Sear**
   - `Soul Sear deals 5 damage to target creature or planeswalker. That permanent loses indestructible until end of turn.`
@@ -4084,6 +4099,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
 - **Spectral Bears**
   - `Whenever this creature attacks, if defending player controls no black nontoken permanents, it doesn't untap during your next untap step.`
+- **Spectral Guardian**
+  - `As long as this creature is untapped, noncreature artifacts have shroud. (They can't be the targets of spells or abilities.)`
 - **Spell Blast**
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
@@ -4319,6 +4336,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Telim'Tor's Darts**
   - `{2}, {T}: This artifact deals 1 damage to target player or planeswalker.`
 - **Telim'Tor's Edict**
+  - `Exile target permanent you own or control.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Tempered Veteran**
   - `{W}, {T}: Put a +1/+1 counter on target creature with a +1/+1 counter on it.`
