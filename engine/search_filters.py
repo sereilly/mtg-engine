@@ -53,24 +53,32 @@ def card_has_type(card, wanted: str) -> bool:
     return str(wanted).lower() in (getattr(card, "type_line", "") or "").lower()
 
 
-def card_colors(card) -> frozenset[str]:
+def card_colors(card, *, game=None, owner=None) -> frozenset[str]:
     """The colours *card* is, as symbols (CR 105.1, CR 202.2).
 
     The printed colours, for the same reason :func:`card_has_type` reads the
     printed type line: a card in a library or a graveyard is not a permanent and
-    has no computed characteristics (CR 613.1), so the card is the whole of what
-    there is to ask. It is the reading ``_stack_item_colors`` and
-    ``damage_source_colors.source_colors`` already take of an object with no
-    layers under it, and this is the third — one function, so a fourth reader
-    cannot spell it a fourth way.
+    has no computed characteristics (CR 613.1), so the card is normally the
+    whole of what there is to ask.
+
+    **Normally.** "The same is true for spells you control and nonland cards you
+    own that aren't on the battlefield" (Celestial Dawn) is a colour a card in a
+    library has that is not printed on it, and ``engine/object_colors.py`` is
+    the one reader of that — this function, ``_stack_item_colors`` and
+    ``handlers/_common`` all ask it, so a fourth reader cannot spell it a fourth
+    way. A caller with no game or no seat gets the printed answer, which is what
+    every caller got before the sentence existed.
 
     Deliberately **not** ``commander.color_identity``: CR 903.4 folds in every
     mana symbol in the rules text and the intrinsic ability of a basic land
     type, so a Badlands is a black-red *identity* and a colourless *card*.
     "A blue instant card" asks the second question.
     """
+    from .object_colors import card_colors as effective_card_colors
+
     return frozenset(
-        str(symbol).upper() for symbol in (getattr(card, "colors", ()) or ())
+        str(symbol).upper()
+        for symbol in effective_card_colors(game, card, owner)
     )
 
 
@@ -88,7 +96,7 @@ def name_key(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
-def search_matches(card, data: dict) -> bool:
+def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     """Whether *card* is a legal find for a search armed with *data*.
 
     *data* is the pending choice's own data — equally, the instruction payload:
@@ -138,7 +146,7 @@ def search_matches(card, data: dict) -> bool:
     # name carries the semantics it already has one module over.
     wanted_colors = restrictions.get("any_colors") or ()
     if wanted_colors:
-        colors = card_colors(card)
+        colors = card_colors(card, game=game, owner=owner)
         if not any(str(symbol).upper() in colors for symbol in wanted_colors):
             return False
     # "a **basic** land card" (Cultivate). A supertype is printed on the type

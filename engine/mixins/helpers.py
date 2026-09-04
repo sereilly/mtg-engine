@@ -84,14 +84,28 @@ class GameHelpersMixin:
         })
         del self.reveal_events[:-10]
 
-    @staticmethod
-    def _stack_item_colors(item) -> tuple[str, ...]:
-        """Effective color symbols of a spell on the stack, honoring a color
-        change applied by a Lace card (StackItem.choices["new_color"])."""
+    def _stack_item_colors(self, item) -> tuple[str, ...]:
+        """Effective color symbols of a spell on the stack.
+
+        Two effects can move it, in this order. A Lace card's choice
+        (``StackItem.choices["new_color"]``) is on the object itself and wins,
+        because it was applied to this spell; a board-wide static ("The same is
+        true for **spells you control**", Celestial Dawn) is read off the board
+        under it, so a Lace resolved onto one spell is not undone by an
+        enchantment that recolours every spell its controller casts.
+
+        An instance method since Mirage -- it was a ``staticmethod`` and every
+        call site already passed through ``self``/``game``, so the board became
+        askable without touching one of them.
+        """
         recolored = getattr(item, "choices", {}).get("new_color")
         if recolored:
             return (recolored,)
-        return tuple(item.card.colors or ())
+        from ..object_colors import card_colors
+
+        return tuple(card_colors(
+            self, item.card, getattr(item, "caster_index", None)
+        ))
 
     def _is_creature(self, permanent: Permanent) -> bool:
         """A permanent is a creature if its printed type says so or an effect has

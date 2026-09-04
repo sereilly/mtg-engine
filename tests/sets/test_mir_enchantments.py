@@ -1592,3 +1592,146 @@ def test_w3g2_the_scope_word_is_payload_not_a_constant(set_pool):
         assert player.graveyard == []
         assert [card.name for card in player.exile] == ["Black Lotus"]
     assert _w3g2c_compile(void).supported, "the shape claims its own line"
+
+
+# --- W3G-solo: Celestial Dawn, three sentences that had to land together ---
+#
+# The set's last card, and the one W3G1 declined with its pieces named. Every
+# test here exists because the card compiled **supported** with only its first
+# line implemented: a card is supported when *any* of its lines is, so the
+# land-type sentence alone made a three-sentence card read as done.
+
+from engine import Game as _dawn_Game, PlayerState as _dawn_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _dawn_load,  # noqa: E402
+                                manifest_set_path as _dawn_path)
+from engine.models import Permanent as _dawn_Permanent  # noqa: E402
+from engine.handlers._common import _card_matches_filter as _dawn_matches  # noqa: E402
+from engine.search_filters import search_matches as _dawn_search  # noqa: E402
+
+
+def _dawn_lea():
+    return {card.name: card for card in _dawn_load(_dawn_path("LEA"))}
+
+
+def _dawn_game(set_pool, mine=(), theirs=(), hand=(), with_dawn=True):
+    """Seat 0 with *mine* (plus Celestial Dawn) and seat 1 with *theirs*."""
+    lea = _dawn_lea()
+    pool = set_pool("MIR")
+    battlefield = [_dawn_Permanent(card=lea[name]) for name in mine]
+    if with_dawn:
+        battlefield.append(_dawn_Permanent(card=pool["Celestial Dawn"]))
+    game = _dawn_Game(players=[
+        _dawn_PlayerState(name="P1", battlefield=battlefield,
+                          hand=[lea[name] for name in hand]),
+        _dawn_PlayerState(name="P2",
+                          battlefield=[_dawn_Permanent(card=lea[n]) for n in theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game
+
+
+def test_celestial_dawn_needs_all_three_sentences(set_pool):
+    """The card is supported and every printed sentence is claimed.
+
+    The guard against the failure this card was declined for: with the
+    land-type line alone it compiled green, because a card is supported when
+    *any* line is. Asked of `parse_coverage`'s claim registry rather than of
+    the support flag, which cannot tell one line from three.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.global_statics import global_static_for
+    from engine.land_types import static_land_type_change_for
+    from engine.mana_spending import mana_spending_for
+
+    card = set_pool("MIR")["Celestial Dawn"]
+    assert compile_card_oracle(card).supported
+
+    lines = [line for line in card.oracle_text.splitlines() if line.strip()]
+    assert len(lines) == 3, "the card prints three lines; the claims below are per line"
+    assert static_land_type_change_for(lines[0].lower().rstrip(".")) is not None
+    static = global_static_for(lines[1])
+    assert static is not None and static.sets_colors == ("white",)
+    assert static.extends_to_spells_and_cards, (
+        "the second sentence is what reaches the stack and the other zones"
+    )
+    assert mana_spending_for(lines[2]) is not None
+
+
+def test_celestial_dawn_makes_only_your_lands_plains(set_pool):
+    """CR 305.7 over a subject named by no land type and one seat."""
+    game = _dawn_game(set_pool, mine=["Mountain"], theirs=["Mountain"])
+    mine = game.players[0].battlefield[0]
+    theirs = game.players[1].battlefield[0]
+    assert mine.basic_land_types == ("plains",)
+    assert theirs.basic_land_types == ("mountain",), (
+        "'lands you control' is a seat, and the opponent is not it"
+    )
+
+
+def test_celestial_dawn_recolours_your_nonland_permanents(set_pool):
+    """CR 613 layer 5, and the two things the sentence does not reach."""
+    game = _dawn_game(set_pool, mine=["Black Knight", "Swamp"],
+                      theirs=["Black Knight"])
+    knight, swamp = game.players[0].battlefield[0], game.players[0].battlefield[1]
+    assert sorted(knight.effective_colors) == ["W"]
+    assert sorted(swamp.effective_colors) == [], "a land is not a nonland permanent"
+    assert sorted(game.players[1].battlefield[0].effective_colors) == ["B"]
+
+
+def test_celestial_dawn_recolours_the_cards_you_own_elsewhere(set_pool):
+    """The second sentence, over a hand and over a library search.
+
+    Three readers of one fact (`engine/object_colors.py`) — a filter payload, a
+    library search and a spell on the stack — and this pins the two that had
+    documented the printed reading as deliberate.
+    """
+    lea = _dawn_lea()
+    ritual = lea["Dark Ritual"]
+    for with_dawn, expect_white in ((False, False), (True, True)):
+        game = _dawn_game(set_pool, with_dawn=with_dawn)
+        seat = game.players[0]
+        assert _dawn_matches(ritual, {"color_filter": "W"},
+                             game=game, owner=seat) is expect_white
+        assert _dawn_matches(ritual, {"color_filter": "B"},
+                             game=game, owner=seat) is not expect_white
+        assert _dawn_search(
+            ritual, {"card_type": "any", "restrictions": {"any_colors": ["W"]}},
+            game=game, owner=0,
+        ) is expect_white
+
+
+def test_celestial_dawn_land_cards_in_hand_keep_their_colour(set_pool):
+    """"nonland cards you own" — a Swamp in hand is a land wherever it is."""
+    game = _dawn_game(set_pool)
+    swamp = _dawn_lea()["Swamp"]
+    assert _dawn_matches(swamp, {"color_filter": "W"},
+                         game=game, owner=game.players[0]) is False
+
+
+def test_celestial_dawn_spends_white_for_anything_and_nothing_else(set_pool):
+    """CR 106.6 both ways: the permission *and* the restriction.
+
+    The restriction is the half that is easy to drop and the half that is most
+    of the card — without it the Dawn would let a seat cast everything its own
+    lands could have cast anyway, plus everything white pays for.
+    """
+    game = _dawn_game(set_pool)
+    seat = game.players[0]
+    cost = lambda **kw: {sym: kw.get(sym, 0) for sym in
+                         ("W", "U", "B", "R", "G", "C")} | {"generic": kw.get("generic", 0)}
+
+    seat.mana_pool.update({"W": 1})
+    assert game._pay_mana_cost(seat, cost(R=1)) is True, "white pays any colour"
+
+    seat.mana_pool.clear()
+    seat.mana_pool.update({"B": 1})
+    assert game._pay_mana_cost(seat, cost(B=1)) is False, (
+        "'only as though it were colorless' takes away the unit's own colour too"
+    )
+
+    seat.mana_pool.clear()
+    seat.mana_pool.update({"B": 2})
+    assert game._pay_mana_cost(seat, cost(generic=2)) is True, (
+        "colorless mana still pays generic"
+    )

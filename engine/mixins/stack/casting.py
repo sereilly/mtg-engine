@@ -2711,6 +2711,21 @@ class SpellCastingMixin:
         # "Spend only black mana on X" (Drain Life) is satisfied by every unit
         # under this permission, so the two questions collapse into one: what is
         # left after the pips and the printed generic are paid.
+        # A permission the two booleans cannot describe (Celestial Dawn: white
+        # pays any colour, everything else pays no colour at all). Asked first,
+        # because it is the general arithmetic and the two branches under it are
+        # the special cases it generalises -- and asked *here* as well as at the
+        # spend, which is the lesson Chromatic Orrery taught: a permission
+        # honoured at one payment site out of several is a card that works less
+        # often than it reads.
+        if player.mana_spending_is_general:
+            from ...mana_payment import spend_under_permissions
+
+            after = spend_under_permissions(
+                temp, required, player.mana_spending_permissions
+            )
+            return 0 if after is None else sum(max(0, n) for n in after.values())
+
         if player.spends_mana_as_any_color:
             from ...mana_payment import fungible_colors_headroom
 
@@ -2969,6 +2984,9 @@ class SpellCastingMixin:
         # A **{C} in the cost still wants colourless**, because colourless is not
         # a colour (CR 105.1) and this line grants colours. So the generic and
         # colourless halves are unchanged.
+        if player.mana_spending_is_general:
+            return self._pay_under_permissions(player, required)
+
         if player.spends_mana_as_any_color:
             return self._pay_with_fungible_colors(player, required)
 
@@ -3053,6 +3071,34 @@ class SpellCastingMixin:
             if owed == 0:
                 break
         player.mana_pool = pool
+        return True
+
+    def _pay_under_permissions(
+        self, player: PlayerState, required: dict[str, int]
+    ) -> bool:
+        """Pay *required* under CR 106.6 permissions the booleans cannot name.
+
+        The arithmetic is `mana_payment.spend_under_permissions` and the
+        *spending* is here, which is the same division `_pay_with_fungible_colors`
+        below draws and for the same reason: the X inference and the client's
+        affordability display ask the same question of the same permission, and
+        three answers to it is how Chromatic Orrery came to be honoured at one
+        site out of four. The pool is written only on success, so a refusal
+        leaves it untouched like every other branch of this cascade.
+        """
+        from ...mana_payment import spend_under_permissions
+
+        pool = {
+            symbol: int(player.mana_pool.get(symbol, 0))
+            for symbol in ("W", "U", "B", "R", "G", "C")
+        }
+        after = spend_under_permissions(
+            pool, required, player.mana_spending_permissions
+        )
+        if after is None:
+            return False
+        for symbol, remaining in after.items():
+            player.mana_pool[symbol] = max(0, int(remaining))
         return True
 
     def _pay_with_fungible_colors(

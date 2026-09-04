@@ -247,3 +247,105 @@ def test_a_grant_the_pool_did_not_need_is_not_spent(catalog):
 
     assert game.players[1].life == 17
     assert caster.spend_mana_as_though_grants[0]["spells"] == 1
+
+
+# --- W3G-solo: the permission is a static ability, so it ends with its source ---
+#
+# The half W3G1 reported and left. All three permissions were **stamped** on the
+# seat as the source entered and never cleared, so destroying Sunglasses of Urza
+# or Chromatic Orrery left the player spending mana its way for the rest of the
+# game. Nothing failed and nothing looked wrong: a stamp nobody clears reads
+# exactly like a permission that is still true. They are derived from the board
+# now (`engine/mana_spending.py`), which is also what let Celestial Dawn's
+# narrowed form be expressed at all.
+
+from engine import Game as _msp_Game, PlayerState as _msp_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _msp_load,  # noqa: E402
+                                manifest_set_path as _msp_path)
+from engine.models import Permanent as _msp_Permanent  # noqa: E402
+from engine.mana_spending import mana_spending_for as _msp_for  # noqa: E402
+
+
+def _msp_board(card):
+    perm = _msp_Permanent(card=card)
+    game = _msp_Game(players=[_msp_PlayerState(name="P1", battlefield=[perm]),
+                              _msp_PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game, perm
+
+
+@pytest.mark.cr("609.4b", "611.3b")
+def test_609_4b_a_spending_permission_ends_with_its_source():
+    """CR 611.3b: a static ability applies while its source is on the
+    battlefield, and not after.
+
+    Both shipped cards, because the two were stamped through different fields
+    and a fix to one would have looked like a fix to both.
+    """
+    lea = {card.name: card for card in _msp_load(_msp_path("LEA"))}
+    m21 = {card.name: card for card in _msp_load(_msp_path("M21"))}
+    for card, field in ((lea["Sunglasses of Urza"], "can_spend_white_as_red"),
+                        (m21["Chromatic Orrery"], "spends_mana_as_any_color")):
+        game, perm = _msp_board(card)
+        assert getattr(game.players[0], field) is True, card.name
+        game.remove_from_battlefield(perm)
+        game._recompute_continuous_effects()
+        assert getattr(game.players[0], field) is False, (
+            f"{card.name}'s permission outlived it"
+        )
+
+
+@pytest.mark.cr("609.4b")
+def test_609_4b_the_permission_is_read_off_the_line_not_the_card_name():
+    """An invented artifact with Sunglasses' template works, and one naming a
+    colour pair nobody printed works too — the two colour words are payload."""
+    permission = _msp_for("You may spend blue mana as though it were green mana.")
+    assert permission is not None
+    assert permission.fungible_colors == ("U",)
+    assert permission.as_colors == ("G",)
+    assert permission.may_pay("U", "G") is True
+    assert permission.may_pay("U", "R") is False
+
+
+@pytest.mark.cr("609.4b")
+def test_609_4b_only_as_though_colorless_takes_away_the_units_own_colour():
+    """Celestial Dawn's second sentence, which is most of the card.
+
+    The obvious reading — answer the equality first, because "as though it
+    were" only ever adds — leaves the seat able to cast everything its own
+    lands could have cast anyway, which is exactly what the restriction is for.
+    """
+    permission = _msp_for(
+        "You may spend white mana as though it were mana of any color. "
+        "You may spend other mana only as though it were colorless mana."
+    )
+    assert permission is not None
+    assert permission.may_pay("W", "R") is True
+    assert permission.may_pay("B", "B") is False, (
+        "'only as though it were colorless' is a restriction, not a permission"
+    )
+
+
+@pytest.mark.cr("609.4b")
+def test_609_4b_a_restriction_with_no_permission_in_front_of_it_refuses():
+    """Half a printed line is not a card. Read alone, the restriction would
+    forbid a seat every coloured pip on the strength of a sentence that grants
+    nothing — so the line refuses and its card reports unsupported."""
+    assert _msp_for(
+        "You may spend other mana only as though it were colorless mana."
+    ) is None
+
+
+@pytest.mark.cr("609.4b", "601.2h")
+def test_601_2h_the_matching_is_exact_not_greedy():
+    """CR 601.2h asks what a player is *able* to do, so the assignment of pool
+    units to coloured pips has to be a matching rather than a first-fit walk:
+    spend the white on the red pip and the white pip starves, on a pool that
+    could have paid."""
+    from engine.mana_payment import spend_under_permissions
+
+    sunglasses = (_msp_for("You may spend white mana as though it were red mana."),)
+    cost = {"W": 1, "R": 1, "generic": 0}
+    assert spend_under_permissions({"W": 1, "R": 1}, cost, sunglasses) is not None
+    assert spend_under_permissions({"W": 1}, cost, sunglasses) is None

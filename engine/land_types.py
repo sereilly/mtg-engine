@@ -290,6 +290,20 @@ class StaticLandTypeChange:
     #: name no land type at all, so ``from_type``/``to_type`` are empty until
     #: :func:`resolve_static_land_type_change` fills them in from the permanent.
     from_chosen: bool = False
+    #: "**Lands** you control are Plains." (Celestial Dawn.) The subject names
+    #: no land type and no supertype — *every* land answers it — so it is a
+    #: fourth way of describing the subjects rather than a value on any of the
+    #: three above, each of which narrows by a word the sentence prints.
+    #: ``land_animation.py`` has had this form since Living Lands; this table
+    #: did not, and the difference was invisible while every printing of the
+    #: sentence happened to name a type.
+    from_any: bool = False
+    #: "Lands **you control** are Plains." The subjects are a *seat's*, not the
+    #: board's, which is the one narrowing here that no reading of a land's
+    #: characteristics can answer — so the refresh supplies the fact and this
+    #: module still owns the decision (see
+    #: :func:`static_land_type_change_applies`).
+    controller_only: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -327,6 +341,16 @@ _STATIC_TYPE_RE = re.compile(r"^all (?P<from>[a-z'-]+) are (?P<to>[a-z'-]+)$")
 #: looked up in the land-type catalog, where it is absent and its absence would
 #: be indistinguishable from a typo.
 _STATIC_NONBASIC_RE = re.compile(r"^nonbasic lands are (?P<to>[a-z'-]+)$")
+
+#: "Lands you control are Plains." (Celestial Dawn.) Every land of one seat,
+#: named by no type at all. Its own pattern rather than a "lands" entry in the
+#: land-type catalog for `_STATIC_NONBASIC_RE`'s reason exactly: the word is
+#: absent from that catalog and its absence would be indistinguishable from a
+#: typo, so a sentence naming a type nobody printed would silently become this
+#: one.
+_STATIC_CONTROLLED_RE = re.compile(
+    r"^lands you control are (?P<to>[a-z'-]+)$"
+)
 
 
 #: "Basic lands of the first chosen type are the second chosen type."
@@ -379,6 +403,14 @@ def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | 
         return StaticLandTypeChange(
             from_type=None, to_type="", basic_only=True, from_chosen=True
         )
+    controlled = _STATIC_CONTROLLED_RE.match(line)
+    if controlled is not None:
+        to_type = _land_subtype(controlled.group("to"))
+        if to_type is None:
+            return None
+        return StaticLandTypeChange(
+            from_type=None, to_type=to_type, from_any=True, controller_only=True
+        )
     nonbasic = _STATIC_NONBASIC_RE.match(line)
     if nonbasic is not None:
         to_type = _land_subtype(nonbasic.group("to"))
@@ -404,16 +436,25 @@ def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, o
     this key existed is byte-identical.
     """
     payload: dict[str, object] = {"to_type": change.to_type}
-    if change.from_nonbasic:
-        payload["from_nonbasic"] = True
+    if change.from_nonbasic or change.from_any:
+        # No ``from_type`` for either, and for the same reason: neither
+        # sentence prints a land type to put there. Emitted only when set, so
+        # every payload written before these keys existed is byte-identical.
+        pass
     else:
         payload["from_type"] = change.from_type
+    if change.from_nonbasic:
+        payload["from_nonbasic"] = True
     # Both emitted only when set, so every payload written before these keys
     # existed is byte-identical.
     if change.basic_only:
         payload["basic_only"] = True
     if change.from_chosen:
         payload["from_chosen"] = True
+    if change.from_any:
+        payload["from_any"] = True
+    if change.controller_only:
+        payload["controller_only"] = True
     return payload
 
 
@@ -509,7 +550,9 @@ def static_supertype_removal_applies(payload: dict, types: Characteristics) -> b
     )
 
 
-def static_land_type_change_applies(payload: dict, types: Characteristics) -> bool:
+def static_land_type_change_applies(
+    payload: dict, types: Characteristics, *, same_controller: bool | None = None
+) -> bool:
     """Whether the static change *payload* describes reaches a permanent that
     currently presents *types*.
 
@@ -525,6 +568,16 @@ def static_land_type_change_applies(payload: dict, types: Characteristics) -> bo
     "what is this land?", neither of them CR 613.7's, and two layer-4 statics
     that could not chain.
     """
+    # "Lands **you control** are …" (Celestial Dawn). The one narrowing here a
+    # land's characteristics cannot answer, so the caller supplies the fact and
+    # this predicate still owns the decision — the alternative was a second
+    # filter at the refresh site, which is exactly the gate/dispatch split this
+    # module's own docstring exists to prevent. ``None`` means the caller did
+    # not answer, which for a payload that asks is refusal rather than a pass:
+    # a seat-narrowed static reaching every land is the direction that destroys
+    # a board.
+    if payload.get("controller_only") and same_controller is not True:
+        return False
     # "**Basic** lands of …" (Illusionary Terrain). Asked of the computed
     # supertypes — a nonbasic dual is a Plains and is not one of the "basic
     # lands" the sentence names.
@@ -536,6 +589,12 @@ def static_land_type_change_applies(payload: dict, types: Characteristics) -> bo
         # for the word, because "Snow Land — Forest" and a card *named*
         # something with "basic" in it both answer that substring wrongly.
         return "basic" not in types.supertypes
+    # "**Lands** you control are …" — no type word at all, so every land the
+    # narrowings above admitted is one of them. The refresh has already gated
+    # on the candidate being a land, which is what makes "every" safe to say
+    # here rather than a second type read.
+    if payload.get("from_any"):
+        return True
     from_type = str(payload.get("from_type") or "")
     return bool(from_type) and from_type in types.subtypes
 

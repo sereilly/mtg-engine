@@ -60,6 +60,17 @@ class GlobalStatic:
     # end of turn." (Titania's Song.) A continuous effect that outlives its
     # source: the source stops existing, the effect does not.
     continues_until_eot: bool = False
+    # "Nonland permanents you control **are white**." (Celestial Dawn.) CR 613
+    # layer 5, set rather than added: CR 105.3 replaces every colour the object
+    # had. A tuple because a card could print two words, and because a frozen
+    # dataclass has to stay hashable.
+    sets_colors: tuple[str, ...] = ()
+    # "**The same is true** for spells you control and nonland cards you own
+    # that aren't on the battlefield." The rest of the same sentence, and a flag
+    # rather than a second static because it names no new effect -- it says the
+    # colour above reaches two more populations. Kept with the effect it
+    # extends, so a reader cannot have one without the other.
+    extends_to_spells_and_cards: bool = False
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -107,6 +118,21 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         GlobalStatic(name="granted_board_wide_ability", applies_to=""),
     ),
     (
+        # Celestial Dawn. The second sentence is optional in the pattern and
+        # mandatory in the *card*: a printing with only the first is a complete
+        # and narrower effect (the board alone), and one with both reaches the
+        # stack and every other zone. Reading them as one line is what keeps
+        # them from drifting apart -- a card whose colour reached the board and
+        # not its own hand would be castable exactly as it was before.
+        re.compile(
+            r"^nonland permanents you control are "
+            r"(?P<sets>white|blue|black|red|green)"
+            r"(?P<extends>\. the same is true for spells you control and nonland "
+            r"cards you own that aren't on the battlefield)?$"
+        ),
+        GlobalStatic(name="board_wide_color", applies_to="nonland_permanent_you_control"),
+    ),
+    (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
             r"artifact creature with power and toughness each equal to its "
@@ -147,6 +173,14 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     pt_from_mana_value=static.pt_from_mana_value,
                     grants_ability=static.grants_ability,
                     continues_until_eot=True,
+                )
+            sets = groups.get("sets")
+            if sets:
+                return GlobalStatic(
+                    name=static.name,
+                    applies_to=static.applies_to,
+                    sets_colors=(sets,),
+                    extends_to_spells_and_cards=bool(groups.get("extends")),
                 )
             granted = groups.get("ability")
             if granted:

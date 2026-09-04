@@ -768,7 +768,7 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     filters = instruction.payload.get("filter") or {}
     eligible = [
         index for index, held in enumerate(target.hand)
-        if not filters or _card_matches_filter(held, filters)
+        if not filters or _card_matches_filter(held, filters, game=game, owner=target)
     ]
     actual = min(x, len(eligible))
     # ``random.sample`` over the eligible slots, drawing from the module-level
@@ -2159,7 +2159,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     found = None
     while player.library:
         card = player.library.pop(0)
-        if _card_matches_filter(card, described):
+        if _card_matches_filter(card, described, game=game, owner=player):
             found = card
             break
         revealed.append(card)
@@ -2586,7 +2586,7 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
     filters = instruction.payload.get("filter") or {}
     doomed = [
         index for index, held in enumerate(victim.hand)
-        if _card_matches_filter(held, filters)
+        if _card_matches_filter(held, filters, game=game, owner=victim)
     ]
     for index in reversed(doomed):
         discarded = victim.hand.pop(index)
@@ -2819,7 +2819,7 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
     described = dict(payload.get("filter") or {})
     taken_slots = [
         index for index, card in enumerate(owner.graveyard)
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(card, described, game=game, owner=owner)
     ]
     if not taken_slots:
         game.log.append(f"{context.card.name}: no card in that graveyard to exile")
@@ -3220,7 +3220,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
         card = victim.library.pop(0)
         game.put_card_into_graveyard(victim, card)
         milled += 1
-        if _card_matches_filter(card, stop_filter):
+        if _card_matches_filter(card, stop_filter, game=game, owner=victim):
             matched.append(card)
             break
     context.results["milled_this_way"] = matched
@@ -3705,7 +3705,7 @@ def exile_from_hand_candidates(game, payload: dict, player) -> list[int]:
     return [
         index
         for index, card in enumerate(player.hand)
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(card, described, game=game, owner=player)
     ]
 
 
@@ -3762,7 +3762,7 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     return [
         index
         for index, card in enumerate(player.hand)
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(card, described, game=game, owner=player)
         and (not permanents_only or card.primary_type in _PERMANENT_TYPES)
     ]
 
@@ -4860,7 +4860,8 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     # answer is checked against and what a non-interactive seat takes are one
     # rule (see ``live_discard_candidates``).
     described = dict(instruction.payload.get("filter") or {})
-    eligible = [card for card in caster.hand if _card_matches_filter(card, described)]
+    eligible = [card for card in caster.hand
+                if _card_matches_filter(card, described, game=game, owner=caster)]
     amount = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(eligible)
     )
@@ -5796,7 +5797,7 @@ def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
     return [
         index
         for index, card in enumerate(player.hand)
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(card, described, game=game, owner=player)
         and (
             not drawn_this_turn
             or any(card is drawn for drawn in provenance)
@@ -5951,7 +5952,7 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
         player = game.players[seat]
         taken = [
             index for index, card in enumerate(player.graveyard)
-            if _card_matches_filter(card, described)
+            if _card_matches_filter(card, described, game=game, owner=player)
         ]
         cards = [player.graveyard[index] for index in taken]
         for index in sorted(taken, reverse=True):
@@ -6129,7 +6130,8 @@ def discard_revealed_matching_unless_pay_life(game: Game, instruction: OracleIns
     # every other handler re-checks: the payload describes what the card said,
     # and this is the reader that decides which cards are offered.
     matching = [
-        card for card in revealed if _card_matches_filter(card, described)
+        card for card in revealed
+        if _card_matches_filter(card, described, game=game, owner=victim)
     ]
     for card in matching:
         paying = dataclasses.replace(

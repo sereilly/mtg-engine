@@ -820,6 +820,14 @@ def computed_controller(perm: Permanent, base_seat: int) -> int:
     return base_seat if result is None else result
 
 
+#: The printed colour word as the symbol every colour channel in this engine
+#: spells one with. Here rather than in ``global_statics`` because that module
+#: holds what the *card prints*, which is the word.
+_COLOR_WORD_SYMBOLS = {
+    "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
+}
+
+
 def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     """Layer 5: colour-changing effects (the laces, "becomes red").
 
@@ -866,6 +874,27 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # Aura resolves — a stamped override would outlive the Aura, and CR 105.3
     # replaces every colour the creature had, so there would be nothing left to
     # put back.
+    # "Nonland permanents you control are white." (Celestial Dawn.) The fourth
+    # channel, and the only board-*wide* one: it is derived from the source's
+    # own text on every recompute exactly as the Aura channel below is, so a
+    # source leaving simply stops contributing and there is nothing to sweep.
+    # Stamped after the two override channels, because CR 105.3 makes the later
+    # effect the one that decides and a static that is still on the battlefield
+    # is later than a lace that has already resolved... which is *not* generally
+    # true, and is why the timestamp is the source's own rather than a constant:
+    # `static_source_timestamp` is the same ordering layer 4's statics use.
+    for static in global_statics_applying_to(perm):
+        if not static.sets_colors:
+            continue
+        effects.append(
+            set_colors(
+                scope_only(oid),
+                [_COLOR_WORD_SYMBOLS[word] for word in static.sets_colors],
+                timestamp=2,
+                label="board-wide colour",
+            )
+        )
+
     from .grammar.vocabulary import COLOR_WORDS
 
     for aura in auras_attached_to(perm):

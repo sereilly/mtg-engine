@@ -76,6 +76,7 @@ from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.mana_spending import mana_spending_for  # noqa: E402
 from engine.targeting import (  # noqa: E402
     enchant_graveyard_line, enchant_line_subject,
 )
@@ -449,6 +450,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("lord_buffs.py (state trigger)",
      lambda s: sacrifice_state_trigger(s) is not None),
     ("global_statics.py", lambda s: global_static_for(s) is not None),
+    # CR 106.6 spending permissions. Both sentences of the pair, because the
+    # census splits a printed line into sentences and the table reads them
+    # together: a restriction alone grants nothing, so `mana_spending_for`
+    # refuses it, and it would otherwise show as unclaimed on a card whose
+    # permission is fully implemented.
+    ("mana_spending.py", lambda s: mana_spending_for(s) is not None
+     or s.rstrip(".") == "you may spend other mana only as though it were colorless mana"),
     # The rider of a global static that outlives its source. It is part of the
     # same ability, matched on the two-sentence form, but arrives here as its
     # own line.

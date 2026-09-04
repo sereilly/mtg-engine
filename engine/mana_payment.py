@@ -112,6 +112,109 @@ def fungible_types_headroom(
     return None if total < owed else total - owed
 
 
+#: The five colours a *pip* can be. Colourless is a pool symbol and never a
+#: coloured pip, which is why this is not ``COLOR_SYMBOLS`` above.
+PIP_SYMBOLS: tuple[str, ...] = ("W", "U", "B", "R", "G")
+
+
+def may_pay_pip(permissions: Sequence, symbol: str, pip: str) -> bool:
+    """Whether one unit of *symbol* mana may pay a coloured *pip* for a seat
+    holding *permissions* (``engine/mana_spending.ManaSpending``).
+
+    With no permission the answer is the rule: a unit pays its own colour and
+    nothing else. With permissions it is **any** of them — CR 106.6 grants are
+    additive, so a restriction one source prints cannot reach the mana another
+    source freed. That is the whole reason this is an ``any`` and not a fold:
+    Celestial Dawn beside Sunglasses of Urza is a seat whose Swamp pays ``{B}``
+    again, because Sunglasses says nothing about black mana and the Dawn's
+    "only" clause is a property of the Dawn's own permission.
+    """
+    if not permissions:
+        return symbol == pip
+    return any(permission.may_pay(symbol, pip) for permission in permissions)
+
+
+def _assign_pips(
+    pool: dict[str, int], required: dict[str, int], permissions: Sequence
+) -> dict[str, int] | None:
+    """*pool* with the coloured pips of *required* paid, or None.
+
+    Augmenting-path matching (Kuhn's), the same shape :func:`_match_colored`
+    uses over lands and for the same reason: exact is the requirement rather
+    than a nicety. A greedy assignment under-reports a pool that could pay --
+    spend the white on the red pip and the white pip starves -- and CR 601.2h
+    asks what a player is *able* to do, not what one pass of a loop managed.
+
+    The units are expanded one per unit, which is what keeps this obviously
+    correct rather than a capacity argument that has to be re-derived: a mana
+    pool is a handful of units and the matching is over a handful of pips.
+    Colourless units are offered **last**, so a cost that also names ``{C}`` is
+    not starved by a pip a coloured unit could have paid -- a preference inside
+    the matching, which still backtracks past it when it cannot be honoured.
+    """
+    left = {symbol: max(0, int(pool.get(symbol, 0))) for symbol in COLOR_SYMBOLS}
+    units: list[str] = []
+    for symbol in tuple(PIP_SYMBOLS) + ("C",):
+        units.extend([symbol] * left[symbol])
+    pips: list[str] = []
+    for pip in PIP_SYMBOLS:
+        pips.extend([pip] * int(required.get(pip, 0)))
+    if not pips:
+        return left
+
+    holder: dict[int, int] = {}  # unit index -> pip index
+
+    def place(pip_index: int, seen: set[int]) -> bool:
+        pip = pips[pip_index]
+        for unit_index, symbol in enumerate(units):
+            if unit_index in seen or not may_pay_pip(permissions, symbol, pip):
+                continue
+            seen.add(unit_index)
+            if unit_index not in holder or place(holder[unit_index], seen):
+                holder[unit_index] = pip_index
+                return True
+        return False
+
+    for index in range(len(pips)):
+        if not place(index, set()):
+            return None
+    for unit_index in holder:
+        left[units[unit_index]] -= 1
+    return left
+
+
+def spend_under_permissions(
+    pool: dict[str, int], required: dict[str, int], permissions: Sequence = ()
+) -> dict[str, int] | None:
+    """*pool* after paying *required* under CR 106.6 *permissions*, or None.
+
+    The one arithmetic every payment site asks, generalised from
+    :func:`fungible_colors_headroom` when Celestial Dawn arrived with a
+    permission the two booleans on ``PlayerState`` could not express: white mana
+    pays any colour and every other unit pays none, not even its own. Three
+    buckets in the order that makes the payment maximal -- the coloured pips
+    (pickiest), then ``{C}``, which nothing else can pay, then the generic
+    remainder from whatever is left.
+    """
+    after = _assign_pips(pool, required, permissions)
+    if after is None:
+        return None
+    colorless = int(required.get("C", 0))
+    if after["C"] < colorless:
+        return None
+    after["C"] -= colorless
+    generic = int(required.get("generic", 0))
+    for symbol in ("C",) + tuple(PIP_SYMBOLS):
+        if generic <= 0:
+            break
+        spend = min(after[symbol], generic)
+        after[symbol] -= spend
+        generic -= spend
+    if generic > 0:
+        return None
+    return after
+
+
 def _normalized(required: dict[str, int]) -> dict[str, int]:
     return {
         **{symbol: int(required.get(symbol, 0)) for symbol in COLOR_SYMBOLS},

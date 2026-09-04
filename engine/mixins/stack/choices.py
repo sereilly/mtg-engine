@@ -565,7 +565,9 @@ class PendingChoicesMixin:
         # payload is a hint: a client that offered the whole library would
         # otherwise turn "a creature card with mana value 6 or greater" into
         # Demonic Tutor.
-        if not search_matches(card, choice.data):
+        if not search_matches(
+            card, choice.data, game=self, owner=choice.player_index
+        ):
             return False
         source.pop(library_index)
         # "…, reveal it, …" (CR 701.20): a search armed with the printed word
@@ -727,7 +729,9 @@ class PendingChoicesMixin:
                 return False
             seen.add((zone, index))
             card = source[index]
-            if not search_matches(card, working):
+            if not search_matches(
+                card, working, game=self, owner=choice.player_index
+            ):
                 return False
             # "a card named A **and/or** a card named B": each printed name is
             # one find, dropped as it is used, so a library holding two copies

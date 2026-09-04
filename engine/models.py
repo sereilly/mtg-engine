@@ -794,6 +794,28 @@ class PlayerState:
     #: pip. Its own flag rather than a widening of the one above, because the
     #: two are different permissions and a card may grant either.
     spends_mana_as_any_color: bool = False
+    #: Every CR 106.6 spending permission the seat's board currently grants
+    #: (``engine/mana_spending.py``). **Derived on every continuous refresh**,
+    #: never stamped: the two booleans above are views over this list, and they
+    #: used to be written as the source entered and never cleared -- so a
+    #: destroyed Sunglasses of Urza left its owner spending white as red for the
+    #: rest of the game. Nothing failed, because a stamp nobody clears reads
+    #: exactly like a permission that is still true.
+    mana_spending_permissions: tuple = ()
+    #: "You may spend other mana only as though it were colorless mana."
+    #: (Celestial Dawn.) The narrowing half of the permission above, derived
+    #: with it: mana outside the permission's colours pays generic and ``{C}``
+    #: and no coloured pip. Its own flag because every payment site asks the
+    #: booleans rather than the list, and this is the one question none of them
+    #: could ask before.
+    mana_restricted_to_colorless_others: bool = False
+    #: Whether this seat's permissions need the **general** payment arithmetic
+    #: (``mana_payment.spend_under_permissions``) rather than one of the two
+    #: special cases the booleans above name. False for every board the engine
+    #: handled before Celestial Dawn -- an unrestricted permission still takes
+    #: the Orrery path and a plain white-as-red one still takes the cascade --
+    #: so a third payment route arrives without moving any shipped card onto it.
+    mana_spending_is_general: bool = False
     #: "For one spell this turn, you may spend mana as though it were mana of
     #: any type to pay that spell's mana cost." (North Star.) A *count* rather
     #: than a flag, because the permission is bounded: it covers a stated

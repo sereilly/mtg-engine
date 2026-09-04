@@ -30,8 +30,6 @@ from ..enter_effects import (
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     NO_MAXIMUM_HAND_SIZE,
     choosable_bodies,
-    SPEND_ANY_COLOR,
-    SPEND_WHITE_AS_RED,
 )
 from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
                      auras_attached_to)
@@ -929,11 +927,13 @@ class PermanentStateMixin:
         if any(instr.kind == "spell_pattern" and instr.value == NO_MAXIMUM_HAND_SIZE for instr in program.instructions) or NO_MAXIMUM_HAND_SIZE in text:
             self.players[caster_index].has_no_max_hand_size = True
 
-        if SPEND_WHITE_AS_RED in text:
-            self.players[caster_index].can_spend_white_as_red = True
-
-        if SPEND_ANY_COLOR in text:
-            self.players[caster_index].spends_mana_as_any_color = True
+        # The two mana-spending permissions used to be stamped here and never
+        # cleared, so a destroyed Sunglasses of Urza or Chromatic Orrery left
+        # its controller spending mana its way for the rest of the game
+        # (CR 611.3a ends a static ability with its source). They are derived
+        # from the board on every continuous refresh now --
+        # `_refresh_mana_spending`, reading `engine/mana_spending.py` -- which
+        # is also what let Celestial Dawn's narrowed form be expressed at all.
 
         if LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER in text:
             controller = self.players[caster_index]
@@ -1121,7 +1121,20 @@ class PermanentStateMixin:
                         lost.append(word)
                         perm.metadata[DERIVED_LOST_SUPERTYPES] = sorted(lost)
                 elif is_land and static_land_type_change_applies(
-                    payload, types_before_timestamp(perm, stamp)
+                    payload,
+                    types_before_timestamp(perm, stamp),
+                    # "Lands **you control** are Plains" (Celestial Dawn). The
+                    # one fact about a candidate that is not a characteristic,
+                    # read through the control seam so a land the source's
+                    # controller has taken is one of theirs and a land they
+                    # have lost is not. Computed only when the payload asks,
+                    # because `controller_index_of` resolves layer 2 and this
+                    # loop runs on every refresh over every permanent.
+                    same_controller=(
+                        self.controller_index_of(perm)
+                        == self.controller_index_of(source)
+                        if payload.get("controller_only") else None
+                    ),
                 ):
                     add_derived_land_type(
                         perm,
@@ -1129,6 +1142,52 @@ class PermanentStateMixin:
                         timestamp=stamp,
                         label=source.card.name,
                     )
+
+    def _refresh_mana_spending(self) -> None:
+        """CR 106.6: what each seat may currently spend a unit of mana as.
+
+        Rebuilt from the board every pass rather than stamped as a source
+        enters, which is what a static ability is (CR 611.3a) and what the two
+        booleans below were not. They stay as *views* over the derived list
+        because every payment site asks them by name; what they cannot express
+        -- a permission narrowed to one colour, and the restriction that comes
+        with it -- is the third field.
+        """
+        from ..mana_spending import permissions_for_seat
+
+        for seat, player in enumerate(self.players):
+            permissions = permissions_for_seat(self, seat)
+            player.mana_spending_permissions = permissions
+            player.spends_mana_as_any_color = any(
+                not p.fungible_colors and not p.as_colors for p in permissions
+            )
+            player.can_spend_white_as_red = any(
+                p.may_pay("W", "R") and p.fungible_colors for p in permissions
+            )
+            # Only when *every* permission the seat holds carries it: a second
+            # source granting an unrestricted permission lifts the narrowing,
+            # because CR 106.6 permissions are additive and a restriction on one
+            # of them cannot reach the mana another one freed.
+            player.mana_restricted_to_colorless_others = bool(permissions) and all(
+                p.others_colorless_only for p in permissions
+            )
+            # Which permissions the two booleans above cannot describe: a
+            # narrowed source with an unnarrowed destination (Celestial Dawn),
+            # a narrowed pair other than white-as-red (a card the pool has not
+            # printed yet but the table already reads), or any restriction. The
+            # boards the engine handled before keep the routes they had, which
+            # is what makes this a widening rather than a rewrite.
+            player.mana_spending_is_general = any(
+                permission.others_colorless_only
+                or (
+                    permission.fungible_colors
+                    and permission.as_colors != ("R",)
+                )
+                or (
+                    permission.fungible_colors not in ((), ("W",))
+                )
+                for permission in permissions
+            )
 
     def _refresh_aspect_of_wolf(self) -> None:
         """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the
@@ -1266,6 +1325,7 @@ class PermanentStateMixin:
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
         self._refresh_land_animation(all_permanents, animations)
+        self._refresh_mana_spending()
         self._refresh_aspect_of_wolf()
         # After the other 7c contributions, because its clamp reads the
         # toughness the creature has *without* it — see the method.
@@ -1723,6 +1783,18 @@ class PermanentStateMixin:
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
+        if static.applies_to == "nonland_permanent_you_control":
+            # "**Nonland** permanents you control are white." (Celestial Dawn.)
+            # The type half through the layer accessor, so a land this very
+            # board has animated is still a land and stays out -- CR 305.7's
+            # replacement does not stop a Plains being a land, and the printed
+            # line would have said so wrongly for an animated one.
+            if source is None or game is None or permanent.has_type("land"):
+                return False
+            return (
+                game.controller_index_of(permanent)
+                == game.controller_index_of(source)
+            )
         if static.applies_to == "creature_you_control":
             if source is None or game is None or not permanent.is_creature:
                 return False
@@ -2728,6 +2800,8 @@ class PermanentStateMixin:
                 if permanent_matches_filter(perm, described["battlefield"]):
                     total += 1
             for card in self.players[opponent].graveyard:
-                if _card_matches_filter(card, described["graveyard"]):
+                if _card_matches_filter(
+                    card, described["graveyard"], game=self, owner=opponent
+                ):
                     total += 1
         return total

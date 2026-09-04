@@ -642,7 +642,10 @@ def evaluate_count(
         cards = getattr(owner, zone, None)
     if cards is None:
         return 0
-    matched_cards = [card for card in cards if _card_matches_filter(card, filt)]
+    matched_cards = [
+        card for card in cards
+        if _card_matches_filter(card, filt, game=game, owner=owner)
+    ]
     if aggregate == "greatest_power":
         # The *printed* power, because a card outside the battlefield has no
         # computed characteristics at all (CR 613 applies to permanents). A
@@ -662,7 +665,20 @@ def _printed_power(card) -> int:
         return 0
 
 
-def _card_matches_filter(card, filt: dict) -> bool:
+def _zone_card_colors(card, *, game=None, owner=None) -> tuple[str, ...]:
+    """The colours of a card in a zone, for the three keys below.
+
+    One call rather than three, because the three keys are three readings of
+    one fact and the version of this matcher that spelled it three times had
+    already drifted once -- ``exclude_colors`` re-fetched the attribute where
+    its two neighbours had cached it.
+    """
+    from ..object_colors import card_colors
+
+    return tuple(card_colors(game, card, owner))
+
+
+def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     """Whether a *card* — not a permanent — answers a filter payload.
 
     A card in a zone has no computed characteristics, so the shared matcher
@@ -733,14 +749,16 @@ def _card_matches_filter(card, filt: dict) -> bool:
     if not _comparison_holds(filt.get("mana_value"), int(getattr(card, "cmc", 0) or 0)):
         return False
     # "the number of **white** cards in their hand" (Inquisition); "**white**
-    # cards in their graveyards" (Nameless Race). Off the card's printed
-    # colours (CR 202.2, derived from the mana cost), which for a card in a
-    # hidden or non-battlefield zone is the whole of what there is: no layer
-    # has run and none can, so a colour *change* cannot be visible here and
-    # reading the printed value is the honest answer rather than an
-    # approximation of one.
+    # cards in their graveyards" (Nameless Race). The printed colours
+    # (CR 202.2, derived from the mana cost) unless a board-wide static says
+    # otherwise -- "the same is true for ... nonland cards you own that aren't
+    # on the battlefield" (Celestial Dawn) is the one thing in the pool that
+    # makes an off-battlefield colour more than what is printed, and it is a
+    # property of a *seat*, so a caller that cannot say whose card this is gets
+    # the printed answer it always got.
+    colors = _zone_card_colors(card, game=game, owner=owner)
     color_filter = filt.get("color_filter")
-    if color_filter and color_filter not in (getattr(card, "colors", ()) or ()):
+    if color_filter and color_filter not in colors:
         return False
     # "…discard a **red or green** card" (Surge of Strength). The union
     # spelling of the key above — one filter carrying several colours, which is
@@ -748,19 +766,15 @@ def _card_matches_filter(card, filt: dict) -> bool:
     # is one noun phrase, not two) — OR'd exactly as the permanent matcher OR's
     # it. Off the same printed colours and for the same reason (CR 202.2).
     any_colors = filt.get("any_colors")
-    if any_colors and not any(
-        color in (getattr(card, "colors", ()) or ()) for color in any_colors
-    ):
+    if any_colors and not any(color in colors for color in any_colors):
         return False
     # "a **nonblack** card" (Krovikan Sorcerer). The negative of the test above,
     # off the same printed colours, and OR'd the same way a type exclusion is: a
     # card carrying *any* excluded colour is out, which is what "nonblack,
     # nonred" would mean printed together.
     excluded_colors = filt.get("exclude_colors") or ()
-    if excluded_colors:
-        held = getattr(card, "colors", ()) or ()
-        if any(color in held for color in excluded_colors):
-            return False
+    if excluded_colors and any(color in colors for color in excluded_colors):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

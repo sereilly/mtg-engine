@@ -1264,7 +1264,10 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
         return bool(player.library)
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
-        return any(_card_matches_filter(card, described) for card in player.hand)
+        return any(
+            _card_matches_filter(card, described, game=game, owner=player)
+            for card in player.hand
+        )
     # "Target player discards a card unless they **put a card from their hand on
     # top of their library**." (Tainted Specter.) An empty hand is a real and
     # checkable "nothing to give": the handler underneath moves as many cards as

@@ -4561,6 +4561,7 @@ def _derived_static_claims(
     from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
+    from .mana_spending import spending_permission_line
     from .prevention import prevention_claims_line
     from .regeneration import denies_regeneration_line, self_regeneration_line
     from .replacements import replacement_claims_line
@@ -4618,6 +4619,15 @@ def _derived_static_claims(
     # working perfectly.
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
+    # CR 106.6 spending permissions ("You may spend white mana as though it were
+    # mana of any color"). The payment paths read the seat's derived permission
+    # list at the moment a cost is paid, so there is no instruction -- and on an
+    # enchantment carrying this line beside two others, no instruction means one
+    # third of the card reports as done by the other two. Celestial Dawn is
+    # exactly that card: with only its land-type line implemented it compiled
+    # green and printed three sentences.
+    if spending_permission_line(oracle_text) is not None:
+        claims.append("mana_spending")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an
