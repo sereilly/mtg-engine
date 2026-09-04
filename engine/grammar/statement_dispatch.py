@@ -420,7 +420,10 @@ def lower_statement(
         # Artifact's sacrifice lowers under a ``May``.
         # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
         # those creatures" names a set an earlier step of this effect chose.
-        return _lower_sacrifice(statement, event, produced)
+        # The **unfiltered** event and its narrowing, for `_lower_destroy`'s
+        # reason: "that creature's controller sacrifices **it**" (Basalt
+        # Golem) asks whether the block trigger named one creature.
+        return _lower_sacrifice(statement, event, produced, event_subject)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
     if isinstance(statement, ast.LookTopPickToHand):

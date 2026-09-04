@@ -1049,13 +1049,29 @@ def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, contex
     already gone is sacrificed by nothing, which is CR 608.2b doing as much as
     it can rather than a failure.
     """
+    from ..oracle_types import LAST_TARGET_CONTROLLER
+
+    # "**If the player does**, they create a 0/2 … Wall …" (Basalt Golem). Both
+    # halves of the rider read this step: whether it took place, and whose
+    # creature it was. The seat is recorded **before** the sacrifice, which is
+    # the only moment it can be — by the sentence behind it the creature is a
+    # card in a graveyard (CR 400.7) and its controller is nobody's to read.
+    #
+    # Written as a zero and a None on the path that does nothing, for the reason
+    # ``discard_target_cards`` writes its zero: a missing key and a false one
+    # read the same to the rider, and writing it is what says this step answered.
+    context.results["sacrificed_this_way"] = 0
     victim = game.permanent_by_id(
         (context.trigger_context or {}).get("bound_permanent_id")
     )
     if victim is None or not game.is_on_battlefield(victim):
         game.log.append(f"{context.card.name}: the creature it named is gone")
         return True, "resolved"
+    seat = game.controller_index_of(victim)
+    if isinstance(seat, int):
+        context.results[LAST_TARGET_CONTROLLER] = seat
     game.sacrifice_permanent(victim)
+    context.results["sacrificed_this_way"] = 1
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
     return True, "resolved"
 

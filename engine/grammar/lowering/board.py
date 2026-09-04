@@ -236,6 +236,7 @@ def _lower_sacrifice(
     node: ast.Sacrifice,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """Only "sacrifice this <permanent>" has a handler.
 
@@ -277,6 +278,36 @@ def _lower_sacrifice(
     if (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "that"
+        and not node.subject.targeted
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        return (
+            OracleInstruction(
+                "sacrifice_bound_permanent", "", _filter_payload(node.subject.filter)
+            ),
+        )
+    # "**That creature's controller sacrifices it** at end of combat." (Basalt
+    # Golem.) The same sentence with the object named in the *possessive* and
+    # the subject left a pronoun — and the seat it names is the one CR 701.17a
+    # would have picked anyway, because a permanent is sacrificed by whoever
+    # controls it. So the possessive says out loud what the action already
+    # implies, and the two printed spellings are one instruction rather than two
+    # readings of a seat.
+    #
+    # Beside the "that <noun>" branch above and under the same gate: the
+    # pronoun was rebound to the *trigger's* subject by
+    # `rebind_pronoun_to_event_subject`, which is what makes it name the blocked
+    # creature and not the Golem, and the delay is what makes the id the only
+    # way to find it again at end of combat.
+    #
+    # Above the forced-sacrifice prompt below, which would otherwise claim it:
+    # routed there, the blocked creature's controller would be asked to pick
+    # *any* creature to give up, which is a strictly better card than the one
+    # printed.
+    if (
+        node.player.kind == "that_player"
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
         and not node.subject.targeted
         and event in _BOUND_OBJECT_DELAYED_EVENTS
     ):

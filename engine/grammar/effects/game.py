@@ -12,6 +12,7 @@ family.
 import dataclasses
 
 from ...tokens import PREDEFINED_TOKENS
+from ...oracle_types import LAST_TARGET_CONTROLLER
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
@@ -439,6 +440,23 @@ def _parse_create_token_for_recipient(
             assert isinstance(token, ast.CreateToken)
             return dataclasses.replace(token, recipient_players=who)
         stream.reset(mark)
+    # "**They** create a 0/2 colorless Wall artifact creature token with
+    # defender." (Basalt Golem, inside the branch of "if the player does".)
+    # Anaphoric rather than descriptive: the seat is the one the sentence in
+    # front named, and nothing on a board says who that is — so the token rides
+    # the controller an earlier step recorded, exactly as "**its controller**
+    # creates …" does (``riders.py``). That is why it sets ``recipient`` and
+    # not ``recipient_players``: those name a *set* the phrase describes, and
+    # this names one seat somebody else wrote down.
+    #
+    # The lowering demands the producer, so with no earlier step recording a
+    # seat the words name nobody and the line refuses rather than handing the
+    # token to whoever the resolution happened to be carrying.
+    if stream.accept_word("they") and stream.at_word("create", "creates"):
+        token = _parse_create_token(stream)
+        assert isinstance(token, ast.CreateToken)
+        return dataclasses.replace(token, recipient=LAST_TARGET_CONTROLLER)
+    stream.reset(mark)
     return None
 
 

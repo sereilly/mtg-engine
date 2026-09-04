@@ -309,6 +309,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # are separate keys rather than one: only the first is available
     # synchronously, and only the second says what was chosen.
     "sacrifice_matching_permanent": ("sacrificed_this_way", "sacrificed_cards"),
+    # "…that creature's controller sacrifices it at end of combat. **If the
+    # player does**, **they** create a 0/2 … Wall …" (Basalt Golem.) The same
+    # two questions the row above answers, asked of the bound sacrifice: whether
+    # it happened, and whose creature it was — and the second is the only place
+    # the token's recipient can come from, because by then the creature is a
+    # card in a graveyard.
+    "sacrifice_bound_permanent": ("sacrificed_this_way", LAST_TARGET_CONTROLLER),
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots

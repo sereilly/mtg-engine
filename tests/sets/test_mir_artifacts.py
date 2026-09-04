@@ -735,3 +735,115 @@ def test_an_empty_ventifact_bottle_does_nothing(set_pool):
 
     assert not bottle.tapped, game.log
     assert game.players[0].mana_pool["C"] == 0, game.log
+
+
+# --- W2G1: combat triggers and their bound referents ---
+#
+# Basalt Golem is filed here rather than with the creatures for the reason
+# tests/sets/README.md gives: by the printed type of the card the test names,
+# and its type line reads "Artifact Creature — Golem".
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1a_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1a_golem_blocked(set_pool):
+    """Basalt Golem attacking, blocked by a Wall, run out to end of combat."""
+    golem = Permanent(card=set_pool("MIR")["Basalt Golem"])
+    golem.summoning_sick = False
+    blocker = Permanent(card=_w2g1a_creature("Wall of Stone", 0, 7))
+    blocker.summoning_sick = False
+    bystander = Permanent(card=_w2g1a_creature("Bystander", 1, 1))
+    bystander.summoning_sick = False
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[golem]),
+        PlayerState(name="P2", battlefield=[blocker, bystander]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+    return game, golem, blocker, bystander
+
+
+def test_basalt_golem_arms_a_delayed_sacrifice_of_what_blocked_it(set_pool):
+    """"That creature's controller sacrifices it at end of combat."
+
+    The pronoun spelling of "sacrifice that creature": the object is named in
+    the *possessive* and the subject is a bare pronoun, so the reader that
+    decides whether a delay binds an object -- which looks at the noun phrase's
+    quantifier -- saw no binding and the entry would have armed about nothing.
+    The seat the possessive names is CR 701.17a's answer anyway (a permanent is
+    sacrificed by whoever controls it), so the two printed spellings are one
+    instruction.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Basalt Golem"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    payload = trig.instruction.payload
+    assert payload["event"] == "next_end_of_combat"
+    assert payload["binds_target"] is True
+    assert [step.kind for step in payload["instruction"].payload["steps"]] == [
+        "sacrifice_bound_permanent", "if_then"
+    ]
+
+    game, _golem, blocker, _bystander = _w2g1a_golem_blocked(set_pool)
+    assert [(e.event, e.bound_permanent_id) for e in game.delayed_triggers] == [
+        ("next_end_of_combat", blocker.permanent_id)
+    ], game.log
+
+
+def test_basalt_golem_gives_the_wall_to_the_player_who_lost_a_creature(set_pool):
+    """"If the player does, **they** create a 0/2 … Wall …"
+
+    Both riders belong to the *delayed* ability. Left beside it they would run
+    when the block trigger resolved -- a whole combat before the sacrifice they
+    ask about -- and read a record nothing had written. And "they" is the
+    sacrificing player, read off the seat the sacrifice recorded before the
+    creature left: by the time the token is created it is a card in a graveyard
+    and its controller is nobody's to look up.
+    """
+    game, _golem, _blocker, _bystander = _w2g1a_golem_blocked(set_pool)
+
+    for _ in range(4):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Wall of Stone"], game.log
+    assert sorted(p.card.name for p in game.players[1].battlefield) == [
+        "Bystander", "Wall Token"
+    ], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == ["Basalt Golem"]
+
+
+def test_basalt_golem_makes_no_wall_when_the_creature_is_already_gone(set_pool):
+    """"**If** the player does" asks a real question even though the sacrifice
+    is not optional: CR 701.17a's action does not happen when the permanent has
+    already left, and the rider is what stops the token arriving anyway."""
+    game, _golem, blocker, _bystander = _w2g1a_golem_blocked(set_pool)
+    game.remove_from_battlefield(blocker)
+
+    for _ in range(4):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+    assert [p.card.name for p in game.players[1].battlefield] == ["Bystander"], game.log
