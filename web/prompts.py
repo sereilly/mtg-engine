@@ -1165,6 +1165,126 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("text_change_vocabulary")
+def _text_change_vocabulary(ctx: PromptContext, choices: list) -> dict:
+    """Mind Bend: "…replacing all instances of one color word with another **or
+    one basic land type with another**." Which vocabulary, asked only when both
+    would do something.
+
+    The two words were named at the cast and are the same mana symbol read two
+    ways — "R" is red and it is Mountain — so what is offered is the *reading*,
+    spelled out, rather than a second pair of words to choose.
+    """
+    # Both tables keyed by mana symbol, from the module that owns them: the
+    # grammar's `COLOR_WORDS` is the same pairs inverted.
+    from engine.text_changes import COLOR_WORDS, LAND_TYPE_WORDS
+
+    choice = choices[0]
+    old_symbol = str(choice.data.get("old_symbol") or "")
+    new_symbol = str(choice.data.get("new_symbol") or "")
+    words = {"color_word": COLOR_WORDS, "land_type": LAND_TYPE_WORDS}
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "permanent_name": choice.data.get("permanent_name", ""),
+        "options": [
+            {
+                "mode": mode,
+                "from": words[mode].get(old_symbol, ""),
+                "to": words[mode].get(new_symbol, ""),
+            }
+            for mode in (choice.data.get("options") or ())
+        ],
+    }
+
+
+@prompt_renderer("aggregate_sacrifice")
+def _aggregate_sacrifice(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Dreadnought: "…sacrifice any number of creatures with total
+    power 12 or greater."
+
+    Every candidate with what it contributes, because the contribution *is* the
+    question — a client that showed names alone could not tell whether a
+    selection pays. The floor and the running rule are sent too, and the engine
+    re-checks the answer against both, so a client sending a short set cannot
+    buy the offer cheaply.
+    """
+    choice = choices[0]
+    payload = dict(choice.data.get("_payload") or {})
+    characteristic = str(choice.data.get("characteristic") or "power")
+    candidates = ctx.game.aggregate_sacrifice_candidates(
+        choice.player_index, payload
+    )
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "characteristic": characteristic,
+        "at_least": int(choice.data.get("at_least", 0)),
+        "choices": [
+            {
+                "permanent_id": perm.permanent_id,
+                "name": perm.card.name,
+                "amount": ctx.game.aggregate_sacrifice_total(
+                    [perm], characteristic
+                ),
+            }
+            for perm in candidates
+        ],
+    }
+
+
+@prompt_renderer("library_end_choice")
+def _library_end_choice(ctx: PromptContext, choices: list) -> dict:
+    """Ether Well: "If that creature is red, you may put it on the bottom of
+    its owner's library instead."
+
+    The permanent is still on the battlefield while this is owed — the move is
+    what the answer performs — so the card being moved is named rather than
+    pointed at by a zone position that does not exist yet.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "moved_name": choice.data.get("moved_name", ""),
+        "owner_name": choice.data.get("owner_name", ""),
+    }
+
+
+@prompt_renderer("graveyard_pile_choice")
+def _graveyard_pile_choice(ctx: PromptContext, choices: list) -> dict:
+    """Ebony Charm: "Exile up to three target cards **from a single
+    graveyard**." Which pile, asked before which cards.
+
+    Only piles that still hold a card the printed phrase names are offered, and
+    they are re-derived through the engine's own candidate rule rather than sent
+    from the armed list — a card can leave a graveyard between the offer and the
+    answer, and a pile offered here is one the pick behind it would find empty.
+    The count of legal cards travels with each option because that is what the
+    choice is actually between.
+    """
+    choice = choices[0]
+    live = ctx.game.live_graveyard_pile_choices(choice)
+    payload = dict(choice.data.get("_payload") or {})
+    from engine.handlers._common import graveyard_card_matches
+
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "options": [
+            {
+                "seat": seat,
+                "name": ctx.game.players[seat].name,
+                "legal_cards": sum(
+                    1 for card in ctx.game.players[seat].graveyard
+                    if graveyard_card_matches(payload, card)
+                ),
+            }
+            for seat in live
+        ],
+    }
+
+
 @prompt_renderer("graveyard_exile_pick")
 def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
     """Rysorian Badger: which cards in the defending player's graveyard go.

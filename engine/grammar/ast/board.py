@@ -67,6 +67,13 @@ class Sacrifice:
     #: per-seat count spec the prompt is sized from. None is every sentence
     #: written before fractions existed: the subject's own count decides.
     count: "Amount | None" = None
+    #: "…sacrifice **any number of creatures with total power 12 or greater**."
+    #: (Phyrexian Dreadnought.) A threshold on the *aggregate* of the chosen
+    #: set, as ``(characteristic, minimum)``. It cannot be a count and it cannot
+    #: ride the filter: how many permanents satisfy it depends on which ones are
+    #: chosen, and a filter is asked of one permanent at a time. None is every
+    #: sacrifice printed with a number instead.
+    total_at_least: "tuple[str, int] | None" = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,14 @@ class Exile:
     #: hidden from every player, so admitting the words without carrying them
     #: would exile the card in full view of the table.
     face_down: bool = False
+    #: ``…from **a single** graveyard`` (Ebony Charm; Night Soil prints it as a
+    #: cost). Two facts in four words: the pile may be **anybody's**, which
+    #: rides the filter's ``zone``/``zone_owner`` like every other printed zone,
+    #: and every card must come out of the **same** one, which cannot — a filter
+    #: is asked of one card at a time, so the restriction on the *set* rides the
+    #: node. ``ast.ExileCost`` carries the identical field one package over, for
+    #: the identical sentence on the cost side.
+    same_zone: bool = False
 
 
 @dataclass(frozen=True)
@@ -564,6 +579,15 @@ class PutOnLibraryTop:
     #: the lowering refuses the mismatch outright for that reason — but it can
     #: only refuse it if the parse kept both halves.
     to_owner: str = "owner"
+    #: "If that creature is **red**, you may put it on the bottom of its owner's
+    #: library **instead**." (Ether Well.) The colours the printed condition
+    #: names, and whether the swap is optional. Carried on this node rather than
+    #: read as a second sentence because "instead" makes it one move with two
+    #: possible ends — two statements would put the card on top and then move it
+    #: again, which is a second zone change nothing on the card describes and
+    #: which any "whenever a card is put on top" trigger would see twice.
+    bottom_instead_colors: tuple[str, ...] = ()
+    bottom_instead_optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -637,6 +661,13 @@ class SacrificeUnlessPay:
     """
     subject: Recipient
     cost: ManaCost
+    #: "…unless you pay **its mana cost reduced by {2}**" (Flash). The cost is
+    #: not printed at all: it is read off the object an earlier step of the same
+    #: sentence moved, and is not knowable while the sentence is being read —
+    #: the same reason ``DestroyUnlessPay.per_counter`` names its multiplier
+    #: instead of counting it. ``cost`` then carries the *reduction*, which is
+    #: the only number the card prints.
+    cost_from: str | None = None
 
 
 @dataclass(frozen=True)

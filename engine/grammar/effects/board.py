@@ -27,377 +27,26 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
-from ..readers import _parse_entering_counters
-from ..vocabulary import CARD_TYPES
-from ..records import _parse_for_each_this_way
-
 from ..errors import GrammarError
-from ..nouns import parse_object_filter
-from ..names import accept_original_expansion
 from ..lexer import NUMBER
-from ..readers import accept_source_reference
+from ..names import accept_original_expansion
+from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import (
     _accept_life_alternative, _accept_number, _accept_per_counter_multiplier,
     _accept_unless_life_cost,
-    _parse_counted_sacrifice,
+    _parse_further_subjects,
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
-    _parse_sacrificed_subject, _parse_that_object, _parse_zone,
+    _parse_that_object, _parse_zone,
 )
+from ..sacrifices import _parse_counted_sacrifice, _parse_sacrificed_subject
 
 
-def _parse_put_source_into_zone(stream: TokenStream) -> ast.Statement | None:
-    """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
-
-    The ability moving its own source, which is neither a target nor a noun
-    phrase — so it is read here, ahead of the counter production that otherwise
-    claims every sentence opening with "put" and refuses this one naming a
-    counter kind nobody printed.
-
-    Refuses without consuming unless the whole sentence is there: the word
-    after "put" must be a self-reference and the destination must be a zone.
-    Anything else is somebody else's "put", and taking part of it would strand
-    the rest.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("put"):
-        stream.reset(mark)
-        return None
-    if not accept_source_reference(stream):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("into"):
-        stream.reset(mark)
-        return None
-    try:
-        zone = _parse_zone(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    return ast.PutSourceIntoZone(zone)
 
 
-def _parse_return(
-    stream: TokenStream, actor: "ast.PlayerRef | None" = None
-) -> ast.Statement:
-    """``[<player> ]Return <objects> [from <zone>] to <zone>`` (CR 400.7).
-
-    One production for Raise Dead, Regrowth, Resurrection and Unsummon, which
-    the legacy registry needed three separately-ordered substring rules for —
-    and which it told apart by probing for ``"creature card" not in text``. The
-    source zone rides on the noun phrase (``engine/grammar/nouns.py``), because
-    "target creature card from your graveyard" is one noun phrase; the
-    destination is parsed here.
-    """
-    # Both spellings of the verb: a bare imperative prints "Return", and one
-    # with a subject prints "returns". Same production — English inflection is
-    # not a different effect.
-    if not (stream.accept_word("return") or stream.accept_word("returns")):
-        raise stream.error("expected 'return'")
-    # "Return target spell or creature to its owner's hand." (Unsubstantiate.)
-    # A union across two zones — the stack and the battlefield — which no
-    # object filter expresses, so the template is read whole and the node
-    # carries the stack half as a flag.
-    union_mark = stream.mark()
-    if stream.accept_phrase("target", "spell", "or", "creature"):
-        if stream.accept_word("to"):
-            destination = _parse_zone(stream)
-            if (
-                destination.name == "hand"
-                and destination.owner is not None
-                and destination.owner.kind == "owner"
-            ):
-                return ast.ReturnToZone(
-                    ast.TargetSpec(
-                        "target", ast.ObjectFilter(card_types=("creature",)),
-                        targeted=True,
-                    ),
-                    destination, None, also_stack=True,
-                )
-        stream.reset(union_mark)
-    # "Return **that card** to its owner's hand." (Puppet Master.) The bound
-    # object again — the card of the creature the trigger watched die, which by
-    # resolution is in a graveyard and so is a *card*, not a permanent anything
-    # could target. Read locally, exactly as `_parse_that_object` reads "that
-    # creature" for the destroy production and for the same reason: teaching
-    # the shared noun parser the phrase would hand it to every line printing
-    # those words. The lowering checks a binder exists.
-    # "Return **to your hand** all enchantments you both own and control, …"
-    # (Remove Enchantments). The destination is printed first when the subject
-    # is too long to sit between the verb and it — English, not a different
-    # effect — so it is read here and the rest of the production is the same
-    # production. Refusing it would cost the card its whole first sentence over
-    # a word order.
-    destination_first: ast.Zone | None = None
-    if stream.at_word("to"):
-        stream.advance()
-        destination_first = _parse_zone(stream)
-
-    bound = stream.mark()
-    subject: ast.Recipient | None
-    # "Return **the top creature card of your graveyard** to the
-    # battlefield." (Shallow Grave.) A card named by its *position* in an
-    # ordered pile (CR 404.3) rather than by a noun phrase, which is why the
-    # shared recipient parser refuses it — the same reason the counter
-    # family reads "the top card of your graveyard" locally one file over.
-    #
-    # Its own quantifier, refused by default everywhere: no lowering accepts
-    # ``"top"`` unless it says so, so a sentence that reaches one fails **by
-    # name** rather than being read as a chosen target the card never offers.
-    top_mark = stream.mark()
-    top_of_graveyard = None
-    if stream.accept_phrase("the", "top"):
-        type_word = stream.peek_word()
-        if type_word is not None and type_word in CARD_TYPES:
-            stream.advance()
-            if stream.accept_phrase("card", "of", "your", "graveyard"):
-                top_of_graveyard = ast.TargetSpec(
-                    "top",
-                    ast.ObjectFilter(
-                        card_types=(type_word,), is_card=True,
-                        zone="graveyard", zone_owner=ast.PlayerRef("you"),
-                    ),
-                )
-    if top_of_graveyard is None:
-        stream.reset(top_mark)
-    if top_of_graveyard is not None:
-        subject = top_of_graveyard
-    elif stream.accept_phrase("that", "card"):
-        subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
-    else:
-        stream.reset(bound)
-        subject = parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected something to return")
-    further = _parse_further_subjects(stream, subject)
-    if destination_first is not None:
-        destination = destination_first
-    else:
-        if not stream.accept_word("to"):
-            raise stream.error("expected a destination zone after 'return'")
-        destination = _parse_zone(stream)
-
-    # "...to the battlefield **tapped**." (Silversmote Ghoul.) CR 110.5b: a
-    # permanent enters untapped unless a spell or ability says otherwise, and
-    # this is the ability saying so. Consumed here rather than left to
-    # engine/enter_effects.py, which answers for a permanent's *own printed*
-    # entry line (a static ability, CR 603.6d) — this rider is printed on the
-    # ability that does the moving, and the permanent it makes has no such line.
-    # Accepted only for the battlefield, because "to your hand tapped" is not a
-    # sentence and silently dropping the word is the bug class this grammar
-    # refuses by construction.
-    entering_tapped = False
-    if destination.name == "battlefield" and stream.accept_word("tapped"):
-        entering_tapped = True
-
-    # "…to the battlefield **with a +1/+1 counter on it**." (Sand Golem.)
-    # CR 121.2 puts the counters on as part of the move, so the phrase belongs
-    # to the return exactly as "tapped" above does — and through the same
-    # reader the exile uses, so one printed phrase has one meaning. Battlefield
-    # only, for that rider's reason: a card in a hand carries no counters, and
-    # consuming the words into nothing is the bug this grammar refuses.
-    entering_counters: tuple[tuple[str, int], ...] = ()
-    if destination.name == "battlefield":
-        entering_counters = _parse_entering_counters(stream)
-
-    # "…to the battlefield **under the control of that creature's owner**."
-    # (Reincarnation.) CR 110.2 makes the spell's controller the default, so
-    # the phrase is only ever read here — consumed, because a dropped "under
-    # the control of" is a permanent entering under the wrong player.
-    under_control_of: ast.PlayerRef | None = None
-    if destination.name == "battlefield" and stream.accept_phrase(
-        "under", "the", "control", "of"
-    ):
-        under_control_of = parse_player_ref(stream)
-        if under_control_of is None:
-            raise stream.error("expected a player after 'under the control of'")
-    # "…to the battlefield **under your control**." (Takklemaggot.) The
-    # possessive spelling of the phrase above and the same field: CR 110.2's
-    # default happens to be the same seat, but a phrase left unconsumed is a
-    # line the grammar refuses, and one consumed into nothing is a permanent
-    # whose controller the card named and the engine guessed.
-    elif destination.name == "battlefield" and stream.accept_phrase(
-        "under", "your", "control"
-    ):
-        under_control_of = ast.PlayerRef("you")
-    # "…to the battlefield **under its owner's control**." (Ivory Gargoyle.)
-    # CR 400.3's default said out loud, on the same field as the two spellings
-    # above — the seat is what the phrase names, and reading it as the ability's
-    # controller would put a stolen creature back on the thief's side.
-    elif destination.name == "battlefield" and stream.accept_phrase(
-        "under", "its", "owner", "'s", "control"
-    ):
-        under_control_of = ast.PlayerRef("owner")
-
-    # "…attached to that creature." (Takklemaggot.) CR 303.4f: an effect that
-    # puts an Aura onto the battlefield has to say what it attaches to. "That
-    # creature" is the one an earlier step of this same sentence chose, so what
-    # is recorded is the *reference* ("chosen"), not a filter; the lowering
-    # turns it into the scratchpad key and refuses the phrase when no earlier
-    # step of the sentence wrote one.
-    attached_to: str | None = None
-    if destination.name == "battlefield" and stream.accept_phrase("attached", "to"):
-        if not (
-            stream.accept_phrase("that", "creature")
-            or stream.accept_phrase("that", "permanent")
-        ):
-            raise stream.error("expected the permanent it is attached to")
-        attached_to = "chosen"
-
-    # "…as a **non-Aura** enchantment." (Takklemaggot.) A layer-4 type change
-    # (CR 613.1d) on the permanent the move creates. Read as "non-<subtype>
-    # <card type>": the card type has to match what the returning object
-    # already is, because the sentence is describing it rather than changing
-    # it, and the subtype is the whole of what the word "non-" takes away.
-    losing_subtypes: tuple[str, ...] = ()
-    if destination.name == "battlefield":
-        mark_as = stream.mark()
-        if stream.accept_phrase("as", "a") or stream.accept_phrase("as", "an"):
-            word = stream.peek_word()
-            if word is not None and word.startswith("non-"):
-                stream.advance()
-                subtype = word[len("non-"):]
-                if stream.accept_word("enchantment", "artifact", "creature", "land"):
-                    losing_subtypes = (subtype,)
-                else:
-                    stream.reset(mark_as)
-            else:
-                stream.reset(mark_as)
-
-    from_zone: ast.Zone | None = None
-    if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
-        from_zone = ast.Zone(subject.filter.zone, subject.filter.zone_owner)
-    # "…**for each card discarded this way**." (Recall.) A repetition of the
-    # whole return, so it is read here at the end of the clause and carried on
-    # the node; lowering refuses a shape it cannot repeat rather than dropping
-    # the words.
-    repetitions = _parse_for_each_this_way(stream)
-
-    def _one(each: ast.Recipient) -> ast.ReturnToZone:
-        each_from = from_zone
-        if isinstance(each, ast.TargetSpec) and each.filter.zone != "battlefield":
-            each_from = ast.Zone(each.filter.zone, each.filter.zone_owner)
-        return ast.ReturnToZone(
-            each, destination, each_from, entering_tapped=entering_tapped,
-            entering_counters=entering_counters,
-            under_control_of=under_control_of, repetitions=repetitions,
-            actor=actor,
-            attached_to=attached_to, losing_subtypes=losing_subtypes,
-        )
-
-    if further:
-        return ast.Conjunction(tuple(_one(each) for each in (subject, *further)))
-    return _one(subject)
 
 
-def _parse_further_subjects(
-    stream: TokenStream,
-    first: "ast.Recipient | None" = None,
-    *,
-    several_targets: bool = False,
-) -> list[ast.Recipient]:
-    """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
-
-    "Return to your hand all enchantments you both own and control, all Auras
-    you own attached to permanents you control, and all Auras you own attached
-    to attacking creatures your opponents control." (Remove Enchantments.) One
-    verb over a union of three noun phrases, which no single ``ObjectFilter``
-    says: its keys are AND'd, so the three folded into one would name an
-    enchantment that is simultaneously an Aura on your own permanent and an
-    Aura on an attacking creature of an opponent's — nothing at all.
-
-    So the union lives in the *shape*: the caller builds one statement per
-    phrase and joins them with :class:`ast.Conjunction`, which lowering already
-    turns into a sequence. Two sweeps over overlapping sets are the same
-    outcome as one sweep over their union, because both are idempotent — a
-    permanent already returned is no longer there to return again.
-
-    Returns an empty list with the cursor untouched unless a separator really
-    is followed by another noun phrase, so "destroy target creature **and** you
-    gain 2 life" still reads as two effects rather than failing here.
-    """
-    extra: list[ast.Recipient] = []
-    while True:
-        mark = stream.mark()
-        # A separator is required. Without one, two adjacent noun phrases would
-        # be joined by nothing but the parser's willingness to keep reading.
-        separated = stream.accept_punct(",")
-        separated = stream.accept_word("and") or separated
-        nxt = (
-            parse_recipient(stream)
-            if separated and not stream.at_word("to")
-            else None
-        )
-        # Every phrase in the union must name an *object*, which is the shape
-        # this production exists for and the shape it can be sure of. "and" is
-        # the commonest word on a Magic card and most of its uses join two
-        # effects, not two objects: "destroy this artifact **and** it deals
-        # damage to you" (Voodoo Doll) has a perfectly good noun phrase after
-        # the "and", and reading it as a second thing to destroy destroyed the
-        # artifact and dropped the damage. A quantifier is the one signal
-        # available before the verb arrives, so the union takes only the
-        # quantifiers that cannot begin a clause and hands every other "and"
-        # back to the statement parser.
-        #
-        # **"target" is one of them**, and it is the safest of the three:
-        # "Destroy target creature **and target land**" (Fumarole), "Exile this
-        # creature **and target creature** without flying that's attacking you"
-        # (Giant Trap Door Spider). The word starts a noun phrase and nothing
-        # else, and the shape that looks dangerous — "…**and target player**
-        # draws a card" — is excluded by the line above rather than by luck: a
-        # targeted *player* parses to ``ast.PlayerRef``, so it was never a
-        # candidate for this union at all.
-        if (
-            not isinstance(nxt, ast.TargetSpec)
-            or nxt.quantifier not in ("all", "each", "target", "this")
-        ):
-            stream.reset(mark)
-            return extra
-        # **"this <type>" is the fourth, and the only one that needs a second
-        # test.** "Destroy it **and this creature** at end of combat" (Goblin
-        # Sappers) is a union; "tap all untapped Islands that player controls
-        # **and this enchantment deals X damage** to the player" (Monsoon) is
-        # two clauses whose second one opens with the very same noun phrase, and
-        # so do Earthbind and Vexing Arcanix. The three quantifiers above cannot
-        # begin a clause, and this one can — a permanent naming itself is the
-        # commonest *subject* on a card.
-        #
-        # So the union takes it only where the phrase ends the sentence: at a
-        # terminator, or in front of the one trailing clause a union may carry
-        # (the "at end of combat" delay, read by the caller). Anything else is a
-        # verb about to arrive, and the "and" belongs to the statement parser.
-        if nxt.quantifier == "this" and not (
-            stream.exhausted
-            or stream.at_punct(".", ";", ",")
-            or stream.at_word("at")
-        ):
-            stream.reset(mark)
-            return extra
-        # **At most one targeted phrase in the union, unless the caller can
-        # describe several.** The old reason was flat — the cast picker asks a
-        # spell for one target — and it is still true of a union lowered to a
-        # ``Conjunction``, whose spec comes from the first instruction that
-        # describes targets and leaves the rest picked by nobody. It is *not*
-        # true of a caller that folds the phrases into one statement with an
-        # ordered ``roles`` description, which the picker, the cast gate and the
-        # AI have all read since Glyph of Delusion. So ``several_targets`` is
-        # the claim "my lowering describes every one of these", and only the
-        # destroy production makes it. Unions whose first phrase is the source
-        # ("Exile **this creature** and target creature …") name one target and
-        # are unaffected either way.
-        if (
-            not several_targets
-            and nxt.quantifier == "target"
-            and any(
-                isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
-                for prior in ((first,) if first is not None else ()) + tuple(extra)
-            )
-        ):
-            raise stream.error(
-                "no spell picks two targets from one verb"
-            )
-        extra.append(nxt)
 
 
 def _parse_destroy(stream: TokenStream) -> ast.Statement:
@@ -687,6 +336,24 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
                     otherwise=ast.Sacrifice(player, subject),
                 )
         if stream.accept_word("pay"):
+            # "…unless you pay **its mana cost reduced by {2}**" (Flash). The
+            # possessive names the object an earlier step of this same sentence
+            # put onto the battlefield, so the amount cannot be a printed
+            # symbol — only the *reduction* is printed. Read before the plain
+            # spelling because both open "pay" and `_parse_mana_payment` raises
+            # rather than refusing: an "its" reaching it fails the whole line
+            # naming a missing mana cost.
+            mark_derived = stream.mark()
+            if stream.accept_phrase("its", "mana", "cost"):
+                if not stream.accept_phrase("reduced", "by"):
+                    raise stream.error(
+                        "expected 'reduced by' after a derived mana cost"
+                    )
+                return ast.SacrificeUnlessPay(
+                    subject, _parse_mana_payment(stream),
+                    cost_from="its_mana_cost",
+                )
+            stream.reset(mark_derived)
             return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
     # "… unless you **sacrifice two Swamps**" (Mold Demon) — the same

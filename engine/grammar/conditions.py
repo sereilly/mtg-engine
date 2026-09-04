@@ -113,16 +113,75 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     """
     first = _parse_single_condition(stream)
     parts = [first]
+    joiner = None
     while True:
         mark = stream.mark()
-        if not stream.accept_word("and"):
+        # "…is in a graveyard **or** a nontoken permanent … is on the
+        # battlefield" (Bazaar of Wonders). Read in the same loop as "and" and
+        # under the same backtracking rule, because both are about the clause
+        # *list*: what changes is only whether every part must hold.
+        #
+        # A sentence may not mix them. "A and B or C" has two readings in
+        # English and neither is written down on any card in the pool, so the
+        # second joiner refuses rather than being resolved by precedence — a
+        # guessed grouping is a condition that holds on boards the card does
+        # not name.
+        word = "and" if stream.at_word("and") else ("or" if stream.at_word("or") else None)
+        if word is None or (joiner is not None and word != joiner):
             break
+        stream.advance()
         try:
             parts.append(_parse_single_condition(stream))
         except GrammarError:
             stream.reset(mark)
             break
-    return first if len(parts) == 1 else ast.EveryOf(tuple(parts))
+        joiner = word
+    if len(parts) == 1:
+        return first
+    return ast.EveryOf(tuple(parts)) if joiner == "and" else ast.SomeOf(tuple(parts))
+
+
+#: Where a "with the same name" clause may look, as ``(printed words, zone)``.
+#: Closed on purpose: the evaluator searches exactly these two piles, and a
+#: third zone admitted here would be a clause consumed and answered about
+#: somewhere else.
+_SAME_NAME_ZONES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("in", "a", "graveyard"), "graveyard"),
+    (("on", "the", "battlefield"), "battlefield"),
+)
+
+
+def _parse_same_named_object(stream: TokenStream) -> "ast.SameNamedObject | None":
+    """``a [nontoken] <card|permanent> with the same name is <where>`` — Bazaar
+    of Wonders' condition, or None with the cursor untouched.
+
+    "The same name" as the object the *firing event* named, which is why this
+    is a condition node rather than an ``ObjectFilter`` with ``named`` set: that
+    field holds a printed literal, and nothing here is printed — the name is
+    not known until the trigger fires. The lowering refuses the clause under any
+    event that freezes no such object.
+
+    Every word is required. "a card with the same name" and "a nontoken
+    permanent with the same name" are the two the card prints, and the noun
+    decides nothing on its own: what separates them is the *zone*, which is read
+    from a closed table so a third one cannot be consumed and then searched
+    somewhere else.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("a", "an"):
+        return None
+    nontoken = bool(stream.accept_word("nontoken"))
+    if not stream.accept_word("card", "permanent"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("with", "the", "same", "name", "is"):
+        stream.reset(mark)
+        return None
+    for words, zone in _SAME_NAME_ZONES:
+        if stream.accept_phrase(*words):
+            return ast.SameNamedObject(zone, nontoken=nontoken)
+    stream.reset(mark)
+    return None
 
 
 def _accept_counter_kind(stream: TokenStream) -> str | None:
@@ -152,6 +211,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     falls back rather than silently losing the condition — the legacy compiler
     dropped intervening-ifs entirely, making conditional triggers always fire."""
     mark = stream.mark()
+
+    # "**a card with the same name is in a graveyard**" / "**a nontoken
+    # permanent with the same name is on the battlefield**" (Bazaar of
+    # Wonders). Read first because both openers are noun phrases the general
+    # readers below would consume as far as "with", leaving "the same name" to
+    # fail the line at a phrase this production does read.
+    same_name = _parse_same_named_object(stream)
+    if same_name is not None:
+        return same_name
 
     # "**this card is in your graveyard with a creature card directly above
     # it**" (Death Spark, Krovikan Horror) / "…**with three or more creature

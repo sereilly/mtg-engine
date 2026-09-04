@@ -42,9 +42,12 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_tapped_lands_produce_chosen,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders, _parse_sacrifice,
-                      _parse_counted_sacrifice, _parse_sacrifice_expansion_permanents,
+                      _parse_sacrifice_expansion_permanents,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
+from .sacrifices import _parse_counted_sacrifice
+from .effects.stack import _parse_conditional_retarget
+from .effects.cards import _parse_for_each_revealed_discard
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +358,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     per_count = _parse_leading_count_scale(_parse_statement_body, stream)
     if per_count is not None:
         return per_count
+    # "**For each blue instant card revealed this way,** that player discards
+    # that card unless they pay 4 life." (Sirocco.) Read before the general
+    # leading loop below, which would take the noun phrase and then fail the
+    # line on a body it has no reading for — the discard names "that card",
+    # which is one turn of a loop rather than a subject anything else parses.
+    # Refuses without consuming, so every other "For each …" keeps its reading.
+    revealed_discard = _parse_for_each_revealed_discard(stream)
+    if revealed_discard is not None:
+        return revealed_discard
+
     # "**The controller of each of those artifacts** gains life equal to its
     # mana value." (Seeds of Innocence.) The loop with its subject printed in
     # front of it. Read here, beside the "for each …" spelling it is a word
@@ -531,6 +544,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # for — and refuses without consuming, so every other "if" keeps its
     # reading.
     if stream.at_word("if"):
+        # "If target spell has only one target and that target is a creature,
+        # change that spell's target to another creature." (Meddle.) Read here
+        # for the reason the two below it are: what looks like a condition is
+        # not one — nothing about the *board* is tested, and both halves are
+        # questions about the announced target of another object, which the
+        # picker has to ask before the spell is cast at all. Refuses without
+        # consuming, so every other "If …" keeps its reading.
+        retarget = _parse_conditional_retarget(stream)
+        if retarget is not None:
+            return retarget
         produces = _parse_produces_instead(stream)
         if produces is not None:
             return produces

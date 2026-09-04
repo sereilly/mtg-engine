@@ -4468,7 +4468,9 @@ SUPPORTED_LAYOUTS = frozenset({
 # Support derived from the text-keyed rule tables
 # ---------------------------------------------------------------------------
 
-def _activation_restrictions_readable(oracle_text: str) -> bool:
+def _activation_restrictions_readable(
+    oracle_text: str, card_name: str | None = None
+) -> bool:
     """Whether this card prints an "Activate only …" clause and every one of
     them is a restriction the engine enforces.
 
@@ -4478,9 +4480,9 @@ def _activation_restrictions_readable(oracle_text: str) -> bool:
     """
     from .activation_restrictions import _clauses, unreadable_activation_clauses
 
-    if not _clauses(oracle_text or ""):
+    if not _clauses(oracle_text or "", card_name):
         return False
-    return not unreadable_activation_clauses(oracle_text or "")
+    return not unreadable_activation_clauses(oracle_text or "", card_name)
 
 
 def _derived_static_claims(
@@ -4535,7 +4537,7 @@ def _derived_static_claims(
     # turn"). The activation path reads the same table, so a clause it cannot
     # read is a card the gate must refuse rather than admit with the restriction
     # unenforced — the direction this whole arrangement exists to prevent.
-    if _activation_restrictions_readable(oracle_text):
+    if _activation_restrictions_readable(oracle_text, card_name):
         claims.append("activation_restrictions")
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)
     # The *board* half of CR 602.5, and the same shape as the two claims below

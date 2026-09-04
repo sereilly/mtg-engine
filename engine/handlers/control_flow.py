@@ -163,6 +163,52 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             evaluate_condition(game, context, part) for part in parts
         )
 
+    if kind == "any_of":
+        # Any part, and an empty list is False for ``all_of``'s reason one
+        # clause up: a disjunction that lowered to nothing is a condition nobody
+        # wrote, and `any([])` is already False — the emptiness is stated here so
+        # the two joiners read the same way rather than agreeing by accident.
+        parts = payload.get("conditions") or []
+        return bool(parts) and any(
+            evaluate_condition(game, context, part) for part in parts
+        )
+
+    if kind == "same_named_object":
+        # "…if **a card with the same name** is in a graveyard or **a nontoken
+        # permanent with the same name** is on the battlefield." (Bazaar of
+        # Wonders.) CR 201.2: two objects have the same name when their names
+        # are identical, and the name compared against is the *spell the trigger
+        # fired on* — frozen by the cast fire site, because by the time this
+        # ability resolves the spell may have left the stack.
+        #
+        # The spell itself is never one of the objects it is compared with: it
+        # is on the stack, and neither zone this searches is the stack. A
+        # permanent that entered from that spell **is** one, which is what makes
+        # the enchantment's own second half read the way the card is printed.
+        cast_card = (context.trigger_context or {}).get("cast_card")
+        name = getattr(cast_card, "name", None)
+        if not name:
+            # No event froze one. The lowering refuses this condition outside a
+            # cast trigger, so reaching here means the fire site recorded
+            # nothing — False, rather than a scan for the empty name that every
+            # object would fail anyway.
+            return False
+        if payload.get("zone") == "graveyard":
+            return any(
+                card.name == name
+                for player in game.players
+                for card in player.graveyard
+            )
+        nontoken = bool(payload.get("nontoken"))
+        return any(
+            # ``effective_card`` rather than the printed one: CR 707.2 makes a
+            # copy's name the copied name, so a Clone of the spell being cast
+            # really is an object with the same name (CR 201.2).
+            permanent.effective_card.name == name
+            and not (nontoken and permanent.metadata.get("is_token"))
+            for permanent in game.all_permanents()
+        )
+
     if kind == "self_in_graveyard_with_cards_above":
         # "…if **this card is in your graveyard with a creature card directly
         # above it**" (Death Spark, Krovikan Horror). CR 404.3's order, read
@@ -1164,6 +1210,19 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # battlefield* is asked: a choice drawn from anywhere else is not a price
     # this player pays, and answering False for it would withdraw an offer the
     # card makes.
+    if instruction.kind == "sacrifice_permanents_totalling":
+        # "…unless you sacrifice any number of creatures with **total power 12
+        # or greater**" (Phyrexian Dreadnought). A board that cannot reach the
+        # floor is a real and checkable "nothing to give", and the whole board
+        # is the most that could ever be offered — so if every candidate
+        # together falls short, the offer is not made and the penalty stands.
+        payload = dict(instruction.payload)
+        payload["_source"] = source if payload.get("exclude_self") else None
+        seat = game.players.index(player)
+        every = game.aggregate_sacrifice_candidates(seat, payload)
+        return game.aggregate_sacrifice_total(
+            every, str(payload.get("characteristic") or "power")
+        ) >= int(payload.get("at_least", 0))
     if instruction.kind == "choose_permanent":
         if instruction.payload.get("controlled_by") != "chooser":
             return True
@@ -1289,7 +1348,7 @@ def _resolved_life_cost(game, printed, context: OracleExecutionContext) -> int:
     return max(0, int(printed))
 
 
-def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
+def _resolved_cost(printed, context: OracleExecutionContext, game=None) -> dict:
     """An offered cost with its variable amount read at resolution.
 
     "You may pay {X}, where X is the number of +1/+1 counters on it."
@@ -1300,12 +1359,59 @@ def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
     ability *resolves*: a counter added between the trigger and its resolution
     changes the number.
     """
+    printed = dict(printed or {})
+    # "…unless you pay **its mana cost reduced by {2}**" (Flash). The cost is
+    # not printed at all: it is the mana cost of the permanent an earlier step
+    # of the same sentence put onto the battlefield, less what the card does
+    # print. Read here rather than at lowering for the where-clause's reason
+    # above — the object does not exist until the step in front of this one
+    # resolves, and which card the seat picked is not knowable before they pick.
+    key = printed.pop("cost_from", None)
+    if key is not None:
+        return _derived_cost(key, printed.pop("reduced_by", None), context, game)
     resolved = {}
-    for symbol, amount in dict(printed or {}).items():
+    for symbol, amount in printed.items():
         if amount == "x":
             amount = max(0, int(context.x_value or 0))
         resolved[symbol] = int(amount)
     return {symbol: amount for symbol, amount in resolved.items() if amount}
+
+
+def _derived_cost(
+    key: str, reduction, context: OracleExecutionContext, game=None,
+) -> dict:
+    """The mana cost of the permanent recorded under *key*, less *reduction*.
+
+    CR 601.2f's arithmetic in the one direction this engine implements it:
+    a reduction applies to the **generic** part first and never takes a
+    coloured pip off, which is the rule for every cost reduction in Magic
+    (CR 601.2f: coloured requirements are unaffected by a generic reduction).
+    Flash's "{2}" off a {3}{G} creature is {1}{G}, and off a {G}{G} creature is
+    {G}{G}.
+
+    Nothing recorded — the seat declined the offer in front of this one, or the
+    permanent has left — is a cost of nothing, and the offer is not made. The
+    caller then runs the decline branch, which is right either way: with no
+    permanent there is nothing to sacrifice.
+    """
+    from ..mana_payment import mana_cost_from_symbols
+
+    recorded = context.results.get(key)
+    permanent = (
+        game.permanent_by_id(recorded)
+        if isinstance(recorded, int) and game is not None
+        else None
+    )
+    if permanent is None:
+        return {}
+    cost = mana_cost_from_symbols(permanent.effective_card.mana_cost or "")
+    if not cost:
+        return {}
+    cost = dict(cost)
+    generic_off = int(dict(reduction or {}).get("generic", 0) or 0)
+    if generic_off:
+        cost["generic"] = max(0, int(cost.get("generic", 0)) - generic_off)
+    return {symbol: amount for symbol, amount in cost.items() if amount}
 
 
 @effect_handler("may")
@@ -1536,7 +1642,7 @@ def _offer_to_seat(
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
-    cost = _resolved_cost(instruction.payload.get("cost"), context)
+    cost = _resolved_cost(instruction.payload.get("cost"), context, game)
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
     # CR 603.12: a *separate* ability the payment creates, so it is carried
@@ -1561,7 +1667,7 @@ def _offer_to_seat(
     # itself, so a printed {X} in an alternative means what it means in the
     # first one.
     alternatives = [
-        _resolved_cost(alternative, context)
+        _resolved_cost(alternative, context, game)
         for alternative in (instruction.payload.get("cost_alternatives") or ())
     ]
     if (cost or life_cost) and not game._player_can_pay_optional(player, {

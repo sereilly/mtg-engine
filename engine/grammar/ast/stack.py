@@ -169,6 +169,13 @@ class ChangeTarget:
     subject: TargetSpec
     current_target: PlayerRef | None = None
     new_target: str | None = None
+    #: "…and **that target is a creature**" (Meddle). The same question
+    #: ``current_target`` asks about a *seat*, asked about an object instead —
+    #: a separate field because a player and a permanent are not two values of
+    #: one thing here: the picker tests them with different readers, and a card
+    #: printing one prints neither of the other. Both being None is Deflection,
+    #: which asks nothing about the target it moves.
+    current_target_type: str | None = None
 
 
 @dataclass(frozen=True)

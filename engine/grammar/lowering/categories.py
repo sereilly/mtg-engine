@@ -413,6 +413,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_self": "zones",
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
+    # "…sacrifice any number of creatures with total power 12 or greater"
+    # (Phyrexian Dreadnought). The same category as every other sacrifice, so
+    # GRAMMAR_CATEGORIES is unchanged: what differs is how the price is counted,
+    # not what happens to the permanents.
+    "sacrifice_permanents_totalling": "zones",
     "sacrifice_attached_permanent": "zones",
     # CR 702.24a's own kind, reached from the grammar as well as from the
     # keyword rewrite: Phantasmal Sphere prints the ability longhand with a
@@ -495,6 +500,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # are one instruction because the branch acts on a card only the offer knows
     # — the same reason `unless_player_pays` carries its own unpaid steps.
     "discard_revealed_unless_pay_life": "zones",
+    # Sirocco: the plural of the row above, one offer per revealed card the
+    # printed phrase names. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "discard_revealed_matching_unless_pay_life": "zones",
+    "discard_bound_revealed_card": "zones",
     # "…discards **all nonland cards**" (Amnesia). A discard like the counted
     # ones beside it; only who picks differs, and here nobody does.
     "discard_all_matching_cards": "zones",
@@ -788,6 +797,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # cast time. Same category, so GRAMMAR_CATEGORIES is unchanged.
     "return_chosen_cards_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
+    # "Return target Aura card from your graveyard to the battlefield
+    # attached to Hakim." The same zone change with CR 303.4f's attachment
+    # folded into the entry, so the category is unchanged and
+    # GRAMMAR_CATEGORIES gains nothing.
+    "reanimate_aura_onto_source": "zones",
     "reanimate_bound_card": "zones",
     # A card returning *itself* from the graveyard (Silversmote Ghoul). Same
     # category as every other zone change: what differs is which object moves,

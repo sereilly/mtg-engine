@@ -129,6 +129,43 @@ class LifeTotalDifference:
 
 
 @dataclass(frozen=True)
+class SomeOf:
+    """"if a card with the same name is in a graveyard **or** a nontoken
+    permanent with the same name is on the battlefield" (Bazaar of Wonders) —
+    any part is enough.
+
+    :class:`EveryOf`'s twin, and a separate node for that one's reason: the
+    disjunction is about the clause list rather than about any one clause, and
+    nothing stops a card joining two different condition kinds with "or".
+    Folding the two into one node with an operator field would make every
+    reader ask which it was before it could ask anything else.
+    """
+
+    conditions: tuple["Condition", ...]
+
+
+@dataclass(frozen=True)
+class SameNamedObject:
+    """"a card **with the same name** is in a graveyard" / "a nontoken permanent
+    with the same name is on the battlefield" (Bazaar of Wonders).
+
+    "The same name" as *what the firing event named* — CR 201.2's name compared
+    against the spell the trigger fired on, which is why this is not an
+    ``ObjectFilter`` with ``named`` set: that field holds a printed literal, and
+    this one holds a comparison against an object nothing knows until the
+    trigger fires.
+
+    ``zone`` is which pile is searched and ``nontoken`` is CR 111's exclusion,
+    both printed. They are separate fields rather than two node kinds because
+    the question — does an object of this name exist over there — is one
+    question asked of two zones.
+    """
+
+    zone: str
+    nontoken: bool = False
+
+
+@dataclass(frozen=True)
 class EveryOf:
     """"if you control an Urza's Mine **and** an Urza's Tower" — every part must
     hold (CR 104 has no conjunction rule; this is plain English "and").
@@ -434,9 +471,11 @@ Condition = Union[
     LifeTotalDifference,
     PlayerLifeIs,
     RawCondition,
+    SameNamedObject,
     SelfInGraveyardWithCardsAbove,
     AttachedCounterCount,
     SourceCounterCount,
+    SomeOf,
     SourceExiledWithCounter,
     SubjectCharacteristicIs,
     TurnIsYours,

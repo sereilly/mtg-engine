@@ -92,6 +92,10 @@ ActionKind = Literal[
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",
     "graveyard_exile_confirm",
+    "graveyard_pile_confirm",
+    "library_end_confirm",
+    "aggregate_sacrifice_confirm",
+    "text_change_vocabulary_confirm",
     "time_vault_skip",
     "time_vault_decline",
     "island_sanctuary_skip",
@@ -371,6 +375,11 @@ class GameActionRequest(BaseModel):
     # land type is addressed by its color: W=plains, U=island, B=swamp, R=mountain,
     # G=forest).
     old_color: Literal["W", "U", "B", "R", "G"] | None = None
+    # Mind Bend: which vocabulary the chosen symbols are read as, sent with
+    # `text_change_vocabulary_confirm`. Its own field rather than reusing a
+    # colour one: the answer is not a word but *how to read* the two words the
+    # cast already named.
+    text_change_mode: Literal["color_word", "land_type"] | None = None
     attacker_indices: list[int] | None = None
     # CR 508.1b: attackers sent at a planeswalker — maps attacker battlefield
     # index to the attacked planeswalker's permanent_id. The attacker's

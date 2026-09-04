@@ -41,6 +41,15 @@ _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 #: from whoever the resolution happened to be carrying.
 _GRAVEYARD_PILE_SEATS = frozenset({"defending_player"})
 
+#: The pile "from **a single** graveyard" names (Ebony Charm): not a seat the
+#: sentence prints but one the chooser picks as the spell resolves. It is a
+#: *value* of the same payload key rather than a second key, because everything
+#: downstream — the candidate rule, the count ceiling, the answer's re-check —
+#: is identical once the seat is known; only how the seat is arrived at differs.
+#: It is not in the set above for exactly that reason: nothing the parse can
+#: read names it, so it cannot arrive by the same route.
+_CHOSEN_GRAVEYARD_PILE = "chosen"
+
 
 def _is_hand_card_exile(subject: "ast.Recipient") -> bool:
     """Whether *subject* is the "a card from your hand" noun phrase.
@@ -451,11 +460,28 @@ def _lower_exile(
     ):
         filt = subject.filter
         owner = filt.zone_owner
-        if owner is None or owner.kind not in _GRAVEYARD_PILE_SEATS:
+        # "…from **a single** graveyard" (Ebony Charm). The pile is anybody's
+        # and the *chooser* names it, which is why the sameness cannot be read
+        # off the filter: the filter is asked of one card at a time and this is
+        # a restriction on the whole set. It arrives on the node from the parse
+        # for that reason, and only where the sentence printed no owner —
+        # "…from **defending player's** graveyard **from a single graveyard**"
+        # is not a sentence, and admitting both would be two answers to which
+        # pile.
+        if node.same_zone:
+            if owner is not None:
+                raise LoweringError(
+                    "a single graveyard is the one the chooser names, not a "
+                    "printed seat", node=node,
+                )
+            pile_owner = _CHOSEN_GRAVEYARD_PILE
+        elif owner is None or owner.kind not in _GRAVEYARD_PILE_SEATS:
             raise LoweringError(
                 "the counted graveyard exile reads one named player's pile",
                 node=node,
             )
+        else:
+            pile_owner = owner.kind
         if len(filt.card_types) > 1:
             # A union ("artifact or creature card") is a second shape the
             # prompt's candidate rule would have to learn; until a card prints
@@ -477,7 +503,7 @@ def _lower_exile(
             )
         pile: dict[str, object] = {
             "count": int(subject.count),
-            "graveyard_owner": owner.kind,
+            "graveyard_owner": pile_owner,
             # "**up to** two" is a ceiling, and the difference is the whole of
             # what the seat is being asked: a fixed count would make a pile of
             # one card an unanswerable prompt.

@@ -460,6 +460,28 @@ def _readable_source_roles(match: "re.Match[str]") -> bool:
     )
 
 
+def _source_not_enchanted(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only if Hakim isn't enchanted." (Hakim, Loreweaver.)
+
+    CR 303.4a's relation asked of the ability's own source, and the mirror of
+    ``_attached_permanent_state`` below, which asks about the *host* of an Aura.
+    The list is the authority (``attached_auras``), not the single ``attached_aura``
+    slot: an Aura that left leaves the slot pointing at it, and a Hakim that has
+    lost his only Aura is a Hakim who may use this again.
+
+    With no source there is no permanent to be enchanted, and the answer is no —
+    the direction that refuses an activation rather than allowing one the card
+    forbids.
+    """
+    if source is None:
+        return False
+    attached = [
+        aura for aura in (source.metadata.get("attached_auras") or [])
+        if game.is_on_battlefield(aura)
+    ]
+    return not attached
+
+
 def _during_declare_blockers(game: "Game", controller_index: int, source) -> bool:
     """Lesser Werewolf. A window scoped to a *step* and to neither player's
     turn: blockers are declared on the defending player's behalf during the
@@ -1425,6 +1447,15 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         reads_payload=True,
         payload_readable=_readable_counted_board,
     ),
+    # "Activate only if Hakim isn't enchanted." (Hakim, Loreweaver.) The noun is
+    # payload because a card printing this of itself may call itself anything --
+    # and the card's own *name* is a fourth spelling, collapsed to
+    # `_SELF_SUBJECT` before the match so that one row reads them all.
+    ActivationRestriction(
+        re.compile(r"^activate only if this [a-z]+ isn'?t enchanted$"),
+        _source_not_enchanted,
+        "it is enchanted",
+    ),
     # "Activate only before the combat damage step." (Angus Mackenzie.) The step
     # alternation is built from the engine's own turn structure, so the step is
     # payload and a step the engine does not have leaves the clause unmatched.
@@ -1545,13 +1576,44 @@ def _matching_entry(clause: str) -> "tuple[ActivationRestriction, re.Match[str]]
     return None
 
 
-def _clauses(text: str) -> list[str]:
+#: What a card naming itself inside a restriction clause is rewritten to.
+#: "Activate only if **Hakim** isn't enchanted" and "…if **this creature** isn't
+#: enchanted" are one sentence about one object (CR 201.4), so they are one row
+#: here — the alternative is a row per printed name, which is a hook wearing a
+#: regex. The noun is deliberately the generic one: every row that reads a
+#: self-reference matches ``this [a-z]+``, because which noun a card calls
+#: itself by says nothing about the rule.
+_SELF_SUBJECT = "this permanent"
+
+
+def _clauses(text: str, card_name: str | None = None) -> list[str]:
     """Every printed "Activate only ..." restriction in *text*, one per rule.
 
     Sentences rather than lines: the clause is the tail of an ability line
     ("{1}{B}, {T}: Each opponent loses 2 life. Activate only if ..."), so a
     line-level reader would never see it on its own.
+
+    *card_name* collapses the card's own name to :data:`_SELF_SUBJECT` first.
+    A card may refer to itself by name (CR 201.4) inside one of these clauses,
+    and without the collapse the row would have to be written round the name —
+    so the clause read as unknown, and the whole ability line was refused by the
+    grammar's full-consumption invariant. Optional because the two callers that
+    have no card in hand (a bare sentence from a test, the grammar's own
+    reconstruction, which renders the SELF token itself) are asking about a
+    sentence rather than about a card.
     """
+    if card_name:
+        from .oracle import _collapse_self_references
+
+        # Lowercased **before** the collapse, not after: the name forms
+        # ``_self_name_forms`` produces are lowercase and the match is
+        # case-sensitive, so a card's printed capital "Hakim" went straight
+        # through and the clause reached the rows with the name still in it —
+        # a restriction silently not enforced, which is this module's own
+        # failure mode. Every clause returned here is lowercased anyway.
+        text = _collapse_self_references(
+            (text or "").lower(), card_name, _SELF_SUBJECT
+        )
     found: list[str] = []
     for raw_line in (text or "").splitlines():
         for sentence in raw_line.split("."):
@@ -1590,7 +1652,7 @@ def _clauses(text: str) -> list[str]:
     return found
 
 
-def activation_restriction_line(sentence: str) -> bool:
+def activation_restriction_line(sentence: str, card_name: str | None = None) -> bool:
     """Whether one printed sentence is a restriction this module enforces.
 
     Read by the support gate and by `scripts/parse_coverage.py`, so what is
@@ -1601,6 +1663,13 @@ def activation_restriction_line(sentence: str) -> bool:
     unenforced, which is the failure this module was written for arriving
     through the joining word instead of through a missing row.
     """
+    if card_name:
+        from .oracle import _collapse_self_references
+
+        # Lowercased first, for ``_clauses``' reason one function up.
+        sentence = _collapse_self_references(
+            (sentence or "").lower(), card_name, _SELF_SUBJECT
+        )
     cleaned = (sentence or "").strip().lower().rstrip(".")
     conjuncts = _conjuncts(cleaned)
     return bool(conjuncts) and all(
@@ -1632,14 +1701,16 @@ def x_zero_restriction_line(sentence: str) -> bool:
     return bool(_X_CANT_BE_ZERO.match((sentence or "").strip().lower().rstrip(".")))
 
 
-def unreadable_activation_clauses(oracle_text: str) -> list[str]:
+def unreadable_activation_clauses(
+    oracle_text: str, card_name: str | None = None
+) -> list[str]:
     """The "Activate only ..." sentences this module does *not* implement.
 
     The support gate's question: a card with one of these is refused rather than
     admitted with the clause unenforced.
     """
     return [
-        clause for clause in _clauses(oracle_text)
+        clause for clause in _clauses(oracle_text, card_name)
         if not activation_restriction_line(clause)
     ]
 
@@ -1652,7 +1723,12 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
     prints its restrictions per ability, and testing the card's whole text would
     gate one ability with the other's rule.
     """
-    for clause in _clauses(ability_text):
+    # The name off the *source*, which every caller already has: a permanent's
+    # printed line may name the card (CR 201.4), and a clause left with the name
+    # in it matches no row — which for an enforcement path is a restriction
+    # silently not applied, this module's own failure mode.
+    card = getattr(source, "card", None)
+    for clause in _clauses(ability_text, getattr(card, "name", None)):
         found = _matching_entry(clause.rstrip("."))
         if found is None:
             continue

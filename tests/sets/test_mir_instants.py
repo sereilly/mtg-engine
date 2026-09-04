@@ -1656,3 +1656,628 @@ def test_a_creature_that_is_not_attacking_is_no_target(set_pool):
     assert game.cast_from_hand(
         1, "Dazzling Beauty", target_player_index=0, target_permanent_index=0
     ).supported, "the control: the attacker beside it is a legal target"
+
+
+# --- W2G4: "from a single graveyard" is a pile the chooser names ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_charm(set_pool, mine=(), theirs=()):
+    """Ebony Charm in seat 0's hand, with a card in each graveyard by name."""
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Ebony Charm"]],
+            graveyard=[set_pool("MIR")[n] for n in mine], life=20,
+        ),
+        PlayerState(
+            name="P2",
+            graveyard=[set_pool("MIR")[n] for n in theirs], life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    return game
+
+
+def test_ebony_charm_is_supported(set_pool):
+    """The second mode was the whole card's refusal: "from a single graveyard"
+    was read on the **cost** side (Night Soil) and nowhere on the effect side,
+    so the noun parser stopped in front of it and the line died on unconsumed
+    text — which under a modal head makes the whole spell unsupported."""
+    program = compile_card_oracle(set_pool("MIR")["Ebony Charm"])
+    assert program.supported, program.reason
+    assert [mode.instruction.kind for mode in program.modes] == [
+        "sequence", "exile_cards_from_graveyard", "grant_target_keyword_until_eot",
+    ]
+    assert program.modes[1].instruction.payload["graveyard_owner"] == "chosen"
+
+
+def test_ebony_charm_asks_which_graveyard_then_which_cards(set_pool):
+    """Two prompts, one resolution (CR 608.2). The pile is not printed, so the
+    chooser names it — and the cards behind it come out of *that* pile.
+
+    The count is the assertion that matters: "up to three" out of a pile of
+    four takes three, and the other pile is untouched.
+    """
+    game = _w2g4_charm(
+        set_pool,
+        mine=["Dirtwater Wraith"],
+        theirs=["Femeref Knight", "Mtenda Herder", "Sidar Jabari", "Soar"],
+    )
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    pending = [c for c in game.pending_choices]
+    assert [c.kind for c in pending] == ["graveyard_pile_choice"], game.log
+    assert sorted(
+        option for option in game.live_graveyard_pile_choices(pending[0])
+    ) == [0, 1]
+
+    assert game.confirm_graveyard_pile_choice(0, 1)
+    pick = [c for c in game.pending_choices]
+    assert [c.kind for c in pick] == ["graveyard_exile_pick"], game.log
+    assert pick[0].data["owner_index"] == 1
+    assert game.confirm_graveyard_exile_pick(0, [0, 1, 2])
+
+    # Sorted, because the pick pops highest index first — a graveyard is a list
+    # and taking one renumbers everything behind it.
+    assert sorted(c.name for c in game.players[1].exile) == [
+        "Femeref Knight", "Mtenda Herder", "Sidar Jabari",
+    ], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Soar"], game.log
+    # The Charm itself is in that pile by now (CR 608.2m), which is the point:
+    # the other graveyard was never read.
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Dirtwater Wraith", "Ebony Charm",
+    ], game.log
+
+
+def test_ebony_charm_takes_no_pile_choice_when_only_one_pile_qualifies(set_pool):
+    """One pile with a legal card in it is not a decision. Offering the prompt
+    anyway would be a question with a single answer the seat then has to
+    dismiss, and — worse — a second place that decides which piles qualify."""
+    game = _w2g4_charm(set_pool, theirs=["Femeref Knight"])
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["graveyard_exile_pick"]
+    assert game.pending_choices[0].data["owner_index"] == 1
+
+
+def test_ebony_charm_exiles_nothing_when_every_graveyard_is_empty(set_pool):
+    """No pile holds a card the phrase names, so there is no prompt at all —
+    and both record keys are still written. An *absent* key is a
+    back-reference with no producer, which is a different thing from a producer
+    that took nothing."""
+    game = _w2g4_charm(set_pool)
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[0].exile == [] and game.players[1].exile == []
+
+
+def test_ebony_charms_pile_choice_takes_the_first_live_pile_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues either prompt: the resolution has to
+    finish, and the stated default is taken where the effect stands. Seat order
+    rather than a valuation, so a seed reproduces a run exactly."""
+    game = _w2g4_charm(
+        set_pool, mine=["Dirtwater Wraith"], theirs=["Femeref Knight"]
+    )
+    game.interactive_seats = set()
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [c.name for c in game.players[0].exile] == ["Dirtwater Wraith"], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Femeref Knight"]
+
+
+# --- W2G4: a cost read off the permanent the step in front of it made ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_flash(set_pool, creature, pool=None, interactive=True):
+    """Flash and one creature card in seat 0's hand."""
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            hand=[set_pool("MIR")["Flash"], set_pool("MIR")[creature]],
+            life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game.players[0].mana_pool.update(pool or {})
+    game.queue_from_hand(0, "Flash")
+    game.resolve_stack()
+    return game
+
+
+def test_flash_is_supported(set_pool):
+    """Two pieces were missing and only one of them was the amount.
+
+    "Sacrifice **it**" names the permanent the step in front of it created, and
+    the pronoun read as the source lowered to ``upkeep_pay_or_sacrifice_self``
+    — a kind the *upkeep registry* dispatches and ``EFFECT_HANDLERS`` does not,
+    so the card would have compiled supported and done nothing.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Flash"])
+    assert program.supported, program.reason
+    offer = program.instructions[0].payload["then"][0]
+    assert offer.kind == "may"
+    assert offer.payload["cost"] == {
+        "cost_from": "put_from_hand_permanents",
+        "reduced_by": {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0,
+                       "generic": 2},
+    }
+    assert [step.kind for step in offer.payload["otherwise"]] == [
+        "sacrifice_recorded_permanent"
+    ]
+
+
+def test_flash_charges_the_creatures_own_cost_less_two(set_pool):
+    """"…unless you pay **its mana cost reduced by {2}**."
+
+    The number is not on Flash at all: Volcanic Dragon costs {4}{R}{R}, so the
+    offer is {2}{R}{R}. CR 601.2f's arithmetic — a generic reduction never takes
+    a coloured pip off — which is why the two {R} survive.
+    """
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert game.confirm_put_from_hand_choice(0, 0), game.log
+
+    offer = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.data["prompt"] for c in offer] == ["Pay {2}{R}{R}?"], game.log
+
+    assert game.confirm_optional_pay(0, accept=True)
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Volcanic Dragon"
+    ], game.log
+    assert not any(v for v in game.players[0].mana_pool.values()), game.log
+
+
+def test_flash_sacrifices_the_creature_it_put_down_when_the_cost_is_declined(set_pool):
+    """The decline branch names the permanent *this* resolution created, by id.
+
+    Not "a creature" — the lowering that read the pronoun as a board sweep would
+    have let the seat sacrifice a different creature, and not the source, which
+    is the spell.
+    """
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    game.confirm_optional_pay(0, accept=True)
+    game.confirm_put_from_hand_choice(0, 0)
+    assert game.confirm_optional_pay(0, accept=False)
+
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Flash", "Volcanic Dragon",
+    ], game.log
+    assert game.players[0].mana_pool["R"] == 2, game.log
+
+
+def test_flash_sacrifices_it_when_the_controller_cannot_pay(set_pool):
+    """CR 601.2b: a cost a player is not *able* to pay is not an offer. With an
+    empty pool the prompt is never armed and the decline branch stands — which
+    is what makes the drawback bite rather than being waived."""
+    game = _w2g4_flash(set_pool, "Volcanic Dragon")
+    game.confirm_optional_pay(0, accept=True)
+    game.confirm_put_from_hand_choice(0, 0)
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert "Volcanic Dragon" in [c.name for c in game.players[0].graveyard]
+
+
+def test_flash_declining_the_first_offer_puts_nothing_down(set_pool):
+    """"**You may** put a creature card…" — declining ends the sentence. The
+    "if you do" branch has no permanent to read, so nothing is offered and
+    nothing is sacrificed."""
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    assert game.confirm_optional_pay(0, accept=False), game.log
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert [c.name for c in game.players[0].hand] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G4: one tuck with two possible ends ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_ether_well(set_pool, victim, interactive=True):
+    """Ether Well in seat 0's hand against *victim* on seat 1's battlefield."""
+    creature = Permanent(card=set_pool("MIR")[victim])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Ether Well"]], life=20),
+        PlayerState(
+            name="P2", battlefield=[creature],
+            library=[set_pool("MIR")["Wall of Corpses"]], life=20,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    return game, creature
+
+
+def test_ether_well_is_supported(set_pool):
+    """The rider was the refusal, and dropping it would have been worse than
+    refusing: a production that consumed "you may put it on the bottom …
+    instead" without carrying it is a card that never offers the choice it
+    prints."""
+    program = compile_card_oracle(set_pool("MIR")["Ether Well"])
+    assert program.supported, program.reason
+    assert program.instructions[0].payload["bottom_instead_colors"] == ["R"]
+
+
+def test_ether_well_tucks_a_nonred_creature_with_no_question_asked(set_pool):
+    """The condition is a condition. A blue creature never reaches the offer,
+    so the spell resolves in one step and the card goes on top."""
+    game, creature = _w2g4_ether_well(set_pool, "Merfolk Raiders")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[1].battlefield == [], game.log
+    assert [c.name for c in game.players[1].library][:1] == [
+        "Merfolk Raiders"
+    ], game.log
+
+
+def test_ether_well_offers_the_bottom_for_a_red_creature(set_pool):
+    """"…you may put it on the bottom of its owner's library **instead**."
+
+    One move with two possible ends, which is why the prompt happens *before*
+    anything moves: tucking on top and then moving the card would be two zone
+    changes where the card describes one.
+    """
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["library_end_choice"]
+    assert game.players[1].battlefield == [creature], game.log
+
+    assert game.confirm_library_end_choice(0, True)
+    assert game.players[1].battlefield == [], game.log
+    assert [c.name for c in game.players[1].library][-1] == "Viashino Warrior"
+
+
+def test_ether_wells_offer_can_be_declined_for_the_printed_top(set_pool):
+    """The "may" is real: answering "top" is the card's own default, and the
+    creature goes where the first sentence says."""
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior")
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert game.confirm_library_end_choice(0, False)
+    assert [c.name for c in game.players[1].library][0] == "Viashino Warrior"
+
+
+def test_ether_well_reads_the_colour_off_layer_five(set_pool):
+    """CR 613: a creature's colour is what the layers say it is, not what its
+    card prints. A blue Merfolk that an effect has made red qualifies for the
+    swap, and reading the printed line instead would never offer it."""
+    game, creature = _w2g4_ether_well(set_pool, "Merfolk Raiders")
+    creature.metadata["color_override"] = ("R",)
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert "R" in creature.effective_colors, creature.metadata
+    assert [c.kind for c in game.pending_choices] == ["library_end_choice"], game.log
+
+
+def test_ether_wells_offer_defaults_to_the_bottom_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues the prompt: the resolution has to
+    finish, and the stated default is the bottom — the offer costs its
+    controller nothing and buries the card deeper."""
+    game, creature = _w2g4_ether_well(set_pool, "Viashino Warrior", interactive=False)
+    game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [c.name for c in game.players[1].library][-1] == "Viashino Warrior"
+
+
+# --- W2G4: re-aiming another spell, gated on what it already points at ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_meddle(set_pool, spell, mine=("Femeref Knight", "Zhalfirin Knight")):
+    """Meddle in seat 0's hand, *spell* in seat 1's, creatures on seat 0's board."""
+    perms = [Permanent(card=set_pool("MIR")[name]) for name in mine]
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Meddle"]],
+            battlefield=list(perms), life=20,
+        ),
+        PlayerState(name="P2", hand=[set_pool("MIR")[spell]], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    return game, perms
+
+
+def _w2g4_meddle_spec(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Meddle"])
+    from engine.targeting import derive_cast_spec
+
+    return derive_cast_spec(set_pool("MIR")["Meddle"], program)
+
+
+def test_meddle_is_supported(set_pool):
+    """The same node Deflection parses to, with the restrictions arranged as a
+    condition rather than as a noun phrase — CR 115.9a's count, what the current
+    target has to be, and the bound on the new one."""
+    program = compile_card_oracle(set_pool("MIR")["Meddle"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_new_spell_target", "change_target_spell_target",
+    ]
+    assert steps[0].payload["current_target_type"] == "creature"
+    assert steps[0].payload["new_target"] == "creature"
+
+
+def test_meddle_re_aims_a_spell_at_another_creature(set_pool):
+    """CR 115.7a: the spell keeps everything else it announced and only what it
+    points at moves — so Dark Banishing destroys the *other* Knight."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing")
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+    game.queue_from_hand(0, "Meddle", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Femeref Knight"
+    ], game.log
+    assert "Zhalfirin Knight" in [c.name for c in game.players[0].graveyard]
+
+
+def test_meddle_is_not_offered_a_spell_whose_target_is_a_player(set_pool):
+    """"…and **that target is a creature**". A production that consumed the
+    clause and dropped it would let Meddle re-aim a spell pointed at a face,
+    which is a strictly larger card than the one printed."""
+    game, _ = _w2g4_meddle(set_pool, "Kaervek's Hex")
+    game.queue_from_hand(1, "Kaervek's Hex")
+
+    offered = game._enumerate_targets(
+        0, set_pool("MIR")["Meddle"], _w2g4_meddle_spec(set_pool), for_cast=True
+    )
+    assert offered == [], game.log
+
+
+def test_meddle_is_offered_a_spell_aimed_at_a_creature(set_pool):
+    """The other side of the same gate, so the test above is not passing for
+    the wrong reason."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing")
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+
+    offered = game._enumerate_targets(
+        0, set_pool("MIR")["Meddle"], _w2g4_meddle_spec(set_pool), for_cast=True
+    )
+    assert [entry["name"] for entry in offered] == ["Dark Banishing"], game.log
+
+
+def test_meddle_leaves_a_spell_alone_when_there_is_no_other_creature(set_pool):
+    """"…to **another** creature" (CR 115.7a). The target the spell already
+    points at is not among the candidates, so a board with one creature on it
+    leaves the spell exactly as it was — the Knight it named still dies."""
+    game, perms = _w2g4_meddle(set_pool, "Dark Banishing", mine=("Femeref Knight",))
+    game.queue_from_hand(
+        1, "Dark Banishing", target_permanent_ids=[perms[0].permanent_id]
+    )
+    game.queue_from_hand(0, "Meddle", target_stack_index=0)
+    game.resolve_stack()
+
+    assert game.players[0].battlefield == [], game.log
+    assert "Femeref Knight" in [c.name for c in game.players[0].graveyard]
+
+
+# --- W2G4: a text change that offers two vocabularies ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_mind_bend(set_pool, target, old, new, interactive=True):
+    """Mind Bend in seat 0's hand aimed at *target* on seat 1's battlefield."""
+    perm = Permanent(card=set_pool("MIR")[target])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Mind Bend"]], life=20),
+        PlayerState(name="P2", battlefield=[perm], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game.queue_from_hand(
+        0, "Mind Bend", target_player_index=1, target_permanent_index=0,
+        old_color=old, new_color=new,
+    )
+    game.resolve_stack()
+    return game, perm
+
+
+def test_mind_bend_is_supported(set_pool):
+    """"…one color word with another **or one basic land type with another**."
+    The alternation is between the two modes that already exist, so it is one
+    mode value rather than a third substitution — and the sentence refuses
+    unless the second vocabulary is one of them, which is what keeps a card
+    offering something unimplementable from reaching the handler as a mode it
+    would ignore."""
+    program = compile_card_oracle(set_pool("MIR")["Mind Bend"])
+    assert program.supported, program.reason
+    assert program.instructions[0].payload["mode"] == "color_word_or_land_type"
+
+
+def test_mind_bend_asks_which_vocabulary_when_both_would_bite(set_pool):
+    """Floodgate writes "nonblue" *and* "Islands", and {U} is both words — so
+    the two readings are two different rewrites and its controller picks
+    (CR 612.1)."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    assert [c.kind for c in game.pending_choices] == ["text_change_vocabulary"]
+    assert game.pending_choices[0].data["options"] == ["color_word", "land_type"]
+
+    assert game.confirm_text_change_vocabulary(0, "land_type")
+    text = perm.effective_card.oracle_text
+    assert "Mountains" in text and "nonblue" in text, text
+
+
+def test_mind_bend_can_rewrite_the_colour_word_instead(set_pool):
+    """The other answer to the same prompt, and the half that proves the choice
+    is real rather than a formality."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    assert game.confirm_text_change_vocabulary(0, "color_word")
+    text = perm.effective_card.oracle_text
+    assert "nonred" in text and "Islands" in text, text
+
+
+def test_mind_bend_reaches_inside_a_non_colour_compound(set_pool):
+    """Mind Bend's own reminder text is the evidence: "you may change 'nonblack
+    creature' to 'nongreen creature'". ``\b`` does not reach inside the
+    compound — there is no word boundary between "non" and "blue" — so every
+    ``non<colour>`` in the pool survived a change that named it, Sleight of
+    Mind's included."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    game.confirm_text_change_vocabulary(0, "color_word")
+    assert "nonblue" not in perm.effective_card.oracle_text
+
+
+def test_mind_bend_asks_nothing_when_only_one_vocabulary_is_written(set_pool):
+    """Dirtwater Wraith prints "Swampwalk" and no colour word at all, so there
+    is one real answer and no decision — the same shortcut the graveyard-pile
+    prompt takes. The land swap happens where the spell resolves."""
+    game, perm = _w2g4_mind_bend(set_pool, "Dirtwater Wraith", "B", "U")
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert "Islandwalk" in perm.effective_card.keywords, perm.effective_card.keywords
+
+
+def test_mind_bend_defaults_to_the_first_offered_vocabulary_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues it: the resolution has to finish, and
+    the stated default is the first vocabulary offered, which is the colour
+    word. Deterministic rather than valued — a seat that should weigh a
+    type-line rewrite against a colour one needs a weight in
+    ``engine/ai_valuation.py``."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R", interactive=False)
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert "nonred" in perm.effective_card.oracle_text
+
+
+# --- W2G4: one offer per card a reveal showed ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_sirocco(set_pool, hand, life=20, interactive=True):
+    """Sirocco in seat 0's hand aimed at seat 1, whose hand is *hand*."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Sirocco"]], life=20),
+        PlayerState(
+            name="P2", hand=[set_pool("MIR")[n] for n in hand], life=life,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1} if interactive else set()
+    game.start_turn(0)
+    game.queue_from_hand(0, "Sirocco", target_player_index=1)
+    game.resolve_stack()
+    return game
+
+
+def test_sirocco_is_supported(set_pool):
+    """The reveal had to start recording what it showed, as *cards*: the
+    sentence behind it narrows by colour and card type, which the names the
+    client is sent cannot be asked."""
+    program = compile_card_oracle(set_pool("MIR")["Sirocco"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "reveal_hand", "discard_revealed_matching_unless_pay_life",
+    ]
+    assert steps[1].payload["filter"] == {
+        "type_filter": "instant", "color_filter": "U",
+    }
+    assert steps[1].payload["life"] == 4
+
+
+def test_sirocco_offers_one_payment_per_matching_card(set_pool):
+    """"**For each** blue instant card revealed this way" — one offer per card,
+    answered independently, and only the declined ones go. The Knight is
+    neither blue nor an instant and is never named."""
+    game = _w2g4_sirocco(
+        set_pool, ["Boomerang", "Dissipate", "Femeref Knight"]
+    )
+    assert [c.data["prompt"] for c in game.pending_choices] == [
+        "Pay 4 life to keep Boomerang?", "Pay 4 life to keep Dissipate?",
+    ], game.log
+
+    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=False)
+
+    assert [c.name for c in game.players[1].hand] == [
+        "Boomerang", "Femeref Knight",
+    ], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Dissipate"]
+    assert game.players[1].life == 16, game.log
+
+
+def test_sirocco_discards_both_copies_of_one_card_one_at_a_time(set_pool):
+    """A hand is the one zone where two copies of a card are the same Python
+    object, so a discard that filtered by identity would empty the hand on the
+    first answer. Each offer takes exactly one, through
+    ``Game.take_card_from_hand``."""
+    game = _w2g4_sirocco(set_pool, ["Boomerang", "Boomerang"])
+    assert len(game.pending_choices) == 2, game.log
+
+    assert game.confirm_optional_pay(1, accept=False)
+    assert [c.name for c in game.players[1].hand] == ["Boomerang"], game.log
+
+    assert game.confirm_optional_pay(1, accept=False)
+    assert game.players[1].hand == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == [
+        "Boomerang", "Boomerang",
+    ], game.log
+
+
+def test_sirocco_discards_outright_when_the_life_cannot_be_paid(set_pool):
+    """CR 119.4: a player may pay life only with a life total at least the
+    amount, so a seat at 2 is never offered the choice — the card simply goes,
+    which is what the sentence says happens when the cost is not paid."""
+    game = _w2g4_sirocco(set_pool, ["Boomerang"], life=2)
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert game.players[1].hand == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Boomerang"]
+    assert game.players[1].life == 2, game.log
+
+
+def test_sirocco_names_nothing_in_a_hand_with_no_blue_instant(set_pool):
+    """The narrowing is the card. Read as "for each card revealed this way" it
+    is a very different spell, and the assertion is that a hand of the wrong
+    cards is left alone entirely."""
+    game = _w2g4_sirocco(set_pool, ["Femeref Knight", "Kaervek's Hex"])
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert sorted(c.name for c in game.players[1].hand) == [
+        "Femeref Knight", "Kaervek's Hex",
+    ], game.log

@@ -141,7 +141,7 @@ _CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count"})
 #: would have. A *named* bound is a table row for the reason every other one
 #: here is: a bound consumed by the parser and unknown to the handler is a
 #: retarget free to aim anywhere.
-_CHANGE_TARGET_NEW_TARGETS = frozenset({"player"})
+_CHANGE_TARGET_NEW_TARGETS = frozenset({"player", "creature"})
 
 #: The same, for "if that target is <player>". ``None`` is again the printed
 #: reading — Deflection asks nothing about who the spell points at now — and
@@ -218,11 +218,33 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
         raise LoweringError(
             "no handler bounds this retarget's new target", node=node
         )
+    # "…and **that target is a creature**" (Meddle). The object twin of
+    # ``current_target``'s seat question, and a second key rather than a second
+    # value of the first: the picker tests a permanent and a face with different
+    # readers, and a card printing one prints neither of the other. Held to the
+    # same closed set as the new-target bound, so a noun the picker cannot ask
+    # about refuses instead of being consumed into a spell this re-aims from
+    # anywhere.
+    if (
+        node.current_target_type is not None
+        and node.current_target_type not in _CHANGE_TARGET_NEW_TARGETS
+    ):
+        raise LoweringError(
+            "no picker asks whether a spell's one target is a "
+            f"{node.current_target_type}", node=node,
+        )
     payload: dict[str, object] = {
         "result_key": _NEW_TARGET_KEY,
         "current_target": None if current is None else current.kind,
         "new_target": node.new_target,
     }
+    # Emitted only when the card prints it, so every payload written before
+    # Meddle existed stays byte-identical — a defaulted key would move
+    # Deflection and Reflecting Mirror in the differential for a change that
+    # says nothing about either of them, which is noise where the differential's
+    # whole value is that it is not noisy.
+    if node.current_target_type is not None:
+        payload["current_target_type"] = node.current_target_type
     return (
         OracleInstruction("choose_new_spell_target", "", dict(payload)),
         # The ``targets`` description rides the step that actually names the

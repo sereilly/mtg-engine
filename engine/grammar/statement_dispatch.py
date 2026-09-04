@@ -34,6 +34,7 @@ from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
+from .lowering.board import _lower_sacrifice_unless_pay
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
@@ -90,6 +91,7 @@ from .lowering import (
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_gain_life,
+    _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
     _lower_play_with_hand_revealed,
     _lower_reveal_hand_and_choose,
@@ -203,6 +205,13 @@ def lower_statement(
     # the name-only table above. The raw `event`, not `dispatch_event`: both
     # are printed inside an offer's branch, which is not the ability's whole
     # effect and would see no event at all.
+    # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
+    # In the chain rather than in the name-only table above because the pronoun
+    # is only a pronoun *relative to what came before it*: with no record from
+    # an earlier step of the same sentence, "it" has no referent but the source,
+    # and the two readings lower to different machinery.
+    if isinstance(statement, ast.SacrificeUnlessPay):
+        return _lower_sacrifice_unless_pay(statement, produced)
     if isinstance(statement, ast.UntapChosenByPaying):
         return _lower_untap_chosen_by_paying(statement, event)
     if isinstance(statement, ast.RevealHandAndChoose):
@@ -399,6 +408,13 @@ def lower_statement(
         return _lower_sacrifice(statement, event, produced)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
+    if isinstance(statement, ast.DiscardRevealedMatchingUnlessPayLife):
+        # The plural, and in the chain beside the singular for its reason: the
+        # record an earlier step wrote is the whole of the gate, so the lowering
+        # needs `produced` and cannot sit in the name-only table.
+        return _lower_discard_revealed_matching_unless_pay_life(
+            statement, produced
+        )
     if isinstance(statement, ast.LookTopPickToHand):
         return _lower_look_top_pick(statement, event)
 
@@ -862,8 +878,14 @@ def lower_statement(
                     # answered from different halves of the resolution context,
                     # and this is the only place both the condition and the
                     # effect it guards are in view.
+                    # The **firing event** travels down too. A trailing "if" is
+                    # still a clause of the ability the event fired, so a
+                    # condition asking about what the event named ("a card with
+                    # the same name", Bazaar of Wonders) has to be able to see
+                    # which event that was — and a condition that cannot see it
+                    # refuses rather than answering about nothing.
                     "condition": _lower_condition(
-                        statement.condition, produced,
+                        statement.condition, produced, event,
                         referent=pronoun_target_referent(then),
                     ),
                     "then": then,

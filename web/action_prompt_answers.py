@@ -690,6 +690,91 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("text_change_vocabulary_confirm")
+def _action_text_change_vocabulary_confirm(session, req, seat_type):
+    # Mind Bend: a colour word, or a basic land type. The engine re-checks the
+    # answer against the list it offered, so a client cannot ask for a swap of a
+    # word the permanent does not have.
+    pending = next(
+        (c for c in session.game.pending_choices_of("text_change_vocabulary")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no text change choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.text_change_mode is None:
+        raise HTTPException(status_code=400, detail="text_change_mode is required")
+    if not session.game.confirm_text_change_vocabulary(
+        req.seat, req.text_change_mode
+    ):
+        raise HTTPException(status_code=400, detail="invalid text change choice")
+
+
+@action_handler("aggregate_sacrifice_confirm")
+def _action_aggregate_sacrifice_confirm(session, req, seat_type):
+    # Phyrexian Dreadnought: the whole set at once, addressed by stable id. The
+    # engine re-checks it against the same candidate rule the prompt was drawn
+    # from *and* against the printed floor -- an answer under the floor is not a
+    # cheaper payment, it is no payment, so it is refused rather than applied.
+    pending = next(
+        (c for c in session.game.pending_choices_of("aggregate_sacrifice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no sacrifice choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    # `target_permanent_ids` is the field the set picker beside this one
+    # already carries for the same shape of answer -- a second field meaning
+    # "the permanents this answer names" is a second answer to it.
+    if req.target_permanent_ids is None:
+        raise HTTPException(
+            status_code=400, detail="target_permanent_ids is required"
+        )
+    if not session.game.confirm_aggregate_sacrifice(
+        req.seat, req.target_permanent_ids
+    ):
+        raise HTTPException(status_code=400, detail="that set does not pay the cost")
+
+
+@action_handler("library_end_confirm")
+def _action_library_end_confirm(session, req, seat_type):
+    # Ether Well: top or bottom. `to_bottom` is the field Dream Cache's answer
+    # already carries for the same question one zone over -- a second field
+    # meaning "which end of a library" would be a second answer to it.
+    pending = next(
+        (c for c in session.game.pending_choices_of("library_end_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no library end choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_library_end_choice(
+        req.seat, bool(req.to_bottom)
+    ):
+        raise HTTPException(status_code=400, detail="invalid library end choice")
+
+
+@action_handler("graveyard_pile_confirm")
+def _action_graveyard_pile_confirm(session, req, seat_type):
+    # Ebony Charm: which graveyard "a single graveyard" means. The seat is sent
+    # on `chosen_seat` rather than `target_seat` for `player_choice_confirm`'s
+    # reason -- a chosen player is not a target (CR 601.2c declares none) -- and
+    # the engine re-checks it against the piles that still hold a legal card, so
+    # a stale answer is refused rather than applied to an emptied graveyard.
+    pending = next(
+        (c for c in session.game.pending_choices_of("graveyard_pile_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no graveyard pile choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.chosen_seat is None:
+        raise HTTPException(status_code=400, detail="chosen_seat is required")
+    if not session.game.confirm_graveyard_pile_choice(req.seat, req.chosen_seat):
+        raise HTTPException(status_code=400, detail="invalid graveyard choice")
+
+
 @action_handler("graveyard_exile_confirm")
 def _action_graveyard_exile_confirm(session, req, seat_type):
     # Rysorian Badger: the seat picks which cards in the defending player's

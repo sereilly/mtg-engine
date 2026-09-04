@@ -51,6 +51,16 @@ PARSE_LAYERS = [
     # Small printed readers `nouns` shares *upward* — a comparison, a
     # self-reference. Below it because nothing about them is about a filter.
     "readers",
+    # The **price** a printed sentence names — a cost demanded ("unless they pay
+    # {2}") or an offer made ("pay {4} and 2 life"). Split out of `phrases` when
+    # that module crossed the guard at Mirage's second wave *integration*, on
+    # nobody's branch: two groups' price fragments merely summed. The seam is
+    # the one `phrases` had already written down in prose — the mana
+    # alternatives lived there and their three life-cost siblings did not, so
+    # one printed offer was read in two modules. Below `phrases`, which
+    # re-exports it so every existing caller keeps its import, exactly as
+    # `readers` above is re-exported.
+    "prices",
     # A quantity read off a *record* of something that already happened — the
     # parse-side mirror of `lowering/_records.py`, carrying that module's name
     # for that reason. "The sacrificed creature's toughness" names an event,
@@ -112,6 +122,18 @@ PARSE_LAYERS = [
     # in it calls back.
     "keywords",
     "phrases",
+    # What a "sacrifice …" clause names, and how it is priced. Split out of
+    # `phrases` when Mirage's second wave took that module past the guard below,
+    # reusing the name `lowering/_sacrifices.py` has carried since it left the
+    # same family one package over — the mirror re-forming rather than forking.
+    # The seam is `parse_counted_subject`'s own docstring: these readers are the
+    # shared half of one clause, read by three families that never see each
+    # other (the board family's sacrifice and its "unless you sacrifice" tails,
+    # the combat family's attack cost under CR 508.1g, the stack family's
+    # counter tails). **Above `phrases`**, which it reads and which never reads
+    # it back: a sacrifice clause is built out of noun phrases and numbers, and
+    # none of those is built out of a sacrifice.
+    "sacrifices",
     # The paragraphs whose frame is an **upkeep trigger** (Power Leak / Errant
     # Minion, Mishra's War Machine / Minion of Leshrac, Phantasmal Sphere /
     # Rogue Skycaptain). Split out of `paragraphs` along the boundary that
@@ -282,6 +304,14 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # consequence rather than the counter itself. The one fragment the two families
 # shared, `_expect_counter_kind`, went down into `phrases` rather than staying
 # with either — a production two families need has no home inside one of them.
+# `returns` joined the parse side when `effects/board.py` reached the size guard
+# a third time, reusing the name `lowering/returns.py` has carried since Fallen
+# Empires. The line is `board`'s own docstring: a return names **two** zones,
+# the one an object leaves and the one it goes to, and that pair is what picks
+# the handler, where everything left behind acts on a permanent where it stands.
+# The one fragment both halves read, `_parse_further_subjects`, went down into
+# `phrases` rather than travelling with either — the same move
+# `_expect_counter_kind` made when `counters` left `characteristics`.
 # `tapping` joined the parse side when `effects/board.py` reached the size
 # guard, reusing the name `lowering/tapping.py` had carried since it left the
 # same family one package over — the third time the mirror has re-formed rather
@@ -340,7 +370,7 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # The boundary is CR's: a token is an **object the game creates** (CR 111.1),
 # where everything left in `game` changes the state a *player* is in — life,
 # extra turns, winning, losing, ante, the choices a sentence makes.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens"]
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -459,7 +489,15 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
+# `text_changes` joins `search` in having no twin on the lowering side: the
+# instruction one produces (`mark_text_modified`) lowers in
+# `lowering/characteristics.py` beside the colour and P/T changes it sits
+# with, and the guard that made it a parse family fired on the *productions*
+# alone. A near-empty `lowering/text_changes.py` would buy back the symmetry
+# and cost the thing symmetry is for.
+LOWERING_FAMILIES = [
+    f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
+] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life"]
 # `life` split out of `lowering/game.py` at 1,014, the second time that module
 # crossed the guard and along the same seam `tokens` left through one set
 # earlier: what stays in `game` changes the state of the **game** (an extra
@@ -555,11 +593,17 @@ LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "r
 # measures, never a property of the inventory — and the guard that made
 # `attachments` a family on the other two sides fired on the lowerings and
 # then, five sets later, on the productions.
+# `returns` is the seventh, and the same reason a seventh time: `ReturnToZone`
+# and `PutSourceIntoZone` are two nodes that sit perfectly well beside the board
+# ones — a return is *two zones and a move*, which is what the production reads
+# and what the lowering dispatches on, never a property of the inventory — and
+# the guard that made `returns` a family on the lowering side fired on the
+# lowerings at Fallen Empires and on the productions here.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
         "search", "control_changes", "prevention", "counters",
-        "tapping", "attachments",
+        "tapping", "attachments", "returns",
         # `tokens` is a parse family and a lowering family with no AST module
         # of its own, for `types`' reason below: `CreateToken`,
         # `CreateCopyToken` and `CreateEmblem` are things the *game* gains, and
@@ -567,6 +611,11 @@ AST_FAMILIES = [
         # ante. Splitting them out would put a node in one family and both of
         # its readers in another.
         "tokens",
+        # `text_changes` is the eighth, and the same reason again: `ChangeText`
+        # is one node that sits perfectly well beside the characteristics ones,
+        # and the guard that made `text_changes` a parse family fired on the
+        # productions and on nothing else.
+        "text_changes",
         # `types` is a parse family and a lowering family with no AST module of
         # its own: what the `becomes` verb produces is `BecomeCreature`,
         # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,

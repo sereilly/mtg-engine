@@ -387,6 +387,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # this way** …" (Rysorian Badger.) The answer is the count the step
         # behind it reads, which is Recall's shape one zone over.
         "graveyard_exile_pick",
+        # "Exile up to three target cards from **a single graveyard**." (Ebony
+        # Charm.) The answer is *which pile*, and the step behind it is the pick
+        # out of that pile — armed by this answer, which is how a chain of
+        # decisions stays one resolution (CR 608.2).
+        "graveyard_pile_choice",
     }, suspending
 
 

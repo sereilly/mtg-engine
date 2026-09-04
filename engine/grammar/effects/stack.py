@@ -15,11 +15,11 @@ subject and nobody else's.
 """
 
 from .. import ast
-from ..lexer import DASH, WORD
+from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
-                       _parse_mana_payment, _parse_zone)
+from ..phrases import (_accept_mana_alternatives, _parse_mana_payment, _parse_zone)
+from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
 
 
@@ -328,6 +328,65 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     return ast.ChangeTarget(subject, current_target=current)
 
 
+def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None":
+    """``If target spell has only one target and that target is a <noun>,
+    change that spell's target to another <noun>.`` (Meddle.)
+
+    The same effect as :func:`_parse_change_target` above with the restrictions
+    arranged as a condition instead of as a noun phrase, so it produces the same
+    node: CR 115.9a's count, the shape the current target has to be, and the
+    bound on the new one. Written as its own production rather than folded into
+    the sentence loop's trailing-``if``, for the reason that reader gives about
+    "if that target is you" — neither half is a question about the board, and
+    the picker has to ask both before the spell is cast at all.
+
+    **The two nouns must match.** "…that target is a creature, change that
+    spell's target to another **creature**" is one restriction stated twice, and
+    a card naming two different nouns would be a retarget whose new target the
+    old one's legality says nothing about — refused rather than read as the
+    first, which is the direction that re-aims a spell somewhere it may not go.
+
+    Returns None with the cursor untouched for every other sentence opening
+    "if", so the ordinary condition reader keeps its own.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "target", "spell", "has", "only", "one", "target"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "that", "target", "is", "a"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "change", "that", "spell", "'s", "target", "to", "another"
+    ):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() != noun:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.ChangeTarget(
+        # The same spec "target spell with a single target" parses to one
+        # production up: CR 115.9a's count and nothing else. The zone is not on
+        # the filter there either — what says "spell" is the picker the kind
+        # table derives, and setting it here would be a narrowing the retarget
+        # lowering has never been asked to honour.
+        ast.TargetSpec(
+            "target", ast.ObjectFilter(target_count=1), targeted=True,
+        ),
+        current_target_type=noun,
+        new_target=noun,
+    )
+
+
 # The words that can count modes. `NUMBER_WORDS` minus the articles: "Choose a
 # card name other than a basic land card name." (Necromentia) opens with the
 # same two tokens as a modal head, and reading "a" as the count would put the
@@ -586,8 +645,21 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     # Consume the remainder of the sentence verbatim; the enforcing code reads
     # the original text, so the grammar only has to account for the tokens --
     # but only once that code has said it can read the sentence at all.
+    #
+    # A SELF token is rendered as the phrase rather than as the name the lexer
+    # collapsed. "Activate only if **Hakim** isn't enchanted" reaches the
+    # enforcement path as printed text and reaches *this* path as tokens, and
+    # the two have to hand `activation_restrictions` the same sentence or the
+    # gate and the grammar disagree about which cards are readable — so both
+    # sides say `_SELF_SUBJECT`, the enforcement path by collapsing the name and
+    # this one by never having it.
+    from ...activation_restrictions import _SELF_SUBJECT
+
     while not stream.exhausted and not stream.at_punct("."):
-        words.append(str(stream.next().text))
+        token = stream.next()
+        words.append(
+            _SELF_SUBJECT if token.kind == SELF else str(token.text)
+        )
     sentence = " ".join(words).replace(" '", "'")
     if not activation_restriction_line(sentence):
         stream.reset(mark)

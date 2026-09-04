@@ -391,6 +391,22 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # mana ability CR 305.6 gives it change; on a creature it is in the rules
     # text, so "swampwalk" becomes "islandwalk" — including inside a lord's
     # grant line. It does NOT change the permanent's color.
+    # "…replacing all instances of one color word with another **or** one basic
+    # land type with another." (Mind Bend.) The card offers both vocabularies
+    # and its controller picks (CR 612.1) — a decision made as the spell
+    # resolves, so it goes on the pending-choice queue rather than being
+    # guessed here. The words themselves were already named at the cast, and
+    # both readings of a mana symbol are legal: "R" is red *and* Mountain.
+    if mode == "color_word_or_land_type":
+        if target_perm is None:
+            game.log.append(f"{card.name}: no permanent to change the text of")
+            return True, "resolved"
+        game.arm_text_change_vocabulary(
+            game.seat_index(context.caster), target_perm,
+            old_symbol, new_symbol, card.name,
+        )
+        return True, "resolved"
+
     if mode == "land_type":
         new_type = _SYMBOL_TO_LAND_TYPE.get(new_symbol)
         old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
@@ -1909,6 +1925,28 @@ def exile_any_number_of_own_tokens(
     return True, "resolved"
 
 
+
+
+@effect_handler("sacrifice_permanents_totalling")
+def sacrifice_permanents_totalling(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…sacrifice **any number of creatures with total power 12 or greater**."
+    (Phyrexian Dreadnought.)
+
+    Its own handler rather than a count on the forced-sacrifice prompt beside
+    it, because the seat is being asked a different question: not "give up N of
+    these" but "give up any set of these whose power adds up", which no number
+    expresses — a set of five may pay where a set of six does not.
+
+    The controller alone is asked (CR 109.5's bare imperative), and the price is
+    checked against the *aggregate* rather than the count, through the same
+    accessor every other reader of a creature's power uses so a pumped creature
+    counts for what CR 613 says it is.
+    """
+    seat = game.players.index(context.caster)
+    payload = dict(instruction.payload)
+    payload["_source"] = context.source_permanent
+    game.arm_aggregate_sacrifice(seat, payload, context)
+    return True, "resolved"
 
 
 @effect_handler("sacrifice_matching_permanent")

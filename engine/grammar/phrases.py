@@ -21,19 +21,26 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import parse_amount
 
 from .errors import GrammarError
-from .lexer import GToken, MANA, NUMBER, PT, PUNCT, WORD, tokenize
+from .lexer import GToken, NUMBER, PT, PUNCT, WORD, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
-from .readers import accept_source_reference
+# The price fragments, re-exported so every existing caller keeps its import
+# — the arrangement `readers` already has one layer down.
+from .prices import (_accept_conjoined_life_cost,  # noqa: F401
+                     _accept_life_alternative,
+                     _accept_mana_alternatives,
+                     _accept_per_counter_multiplier,
+                     _accept_unless_life_cost, _parse_mana_payment,
+                     _parse_pay_life)
 # The back-references left for `references` when this module crossed the
 # thousand-line guard — they answer CR 115's question with an earlier step as
 # the referent, which is that module's subject and not this one's word tables.
 # Re-exported under the names this module used, so no caller changed.
 from .references import (PAIR_ORDINALS,  # noqa: F401
                          _parse_that_object, parse_bound_subject,
-                         parse_pair_ordinal_subject, parse_target_spec)
+                         parse_pair_ordinal_subject, parse_recipient,
+                         parse_target_spec)
 from .stream import TokenStream
 from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
 from .keywords import (PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords,
@@ -530,178 +537,6 @@ def _parse_zone(stream: TokenStream) -> ast.Zone:
     return ast.Zone(name, owner)
 
 
-def _parse_mana_payment(stream: TokenStream, *, allow_variable: bool = False) -> ast.ManaCost:
-    """The mana half of "you may pay {1}" / "unless its controller pays {X}".
-
-    *allow_variable* admits ``{X}``. It is off by default because most payment
-    prompts resolve a concrete number: an "unless you pay {X}" whose caller
-    cannot supply an X would otherwise become a silent "pay {0}", which is
-    never a real choice.
-    """
-    pips: dict[str, int] = {}
-    while stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit():
-            pips["generic"] = pips.get("generic", 0) + int(symbol)
-        elif symbol in ("W", "U", "B", "R", "G", "C"):
-            pips[symbol] = pips.get(symbol, 0) + 1
-        elif allow_variable and symbol == "X":
-            pips["X"] = pips.get("X", 0) + 1
-        else:
-            raise stream.error(f"unsupported mana symbol {token.text!r}")
-    if not pips:
-        raise stream.error("expected a mana cost to pay")
-    return ast.ManaCost(tuple(sorted(pips.items())))
-
-
-def _accept_mana_alternatives(stream: TokenStream) -> tuple["ast.ManaCost", ...]:
-    """``or <mana>`` runs trailing a mana payment — "…unless they pay {B} **or
-    {3}**" (Lim-Dûl's Hex). CR 118.8's alternative cost.
-
-    One offer the payer may cover either way, so the alternatives ride the same
-    payment rather than arming a second prompt: two prompts would be two
-    decisions and two penalties, and declining the first would deal the damage
-    before the second was ever made.
-
-    Whole costs, where ``_accept_life_alternative`` carries only an amount: the
-    other currency there is life, which has exactly one number, and this one is
-    mana, which is a symbol dict. Refuses without consuming, so any other "or"
-    in the sentence keeps the reading it had.
-    """
-    alternatives: list[ast.ManaCost] = []
-    while True:
-        mark = stream.mark()
-        if not stream.accept_word("or"):
-            return tuple(alternatives)
-        try:
-            alternatives.append(_parse_mana_payment(stream))
-        except GrammarError:
-            stream.reset(mark)
-            return tuple(alternatives)
-
-
-def _accept_unless_life_cost(stream: TokenStream) -> "ast.Amount | None":
-    """The life half of "… unless <player> pays <life>", or None, cursor unmoved.
-
-    Two printed shapes and no third: "**3 life**" and "**life equal to its
-    toughness**" (Essence Vortex). The second is not a number this parser could
-    count — CR 613 makes toughness computed, so it is whatever the creature has
-    when the offer is made — and it travels as the characteristic reference the
-    resolution reads.
-
-    None rather than a raise, so the mana payment beside it keeps its reading of
-    every clause that is not a life cost.
-    """
-    mark = stream.mark()
-    if stream.accept_word("life"):
-        if stream.accept_phrase("equal", "to", "its"):
-            for name in ("toughness", "power"):
-                if stream.accept_word(name):
-                    return ast.CharacteristicOfSubject(name, 0)
-        stream.reset(mark)
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if isinstance(amount, ast.Fixed) and amount.value > 0 and stream.accept_word("life"):
-        return amount
-    stream.reset(mark)
-    return None
-
-
-def _accept_life_alternative(stream: TokenStream) -> int | None:
-    """``or 1 life`` trailing a mana payment (Erosion) — CR 118.8, or None.
-
-    Only the amount is carried, not a whole cost node: this is the second half
-    of one offer, and the payer covers it either way. Refuses without consuming
-    so any other "or" in the sentence keeps the reading it had.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("or"):
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(amount, ast.Fixed) or not stream.accept_word("life"):
-        stream.reset(mark)
-        return None
-    return amount.value
-
-
-def _accept_conjoined_life_cost(stream: TokenStream) -> "ast.Amount | None":
-    """``and 2 life`` trailing a mana payment (Purgatory) — or None, unmoved.
-
-    CR 118.8's alternative reads "**or** 1 life" and is one offer the payer may
-    cover either way; this is "**and** 2 life" and is one offer with two
-    prices, both of which have to be paid. One word apart in print and opposite
-    in meaning, which is why it is its own reader beside
-    :func:`_accept_life_alternative` rather than a flag on it — folded
-    together, a player with the mana and no life would take Purgatory's offer
-    for free.
-
-    Refuses without consuming, so any other "and" in the sentence keeps its own
-    reading — "you may pay {4} and draw a card" is a conjunction of an offer
-    and an effect, and this must not eat its "and".
-    """
-    mark = stream.mark()
-    if not stream.accept_word("and"):
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if (
-        isinstance(amount, ast.Fixed)
-        and amount.value > 0
-        and stream.accept_word("life")
-    ):
-        return amount
-    stream.reset(mark)
-    return None
-
-
-def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
-    """``for each <word> counter on <the source>`` trailing a printed cost, or
-    None with the cursor untouched.
-
-    "Destroy this creature unless you pay {1} **for each music counter on it**"
-    — the ability Musician grants: CR 702.24a's escalation with the keyword's
-    name taken off it — and "…unless they pay {1} **for each vortex counter on
-    this enchantment**" (Energy Vortex), which is the same clause with the
-    source spelled out. Both go through ``accept_source_reference``, the one
-    reader of that phrase, so the two spellings cannot come apart.
-
-    The counter word is payload, so a card printing a different one needs no
-    production. Returns None with the cursor untouched, because a flat cost
-    must keep reading exactly as it did.
-
-    Here in ``phrases`` rather than in either family: it is a fragment the
-    destruction productions and the damage ones both read, and a fragment two
-    families need goes in ``phrases`` — never in one of them.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
-    word = stream.peek_word()
-    if word is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_word("counter", "counters") or not stream.accept_word("on"):
-        stream.reset(mark)
-        return None
-    if not accept_source_reference(stream):
-        stream.reset(mark)
-        return None
-    return str(word)
-
-
 def _parse_card_alternatives(
     stream: TokenStream,
 ) -> tuple[ast.ObjectFilter, ...] | None:
@@ -795,110 +630,6 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     return field_name, (not value) if negated else value
 
 
-def _parse_sacrificed_subject(
-    stream: TokenStream, player: ast.PlayerRef
-) -> ast.Statement:
-    """What a "sacrifice …" sentence names when ``parse_recipient`` refused it.
-
-    Two readings reach here, and neither is a noun phrase the recipient parser
-    has: the object an earlier step of this same ability *bound* ("sacrifice
-    **that creature**", Phantasmal Mount), and a bare count in front of an
-    untargeted plural ("sacrifice **two Islands**", Leviathan). The bound one is
-    tried first because "that creature" would otherwise reach
-    :func:`parse_counted_subject`, which has no count to read and would refuse
-    the whole line.
-
-    Only the *sacrifice* verb comes through this door; the "unless you
-    sacrifice" tails go straight to the counted reader, because an alternative
-    cost naming an object the sentence already chose is not a shape any card
-    prints.
-    """
-    bound = parse_bound_subject(stream)
-    if bound is not None:
-        return ast.Sacrifice(player, bound)
-    return _parse_counted_sacrifice(stream, player)
-
-
-def _parse_counted_sacrifice(
-    stream: TokenStream, player: ast.PlayerRef
-) -> ast.Statement:
-    """"two Swamps" / "an Island" — what an "unless you sacrifice" asks for.
-
-    The printed number is read here rather than by ``parse_recipient``, which
-    has no reading for a bare count in front of an untargeted plural: the
-    counted position is the one the noun parser wants told about
-    (``plural=True``), exactly as a counted trigger subject is. One number and
-    one noun phrase, so "an Island" and "two Swamps" are one production with
-    the count as data.
-    """
-    # The noun phrase itself is `parse_counted_subject` above: Leviathan's
-    # "can't attack unless you sacrifice two Islands" is the same phrase read by
-    # the combat family, and one reading is what keeps the offer, the gate and
-    # the charge agreeing about what the card asks for.
-    counted = parse_counted_subject(stream)
-    if counted is None:
-        raise stream.error("expected what to sacrifice")
-    count, described = counted
-    return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
-
-
-def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
-    """``pay 4 life`` (Sylvan Library) — CR 119.4.
-
-    A bare imperative whose subject is the effect's controller, like the bare
-    draw and discard beside it. Refuses without consuming, so "pay {R}{R}" and
-    every other payment sentence keeps the reading it had.
-
-    Here rather than with the life effects because two families read it: the
-    `game` family's whole sentence, and the `board` family's "sacrifice this
-    enchantment **unless you pay 2 life**" (Season of the Witch), where the
-    payment is the alternative to the destruction. A fragment two families need
-    is not an effect — the same rule `_parse_zone` and `_parse_mana_payment`
-    above are here for — and a second reading of the phrase is how the offer
-    and the payment come to disagree about what was paid.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("pay", "pays"):
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("life"):
-        stream.reset(mark)
-        return None
-    return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
-
-
-def parse_counted_subject(
-    stream: TokenStream,
-) -> "tuple[int, ast.ObjectFilter] | None":
-    """``two Swamps`` / ``an Island`` — a printed count in front of a plural
-    noun phrase, as ``(count, filter)``; None with the cursor untouched when the
-    words are not that.
-
-    Here rather than with the sacrifice production that first needed it, because
-    two families read the same phrase: "unless you sacrifice **two Islands**"
-    (the `board` family's destroy and sacrifice tails) and "can't attack unless
-    you sacrifice **two Islands**" (the `combat` family's attack cost, CR
-    508.1g). One reading, so the offer, the cost gate and the charge cannot
-    disagree about what the card asks for.
-
-    "**an** Island" (Elder Spawn) prints its count as the article, and
-    ``NUMBER_WORDS`` reads an article as one — so ``_accept_number`` would
-    consume it and leave a bare noun behind, which ``parse_subject_filter_at``
-    quantifies as the sweep "all" and then refuses against the singular it was
-    asked for. The article is left where it is instead: a singular subject is a
-    reading that parser already has.
-    """
-    mark = stream.mark()
-    count = None if stream.peek_word() in ("a", "an") else _accept_number(stream)
-    described = parse_subject_filter_at(stream, plural=(count or 1) != 1)
-    if described is None:
-        stream.reset(mark)
-        return None
-    return count or 1, described
 
 # ---------------------------------------------------------------------------
 # "…of an opponent's choice"
@@ -971,3 +702,112 @@ def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
         raise stream.error("expected a counter kind" + suffix)
     stream.advance()
     return token
+
+
+def _parse_further_subjects(
+    stream: TokenStream,
+    first: "ast.Recipient | None" = None,
+    *,
+    several_targets: bool = False,
+) -> list[ast.Recipient]:
+    """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
+
+    "Return to your hand all enchantments you both own and control, all Auras
+    you own attached to permanents you control, and all Auras you own attached
+    to attacking creatures your opponents control." (Remove Enchantments.) One
+    verb over a union of three noun phrases, which no single ``ObjectFilter``
+    says: its keys are AND'd, so the three folded into one would name an
+    enchantment that is simultaneously an Aura on your own permanent and an
+    Aura on an attacking creature of an opponent's — nothing at all.
+
+    So the union lives in the *shape*: the caller builds one statement per
+    phrase and joins them with :class:`ast.Conjunction`, which lowering already
+    turns into a sequence. Two sweeps over overlapping sets are the same
+    outcome as one sweep over their union, because both are idempotent — a
+    permanent already returned is no longer there to return again.
+
+    Returns an empty list with the cursor untouched unless a separator really
+    is followed by another noun phrase, so "destroy target creature **and** you
+    gain 2 life" still reads as two effects rather than failing here.
+    """
+    extra: list[ast.Recipient] = []
+    while True:
+        mark = stream.mark()
+        # A separator is required. Without one, two adjacent noun phrases would
+        # be joined by nothing but the parser's willingness to keep reading.
+        separated = stream.accept_punct(",")
+        separated = stream.accept_word("and") or separated
+        nxt = (
+            parse_recipient(stream)
+            if separated and not stream.at_word("to")
+            else None
+        )
+        # Every phrase in the union must name an *object*, which is the shape
+        # this production exists for and the shape it can be sure of. "and" is
+        # the commonest word on a Magic card and most of its uses join two
+        # effects, not two objects: "destroy this artifact **and** it deals
+        # damage to you" (Voodoo Doll) has a perfectly good noun phrase after
+        # the "and", and reading it as a second thing to destroy destroyed the
+        # artifact and dropped the damage. A quantifier is the one signal
+        # available before the verb arrives, so the union takes only the
+        # quantifiers that cannot begin a clause and hands every other "and"
+        # back to the statement parser.
+        #
+        # **"target" is one of them**, and it is the safest of the three:
+        # "Destroy target creature **and target land**" (Fumarole), "Exile this
+        # creature **and target creature** without flying that's attacking you"
+        # (Giant Trap Door Spider). The word starts a noun phrase and nothing
+        # else, and the shape that looks dangerous — "…**and target player**
+        # draws a card" — is excluded by the line above rather than by luck: a
+        # targeted *player* parses to ``ast.PlayerRef``, so it was never a
+        # candidate for this union at all.
+        if (
+            not isinstance(nxt, ast.TargetSpec)
+            or nxt.quantifier not in ("all", "each", "target", "this")
+        ):
+            stream.reset(mark)
+            return extra
+        # **"this <type>" is the fourth, and the only one that needs a second
+        # test.** "Destroy it **and this creature** at end of combat" (Goblin
+        # Sappers) is a union; "tap all untapped Islands that player controls
+        # **and this enchantment deals X damage** to the player" (Monsoon) is
+        # two clauses whose second one opens with the very same noun phrase, and
+        # so do Earthbind and Vexing Arcanix. The three quantifiers above cannot
+        # begin a clause, and this one can — a permanent naming itself is the
+        # commonest *subject* on a card.
+        #
+        # So the union takes it only where the phrase ends the sentence: at a
+        # terminator, or in front of the one trailing clause a union may carry
+        # (the "at end of combat" delay, read by the caller). Anything else is a
+        # verb about to arrive, and the "and" belongs to the statement parser.
+        if nxt.quantifier == "this" and not (
+            stream.exhausted
+            or stream.at_punct(".", ";", ",")
+            or stream.at_word("at")
+        ):
+            stream.reset(mark)
+            return extra
+        # **At most one targeted phrase in the union, unless the caller can
+        # describe several.** The old reason was flat — the cast picker asks a
+        # spell for one target — and it is still true of a union lowered to a
+        # ``Conjunction``, whose spec comes from the first instruction that
+        # describes targets and leaves the rest picked by nobody. It is *not*
+        # true of a caller that folds the phrases into one statement with an
+        # ordered ``roles`` description, which the picker, the cast gate and the
+        # AI have all read since Glyph of Delusion. So ``several_targets`` is
+        # the claim "my lowering describes every one of these", and only the
+        # destroy production makes it. Unions whose first phrase is the source
+        # ("Exile **this creature** and target creature …") name one target and
+        # are unaffected either way.
+        if (
+            not several_targets
+            and nxt.quantifier == "target"
+            and any(
+                isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
+                for prior in ((first,) if first is not None else ()) + tuple(extra)
+            )
+        ):
+            raise stream.error(
+                "no spell picks two targets from one verb"
+            )
+        extra.append(nxt)

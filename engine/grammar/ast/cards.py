@@ -227,6 +227,28 @@ class DiscardRevealedUnlessPayLife:
 
 
 @dataclass(frozen=True)
+class DiscardRevealedMatchingUnlessPayLife:
+    """``For each <filter> card revealed this way, that player discards that
+    card unless they pay <N> life.`` (Sirocco.)
+
+    The plural of :class:`DiscardRevealedUnlessPayLife`, and one node rather
+    than a loop around that one for the reason that one is fused at all: the
+    offer and its penalty are a single prompt, and here they are a prompt *per
+    card* out of a set the handler already has in hand. A general loop would
+    have to bind "that card" for each turn of it, which no other sentence in the
+    pool asks for.
+
+    ``filter`` is the printed narrowing ("blue instant card"), asked of a card
+    rather than of a permanent — the objects are in a hand, so nothing about the
+    battlefield is in the question.
+    """
+
+    player: PlayerRef
+    filter: "ObjectFilter"
+    amount: Amount
+
+
+@dataclass(frozen=True)
 class RevealHandAndChoose:
     """``Target opponent reveals their hand. You choose a <filter> card from
     it. That player discards that card.`` (Duress.)
@@ -339,8 +361,14 @@ class ExileGraveyard:
     than an :class:`Exile` over a noun phrase: there is nothing to filter, no
     target among the cards, and the count is however many are there when it
     resolves.
+
+    ``player`` is None for "exile **all graveyards**" (Bazaar of Wonders) — the
+    sweep over every seat, which names nobody and targets nothing. A sentinel
+    seat would have been the other way to say it and is the wrong one: "all
+    graveyards" chooses no target (CR 115.1), and a ``PlayerRef`` here is read
+    by the picker as one.
     """
-    player: PlayerRef
+    player: PlayerRef | None
 
 
 @dataclass(frozen=True)

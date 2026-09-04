@@ -795,6 +795,25 @@ def _parse_postmodifiers(
                 if matched is not None:
                     d.attached_to = matched[1]
                     continue
+                # "…attached to **Hakim**" (Hakim, Loreweaver) — the card
+                # naming itself where the table above reads "it". The lexer has
+                # already collapsed the name to one SELF token, so the two
+                # spellings are one referent and the *general* defect is that
+                # only the pronoun was listed: any card printing "attached to
+                # <its own name>" refused its whole line on unconsumed text.
+                # Read through ``accept_source_reference``, which is the one
+                # production for the three spellings ("it", "this <noun>", the
+                # name) — a fourth word list here would be a second answer to
+                # "does this phrase name the source?".
+                #
+                # It sits below the table and above the noun-phrase branch,
+                # which is what "this creature" needs: the noun parser reads it
+                # as an *ObjectFilter* whose ``is_source`` the payload then drops
+                # — an attachment sweep over every creature on the board rather
+                # than over the source.
+                if accept_source_reference(stream):
+                    d.attached_to = "source"
+                    continue
                 # "…attached to **target permanent you own**" (Scarab of the
                 # Unseen). The host as a chosen object rather than as a
                 # back-reference: the same relation the table above reads, with

@@ -8,7 +8,9 @@ precisely so this stays true. Independence is the point: it is what makes
 
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
-    board            destruction, bouncing, sacrificing, attaching
+    board            destruction, sacrificing
+    text_changes     rewriting a printed word (CR 612)
+    returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
     cards            drawing, discarding, milling, searching, revealing
     mana             producing it, and changing what a permanent produces
@@ -67,9 +69,11 @@ from .characteristics import (
     _parse_has,
     _parse_has_base_pt,
     _parse_for_each,
-    _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
     _parse_becomes_base_pt,
+)
+from .text_changes import (
+    _TEXT_CHANGE_MODES,
     _parse_change_text,
 )
 from .types import (
@@ -79,14 +83,15 @@ from .types import (
 from .board import (
     _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
-    _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
-    _parse_return,
-    _parse_put_source_into_zone,
     _parse_destroy,
     _parse_further_subjects,
     _parse_that_object,
+)
+from .returns import (
+    _parse_return,
+    _parse_put_source_into_zone,
 )
 from .attachments import (
     _parse_attach,
@@ -117,6 +122,7 @@ from .cards import (
     _parse_choose_cards_in_hand,
     _parse_discard,
     _parse_discard_revealed_unless_pay_life,
+    _parse_for_each_revealed_discard,
     _parse_mill,
     _parse_scry,
     _parse_cast_permission,
@@ -240,7 +246,6 @@ __all__ = [
     "_parse_choose_cards_in_hand",
     "_parse_put_iterated_card_on_library",
     "_parse_sacrifice",
-    "_parse_counted_sacrifice",
     "_parse_sacrifice_expansion_permanents",
     "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",
@@ -248,6 +253,7 @@ __all__ = [
     "_parse_shuffle_library",
     "_parse_discard",
     "_parse_discard_revealed_unless_pay_life",
+    "_parse_for_each_revealed_discard",
     "_parse_mill",
     "_parse_scry",
     "_parse_skip_step",

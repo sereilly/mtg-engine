@@ -21,10 +21,69 @@ from ..errors import GrammarError
 from ..lexer import PT
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import CARD_TYPES
+from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
                        is_pt_counter, parse_pair_ordinal_subject)
+
+
+def _accept_bottom_instead_rider(
+    stream: TokenStream,
+) -> "tuple[tuple[str, ...], bool]":
+    """"**If that creature is red, you may put it on the bottom of its owner's
+    library instead.**" (Ether Well.)
+
+    The second sentence of a one-sentence effect: "instead" means the card lands
+    at *one* end, not at both in turn, so the rider rides the move it modifies
+    rather than becoming a statement of its own.
+
+    Refuses whole. A partial match here would consume "if that creature is red"
+    and leave the rest of the sentence to die as unconsumed text, which reports
+    the card unsupported at a clause that reads perfectly well — and, worse, a
+    version that consumed the words without carrying them would be a card that
+    never offers the choice its own text prints.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return (), False
+    if not stream.accept_phrase("if", "that", "creature", "is"):
+        stream.reset(mark)
+        return (), False
+    colors: list[str] = []
+    while True:
+        word = stream.peek_word()
+        symbol = COLOR_WORDS.get(word) if word else None
+        if symbol is None:
+            break
+        stream.advance()
+        colors.append(symbol)
+        if not stream.accept_word("or"):
+            break
+    if not colors:
+        stream.reset(mark)
+        return (), False
+    stream.accept_punct(",")
+    optional = bool(stream.accept_phrase("you", "may"))
+    if not optional:
+        # Only the offered spelling is read. A mandatory "put it on the bottom
+        # instead" is a different card and would need no prompt at all, so
+        # admitting it here would be a production claiming a sentence it has not
+        # been shown.
+        stream.reset(mark)
+        return (), False
+    if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of"):
+        stream.reset(mark)
+        return (), False
+    if not (
+        stream.accept_phrase("its", "owner", "'s", "library")
+        or stream.accept_phrase("their", "library")
+    ):
+        stream.reset(mark)
+        return (), False
+    if not stream.accept_word("instead"):
+        stream.reset(mark)
+        return (), False
+    return tuple(colors), True
 
 
 def _parse_put_counter(stream: TokenStream) -> ast.Statement:
@@ -78,7 +137,11 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             stream.accept_phrase("on", "top", "of", "their", "library")
         ):
             in_any_order = bool(stream.accept_phrase("in", "any", "order"))
-            return ast.PutOnLibraryTop(moved, in_any_order=in_any_order)
+            colors, optional = _accept_bottom_instead_rider(stream)
+            return ast.PutOnLibraryTop(
+                moved, in_any_order=in_any_order,
+                bottom_instead_colors=colors, bottom_instead_optional=optional,
+            )
         # "…on top of **your** library" (Reinforcements). The third spelling of
         # the same destination, and the one that names a *fixed* seat rather
         # than following the cards: "their" above means whoever the sentence

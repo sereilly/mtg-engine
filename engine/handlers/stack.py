@@ -808,6 +808,14 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
         return []
     if bound == "player":
         spec = {**spec, "kind": "player"}
+    # "…change that spell's target to **another creature**" (Meddle). The
+    # opposite forcing to the one above and for the same reason: the question is
+    # which *permanents* are legal, and asking the spell's own spec would offer
+    # the faces a Lightning Bolt may also choose. It narrows rather than widens
+    # — a spell whose own spec offers no creature offers none here either,
+    # because ``_enumerate_targets`` still answers for that card.
+    elif bound == "creature":
+        spec = {**spec, "kind": "creature"}
     entries = game._enumerate_targets(
         item.caster_index, item.card, spec, for_cast=True
     )
@@ -821,7 +829,12 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
                 {"kind": "player", "seat": seat, "name": game.players[seat].name}
             )
             continue
-        if entry.get("kind") != "permanent" or bound is not None:
+        # A permanent answer is dropped when the card bounds the new target to
+        # a **player** — Reflecting Mirror could only ever have offered a face.
+        # A creature bound is the other way round: the spec above already
+        # narrowed the enumeration to creatures, so what comes back is the list
+        # to offer.
+        if entry.get("kind") != "permanent" or bound not in (None, "creature"):
             continue
         # The enumeration names a battlefield slot; the seam's bridge turns it
         # into a permanent once, here, and everything downstream carries the id.

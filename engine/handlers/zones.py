@@ -22,6 +22,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, LAST_TARGET_CONTROLLER,
+                            REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -1334,6 +1335,92 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("reanimate_aura_onto_source")
+def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return target Aura card from your graveyard to the battlefield
+    **attached to Hakim**." (Hakim, Loreweaver.)
+
+    Its own handler rather than a rider on ``reanimate_creature``, because
+    CR 303.4f makes the attachment part of the entry rather than a step after
+    it: an Aura that entered attached to nothing is what CR 704.5m puts
+    straight back in the graveyard, so a version that put the card down and
+    then attached would be a card that works only when nothing looks in
+    between.
+
+    **The host is the ability's own source and nothing else.** It is read off
+    ``context.source_permanent`` rather than off the board, because a permanent
+    that has left between activation and resolution has no host to offer
+    (CR 608.2b) — and picking some other creature would be an Aura landing
+    where the card never said.
+
+    Legality is ``auras.aura_attach_refusal``, the one predicate the cast gate,
+    the CR 704.5m sweep and the two other resolutions ask. CR 303.4j: an
+    attachment that would be illegal simply does not happen, and here that
+    means the card stays in the graveyard — putting it onto the battlefield
+    unattached would be strictly worse than not resolving, since the sweep
+    would bin it and the card would be gone.
+    """
+    from ..auras import attach_aura, aura_attach_refusal
+
+    caster = context.caster
+    host = context.source_permanent
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{context.card.name}: nothing to attach the Aura to")
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    spec = dict(instruction.payload)
+    idx = context.target_permanent_index
+    if not (
+        isinstance(idx, int)
+        and 0 <= idx < len(caster.graveyard)
+        and graveyard_card_matches(spec, caster.graveyard[idx])
+    ):
+        # The same order every other reanimation falls back through: an AI seat
+        # announces the ability without naming a slot, so the first legal card
+        # in the pile is the one this takes. A re-check rather than a trust,
+        # for the reason `reanimate_creature` re-checks: a picker and a
+        # resolution that disagree are a target the player may announce and the
+        # effect then declines.
+        idx = next(
+            (
+                slot
+                for slot, card in enumerate(caster.graveyard)
+                if graveyard_card_matches(spec, card)
+            ),
+            None,
+        )
+    if idx is None:
+        game.log.append(f"{context.card.name}: no Aura card in the graveyard")
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    aura_card = caster.graveyard[idx]
+    arrival = Permanent(card=aura_card)
+    refusal = aura_attach_refusal(game, arrival, host)
+    if refusal is not None:
+        game.log.append(
+            f"{context.card.name}: {aura_card.name} cannot enchant "
+            f"{host.card.name} ({refusal})"
+        )
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
+    caster.graveyard.pop(idx)
+    game._put_permanent_onto_battlefield(
+        game.seat_index(caster), arrival, None, from_zone="graveyard"
+    )
+    attach_aura(arrival, host)
+    # CR 704.5m is asked at once, the way the attach handler asks it: layer
+    # contributions are computed on read, so nothing has to be refreshed — but
+    # an Aura that arrived on a host it may not stay on has to go now rather
+    # than at the next sweep.
+    game.check_state_based_actions()
+    context.results[REANIMATED_PERMANENTS] = (arrival.permanent_id,)
+    game.log.append(
+        f"{aura_card.name} returned to the battlefield attached to "
+        f"{host.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("return_bound_card_to_owners_hand")
 def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return that card to its owner's hand." (Puppet Master.)
@@ -2397,6 +2484,12 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
         (i for i, seated in enumerate(game.players) if seated is victim), None
     )
     names = [held.name for held in victim.hand]
+    # "**For each blue instant card revealed this way**, …" (Sirocco.) What was
+    # shown, as cards rather than names: the sentence behind this one narrows by
+    # colour and card type, and a list of names cannot be asked either. Written
+    # even for an empty hand, because an absent key is a back-reference with no
+    # producer — a different thing from a reveal that showed nothing.
+    context.results[REVEALED_HAND_CARDS] = list(victim.hand)
     if seat is not None:
         game.record_reveal(seat, names)
     game.log.append(
@@ -2536,13 +2629,22 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
     ownership lookup — and the list is emptied rather than filtered, because the
     card names no restriction.
     """
-    victim = context.target if context.target is not None else context.caster
-    exiled = list(victim.graveyard)
-    victim.graveyard.clear()
-    victim.exile.extend(exiled)
-    game.log.append(
-        f"{context.card.name} exiled {victim.name}'s graveyard ({len(exiled)} card(s))"
+    # "Exile **all graveyards**." (Bazaar of Wonders.) Every pile, named by
+    # nobody — which is why the payload key is what selects the sweep rather
+    # than a sentinel seat: this sentence chooses no target (CR 115.1), and a
+    # seat here would be one.
+    victims = (
+        list(game.players) if instruction.payload.get("every")
+        else [context.target if context.target is not None else context.caster]
     )
+    for victim in victims:
+        exiled = list(victim.graveyard)
+        victim.graveyard.clear()
+        victim.exile.extend(exiled)
+        game.log.append(
+            f"{context.card.name} exiled {victim.name}'s graveyard "
+            f"({len(exiled)} card(s))"
+        )
     return True, "resolved"
 
 
@@ -2690,6 +2792,30 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     later step of this same resolution and would read a zero otherwise.
     """
     owner = str(instruction.payload.get("graveyard_owner") or "")
+    caster_index = game.players.index(context.caster)
+    # "…from **a single** graveyard" (Ebony Charm). The pile is not printed;
+    # the chooser names it as the spell resolves, and only where there is a
+    # choice to make. One pile with a legal card in it is not a decision, and
+    # none at all is not a prompt — offering either would be a question with one
+    # answer or with none, which the seat then has to dismiss.
+    if owner == "chosen":
+        piles = game.graveyard_piles_with_a_legal_card(dict(instruction.payload))
+        if not piles:
+            game.log.append(
+                f"{context.card.name}: no graveyard holds a card it can exile"
+            )
+            context.results[EXILED_THIS_WAY_OBJECTS] = []
+            context.results[EXILED_THIS_WAY] = 0
+            return True, "resolved"
+        if len(piles) == 1:
+            game.arm_graveyard_exile_pick(
+                caster_index, piles[0], dict(instruction.payload), context
+            )
+        else:
+            game.arm_graveyard_pile_choice(
+                caster_index, dict(instruction.payload), context
+            )
+        return True, "resolved"
     if owner != "defending_player":
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
@@ -2699,7 +2825,6 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             f"{context.card.name}: no defending player was recorded"
         )
         return True, "resolved"
-    caster_index = game.players.index(context.caster)
     game.arm_graveyard_exile_pick(
         caster_index, seat, dict(instruction.payload), context
     )
@@ -3357,6 +3482,23 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
         return True, "resolved"
     owner_idx = game.owner_index_of(target_perm)
     owner = game.players[owner_idx] if owner_idx is not None else context.caster
+    # "If that creature is **red**, you may put it on the bottom of its owner's
+    # library **instead**." (Ether Well.) One move with two possible ends, so
+    # the colour is asked *before* anything moves and the prompt performs the
+    # move — putting it on top and then moving it would be two zone changes
+    # where the card describes one. The colour is read through layer 5
+    # (``effective_colors``), not off the printed card: a creature a Painter's
+    # Servant has made red is red (CR 613), and the printed line is not.
+    colors = tuple(instruction.payload.get("bottom_instead_colors") or ())
+    if colors and any(
+        color in target_perm.effective_colors for color in colors
+    ):
+        game.arm_library_end_choice(
+            game.players.index(context.caster), target_perm, owner_idx
+            if owner_idx is not None else game.players.index(context.caster),
+            context,
+        )
+        return True, "resolved"
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(
@@ -5612,6 +5754,12 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
 #: discard by value would take whichever one ``list.remove`` reached first.
 REVEALED_HAND_INDEX = "revealed_card_hand_index"
 
+#: Which of a revealed hand's cards *one* of Sirocco's offers is about. Private
+#: to a single offer's branch context — the resolution's own scratchpad is
+#: shared, and a key written into it per offer would leave every branch reading
+#: whichever was armed last.
+_DISCARDED_REVEALED_CARD = "discarded_revealed_card"
+
 
 @effect_handler("reveal_random_card_from_hand")
 def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -5719,6 +5867,99 @@ def discard_revealed_unless_pay_life(game: Game, instruction: OracleInstruction,
         _context=paying_context,
         prompt=f"Pay {amount} life to keep {card.name}?",
     )
+    return True, "resolved"
+
+
+@effect_handler("discard_revealed_matching_unless_pay_life")
+def discard_revealed_matching_unless_pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"For each blue instant card revealed this way, that player discards that
+    card unless they pay 4 life." (Sirocco.)
+
+    The plural of ``discard_revealed_unless_pay_life``: one offer per card the
+    reveal in front of this one showed that the printed phrase names, all on the
+    same ``optional_pay`` queue, so the spell stays on the stack until the last
+    is answered (CR 608.2, CR 117.3b) and ``web/prompts.py``'s three loops
+    render, gate and default them exactly as they do a single one.
+
+    **Each offer carries its own card**, in a *copy* of the resolution's
+    scratchpad: ``results`` is one dict for the whole resolution, so writing the
+    card into it per offer would leave every branch reading whichever was armed
+    last. Nothing after this sentence reads the record, which is what makes the
+    copy free.
+
+    The discard names the card rather than a slot. Two copies of one card in a
+    hand are the same Python object and the pile renumbers as cards leave, so
+    the slot the reveal saw is stale by the second answer —
+    ``Game.take_card_from_hand`` removes exactly one, by an index found through
+    identity.
+
+    CR 119.4: a player may pay life only with a life total at least the amount,
+    so a seat that cannot pay is never offered the choice — it simply discards,
+    which is what the sentence says happens when the cost is not paid.
+    """
+    from .life_and_game import can_pay_life
+
+    victim = context.target if context.target is not None else context.caster
+    seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
+    revealed = context.results.get(REVEALED_HAND_CARDS)
+    if seat is None or not revealed:
+        return True, "resolved"
+    described = dict(instruction.payload.get("filter") or {})
+    amount = int(instruction.payload.get("life", 0))
+    # Re-checked here rather than trusted from the lowering, for the reason
+    # every other handler re-checks: the payload describes what the card said,
+    # and this is the reader that decides which cards are offered.
+    matching = [
+        card for card in revealed if _card_matches_filter(card, described)
+    ]
+    for card in matching:
+        paying = dataclasses.replace(
+            context, caster=victim,
+            results={**context.results, _DISCARDED_REVEALED_CARD: card},
+        )
+        discard = (
+            _OracleInstruction("discard_bound_revealed_card", "", {}),
+        )
+        if not can_pay_life(victim, amount):
+            game._execute_oracle_instruction(discard[0], paying)
+            continue
+        game.arm_pending_choice(
+            "optional_pay", seat,
+            card_name=context.card.name if context.card is not None else "",
+            cost={},
+            life=0,
+            _source_permanent=context.source_permanent,
+            _on_accept=(_OracleInstruction("pay_life", "", {"amount": amount}),),
+            _on_decline=discard,
+            _on_reflexive=(),
+            _context=paying,
+            prompt=f"Pay {amount} life to keep {card.name}?",
+        )
+    return True, "resolved"
+
+
+@effect_handler("discard_bound_revealed_card")
+def discard_bound_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The declined branch of one of Sirocco's offers.
+
+    The card is named rather than pointed at by a slot, which is the whole
+    difference from ``discard_revealed_card`` beside it: that one is about the
+    single card a reveal showed and the slot is what says *which copy*, where
+    this one is one of several offers whose answers arrive in any order and
+    renumber the pile as they land. ``Game.take_card_from_hand`` removes exactly
+    one, by an index found through identity — a hand is the one zone where two
+    copies of a card are the same object, so a filter by identity would remove
+    both.
+    """
+    victim = context.target if context.target is not None else context.caster
+    card = context.results.get(_DISCARDED_REVEALED_CARD)
+    if card is None:
+        return True, "resolved"
+    if not game.take_card_from_hand(victim, card):
+        game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
+        return True, "resolved"
+    victim.graveyard.append(card)
+    game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 
 

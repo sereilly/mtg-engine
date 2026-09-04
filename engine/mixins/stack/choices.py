@@ -32,6 +32,7 @@ from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
 from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS)
+from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
@@ -3996,8 +3997,24 @@ class PendingChoicesMixin:
             return False
         card = player.hand[hand_index]
         player.hand = [c for i, c in enumerate(player.hand) if i != hand_index]
+        arrival = Permanent(card=card)
         self._put_permanent_onto_battlefield(
-            choice.player_index, Permanent(card=card), None
+            choice.player_index, arrival, None
+        )
+        # "If you do, sacrifice **it** …" (Flash). By id, like every other
+        # producer of a permanent this engine records: the permanent may leave
+        # between two steps of one resolution, and a returning one is a new
+        # object (CR 400.7). Written here rather than in the handler that armed
+        # the prompt, because the permanent does not exist until the answer
+        # arrives — the same reason the reanimation is the only step that can
+        # name what it reanimated.
+        #
+        # Set rather than appended: a repeated round (Eureka) offers the seats
+        # in turn and each answer replaces the last, which is right for a
+        # sentence naming "it" — a card printing "each of them" would want the
+        # list, and there is none in the pool.
+        choice.data["_context"].results[PUT_FROM_HAND_PERMANENTS] = (
+            arrival.permanent_id
         )
         # The record a repeated round ends on — see engine/repeated_offers.py.
         # Appended rather than set, because every seat of the round shares the
@@ -4217,6 +4234,451 @@ class PendingChoicesMixin:
         wanted = self._how_many_graveyard_cards(choice)
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
+
+    # -- Which vocabulary a text change replaces a word from -----------------
+
+    def live_text_change_vocabularies(self, permanent, old_symbol: str) -> list[str]:
+        """The vocabularies whose printed word is actually on *permanent*.
+
+        A text change that rewrites a word the permanent does not have is a
+        legal choice (CR 612.1 puts no such condition on it) and changes
+        nothing, so offering it would be a question one of whose answers is
+        "do nothing" — the shortcut every other picker here takes when a choice
+        has one real answer. The *written* text, not the printed card: a second
+        text change rewrites what the first wrote.
+        """
+        # `text_changes`' own tables, both keyed by mana **symbol**. The
+        # grammar's `COLOR_WORDS` is the same pairs the other way round (word →
+        # symbol) and reading it here would look up "U" and find nothing, which
+        # is a vocabulary silently never offered.
+        from ...text_changes import COLOR_WORDS, LAND_TYPE_WORDS
+
+        symbol = (old_symbol or "").upper()
+        effective = permanent.effective_card
+        written = " ".join(
+            (effective.type_line, effective.oracle_text, *effective.keywords)
+        ).lower()
+        found = []
+        colour = COLOR_WORDS.get(symbol)
+        if colour and colour in written:
+            found.append("color_word")
+        land = LAND_TYPE_WORDS.get(symbol)
+        if land and land in written:
+            found.append("land_type")
+        return found
+
+    def arm_text_change_vocabulary(
+        self, player_index: int, permanent, old_symbol: str, new_symbol: str,
+        card_name: str,
+    ) -> None:
+        """Queue "a colour word, or a basic land type?" for Mind Bend.
+
+        One vocabulary that could do anything is not a decision, and none at all
+        is not a prompt: the swap is performed straight away in the first case
+        and nothing happens in the second, exactly as the pile choice one file
+        over decides whether to ask at all.
+        """
+        live = self.live_text_change_vocabularies(permanent, old_symbol)
+        if not live:
+            self.log.append(
+                f"{card_name} had no effect: {permanent.card.name} has no such "
+                "word in its text"
+            )
+            return
+        if len(live) == 1:
+            self._apply_text_change_vocabulary(
+                permanent, live[0], old_symbol, new_symbol, card_name
+            )
+            return
+        self.arm_pending_choice(
+            "text_change_vocabulary", player_index,
+            card_name=card_name,
+            permanent_name=permanent.card.name,
+            options=list(live),
+            old_symbol=(old_symbol or "").upper(),
+            new_symbol=(new_symbol or "").upper(),
+            _permanent=permanent,
+        )
+
+    def _apply_text_change_vocabulary(
+        self, permanent, mode: str, old_symbol: str, new_symbol: str,
+        card_name: str,
+    ) -> None:
+        """Perform the swap the seat named, through the same two writers the
+        single-vocabulary cards use — a third copy here would be a third answer
+        to what a text change records."""
+        from ...text_changes import (LAND_TYPE_WORDS, change_color_word,
+                                     change_land_word)
+
+        if mode == "color_word":
+            if change_color_word(
+                permanent, old_symbol, new_symbol, label=card_name
+            ):
+                self.log.append(
+                    f"{card_name} changed {old_symbol} text to {new_symbol} on "
+                    f"{permanent.card.name}"
+                )
+            return
+        old_type = LAND_TYPE_WORDS.get((old_symbol or "").upper())
+        new_type = LAND_TYPE_WORDS.get((new_symbol or "").upper())
+        if old_type and new_type and change_land_word(
+            permanent, old_type, new_type, label=card_name
+        ):
+            self.log.append(
+                f"{card_name} changed {old_type} to {new_type} in "
+                f"{permanent.card.name}'s text"
+            )
+            # A land word inside a lord's grant line ("Other Goblins have
+            # mountainwalk") is part of a buff the board caches, so the swap has
+            # to be re-derived — the same call the single-vocabulary handler
+            # makes for the same reason.
+            self._recalculate_lord_buffs()
+
+    def confirm_text_change_vocabulary(self, player_index: int, mode) -> bool:
+        return self.resolve_pending_choice(
+            "text_change_vocabulary", player_index, mode=mode
+        )
+
+    def _resolve_text_change_vocabulary(self, choice: PendingChoice, mode) -> bool:
+        permanent = choice.data.get("_permanent")
+        if mode not in (choice.data.get("options") or ()):
+            return False
+        if permanent is None or not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed (CR 608.2b): nothing to rewrite,
+            # and the decision is over either way.
+            self.discard_pending_choice(choice)
+            return True
+        self.discard_pending_choice(choice)
+        self._apply_text_change_vocabulary(
+            permanent, str(mode), str(choice.data.get("old_symbol") or ""),
+            str(choice.data.get("new_symbol") or ""),
+            str(choice.data.get("card_name") or ""),
+        )
+        return True
+
+    def _default_text_change_vocabulary(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** offered vocabulary, which is the
+        colour word.
+
+        Not a valuation — the order is the one
+        ``live_text_change_vocabularies`` builds and is seed-deterministic. A
+        seat that should weigh a type-line rewrite against a colour one needs a
+        weight in ``engine/ai_valuation.py``, not a branch here.
+        """
+        options = list(choice.data.get("options") or ())
+        if not options or not self._resolve_text_change_vocabulary(
+            choice, options[0]
+        ):
+            self.discard_pending_choice(choice)
+
+    # -- A sacrifice priced by an aggregate rather than by a count -----------
+
+    def aggregate_sacrifice_candidates(self, seat: int, payload: dict) -> list:
+        """The permanents *seat* controls that the printed noun phrase names.
+
+        Through ``subject_matches``, the one predicate the picker, the
+        takeability gate and the answer's re-check all ask — three readings of
+        "which creatures may be given up" is three chances to offer one the
+        resolution then refuses.
+        """
+        from ...subject_filters import subject_matches
+
+        described = dict(payload.get("filter") or {})
+        source = payload.get("_source")
+        return [
+            perm for perm in self.controlled_by(seat)
+            if subject_matches(self, perm, described, observer=seat, source=source)
+            and not (payload.get("exclude_self") and perm is source)
+        ]
+
+    def aggregate_sacrifice_total(self, permanents, characteristic: str) -> int:
+        """What a chosen set totals, through CR 613's layers.
+
+        ``effective_power`` rather than the printed number, so a pumped creature
+        counts for what it is now — the same accessor every other reader of a
+        creature's power in this engine goes through.
+        """
+        return sum(
+            int(
+                (perm.effective_power if characteristic == "power"
+                 else perm.effective_toughness) or 0
+            )
+            for perm in permanents
+        )
+
+    def arm_aggregate_sacrifice(self, player_index: int, payload: dict, context) -> None:
+        """Queue "sacrifice any number of <noun> with total <X> N or greater".
+
+        The whole payload travels rather than the candidate list, for
+        ``arm_choose_cards_in_hand``'s reason: it is the *rule* the candidates
+        came from, and re-running it is what keeps the list offered and the list
+        an answer is checked against from being two lists.
+        """
+        self.arm_pending_choice(
+            "aggregate_sacrifice", player_index,
+            card_name=context.card.name,
+            characteristic=str(payload.get("characteristic") or "power"),
+            at_least=int(payload.get("at_least", 0)),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def confirm_aggregate_sacrifice(self, player_index: int, permanent_ids) -> bool:
+        return self.resolve_pending_choice(
+            "aggregate_sacrifice", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_aggregate_sacrifice(self, choice: PendingChoice, permanent_ids) -> bool:
+        """Sacrifice exactly the set named, once it clears the printed floor.
+
+        Validated whole before anything is sacrificed, the shape every
+        list-shaped picker here takes: one bad id rejects the answer and leaves
+        the prompt queued, so a malformed request cannot sacrifice half a
+        selection. **The floor is the whole of the price** — an answer under it
+        is not a cheaper payment, it is no payment at all, so it is refused
+        rather than applied.
+        """
+        payload = dict(choice.data.get("_payload") or {})
+        live = self.aggregate_sacrifice_candidates(choice.player_index, payload)
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            chosen.append(perm)
+        characteristic = str(choice.data.get("characteristic") or "power")
+        if self.aggregate_sacrifice_total(chosen, characteristic) < int(
+            choice.data.get("at_least", 0)
+        ):
+            return False
+        self.discard_pending_choice(choice)
+        for perm in chosen:
+            self.sacrifice_permanent(perm)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: "
+            + (", ".join(perm.card.name for perm in chosen) or "nothing")
+            + " sacrificed"
+        )
+        return True
+
+    def _default_aggregate_sacrifice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **fewest** permanents that clear the floor,
+        taking the largest first.
+
+        A toll rather than a gift — "take gifts, pay tolls, make no trades" —
+        and the cheapest way to pay a toll counted in power is to spend as few
+        bodies as possible. Ties break by battlefield order, which is
+        seed-deterministic; a seat that should value the creatures themselves
+        needs a weight in ``engine/ai_valuation.py``, not a branch here.
+
+        **The ability's own source is a candidate** unless the sentence printed
+        "another": nothing in CR 701.17a excludes it, and Phyrexian Dreadnought
+        really can be sacrificed to its own trigger. So the largest-first rule
+        usually pays with the source — which is the *same board state* as
+        declining, and therefore the "make no trades" answer rather than an
+        accident of the ordering.
+        """
+        payload = dict(choice.data.get("_payload") or {})
+        characteristic = str(choice.data.get("characteristic") or "power")
+        wanted = int(choice.data.get("at_least", 0))
+        live = self.aggregate_sacrifice_candidates(choice.player_index, payload)
+        ordered = sorted(
+            live,
+            key=lambda perm: -int(
+                (perm.effective_power if characteristic == "power"
+                 else perm.effective_toughness) or 0
+            ),
+        )
+        taken, total = [], 0
+        for perm in ordered:
+            if total >= wanted:
+                break
+            taken.append(perm)
+            total = self.aggregate_sacrifice_total(taken, characteristic)
+        if total < wanted or not self._resolve_aggregate_sacrifice(
+            choice, [perm.permanent_id for perm in taken]
+        ):
+            # Nothing the seat controls can cover the price. The offer should
+            # never have been made — ``_action_is_takeable`` asks the same
+            # question first — so this is the defensive half, and it declines
+            # rather than sacrificing a set that does not pay.
+            self.discard_pending_choice(choice)
+
+    # -- Which end of a library a tuck puts its card on ----------------------
+
+    def arm_library_end_choice(
+        self, player_index: int, permanent, owner_index: int, context
+    ) -> None:
+        """Queue "top or bottom?" for a tuck whose card qualifies for the swap.
+
+        The **permanent** travels rather than the card, so the answer moves the
+        object this resolution resolved: two copies of one card in a library are
+        the same ``CardDefinition``, and a card is not addressable while a
+        permanent still is (CR 400.7).
+        """
+        self.arm_pending_choice(
+            "library_end_choice", player_index,
+            card_name=context.card.name,
+            moved_name=permanent.card.name,
+            owner_index=int(owner_index),
+            owner_name=self.players[int(owner_index)].name,
+            _permanent=permanent,
+            _context=context,
+        )
+
+    def confirm_library_end_choice(self, player_index: int, to_bottom) -> bool:
+        return self.resolve_pending_choice(
+            "library_end_choice", player_index, to_bottom=to_bottom
+        )
+
+    def _resolve_library_end_choice(self, choice: PendingChoice, to_bottom) -> bool:
+        """Move the permanent to the end the seat named.
+
+        The move happens **here** rather than before the prompt, because "put it
+        on the bottom **instead**" is one zone change with two possible ends: a
+        version that tucked on top and then moved the card would be two zone
+        changes, which is one more than the card describes and one more than any
+        watcher should see.
+        """
+        permanent = choice.data.get("_permanent")
+        if permanent is None or not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed. CR 608.2b: the effect does as
+            # much as it can, which here is nothing.
+            self.discard_pending_choice(choice)
+            return True
+        owner = self.players[int(choice.data["owner_index"])]
+        self.remove_from_battlefield(permanent)
+        self._remove_aura_effects(permanent)
+        position = "bottom" if to_bottom else "top"
+        self.put_card_into_library(
+            owner, permanent.card, position, from_battlefield=permanent
+        )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: "
+            f"{permanent.card.name} put on {position} of {owner.name}'s library"
+        )
+        return True
+
+    def _default_library_end_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **bottom**.
+
+        The offer costs its controller nothing and buries the card deeper, so
+        it is a gift under "take gifts, pay tolls, make no trades" — and it is
+        deterministic, which is what AI and headless play need. A seat that
+        should weigh the two ends needs a weight in ``engine/ai_valuation.py``,
+        not a branch here.
+        """
+        self._resolve_library_end_choice(choice, True)
+
+    # -- Which graveyard "a single graveyard" means --------------------------
+
+    def graveyard_piles_with_a_legal_card(self, payload: dict) -> list[int]:
+        """The seats whose graveyard holds a card the printed phrase admits.
+
+        The rule rather than the list, for ``arm_graveyard_exile_pick``'s
+        reason: a pile offered here is a pile the pick will then be re-checked
+        against, and two readings of "which cards does this phrase name" is
+        exactly the drift ``graveyard_card_matches`` exists to stop.
+        """
+        from ...handlers._common import graveyard_card_matches
+
+        return [
+            seat for seat, player in enumerate(self.players)
+            if any(graveyard_card_matches(payload, card)
+                   for card in player.graveyard)
+        ]
+
+    def arm_graveyard_pile_choice(
+        self, player_index: int, payload: dict, context
+    ) -> None:
+        """Queue "which graveyard?" for "exile … from **a single** graveyard".
+
+        A prompt of its own rather than a wider ``graveyard_exile_pick``,
+        because the two questions have different answers and different
+        candidate rules — and because answering this one *arms* that one, which
+        is how a chain of decisions stays a single resolution (CR 608.2): the
+        stack object stays put until the last prompt of the chain is answered.
+        """
+        self.arm_pending_choice(
+            "graveyard_pile_choice", player_index,
+            card_name=context.card.name,
+            seats=self.graveyard_piles_with_a_legal_card(payload),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_graveyard_pile_choices(self, choice: PendingChoice) -> list[int]:
+        """The offered piles that are still legal answers.
+
+        Recomputed rather than trusted: a card can leave a graveyard between the
+        offer and the answer (another player's effect in response), and a pile
+        that no longer holds a card the phrase names is a pile the pick behind
+        this would find empty.
+        """
+        offered = set(choice.data.get("seats") or ())
+        return [
+            seat
+            for seat in self.graveyard_piles_with_a_legal_card(
+                dict(choice.data.get("_payload") or {})
+            )
+            if seat in offered
+        ]
+
+    def confirm_graveyard_pile_choice(self, player_index: int, seat) -> bool:
+        return self.resolve_pending_choice(
+            "graveyard_pile_choice", player_index, seat=seat
+        )
+
+    def _resolve_graveyard_pile_choice(self, choice: PendingChoice, seat) -> bool:
+        live = self.live_graveyard_pile_choices(choice)
+        context = choice.data.get("_context")
+        if not live:
+            # Every offered pile has been emptied of legal cards while this was
+            # owed. The sentence carries on having exiled nothing rather than
+            # staying owed a prompt with no answer — and both record keys are
+            # written, because an *absent* key is a back-reference with no
+            # producer, a different thing from a producer that took nothing.
+            if context is not None:
+                context.results[EXILED_THIS_WAY_OBJECTS] = []
+                context.results[EXILED_THIS_WAY] = 0
+            self.discard_pending_choice(choice)
+            return True
+        if not isinstance(seat, int) or seat not in live:
+            return False
+        payload = dict(choice.data.get("_payload") or {})
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: chose "
+            f"{self.players[seat].name}'s graveyard"
+        )
+        # The second half of the chain, armed by the answer to the first. The
+        # prompt this queues stamps the same resolving stack object, so the
+        # object stays on the stack and no step advances until it too is
+        # answered.
+        self.arm_graveyard_exile_pick(
+            choice.player_index, seat, payload, context
+        )
+        return True
+
+    def _default_graveyard_pile_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** live pile, in seat order.
+
+        Not a valuation — seat order is seed-deterministic, which is what AI and
+        headless play need, and ``_default_player_choice`` states the same rule
+        for the same reason. A seat that should choose cleverly needs a weight
+        in ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_graveyard_pile_choices(choice)
+        if not live or not self._resolve_graveyard_pile_choice(choice, live[0]):
+            context = choice.data.get("_context")
+            if context is not None:
+                context.results[EXILED_THIS_WAY_OBJECTS] = []
+                context.results[EXILED_THIS_WAY] = 0
+            self.discard_pending_choice(choice)
 
     # -- Kudzu's reattachment ------------------------------------------------
 
@@ -6869,6 +7331,88 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "text_change_vocabulary",
+    resolve=lambda game, choice, r: game._resolve_text_change_vocabulary(
+        choice, r.get("mode")
+    ),
+    default=lambda game, choice: game._default_text_change_vocabulary(choice),
+    action="text_change_vocabulary_confirm",
+    prompt_key="text_change_vocabulary",
+    blocked_detail="choose which kind of word to replace before other actions",
+    # **Not** ``suspends``: the rewrite *is* the answer and it is the last step
+    # of the spell, so nothing behind it reads a record. ``blocked_detail`` is
+    # what makes the game wait (CR 608.2).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # A text change is a public change to a public object (CR 612), so a
+    # seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+register_choice(
+    "aggregate_sacrifice",
+    resolve=lambda game, choice, r: game._resolve_aggregate_sacrifice(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_aggregate_sacrifice(choice),
+    action="aggregate_sacrifice_confirm",
+    prompt_key="aggregate_sacrifice",
+    blocked_detail="choose what to sacrifice before other actions",
+    # **Not** ``suspends``: the sacrifice *is* the answer and it is the last
+    # step of the offer's accept branch, so nothing behind it reads a record.
+    # ``blocked_detail`` is what makes the game wait (CR 608.2), which it must —
+    # the creatures are still on the battlefield until the answer arrives.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "library_end_choice",
+    resolve=lambda game, choice, r: game._resolve_library_end_choice(
+        choice, bool(r.get("to_bottom"))
+    ),
+    default=lambda game, choice: game._default_library_end_choice(choice),
+    action="library_end_confirm",
+    prompt_key="library_end_choice",
+    blocked_detail="choose which end of the library before other actions",
+    # **Not** ``suspends``: the move *is* the answer and it is the last step of
+    # the sentence, so nothing behind it reads the record — which is the whole
+    # of what that field claims. ``blocked_detail`` is what makes the game wait
+    # (CR 608.2), and the permanent is still on the battlefield until the answer
+    # arrives, which is why no action may run in between.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Which end of a library a card went to is public (both ends of CR 401.1's
+    # ordered zone are announced), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+register_choice(
+    "graveyard_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pile_choice(
+        choice, r.get("seat")
+    ),
+    default=lambda game, choice: game._default_graveyard_pile_choice(choice),
+    action="graveyard_pile_confirm",
+    prompt_key="graveyard_pile_choice",
+    blocked_detail="choose which graveyard to exile from before other actions",
+    # The pick this arms is a later step of the same resolution and reads the
+    # answer, so nothing may run past it (CR 608.2). The chain is what makes
+    # both prompts one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Whose graveyard holds what is public (CR 400.2 makes a graveyard an open
+    # zone), so a seatless viewer may see the question.
+    spectator_visible=True,
 )
 
 register_choice(

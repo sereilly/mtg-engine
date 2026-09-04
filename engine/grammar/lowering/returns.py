@@ -299,6 +299,38 @@ def _lower_return_to_zone(
         and filt.subtypes
     ):
         gated = dataclasses.replace(gated, subtypes=())
+    # "Return target **Aura** card from your graveyard to the battlefield
+    # attached to Hakim." The third adjective the graveyard family reads, lifted
+    # out of the blanket refusal for the colour's and the subtype's reason above
+    # rather than weakened inside it: it travels as ``graveyard_subtypes``, and
+    # the picker, the activation gate and the handler all test it through the
+    # one predicate (``graveyard_card_matches``). Scoped to the attachment
+    # phrase, so every other graveyard-to-battlefield return goes on refusing a
+    # printed subtype it has no way to honour.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and node.attached_to == "source"
+        and filt.subtypes
+    ):
+        gated = dataclasses.replace(gated, subtypes=())
+    # "…**attached to** <something>" on a *targeted* return. Exactly one pair of
+    # zones below reads it (the Aura reanimation), and this is what keeps the
+    # phrase from being dropped by any of the others: an Aura that arrived
+    # attached to nothing is swept away by CR 704.5m, so a return admitted with
+    # the words consumed and unread is a card that reports supported and does
+    # nothing. Read here rather than per branch, above the shapes that would
+    # otherwise fall through to a bounce.
+    if node.attached_to is not None and not (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and node.attached_to == "source"
+    ):
+        raise LoweringError(
+            "only the Aura reanimation attaches what it returns", node=node
+        )
     if node.from_zone is not None and _reads_no_return_restriction(gated):
         raise LoweringError("no return handler honours this restriction", node=node)
     # The leave-the-battlefield rider is armed by exactly one handler (the
@@ -341,6 +373,49 @@ def _lower_return_to_zone(
         if destination.name == "battlefield":
             if destination.owner is not None:
                 raise LoweringError("no handler for a reanimation under another's control", node=node)
+            # "Return target **Aura** card from your graveyard to the
+            # battlefield **attached to Hakim**." (Hakim, Loreweaver.) Its own
+            # kind rather than a payload on the reanimation below, because
+            # CR 303.4f makes the attachment part of the *entry*: an Aura put
+            # onto the battlefield attached to nothing is swept away by
+            # CR 704.5m before anyone can move it, so "which card comes back"
+            # and "what it comes back onto" are one event and not a rider on
+            # one.
+            #
+            # Gated on every word of the phrase. The subtype is what the
+            # picker offers and the handler re-checks (one predicate,
+            # ``graveyard_card_matches``); the host is the ability's own
+            # source, which is the only host this sentence can name — nothing
+            # earlier in it chooses one, so ``attached_to == "chosen"`` here
+            # would read an empty scratchpad key.
+            if node.attached_to == "source":
+                if filt.card_types not in ((), ("enchantment",)):
+                    raise LoweringError(
+                        "the Aura reanimation reads an Aura card, not a "
+                        f"{filt.card_types[0]} one", node=node,
+                    )
+                if filt.subtypes != ("aura",):
+                    raise LoweringError(
+                        "only an Aura is returned attached to the source",
+                        node=node,
+                    )
+                leftover = _restrictions_beyond(
+                    filt,
+                    frozenset({"card_types", "subtypes", "zone", "zone_owner",
+                               "is_card"}),
+                )
+                if leftover:
+                    raise LoweringError(
+                        "the Aura reanimation does not honour "
+                        f"{leftover[0]!r}", node=node,
+                    )
+                return (
+                    OracleInstruction(
+                        "reanimate_aura_onto_source", "",
+                        {"graveyard_subtypes": ["aura"],
+                         "card_type": "enchantment"},
+                    ),
+                )
             # `reanimate_creature` only ever puts a creature onto the
             # battlefield. Regrowth's untyped "target card" has no lowering
             # here: claiming it would silently narrow the player's choice.
