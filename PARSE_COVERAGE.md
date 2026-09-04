@@ -25,15 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**20 unclaimed sentence(s) across 15 supported card(s).**
+**16 unclaimed sentence(s) across 12 supported card(s).**
 
-- **Afiya Grove**
-  - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
-  - `when this enchantment has no +1/+1 counters on it, sacrifice it`
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
-- **Energy Vortex**
-  - `at the beginning of the chosen player's upkeep, this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment`
 - **Forsaken Wastes**
   - `players can't gain life`
   - `whenever this enchantment becomes the target of a spell, that spell's controller loses 5 life`
@@ -54,8 +49,6 @@ anything anyone did, and every ingest would arrive red.
   - `as an additional cost to cast this spell, sacrifice two creatures`
 - **Roots of Life**
   - `as this enchantment enters, choose island or swamp`
-- **Soul Echo**
-  - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
 - **Tombstone Stairwell**
   - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
   - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`
