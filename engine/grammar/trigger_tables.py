@@ -17,6 +17,50 @@ from __future__ import annotations
 from . import ast
 
 
+#: The permanent nouns a card uses to name **itself** — "this creature", "this
+#: artifact", … — shared by ``accept_event_phrase``'s SELF substitution and by
+#: the generated table below. Moved above ``_WHENEVER_EVENTS`` when that table
+#: grew a row set built from it; it was always pure data and its position in
+#: the file was incidental.
+_DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
+
+#: "Whenever this <permanent> becomes the target of a spell [or ability]
+#: [an opponent controls | you control]" — Warden of the Woods, and Forsaken
+#: Wastes, which prints the narrowest of them ("this enchantment", "a spell",
+#: nobody's in particular).
+#:
+#: Generated rather than written out. Three axes — which noun the card uses for
+#: itself, which class of object did the targeting, and whose it was — multiply
+#: to forty-five spellings of **one** condition, and a hand-written list of
+#: forty-five is forty-four chances to leave one out; the narrowings themselves
+#: are payload on ``engine/oracle.py``'s row and are dispatched from there.
+#:
+#: Ordered longest-first on every axis, which is this table's own rule: matched
+#: the other way round "a spell" would claim a line that said "a spell or
+#: ability" and strand the rest of it.
+_BECOMES_TARGET_OBJECTS: tuple[tuple[str, ...], ...] = (
+    ("a", "spell", "or", "ability"),
+    ("a", "spell"),
+    ("an", "ability"),
+)
+
+_BECOMES_TARGET_CONTROLLERS: tuple[tuple[str, ...], ...] = (
+    ("an", "opponent", "controls"),
+    ("you", "control"),
+    (),
+)
+
+_BECOMES_TARGET_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
+    (
+        "self_becomes_target",
+        ("this", noun, "becomes", "the", "target", "of") + obj + controller,
+    )
+    for noun in _DAMAGER_NOUNS
+    for obj in _BECOMES_TARGET_OBJECTS
+    for controller in _BECOMES_TARGET_CONTROLLERS
+)
+
+
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
@@ -51,19 +95,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("attached_creature_leaves_battlefield",
      ("enchanted", "creature", "leaves", "the", "battlefield")),
     # "…becomes the target of a spell or ability an opponent controls" (Warden
-    # of the Woods). Longest first, as everywhere in this table: the narrowed
-    # wording has the unnarrowed one as a strict prefix, so matching that first
-    # would strand "an opponent controls" — and *both* front ends would then
-    # name a condition that fires on the controller's own spells too.
-    ("self_becomes_target",
-     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
-      "or", "ability", "an", "opponent", "controls")),
-    ("self_becomes_target",
-     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
-      "or", "ability", "you", "control")),
-    ("self_becomes_target",
-     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
-      "or", "ability")),
+    # of the Woods) and its forty-four siblings, generated above. Longest first
+    # on every axis, as everywhere in this table: the narrowed wording has the
+    # unnarrowed one as a strict prefix, so matching that first would strand
+    # "an opponent controls" — and *both* front ends would then name a
+    # condition that fires on the controller's own spells too.
+    *_BECOMES_TARGET_EVENTS,
     ("creature_attacks_or_blocks", ("this", "creature", "attacks", "or", "blocks")),
     # "attacks and isn't blocked" (Merchant Ship) — before the bare "attacks"
     # it is a prefix of, so the longer condition matches first.
@@ -294,8 +331,6 @@ _DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("you",), "you"),
 )
 
-
-_DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
 
 #: What `_accept_ordinal_exclusion` returns when the clause is there but says
 #: something this engine would have to guess at. A sentinel rather than None,

@@ -598,7 +598,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
         if item.card.primary_type in ("instant", "sorcery"):
             target_name = game.players[item.target_player_index].name
-    item_type = "ability" if (item.ability_instruction is not None or item.hook_key is not None) else "spell"
+    item_type = "ability" if item.is_ability else "spell"
     is_triggered = bool(item.ability_effect_kind and item.ability_effect_kind.startswith("triggered_"))
     label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
 

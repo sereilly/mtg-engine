@@ -281,6 +281,22 @@ class StackItem:
     # spell nothing held.
     finish_resolution: Callable[[], None] | None = None
 
+    @property
+    def is_ability(self) -> bool:
+        """Whether this stack object is an ability rather than a spell.
+
+        CR 113.3: an activated or triggered ability on the stack is not a spell,
+        and two readers care which — the client's stack item type, and
+        "becomes the target of **a spell**" (Forsaken Wastes), whose whole
+        narrowing is this question. One property rather than two spellings of
+        the same conjunction: a card that fires on one and not the other cannot
+        disagree with the label the player is shown.
+
+        A property, not a field, so nothing has to set it and it cannot go stale
+        on an item some fire site built by hand.
+        """
+        return self.ability_instruction is not None or self.hook_key is not None
+
 
 @dataclass
 class OracleExecutionContext:

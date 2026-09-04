@@ -259,16 +259,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"
      r", if it (?P<dying_not_sacrificed>wasn't sacrificed)"),
-    # "…is put into **your** graveyard from the battlefield" (Enduring Renewal).
+    # "…is put into **your** graveyard from the battlefield" (Enduring Renewal)
+    # and its mirror, "…into **an opponent's** graveyard…" (Grim Feast).
     # Whose graveyard is a narrowing the *subject* cannot carry: CR 404.1 sends
     # a permanent to its **owner's** graveyard, and who owns it is not a
     # characteristic `subject_matches` reads off a permanent. So it is its own
-    # payload key, tested by the dispatcher against the observer's seat. Before
-    # the unqualified row, whose pattern would otherwise match the same line
-    # with the possessive read as part of nothing and the narrowing dropped —
-    # a trigger firing on the opponent's dying creatures too.
+    # payload key, tested by the dispatcher against the observer's seat — one
+    # key with two values rather than two conditions, because the dispatcher's
+    # question ("is the owner this observer?") is the same one answered either
+    # way round. Before the unqualified row, whose pattern would otherwise match
+    # the same line with the possessive read as part of nothing and the
+    # narrowing dropped — a trigger firing on every graveyard there is.
     ("permanent_dies",
-     r"whenever (?P<dying_subject>an? [^,]+) is put into (?P<dying_graveyard_owner>your) "
+     r"whenever (?P<dying_subject>an? [^,]+) is put into "
+     r"(?P<dying_graveyard_owner>your|an opponent's) "
      r"graveyard from the battlefield"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
@@ -582,8 +586,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # A separate kind from the WHEN table's `becomes_target`, because a kind
     # lives in one table: that one is a one-shot wording no card in the pool
     # prints, and it still has no dispatcher.
+    # Any permanent, because CR 603.2's event is about an object and Mirage
+    # prints it on an enchantment (Forsaken Wastes). Which **class** of object
+    # did the targeting is a named group beside whose it was, for the reason
+    # this table gives everywhere else: "a spell" and "a spell or ability" are
+    # one condition with different data, and a card that says only "a spell"
+    # must not fire on an activated ability. Longest alternative first — the
+    # match is unanchored at the end, so "a spell" listed ahead of "a spell or
+    # ability" would consume the shorter reading and drop the rest.
     ("self_becomes_target",
-     r"whenever this creature becomes the target of a spell or ability"
+     r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
+     r"the target of (?P<targeted_by>a spell or ability|a spell|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to
@@ -4561,6 +4574,7 @@ def _derived_static_claims(
     from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
+    from .life_prohibitions import life_gain_ban_line
     from .mana_spending import spending_permission_line
     from .prevention import prevention_claims_line
     from .regeneration import denies_regeneration_line, self_regeneration_line
@@ -4605,6 +4619,17 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("global_activation_ban")
+    # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
+    # asks this same table on every gain, so there is no instruction to produce
+    # — and a permanent whose whole text is the sentence would report
+    # unsupported however well the ban works. Its own claim name for the reason
+    # the ban above has one: it is what the permanent *does*, and it is about
+    # everybody else's life totals.
+    if any(
+        life_gain_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("life_prohibitions")
     # CR 603.2d extra triggers (Sanctum of All). The fire site reads the
     # permanent's own text, so there is no instruction — and without this claim
     # the card would be admitted with the sentence doing nothing, which for a

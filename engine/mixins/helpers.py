@@ -972,10 +972,13 @@ class GameHelpersMixin:
             # fire site that enumerates instruction kinds cannot be complete;
             # it can only be as complete as the last card that touched it.
             #
-            # ``dead_power`` is captured for every trigger whether or not it
-            # asks: the permanent is about to leave and CR 603.10 says the
-            # trigger uses the information the game had, so the read has to be
-            # here even though only some payloads consume it.
+            # ``dead_power`` and ``dead_toughness`` are captured for every
+            # trigger whether or not it asks: the permanent is about to leave
+            # and CR 603.10 says the trigger uses the information the game had,
+            # so the read has to be here even though only some payloads consume
+            # it. Both characteristics, for the same reason there is one read
+            # rather than one per card — a fire site that freezes only what
+            # today's cards ask for is a fire site the next card has to edit.
             for trig in matching_triggers(
                 permanent.effective_card, condition_kinds={"dies"},
             ):
@@ -988,7 +991,10 @@ class GameHelpersMixin:
                     instruction=trig.instruction,
                     effect_kind=trig.effect_kind,
                     ability_text=trig.source_line,
-                    trigger_context={"dead_power": max(0, permanent.effective_power)},
+                    trigger_context={
+                        "dead_power": max(0, permanent.effective_power),
+                        "dead_toughness": max(0, permanent.effective_toughness),
+                    },
                 )
                 self.log.append(f"{permanent.card.name} triggered (died)")
         text = permanent.effective_card.oracle_text.lower()
@@ -2153,9 +2159,20 @@ class GameHelpersMixin:
         return item
 
     def _stack_push_object(self, item) -> None:
-        """Put *item* on the stack, recording its target's identity (CR 601.2c).
+        """Put *item* on the stack, recording its target's identity (CR 601.2c),
+        then announce the targeting (CR 603.2).
 
-        The one place an object goes on the stack, and the reason it is one
+        Three statements, because the announcement is a *consequence* of the
+        push and not of one way of reaching it. It used to sit at the end of the
+        stamping below, which has three exits — a graveyard target, a caller
+        that already knows the identities, and the ordinary one — so only the
+        third announced. The second is the path **the web layer always takes**
+        (it resolves `target_permanent_ids` off the wire), which meant Warden of
+        the Woods never triggered in the running app and Forsaken Wastes would
+        never have. Same shape as `become_tapped`: one event, several ways in,
+        and the fire site wired into one of them.
+
+        The stamping is :meth:`_stamp_stack_targets`, and the reason it is one
         place: a stack object is the engine's only structure that outlives the
         moment it was built. Everything else that holds a battlefield index
         uses it within the same step, where the list cannot renumber
@@ -2173,6 +2190,17 @@ class GameHelpersMixin:
         slot in a different list, so the battlefield stamping below answers a
         question the item never asked: Raise Dead naming graveyard slot 1 was
         handed the id of whatever permanent sat in battlefield slot 1."""
+        self._stamp_stack_targets(item)
+        self.stack.append(item)
+        self._announce_targeting(item)
+
+    def _stamp_stack_targets(self, item) -> None:
+        """Record the identity behind every index *item* carries (CR 601.2c).
+
+        Split out of :meth:`_stack_push_object` so the push and the
+        announcement happen once each — see that method for what the three
+        exits below cost. Nothing here appends to the stack.
+        """
         # Each chosen mode of a multi-mode spell names its own object, so each
         # one is stamped here for the same reason the item's own target is: the
         # index was chosen while it still meant what it said, and this is the
@@ -2200,7 +2228,6 @@ class GameHelpersMixin:
             item.target_graveyard_card = self.stamp_graveyard_targets(
                 self.graveyard_target_seat(item, spec), item.target_permanent_index
             )
-            self.stack.append(item)
             return
         if item.target_permanent_id is not None:
             # The caller already knows the identities. The web layer does: it
@@ -2210,7 +2237,6 @@ class GameHelpersMixin:
             # second slot resolved to whatever sat at that index on the wrong
             # board. Garruk, Savage Herald's -2 names one creature you control
             # and then anyone's, so it is the shape that needed this.
-            self.stack.append(item)
             return
         seat = item.target_player_index
         if seat is None:
@@ -2218,8 +2244,6 @@ class GameHelpersMixin:
             seat = 1 - item.caster_index if len(self.players) == 2 else item.caster_index
         if 0 <= seat < len(self.players):
             item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
-        self.stack.append(item)
-        self._announce_targeting(item)
 
     def _announce_targeting(self, item) -> None:
         """"…becomes the target of a spell or ability" (CR 603.2, Warden of the
@@ -2234,6 +2258,18 @@ class GameHelpersMixin:
         One event per targeted permanent, and the announcement carries *who* did
         the targeting — the narrowing "an opponent controls" is about the spell's
         controller, which nothing downstream could recover from the permanent.
+
+        It carries **what** did the targeting for the same reason: "becomes the
+        target of a spell" (Forsaken Wastes) is a narrower condition than
+        "…of a spell or ability" (Warden of the Woods), and by the time the
+        trigger resolves the object may have left the stack. `spell` / `ability`
+        is the split `web/serialization.py` already draws for the client, asked
+        of the one predicate rather than re-spelled here.
+
+        And the targeting seat rides under ``event_subject_player`` as well as
+        under its own key, because "**that spell's controller** loses 5 life"
+        is the same seat read by the ordinary "that player" machinery — the key
+        every frozen-seat reader in ``handlers/`` already asks for.
         """
         from ..events import emit
 
@@ -2250,6 +2286,8 @@ class GameHelpersMixin:
                 self, "self_becomes_target",
                 subject=targeted,
                 source_seat=item.caster_index,
+                targeted_by="an ability" if item.is_ability else "a spell",
+                event_subject_player=item.caster_index,
             )
 
     def _destroy_swept_permanents(
@@ -2349,9 +2387,16 @@ class GameHelpersMixin:
                 # about who controlled the permanent — so it is asked here
                 # rather than folded into the filter above, where
                 # `subject_matches` has no owner to read.
-                if trig.condition.payload.get("dying_graveyard_owner") == "your":
+                grave_owner = trig.condition.payload.get("dying_graveyard_owner")
+                if grave_owner is not None:
                     owner_index = self.owner_index_of(dead_permanent)
-                    if owner_index != controller_index:
+                    # "an opponent's" is the mirror of "your" and not a second
+                    # question: CR 102.2 makes an opponent every player who is
+                    # not you, so both readings are one comparison against the
+                    # observer's seat read the two ways round. A card printing
+                    # neither leaves the key absent and every graveyard counts.
+                    mine = owner_index == controller_index
+                    if mine is not (grave_owner == "your"):
                         continue
                 # "…if it wasn't sacrificed" (Urza's Miter). CR 603.4's
                 # intervening-if, checked when the trigger would fire — and the
@@ -2376,6 +2421,17 @@ class GameHelpersMixin:
                         # Master, recorded here because this fire site is where
                         # a non-creature permanent's death is announced.
                         "dead_card": dead_permanent.card,
+                        # "…you gain life equal to **its toughness**" (Grim
+                        # Feast). Last known information (CR 603.10 / 608.2h):
+                        # the number the permanent had on the battlefield, so a
+                        # creature that died pumped or shrunk is worth what it
+                        # was worth. By resolution it is a card in a graveyard
+                        # with a printed number and no anthem on it, which is
+                        # the wrong answer and an invisible one. Frozen for
+                        # every trigger whether or not it asks, exactly as the
+                        # creature-death site freezes them.
+                        "dead_power": max(0, dead_permanent.effective_power),
+                        "dead_toughness": max(0, dead_permanent.effective_toughness),
                     },
                 ))
         self._enqueue_triggered_batch(events)

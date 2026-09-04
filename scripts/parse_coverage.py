@@ -72,6 +72,7 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
 from engine.cast_timing import (grants_flash,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed)
 from engine.replacements import replacement_claims_line  # noqa: E402
+from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
@@ -316,6 +317,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # as unclaimed rather than as what it was: a replacement with no interceptor
     # behind it at all.
     ("replacements.py", replacement_claims_line),
+    # "Players can't gain life." (Forsaken Wastes, CR 119.7.) A prohibition
+    # rather than a replacement — `Game._gain_life` asks it before it gathers
+    # CR 614's contenders, because the rule says a replacement over a banned
+    # gain does nothing — so it is its own channel beside the row above,
+    # asking the module that carries the sentence out.
+    ("life_prohibitions.py", lambda s: life_gain_ban_line(s) is not None),
     # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
     # an effect — so the sentence would read as unclaimed without this, which
     # is what it *should* have read while the phrase sat in the spell-pattern

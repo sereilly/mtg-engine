@@ -632,9 +632,19 @@ def _self_becomes_target_filter(
     Whose spell it must be is read off the trigger's own parsed condition, so
     the unnarrowed wording and "you control" are the same dispatcher with
     different data.
+
+    **What** it must be is read the same way. "…the target of a spell"
+    (Forsaken Wastes) is narrower than "…of a spell or ability", and a
+    narrowing nothing tests is an ability that fires more often than the card
+    allows — silent, and in the player's favour. An absent key is the
+    unnarrowed printing and admits both.
     """
     if event.subject is not permanent:
         return False
+    wanted = trig.condition.payload.get("targeted_by")
+    if wanted in ("a spell", "an ability"):
+        if event.payload.get("targeted_by") != wanted:
+            return False
     scope = _TARGETING_CONTROLLER_SCOPES.get(
         trig.condition.payload.get("targeting_controller")
     )
