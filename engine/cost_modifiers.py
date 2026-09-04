@@ -425,6 +425,8 @@ def cost_modifier_claims_line(line: str) -> bool:
         and _sacrifice_symbol_modifier(sacrifice) is not None
     ):
         return True
+    if self_per_target_tax_claims_line(line):
+        return True
     return self_reduction_claims_line(line)
 
 
@@ -919,6 +921,83 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
 def self_reduction_claims_line(line: str) -> bool:
     """Whether *line* is, in its entirety, a self-reduction this can apply."""
     return self_cost_reduction(line.strip()) is not None
+
+
+# ---------------------------------------------------------------------------
+# A spell's own increase, sized by how many targets it chose (CR 601.2f)
+# ---------------------------------------------------------------------------
+
+# "This spell costs {1} more to cast for each target beyond the first."
+# (Fireball.) / "This spell costs 3 life more to cast for each target."
+# (Phyrexian Purge.) The *increase* twin of the self-reduction above, and one
+# template rather than two: what differs between the pool's two printings is
+# the resource and whether the first target is free, and both of those are
+# payload.
+#
+# It is a **self** tax, so no scan of any battlefield could find it -- exactly
+# the split this module's header draws between a permanent's modifier and a
+# spell's own. And its size is not in the sentence: CR 601.2c chooses targets
+# before 601.2f calculates the cost, which is the ordering that makes "for each
+# target" answerable at all.
+#
+# Fireball's half of it used to be a substring test inside
+# `mixins/stack/casting.queue_from_hand`, and a literal in parse_coverage's
+# `_MIXIN_TEXT_SCANS` claiming it -- one card's sentence written out twice.
+# Phyrexian Purge is the second card that shares the shape, which is the bar
+# `card_hooks.py` states for staying out of it.
+_SELF_PER_TARGET_TAX = re.compile(
+    r"^this spell costs (?:\{(?P<generic>\d+)\}|(?P<life>\d+) life) more to "
+    r"cast for each target(?P<beyond> beyond the first)?$"
+)
+
+
+@dataclass(frozen=True)
+class SelfPerTargetTax:
+    """How much more a spell costs itself, per target it chose.
+
+    ``life`` is the resource, not a flag on an amount: CR 118.3b pays a life
+    cost with life, and folding it into the generic mana total would let a
+    Mountain pay it -- the same reason ``CostModifier.life`` is its own field.
+
+    ``beyond_first`` is Fireball's exemption. Charging its absence would tax the
+    first target too, which is a spell costing more than it prints; charging its
+    presence where it is not printed is the other direction, and worse.
+    """
+
+    amount: int
+    life: bool = False
+    beyond_first: bool = False
+
+    def owed(self, targets: int) -> int:
+        """What *targets* chosen targets cost, in this tax's resource."""
+        charged = targets - 1 if self.beyond_first else targets
+        return self.amount * max(0, charged)
+
+
+@lru_cache(maxsize=None)
+def self_per_target_tax(oracle_text: str) -> "SelfPerTargetTax | None":
+    """The per-target increase *oracle_text* applies to itself, if any.
+
+    Read per line and anchored at both ends, exactly as
+    :func:`self_cost_reduction` reads its own: a template found in the middle of
+    a longer sentence would be a cost the card does not print.
+    """
+    for line in oracle_text.lower().split("\n"):
+        match = _SELF_PER_TARGET_TAX.match(line.strip().rstrip("."))
+        if match is None:
+            continue
+        generic = match.group("generic")
+        return SelfPerTargetTax(
+            amount=int(generic if generic is not None else match.group("life")),
+            life=generic is None,
+            beyond_first=match.group("beyond") is not None,
+        )
+    return None
+
+
+def self_per_target_tax_claims_line(line: str) -> bool:
+    """Whether *line* is, in its entirety, a per-target increase this charges."""
+    return self_per_target_tax(line.strip()) is not None
 
 
 def _counted_reduction(game, caster_index: int, counted: str) -> int:

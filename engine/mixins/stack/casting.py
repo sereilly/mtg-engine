@@ -37,7 +37,7 @@ from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, sacrifice_taxes,
-    spell_cost_tax, spell_life_tax, spell_symbol_tax,
+    self_per_target_tax, spell_cost_tax, spell_life_tax, spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
@@ -902,26 +902,28 @@ class SpellCastingMixin:
 
         # "…that target this creature cost an additional 3 life to cast."
         # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
-        # the spell *targets* — so it is charged here, where the chosen targets
-        # are known (CR 601.2c chooses them before 601.2h pays), and refused
-        # rather than clamped when the caster cannot pay: CR 119.4 caps the
-        # payment at the payer's life total and CR 601.2h makes an
-        # unpayable cost an uncastable spell, not a free one.
-        life_tax, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
-        if life_tax:
-            if caster.life < life_tax:
-                details = (
-                    f"{caster.name} cannot pay {life_tax} life to cast {card.name} "
-                    f"({', '.join(life_taxing_names)})"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, details
-                )
-            caster.life -= life_tax
-            self.log.append(
-                f"{caster.name} paid {life_tax} life to cast {card.name} "
+        # the spell *targets* — so it is **determined** here, where the chosen
+        # targets are known (CR 601.2c chooses them before 601.2f calculates the
+        # cost), and refused rather than clamped when the caster cannot pay:
+        # CR 119.4 caps the payment at the payer's life total and CR 601.2h
+        # makes an unpayable cost an uncastable spell, not a free one.
+        #
+        # **Determined and not yet paid**, which is the correction. The life
+        # used to come off right here, above the support gate, the timing gate,
+        # the target gates, the additional costs and the mana — so every one of
+        # those refusals left the caster having paid life for a spell that was
+        # never cast, which CR 601.2 makes a rewind rather than a purchase. The
+        # payment is now down with the mana, and everything between the two
+        # points spends nothing.
+        life_owed, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
+        if life_owed and caster.life < life_owed:
+            details = (
+                f"{caster.name} cannot pay {life_owed} life to cast {card.name} "
                 f"({', '.join(life_taxing_names)})"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, details
             )
 
         # CR 601.2f: increases first, then reductions.
@@ -1095,18 +1097,52 @@ class SpellCastingMixin:
                 cleaned.append((seat, index) if share is None else (seat, index, share))
             divided_targets = cleaned or None
 
-        # Fireball-style spells cost {1} more to cast for each target beyond the
-        # first. Count the chosen targets (the cross-seat divided list, a list of
-        # creature indices, or a single creature/player) and tax the extras as
-        # generic mana.
-        if "costs {1} more to cast for each target beyond the first" in card.oracle_text.lower():
+        # "This spell costs {1} more to cast for each target beyond the first."
+        # (Fireball) / "This spell costs 3 life more to cast for each target."
+        # (Phyrexian Purge.) A spell's own increase, sized by how many targets it
+        # chose — CR 601.2c settles the targets before CR 601.2f calculates the
+        # cost, which is what makes the sentence answerable at all.
+        #
+        # Read off `cost_modifiers.self_per_target_tax`, the table the support
+        # gate and the parse census also ask, rather than off a substring here:
+        # this used to be Fireball's own sentence written out in this function
+        # and again as a literal in parse_coverage, and Phyrexian Purge is the
+        # second card that shares the shape.
+        per_target = self_per_target_tax(card.oracle_text or "")
+        if per_target is not None:
+            # The chosen targets: the cross-seat divided list, a list of
+            # creature indices, the same list by id, or a single
+            # creature/player. Nothing named counts as one, which is the
+            # long-standing reading here and the only one that cannot
+            # *under*-charge — the direction a cost may never move.
             if divided_targets is not None:
                 num_targets = len(divided_targets)
             elif isinstance(target_permanent_index, list):
                 num_targets = len([i for i in target_permanent_index if isinstance(i, int)])
+            elif target_permanent_ids:
+                num_targets = len(
+                    [i for i in target_permanent_ids if isinstance(i, int)]
+                )
             else:
                 num_targets = 1
-            extra_generic_tax += max(0, num_targets - 1)
+            owed = per_target.owed(num_targets)
+            if per_target.life:
+                # CR 118.3b: life is not mana, so it joins the life the board's
+                # taxes owe rather than the generic total — a {R} cannot pay it.
+                life_owed += owed
+                if owed:
+                    life_taxing_names = [*life_taxing_names, card.name]
+                if caster.life < life_owed:
+                    details = (
+                        f"{caster.name} cannot pay {life_owed} life to cast "
+                        f"{card.name} for {num_targets} target(s)"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+            else:
+                extra_generic_tax += owed
 
         x_colors = x_spend_colors_from_text(card.oracle_text)
         # What the payment below actually put on X, per colour. Empty until
@@ -1216,6 +1252,11 @@ class SpellCastingMixin:
         unpayable = self._unpayable_additional_cost(
             caster_index, card, cast_costs, spell_hand_index=hand_index,
             from_zone=from_zone, x_value=resolved_x_value,
+            # What the cost increases above will take before this cost is paid.
+            # Two life prices on one cast are each payable alone and not
+            # together, and the gate that could not see the other one would
+            # admit a cast that then took the caster below 0 (CR 119.4).
+            life_already_owed=life_owed,
         )
         if unpayable is not None:
             self.log.append(unpayable)
@@ -1331,6 +1372,16 @@ class SpellCastingMixin:
         self._pay_alternative_cost(
             caster_index, card, chosen_alternative, alternative_card,
         )
+        # CR 601.2f's increases, in life. Gated far above, where the targets
+        # settle what they come to, and paid here with every other cost —
+        # nothing between the two points spends anything, so a refusal up there
+        # costs the caster exactly nothing.
+        if life_owed:
+            caster.life -= life_owed
+            self.log.append(
+                f"{caster.name} paid {life_owed} life to cast {card.name} "
+                f"({', '.join(life_taxing_names)})"
+            )
         cost_spoils = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
@@ -1572,6 +1623,7 @@ class SpellCastingMixin:
         spell_hand_index: int | None,
         from_zone: str,
         x_value: int | None = None,
+        life_already_owed: int = 0,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -1622,10 +1674,15 @@ class SpellCastingMixin:
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
             life = cost.life_charged(x_value)
-            if life and caster.life < life:
+            # Against what the cost increases have already claimed, not against
+            # the raw total: CR 601.2f's increases and CR 601.2b's printed cost
+            # are paid out of one life total, and a gate reading it twice would
+            # admit a pair of prices the caster can meet only one at a time.
+            available = caster.life - max(0, life_already_owed)
+            if life and available < life:
                 return (
                     f"{card.name} can't be cast: {caster.name} cannot pay "
-                    f"{life} life with {caster.life} remaining "
+                    f"{life} life with {available} remaining "
                     f"(CR 601.2h)"
                 )
             if cost.discard_cards:

@@ -198,7 +198,6 @@ _MIXIN_TEXT_SCANS = (
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
     "if you would begin your turn while this artifact is tapped, you may skip that turn instead",  # beginning_phase.py (Time Vault)
-    "this spell costs {1} more to cast for each target beyond the first",  # stack/casting.queue_from_hand (Fireball)
     "enters tapped",                                                     # permanent_state.py:100
     "whenever enchanted land is tapped for mana, its controller adds an additional",  # turn_management.py:285 (Wild Growth)
     "when enchanted creature dies, this aura deals damage equal to that creature's toughness",  # _trigger_aura_death_effects (Creature Bond)

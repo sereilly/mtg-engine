@@ -1724,3 +1724,92 @@ def test_w4g1_a_singular_sacrifice_cost_still_eats_exactly_one(set_pool):
         assert cost is not None, printed
         assert cost.sacrifice_count == count, printed
         assert cost.sacrifice_filter is not None, printed
+
+
+# W4G1, continued: Phyrexian Purge's per-target life surcharge (CR 601.2f)
+
+
+def _w4g1s_purge_game(set_pool, victims: int, life: int = 20):
+    """Phyrexian Purge in seat 0's hand and *victims* creatures for seat 1."""
+    pool = set_pool("MIR")
+    theirs = _w4g1s_bears(set_pool, victims)
+    game = _w4g1s_Game(players=[
+        _w4g1s_PlayerState(
+            name="P1", life=life, hand=[pool["Phyrexian Purge"]],
+            library=[pool["Swamp"]] * 6,
+        ),
+        _w4g1s_PlayerState(
+            name="P2", library=[pool["Swamp"]] * 6, battlefield=list(theirs),
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    game.start_turn(0)
+    return game, theirs
+
+
+def test_w4g1_phyrexian_purge_charges_three_life_a_target(set_pool):
+    """"This spell costs 3 life more to cast for each target."
+
+    The cost is in life and it scales with a number the *caster* chooses, so
+    both halves have to be read: charging a flat 3 would make a two-target Purge
+    a bargain, and charging mana would let a Swamp pay for it (CR 118.3b).
+    """
+    game, theirs = _w4g1s_purge_game(set_pool, victims=3)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Purge",
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+
+    assert result.supported is True, result.details
+    assert game.players[0].life == 14, game.log
+    assert len(list(game.controlled_by(1))) == 1, game.log
+
+
+def test_w4g1_phyrexian_purges_surcharge_is_per_target_not_flat(set_pool):
+    """One target is 3, two are 6. The near miss — a flat charge — resolves, and
+    reads as a working card right up until somebody counts the life."""
+    game, _theirs = _w4g1s_purge_game(set_pool, victims=2)
+
+    game.cast_from_hand(
+        0, "Phyrexian Purge", target_player_index=1, target_permanent_index=[0],
+    )
+
+    assert game.players[0].life == 17, game.log
+
+
+def test_w4g1_a_caster_who_cannot_pay_the_surcharge_is_refused(set_pool):
+    """CR 601.2h: an unpayable cost makes the spell uncastable, not free, and
+    CR 119.4 caps a life payment at the payer's own total. At 3 life, one target
+    is payable and two are not — so the refusal has to read the announced
+    targets rather than the printed number."""
+    game, theirs = _w4g1s_purge_game(set_pool, victims=2, life=3)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Purge",
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+
+    assert result.supported is False, result.details
+    assert game.players[0].life == 3, "CR 601.2e rewinds; nothing was paid"
+    assert len(list(game.controlled_by(1))) == 2, game.log
+    assert any(
+        card.name == "Phyrexian Purge" for card in game.players[0].hand
+    ), "and the spell was never cast"
+
+
+def test_w4g1_the_same_caster_may_still_purge_one_creature(set_pool):
+    """The other end of the same gate: a surcharge that refused every cast would
+    pass a test that only checks it refuses. Three life buys exactly one
+    target."""
+    game, _theirs = _w4g1s_purge_game(set_pool, victims=2, life=3)
+
+    result = game.cast_from_hand(
+        0, "Phyrexian Purge", target_player_index=1, target_permanent_index=[0],
+    )
+
+    assert result.supported is True, result.details
+    assert game.players[0].life == 0, game.log
+    assert len(list(game.controlled_by(1))) == 1, game.log
