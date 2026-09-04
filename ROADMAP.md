@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (227/335 supported, still `measured`)
+## Mirage (MIR) — in progress (288/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1438,6 +1438,57 @@ draw one package over. The missing-name scan then named **six** bindings the
 move left behind, before the suite ran.
 
 **After four merges: 227 → 276 of 335 supported, 59 left.**
+
+#### W1G2 — turn steps: a player at -7 life who never lost
+
+Twelve of twenty-one, plus two mis-plays fixed and one card's ability free.
+**Forsaken Wastes drained the wrong player on both upkeeps** — "that player
+loses 1 life" hit the opponent twice and its own controller never, because the
+life-loss lowering had a "that player" branch for events about an *object* and
+none for events about a *player*. And **Spatial Binding's "can't phase out" was
+a read with no writer**: `resolve_phasing_for` had been checking a metadata key
+since phasing landed that nothing in the engine ever wrote.
+
+The finding it could not fix, and the wave's worst: **Soul Echo is strictly
+stronger than printed**. "You don't lose the game for having 0 or less life" is
+live, the enters-with-counters half produces nothing, and the upkeep trigger
+that would sacrifice it is unsupported — verified in a game, a player at **−7
+life never loses, forever**.
+
+#### After the wave: 227 → 288 of 335, 47 left
+
+| | Wave 1 |
+| --- | --- |
+| Cards landed | **61** (13 + 13 + 11 + 17 + 12, minus overlaps) |
+| New name-keyed hooks | **0** — and one *retired* |
+| Cap splits | 5, four taken in-branch and one at integration |
+| Serial suite | 12,758 → **13,324** tests, green |
+| Hollow lines | 8 → **6** |
+| Picker findings | 5 → **3** |
+| Unclaimed parse sentences | 25 → **16** |
+
+**The instruction that did the work was "make a hook the last resort,
+explicitly".** Five independent agents under it produced zero new entries across
+61 cards and deleted one — the third wave in this repo's history to move hook
+reliance the right way while the pool grew.
+
+**Every group corrected roughly a third of its own brief**, as the playbook
+predicts, and the corrections were never quibbles: "the combat family" was the
+wrong frame for half of W1G1's list; W1G2's turn-step machinery needed almost
+nothing and six of its twelve cards were ordinary noun-phrase work; three
+refusal sites named a layer that was not the one that failed (Lion's Eye Diamond
+blocked by its *last* sentence, Burning Palm Efreet by one printed word,
+Abyssal Hunter by its recipient rather than its amount).
+
+**The post-wave duplicate-*idea* sweep found one**, which is what it is for —
+the duplicate-*name* guard cannot see it. `grant_reverse_damage_shield`,
+`grant_exile_prevention_shield` and `grant_whole_prevention_shield` are one
+instruction spelled three times: identical bodies differing only in which
+`make_*` builder they call, and `Shield.kind` already carries that difference.
+Five builder pairs underneath repeat the same two lines. It predates the wave
+(the wave added two of the five), nothing is wrong, and collapsing it wants its
+own differential — so it is a Known gap in SET_PLAYBOOK rather than an
+end-of-wave refactor.
 
 ### Where the set stands — ten rounds in
 

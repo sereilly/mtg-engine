@@ -320,6 +320,28 @@ ceiling per offer computed from pool and board, a several-target collection
 whose maximum is recomputed from the answer through
 `oracle_types.cost_target_count`, and sending the map on the cast action.
 
+**Added at MIR's wave 1: the chosen-source shield is one instruction spelled
+three times.** `grant_reverse_damage_shield`, `grant_exile_prevention_shield` and
+`grant_whole_prevention_shield` have byte-identical bodies — resolve the chosen
+source (a permanent, or a spell on the stack by its `CardDefinition`), arm a
+shield, fall back to a sourceless charge — and differ only in which
+`shields.make_*` builder they call. `Shield.kind` already carries that
+difference, and the five builder pairs underneath (`_source`/`_charge` for whole,
+half, life-gain, exile, team) repeat the same two lines with one constant
+changed. Nothing is broken and no card is mis-played; what it costs is a fourth
+copy every time a set prints a new rider on CR 615.5's sentence, which Mirage
+did twice. **Phase 3 of the next set that prints one clears it**, by making the
+rider payload on one kind rather than by adding the fourth handler — and the
+collapse wants its own `oracle_diff`, which is why it was not taken at the end of
+the wave that found it.
+
+**Added at MIR's wave 1: `_per_recipient_count` means two things.** It is defined
+in `lowering/_amounts.py` (a per-seat count spec) and in `lowering/_sweeps.py` (a
+per-object multiplier). Both are module-private with local callers, so nothing is
+broken — but it is one name for two facts across two floor modules, and the
+duplicate-definition sweep cannot flag it because it was already true before the
+wave. A rename by whoever next touches either module.
+
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
 result, grown by four promotions — with derived `equivalent` named as the lever
