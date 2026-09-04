@@ -328,6 +328,27 @@ def _parse_cant_be(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     return ast.CantBe(subject, word, duration, by=by)
 
 
+def _parse_becomes_blocked(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.BecomeBlocked | None":
+    """``<subject> becomes blocked`` (Dazzling Beauty; CR 509.1h).
+
+    Returns None with the cursor untouched when the word after "becomes" is
+    anything else, so every colour and creature-body reading of the same verb
+    keeps its own production and its own refusal. It is read here rather than
+    as a branch of that one because *blocked* is not a characteristic — the
+    type/colour production is about CR 613 layers and this is about a combat.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("becomes", "become"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("blocked"):
+        stream.reset(mark)
+        return None
+    return ast.BecomeBlocked(subject)
+
+
 def _parse_remove_from_combat(stream: TokenStream) -> ast.RemoveFromCombat | None:
     """``remove <subject> from combat`` (Disharmony; CR 506.4c).
 

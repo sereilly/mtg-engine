@@ -674,6 +674,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "assign_no_combat_damage_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
+    # "Target unblocked attacking creature becomes blocked." (Dazzling Beauty;
+    # CR 509.1h.) A one-shot change to what a creature's being in combat means,
+    # filed beside `remove_from_combat` for that entry's reason: the family
+    # whose steps dispatch it is the combat one.
+    "become_blocked": "combat_restrictions",
     # "You choose which creatures block this combat and how those creatures
     # block." (Melee.) CR 509.1a's chooser substituted for the declare-blockers
     # turn-based action — a restriction on how that declaration is made rather

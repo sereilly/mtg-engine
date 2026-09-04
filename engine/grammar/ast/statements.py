@@ -181,6 +181,7 @@ from .combat import (
     ForceChosenCreatureToAttack,
     ReassignBlockersBetweenAttackers,
     RemoveFromCombat,
+    BecomeBlocked,
 )
 from .game import (
     Ante,
@@ -250,7 +251,8 @@ Effect = Union[
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
     AssignsNoCombatDamage,
-    RemoveFromCombat, ChooseBlocksForDefenders, ReassignBlockersBetweenAttackers,
+    RemoveFromCombat, BecomeBlocked, ChooseBlocksForDefenders,
+    ReassignBlockersBetweenAttackers,
     ChangeText, GainControl, RawEffect,
 ]
 # `CombatRestriction` was absent from this union for as long as it existed: it

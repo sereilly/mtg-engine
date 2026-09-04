@@ -303,6 +303,7 @@ from .combat import (
     CombatRestriction,
     ForceChosenCreatureToAttack,
     RemoveFromCombat,
+    BecomeBlocked,
 )
 from .game import (
     Ante,
@@ -604,6 +605,7 @@ __all__ = [
     "AttackingDoesntTap",
     "BlockCountGrant",
     "CombatRestriction",
+    "BecomeBlocked",
     "RemoveFromCombat",
     # game
     "CreateEmblem",

@@ -54,6 +54,7 @@ from .lowering import (
     _amount_payload,
     _lower_become_color,
     _lower_cant_be,
+    _lower_become_blocked,
     _lower_remove_from_combat,
     _lower_combat_restriction,
     lower_block_count_grant,
@@ -623,6 +624,9 @@ def lower_statement(
 
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
+
+    if isinstance(statement, ast.BecomeBlocked):
+        return _lower_become_blocked(statement)
 
     # In the chain: the event decides whether "that creature gains first
     # strike" names a block pair's other half or nothing at all.

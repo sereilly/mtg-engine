@@ -43,6 +43,7 @@ from .effects import (
     _parse_ante,
     _parse_gain_control,
     _parse_assigns_no_combat_damage,
+    _parse_becomes_blocked,
     _parse_becomes,
     _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
@@ -531,6 +532,15 @@ def parse_subject_verb(
             if no_damage is not None:
                 return no_damage
         if token.text in ("becomes", "become"):
+            # "Target unblocked attacking creature **becomes blocked**."
+            # (Dazzling Beauty; CR 509.1h.) Tried before the type/colour
+            # production and non-consuming on refusal, because *blocked* is not
+            # a characteristic: that production is about CR 613 layers and this
+            # is about a combat, and folding the word into it would put a
+            # combat fact in the layer system's vocabulary.
+            blocked = _parse_becomes_blocked(stream, source_spec)
+            if blocked is not None:
+                return blocked
             return _parse_becomes(stream, source_spec)
         # "This creature**'s power becomes** the toughness of target creature
         # …" (Sworn Defender). CR 613.4b's rewrite in the possessive voice,
