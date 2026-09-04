@@ -12,29 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **172**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**4 unclaimed sentence(s) across 3 supported card(s).**
-
-- **Malignant Growth**
-  - `at the beginning of each opponent's draw step, that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way`
-- **Mangara's Equity**
-  - `as this enchantment enters, choose black or red`
-  - `whenever a creature of the chosen color deals damage to you or a white creature you control, this enchantment deals that much damage to that creature`
-- **Roots of Life**
-  - `as this enchantment enters, choose island or swamp`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

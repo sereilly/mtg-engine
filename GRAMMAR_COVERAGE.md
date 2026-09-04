@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 92.5% | 92.3% | 63.5% | 281 |
+| MIR *(measured)* | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | **All (shipped)** | **3583** | **5267** | **89.5%** | **88.5%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 297 | 128 | expected a subject |  |
+| 293 | 124 | expected a subject |  |
 | 101 | 44 | unrecognized effect verb |  |
 | 76 | 31 | unconsumed text |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -2783,6 +2783,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever equipped creature dies, put a soul counter on this Equipment.`
 - **Malignant Growth**
   - `At the beginning of your upkeep, put a growth counter on this enchantment.`
+  - `At the beginning of each opponent's draw step, that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way.`
 - **Mammoth Harness**
   - `Whenever enchanted creature blocks or becomes blocked by a creature, the other creature gains first strike until end of turn.`
 - **Mana Clash**
@@ -2836,6 +2837,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When a spell or ability an opponent controls causes you to discard this card, you gain 2 life, and you return this card from your graveyard to your hand at the beginning of the next end step.`
 - **Mangara's Equity**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {1}{W}.`
+  - `Whenever a creature of the chosen color deals damage to you or a white creature you control, this enchantment deals that much damage to that creature.`
 - **Mangara's Tome**
   - `When this artifact enters, search your library for five cards, exile them in a face-down pile, and shuffle that pile. Then shuffle your library.`
   - `{2}: The next time you would draw a card this turn, instead put the top card of the exiled pile into its owner's hand.`
