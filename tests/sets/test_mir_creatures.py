@@ -2241,3 +2241,137 @@ def test_zirilan_exiles_the_dragon_at_the_next_end_step(set_pool):
     standing = [p.card.name for p in game.players[0].battlefield]
     assert standing == ["Zirilan of the Claw"], game.log
     assert [c.name for c in game.players[0].exile] == ["Volcanic Dragon"], game.log
+
+
+# --- W2G3: Benevolent Unicorn, spell damage reduced by 1 ---
+#
+# A **replacement**, not a prevention shield, and the difference is the card:
+# CR 120.8 makes a source that would deal 0 damage deal none at all, so a
+# 1-damage spell reduced to 0 deals nothing, marks nothing and fires no "deals
+# damage" trigger. Written as a shield it would have prevented 1 of 1 and still
+# announced an event.
+
+from engine import Game as _w2g3c_Game, PlayerState as _w2g3c_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w2g3c_load,  # noqa: E402
+                                manifest_set_path as _w2g3c_path)
+from engine.models import Permanent as _w2g3c_Permanent  # noqa: E402
+from engine.replacements import (source_damage_reduction  # noqa: E402
+                                 as _w2g3c_reduction)
+
+from tests.helpers import _damage_dealt as _w2g3c_dealt  # noqa: E402
+
+
+def _w2g3c_lea():
+    return {card.name: card for card in _w2g3c_load(_w2g3c_path("LEA"))}
+
+
+def _w2g3c_game(pool, hand=(), mine=(), theirs=()):
+    lea = _w2g3c_lea()
+    game = _w2g3c_Game(players=[
+        _w2g3c_PlayerState(name="P1", hand=[lea[name] for name in hand],
+                           battlefield=list(mine), library=[lea["Island"]] * 6),
+        _w2g3c_PlayerState(name="P2", battlefield=list(theirs),
+                           library=[lea["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def test_w2g3_benevolent_unicorn_softens_a_burn_spell(set_pool):
+    """"If a spell would deal damage to a permanent or player, it deals that
+    much damage minus 1 to that permanent or player instead."
+
+    Global: the sentence names no controller, so an opponent's Unicorn softens
+    a spell aimed at its own controller exactly as it softens one aimed at
+    anybody.
+    """
+    pool = set_pool("MIR")
+    lea = _w2g3c_lea()
+    game = _w2g3c_game(
+        pool, hand=["Lightning Bolt"],
+        mine=[_w2g3c_Permanent(card=pool["Benevolent Unicorn"])],
+    )
+
+    cast = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[1].life == 18, "3 damage minus 1"
+    assert lea  # the fixture pool is what supplies the burn spell
+
+
+def test_w2g3_two_unicorns_take_two_points(set_pool):
+    """CR 616.1 would apply them one at a time in an order the affected player
+    picks, and subtraction commutes — so the number is the same however they are
+    ordered, which is why one candidate sums them rather than two candidates
+    each taking a point."""
+    pool = set_pool("MIR")
+    game = _w2g3c_game(
+        pool, hand=["Lightning Bolt"],
+        mine=[_w2g3c_Permanent(card=pool["Benevolent Unicorn"]),
+              _w2g3c_Permanent(card=pool["Benevolent Unicorn"])],
+    )
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[1].life == 19
+
+
+def test_w2g3_benevolent_unicorn_leaves_an_ability_alone(set_pool):
+    """"A **spell**" is asked of the object whose instructions are running, not
+    of the source's type line: a permanent's activated ability passes the
+    permanent's own card as the source, and a type read would have to guess.
+    Prodigal Sorcerer's ping is not a spell and takes its full point."""
+    pool = set_pool("MIR")
+    lea = _w2g3c_lea()
+    game = _w2g3c_game(
+        pool,
+        mine=[_w2g3c_Permanent(card=pool["Benevolent Unicorn"]),
+              _w2g3c_Permanent(card=lea["Prodigal Sorcerer"])],
+    )
+    game.players[0].battlefield[1].metadata["summoning_sickness_turn"] = -99
+
+    used = game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_player_index=1, ability_index=0,
+    )
+    assert used.supported, used.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[1].life == 19
+
+
+def test_w2g3_benevolent_unicorn_leaves_combat_damage_alone(set_pool):
+    """A creature is a permanent, never a spell — checked before the resolving
+    object is asked for at all, so combat damage never reaches the list."""
+    pool = set_pool("MIR")
+    lea = _w2g3c_lea()
+    attacker = _w2g3c_Permanent(card=lea["Hill Giant"])
+    game = _w2g3c_game(
+        pool, mine=[_w2g3c_Permanent(card=pool["Benevolent Unicorn"])],
+        theirs=[attacker],
+    )
+
+    assert _w2g3c_dealt(
+        game, game.players[0], 3, source=attacker, combat=True
+    ) == 3
+
+
+def test_w2g3_the_reduction_reads_its_own_sentence(set_pool):
+    """The matcher's refusal test, which the positive cases cannot give: the
+    two halves of the sentence have to name the **same** recipients, so a card
+    reducing damage to a permanent and dealing the reduced amount to a creature
+    is not this effect and stays unclaimed."""
+    assert _w2g3c_reduction(
+        "If a spell would deal damage to a permanent or player, it deals that "
+        "much damage minus 1 to that permanent or player instead."
+    ) == ("spell", 1)
+    assert _w2g3c_reduction(
+        "If a spell would deal damage to a permanent or player, it deals that "
+        "much damage minus 1 to that creature or player instead."
+    ) is None
+    assert _w2g3c_reduction("Destroy target creature.") is None

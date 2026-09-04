@@ -142,6 +142,16 @@ RECORDED_REDIRECT = 4
 # 616.1e permits either; the default should not be the one that costs the player
 # two life and a shield.
 DAMAGE_SOURCE_CAP = 5  # Forethought Amulet
+# "If a spell would deal damage to a permanent or player, it deals that much
+# damage minus 1 to that permanent or player instead." (Benevolent Unicorn.)
+# The same kind of effect as the cap above — CR 120.4b, the damage *dealt* —
+# and beside it for the same reasons, one slot later only because a card
+# printing both would want the cap applied to the printed number first. Ahead
+# of the prevention shields at 10-600, again for the cap's reason: a shield
+# spent first absorbs its points from the printed damage and the reduction
+# takes what is left down anyway, where the reduction spent first leaves the
+# shield its points for the next source.
+DAMAGE_SOURCE_REDUCTION = 6  # Benevolent Unicorn
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -643,18 +653,162 @@ def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | N
     return ReplacementOutcome(new_amount=capped)
 
 
+#: "If a **spell** would deal damage to a permanent or player, it deals that
+#: much damage minus **1** to that permanent or player instead." (Benevolent
+#: Unicorn.) The source class and the reduction are payload, exactly as the cap
+#: above has them: a card printing "minus 2", or naming a narrower class of
+#: source, is this same sentence.
+#:
+#: The recipient phrase is **not** payload and is spelled out twice with a
+#: backreference, because the two halves of the sentence have to name the same
+#: thing: a card reducing damage to a permanent and then dealing the reduced
+#: amount to a *player* is not this effect, and matching the two independently
+#: would read it as though it were.
+_SOURCE_DAMAGE_REDUCTION = re.compile(
+    r"^if an? (?P<source_class>[a-z ]+?) would deal damage to a "
+    r"(?P<recipients>permanent or player|creature or player), it deals that "
+    r"much damage minus (?P<reduction>\d+) to that (?P=recipients) instead$"
+)
+
+
+def source_damage_reduction(line: str) -> tuple[str, int] | None:
+    """``(source class, points removed)`` *line* takes off, or None.
+
+    One matcher, asked by the interceptors below and by
+    :func:`replacement_claims_line`, so what is reduced and what is claimed
+    cannot drift — the arrangement ``source_damage_cap`` above already has.
+
+    The class is checked against :func:`_source_answers_class` at fire time
+    rather than here, so a class that reader cannot answer leaves the effect
+    inert rather than unclaimed. That is the opposite of the cap's rule one
+    function up, and deliberately: this pattern's class is a *whole word* the
+    card prints ("a spell"), not a list of card types to be split, so a class
+    nobody reads is a typo in this file rather than a card the pool prints.
+    """
+    match = _SOURCE_DAMAGE_REDUCTION.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    return match.group("source_class"), int(match.group("reduction"))
+
+
+def _spell_damage_reduction(game, payload: dict) -> int:
+    """How many points every such line on the board takes off this event.
+
+    **Summed** across the battlefield rather than applied one permanent at a
+    time. CR 616.1 would apply two Unicorns as two replacements in an order the
+    affected player picks, and subtraction commutes — so the number is the same
+    either way, and one candidate per registration is the model
+    ``apply_in_order`` has ("an effect applies once per event"). A second
+    candidate per permanent would be a change to that model for no change in
+    any answer.
+
+    Every battlefield, unlike the cap beside it: the printed sentence names no
+    controller at all, so an opponent's Unicorn softens a burn spell aimed at
+    its own controller exactly as it softens one aimed at anybody.
+    """
+    amount = payload.get("amount") or 0
+    if amount <= 0:
+        return 0
+    total = 0
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            read = source_damage_reduction(line)
+            if read is None:
+                continue
+            source_class, points = read
+            if not _source_answers_class(game, payload.get("source"), source_class):
+                continue
+            total += points
+    return total
+
+
+def _applies_spell_damage_reduction(game, payload: dict) -> bool:
+    return _spell_damage_reduction(game, payload) > 0
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_SOURCE_REDUCTION,
+    applies=_applies_spell_damage_reduction,
+)
+@replacement_effect(
+    "damage_to_creature", DAMAGE_SOURCE_REDUCTION,
+    applies=_applies_spell_damage_reduction,
+)
+def _reduce_spell_damage(game, payload: dict) -> ReplacementOutcome | None:
+    """Benevolent Unicorn: "If a spell would deal damage to a permanent or
+    player, it deals that much damage minus 1 to that permanent or player
+    instead."
+
+    A **replacement** and not a prevention shield, and the difference is the
+    whole card. A shield absorbs points and reports damage prevented; this
+    changes the number the source would deal (CR 120.4b), so a 1-damage spell
+    reduced to 0 is a source that deals no damage at all (CR 120.8) — nothing is
+    dealt, nothing is marked, and no "deals damage" trigger fires. Written as a
+    shield it would have prevented 1 of 1 and *still* announced an event.
+
+    One interceptor on both recipient kinds, because "a permanent or player" is
+    one sentence and a second copy is two answers to it.
+    """
+    removed = _spell_damage_reduction(game, payload)
+    reduced = max(0, int(payload["amount"]) - removed)
+    recipient = payload["recipient"]
+    game.log.append(
+        f"{getattr(recipient, 'name', None) or recipient.card.name} takes "
+        f"{reduced} damage instead of {payload['amount']} (spell damage reduced "
+        f"by {removed})"
+    )
+    return ReplacementOutcome(new_amount=reduced)
+
+
 def _match_group(pattern, line: str, group: str) -> str | None:
     match = pattern.match(" ".join((line or "").strip().lower().rstrip(".").split()))
     return match.group(group) if match is not None else None
 
 
 def _source_answers_class(game, source, source_class: str) -> bool:
-    """Whether *source* is in the class a redirect names."""
+    """Whether *source* is in the class a redirect or a reduction names."""
     if source_class == "unblocked creatures":
         return _unblocked_attacker(source)
+    if source_class == "spell":
+        return _source_is_a_spell(game, source)
     from .prevention import source_has_type
 
     return source_has_type(game, source, source_class.rstrip("s"))
+
+
+def _source_is_a_spell(game, source) -> bool:
+    """Whether the damage's source is a **spell** (CR 109.5, CR 111.1).
+
+    Asked of ``Game.resolving_items`` — the object whose instructions are
+    running — for the reason ``damage_redirects.resolving_object_redirects``
+    states about the same question: **that is the only way a spell can be
+    recognised**. The object is popped off the stack before its instructions
+    run, so a stack scan finds nothing; and its damage source is the printed
+    ``CardDefinition`` (one object per *card*, shared by every copy), so the
+    source alone cannot say whether a spell or a permanent's ability is dealing
+    it. A ``StackItem`` is one object per cast, and it knows which.
+
+    A stack item is a spell exactly when nothing stamped an ability on it: the
+    activation and trigger paths both fill ``ability_instruction``. The
+    innermost item, because a resolution can nest — a replacement re-running an
+    event is inside whatever armed it.
+
+    Two boundaries are stated rather than hidden. A permanent source is never a
+    spell, checked first so a creature's combat damage never reaches the list.
+    And ``resolving_items`` is empty while a resolution waits on a prompt, so
+    damage dealt after a CR 616.1e question was asked mid-resolution is outside
+    this — the same limit the redirect reader records, and the same safe
+    direction: the damage lands as it would have without the effect.
+    """
+    if source is None or hasattr(source, "permanent_id"):
+        return False
+    items = getattr(game, "resolving_items", None) or ()
+    if not items:
+        return False
+    top = items[-1]
+    return top.card is source and top.ability_instruction is None
 
 
 def _unblocked_attacker(source) -> bool:
@@ -2529,6 +2683,11 @@ def replacement_claims_line(line: str) -> bool:
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.
     if source_damage_cap(normalized) is not None:
+        return True
+    # "If a spell would deal damage to a permanent or player, it deals that much
+    # damage minus 1 …" (Benevolent Unicorn), the same arrangement again — the
+    # source class and the number of points are payload.
+    if source_damage_reduction(normalized) is not None:
         return True
     # "If a land is tapped for mana, it produces {B} instead of any other
     # type." (Infernal Darkness, Ritual of Subdual.) "If tapped for mana,

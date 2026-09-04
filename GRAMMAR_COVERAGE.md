@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 81.1% | 80.0% | 53.2% | 236 |
+| MIR *(measured)* | 335 | 545 | 82.0% | 81.1% | 54.1% | 241 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,9 +44,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 333 | 162 | expected a subject |  |
+| 330 | 159 | expected a subject |  |
 | 114 | 52 | unrecognized effect verb |  |
-| 87 | 42 | unconsumed text |  |
+| 85 | 40 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -443,6 +443,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bestial Fury**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `Whenever enchanted creature becomes blocked, it gets +4/+0 and gains trample until end of turn.`
+- **Binding Agony**
+  - `Whenever enchanted creature is dealt damage, this Aura deals that much damage to that creature's controller.`
 - **Binding Grasp**
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
@@ -613,6 +615,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {G} or {W}. This land deals 1 damage to you.`
 - **Brushwagg**
   - `Whenever this creature blocks or becomes blocked, it gets -2/+2 until end of turn.`
+- **Builder's Bane**
+  - `Destroy X target artifacts. Builder's Bane deals damage to each player equal to the number of artifacts they controlled that were put into a graveyard this way.`
 - **Burlfist Oak**
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
@@ -747,6 +751,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
 - **Cinder Cloud**
   - `Destroy target creature. If a white creature dies this way, Cinder Cloud deals damage to that creature's controller equal to the creature's power.`
+- **Circle of Despair**
+  - `{1}, Sacrifice a creature: The next time a source of your choice would deal damage to any target this turn, prevent that damage.`
 - **Circle of Protection: Artifacts**
   - `{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.`
   - `{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.`
@@ -3545,6 +3551,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Reign of Chaos**
   - `• Destroy target Plains and target white creature.`
   - `• Destroy target Island and target blue creature.`
+- **Reign of Terror**
+  - `Destroy all green creatures or all white creatures. They can't be regenerated. You lose 2 life for each creature that died this way.`
 - **Reincarnation**
   - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
 - **Reinforcements**
@@ -3855,6 +3863,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Return target Aura attached to a creature to its owner's hand.`
   - `• Regenerate target green creature.`
   - `• Target creature gains trample until end of turn.`
+- **Seeds of Innocence**
+  - `Destroy all artifacts. They can't be regenerated. The controller of each of those artifacts gains life equal to its mana value.`
 - **Seizures**
   - `Whenever enchanted creature becomes tapped, this Aura deals 3 damage to that creature's controller unless that player pays {3}.`
 - **Selfless Savior**

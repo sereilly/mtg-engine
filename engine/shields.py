@@ -496,21 +496,44 @@ def make_numeric_pool(amount: int, source_name: str | None = None) -> Shield:
 
 
 def make_capped_source(source) -> Shield:
-    return Shield(
-        kind=PREVENT_ALL_BUT, leave=1, uses=1, source=source, lifetime=END_OF_COMBAT
+    return make_chosen_source_shield(
+        PREVENT_ALL_BUT, source, leave=1, lifetime=END_OF_COMBAT
     )
 
 
 def make_capped_charge() -> Shield:
-    return Shield(kind=PREVENT_ALL_BUT, leave=1, uses=1, lifetime=END_OF_COMBAT)
+    return make_chosen_source_shield(
+        PREVENT_ALL_BUT, leave=1, lifetime=END_OF_COMBAT
+    )
+
+
+def make_chosen_source_shield(
+    kind: str, source=None, source_name: str | None = None, **extra
+) -> Shield:
+    """CR 615.8's one-instance shield, against a chosen source or against any.
+
+    Every "the next time a source of your choice would deal damage … this turn"
+    card arms exactly this: one use, the chosen object recorded if the player
+    named one, and the *kind* deciding what happens once the shield absorbs.
+    The five builder pairs below were this function written ten times with one
+    constant changed, and the charge half of each pair was the same line again
+    with ``source`` left out.
+
+    The named wrappers stay because ``engine/models.py``'s derived views take a
+    builder as a zero- or one-argument constructor, and a view is a place a
+    builder has to be nameable. What is gone is the *body* being repeated: the
+    shape of a chosen-source shield now has one home, so a field added to it
+    reaches every card that prints the sentence.
+    """
+    return Shield(kind=kind, uses=1, source=source, source_name=source_name, **extra)
 
 
 def make_life_gain_source(source, source_name: str | None = None) -> Shield:
-    return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source=source, source_name=source_name)
+    return make_chosen_source_shield(PREVENT_AND_GAIN_LIFE, source, source_name)
 
 
 def make_life_gain_charge(source_name: str | None = None) -> Shield:
-    return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
+    return make_chosen_source_shield(PREVENT_AND_GAIN_LIFE, source_name=source_name)
 
 
 def make_team_source(
@@ -519,10 +542,9 @@ def make_team_source(
 ) -> Shield:
     """Shadowbane's shield against the source its controller chose, covering
     that controller and the permanents the printed phrase names."""
-    return Shield(
-        kind=PREVENT_TEAM, uses=1, source=source, recipients=dict(recipients),
+    return make_chosen_source_shield(
+        PREVENT_TEAM, source, source_name, recipients=dict(recipients),
         filter_seat=seat, rider_colors=tuple(rider_colors),
-        source_name=source_name,
     )
 
 
@@ -532,48 +554,47 @@ def make_team_charge(
 ) -> Shield:
     """The same shield with no source recorded — the AI/headless cast, exactly
     as Reverse Damage, Dark Sphere and Forcefield each keep one."""
-    return Shield(
-        kind=PREVENT_TEAM, uses=1, recipients=dict(recipients), filter_seat=seat,
-        rider_colors=tuple(rider_colors), source_name=source_name,
+    return make_chosen_source_shield(
+        PREVENT_TEAM, source_name=source_name, recipients=dict(recipients),
+        filter_seat=seat, rider_colors=tuple(rider_colors),
     )
 
 
 def make_exile_source(source, source_name: str | None = None) -> Shield:
     """Bone Mask's shield against the source its controller chose."""
-    return Shield(
-        kind=PREVENT_AND_EXILE, uses=1, source=source, source_name=source_name
-    )
+    return make_chosen_source_shield(PREVENT_AND_EXILE, source, source_name)
 
 
 def make_exile_charge(source_name: str | None = None) -> Shield:
     """The same shield with no source recorded — the AI/headless activation,
     exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
-    return Shield(kind=PREVENT_AND_EXILE, uses=1, source_name=source_name)
+    return make_chosen_source_shield(PREVENT_AND_EXILE, source_name=source_name)
 
 
 def make_whole_source(source, source_name: str | None = None) -> Shield:
     """Pentagram of the Ages' shield against the source its controller chose."""
-    return Shield(kind=PREVENT_WHOLE, uses=1, source=source, source_name=source_name)
+    return make_chosen_source_shield(PREVENT_WHOLE, source, source_name)
 
 
 def make_whole_charge(source_name: str | None = None) -> Shield:
     """The same shield with no source recorded — the AI/headless activation,
     exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
-    return Shield(kind=PREVENT_WHOLE, uses=1, source_name=source_name)
+    return make_chosen_source_shield(PREVENT_WHOLE, source_name=source_name)
 
 
 def make_half_source(source, rounding: str, source_name: str | None = None) -> Shield:
     """Dark Sphere's shield against the source its controller chose."""
-    return Shield(
-        kind=PREVENT_HALF, uses=1, source=source, half=rounding,
-        source_name=source_name,
+    return make_chosen_source_shield(
+        PREVENT_HALF, source, source_name, half=rounding
     )
 
 
 def make_half_charge(rounding: str, source_name: str | None = None) -> Shield:
     """The same shield with no source recorded — the AI/headless activation,
     exactly as Reverse Damage and Forcefield each keep a generic charge."""
-    return Shield(kind=PREVENT_HALF, uses=1, half=rounding, source_name=source_name)
+    return make_chosen_source_shield(
+        PREVENT_HALF, source_name=source_name, half=rounding
+    )
 
 
 def make_color_shield(colors, source_name: str | None = None) -> Shield:

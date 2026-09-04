@@ -114,6 +114,17 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # died — which under a control-change effect is not its owner.
     "creature_dies",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
+    # Binding Agony — the **damaged** creature's, which for an Aura watching
+    # its host is the host's controller. Frozen by `_fire_dealt_damage_triggers`
+    # while the creature is still on the battlefield: this trigger resolves off
+    # the stack (CR 603.3), and lethal damage is exactly the case where the
+    # creature is in a graveyard by then and CR 400.7 leaves nothing with a
+    # controller to read.
+    #
+    # The subject of *this* event is the damaged object, not the damager — the
+    # `damage_dealt` row below is the other way round, and reading one for the
+    # other on a creature that traded would charge the wrong player.
+    "creature_dealt_damage",
     # Backfire — the damager's. The subject of a damage event is whatever dealt
     # it, so "that creature's controller" is the seat `deal_damage` derives for
     # every event and freezes into the announcement.

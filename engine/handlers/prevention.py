@@ -306,6 +306,98 @@ def add_pt_counters_per_damage_prevented(
     return True, "resolved"
 
 
+def chosen_shield_source(game, context, *, from_target_channel: bool = True):
+    """The object "a source of your choice" names (CR 615.8), or None.
+
+    One reader for every card that prints the phrase, which is what this file
+    had five copies of. The answer comes from whichever channel the *card* left
+    free, in the order a more specific announcement beats a less specific one:
+
+    * ``choices["chosen_source"]`` — the announcement field that exists for
+      exactly this phrase (``engine/game_types.py``), sent as
+      ``source_seat``/``source_permanent_index`` or ``source_stack_index``. It
+      is read first because a card that names a target *as well* (Circle of
+      Despair, Jade Monolith) has nowhere else to put the source.
+    * a spell on the stack the caster picked as the ability's target.
+    * a permanent the caster picked as the ability's target — the channel the
+      four older cards use, because their printed sentence names nothing else.
+
+    *from_target_channel* is False for a card whose target is something else
+    entirely. Circle of Despair's target is the permanent or player the shield
+    *protects*, so reading it as the source would arm the shield against the
+    very thing it is guarding — the shield would then answer only to damage
+    that thing dealt, and prevent nothing the card is played for.
+
+    None is a legal outcome, not an error: an AI or headless activation picks no
+    source at all, and every caller falls back to a shield answering to any
+    source, which is spent on one instance either way.
+    """
+    recorded = (context.choices or {}).get("chosen_source")
+    if recorded is not None:
+        return recorded
+    if context.stack_target is not None:
+        # A spell on the stack: matched later by its card identity, which is the
+        # same ``CardDefinition`` the spell deals its damage with (CR 109.5).
+        return context.stack_target.card
+    if not from_target_channel:
+        return None
+    return resolve_target_permanent(
+        game, context, predicate=lambda p: True, fallback_players=()
+    )
+
+
+def _shield_target(game, context):
+    """The player or permanent an "any target" shield protects, or None.
+
+    CR 115.4's "any target" is a creature, a planeswalker, a battle or a player,
+    and the two halves arrive on different channels — a permanent through the
+    ability's own target resolution, a player as ``context.target``. Asked in
+    that order because a permanent target also fills the player slot with
+    whoever controls it, so the player reading alone would put the shield around
+    the wrong object every time a creature was named.
+    """
+    permanent = resolve_target_permanent(
+        game, context, predicate=lambda p: True, fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if permanent is not None:
+        return permanent
+    return context.target
+
+
+def _arm_chosen_source_shield(
+    game, context, build, *, recipient=None, from_target_channel: bool = True,
+    verb: str = "will prevent the next damage",
+) -> tuple[bool, str]:
+    """Resolve the chosen source, arm the shield *build* makes, and log it.
+
+    The body five handlers had a copy of. What each of them really contributes
+    is *build* — one ``shields.make_*`` call, which is to say one
+    ``Shield.kind`` — and every other line was the same: read the choice, arm
+    against it if there was one, arm a sourceless charge if there was not.
+
+    *recipient* is who the shield protects, defaulting to the ability's
+    controller (CR 109.5) because that is who every card but Circle of Despair
+    names. It may be a ``PlayerState`` or a ``Permanent``: CR 615.1 puts a
+    shield around either, and ``shields.add_shield`` has always taken both.
+    """
+    protected = recipient if recipient is not None else context.caster
+    granted_by = context.card.name if context.card else None
+    chosen = chosen_shield_source(
+        game, context, from_target_channel=from_target_channel
+    )
+    add_shield(protected, build(chosen, granted_by))
+    who = getattr(protected, "name", None) or protected.card.name
+    if chosen is not None:
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{who} {verb} from {getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        game.log.append(f"{who} {verb} dealt to them")
+    return True, "resolved"
+
+
 @effect_handler("grant_reverse_damage_shield")
 def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Reverse Damage: arm a one-shot shield against "a source of your choice".
@@ -316,25 +408,14 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
     as life. With no chosen source (AI / headless casts), fall back to a generic
     charge that shields the entire next damage event from any source.
     """
-    caster = context.caster
-    chosen = None
-    if context.stack_target is not None:
-        # A spell on the stack: match later by its card identity (the same
-        # CardDefinition the spell deals damage with when it resolves).
-        chosen = context.stack_target.card
-    else:
-        chosen = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
-    granted_by = context.card.name if context.card else None
-    if chosen is not None:
-        add_shield(caster, make_life_gain_source(chosen, granted_by))
-        source_card = getattr(chosen, "card", chosen)
-        game.log.append(
-            f"{caster.name} armed a Reverse Damage shield against {getattr(source_card, 'name', 'a source')}"
-        )
-    else:
-        add_shield(caster, make_life_gain_charge(granted_by))
-        game.log.append(f"{caster.name} armed a Reverse Damage shield")
-    return True, "resolved"
+    return _arm_chosen_source_shield(
+        game, context,
+        lambda chosen, by: (
+            make_life_gain_source(chosen, by) if chosen is not None
+            else make_life_gain_charge(by)
+        ),
+        verb="armed a prevent-and-gain-life shield",
+    )
 
 
 @effect_handler("grant_team_prevention_shield")
@@ -355,35 +436,18 @@ def grant_team_prevention_shield(game: Game, instruction: OracleInstruction, con
     over.
     """
     caster = context.caster
-    granted_by = context.card.name if context.card else None
     recipients = dict(instruction.payload.get("recipients") or {})
     rider_colors = tuple(instruction.payload.get("rider_colors") or ())
     seat = game.players.index(caster) if caster in game.players else None
-    if context.stack_target is not None:
-        chosen = context.stack_target.card
-    else:
-        chosen = resolve_target_permanent(
-            game, context, predicate=lambda p: True, fallback_players=()
-        )
-    if chosen is not None:
-        add_shield(
-            caster,
-            make_team_source(chosen, recipients, seat, rider_colors, granted_by),
-        )
-        source_card = getattr(chosen, "card", chosen)
-        game.log.append(
-            f"{caster.name} will prevent the next damage from "
-            f"{getattr(source_card, 'name', 'a source')} to them or their creatures"
-        )
-    else:
-        add_shield(
-            caster, make_team_charge(recipients, seat, rider_colors, granted_by)
-        )
-        game.log.append(
-            f"{caster.name} will prevent the next damage dealt to them or their "
-            "creatures"
-        )
-    return True, "resolved"
+    return _arm_chosen_source_shield(
+        game, context,
+        lambda chosen, by: (
+            make_team_source(chosen, recipients, seat, rider_colors, by)
+            if chosen is not None
+            else make_team_charge(recipients, seat, rider_colors, by)
+        ),
+        verb="will prevent the next damage to them or their creatures",
+    )
 
 
 @effect_handler("grant_exile_prevention_shield")
@@ -398,25 +462,13 @@ def grant_exile_prevention_shield(game: Game, instruction: OracleInstruction, co
     will deal its damage with. What differs is only what the interceptor does
     once it has absorbed, which is what ``Shield.kind`` selects.
     """
-    caster = context.caster
-    granted_by = context.card.name if context.card else None
-    if context.stack_target is not None:
-        chosen = context.stack_target.card
-    else:
-        chosen = resolve_target_permanent(
-            game, context, predicate=lambda p: True, fallback_players=()
-        )
-    if chosen is not None:
-        add_shield(caster, make_exile_source(chosen, granted_by))
-        source_card = getattr(chosen, "card", chosen)
-        game.log.append(
-            f"{caster.name} will prevent the next damage from "
-            f"{getattr(source_card, 'name', 'a source')}"
-        )
-    else:
-        add_shield(caster, make_exile_charge(granted_by))
-        game.log.append(f"{caster.name} will prevent the next damage dealt to them")
-    return True, "resolved"
+    return _arm_chosen_source_shield(
+        game, context,
+        lambda chosen, by: (
+            make_exile_source(chosen, by) if chosen is not None
+            else make_exile_charge(by)
+        ),
+    )
 
 
 @effect_handler("grant_whole_prevention_shield")
@@ -453,12 +505,32 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
             "would deal them"
         )
         return True, "resolved"
-    if context.stack_target is not None:
-        chosen = context.stack_target.card
-    else:
-        chosen = resolve_target_permanent(
-            game, context, predicate=lambda p: True, fallback_players=()
+    if instruction.payload.get("recipient") == "target":
+        # "…would deal damage to **any target** this turn, prevent that
+        # damage." (Circle of Despair.) The shield goes around what the ability
+        # targeted rather than around its controller — CR 615.1 puts one around
+        # a player *or* a permanent, and `add_shield` has always taken both.
+        #
+        # The target channel is spent on that choice, so the source cannot come
+        # from it: read from the target channel it would arm the shield against
+        # the very permanent it protects, which answers only to damage that
+        # permanent deals and prevents nothing the card is played for. The
+        # announcement's own ``chosen_source`` field carries it instead — the
+        # second prompt `targeting._whole_prevention_shield_spec` asks for, and
+        # the one Jade Monolith has run for its two choices all along.
+        protected = _shield_target(game, context)
+        if protected is None:
+            game.log.append(f"{granted_by}: nothing is there to protect")
+            return True, "resolved"
+        return _arm_chosen_source_shield(
+            game, context,
+            lambda chosen, by: (
+                make_whole_source(chosen, by) if chosen is not None
+                else make_whole_charge(by)
+            ),
+            recipient=protected, from_target_channel=False,
         )
+    chosen = chosen_shield_source(game, context)
     if chosen is not None:
         add_shield(caster, make_whole_source(chosen, granted_by))
         source_card = getattr(chosen, "card", chosen)
@@ -484,26 +556,15 @@ def grant_half_prevention_shield(game: Game, instruction: OracleInstruction, con
     arithmetic rather than anything decided here: half of an event nobody can
     size yet.
     """
-    caster = context.caster
     rounding = str(instruction.payload.get("half", "down"))
-    granted_by = context.card.name if context.card else None
-    if context.stack_target is not None:
-        chosen = context.stack_target.card
-    else:
-        chosen = resolve_target_permanent(
-            game, context, predicate=lambda p: True, fallback_players=()
-        )
-    if chosen is not None:
-        add_shield(caster, make_half_source(chosen, rounding, granted_by))
-        source_card = getattr(chosen, "card", chosen)
-        game.log.append(
-            f"{caster.name} will prevent half the next damage from "
-            f"{getattr(source_card, 'name', 'a source')}"
-        )
-    else:
-        add_shield(caster, make_half_charge(rounding, granted_by))
-        game.log.append(f"{caster.name} will prevent half the next damage dealt to them")
-    return True, "resolved"
+    return _arm_chosen_source_shield(
+        game, context,
+        lambda chosen, by: (
+            make_half_source(chosen, rounding, by) if chosen is not None
+            else make_half_charge(rounding, by)
+        ),
+        verb="will prevent half the next damage",
+    )
 
 
 @effect_handler("grant_forcefield_shield")

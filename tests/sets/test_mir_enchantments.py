@@ -1080,3 +1080,213 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
     assert not forest.tapped, game.log
     assert game.controller_index_of(forest) == 0, game.log
+
+
+# --- W2G3: Binding Agony and Circle of Despair ---
+#
+# One Aura that watches an event about its *host* rather than about itself, and
+# one enchantment whose activated ability makes two choices in one announcement
+# — a target to protect and a source to protect it from.
+
+from engine import Game as _w2g3e_Game, PlayerState as _w2g3e_PlayerState  # noqa: E402
+from engine.auras import attach_aura as _w2g3e_attach  # noqa: E402
+from engine.card_loader import (load_cards as _w2g3e_load,  # noqa: E402
+                                manifest_set_path as _w2g3e_path)
+from engine.models import Permanent as _w2g3e_Permanent  # noqa: E402
+from engine.shields import shields_on as _w2g3e_shields  # noqa: E402
+
+
+def _w2g3e_lea():
+    return {card.name: card for card in _w2g3e_load(_w2g3e_path("LEA"))}
+
+
+def _w2g3e_board(pool, seats, hand=()):
+    """A game with *seats* — ``(seat, card name, which pool)`` — already in play."""
+    lea = _w2g3e_lea()
+    game = _w2g3e_Game(players=[
+        _w2g3e_PlayerState(name="P1", hand=[lea[name] for name in hand],
+                           library=[lea["Island"]] * 6),
+        _w2g3e_PlayerState(name="P2", library=[lea["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for seat, name in seats:
+        card = pool[name] if name in pool else lea[name]
+        game._put_permanent_onto_battlefield(seat, _w2g3e_Permanent(card=card), None)
+    for player in game.players:
+        for permanent in player.battlefield:
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def test_w2g3_binding_agony_bites_the_hosts_controller(set_pool):
+    """"Whenever enchanted creature is dealt damage, this Aura deals that much
+    damage to that creature's controller."
+
+    Three pieces met here. The trigger's subject is the Aura's *host*, so the
+    fire site scans what is attached to the damaged creature as well as the
+    creature's own card — an Aura's ability is the Aura's, not a granted ability
+    of its host (CR 113.7a). And "that creature's controller" is frozen while
+    the creature is still on the battlefield, which is what makes the lethal
+    case work at all: by the time this trigger resolves off the stack (CR 603.3)
+    the creature is a card in a graveyard with no controller (CR 400.7).
+    """
+    pool = set_pool("MIR")
+    game = _w2g3e_board(
+        pool, [(0, "Binding Agony"), (1, "Hill Giant")], hand=["Lightning Bolt"],
+    )
+    aura = game.players[0].battlefield[0]
+    giant = game.players[1].battlefield[0]
+    _w2g3e_attach(aura, giant)
+
+    cast = game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=1, target_permanent_index=0,
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(giant), "3 to a 3/3 is lethal"
+    assert game.players[1].life == 17, "the dead creature's controller takes 3"
+    assert game.players[0].life == 20, "never the Aura controller's"
+
+
+def test_w2g3_binding_agony_is_silent_about_other_creatures(set_pool):
+    """The trigger is about the host and nothing else. Damage to a creature the
+    Aura is not on fires it nowhere — the scan is over what is attached to the
+    *damaged* permanent, so an Aura elsewhere on the board never sees it."""
+    pool = set_pool("MIR")
+    game = _w2g3e_board(
+        pool,
+        [(0, "Binding Agony"), (1, "Hill Giant"), (1, "Grizzly Bears")],
+        hand=["Lightning Bolt"],
+    )
+    aura = game.players[0].battlefield[0]
+    giant, bears = game.players[1].battlefield
+    _w2g3e_attach(aura, giant)
+
+    game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=1, target_permanent_index=1,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(bears), "3 to a 2/2 is lethal"
+    assert game.is_on_battlefield(giant), "the Aura's host was never damaged"
+    assert game.players[1].life == 20, "the Bears wear no Aura"
+
+
+def _w2g3e_circle(pool):
+    """Circle of Despair, a creature to protect, a creature to eat, two pingers."""
+    game = _w2g3e_board(pool, [
+        (0, "Circle of Despair"),
+        (0, "Hill Giant"),               # the protected target
+        (0, "Mons's Goblin Raiders"),    # the sacrifice the cost eats
+        (1, "Prodigal Sorcerer"),        # the chosen source
+        (1, "Rod of Ruin"),              # a source nobody chose
+    ])
+    return game, game.players[0].battlefield[1]
+
+
+def _w2g3e_arm(game, protected):
+    """Activate the Circle: the target on the target channel, the source on the
+    announcement's own ``chosen_source`` field."""
+    used = game.activate_permanent_ability(
+        0, "Circle of Despair",
+        target_player_index=0, target_permanent_ids=[protected.permanent_id],
+        source_seat=1, source_permanent_index=0, cost_permanent_index=2,
+    )
+    assert used.supported, used.details
+    game.resolve_stack()
+    game._settle()
+
+
+def test_w2g3_circle_of_despair_shields_the_creature_it_named(set_pool):
+    """"{1}, Sacrifice a creature: The next time a source of your choice would
+    deal damage to any target this turn, prevent that damage."
+
+    The shield goes around what the ability *targeted* — CR 615.1 puts one
+    around a player or a permanent — and answers to the source the announcement
+    chose, which cannot ride the target channel because the target is spent on
+    the thing being protected.
+    """
+    pool = set_pool("MIR")
+    game, giant = _w2g3e_circle(pool)
+    _w2g3e_arm(game, giant)
+
+    armed = _w2g3e_shields(giant)
+    assert [s.kind for s in armed] == ["prevent_whole"], game.log
+    assert armed[0].source.card.name == "Prodigal Sorcerer"
+
+    game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0,
+        target_permanent_index=1, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert giant.damage_marked == 0
+    assert not _w2g3e_shields(giant), "one use, spent (CR 615.3)"
+
+
+def test_w2g3_circle_of_despair_ignores_a_source_nobody_chose(set_pool):
+    """The other half of the same shield, and the half a dropped choice would
+    get wrong: with no source recorded the handler falls back to a shield
+    answering to everything, which is a strictly stronger card."""
+    pool = set_pool("MIR")
+    game, giant = _w2g3e_circle(pool)
+    _w2g3e_arm(game, giant)
+
+    game.activate_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=1, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert giant.damage_marked == 1, "the Rod is not the chosen source"
+    assert len(_w2g3e_shields(giant)) == 1, "and the shield is still waiting"
+
+
+def test_w2g3_circle_of_despair_can_shield_a_player(set_pool):
+    """"Any target" is CR 115.4's four kinds, and the player half goes through
+    the same handler: the shield lands on whoever the ability named."""
+    pool = set_pool("MIR")
+    game, _giant = _w2g3e_circle(pool)
+    game.activate_permanent_ability(
+        0, "Circle of Despair", target_player_index=0,
+        source_seat=1, source_permanent_index=0, cost_permanent_index=2,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert [s.kind for s in _w2g3e_shields(game.players[0])] == ["prevent_whole"]
+
+    game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[0].life == 20
+
+
+def test_w2g3_the_circle_asks_for_a_target_and_then_a_source(set_pool):
+    """The picker's shape, because a card whose source went unasked is a card
+    whose shield answers to everything. Two choices in one announcement is Jade
+    Monolith's spec — a target, then ``requires_source``'s second prompt."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("MIR")
+    program = compile_card_oracle(pool["Circle of Despair"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+
+    assert spec == {
+        "kind": "any",
+        "requires_source": True,
+        # "**Sacrifice a creature**" is a third choice in the same
+        # announcement (CR 602.2b reaching CR 601.2b), and it has always had
+        # its own picker.
+        "cost_spec": {"kind": "creature", "own_only": True, "sacrifice_cost": True},
+    }, spec

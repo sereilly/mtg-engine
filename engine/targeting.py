@@ -1227,6 +1227,17 @@ def _whole_prevention_shield_spec(payload: dict) -> dict | None:
     """
     if payload.get("from_source"):
         return None
+    if payload.get("recipient") == "target":
+        # "…would deal damage to **any target** this turn" (Circle of Despair).
+        # Two choices in one announcement, which is Jade Monolith's shape and
+        # runs Jade Monolith's two-stage prompt: the *target* first — CR 115.4's
+        # creature, planeswalker, battle or player — and then the damage source,
+        # which ``requires_source`` is what tells the client to ask for.
+        #
+        # The source cannot ride ``source_of_choice`` here as it does below,
+        # because that flag makes the *only* prompt a source picker and this
+        # card has a real target to announce (CR 601.2c).
+        return {"kind": "any", "requires_source": True}
     return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
 
 
