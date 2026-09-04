@@ -210,6 +210,20 @@ class CreateToken:
     # from `engine/tokens.py`'s table at parse time rather than left for the
     # handler to look up again, so the AST says everything the token is.
     oracle_text: str | None = None
+    #: "…**for each untapped Forest they control**" (Waiting in the Weeds). A
+    #: set on a board, where ``per_death`` above is a history and
+    #: ``per_source_regeneration`` a record on one permanent — three multipliers
+    #: because the number comes from three different places, which is the same
+    #: reason ``_stamp_token_count`` has three branches.
+    #:
+    #: "They" is the *recipient*, not the caster: this is the only one of the
+    #: three whose count is taken once per seat, and it is what makes the
+    #: sentence say something different from "for each Forest you control".
+    #:
+    #: **Last**, for ``lost_keywords``' reason on ``LordBuff`` one module over:
+    #: nothing here is built positionally today, and a field inserted in the
+    #: middle is how that stops being true silently.
+    per_each: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

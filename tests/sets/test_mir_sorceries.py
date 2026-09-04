@@ -655,3 +655,108 @@ def test_only_a_targeted_seat_is_rebound(set_pool):
     gain = compiled.instructions[0].payload["then"][0]
 
     assert gain.payload.get("recipient") == "caster"
+
+
+# --- W2G5 (continued): a token count taken once per player (CR 111.1) ---
+#
+# "Each player creates a 1/1 green Cat creature token for each untapped Forest
+# **they** control." Two pieces, and only the second is interesting.
+#
+# The recipient was one row in a table that already had "each opponent" and
+# "target opponent", and the handler already knew `each_player`. The **count**
+# is the part with no channel: every multiplied token count in the engine was
+# either a game-wide tally (Gadrak) or a record on one permanent (Spiny
+# Starfish), both of them one number computed in front of the loop over seats.
+# This one is a different number for each seat, so it has to be evaluated
+# inside that loop — evaluated once, every player would create as many Cats as
+# the *caster's* board carried, which is a card nobody printed and which no
+# two-Forest test would notice.
+
+from engine.models import Permanent
+
+from tests.helpers import _mk_card
+
+
+def _w2g5_forest(tapped: bool = False) -> Permanent:
+    return Permanent(card=_mk_card("Forest", "Basic Land - Forest", ""))
+
+
+def _w2g5_weeds_game(set_pool, mine: int, theirs: int, *, tapped: int = 0):
+    pool = set_pool("MIR")
+    my_lands = [_w2g5_forest() for _ in range(mine)]
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[pool["Waiting in the Weeds"]], battlefield=my_lands
+        ),
+        PlayerState(name="P2", battlefield=[_w2g5_forest() for _ in range(theirs)]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    # After the untap step, or the mark this test is about would be swept before
+    # the spell is ever cast.
+    for land in my_lands[:tapped]:
+        land.tapped = True
+    return game
+
+
+def _w2g5_cats(game, seat: int) -> int:
+    return sum(
+        1 for perm in game.controlled_by(seat) if perm.metadata.get("is_token")
+    )
+
+
+def test_waiting_in_the_weeds_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Waiting in the Weeds"])
+    assert program.supported, program.reason
+
+
+def test_each_player_counts_their_own_forests(set_pool):
+    """The whole card. The two boards are deliberately different sizes: a count
+    taken once in front of the loop over seats would give both players the same
+    number, and it would be the caster's."""
+    game = _w2g5_weeds_game(set_pool, mine=3, theirs=1)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (3, 1), game.log
+
+
+def test_a_tapped_forest_is_not_counted(set_pool):
+    """"…for each **untapped** Forest they control." The adjective is a third of
+    the sentence, and a count that dropped it would be silently too large — the
+    dropped-rider bug with an arithmetic face."""
+    game = _w2g5_weeds_game(set_pool, mine=3, theirs=1, tapped=1)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (2, 1), game.log
+
+
+def test_a_player_with_no_forests_creates_nothing(set_pool):
+    """Zero is a number the sentence can produce, and CR 111.1 makes no token
+    for it — as against a count that failed to resolve, which this test would
+    not tell apart from a working one if the opponent had any Forest at all."""
+    game = _w2g5_weeds_game(set_pool, mine=2, theirs=0)
+
+    assert game.cast_from_hand(0, "Waiting in the Weeds").supported
+    game.resolve_stack()
+    game._settle()
+
+    assert (_w2g5_cats(game, 0), _w2g5_cats(game, 1)) == (2, 0), game.log
+
+
+def test_they_control_needs_a_distributed_subject(set_pool):
+    """"They" names nobody when the sentence in front of it named nobody. The
+    refusal is the point: falling back to the caster would be the same card with
+    the wrong board counted, and nothing would say so."""
+    compiled = compile_line(
+        "Create a 1/1 green Cat creature token for each untapped Forest they control."
+    )
+
+    assert not compiled.instructions
+    assert "names no seat" in (compiled.lowering_error or ""), compiled.lowering_error

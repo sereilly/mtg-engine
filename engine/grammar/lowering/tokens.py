@@ -16,12 +16,15 @@ one production over a shared body vocabulary and is nowhere near the cap.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._events import _back_reference_payload
+from ._amounts import count_spec
 from ._common import (_amount_payload, _describe_targets, _filter_payload,
                       _restrictions_beyond)
 
@@ -275,6 +278,43 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
                 node=node,
             )
         payload["count"] = {"source_record": REGENERATED_THIS_TURN}
+        return payload["count"]
+    if node.per_each is not None:
+        # "…**for each untapped Forest they control**" (Waiting in the Weeds).
+        # A count of a board, where the two branches above read a history and a
+        # record — and the one whose number is taken **once per recipient**, so
+        # the spec rides under its own key and the handler evaluates it inside
+        # the loop over seats rather than once in front of it.
+        #
+        # "They" is the recipient, and it only means anything when the sentence
+        # named one: "Create a token for each Forest **they** control" with no
+        # distributed subject in front of it names nobody, so it refuses rather
+        # than falling back to the caster — which would be the same card with
+        # the wrong board counted, and silent.
+        filt = node.per_each
+        per_recipient = filt.controller == "that_player"
+        if per_recipient and node.recipient_players is None:
+            raise LoweringError(
+                "'they control' names no seat without a distributed subject",
+                node=node,
+            )
+        if not per_recipient and filt.controller not in (None, "you"):
+            raise LoweringError(
+                f"a token count cannot be narrowed to the "
+                f"{filt.controller}'s permanents", node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-each token count multiplies one token, not several",
+                node=node,
+            )
+        # The controller is stripped before ``count_spec`` sees it and the
+        # count is scoped by the *owner* it is evaluated for instead — which is
+        # each recipient in turn. Handed over as a key that matcher does not
+        # test, it would be silently ignored and every seat would be counted on
+        # the caster's board.
+        spec = count_spec(dataclasses.replace(filt, controller=None), node)
+        payload["count"] = {"per_each": spec, "per_recipient": per_recipient}
         return payload["count"]
     if isinstance(node.count, ast.ThatMuch):
         # "create that many … tokens" — the count is the firing event's own

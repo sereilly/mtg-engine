@@ -18,7 +18,7 @@ from ..errors import GrammarError
 from ..lexer import (PT, PUNCT, QUOTE, SELF, WORD)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
-from ..phrases import _parse_for_each
+from ..phrases import _parse_for_each, _parse_per_each_objects
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
                           TYPE_LINE_SUPERTYPES, match_longest, singular)
@@ -413,6 +413,7 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
 #: production, because everything else about the sentence is identical — and a
 #: table rather than two branches, because the next such prefix is a row.
 _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("each", "player"), "each_player"),
     (("each", "opponent"), "each_opponent"),
     (("target", "opponent"), "target_opponent"),
 )
@@ -643,6 +644,15 @@ def _finish_create_token(
         )
     )
 
+    # "…**for each untapped Forest they control**" (Waiting in the Weeds). The
+    # board-set multiplier, through the fragment every other multiplied number
+    # in the grammar reads — never a second copy, which is how two spellings of
+    # one clause end up counting different sets. Read after the regeneration
+    # window above, which it rewinds off rather than claiming.
+    per_each, per_each_beyond_first = _parse_per_each_objects(stream)
+    if per_each_beyond_first:
+        raise stream.error("no token count discounts the first of the set")
+
     # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
     # Both words are recorded — a token entering merely tapped, or merely
     # attacking, would be a different effect wearing the same head.
@@ -720,6 +730,7 @@ def _finish_create_token(
         tapped=tapped,
         attacking=attacking,
         per_source_regeneration=per_source_regeneration,
+        per_each=per_each,
     )
 
 
