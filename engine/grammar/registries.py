@@ -31,6 +31,7 @@ from ..auras import aura_continuous_claim
 from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
+                                 chosen_name_ban_line,
                                  global_cast_ban_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
@@ -110,6 +111,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # `global_cast_ban` runs it off the board's text at every cast. Claimed
     # through the reader that enforces it, so the claim cannot outlive the ban.
     if global_cast_ban_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the *name*-keyed half of the same rule:
+    # "Spells with the chosen names can't be cast and lands with the chosen
+    # names can't be played." (Null Chamber.) Claimed through the reader that
+    # enforces it, so the claim cannot outlive the ban.
+    if chosen_name_ban_line(normalized):
         return "cast_restrictions"
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:

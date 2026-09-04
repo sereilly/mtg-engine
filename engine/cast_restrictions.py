@@ -499,6 +499,74 @@ def global_cast_ban_line(line: str) -> str | None:
     return match.group("type") if match is not None else None
 
 
+#: Where a permanent records the names two seats chose as it entered (Null
+#: Chamber). A list, and the order is the choosers' — it is read as a *set* by
+#: the ban below, but recorded in order because each slot belongs to one seat
+#: and a prompt answering into the wrong one would swap the two players'
+#: choices.
+CHOSEN_CARD_NAMES = "chosen_card_names"
+
+#: "Spells with the chosen names can't be cast and lands with the chosen names
+#: can't be played." (Null Chamber.) The *name*-keyed twin of the type-keyed ban
+#: above, and its own row rather than a widening of that one: what a card is
+#: called is not a characteristic anything else in this table tests, and the
+#: names are not in the sentence at all — they were chosen as the permanent
+#: entered (CR 614.1c) and live on it.
+#:
+#: Both halves of the printed sentence are one row on purpose. A spell and a
+#: land drop are the same action to `cast_from_hand`, so one gate covers both —
+#: and claiming only the casting half would ship an enchantment that stops a
+#: Wrath of God and lets its Island through, which is not the card.
+_CHOSEN_NAME_BAN = re.compile(
+    r"^spells with the chosen names can't be cast and lands with the chosen "
+    r"names can't be played$"
+)
+
+
+@lru_cache(maxsize=None)
+def chosen_name_ban_line(line: str) -> bool:
+    """Whether *line* is the chosen-name prohibition.
+
+    One reader, two callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and ``mixins/stack/casting.py`` asks it at CR 601.3 so the line is
+    *enforced*. A restriction claimed and not enforced is an enchantment that
+    reports supported and stops nothing.
+    """
+    return _CHOSEN_NAME_BAN.match(line.strip().lower().rstrip(".")) is not None
+
+
+def chosen_name_ban(game: "Game", card) -> str | None:
+    """The name of a permanent whose chosen names forbid *card*, or None.
+
+    Every battlefield and no seat comparison: the sentence names nobody, so it
+    binds everybody including the enchantment's own controller (CR 601.3a) —
+    which for Null Chamber is the whole design, since one of the two names is
+    its controller's own choice and the other is an opponent's.
+
+    Compared through ``search_filters.name_key`` on both sides, so a printing
+    with different punctuation is the same name — the comparison every other
+    name test in the engine makes.
+    """
+    from .search_filters import name_key
+
+    wanted = name_key(getattr(card, "name", "") or "")
+    if not wanted:
+        return None
+    for _seat, permanent in game.permanents_with_controller():
+        chosen = permanent.metadata.get(CHOSEN_CARD_NAMES) or ()
+        if not chosen:
+            continue
+        if not any(
+            chosen_name_ban_line(raw_line)
+            for raw_line in (permanent.effective_card.oracle_text or "").splitlines()
+        ):
+            continue
+        if any(name_key(str(name)) == wanted for name in chosen if name):
+            return permanent.card.name
+    return None
+
+
 def global_cast_ban(game: "Game", card) -> str | None:
     """The name of a permanent forbidding *card* from being cast, or None.
 

@@ -1217,3 +1217,116 @@ def test_the_chosen_type_narrowing_survives_the_instruction(set_pool):
 
     assert payload["chosen_land_type"] is True
     assert lord_buff_from_payload(payload).filter.chosen_land_type
+
+
+# --- W2G5 (continued): two seats, one record, a name-keyed ban (CR 601.3a) ---
+#
+# Null Chamber is two templates, and both were shapes the engine had exactly
+# half of.
+#
+# "You and an opponent **each** choose a card name" is two armings of the one
+# `enter_choice` prompt rather than a new kind: what differs from Runed Halo's
+# single choice is who answers and which slot the answer lands in, and both are
+# data. It is read *before* Runed Halo's phrase, which is a substring of it —
+# tried first that one would claim this line, record one name, and leave the
+# opponent's choice unmade.
+#
+# And the ban is `global_cast_ban`'s twin keyed on what a card is *called*
+# rather than on its type. One row for both halves of the printed sentence,
+# because a spell and a land drop are the same action to `cast_from_hand` — and
+# claiming only the casting half would ship an enchantment that stops a Wrath of
+# God and lets its Island through, which is not the card.
+
+
+def _w2g5_chamber_board(set_pool):
+    """Null Chamber on seat 0, with a hand each side has cards to name from."""
+    pool = set_pool("MIR")
+    chamber = Permanent(card=pool["Null Chamber"])
+    bear = _mk_card("Grizzly Bears", "{1}{G}", "Creature - Bear", "")
+    wolf = _mk_card("Timber Wolves", "{1}{G}", "Creature - Wolf", "")
+    forest = _mk_card("Forest", "", "Basic Land - Forest", "")
+    tower = _mk_card("Ivory Tower", "{2}", "Artifact", "")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chamber], hand=[bear, wolf, forest, tower]),
+        PlayerState(name="P2", battlefield=[Permanent(card=bear)], hand=[wolf]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._initialize_permanent_state(chamber, 0, 1)
+    return game, chamber
+
+
+def test_null_chamber_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("MIR")["Null Chamber"])
+    assert program.supported, program.reason
+
+
+def test_both_seats_are_asked_and_both_answers_are_kept(set_pool):
+    """Two prompts, one per seat, writing into two slots of one record. Written
+    by index rather than appended, because a prompt answering into the wrong
+    slot would swap the two players' choices — which no test of the *ban* could
+    tell apart, since it reads the record as a set."""
+    game, chamber = _w2g5_chamber_board(set_pool)
+
+    owed = [(c.player_index, c.data.get("card_name_slot")) for c in game.pending_choices]
+    assert owed == [(0, 0), (1, 1)], owed
+
+    assert game.confirm_enter_choice(0, card_name="Grizzly Bears")
+    assert game.confirm_enter_choice(1, card_name="Timber Wolves")
+
+    assert chamber.metadata["chosen_card_names"] == ["Grizzly Bears", "Timber Wolves"]
+
+
+def test_a_basic_land_name_is_refused(set_pool):
+    """The one restriction the sentence prints, and the whole of the card's
+    cost: without it Null Chamber names Forest and stops a deck. Refused rather
+    than repaired — quietly keeping the default would tell the player they had
+    chosen something they had not."""
+    game, chamber = _w2g5_chamber_board(set_pool)
+
+    assert not game.confirm_enter_choice(0, card_name="Forest")
+    assert [c.player_index for c in game.pending_choices] == [0, 1], (
+        "a rejected answer leaves the prompt owed"
+    )
+
+
+def test_the_ban_binds_both_players_including_its_controller(set_pool):
+    """CR 601.3a: the sentence names nobody, so it binds everybody — which for
+    this card is the design, since one of the two names is the *opponent's*
+    choice and stops the enchantment's own controller."""
+    game, _chamber = _w2g5_chamber_board(set_pool)
+    assert game.confirm_enter_choice(0, card_name="Grizzly Bears")
+    assert game.confirm_enter_choice(1, card_name="Timber Wolves")
+    game.start_turn(0)
+
+    stopped = game.cast_from_hand(0, "Timber Wolves")
+    assert not stopped.supported
+    assert "Null Chamber" in stopped.details
+
+    assert game.cast_from_hand(0, "Ivory Tower").supported, (
+        "the control: a card neither seat named is unaffected"
+    )
+
+
+def test_a_named_land_cannot_be_played_either(set_pool):
+    """"…**and lands with the chosen names can't be played**." The second half
+    of one printed sentence, and the half a type-keyed ban cannot express — the
+    gate sits above the land-drop refusal, which is behind `enforce_mana_costs`
+    while a prohibition is not."""
+    pool = set_pool("MIR")
+    chamber = Permanent(card=pool["Null Chamber"])
+    haven = _mk_card("Safe Haven", "", "Land", "")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chamber], hand=[haven]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._initialize_permanent_state(chamber, 0, 1)
+    assert game.confirm_enter_choice(0, card_name="Safe Haven")
+    game.start_turn(0)
+
+    refused = game.cast_from_hand(0, "Safe Haven")
+
+    assert not refused.supported
+    assert "Null Chamber" in refused.details, refused.details

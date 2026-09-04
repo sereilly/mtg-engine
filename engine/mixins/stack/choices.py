@@ -2722,7 +2722,40 @@ class PendingChoicesMixin:
         # default rather than naming nothing, which would make the protection
         # apply to nothing.
         if choice.data.get("needs_card_name"):
+            from ...cast_restrictions import CHOSEN_CARD_NAMES
+
             permanent = choice.data["permanent"]
+            # "…**you and an opponent each** choose a card name other than a
+            # basic land card name." (Null Chamber.) Two seats answering into
+            # one record, so the slot says whose answer this is — read as a set
+            # by the ban, but written by index, because a prompt answering into
+            # the wrong slot would swap the two players' choices.
+            slot = choice.data.get("card_name_slot")
+            if slot is not None:
+                from ...grammar.phrases import BASIC_LAND_WORDS
+
+                if card_name:
+                    # The one restriction the sentence prints. CR 201.2 leaves
+                    # the choice otherwise unbounded, so a name off the offered
+                    # list is legal — this is the only answer that is not, and
+                    # it is refused rather than repaired: quietly keeping the
+                    # default would tell the player they had chosen something
+                    # they had not.
+                    if str(card_name).strip().lower() in BASIC_LAND_WORDS:
+                        return False
+                    names = list(
+                        permanent.metadata.get(CHOSEN_CARD_NAMES) or ["", ""]
+                    )
+                    while len(names) <= int(slot):
+                        names.append("")
+                    names[int(slot)] = card_name
+                    permanent.metadata[CHOSEN_CARD_NAMES] = names
+                self.discard_pending_choice(choice)
+                self.log.append(
+                    f"{self.players[player_index].name} named "
+                    f"{card_name or 'nothing'} for {choice.data['card_name']}"
+                )
+                return True
             if card_name:
                 permanent.metadata["chosen_card_name"] = card_name
             self.discard_pending_choice(choice)

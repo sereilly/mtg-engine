@@ -200,6 +200,34 @@ def chooses_creature_type_on_enter(text: str) -> bool:
     return bool(_CHOOSE_CREATURE_TYPE_ON_ENTER_RE.search(text or ""))
 
 
+#: "As this enchantment enters, **you and an opponent each** choose a card name
+#: other than a basic land card name." (Null Chamber.) Two names, chosen by two
+#: *different seats* — which is what separates it from Runed Halo's single
+#: choice below and from Illusionary Terrain's ordered pair: those are one
+#: player answering once, and this is two players answering once each.
+#:
+#: A pattern rather than a literal, for the reason every other row here is one:
+#: the printed noun is data, and so is the exclusion. The exclusion is
+#: *required* rather than optional — CR 201.2 lets a player name any card, and
+#: this card's whole cost is that it may not name a Forest, so a wording without
+#: it is a strictly better card and refuses here.
+_CHOOSE_TWO_CARD_NAMES_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, you and an opponent each choose a card name "
+    r"other than a basic land card name"
+)
+
+
+def chooses_two_card_names_on_enter(text: str) -> bool:
+    """Whether *text* asks two seats for a card name each as it enters.
+
+    A substring probe like the colour one above, because the mixin asks it of
+    the card's whole normalized text; :func:`enter_effect_line` asks the
+    whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    return bool(_CHOOSE_TWO_CARD_NAMES_ON_ENTER_RE.search(text or ""))
+
+
 # "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
 # rather than a quality: nothing on any board constrains it, and the choice is
 # made from the whole card pool — which is why the default below is a name the
@@ -1001,6 +1029,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a creature type as it enters"
     if chooses_land_type_on_enter(normalized):
         return "chooses a land type as it enters"
+    if chooses_two_card_names_on_enter(normalized):
+        return "two players each choose a card name as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -1037,6 +1067,7 @@ __all__ = [
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",
     "chooses_land_type_on_enter",
+    "chooses_two_card_names_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",

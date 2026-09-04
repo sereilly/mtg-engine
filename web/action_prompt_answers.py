@@ -790,9 +790,17 @@ def _action_opponent_damage_choose(session, req, seat_type):
 def _action_enter_choice_confirm(session, req, seat_type):
     # Black Vise / Jihad: the controller confirms the "as this enters"
     # choice — an opponent (target_seat) and, for Jihad, a color (mana_color).
-    pending = session.game.pending_enter_choice
-    if pending is None or pending.get("controller_index") != req.seat:
+    # **The seat's own prompt, not the oldest of the kind.** Null Chamber arms
+    # two at once — "you and an opponent each choose a card name" — and reading
+    # the queue head would have let the first chooser answer and refused the
+    # second with "no enter choice is pending for you", leaving the enchantment
+    # holding half its record forever. The engine's own resolver has always
+    # looked the seat's prompt up; this preamble did not, and the two
+    # disagreeing is what makes a prompt unanswerable.
+    choice = session.game.pending_choice_of("enter_choice", req.seat)
+    if choice is None:
         raise HTTPException(status_code=400, detail="no enter choice is pending for you")
+    pending = choice.data
     # "…choose two basic land types." (Illusionary Terrain.) The one shape of
     # this prompt that names no seat at all, so `target_seat` is not required
     # for it; the pair arrives as the two colour fields the text-change spells
@@ -839,6 +847,20 @@ def _action_enter_choice_confirm(session, req, seat_type):
         if not session.game.confirm_enter_choice(
             req.seat, creature_type=req.creature_type
         ):
+            raise HTTPException(status_code=400, detail="invalid enter choice")
+        return
+    # "…choose a card name." (Runed Halo; Null Chamber asks two seats for one
+    # each.) The fourth shape that names no seat — and the shape the client
+    # could not answer at all until now, because this chain fell straight
+    # through to the `target_seat` check below and refused it.
+    #
+    # CR 201.2 bounds the choice by nothing, so any string is accepted here and
+    # the one restriction the card prints (not a basic land card name) is
+    # checked by the engine, beside the record it writes.
+    if pending.get("needs_card_name"):
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+        if not session.game.confirm_enter_choice(req.seat, card_name=req.card_name):
             raise HTTPException(status_code=400, detail="invalid enter choice")
         return
     if req.target_seat is None:
