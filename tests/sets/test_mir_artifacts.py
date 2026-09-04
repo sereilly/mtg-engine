@@ -985,3 +985,188 @@ def test_acidic_dagger_cannot_be_activated_once_blockers_are_declared(set_pool):
         0, "Acidic Dagger", target_player_index=0, target_permanent_index=1
     )
     assert "only before blockers are declared" in result.details, result
+
+
+# --- W3G5: Grinning Totem, a card played out of somebody else's exile ---
+
+from engine import Game as _w3g5_Game, PlayerState as _w3g5_PlayerState  # noqa: E402
+from engine.cast_permissions import (  # noqa: E402
+    playable_from_zones as _w3g5_playable,
+)
+from engine.grammar import compile_line as _w3g5_compile_line  # noqa: E402
+from engine.models import Permanent as _w3g5_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g5_compile  # noqa: E402
+
+
+def _w3g5_totem_board(set_pool):
+    """Grinning Totem on seat 0's battlefield, three known cards on seat 1's
+    library with a creature on top."""
+    pool = set_pool("MIR")
+    totem = _w3g5_Permanent(card=pool["Grinning Totem"])
+    game = _w3g5_Game(players=[
+        _w3g5_PlayerState(
+            name="P1", battlefield=[totem], library=[pool["Island"]] * 12
+        ),
+        _w3g5_PlayerState(
+            name="P2",
+            library=[pool["Bay Falcon"], pool["Mountain"], pool["Forest"]]
+            + [pool["Island"]] * 8,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    return game, totem
+
+
+def _w3g5_activate_and_find(set_pool):
+    """The board after the ability has resolved and the search been answered:
+    Bay Falcon is in seat 1's exile and seat 0 may play it."""
+    game, _totem = _w3g5_totem_board(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Grinning Totem", target_player_index=1
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    assert game.confirm_search_library(0, 0, "library")
+    return game
+
+
+def test_grinning_totem_exiles_into_the_searched_players_own_exile(set_pool):
+    """"Search target opponent's library for a card and exile it."
+
+    CR 400.3 sends the card to its **owner's** exile, and its owner is the
+    player whose library it came out of — so it lands in seat 1's pile, not the
+    searcher's. That split is the whole of what makes this card hard: the
+    permission below belongs to the other seat.
+    """
+    game = _w3g5_activate_and_find(set_pool)
+
+    assert [c.name for c in game.players[1].exile] == ["Bay Falcon"]
+    assert game.players[0].exile == []
+    # "Then that player shuffles" — the search is over, and what is left of the
+    # library is everything it did not take.
+    assert len(game.players[1].library) == 10
+
+
+def test_grinning_totem_grants_its_controller_a_cross_seat_permission(set_pool):
+    """"Until the beginning of your next upkeep, you may play that card."
+
+    Two seats, and the grant has to name both: the *player* who may play it is
+    the Totem's controller, and the *pile* it is in is the opponent's. Read as
+    one seat the grant is wrong in a stated direction either way — as the
+    grantee it covers a card nothing holds, and as the owner it lets the wrong
+    player cast it.
+    """
+    game = _w3g5_activate_and_find(set_pool)
+
+    grant = game.cast_permissions[0]
+    assert (grant.player_index, grant.zone_seat) == (0, 1)
+    assert grant.mode == "play"          # a land is played, not cast
+    assert grant.duration == "your_next_upkeep"
+    assert [c.name for c in grant.cards] == ["Bay Falcon"]
+
+    # And the seat sees it as something it may play, with the pile named.
+    assert _w3g5_playable(game, 0) == [{
+        "zone": "exile", "index": 0, "name": "Bay Falcon", "free": False,
+        "source": "Grinning Totem", "owner_seat": 1,
+    }]
+    # The card's owner has no permission — it is seat 0's, not the card's.
+    assert _w3g5_playable(game, 1) == []
+
+
+def test_grinning_totem_lets_the_card_be_cast_out_of_the_other_pile(set_pool):
+    """The game the grant exists for: seat 0 casts an opponent's card out of the
+    opponent's exile, and the one-card grant retires as it is used."""
+    game = _w3g5_activate_and_find(set_pool)
+
+    result = game.cast_from_hand(0, "Bay Falcon", from_zone="exile")
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    # The Totem itself went as a cost ("Sacrifice this artifact"), so the only
+    # permanent seat 0 has is the opponent's card.
+    assert [p.card.name for p in game.controlled_by(0)] == ["Bay Falcon"]
+    assert game.players[1].exile == []
+    assert game.cast_permissions == []
+
+
+def test_grinning_totem_bins_the_card_it_was_not_played(set_pool):
+    """"At the beginning of your next upkeep, if you haven't played it, put it
+    into its owner's graveyard."
+
+    A CR 603.7 delayed ability, and *its owner's* graveyard is seat 1's — the
+    same seat whose library the card came out of.
+    """
+    game = _w3g5_activate_and_find(set_pool)
+    assert [t.event for t in game.delayed_triggers] == ["controllers_next_upkeep"]
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.players[1].exile == []
+    assert [c.name for c in game.players[1].graveyard] == ["Bay Falcon"]
+    # Seat 0's own graveyard holds only the Totem it sacrificed as a cost —
+    # "its owner's graveyard" is not the searcher's.
+    assert [c.name for c in game.players[0].graveyard] == ["Grinning Totem"]
+    # The permission is swept at that same upkeep (CR 611.2a).
+    assert game.cast_permissions == []
+
+
+def test_grinning_totem_bins_nothing_when_the_card_was_played(set_pool):
+    """The printed condition, enforced rather than parsed and dropped.
+
+    It is enforced by *where the card is*: a card the player played is no longer
+    in exile, and the move only ever takes a card out of exile. It cannot be
+    enforced by asking the permission — a "your next upkeep" grant is swept as
+    that upkeep begins, before any ability of that upkeep can fire, so by the
+    time this ability resolves every such grant is gone whether it was spent or
+    not.
+    """
+    game = _w3g5_activate_and_find(set_pool)
+    assert game.cast_from_hand(0, "Bay Falcon", from_zone="exile").supported
+    game.resolve_stack()
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Bay Falcon"]
+    assert game.players[1].graveyard == []
+    assert "the exiled card was played" in " ".join(game.log)
+
+
+def test_the_permission_needs_a_step_that_actually_exiled(set_pool):
+    """The producer gate, and the reason it is keyed on the search's *payload*
+    rather than on its kind.
+
+    A library search records what it exiled only when the printed sentence sent
+    its find to exile. Declaring the record flat on ``search_library`` would
+    admit this line — a tutor to the hand followed by permission to play "that
+    card" — which would compile clean and permit nothing at all.
+    """
+    compiled = _w3g5_compile_line(
+        "Search your library for a creature card, put it into your hand, then "
+        "shuffle. Until the beginning of your next upkeep, you may play that card."
+    )
+
+    assert not compiled.instructions
+    assert "no exile in this effect" in (compiled.lowering_error or ""), (
+        compiled.lowering_error
+    )
+
+
+def test_grinning_totem_reports_supported_with_all_three_steps(set_pool):
+    """Every printed sentence reaches an instruction: the search, the CR 601.3
+    permission and the CR 603.7 delayed ability."""
+    pool = set_pool("MIR")
+    program = _w3g5_compile(pool["Grinning Totem"])
+
+    assert program.supported
+    (ability,) = program.activated_abilities
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "search_library", "grant_cast_permission", "create_delayed_trigger",
+    ]
+    assert steps[0].payload["destination"] == "exile"
+    assert steps[2].payload["instruction"].payload == {
+        "zone": "graveyard", "only_if_unplayed": True,
+    }

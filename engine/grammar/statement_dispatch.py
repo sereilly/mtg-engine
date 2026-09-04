@@ -52,6 +52,7 @@ from .lowering import (
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _lower_add_mana,
+    _lower_put_exiled_card_into_zone,
     _lower_note_mana_spent,
     _lower_add_mana_for_tapped_land,
     _amount_payload,
@@ -526,22 +527,8 @@ def lower_statement(
         }
         return (OracleInstruction("repeated_graveyard_pick", "", payload),)
 
-    if isinstance(statement, ast.PutExiledCardIntoHand):
-        # The producer gate every back-reference makes: "that card" names what
-        # a step of this same effect exiled, and a sentence with no exile behind
-        # it would put nothing anywhere while the card compiled supported.
-        if "exiled_cards" not in produced:
-            raise LoweringError(
-                "'that card' names a card no step of this effect exiled",
-                node=statement,
-            )
-        if statement.player.kind != "you":
-            raise LoweringError(
-                f"no handler puts an exiled card into {statement.player.kind!r}'s "
-                "hand",
-                node=statement,
-            )
-        return (OracleInstruction("put_exiled_cards_into_hand", "", {}),)
+    if isinstance(statement, ast.PutExiledCardIntoZone):
+        return _lower_put_exiled_card_into_zone(statement, produced)
 
     if isinstance(statement, ast.ExileBoundCard):
         # "Whenever a nontoken creature is put into your graveyard from the

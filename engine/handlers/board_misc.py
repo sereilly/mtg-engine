@@ -2200,3 +2200,104 @@ def change_supertype(game: Game, instruction: OracleInstruction, context: Oracle
         + (f"becomes {word}" if gained else f"is no longer {word}")
     )
     return True, "resolved"
+
+
+@effect_handler("rebalance_lands")
+def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Natural Balance's whole paragraph.
+
+    "Each player who controls six or more lands chooses five lands they control
+    and sacrifices the rest. Each player who controls four or fewer lands may
+    search their library for up to X basic land cards and put them onto the
+    battlefield, where X is five minus the number of lands they control. Then
+    each player who searched their library this way shuffles."
+
+    Two halves and one number. A seat over the target sacrifices down to it; a
+    seat under it may tutor up towards it; a seat *on* it is in neither
+    sentence, which is why the memberships are read rather than a difference
+    being taken.
+
+    **Both memberships are read off the same board, before anything moves**, and
+    that is a rules answer rather than a convenience. The sets are disjoint —
+    a seat that sacrifices down to the target has five lands and can never be in
+    the "four or fewer" half — and one player's sacrifices change nobody else's
+    count, so a board read after the first sentence would give the same answer.
+    Reading it once says so; reading it twice would leave the question of what
+    an intervening replacement effect did, which the card does not ask.
+
+    Every decision is a prompt of the seat that owes it, queued through the
+    standing machinery: `arm_forced_sacrifice` for the removals, the ordinary
+    library search for the tutor. Nothing here is a new mechanism — which is the
+    point, because "chooses N and sacrifices the rest" and "search for up to N
+    basic land cards" are what those two prompts already are.
+    """
+    keep = int(instruction.payload.get("keep", 5))
+    counts = [
+        sum(
+            1 for perm in game.controlled_by(seat)
+            if perm.card.primary_type == "land"
+        )
+        for seat in range(len(game.players))
+    ]
+    over = [(seat, held) for seat, held in enumerate(counts) if held > keep]
+    under = [(seat, held) for seat, held in enumerate(counts) if held < keep]
+    if not over and not under:
+        game.log.append(
+            f"{context.card.name}: every player already controls {keep} lands"
+        )
+        return True, "resolved"
+    for seat, held in over:
+        game.arm_forced_sacrifice(
+            seat, held - keep,
+            filter={"card_types": ("land",)},
+            reason=context.card.name if context.card is not None else "Rebalance",
+        )
+    for seat, held in under:
+        # "**may** search their library for **up to** X basic land cards": an
+        # offer with a ceiling, which is what `up_to` on the search prompt means
+        # — a seat may find fewer, none included (CR 701.23b), and declining is
+        # the fail-to-find every search already answers.
+        #
+        # The searching seat is its own chooser and its own zone owner, so no
+        # seat key rides the prompt; that is the ordinary case the flow
+        # defaults to, and it is what makes "their library" every player's own.
+        game.arm_pending_choice(
+            "search_library", seat,
+            count=keep - held,
+            card_type="land",
+            zones=("library",),
+            restrictions={"supertypes": ("basic",)},
+            destination="battlefield",
+            # One slot per find, all to the same place — the shape a counted
+            # search whose finds share a destination already takes.
+            destinations=["battlefield"] * (keep - held),
+            tapped=[False] * (keep - held),
+            card_name=context.card.name if context.card is not None else "",
+            enters_tapped=False,
+            untap_found_if=None,
+            up_to=True,
+            reveal=False,
+            # **No record.** Every other search hands over the resolution's
+            # scratchpad so a later sentence can name what it found; this
+            # paragraph has no later sentence, and the scratchpad is one dict
+            # shared by every seat this instruction armed — so a record here
+            # would be several players' finds in one channel, which is the
+            # two-value-shapes hazard rather than a feature.
+        )
+    if over:
+        game.log.append(
+            f"{context.card.name}: "
+            + ", ".join(
+                f"{game.players[seat].name} sacrifices {held - keep} land(s)"
+                for seat, held in over
+            )
+        )
+    if under:
+        game.log.append(
+            f"{context.card.name}: "
+            + ", ".join(
+                f"{game.players[seat].name} may search for {keep - held} basic land(s)"
+                for seat, held in under
+            )
+        )
+    return True, "pending_rebalance_lands"

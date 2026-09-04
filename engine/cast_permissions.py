@@ -76,6 +76,27 @@ class CastPermission:
     # anything leaves (CR 400.7 gives a returning permanent a new id, which is
     # also correct here: the new object has granted nothing yet).
     source_permanent_id: int | None = None
+    #: **Whose zone the cards are in**, when that is not the grantee's own.
+    #: "Search target opponent's library for a card and exile it. … you may
+    #: play that card." (Grinning Totem.) CR 400.3 sends the card to its
+    #: *owner's* exile — the searched player's — while CR 601.3 gives the
+    #: permission to the searcher, so the two seats come apart for the first
+    #: time in this pool.
+    #:
+    #: Its own field rather than a wider ``player_index`` because they answer
+    #: two different questions and collapsing them is wrong in both directions:
+    #: read as the grantee, nothing would find the card, and read as the owner,
+    #: the wrong player would be allowed to cast it. None means "the grantee's
+    #: own", which is every other grant.
+    zone_player_index: int | None = None
+
+    @property
+    def zone_seat(self) -> int:
+        """Which seat's copy of :attr:`zone` this grant reads."""
+        return (
+            self.player_index if self.zone_player_index is None
+            else self.zone_player_index
+        )
 
 
 def grant_permission(game, **kwargs) -> CastPermission:
@@ -100,7 +121,7 @@ def grant_permission(game, **kwargs) -> CastPermission:
 
 
 def _zone_cards(game, permission: CastPermission) -> list:
-    player = game.players[permission.player_index]
+    player = game.players[permission.zone_seat]
     return getattr(player, permission.zone)
 
 
@@ -252,28 +273,47 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
     A hand-zone waiver is deliberately absent: those cards are already offered
     by the ordinary hand UI, which asks :func:`permission_for` about cost."""
     entries: list[dict] = []
-    player = game.players[player_index]
+    # Every seat's graveyard and exile, not only this one's. A grant names the
+    # zone it opens *and* whose copy of it (``zone_player_index``): Grinning
+    # Totem's exiled card sits in the searched player's exile because CR 400.3
+    # puts it there, and the permission to play it belongs to the searcher. The
+    # seat's own zones come first so the entries a client already knew are in
+    # the order it already saw them.
+    seats = [player_index] + [
+        seat for seat in range(len(game.players)) if seat != player_index
+    ]
     for zone in ("graveyard", "exile"):
-        for index, card in enumerate(getattr(player, zone)):
-            as_land = card.primary_type == "land"
-            permission = permission_for(
-                game, player_index, card, zone, as_land=as_land
-            )
-            if permission is None:
-                continue
-            entries.append({
-                "zone": zone,
-                "index": index,
-                "name": card.name,
-                "free": permission.free,
-                "source": permission.source_name,
-            })
+        for owner_seat in seats:
+            for index, card in enumerate(getattr(game.players[owner_seat], zone)):
+                as_land = card.primary_type == "land"
+                permission = permission_for(
+                    game, player_index, card, zone, as_land=as_land
+                )
+                if permission is None:
+                    continue
+                if permission.zone_seat != owner_seat:
+                    # The same card object can sit in two seats' zones (a deck
+                    # repeats one immutable definition per copy), so the grant
+                    # has to agree about *which* pile before this entry names an
+                    # index into one.
+                    continue
+                entries.append({
+                    "zone": zone,
+                    "index": index,
+                    "name": card.name,
+                    "free": permission.free,
+                    "source": permission.source_name,
+                    # Whose pile the index is into. The viewer's own on every
+                    # grant but the cross-seat one, so a client reading only
+                    # `zone`/`index` keeps working.
+                    "owner_seat": owner_seat,
+                })
     # CR 903.8's command zone. The question this function answers is "what may
     # this seat play from a non-hand zone right now", and a commander is one of
     # those — but by a *rule* rather than by a CastPermission, so it is asked of
     # engine/commander.py instead of of the permission seam. Listing it here is
     # what lets the browser offer it through the one zone-cast path.
-    for index, card in enumerate(player.command_zone):
+    for index, card in enumerate(game.players[player_index].command_zone):
         if not game.may_cast_from_command_zone(player_index, card):
             continue
         entries.append({
@@ -282,6 +322,10 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
             "name": card.name,
             "free": False,
             "source": "commander",
+            # The command zone is the seat's own by construction — CR 903.8 lets
+            # a player cast a commander **they own** — so the key every other
+            # entry carries is stated here rather than left absent.
+            "owner_seat": player_index,
             # CR 903.8, so the client can show what the cast will actually cost.
             "commander_tax": game.commander_tax(player_index, card),
         })

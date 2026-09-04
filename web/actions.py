@@ -198,15 +198,27 @@ def _action_cast(session, req, seat_type):
         # Casting from outside the hand needs a permission grant
         # (engine/cast_permissions.py); the engine re-checks, this just
         # turns "no" into a 400 with the reason instead of a queue refusal.
-        zone_cards = getattr(caster, req.from_zone)
+        # Every seat's copy of the zone, not only the caster's: a grant names
+        # whose pile it opens (engine/cast_permissions.py's `zone_seat`), and
+        # Grinning Totem's exiled card sits in the *searched* player's exile
+        # while the permission belongs to the searcher. The caster's own pile
+        # is looked at first, so nothing that resolved here before moves.
+        seats = [req.seat] + [
+            seat for seat in range(len(session.game.players)) if seat != req.seat
+        ]
         card = next(
             (
-                entry for entry in zone_cards
+                entry
+                for seat in seats
+                for entry in getattr(session.game.players[seat], req.from_zone)
                 if entry.name == req.card_name
-                and permission_for(
-                    session.game, req.seat, entry, req.from_zone,
-                    as_land=entry.primary_type == "land",
+                and (
+                    grant := permission_for(
+                        session.game, req.seat, entry, req.from_zone,
+                        as_land=entry.primary_type == "land",
+                    )
                 ) is not None
+                and grant.zone_seat == seat
             ),
             None,
         )

@@ -13221,9 +13221,18 @@ function renderZoneCards(
   // through one `castable_from_zones` list — a commander is offered by CR 903.8
   // rather than by a cast permission, but what the client does with it is
   // identical.
+  // The pile is matched by `owner_seat` rather than by "is this my own zone":
+  // a grant names whose copy of the zone it opens, and Grinning Totem's exiled
+  // card sits in the *searched* player's exile while the permission belongs to
+  // the searcher. Every other grant carries `owner_seat === seat`, so the list
+  // a viewer saw for their own piles is unchanged.
   const castableEntries =
-    zoneSeat === seat && (zoneKind === "graveyard" || zoneKind === "exile" || zoneKind === "command")
-      ? (currentState?.castable_from_zones || []).filter((entry) => entry.zone === zoneKind)
+    zoneKind === "graveyard" || zoneKind === "exile" || zoneKind === "command"
+      ? (currentState?.castable_from_zones || []).filter(
+          (entry) =>
+            entry.zone === zoneKind &&
+            (entry.owner_seat ?? seat) === zoneSeat,
+        )
       : [];
   const isCastableFromZone = (index) => castableEntries.some((entry) => entry.index === index);
   // Render with the most recently added card (end of the array) leftmost,

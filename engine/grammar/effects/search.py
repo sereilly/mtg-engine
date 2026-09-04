@@ -282,6 +282,18 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
     to: ast.Zone | None = None
     if stream.accept_phrase("and", "exile", "them"):
         to = ast.Zone("exile")
+    elif isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
+        "and", "exile", "it"
+    ):
+        # "Search target opponent's library for **a card** and exile **it**."
+        # (Grinning Totem.) The plural clause above with one find, and the
+        # pronoun is *checked against the count* rather than merely consumed:
+        # "for three cards and exile it" is not a sentence any card prints, and
+        # admitting it would let a three-card search claim the one-card reading
+        # — the same agreement `_parse_search_untap_rider` demands of "that
+        # land". The whole difference is a word, so it is a branch here and not
+        # a second production.
+        to = ast.Zone("exile")
     if not stream.accept_punct("."):
         raise stream.error("expected the sentence that ends this search")
     if to is not None:

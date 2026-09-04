@@ -1210,3 +1210,239 @@ def test_the_spell_waits_on_the_stack_while_a_bid_is_owed(set_pool):
     assert [c.name for c in game.players[0].graveyard] == ["Illicit Auction"]
     assert game.controller_index_of(victim) == 1
     assert game.players[1].life == 17
+
+
+# --- W3G5: the search sorceries and Sealed Fate's missing player picker ---
+
+import pytest as _pytest_w3g5
+
+from engine import Game as _Game_w3g5, PlayerState as _PlayerState_w3g5
+from engine.oracle import compile_card_oracle as _compile_w3g5
+from engine.targeting import derive_cast_spec as _cast_spec_w3g5
+
+
+def _w3g5_sealed_fate_game(set_pool):
+    """Sealed Fate in seat 0's hand, four known cards on seat 1's library."""
+    pool = set_pool("MIR")
+    game = _Game_w3g5(players=[
+        _PlayerState_w3g5(
+            name="P1", hand=[pool["Sealed Fate"]], library=[pool["Island"]] * 6
+        ),
+        _PlayerState_w3g5(
+            name="P2",
+            library=[
+                pool["Bay Falcon"], pool["Island"], pool["Mountain"], pool["Forest"]
+            ],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_sealed_fate_derives_the_opponent_picker_its_line_names(set_pool):
+    """"Look at the top X cards of **target opponent's** library."
+
+    The picker sweep's Roots class: the card reported supported, claimed every
+    sentence, and derived *no* cast spec — because ``look_top_pick_to_hand`` has
+    a row in the payload-keyed spec table and that row pre-empts the generic
+    ``targets`` reading. The row answered only Ashnod's Cylix's ``looker`` key,
+    so Sealed Fate's ``pile_owner`` description was thrown away.
+    """
+    pool = set_pool("MIR")
+    card = pool["Sealed Fate"]
+
+    spec = _cast_spec_w3g5(card, _compile_w3g5(card))
+
+    assert spec is not None, "the client would send a bare cast"
+    assert spec["kind"] == "player"
+    # CR 115.4: "target opponent" may not choose the caster.
+    assert spec.get("opponents_only") is True, spec
+
+
+def test_sealed_fate_exiles_one_and_stacks_the_rest_back(set_pool):
+    """The game the derivation exists for: the caster names the opponent, sees
+    the top three, exiles one and puts the other two back on top."""
+    game = _w3g5_sealed_fate_game(set_pool)
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Sealed Fate", target_player_index=1, x_value=3)
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    prompt = next(c for c in game.pending_choices if c.kind == "look_top_pick")
+    # The pile is the opponent's; the decision is the caster's (CR 608.2c).
+    assert prompt.player_index == 0
+    assert game.look_top_pile_index(prompt) == 1
+    assert game.live_look_top_candidates(prompt) == [0, 1, 2]
+
+    assert game.confirm_look_top_pick(0, 0)
+
+    assert [c.name for c in game.players[1].exile] == ["Bay Falcon"]
+    assert [c.name for c in game.players[1].library] == [
+        "Island", "Mountain", "Forest"
+    ]
+
+
+def test_sealed_fate_without_a_named_opponent_looks_at_nothing(set_pool):
+    """The failure the derivation caused, pinned so it stays a *refusal* rather
+    than becoming a silent no-op again.
+
+    With no seat named the handler has no pile, logs that it was given none and
+    resolves having moved nothing — which is what the app did on every cast of
+    this card, because the bare cast was all the client knew how to send.
+    """
+    game = _w3g5_sealed_fate_game(set_pool)
+    game.interactive_seats = set()
+
+    assert game.cast_from_hand(0, "Sealed Fate", x_value=3).supported
+    game.resolve_stack()
+
+    assert game.players[1].exile == []
+    assert len(game.players[1].library) == 4
+
+
+# --- W3G5: Natural Balance, a per-player loop with two branches ---
+
+from engine.grammar import compile_line as _w3g5nb_compile_line  # noqa: E402
+from engine.models import Permanent as _w3g5nb_Permanent  # noqa: E402
+
+
+def _w3g5nb_game(set_pool, mine: int, theirs: int, interactive=()):
+    """Natural Balance in seat 0's hand, with each seat holding *n* basics on
+    the battlefield and a library of four basics and one creature card."""
+    pool = set_pool("MIR")
+
+    def _lands(count: int, name: str):
+        return [_w3g5nb_Permanent(card=pool[name]) for _ in range(count)]
+
+    game = _Game_w3g5(players=[
+        _PlayerState_w3g5(
+            name="P1", hand=[pool["Natural Balance"]],
+            battlefield=_lands(mine, "Forest"),
+            library=[pool["Forest"], pool["Mountain"], pool["Plains"],
+                     pool["Swamp"], pool["Bay Falcon"]],
+        ),
+        _PlayerState_w3g5(
+            name="P2", battlefield=_lands(theirs, "Island"),
+            library=[pool["Island"], pool["Plains"], pool["Swamp"],
+                     pool["Mountain"], pool["Bay Falcon"]],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w3g5nb_lands(game, seat: int) -> int:
+    return sum(
+        1 for perm in game.controlled_by(seat) if perm.card.primary_type == "land"
+    )
+
+
+def _w3g5nb_resolve(game):
+    assert game.cast_from_hand(0, "Natural Balance").supported
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+@_pytest_w3g5.mark.parametrize(
+    "mine, theirs, expected",
+    [
+        (8, 2, (5, 5)),   # one over, one under
+        (6, 4, (5, 5)),   # both boundaries: "six or more" and "four or fewer"
+        (6, 5, (5, 5)),   # five is in neither sentence
+        (5, 5, (5, 5)),   # nobody is in either sentence
+        (9, 0, (5, 4)),   # a library holding four basics finds only four
+    ],
+)
+def test_natural_balance_moves_every_seat_toward_five(
+    set_pool, mine, theirs, expected
+):
+    """"Each player who controls six or more lands … Each player who controls
+    four or fewer lands …"
+
+    The two memberships are the point, and the boundaries are where a
+    difference-taking implementation would be wrong: a seat on exactly five is
+    in neither sentence, and a seat on six sacrifices one rather than being left
+    alone. The last row is CR 701.23b — a search may find fewer than it names,
+    and a library holding two basics is the board that says so.
+    """
+    game = _w3g5nb_game(set_pool, mine, theirs)
+
+    _w3g5nb_resolve(game)
+
+    assert (_w3g5nb_lands(game, 0), _w3g5nb_lands(game, 1)) == expected, game.log
+
+
+def test_natural_balance_only_finds_basic_lands(set_pool):
+    """"…search their library for up to X **basic land** cards."
+
+    Both halves of the restriction are enforced, and each is a way the search
+    could quietly be a better card: the creature card in the library is not a
+    land, and a nonbasic would not be basic. The AI seat takes the maximum it
+    is allowed, so what it left behind is the whole of the check.
+    """
+    game = _w3g5nb_game(set_pool, 5, 1)
+
+    _w3g5nb_resolve(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(1)) == [
+        "Island", "Island", "Mountain", "Plains", "Swamp",
+    ]
+    assert [c.name for c in game.players[1].library] == ["Bay Falcon"]
+
+
+def test_natural_balance_sacrifices_are_the_players_own(set_pool):
+    """"…chooses five lands they control and sacrifices the rest."
+
+    Each seat gives up its own lands, into its own graveyard — the removals are
+    the standing forced-sacrifice prompt, one per seat that owes one, rather
+    than the spell's controller choosing for everybody.
+    """
+    game = _w3g5nb_game(set_pool, 8, 7)
+
+    _w3g5nb_resolve(game)
+
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Forest", "Forest", "Forest", "Natural Balance",
+    ]
+    assert [c.name for c in game.players[1].graveyard] == ["Island", "Island"]
+
+
+def test_natural_balance_asks_the_seat_that_owes_the_choice(set_pool):
+    """An interactive seat is *asked* which lands go, and the opponent's search
+    is queued for the opponent — two prompts, two owners, neither of them the
+    spell's controller deciding for the other."""
+    game = _w3g5nb_game(set_pool, 7, 3, interactive=(0,))
+
+    assert game.cast_from_hand(0, "Natural Balance").supported
+    game.resolve_stack()
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("sacrifice", 0), ("search_library", 1),
+    ]
+    # Nothing has moved while the choice is owed.
+    assert _w3g5nb_lands(game, 0) == 7
+
+
+def test_the_four_printed_numbers_have_to_agree(set_pool):
+    """The card prints four numbers and they are one: "six or more" is one over
+    the target, "four or fewer" one under it, and "five minus the number of
+    lands they control" counts up to it.
+
+    A printing whose numbers disagreed would be a different card, and storing
+    four fields would have made it a coin-toss which one the handler believed.
+    So the production checks them and refuses.
+    """
+    compiled = _w3g5nb_compile_line(
+        "Each player who controls six or more lands chooses four lands they "
+        "control and sacrifices the rest. Each player who controls four or "
+        "fewer lands may search their library for up to X basic land cards and "
+        "put them onto the battlefield, where X is five minus the number of "
+        "lands they control. Then each player who searched their library this "
+        "way shuffles."
+    )
+
+    assert not compiled.instructions
+    assert "do not agree" in (compiled.parse_error or ""), compiled.parse_error

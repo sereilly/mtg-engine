@@ -114,6 +114,21 @@ PARSE_LAYERS = [
     # own words to the end — and split out of it when Antiquities' four-sentence
     # cards pushed that file past the guard below.
     "paragraphs",
+    # The paragraphs that change a card's **owner** (CR 108.3): Bronze Tablet,
+    # Timmerian Fiends, Tempest Efreet. Split out of `paragraphs` at Mirage's
+    # third wave, when Natural Balance's paragraph took that module past the
+    # guard below. The seam is what the three cards *change* rather than how
+    # they read: Juxtapose is sentence-for-sentence the same shape and exchanges
+    # **control** (CR 613 layer 2), a different rule with a different duration,
+    # so it stayed behind. Beside `paragraphs` at the same level and for its
+    # reason — nothing here calls back into the sentence parser either.
+    #
+    # The name is not a mirror re-forming, which the module's docstring says
+    # outright: these three lower in `lowering/zones.py`, so `zones` is the name
+    # the rule would ask for, and `zones` on this side already means something
+    # else (which zone an object is *already* in). Reusing it would fork a name
+    # rather than re-form one.
+    "ownership",
     # Reading a keyword-ability list off a printed line. Split out of `phrases`
     # at the guard below, reusing the name `lowering/keywords.py` has carried
     # since it left the same family one package over. Below `phrases`, which
@@ -660,7 +675,7 @@ AST_FAMILIES = [
         # family and both of its readers in another.
         "types",
         # `exile` is the same shape as `types`, one package over. The nodes the
-        # five exile productions build — `PutExiledCardIntoHand`,
+        # five exile productions build — `PutExiledCardIntoZone`,
         # `ExileBoundCard`, `ExileGraveyard`, `PutExiledWithSource` — are cards
         # in a zone, and they live in `ast/cards.py` beside every other card
         # node because that is what they *are*. The guard fired on the readers

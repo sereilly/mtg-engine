@@ -299,19 +299,33 @@ class RepeatedGraveyardPick:
 
 
 @dataclass(frozen=True)
-class PutExiledCardIntoHand:
+class PutExiledCardIntoZone:
     """``Put that card into your hand.`` (Necropotence, inside its delay.)
 
-    "That card" is the one an earlier step of the **same effect** exiled, so
-    this reads the resolution's own record rather than choosing anything —
-    the same back-reference "you may play cards exiled this way" makes, and
-    demanded of its producer for the same reason: a sentence with nothing
-    behind it is the sentence read wrong.
+    ``If you haven't played it, put it into its owner's graveyard.``
+    (Grinning Totem, inside its delay.)
 
-    The zone is fixed by the node: only a hand is printed, and a card printing
-    another destination is a different sentence this production refuses.
+    "That card" / "it" is the one an earlier step of the **same effect**
+    exiled, so this reads the resolution's own record rather than choosing
+    anything — the same back-reference "you may play cards exiled this way"
+    makes, and demanded of its producer for the same reason: a sentence with
+    nothing behind it is the sentence read wrong.
+
+    The zone was fixed by the node until Mirage printed the second
+    destination, and it is a field now for the reason every parameter in this
+    grammar is payload: what changes between the two sentences is where the
+    card goes, and nothing else. Which destinations have a handler is the
+    lowering's question, and it refuses the rest by name.
+
+    ``only_if_unplayed`` is Grinning Totem's printed condition. It states what
+    the move already does rather than narrowing it — a card that was played is
+    no longer in exile, and this instruction only ever moves a card out of
+    exile — so it changes no outcome and is carried anyway, because a word
+    consumed and never read could be deleted with no sign, and because it is
+    what lets the log say *why* nothing moved.
     """
-    player: PlayerRef
+    zone: Zone
+    only_if_unplayed: bool = False
 
 
 @dataclass(frozen=True)

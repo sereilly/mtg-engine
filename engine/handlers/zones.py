@@ -4513,12 +4513,32 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         if not cards:
             game.log.append(f"{source_name}: nothing was exiled, so there is nothing to permit")
             return True, "resolved"
-        grant_permission(
-            game, player_index=caster_index, zone=payload.get("zone", "exile"),
-            mode=payload.get("mode", "cast"), cards=cards,
-            duration=duration, source_name=source_name,
-            source_permanent_id=game.permanent_id_of(context.source_permanent),
-        )
+        zone = payload.get("zone", "exile")
+        # **Whose pile each card is in.** CR 400.3 sends an object to its
+        # *owner's* zone, and a search of somebody else's library exiles a card
+        # they own (Grinning Totem) — so the cards this permission names are not
+        # always in the grantee's own exile, and a grant that assumed they were
+        # would cover nothing at all. Read off the board rather than passed
+        # down, because the step that exiled them is the only one that knew and
+        # the answer is visible here.
+        by_seat: dict[int | None, list] = {}
+        for card in cards:
+            seat = next(
+                (
+                    index for index, player in enumerate(game.players)
+                    if any(held is card for held in getattr(player, zone, ()))
+                ),
+                caster_index,
+            )
+            by_seat.setdefault(None if seat == caster_index else seat, []).append(card)
+        for zone_seat, held in by_seat.items():
+            grant_permission(
+                game, player_index=caster_index, zone=zone,
+                mode=payload.get("mode", "cast"), cards=held,
+                duration=duration, source_name=source_name,
+                source_permanent_id=game.permanent_id_of(context.source_permanent),
+                zone_player_index=zone_seat,
+            )
         game.log.append(
             f"{caster.name} may {payload.get('mode', 'cast')} "
             f"{', '.join(card.name for card in cards)} from exile"
@@ -5180,19 +5200,34 @@ def finish_repeated_graveyard_pick(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
-@effect_handler("put_exiled_cards_into_hand")
-def put_exiled_cards_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+@effect_handler("put_exiled_cards_into_zone")
+def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necropotence: "Put that card into your hand at the beginning of your next
     end step."
+
+    Grinning Totem: "At the beginning of your next upkeep, if you haven't played
+    it, put it into its owner's graveyard."
 
     The cards a step of the same effect exiled, read out of the resolution
     scratchpad — which for a *delayed* ability is the copy frozen when it was
     created (CR 603.7d, ``DelayedTrigger.captured``). Nothing else could name
-    them: by the time the end step arrives the exile zone holds whatever else
-    has gone there since, and a card in it is not distinguishable by name.
+    them: by the time the step arrives the exile zone holds whatever else has
+    gone there since, and a card in it is not distinguishable by name.
 
-    Located by identity and only in the caster's own exile, so a card that has
-    already left is not conjured back.
+    Located by **identity**, in whichever seat's exile holds it. That is one
+    rule and not two: a card is in exactly one exile list, so this finds the
+    same card the caster-only scan found whenever there was one, and it differs
+    only where the card is somebody else's — which is Grinning Totem's, because
+    CR 400.3 put the searched player's card into the searched player's exile.
+
+    A card that has already left is not conjured back, and that is also where
+    Grinning Totem's printed condition is enforced: "if you haven't played it"
+    is true exactly when the card is still in exile, because playing it took it
+    out. (It is not the *permission* that answers — a "your next upkeep" grant
+    is swept as the upkeep step begins, before this ability can fire, so by the
+    time the question is asked every such grant is gone whether it was used or
+    not.) ``only_if_unplayed`` is the printed word, carried so the log can say
+    which case it took.
     """
     # Two places one record can be, and which one depends on how far the
     # sentence travelled. Inside a single resolution it is the scratchpad; a
@@ -5205,19 +5240,46 @@ def put_exiled_cards_into_hand(game: Game, instruction: OracleInstruction, conte
         or ()
     )
     caster = context.caster
+    destination = str(instruction.payload.get("zone", "hand"))
     moved: list = []
+    # The caster's own pile first, then everybody else's. Identity alone is not
+    # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
+    # per copy and the catalog is shared between seats, so *the same object* can
+    # sit in two players' exiles at once — and a bare scan would then take
+    # whichever seat came first in the list. Necropotence's card is always its
+    # controller's, so asking that pile first keeps it exactly where it was, and
+    # the wider scan is reached only by the card that needs it.
+    seats = [context.caster] + [p for p in game.players if p is not context.caster]
     for card in cards:
-        for index, held in enumerate(caster.exile):
-            if held is card:
-                caster.exile.pop(index)
-                # Through the write seam, so CR 903.9b rides it.
-                if game.put_card_into_hand(caster, card):
-                    moved.append(card)
-                break
+        for owner in seats:
+            index = next(
+                (i for i, held in enumerate(owner.exile) if held is card), None
+            )
+            if index is None:
+                continue
+            owner.exile.pop(index)
+            if destination == "graveyard":
+                # CR 400.3: its **owner's** graveyard, and the owner is the
+                # player whose exile held it — the card reached that pile out of
+                # that player's own library. Appended directly, the way
+                # ``place_held_card`` does it: a graveyard has no write seam,
+                # because CR 903.9b's replacement is about hands and libraries.
+                owner.graveyard.append(card)
+                moved.append(card)
+            # Through the write seam, so CR 903.9b rides it.
+            elif game.put_card_into_hand(caster, card):
+                moved.append(card)
+            break
     if moved:
+        names = ", ".join(card.name for card in moved)
         game.log.append(
-            f"{caster.name} put {', '.join(card.name for card in moved)} "
-            "into their hand from exile"
+            f"{caster.name} put {names} into their hand from exile"
+            if destination == "hand"
+            else f"{names} was put into its owner's graveyard from exile"
+        )
+    elif instruction.payload.get("only_if_unplayed"):
+        game.log.append(
+            f"{context.card.name}: the exiled card was played, so nothing is binned"
         )
     else:
         game.log.append(f"{context.card.name}: nothing was left in exile to take")

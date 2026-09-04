@@ -21,6 +21,11 @@ One call goes upward, the same inversion `subject_verb` itself makes:
 import dataclasses
 
 from . import ast
+from .ownership import (
+    _parse_ante_offer_ownership_exchange,
+    _parse_ownership_exchange_unless_paid,
+    _parse_random_reveal_ownership_exchange,
+)
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
     _parse_exchange_greatest_mana_value,
@@ -29,9 +34,7 @@ from .paragraphs import (
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
-    _parse_ante_offer_ownership_exchange,
-    _parse_ownership_exchange_unless_paid,
-    _parse_random_reveal_ownership_exchange,
+    _parse_rebalance_lands,
     _parse_transmute_by_sacrifice,
 )
 from .references import parse_recipient
@@ -158,6 +161,13 @@ def parse_imperative(
     fiends = _parse_ante_offer_ownership_exchange(stream)
     if fiends is not None:
         return fiends
+    # Natural Balance's whole three-sentence paragraph, beside the two above
+    # for their reason: it opens on a noun phrase ("Each player who controls six
+    # or more lands") that the subject reader would take and then a verb no
+    # production of its own would finish. Refuses without consuming.
+    rebalanced = _parse_rebalance_lands(stream)
+    if rebalanced is not None:
+        return rebalanced
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield

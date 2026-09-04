@@ -1005,19 +1005,39 @@ def _player_recipient_spec(payload: dict) -> dict | None:
 
 
 def _look_top_pick_spec(payload: dict) -> dict | None:
-    """Ashnod's Cylix's picker, or None for every other card in the family.
+    """The seat this look-top pick chooses, or None for the cards choosing none.
 
-    "**Target player** looks at the top three cards of their library" chooses a
-    seat as the ability is activated (CR 602.2b); "Look at the top five cards of
-    **your** library" (Browse, See the Truth, Diabolic Vision) chooses nobody,
-    and raising a player picker in front of one of those would ask its
-    controller to name a target the handler ignores — the twelve-card mistake
-    ``_player_recipient_spec`` above records, which is why this is derived from
-    the payload rather than declared flat for the kind.
+    Two payload keys name a chosen seat, and they are the family's two printed
+    shapes:
+
+    * ``looker`` — "**Target player** looks at the top three cards of their
+      library" (Ashnod's Cylix): one seat answers both questions, chosen as the
+      ability is activated (CR 602.2b);
+    * ``pile_owner`` — "Look at the top X cards of **target opponent's**
+      library" (Sealed Fate): the pile is the chosen player's and every decision
+      about it is the caster's.
+
+    "Look at the top five cards of **your** library" (Browse, See the Truth,
+    Diabolic Vision) chooses nobody, and raising a player picker in front of one
+    of those would ask its controller to name a target the handler ignores — the
+    twelve-card mistake ``_player_recipient_spec`` above records, which is why
+    this is derived from the payload rather than declared flat for the kind.
+
+    The ``pile_owner`` half reads the lowering's own ``targets`` description
+    rather than restating it, because the narrowing is part of the answer:
+    "target opponent" may not choose the caster (CR 115.4) and "target player"
+    may. Restating it was never the bug, though. The bug is that this function
+    is registered in ``_KIND_TO_SPEC_FROM_PAYLOAD``, which **pre-empts** the
+    generic ``targets`` reading in :func:`_from_instruction` — so answering None
+    for a payload carrying a real description threw that description away.
+    Sealed Fate derived no picker at all, the client sent a bare cast, and the
+    handler logged "no player chosen" and looked at nothing.
     """
-    if payload.get("looker") != "target_player":
-        return None
-    return {"kind": "player"}
+    if payload.get("looker") == "target_player":
+        return {"kind": "player"}
+    if payload.get("pile_owner") is not None:
+        return _from_targets_payload(payload.get("targets"))
+    return None
 
 
 def _counter_spec(payload: dict) -> dict:
@@ -1284,7 +1304,7 @@ def _cast_permission_spec(payload: dict) -> dict | None:
     return spec
 
 
-def _reanimation_spec(payload: dict) -> dict:
+def _reanimation_spec(payload: dict) -> dict | None:
     """"Return target creature card from your graveyard to the battlefield",
     narrowed by the colours the phrase prints (Dreams of the Dead's "white or
     black") and by **whose graveyard** the printed phrase reads.
@@ -1304,7 +1324,19 @@ def _reanimation_spec(payload: dict) -> dict:
     with the only creature card in an opponent's pile, ``_enumerate_targets``
     returned nothing and the cast was refused outright. The payload is the
     evidence, exactly as the colours beside it are.
+
+    ``from_top`` is the same reading pushed all the way: "Return **the top**
+    creature card of your graveyard to the battlefield" (Shallow Grave) names
+    its card by position, so nobody chooses and there is no picker to derive.
+    The handler says so outright — it overwrites any index the wire carried —
+    and this function claimed one anyway, which is the derivation disagreeing
+    with the program it is derived from once more. The cost is the mirror of
+    Hymn of Rebirth's: with an empty graveyard ``_enumerate_targets`` returns
+    nothing, and a picker the client must fill from an empty list is a cast that
+    cannot be made — where the card, resolving, simply finds no creature.
     """
+    if payload.get("from_top"):
+        return None
     spec: dict = {"kind": "graveyard_creature"}
     if not payload.get("any_graveyard"):
         spec["own_graveyard_only"] = True

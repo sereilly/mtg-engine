@@ -524,12 +524,48 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 }
 
 
-def produced_keys(kind: str) -> frozenset[str]:
-    """Every scratchpad value *kind* records."""
+#: Records a kind writes for **some payloads only**, as
+#: ``kind -> (payload key, payload value, record)``.
+#:
+#: :data:`_PRODUCES` answers "what does a step of this kind write", which is the
+#: whole answer for every kind but one. A library search puts its find wherever
+#: the printed sentence sent it — a hand, a battlefield, the top of the library,
+#: exile — and only the sentence that says *exile* leaves anything behind for
+#: "until the beginning of your next upkeep, you may play that card" (Grinning
+#: Totem) to read. Declaring ``exiled_cards`` flat on ``search_library`` would
+#: admit a tutor-to-hand followed by that permission, which would compile clean
+#: and permit nothing; leaving it out refuses the card that does print it.
+#:
+#: One table rather than a predicate, for :data:`_PRODUCES`' own reason: this is
+#: a registry, and the thing being registered is a payload entry the lowering
+#: already writes.
+_PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
+    "search_library": ("destination", "exile", "exiled_cards"),
+}
+
+
+def produced_keys(instruction) -> frozenset[str]:
+    """Every scratchpad value *instruction* records.
+
+    Keyed by kind through :data:`_PRODUCES`, plus the one kind whose record
+    depends on its payload (:data:`_PRODUCES_FOR_PAYLOAD`) — which is why this
+    takes the instruction rather than the kind: "what does a step of this kind
+    write" is not answerable for a search until you know where it was sending
+    its find.
+    """
+    kind = instruction.kind
     recorded = _PRODUCES.get(kind)
-    if recorded is None:
-        return frozenset()
-    return frozenset((recorded,) if isinstance(recorded, str) else recorded)
+    keys = (
+        frozenset()
+        if recorded is None
+        else frozenset((recorded,) if isinstance(recorded, str) else recorded)
+    )
+    conditional = _PRODUCES_FOR_PAYLOAD.get(kind)
+    if conditional is not None:
+        payload_key, payload_value, record = conditional
+        if (instruction.payload or {}).get(payload_key) == payload_value:
+            keys = keys | {record}
+    return keys
 
 
 def primary_produced(kind: str) -> str | None:

@@ -871,3 +871,20 @@ def _lower_destroy_each_unless_paid(
     if node.no_regen:
         payload["bypass_regeneration"] = True
     return (OracleInstruction("destroy_each_unless_life_paid", "", payload),)
+
+
+def _lower_rebalance_lands(node: "ast.RebalanceLands") -> tuple[OracleInstruction, ...]:
+    """Natural Balance's whole paragraph, as one instruction.
+
+    One payload key, because the production already reduced the card's four
+    printed numbers to the one they agree on. Every seat's membership in either
+    half and every count it owes is a function of that number and of a board the
+    handler reads, so there is nothing else to carry.
+    """
+    if node.keep < 1:
+        # A rebalancing that keeps nothing would be a one-sided Armageddon with
+        # a tutor attached, and the "five minus" clause would count *up* from a
+        # number the card never printed. No card prints it, and the refusal is
+        # the loud failure rather than a handler improvising.
+        raise LoweringError("a land rebalancing keeps at least one land", node=node)
+    return (OracleInstruction("rebalance_lands", "", {"keep": node.keep}),)
