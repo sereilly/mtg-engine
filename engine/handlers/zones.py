@@ -5242,8 +5242,16 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     caster = context.caster
     destination = str(instruction.payload.get("zone", "hand"))
     moved: list = []
+    # The caster's own pile first, then everybody else's. Identity alone is not
+    # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
+    # per copy and the catalog is shared between seats, so *the same object* can
+    # sit in two players' exiles at once — and a bare scan would then take
+    # whichever seat came first in the list. Necropotence's card is always its
+    # controller's, so asking that pile first keeps it exactly where it was, and
+    # the wider scan is reached only by the card that needs it.
+    seats = [context.caster] + [p for p in game.players if p is not context.caster]
     for card in cards:
-        for owner in game.players:
+        for owner in seats:
             index = next(
                 (i for i, held in enumerate(owner.exile) if held is card), None
             )
