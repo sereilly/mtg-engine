@@ -87,6 +87,7 @@ from .effects import (
     _parse_look_at_hand,
     _parse_exile_bound_card,
     _parse_put_exiled_card_into_hand,
+    _parse_put_exiled_pile_top_into_hand,
     _parse_exile_cost_sacrifices,
     _parse_mill,
     _parse_modal_head,
@@ -293,6 +294,14 @@ def parse_imperative(
         exiled_back = _parse_put_exiled_card_into_hand(stream)
         if exiled_back is not None:
             return exiled_back
+        # "Put the top card of the exiled pile into its owner's hand."
+        # (Mangara's Tome.) CR 610.3's linked pile rather than a back-reference
+        # inside one resolution, and read here for the same reason as the three
+        # above: the counter production takes "the top card" as a count and
+        # refuses with a site naming counters.
+        pile_top = _parse_put_exiled_pile_top_into_hand(stream)
+        if pile_top is not None:
+            return pile_top
         # "Put it into your graveyard." (All Hallow's Eve.) The ability moving
         # its own source; same treatment and same reason as the two above.
         moved = _parse_put_source_into_zone(stream)

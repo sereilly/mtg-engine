@@ -78,6 +78,16 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # admits a narrowed line on, so with the word missing the cost was refused
     # outright and the card was unsupported.
     "token_only",
+    # "Destroy all **tokens created with this enchantment**" (Tombstone
+    # Stairwell); "exile any number of **tokens created with this creature**"
+    # (Tetravus). A fact about the token's history, not a characteristic — the
+    # maker stamps its own ``permanent_id`` on every token it makes — so what
+    # it needs beyond the object is the ability's own source, which puts it on
+    # ``blocked_by_source``'s footing: testable here and nowhere else, and
+    # answered no by a caller with no source. That direction is the whole
+    # point on a *sweep*: with the word untestable the lowering refused the
+    # line, and dropping it instead would destroy every token on the table.
+    "created_with_source",
     # "target **nonsnow** land" (Hallowed Ground). The negative of
     # ``supertypes``, answered off the same effective type line — testable for
     # exactly the reason the positive is.
@@ -724,6 +734,21 @@ def subject_matches(
         if source is None:
             return False
         if not any(mate is obj for mate in creatures_banded_with(game, source)):
+            return False
+    # "…**created with this enchantment**" (Tombstone Stairwell) — the tokens
+    # this very permanent made, read off the record the token carries rather
+    # than off anything about the token itself: two boards can hold identical
+    # 2/2 Zombies named Tombspawn, and only the stamped maker id tells them
+    # apart. By id and not by identity because a maker that left and returned
+    # is a new object (CR 400.7) whose old tokens were not created with *it* —
+    # and the record outlives the maker's departure, which is what the
+    # leaves-the-battlefield printing of the sentence needs.
+    if described.get("created_with_source"):
+        from .tokens import CREATED_WITH_PERMANENT_ID
+
+        if source is None:
+            return False
+        if obj.metadata.get(CREATED_WITH_PERMANENT_ID) != source.permanent_id:
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

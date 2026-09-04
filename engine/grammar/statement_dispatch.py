@@ -63,6 +63,7 @@ from .lowering import (
     _lower_combat_restriction,
     lower_block_count_grant,
     _lower_create_delayed_trigger,
+    _lower_next_draw_replacement,
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
@@ -733,6 +734,14 @@ def lower_statement(
             statement.effect, produced, event=statement.event, whole_effect=True,
             event_subject=statement.subject or statement.agent,
         ), produced)
+
+    if isinstance(statement, ast.NextDrawReplacement):
+        # The inner sentence is lowered under *this* line's event, not the
+        # replaced draw: see `_lower_next_draw_replacement`.
+        return _lower_next_draw_replacement(statement, lower_statement(
+            statement.effect, produced, event=event,
+            event_subject=event_subject, whole_effect=False,
+        ))
 
     if isinstance(statement, ast.WhereX):
         # The wrapped sentence is lowered *here* so `where_x` can sit a layer

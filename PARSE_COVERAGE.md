@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**16 unclaimed sentence(s) across 12 supported card(s).**
+**13 unclaimed sentence(s) across 11 supported card(s).**
 
 - **Aleatory**
   - `cast this spell only during combat after blockers are declared`
@@ -49,10 +49,6 @@ anything anyone did, and every ingest would arrive red.
   - `as an additional cost to cast this spell, sacrifice two creatures`
 - **Roots of Life**
   - `as this enchantment enters, choose island or swamp`
-- **Tombstone Stairwell**
-  - `at the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black zombie creature token with haste named tombspawn for each creature card in their graveyard`
-  - `at the beginning of each end step, destroy all tokens created with this enchantment. they can't be regenerated`
-  - `when this enchantment leaves the battlefield, destroy all tokens created with this enchantment. they can't be regenerated`
 - **Torrent of Lava**
   - `as long as torrent of lava is on the stack, each creature has "{t}: prevent the next 1 damage that would be dealt to this creature by torrent of lava this turn."`
 

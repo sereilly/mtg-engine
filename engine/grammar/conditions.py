@@ -937,6 +937,14 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             for word, state, negated in _PRESENT_STATES:
                 if stream.accept_word(word):
                     return ast.IsState(subject, state, negated=negated)
+            # "…**is on the battlefield**" (Tombstone Stairwell). A zone
+            # question rather than a state of the permanent, which is why it is
+            # not another row of the table above: every word there is a field
+            # the object carries, and CR 400.1's "which zone is it in" is the
+            # game's to answer. Read after the table so a state word still wins
+            # its own reading.
+            if stream.accept_phrase("on", "the", "battlefield"):
+                return ast.SourceOnBattlefield(subject)
         # "…**didn't attack this turn**" / "…**attacked this turn**"
         # (Aggression, and the delayed end-step destruction Norritt's family
         # prints about a creature it chose). The same axis the present-tense

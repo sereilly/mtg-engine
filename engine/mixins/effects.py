@@ -1020,7 +1020,7 @@ class EffectsMixin:
             self, "discard", {"player": player, "card": card}
         )
         if not consumed:
-            player.graveyard.append(card)
+            self.put_card_into_graveyard(player, card)
         self._announce_discard_triggers(player, card)
         self.announce_discard(player, card)
 

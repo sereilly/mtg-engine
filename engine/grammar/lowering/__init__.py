@@ -5,7 +5,7 @@ template has one home on each side — prowess parses in
 `effects/characteristics.py` and lowers in `lowering/characteristics.py`.
 
     _common          payload shapes and the fragments several families need
-    categories       the kind -> category registry the gate reads
+    categories       the kind -> category registry the gate in `lower.py` reads
     damage           dealing it, and preventing it
     redirection      CR 614.9, changing who dealt damage reaches
     fighting         CR 701.14, two creatures damaging each other
@@ -170,6 +170,7 @@ from .exile import (
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
     _lower_exile_graveyard_until_leaves,
+    _lower_put_exiled_pile_top_into_hand,
     _lower_exile_top_of_library,
     _lower_exile_entire_library,
     _lower_put_exiled_card_into_zone,
@@ -242,6 +243,7 @@ from .cards import (
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _lower_draw,
+    _lower_next_draw_replacement,
     _lower_mill,
     _lower_mill_until,
     _lower_put_milled_card_onto_battlefield,
@@ -331,9 +333,9 @@ __all__ = [
     "_lower_condition",
     "pronoun_target_referent",
     "INSTRUCTION_CATEGORIES",
+    "categories_of",
     "_COST_PRODUCES",
     "_PRODUCES",
-    "categories_of",
     "_mentions_x",
     "_refuse_unfused_distinctness",
     "_stamp_x_from_count",
@@ -473,6 +475,7 @@ __all__ = [
     "_fused_discard_then_draw",
     "_fused_draw_then_discard",
     "_lower_draw",
+    "_lower_next_draw_replacement",
     "_lower_mill",
     "_lower_mill_until",
     "_lower_put_milled_card_onto_battlefield",
@@ -507,6 +510,7 @@ __all__ = [
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",
     "_lower_exile_graveyard_until_leaves",
+    "_lower_put_exiled_pile_top_into_hand",
     "_lower_force_chosen_creature_to_attack",
     "_lower_transmute_by_sacrifice",
     "_lower_exile_until_leaves_or_untaps",

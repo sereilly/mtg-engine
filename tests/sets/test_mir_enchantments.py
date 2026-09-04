@@ -1080,3 +1080,515 @@ def test_wellspring_untaps_and_reborrows_each_upkeep(set_pool):
 
     assert not forest.tapped, game.log
     assert game.controller_index_of(forest) == 0, game.log
+
+
+# --- W3G2: Tombstone Stairwell ---
+#
+# The set's one *hollow* card: it compiled, reported supported on the strength
+# of the substring "destroy all", and did nothing at all. Three abilities, and
+# what they need is one thing — a permanent that keeps a record of the tokens it
+# made and later destroys exactly those. The record already existed
+# (`engine/tokens.CREATED_WITH_PERMANENT_ID`, stamped by the `create_token`
+# handler for Tetravus and Dance of Many); what was missing was permission to
+# *test* it as a noun-phrase narrowing, so `destroy all tokens created with this
+# enchantment` parsed and then refused at the lowering with "no sweep handler
+# for this narrowing".
+#
+# The other half is CR 603.4's intervening-if "if this enchantment is on the
+# battlefield", which is the clause that makes the cumulative upkeep matter: the
+# turn its controller cannot pay, the enchantment is sacrificed during the very
+# upkeep step the Zombie trigger fired in, and the gate is what stops it
+# repopulating the board on its way out.
+
+from engine import Game as _w3g2_Game, PlayerState as _w3g2_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g2_load,  # noqa: E402
+                                manifest_set_path as _w3g2_path)
+from engine.models import Permanent as _w3g2_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g2_compile  # noqa: E402
+from engine.tokens import (CREATED_WITH_PERMANENT_ID as _w3g2_made_by,  # noqa: E402
+                           make_token_card as _w3g2_make_token)
+
+
+def _w3g2_lea():
+    return {card.name: card for card in _w3g2_load(_w3g2_path("LEA"))}
+
+
+def _w3g2_board(set_pool, *, stairwells=1, enforce_costs=False):
+    """A two-seat game with *stairwells* Tombstone Stairwells under P1.
+
+    P1's graveyard holds two creature cards and P2's holds one, so the upkeep
+    trigger's "for each creature card in **their** graveyard" has a different
+    answer per seat — the ``per_recipient`` half of the count, which a single
+    evaluation on the caster's board would get wrong in the direction nobody
+    notices (both seats getting the caster's number).
+    """
+    lea = _w3g2_lea()
+    game = _w3g2_Game(players=[
+        _w3g2_PlayerState(
+            name="P1", library=[lea["Island"]] * 10,
+            graveyard=[lea["Grizzly Bears"], lea["Hurloon Minotaur"]],
+        ),
+        _w3g2_PlayerState(
+            name="P2", library=[lea["Island"]] * 10,
+            graveyard=[lea["Grizzly Bears"]],
+        ),
+    ])
+    game.enforce_mana_costs = enforce_costs
+    game.interactive_seats = set()
+    made = []
+    for _ in range(stairwells):
+        permanent = _w3g2_Permanent(card=set_pool("MIR")["Tombstone Stairwell"])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        made.append(permanent)
+    return game, made
+
+
+def _w3g2_names(player):
+    return sorted(perm.card.name for perm in player.battlefield)
+
+
+def test_w3g2_tombstone_stairwell_is_no_longer_hollow(set_pool):
+    """Every one of the three abilities compiles to an instruction.
+
+    The card reported ``supported`` before this round and carried three
+    instruction-less ability parts — the shape SET_PLAYBOOK Phase 4 exists to
+    catch, and the one Legends shipped fourteen of. Asserted as a census over
+    the program rather than on one line, because "supported" was never the
+    thing that was wrong.
+    """
+    program = _w3g2_compile(set_pool("MIR")["Tombstone Stairwell"])
+    assert program.supported, program.reason
+    hollow = [
+        trig.source_line for trig in program.triggered_abilities
+        if trig.instruction is None
+    ]
+    assert hollow == [], hollow
+
+
+def test_w3g2_tombstone_stairwell_fills_both_graveyards_worth_of_zombies(set_pool):
+    """"At the beginning of each upkeep ... each player creates a 2/2 black
+    Zombie creature token with haste named Tombspawn for each creature card in
+    **their** graveyard."
+
+    Two creature cards in P1's graveyard and one in P2's, so the count is per
+    recipient rather than per caster.
+    """
+    game, _ = _w3g2_board(set_pool)
+
+    game.start_next_turn()
+    game.resolve_stack()
+
+    assert _w3g2_names(game.players[0]) == [
+        "Tombspawn", "Tombspawn", "Tombstone Stairwell",
+    ], game.log
+    assert _w3g2_names(game.players[1]) == ["Tombspawn"], game.log
+    zombie = next(
+        perm for perm in game.controlled_by(game.players[1])
+        if perm.card.name == "Tombspawn"
+    )
+    # 2/2 black with haste, as printed — the token maker's own payload, checked
+    # once so the sweeps below are about the record and not about the card.
+    assert (zombie.effective_power, zombie.effective_toughness) == (2, 2)
+    assert game._has_keyword(zombie, "haste")
+
+
+def test_w3g2_end_step_destroys_its_own_tokens_and_leaves_a_look_alike(set_pool):
+    """"At the beginning of each end step, destroy all tokens created with this
+    enchantment."
+
+    The narrowing is a *record*, not a description: a 2/2 black Zombie named
+    Tombspawn that this enchantment did not make is not one of them. Without a
+    matcher for the phrase the lowering refused the line outright; with the
+    phrase dropped instead it would have swept every token on the table, which
+    is why the key had to be testable rather than merely carried.
+    """
+    game, _ = _w3g2_board(set_pool)
+    game.start_next_turn()
+    game.resolve_stack()
+
+    decoy = _w3g2_Permanent(
+        card=_w3g2_make_token(
+            name="Tombspawn", power=2, toughness=2,
+            type_line="Creature - Zombie", colors=("B",), keywords=("Haste",),
+        ),
+        metadata={"is_token": True},
+    )
+    game._put_permanent_onto_battlefield(0, decoy, None)
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert _w3g2_names(game.players[0]) == ["Tombspawn", "Tombstone Stairwell"], game.log
+    assert _w3g2_names(game.players[1]) == [], game.log
+    assert game.is_on_battlefield(decoy), game.log
+
+
+def test_w3g2_another_makers_tombspawn_survives_the_sweep(set_pool):
+    """The record is keyed by the maker's ``permanent_id``, so a token some
+    *other* permanent made is not one of these.
+
+    The look-alike bug class this repo keeps finding, in its token form: a sweep
+    that asked "is this a Tombspawn?" — or that compared ``Permanent`` by value
+    — would take the other maker's Zombies too, and every assertion about
+    counts would still pass.
+
+    Two Stairwells cannot be the second maker: CR 704.5k's world rule puts the
+    older one into its owner's graveyard the moment the second enters (the test
+    below plays that out). So the second maker here is an ordinary permanent
+    with the record the ``create_token`` handler would have stamped on its
+    token — the same field, written the same way, by hand because the board
+    state that writes it is one this card forbids.
+    """
+    game, (stair,) = _w3g2_board(set_pool)
+    game.start_next_turn()
+    game.resolve_stack()
+
+    other_maker = next(iter(game.controlled_by(game.players[1])))
+    assert other_maker.permanent_id != stair.permanent_id
+    theirs = _w3g2_Permanent(
+        card=_w3g2_make_token(
+            name="Tombspawn", power=2, toughness=2,
+            type_line="Creature - Zombie", colors=("B",), keywords=("Haste",),
+        ),
+        metadata={"is_token": True, _w3g2_made_by: other_maker.permanent_id},
+    )
+    game._put_permanent_onto_battlefield(1, theirs, None)
+
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert game.is_on_battlefield(theirs), game.log
+    assert _w3g2_names(game.players[1]) == ["Tombspawn"], game.log
+    assert _w3g2_names(game.players[0]) == ["Tombstone Stairwell"], game.log
+
+
+def test_w3g2_the_world_rule_takes_the_first_stairwell_and_its_zombies(set_pool):
+    """CR 704.5k: a second Tombstone Stairwell makes the first one a
+    state-based casualty, and the leaves-the-battlefield trigger fires on the
+    way out.
+
+    Worth its own test because it is the board state the sweep above cannot be
+    written against, and because it is the one that would have hidden a
+    record read by *card* rather than by maker id: the incoming Stairwell has
+    the same name, the same text and none of the outgoing one's Zombies.
+    """
+    game, (first,) = _w3g2_board(set_pool)
+    game.start_next_turn()
+    game.resolve_stack()
+    assert len(_w3g2_names(game.players[0])) == 3, game.log
+
+    second = _w3g2_Permanent(card=set_pool("MIR")["Tombstone Stairwell"])
+    game._put_permanent_onto_battlefield(0, second, None)
+    game.check_state_based_actions()
+    game.resolve_stack()
+
+    assert not game.is_on_battlefield(first), game.log
+    assert _w3g2_names(game.players[0]) == ["Tombstone Stairwell"], game.log
+    assert _w3g2_names(game.players[1]) == [], game.log
+
+
+def test_w3g2_leaving_the_battlefield_takes_its_zombies_with_it(set_pool):
+    """"When this enchantment leaves the battlefield, destroy all tokens created
+    with this enchantment."
+
+    The reader that fires *after* its source is gone. It works because the
+    record lives on the tokens and names the maker by id — the maker's
+    ``Permanent`` is still a live object with a stable id once it has left, and
+    the trigger carries it as the ability's source.
+    """
+    game, (stair,) = _w3g2_board(set_pool)
+    game.start_next_turn()
+    game.resolve_stack()
+    assert len(_w3g2_names(game.players[0])) == 3, game.log
+
+    game.remove_from_battlefield(stair)
+    game._permanent_to_graveyard(game.players[0], stair)
+    game.resolve_stack()
+
+    assert _w3g2_names(game.players[0]) == [], game.log
+    assert _w3g2_names(game.players[1]) == [], game.log
+
+
+def test_w3g2_unpaid_cumulative_upkeep_makes_no_zombies_on_its_way_out(set_pool):
+    """CR 603.4: "if this enchantment is on the battlefield" is checked again
+    once the enchantment has gone, and the ability then does nothing.
+
+    This is the whole card's timing, not a contrived case. Both abilities fire
+    at the beginning of the same upkeep; the cumulative upkeep goes unpaid, the
+    enchantment is sacrificed, and the Zombie trigger finds nothing to be on the
+    battlefield. Without the gate it would repopulate two boards on the way out
+    and the leaves-the-battlefield trigger — which resolved first — would not be
+    there to clean up after it.
+    """
+    game, (stair,) = _w3g2_board(set_pool, enforce_costs=True)
+    game.start_next_turn()            # P2's upkeep: the Zombies arrive
+    game.resolve_stack()
+    assert len(_w3g2_names(game.players[0])) == 3, game.log
+
+    game.start_next_turn()            # P1's upkeep: cumulative upkeep, unpaid
+    game.resolve_stack()
+
+    assert "Tombstone Stairwell" in [card.name for card in game.players[0].graveyard]
+    assert _w3g2_names(game.players[0]) == [], game.log
+    assert _w3g2_names(game.players[1]) == [], game.log
+
+
+# --- W3G2: Forbidden Crypt ---
+#
+# Two CR 614 replacements and nothing else, which is why the card reported
+# "no ability of this permanent is implemented": an interceptor produces no
+# instruction, so a permanent whose whole text is one is held up by
+# REPLACEMENT_LINES.
+#
+# The second line is the one that needed building. "If a card would be put into
+# your graveyard **from anywhere**" has no single fire site — a death, a
+# discard, a mill, a sacrifice and a spell finishing on the stack are one event
+# with twenty-six spellings — so it needed the graveyard seam
+# (`Game.put_card_into_graveyard`) that `put_card_into_hand` and
+# `put_card_into_library` already had for CR 903.9b's identical problem. The
+# tests below drive four of those paths, because the interesting failure of a
+# rule like this is not that it does nothing, it is that it works on the path
+# you tested and nowhere else.
+
+from engine import Game as _w3g2c_Game, PlayerState as _w3g2c_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g2c_load,  # noqa: E402
+                                manifest_set_path as _w3g2c_path)
+from engine.models import Permanent as _w3g2c_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g2c_compile  # noqa: E402
+
+
+def _w3g2c_lea():
+    return {card.name: card for card in _w3g2c_load(_w3g2c_path("LEA"))}
+
+
+def _w3g2c_board(set_pool, *, graveyard=(), seat=0, interactive=()):
+    """A two-seat game with a Forbidden Crypt under *seat*.
+
+    ``graveyard`` fills P1's graveyard by LEA card name — the pile the first
+    line spends and the second line keeps empty.
+    """
+    lea = _w3g2c_lea()
+    game = _w3g2c_Game(players=[
+        _w3g2c_PlayerState(
+            name="P1", library=[lea["Island"]] * 10,
+            graveyard=[lea[name] for name in graveyard],
+        ),
+        _w3g2c_PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    crypt = _w3g2c_Permanent(card=set_pool("MIR")["Forbidden Crypt"])
+    game._put_permanent_onto_battlefield(seat, crypt, None)
+    return game, crypt
+
+
+def test_w3g2_forbidden_crypt_is_supported_by_its_replacements(set_pool):
+    """The card's whole text is two interceptors, so nothing it does reaches
+    the compiled program — the support gate has to read REPLACEMENT_LINES for
+    it, which is exactly the gap Fiery Emancipation opened."""
+    program = _w3g2c_compile(set_pool("MIR")["Forbidden Crypt"])
+    assert program.supported, program.reason
+
+
+def test_w3g2_a_draw_returns_a_card_from_the_graveyard_instead(set_pool):
+    """"If you would draw a card, return a card from your graveyard to your
+    hand instead."
+
+    Nothing is drawn: the replacement consumes the event, so a "whenever you
+    draw a card" effect correctly sees no draw and the library is untouched.
+    """
+    game, _ = _w3g2c_board(set_pool, graveyard=["Black Lotus", "Grizzly Bears"])
+    player = game.players[0]
+    library_before = len(player.library)
+
+    drawn = game._draw_with_replacements(player, 1)
+
+    assert drawn == 0
+    assert len(player.library) == library_before
+    assert [card.name for card in player.hand] == ["Black Lotus"]
+    assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
+
+
+def test_w3g2_an_interactive_seat_picks_which_card_comes_back(set_pool):
+    """The return is a choice, so it is offered rather than taken. An
+    interactive seat queues it and the draw suspends; every other seat takes
+    the default at once, through the same resolver."""
+    game, _ = _w3g2c_board(
+        set_pool, graveyard=["Black Lotus", "Grizzly Bears"], interactive=(0,),
+    )
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 1) == 0
+    [choice] = game.pending_replacement_choices
+    assert choice.kind == "return_from_graveyard_instead_of_draw"
+    assert choice.options == ("Black Lotus", "Grizzly Bears")
+
+    assert game.resolve_replacement_choice(0, 1) is True
+    assert [card.name for card in player.hand] == ["Grizzly Bears"]
+    assert [card.name for card in player.graveyard] == ["Black Lotus"]
+
+
+def test_w3g2_an_empty_graveyard_loses_the_game(set_pool):
+    """"If you can't, you lose the game." (CR 104.3e.)
+
+    The decline branch of the replacement, and the clause that makes Forbidden
+    Crypt a real card rather than a slow Regrowth. It is not a state-based
+    action waiting to be noticed: the effect states the player loses, so they
+    have, and the opponent has won.
+    """
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 1) == 0
+    assert player.lost
+    assert game.get_winner() is game.players[1]
+
+
+def test_w3g2_the_second_draw_of_a_pair_finds_the_graveyard_empty(set_pool):
+    """CR 121.2: a two-card draw is two draws, each replaced on its own.
+
+    The first spends the only card in the graveyard and the second has nothing
+    to return, so the loss lands on the second — which a replacement written
+    once per *event* rather than once per draw would have missed entirely.
+    """
+    game, _ = _w3g2c_board(set_pool, graveyard=["Black Lotus"])
+    player = game.players[0]
+
+    assert game._draw_with_replacements(player, 2) == 0
+    assert [card.name for card in player.hand] == ["Black Lotus"]
+    assert player.lost
+
+
+def test_w3g2_a_dying_creature_is_exiled_and_did_not_die(set_pool):
+    """"If a card would be put into your graveyard from anywhere, exile that
+    card instead."
+
+    A death is one of the paths, and the consequence goes further than the
+    pile: CR 700.4 defines dying as being put into a graveyard *from the
+    battlefield*, so a creature exiled instead did not die — no dies trigger,
+    and no creature counted toward "a creature died this turn".
+    """
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    bear = _w3g2c_Permanent(card=_w3g2c_lea()["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bear, None)
+
+    game.remove_from_battlefield(bear)
+    game._permanent_to_graveyard(player, bear)
+
+    assert [card.name for card in player.exile] == ["Grizzly Bears"]
+    assert player.graveyard == []
+    assert getattr(game, "creatures_died_this_turn", 0) == 0
+    assert player.creatures_died_under_your_control_this_turn == 0
+
+
+def test_w3g2_a_discard_a_mill_and_a_resolved_spell_are_all_exiled(set_pool):
+    """The other three paths into a graveyard, driven one at a time.
+
+    A rule written "from anywhere" fails by working on the path its author
+    tested. These are the three that reach a different module each: the
+    discard seam in ``mixins/effects.py``, the mill handler in
+    ``handlers/zones.py``, and the stack's leave-the-stack transition in
+    ``mixins/stack/resolution.py``.
+    """
+    lea = _w3g2c_lea()
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    player.hand.append(lea["Black Lotus"])
+    game.take_card_from_hand(player, player.hand[0])
+    game._discard_card(player, lea["Black Lotus"])
+    assert [card.name for card in player.exile] == ["Black Lotus"]
+    assert player.graveyard == []
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    millstone = _w3g2c_Permanent(
+        card={c.name: c for c in _w3g2c_load(_w3g2c_path("ATQ"))}["Millstone"]
+    )
+    game._put_permanent_onto_battlefield(0, millstone, None)
+    millstone.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Millstone", target_player_index=0)
+    game._settle()
+    assert len(player.exile) == 2, game.log
+    assert player.graveyard == [], game.log
+
+    game, _ = _w3g2c_board(set_pool)
+    player = game.players[0]
+    player.hand.append(lea["Lightning Bolt"])
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+    assert [card.name for card in player.exile] == ["Lightning Bolt"]
+    assert player.graveyard == []
+    assert game.players[1].life == 17
+
+
+def test_w3g2_an_opponents_crypt_leaves_your_graveyard_alone(set_pool):
+    """"**Your** graveyard" is read relative to the enchantment's controller
+    (CR 109.5), so a Crypt across the table exiles nothing of yours and does
+    not replace your draws either.
+
+    The direction that would be invisible: a scope word read as "anybody's"
+    would empty both graveyards and lose both players the game, and every
+    assertion about the controller's own side would still pass.
+    """
+    game, _ = _w3g2c_board(set_pool, seat=1)
+    victim = game.players[0]
+    victim.hand.append(_w3g2c_lea()["Black Lotus"])
+    game.take_card_from_hand(victim, victim.hand[0])
+    game._discard_card(victim, _w3g2c_lea()["Black Lotus"])
+
+    assert [card.name for card in victim.graveyard] == ["Black Lotus"]
+    assert victim.exile == []
+    assert game._draw_with_replacements(victim, 1) == 1
+    assert not victim.lost
+
+
+def test_w3g2_the_scope_word_is_payload_not_a_constant(set_pool):
+    """"If a card would be put into **a** graveyard from anywhere, exile it
+    instead." (Rest in Peace's sentence, Planar Void's.)
+
+    The same production with a different seat in it, so the matcher takes the
+    scope as payload rather than pinning Forbidden Crypt's wording. Checked
+    with an invented card carrying the printed line, which is the "would a
+    second card work?" test the card-hook bar asks for — and the answer has to
+    be yes, or the phrase belongs in ``card_hooks``.
+    """
+    from engine.replacements import graveyard_exile_scope
+
+    assert graveyard_exile_scope(
+        "If a card would be put into your graveyard from anywhere, exile that "
+        "card instead."
+    ) == "you"
+    assert graveyard_exile_scope(
+        "If a card would be put into a graveyard from anywhere, exile it instead."
+    ) == "any"
+    assert graveyard_exile_scope(
+        "If a card would be put into an opponent's graveyard from anywhere, "
+        "exile it instead."
+    ) == "opponent"
+    assert graveyard_exile_scope("Destroy target creature.") is None
+
+    from tests.helpers import _mk_card as _w3g2c_mk_card
+
+    lea = _w3g2c_lea()
+    void = _w3g2c_mk_card(
+        "Planar Void (test)", "{B}", "Enchantment",
+        "If a card would be put into a graveyard from anywhere, exile it "
+        "instead.",
+    )
+    game = _w3g2c_Game(players=[
+        _w3g2c_PlayerState(name="P1", library=[lea["Island"]] * 5),
+        _w3g2c_PlayerState(name="P2", library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(0, _w3g2c_Permanent(card=void), None)
+
+    for seat in (0, 1):
+        player = game.players[seat]
+        assert game.put_card_into_graveyard(player, lea["Black Lotus"]) is False
+        assert player.graveyard == []
+        assert [card.name for card in player.exile] == ["Black Lotus"]
+    assert _w3g2c_compile(void).supported, "the shape claims its own line"

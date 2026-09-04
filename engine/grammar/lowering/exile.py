@@ -859,7 +859,27 @@ def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction
         # (CR 701.23b), emitted only when printed so every payload written for
         # the "any number of" spelling stays byte-identical.
         payload["maximum"] = node.count
+    if node.face_down_pile:
+        # "…exile them in a face-down pile" (Mangara's Tome). The finds become
+        # a **linked** pile on the exiling permanent (CR 610.3), which is the
+        # only thing a later "the exiled pile" can name — so a card printing
+        # the phrase with no permanent behind it (an instant) would exile face
+        # down into nothing, and the handler refuses there rather than here,
+        # where the source is not yet known.
+        payload["face_down_pile"] = True
+    if node.shuffle_pile:
+        payload["shuffle_pile"] = True
     return (OracleInstruction("search_and_exile_matching", "", payload),)
+
+
+def _lower_put_exiled_pile_top_into_hand(
+    node: "ast.PutExiledPileTopIntoHand",
+) -> tuple[OracleInstruction, ...]:
+    """"Put the top card of the exiled pile into its owner's hand." (Mangara's
+    Tome.) No payload: the pile is CR 610.3's linked record on the ability's
+    own source, so which cards and whose are read at resolution rather than
+    described here."""
+    return (OracleInstruction("put_exiled_pile_top_into_hand", "", {}),)
 
 
 def _lower_exile_graveyard_until_leaves(

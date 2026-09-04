@@ -765,6 +765,45 @@ class GameHelpersMixin:
             library.append(card)
         return True
 
+    def put_card_into_graveyard(self, owner, card) -> bool:
+        """Put *card* into *owner*'s graveyard, unless something diverts it.
+
+        The third of the zone seams, and it exists for the reason CR 903.9b gave
+        the first two: "if a card would be put into your graveyard **from
+        anywhere**" (Forbidden Crypt) has no single fire site — a death, a
+        discard, a mill, a spell finishing on the stack and a sacrifice are all
+        the same event — and twenty-six fire sites is twenty-five places to
+        forget it.
+
+        Returns True when the card actually arrived. False means a CR 614
+        replacement sent it somewhere else, and every caller must read it the
+        way they read :meth:`put_card_into_hand`'s: do not also record a card
+        reaching the graveyard.
+
+        The seat is the caller's, not derived. CR 400.3 sends a card to its
+        *owner's* graveyard and almost every caller has already worked that out
+        — but an ownership exchange (Bazaar of Baghdad's family) deliberately
+        files a card under the player who now owns it, and deriving the seat
+        here would quietly undo that.
+
+        No token guard, unlike the hand and library seams: CR 111.7 does put a
+        token into the graveyard before the state-based action makes it cease to
+        exist, and the one path that moves a dying permanent's card
+        (:meth:`_permanent_to_graveyard`) already keeps a token's card out. A
+        guard here would be a second, differently-worded answer to a question
+        that already has one.
+        """
+        seat = self._owner_seat(owner)
+        consumed, _ = apply_replacements(
+            self,
+            "put_into_graveyard",
+            {"player": self.players[seat], "card": card},
+        )
+        if consumed:
+            return False
+        self.players[seat].graveyard.append(card)
+        return True
+
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:
         """CR 614.6 for a permanent on its way off the battlefield — whether a
         replacement sent it somewhere other than *destination*.
@@ -824,7 +863,17 @@ class GameHelpersMixin:
             # from the controller's when the permanent was stolen (Control Magic).
             owner_idx = self.owner_index_of(permanent)
             owner = self.players[owner_idx] if owner_idx is not None else player
-            owner.graveyard.append(permanent.card)
+            # Through the one graveyard seam, so "if a card would be put into
+            # your graveyard from anywhere" sees a death like every other move.
+            # A diverted card means **nothing died** (CR 700.4: dying is being
+            # put into a graveyard from the battlefield), so the dies-triggers
+            # and the death tallies below are skipped — the same early return
+            # the `would_die` replacement above already takes, one rule further
+            # down. The token branch is deliberately outside this: CR 111.7
+            # keeps a token's card out of the pile while leaving it something
+            # that died.
+            if not self.put_card_into_graveyard(owner, permanent.card):
+                return
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death
         # already passes through, not from the destruction paths: it used to be

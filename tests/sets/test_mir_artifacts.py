@@ -1170,3 +1170,271 @@ def test_grinning_totem_reports_supported_with_all_three_steps(set_pool):
     assert steps[2].payload["instruction"].payload == {
         "zone": "graveyard", "only_if_unplayed": True,
     }
+
+
+# --- W3G2: Mangara's Tome ---
+#
+# A search that makes a *pile* and an ability that reads it one card at a time.
+# Both halves needed a piece the engine did not have:
+#
+# * "exile them in a face-down pile, and shuffle that pile" is `SearchAndExile`
+#   with two printed facts on it. The record it builds is CR 610.3's linked
+#   pile (`engine/linked_exile.py`) — the same one Knowledge Vault and Tetravus
+#   already use — which is what a later ability naming "the exiled pile" can be
+#   about at all.
+# * "The next time you would draw a card this turn, instead <effect>" is a
+#   CR 614.1 one-shot draw replacement, and it is a *general* production
+#   because three cards in the pool print that opener: Aladdin's Lamp and Ring
+#   of Ma'rûf print it too, with inner sentences this grammar does not read, so
+#   they keep their card hooks and this claims neither.
+#
+# The armed replacement lives on the game rather than on the Tome, which is
+# CR 611.2: the effect belongs to the ability that resolved, so destroying the
+# artifact in response does not un-arm the draw it paid for.
+
+import random as _w3g2t_random  # noqa: E402
+
+from engine import Game as _w3g2t_Game, PlayerState as _w3g2t_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w3g2t_load,  # noqa: E402
+                                manifest_set_path as _w3g2t_path)
+from engine.linked_exile import linked_entries as _w3g2t_pile  # noqa: E402
+from engine.models import Permanent as _w3g2t_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g2t_compile  # noqa: E402
+
+
+def _w3g2t_lea():
+    return {card.name: card for card in _w3g2t_load(_w3g2t_path("LEA"))}
+
+
+#: Five distinct cards plus filler, so "which five went into the pile" and
+#: "what order is the pile in" are both readable off the names.
+_W3G2T_DECK = (
+    "Black Lotus", "Grizzly Bears", "Hurloon Minotaur", "Mox Pearl",
+    "Healing Salve", "Island", "Island", "Island", "Island",
+)
+
+
+def _w3g2t_board(set_pool, *, seed=7):
+    """A game with a Mangara's Tome already resolved on P1's battlefield.
+
+    The Tome is *cast* rather than placed, so the entry trigger runs and the
+    pile is what the search actually built. The seed pins the two shuffles —
+    the library's and the pile's — so the assertions below name cards rather
+    than counting them.
+    """
+    _w3g2t_random.seed(seed)
+    lea = _w3g2t_lea()
+    game = _w3g2t_Game(players=[
+        _w3g2t_PlayerState(
+            name="P1", library=[lea[name] for name in _W3G2T_DECK],
+            hand=[set_pool("MIR")["Mangara's Tome"]],
+        ),
+        _w3g2t_PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Mangara's Tome").supported
+    game._settle()
+    game.auto_resolve_pending_choices()
+    tome = next(iter(game.controlled_by(game.players[0])))
+    tome.metadata["summoning_sickness_turn"] = -99
+    return game, tome
+
+
+def _w3g2t_arm(game, tome):
+    game.activate_permanent_ability(0, "Mangara's Tome")
+    game._settle()
+    game.auto_resolve_pending_choices()
+
+
+def test_w3g2_mangaras_tome_is_supported_in_both_halves(set_pool):
+    program = _w3g2t_compile(set_pool("MIR")["Mangara's Tome"])
+    assert program.supported, program.reason
+    assert [t.source_line for t in program.triggered_abilities if t.instruction is None] == []
+    assert [a.source_line for a in program.activated_abilities if a.instruction is None] == []
+
+
+def test_w3g2_the_entry_search_builds_a_face_down_pile(set_pool):
+    """"…search your library for five cards, exile them in a face-down pile,
+    and shuffle that pile. Then shuffle your library."
+
+    Five cards leave the library for exile, every one of them face down
+    (CR 406.3), and the record on the artifact is what makes them a *pile*
+    rather than five loose cards in the exile zone.
+    """
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+
+    assert len(player.exile) == 5, game.log
+    assert len(player.library) == len(_W3G2T_DECK) - 5
+
+    entries = _w3g2t_pile(tome)
+    assert len(entries) == 5
+    assert all(entry.get("face_down") for entry in entries)
+    assert all(entry.get("owner_index") == 0 for entry in entries)
+    # The pile holds the same five cards the exile does, in its own order.
+    assert sorted(entry["card"].name for entry in entries) == sorted(
+        card.name for card in player.exile
+    )
+    # "…and shuffle that pile": the order is the shuffle's, not the search's.
+    assert [entry["card"].name for entry in entries] != [
+        card.name for card in player.exile
+    ], "an unshuffled pile would come back in the order it was exiled"
+
+
+def test_w3g2_the_armed_ability_replaces_the_next_draw(set_pool):
+    """"{2}: The next time you would draw a card this turn, instead put the top
+    card of the exiled pile into its owner's hand."
+
+    Nothing is drawn — the library is untouched and the seam reports 0 — and
+    the card that arrives is the pile's top, which leaves both the pile and
+    the exile zone.
+    """
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    top = _w3g2t_pile(tome)[0]["card"]
+    library_before = len(player.library)
+
+    _w3g2t_arm(game, tome)
+    assert game._draw_with_replacements(player, 1) == 0
+
+    assert [card.name for card in player.hand] == [top.name], game.log
+    assert len(player.library) == library_before, "no card left the library"
+    assert len(_w3g2t_pile(tome)) == 4
+    assert top not in player.exile
+
+
+def test_w3g2_each_activation_arms_one_draw(set_pool):
+    """"The next time" is one draw (CR 121.2 makes a two-card instruction two
+    draws), and two activations are two effects — so a two-card draw under two
+    charges takes two cards off the pile and none off the library."""
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    first, second = [entry["card"] for entry in _w3g2t_pile(tome)[:2]]
+    library_before = len(player.library)
+
+    _w3g2t_arm(game, tome)
+    _w3g2t_arm(game, tome)
+    assert game._draw_with_replacements(player, 2) == 0
+
+    assert [card.name for card in player.hand] == [first.name, second.name], game.log
+    assert len(player.library) == library_before
+    assert game.armed_draw_replacements == []
+
+
+def test_w3g2_one_charge_leaves_the_second_draw_alone(set_pool):
+    """The other half of the same rule: with one charge armed, the first draw
+    is replaced and the second is an ordinary draw off the library."""
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    library_before = len(player.library)
+
+    _w3g2t_arm(game, tome)
+    drawn = game._draw_with_replacements(player, 2)
+
+    assert drawn == 1, game.log
+    assert len(player.hand) == 2
+    assert len(player.library) == library_before - 1
+
+
+def test_w3g2_an_empty_pile_still_takes_the_draw(set_pool):
+    """CR 614.1: the charge is spent on the next draw whether or not the effect
+    behind it finds anything to do. Five cards is all Mangara's Tome ever
+    exiles, so the sixth activation is the card's own failure mode, and it has
+    to be the printed one — the draw is replaced and nothing arrives, not a
+    draw that quietly happens anyway."""
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    for _ in range(5):
+        _w3g2t_arm(game, tome)
+        game._draw_with_replacements(player, 1)
+    assert len(player.hand) == 5
+    assert _w3g2t_pile(tome) == ()
+
+    library_before = len(player.library)
+    _w3g2t_arm(game, tome)
+    assert game._draw_with_replacements(player, 1) == 0
+
+    assert len(player.hand) == 5, game.log
+    assert len(player.library) == library_before, "the draw was replaced, not made"
+    assert any("the exiled pile is empty" in line for line in game.log)
+
+
+def test_w3g2_the_charge_expires_with_the_turn(set_pool):
+    """"…**this turn**." An unspent charge does not wait for the next one, and
+    the next turn's draw step is an ordinary draw."""
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    _w3g2t_arm(game, tome)
+    assert game.armed_draw_replacements
+
+    game.start_next_turn()          # P2's turn
+    assert game.armed_draw_replacements == []
+    library_before = len(player.library)
+    assert game._draw_with_replacements(player, 1) == 1
+    assert len(player.library) == library_before - 1
+
+
+def test_w3g2_destroying_the_tome_does_not_unarm_the_draw(set_pool):
+    """CR 611.2: the replacement belongs to the ability that resolved, not to
+    the permanent that printed it.
+
+    The record is on the game for exactly this, and the pile it reads is a link
+    between two *abilities* (CR 610.3) rather than between two objects — so a
+    Tome destroyed with the charge armed still hands over its top card. Written
+    down because the obvious place for the record is the artifact's metadata,
+    where a destroyed Tome would silently make the {2} the player just paid buy
+    nothing.
+    """
+    game, tome = _w3g2t_board(set_pool)
+    player = game.players[0]
+    top = _w3g2t_pile(tome)[0]["card"]
+    _w3g2t_arm(game, tome)
+
+    game.remove_from_battlefield(tome)
+    game._permanent_to_graveyard(player, tome)
+
+    assert game._draw_with_replacements(player, 1) == 0
+    assert [card.name for card in player.hand] == [top.name], game.log
+
+
+def test_w3g2_the_other_two_cards_printing_this_opener_keep_their_hooks(set_pool):
+    """The sweep this production owes. Three cards in the pool print "The next
+    time you would draw a card this turn, instead …", and the other two —
+    Aladdin's Lamp and Ring of Ma'rûf — carry inner sentences this grammar does
+    not read.
+
+    A production that consumed the opener and then fell through would have
+    taken their lines away and left them doing nothing; because it parses the
+    inner sentence as an ordinary statement, the whole line refuses and the
+    compiler goes on to ``card_hooks`` as it always did. Asserted as
+    *behaviour* — both cards still arm their own replacement — rather than as a
+    claim about which registry read the line.
+    """
+    lea = _w3g2t_lea()
+    arn = {card.name: card for card in _w3g2t_load(_w3g2t_path("ARN"))}
+
+    for name, check in (
+        ("Aladdin's Lamp", lambda g: g.lamp_draw_replacements),
+        ("Ring of Ma'rûf", lambda g: g.outside_game_draw_replacements),
+    ):
+        pool = arn
+        program = _w3g2t_compile(pool[name])
+        assert program.supported, (name, program.reason)
+        game = _w3g2t_Game(players=[
+            _w3g2t_PlayerState(name="P1", library=[lea["Island"]] * 10),
+            _w3g2t_PlayerState(name="P2", library=[lea["Island"]] * 10),
+        ])
+        game.enforce_mana_costs = False
+        game.interactive_seats = set()
+        permanent = _w3g2t_Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+        game.start_turn(0)
+        game.activate_permanent_ability(0, name, x_value=2)
+        game._settle()
+        assert check(game), (name, game.log)
+        assert game.armed_draw_replacements == [], (
+            f"{name} still arms its own replacement, not the general one"
+        )

@@ -398,6 +398,39 @@ def _fused_discard_then_draw(
     )
 
 
+def _lower_next_draw_replacement(
+    node: "ast.NextDrawReplacement", effect: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"The next time you would draw a card this turn, instead <effect>."
+    (Mangara's Tome.)
+
+    *effect* is the inner sentence, already lowered by the dispatch — the same
+    arrangement ``_lower_create_delayed_trigger`` has, and for its reason: what
+    the sentence means does not depend on being wrapped, and lowering it here
+    would be a second dispatch. It is lowered under the *line's* own event
+    rather than under the replaced draw, which is the difference from a delayed
+    ability: nothing in "instead put the top card of the exiled pile into its
+    owner's hand" is relative to a draw, where "you gain **that much** life"
+    behind a delay is relative to the event the delay names.
+
+    An effect that lowered to nothing refuses, exactly as a delayed ability
+    with no effect does: a replacement armed over an empty instruction takes
+    the draw away and gives the player nothing back, which is a strictly worse
+    card than the one printed.
+    """
+    if not effect:
+        raise LoweringError("this replacement has no effect", node=node)
+    # Several sentences behind one "instead" are one replacement's effect
+    # (CR 608.2), so they compose the way every other multi-step effect does.
+    instruction = (
+        effect[0] if len(effect) == 1
+        else OracleInstruction("sequence", "", {"steps": list(effect)})
+    )
+    return (
+        OracleInstruction("arm_draw_replacement", "", {"instruction": instruction}),
+    )
+
+
 def _lower_draw(
     node: ast.Draw,
     produced: frozenset[str] = frozenset(),

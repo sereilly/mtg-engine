@@ -29,6 +29,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
+from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
 from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS)
@@ -1148,7 +1149,7 @@ class PendingChoicesMixin:
             # looked at again.
             if choice.data.get("rest_destination") == "graveyard":
                 for card in rest:
-                    caster.graveyard.append(card)
+                    self.put_card_into_graveyard(caster, card)
                 return
             # "…and **exile the rest**." (Browse.) The cards leave the game
             # rather than the library, which is why the same ability may be
@@ -1591,6 +1592,25 @@ class PendingChoicesMixin:
         if "library" in zones:
             random.shuffle(caster.library)
         ctx = choice.data.get("_context")
+        # "…exile them **in a face-down pile**, and shuffle that pile."
+        # (Mangara's Tome.) The finds become one linked pile on the exiling
+        # permanent (CR 610.3), which is what the artifact's second ability
+        # names — without the record the cards are in exile and nothing on the
+        # board can say which exile they are.
+        #
+        # ``ends_on`` is empty and that is the card: Mangara's Tome never gives
+        # them back, so nothing ends the link and the pile outlives the
+        # artifact in exile, exactly as Knowledge Vault's does.
+        source = getattr(ctx, "source_permanent", None) if ctx is not None else None
+        if choice.data.get("face_down_pile") and source is not None:
+            for card in exiled:
+                link_exiled_card(
+                    source, card, choice.player_index, face_down=True
+                )
+            if choice.data.get("shuffle_pile"):
+                # Through the module RNG the AI simulator seeds, like every
+                # other shuffle here, so a seed still replays a run exactly.
+                shuffle_linked_pile(source, random.shuffle)
         if ctx is not None:
             ctx.results["exiled_cards"] = exiled
         self.discard_pending_choice(choice)
@@ -2817,7 +2837,7 @@ class PendingChoicesMixin:
         discarded = [card for card in revealed if named and card.name == named]
         for index in reversed(revealed_indices):
             if named and zone[index].name == named:
-                target.graveyard.append(zone.pop(index))
+                self.put_card_into_graveyard(target, zone.pop(index))
         self.discard_pending_choice(choice)
         self.log.append(
             f"{target.name} revealed {len(revealed)} card(s) at random from their "
@@ -5136,7 +5156,7 @@ class PendingChoicesMixin:
         for perm in chosen_perms:
             self.sacrifice_permanent(perm)
         for i in sorted(hand, reverse=True):
-            player.graveyard.append(player.hand.pop(i))
+            self.put_card_into_graveyard(player, player.hand.pop(i))
         self.discard_pending_choice(choice)
         self.log.append(f"{player.name} resolved their Balance sacrifices")
         return True
@@ -6474,7 +6494,7 @@ class PendingChoicesMixin:
         player = self.players[drawing_seat]
         if bought and player.library:
             card = player.library.pop(0)
-            player.graveyard.append(card)
+            self.put_card_into_graveyard(player, card)
             self.log.append(
                 f"{card.name} was put into {player.name}'s graveyard "
                 f"({source_name})"
@@ -8052,4 +8072,23 @@ register_choice(
     prompt_key="outside_game_draw",
     blocked_detail="choose a card from outside the game before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "return_from_graveyard_instead_of_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="graveyard_return_draw_confirm",
+    prompt_key="return_from_graveyard_instead_of_draw",
+    blocked_detail=(
+        "choose which card comes back from your graveyard (Forbidden Crypt) "
+        "before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draws queued behind it are the
+    # resolver's own business - so nothing is waiting on the answer to carry on,
+    # exactly as for the four offers above.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
 )

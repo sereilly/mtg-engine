@@ -619,6 +619,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Necropotence again, the other half: what its own exile put aside comes
     # back at its controller\'s next end step.
     "put_exiled_cards_into_zone": "zones",
+    # "Put the top card of the exiled pile into its owner's hand."
+    # (Mangara's Tome.) CR 610.3's linked pile, so the same category as
+    # the search that made it.
+    "put_exiled_pile_top_into_hand": "zones",
+    # "The next time you would draw a card this turn, instead ..."
+    # (Mangara's Tome.) A wrapper like `create_delayed_trigger`, and the
+    # gate walks into it for the same reason: what the line touches is
+    # what the armed effect touches.
+    "arm_draw_replacement": "zones",
     # Forgotten Lore: an opponent picks out of your graveyard, again for
     # each payment, and the pick the loop stopped on is the one you keep.
     "repeated_graveyard_pick": "zones",

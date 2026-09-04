@@ -531,6 +531,19 @@ def _lower_condition(
         if _is_enchanted(condition.subject):
             payload["subject"] = "attached"
         return payload
+    if isinstance(condition, ast.SourceOnBattlefield):
+        # "if this enchantment is on the battlefield" (Tombstone Stairwell).
+        # The evaluator asks the game which zone the source is in, so a rebound
+        # pronoun — an Aura's "it", meaning the creature it enchants — would be
+        # answered about the wrong object. Refused rather than answered: no
+        # card in the pool prints that reading, and guessing would make a
+        # CR 603.4 gate open on somebody else's permanent.
+        if _is_enchanted(condition.subject):
+            raise LoweringError(
+                "\"on the battlefield\" is asked of the ability's own source",
+                node=condition,
+            )
+        return {"kind": "source_on_battlefield", "negated": condition.negated}
     if isinstance(condition, ast.StartedTheTurnState):
         # Its own kind, not `is_state` with a flag: the evaluator reads a
         # different thing (the untap step's record, not the board), so a payload

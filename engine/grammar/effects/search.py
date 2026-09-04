@@ -396,12 +396,30 @@ def _accept_counted_exile_search(
     if not stream.accept_phrase("exile", "them"):
         stream.reset(mark)
         return None
+    zones = ("graveyard", "library") if graveyard else ("library",)
+    # "…exile them **in a face-down pile, and shuffle that pile**." (Mangara's
+    # Tome.) The other spelling of what happens to the finds, and the one that
+    # keeps them: this pile is recorded on the exiling permanent (CR 610.3) so
+    # a later linked ability can read it, where Foresight's finds are exiled
+    # and never mentioned again.
+    #
+    # No "then shuffle" here, and that is the card rather than an omission —
+    # Mangara's Tome shuffles its library in the *next* printed sentence, which
+    # the ordinary shuffle production reads. Consuming a shuffle that is not
+    # there would take that sentence's words away from it.
+    if stream.accept_phrase("in", "a", "face-down", "pile"):
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        shuffled = bool(stream.accept_phrase("shuffle", "that", "pile"))
+        return ast.SearchAndExile(
+            filt, zones=zones, count=count.value,
+            face_down_pile=True, shuffle_pile=shuffled,
+        )
     stream.accept_punct(",")
     stream.accept_word("then")
     if not stream.accept_word("shuffle"):
         stream.reset(mark)
         return None
-    zones = ("graveyard", "library") if graveyard else ("library",)
     return ast.SearchAndExile(filt, zones=zones, count=count.value)
 
 

@@ -469,6 +469,30 @@ class SearchAndExile:
     filter: ObjectFilter
     zones: tuple[str, ...] = ("graveyard", "library")
     count: int | None = None
+    #: "…exile them **in a face-down pile**" (Mangara's Tome). Two printed
+    #: facts, and two fields rather than one, because they are separable: the
+    #: pile is hidden (CR 406.3) *and* it is a pile — a run of cards recorded
+    #: on the exiling permanent (CR 610.3), which is what a later ability
+    #: naming "the exiled pile" can be linked to. A card printing the phrase
+    #: without the shuffle would be the same effect minus the randomisation.
+    face_down_pile: bool = False
+    #: "…**and shuffle that pile**" (Mangara's Tome). The pile's *order* is
+    #: randomised, which is the whole point of a card that then reads it one
+    #: card at a time from the top — a searched pile in library order would let
+    #: the searcher choose what comes back and in what sequence.
+    shuffle_pile: bool = False
+
+
+@dataclass(frozen=True)
+class PutExiledPileTopIntoHand:
+    """"Put the top card of the exiled pile into its owner's hand."
+    (Mangara's Tome.)
+
+    "The exiled pile" is CR 610.3's linked pile — the run of cards the same
+    permanent's other ability exiled — so this names no zone the sentence could
+    have meant differently and carries no payload: which cards, and whose, are
+    the record's answer rather than this node's.
+    """
 
 
 @dataclass(frozen=True)
