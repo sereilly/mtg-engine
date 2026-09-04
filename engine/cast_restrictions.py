@@ -110,6 +110,18 @@ def _before_combat_damage_step(game: "Game", caster_index: int) -> bool:
     return not past_combat_damage
 
 
+def _during_an_opponents_turn(game: "Game", caster_index: int) -> bool:
+    """Delirium: legal only while it is not this player's turn.
+
+    The whole turn, which is what separates it from the two narrower windows
+    below — those name a *step* as well, and this one names none. The seat test
+    is the only test there is, and it is the right one in a multiplayer game
+    too: CR 102.1 gives every seat its own turn, so "an opponent's turn" is
+    every turn but the caster's.
+    """
+    return game.active_player_index != caster_index
+
+
 def _opponents_turn_before_attackers(game: "Game", caster_index: int) -> bool:
     if game.active_player_index == caster_index:
         return False
@@ -200,6 +212,19 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's turn after their upkeep step",
         _opponents_turn_after_upkeep,
         "can only be cast during an opponent's turn after their upkeep step",
+    ),
+    # **Last, and the order is load-bearing.** This phrase is a strict prefix of
+    # the two above it, and `check_cast_timing` reports the *first* violated
+    # restriction it finds — so above them it would answer Siren's Call and
+    # Reset with a message naming a window wider than the one they print. The
+    # enforcement is unaffected either way (a card printing the longer clause
+    # violates both rows together), which is exactly why the ordering has to be
+    # stated: the failure is a message, and a message is not something a
+    # behavioural test looks at unless it is told to.
+    CastRestriction(
+        "cast this spell only during an opponent's turn",
+        _during_an_opponents_turn,
+        "can only be cast during an opponent's turn",
     ),
 )
 

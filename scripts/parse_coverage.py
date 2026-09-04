@@ -66,6 +66,7 @@ from engine.activation_restrictions import (  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
+                                      chosen_name_ban_line,
                                       global_cast_ban_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed)
@@ -283,6 +284,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # own channel, asking the reader that answers it.
     ("cast_restrictions.py (board-wide ban)",
      lambda s: global_cast_ban_line(s) is not None),
+    # The *name*-keyed half of the same rule — "Spells with the chosen names
+    # can't be cast and lands with the chosen names can't be played." (Null
+    # Chamber.) Its own channel beside the type-keyed one for that channel's
+    # reason: the reader that enforces the line is the one asked, so a claim
+    # cannot outlive the ban.
+    ("cast_restrictions.py (chosen-name ban)",
+     lambda s: chosen_name_ban_line(s)),
     # The same shape one rule over — "Activated abilities of creatures can't be
     # activated." (Cursed Totem), CR 602.5's board half, enforced by
     # `activation_restrictions.global_activation_ban` from

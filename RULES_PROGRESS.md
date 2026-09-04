@@ -5,13 +5,13 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**347 / 612 tracked rules covered (56%)** — 1909 tests, 0 unannotated.
+**348 / 612 tracked rules covered (56%)** — 1911 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
 | [100. General](#100-general) | 0/7 | 0% |
 | [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 3/4 | 75% |
-| [102. Players](#102-players) | 1/4 | 25% |
+| [102. Players](#102-players) | 2/4 | 50% |
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
 | [105. Colors](#105-colors) | 2/5 | 40% |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 102. Players
 
-- [ ] **102.1** A player is one of the people in the game. The active player is the player whose turn it is. The ...
+- [x] **102.1** A player is one of the people in the game. The active player is the player whose turn it is. The ... *(1 tests)*
 - [ ] **102.2** In a two-player game, a player’s opponent is the other player.
 - [x] **102.3** In a multiplayer game between teams, a player’s teammates are the other players on their team, an... *(1 tests)*
 - [ ] **102.4** A spell or ability may use the term “your team” as shorthand for “you and/or your teammates.” In ...
@@ -663,7 +663,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(174 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(12 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
