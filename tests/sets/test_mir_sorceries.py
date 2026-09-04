@@ -1813,3 +1813,22 @@ def test_w4g1_the_same_caster_may_still_purge_one_creature(set_pool):
     assert result.supported is True, result.details
     assert game.players[0].life == 0, game.log
     assert len(list(game.controlled_by(1))) == 1, game.log
+
+
+def test_w4g1_naming_no_targets_costs_no_life(set_pool):
+    """"Destroy **any number of** target creatures" — CR 601.2c lets the caster
+    announce none, and none is what "for each target" then multiplies.
+
+    The near miss is the one the AI simulator found: a bare seat with no
+    creature named read as one target, so a Purge that destroyed nothing still
+    cost 3 life. Counted off `derive_cast_spec`'s `unbounded_targets`, which is
+    the shape rather than the card — every spell with a fixed target list still
+    reads a bare seat as its one target.
+    """
+    game, theirs = _w4g1s_purge_game(set_pool, victims=2)
+
+    result = game.cast_from_hand(0, "Phyrexian Purge", target_player_index=1)
+
+    assert result.supported is True, result.details
+    assert game.players[0].life == 20, game.log
+    assert len(list(game.controlled_by(1))) == 2, game.log

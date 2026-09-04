@@ -1111,10 +1111,7 @@ class SpellCastingMixin:
         per_target = self_per_target_tax(card.oracle_text or "")
         if per_target is not None:
             # The chosen targets: the cross-seat divided list, a list of
-            # creature indices, the same list by id, or a single
-            # creature/player. Nothing named counts as one, which is the
-            # long-standing reading here and the only one that cannot
-            # *under*-charge — the direction a cost may never move.
+            # creature indices, the same list by id, or a single one.
             if divided_targets is not None:
                 num_targets = len(divided_targets)
             elif isinstance(target_permanent_index, list):
@@ -1123,8 +1120,20 @@ class SpellCastingMixin:
                 num_targets = len(
                     [i for i in target_permanent_ids if isinstance(i, int)]
                 )
-            else:
+            elif target_permanent_index is not None:
                 num_targets = 1
+            else:
+                # A seat and nothing else. For a spell whose target list is
+                # **open-ended** — "Destroy any number of target creatures" —
+                # that is an announcement of no targets at all, and CR 601.2c
+                # allows it: the caster is charged nothing and the spell
+                # destroys nothing. For every other spell the seat *is* the
+                # target (Fireball to the face), so one it is. Read off
+                # `derive_cast_spec`'s `unbounded_targets`, which is the general
+                # shape rather than a card, and asked only in this branch so
+                # every named-target path stays exactly what it was.
+                spec = derive_cast_spec(card, compile_card_oracle(card)) or {}
+                num_targets = 0 if spec.get("unbounded_targets") else 1
             owed = per_target.owed(num_targets)
             if per_target.life:
                 # CR 118.3b: life is not mana, so it joins the life the board's
