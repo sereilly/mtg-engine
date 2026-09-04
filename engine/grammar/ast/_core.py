@@ -82,6 +82,15 @@ class CountOfDeathsThisWay:
     nothing, and a zero is a number the card never printed.
     """
     filter: "ObjectFilter"
+    #: "…the number of artifacts **they controlled** that were put into a
+    #: graveyard this way" (Builder's Bane). The same record, split by the seat
+    #: that controlled each object rather than counted whole — so the sentence
+    #: has one answer per player instead of one answer. A flag rather than a
+    #: node of its own because the *set* is identical; what differs is whether
+    #: the count is taken over all of it or over one seat's share, and a card
+    #: reading the shared number where it printed the per-seat one deals every
+    #: player the whole spell's damage.
+    per_controller: bool = False
 
 
 @dataclass(frozen=True)

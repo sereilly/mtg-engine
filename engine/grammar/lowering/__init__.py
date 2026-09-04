@@ -305,19 +305,21 @@ from .game import (
     _lower_count_objects,
     _lower_ante,
     _lower_repeat_process,
-    _lower_exchange_life_totals,
-    _lower_set_life_total,
-    _lower_gain_life,
     _lower_extra_turn,
     _LOSE_GAME_KINDS,
     _lower_lose_game,
     _lower_win_game,
-    _lower_lose_life,
-    _lower_pay_life,
     _lower_coin_flip_damage_loop,
     _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
     _lower_skip_step,
+)
+from .life import (
+    _lower_exchange_life_totals,
+    _lower_gain_life,
+    _lower_lose_life,
+    _lower_pay_life,
+    _lower_set_life_total,
 )
 
 __all__ = [

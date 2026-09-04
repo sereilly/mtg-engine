@@ -171,6 +171,22 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # so it is read out of the scratchpad here instead of going to
         # `evaluate_count`, which counts objects. A seat the record never
         # mentions discarded nothing, which is the printed base.
+        # "…equal to the number of artifacts **they controlled** that were put
+        # into a graveyard this way" (Builder's Bane). One earlier step of this
+        # same resolution froze a ``{permanent_id: seat}`` map about what it
+        # took, and this seat's share of it is the number. Counted off that map
+        # rather than off a per-seat tally recorded beside it, because a tally
+        # would be a second copy of one fact -- and the map is what the readers
+        # of "its controller" already ask, so a destroy step has one thing to
+        # remember rather than two that can drift.
+        #
+        # A seat the map never mentions lost nothing and takes nothing, which
+        # is also what the words say.
+        tally = per_recipient_spec.get("seat_tally_of")
+        if tally is not None:
+            recorded = context.results.get(tally) or {}
+            seat = game.players.index(face)
+            return sum(1 for owner in recorded.values() if owner == seat)
         record = per_recipient_spec.get("resolution_record")
         if record is not None:
             recorded = context.results.get(record) or {}

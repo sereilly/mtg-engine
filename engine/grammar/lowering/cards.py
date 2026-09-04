@@ -833,10 +833,27 @@ def _lower_for_each_chosen(
     """
     named = node.iterator.subject
     if named is not None:
-        if CHOSEN_TARGET_PERMANENTS not in produced:
+        # Which record "those" names is decided by what an earlier step of this
+        # same effect actually wrote, in the order the phrase can mean them: a
+        # step that *chose* permanents is the closer referent (Winter's Chill
+        # names its own targets), and a sweep that destroyed some is the other
+        # ("Destroy all artifacts. … **each of those artifacts** …", Seeds of
+        # Innocence).
+        #
+        # Read off *produced* rather than fixed by the parse, for the reason
+        # every back-reference here is: the printed word is the same either way
+        # and only the effect around it can say which set exists. Neither
+        # recorded refuses, exactly as before — an empty loop is a sentence that
+        # reports supported and does not run.
+        record = None
+        if CHOSEN_TARGET_PERMANENTS in produced:
+            record = CHOSEN_TARGET_PERMANENTS
+        elif "destroyed_this_way" in produced:
+            record = "destroyed_this_way_objects"
+        if record is None:
             raise LoweringError(
                 "'those <permanents>' with no earlier step in this effect that "
-                "chose any",
+                "chose or destroyed any",
                 node=node,
             )
         if not inner:
@@ -852,7 +869,7 @@ def _lower_for_each_chosen(
                 "for_each", "",
                 {
                     "iterator": {
-                        "produced_by": CHOSEN_TARGET_PERMANENTS,
+                        "produced_by": record,
                         **_filter_payload(named),
                     },
                     "effect": inner,

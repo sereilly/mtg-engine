@@ -239,7 +239,9 @@ def _parse_per_each_objects(
     return filt, beyond_first
 
 
-def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
+def _parse_for_each(
+    stream: TokenStream, *, allow_this_way: bool = False
+) -> "ast.DiedThisTurn | ast.DiedThisWay | None":
     """``for each <objects> that died this turn`` — a trailing iteration clause.
 
     The set is a *history*, not a board state, which is why it produces
@@ -249,6 +251,20 @@ def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
     probe exists: the engine's death tally resets each turn, so a clause
     counting some other window is a different number — and letting the words be
     absent would let them be *deleted* with no change to the parse.
+
+    *allow_this_way* additionally admits "…that died **this way**"
+    (:class:`ast.DiedThisWay`), the same two spellings the *leading* position
+    already reads through ``statement_dispatch``. Off by default because they
+    are emphatically not one set — "this turn" is a window anything may have
+    contributed to and "this way" is exactly what an earlier step of this
+    effect destroyed — so a caller with no producer to read gets the refusal it
+    has always had rather than a clause it would count off the wrong record.
+
+    One reader for both, and that is the point: ``_parse_loses`` had grown its
+    own inline "for each" over a bare noun phrase, so which spellings a card
+    could use depended on whether it gained life or lost it. Reign of Terror
+    ("You lose 2 life **for each creature that died this way**") is the card
+    that found the fork.
 
     Returning None leaves the cursor where it was, so a caller that does not
     find the clause still owes the rest of the line to full-token consumption.
@@ -264,6 +280,8 @@ def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
     if not stream.accept_phrase("that", "died"):
         stream.reset(mark)
         return None
+    if allow_this_way and stream.accept_phrase("this", "way"):
+        return ast.DiedThisWay(filt)
     if _parse_duration(stream).kind != "this_turn":
         stream.reset(mark)
         return None

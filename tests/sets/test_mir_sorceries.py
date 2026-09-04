@@ -555,3 +555,254 @@ def test_choking_sands_spares_a_basic_lands_controller(set_pool):
 
     assert not game.is_on_battlefield(forest)
     assert game.players[1].life == 20
+
+
+# --- W2G3: the destroy family's back-references ---
+#
+# Three sorceries whose second sentence asks a question about what their first
+# one destroyed, and three different questions: how many died (Reign of Terror),
+# whose each of them was, counted per seat (Builder's Bane), and whose each of
+# them was, one at a time (Seeds of Innocence).
+
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState  # noqa: E402
+from engine.card_loader import (load_cards as _w2g3_load,  # noqa: E402
+                                manifest_set_path as _w2g3_path)
+from engine.models import Permanent as _w2g3_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w2g3_compile  # noqa: E402
+
+
+def _w2g3_lea():
+    return {card.name: card for card in _w2g3_load(_w2g3_path("LEA"))}
+
+
+def _w2g3_game(pool, hand, mine=(), theirs=()):
+    """One spell in hand and two boards, with nobody interactive.
+
+    A non-interactive seat answers a `mode_choice` prompt with the first
+    printed mode the moment it is armed, which is what makes Reign of Terror's
+    "destroy all green creatures **or** all white creatures" testable without a
+    client — and what makes the mode it takes the green half.
+    """
+    lea = _w2g3_lea()
+    game = _w2g3_Game(players=[
+        _w2g3_PlayerState(name="P1", hand=[pool[name] for name in hand],
+                          battlefield=list(mine),
+                          library=[lea["Island"]] * 6),
+        _w2g3_PlayerState(name="P2", battlefield=list(theirs),
+                          library=[lea["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def test_w2g3_reign_of_terror_takes_one_colour_and_charges_for_each_death(set_pool):
+    """"Destroy all green creatures or all white creatures. They can't be
+    regenerated. You lose 2 life for each creature that died this way."
+
+    Both halves of the sentence were missing and each was invisible to the
+    other. The rider is printed with the pronoun "they" after a *modal* destroy,
+    which the fold reached only in its noun spelling; and the life loss is the
+    trailing "for each", which the loss production read over a bare noun phrase
+    and so stopped in front of the relative clause.
+    """
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Reign of Terror"],
+        mine=[_w2g3_Permanent(card=lea["Grizzly Bears"]),
+              _w2g3_Permanent(card=lea["Savannah Lions"])],
+        theirs=[_w2g3_Permanent(card=lea["Grizzly Bears"]),
+                _w2g3_Permanent(card=lea["Mons's Goblin Raiders"])],
+    )
+
+    cast = game.cast_from_hand(0, "Reign of Terror")
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Savannah Lions"]
+    assert [p.card.name for p in game.players[1].battlefield] == [
+        "Mons's Goblin Raiders"
+    ]
+    assert game.players[0].life == 16, "2 life for each of the two green deaths"
+    assert game.players[1].life == 20, "the loss is the caster's, not everyone's"
+
+
+def test_w2g3_reign_of_terror_beats_a_regeneration_shield(set_pool):
+    """The rider is the half a modal destroy was dropping, so it gets a game of
+    its own: a shielded creature that survived would also be a creature the life
+    loss never counted, and both halves would be wrong in the same direction."""
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Reign of Terror"],
+        theirs=[_w2g3_Permanent(card=lea["Grizzly Bears"])],
+    )
+    bear = game.players[1].battlefield[0]
+    bear.regeneration_shield = 1
+
+    game.cast_from_hand(0, "Reign of Terror")
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(bear), "CR 701.15c: the shield is ignored"
+    assert game.players[0].life == 18
+
+
+def test_w2g3_a_life_loss_counts_only_what_this_effect_destroyed(set_pool):
+    """"This way" is not "this turn", and the refusal says so. With no destroy
+    in front of it the clause names nothing, and lowering it anyway would have
+    read an absent record as a zero — a card that reports supported and loses
+    the caster no life at all."""
+    from engine.grammar import compile_line as _compile
+
+    alone = _compile("You lose 2 life for each creature that died this way.")
+    assert alone.parsed, "the trailing clause parses"
+    assert alone.lowering_error == (
+        "back-reference to 'destroyed_this_way' with no producer in this effect"
+    )
+
+    turn = _compile("You lose 2 life for each creature that died this turn.")
+    assert turn.parsed, "the sibling spelling parses through the same reader"
+    assert turn.lowering_error == (
+        "no life-loss handler counts the turn's death tally"
+    ), "read but refused, rather than silently counted as the other window"
+
+
+def test_w2g3_builders_bane_charges_each_player_for_their_own_losses(set_pool):
+    """"Destroy X target artifacts. Builder's Bane deals damage to each player
+    equal to the number of artifacts **they controlled** that were put into a
+    graveyard this way."
+
+    The possessive is the whole card. Dropped, both seats take the total — three
+    artifacts destroyed and both players take 3 — which is a spell that reports
+    supported and hits about twice as hard as it prints.
+    """
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Builder's Bane"],
+        mine=[_w2g3_Permanent(card=lea["Mox Pearl"])],
+        theirs=[_w2g3_Permanent(card=lea["Icy Manipulator"]),
+                _w2g3_Permanent(card=lea["Jade Statue"])],
+    )
+    ids = [
+        game.players[0].battlefield[0].permanent_id,
+        game.players[1].battlefield[0].permanent_id,
+        game.players[1].battlefield[1].permanent_id,
+    ]
+
+    cast = game.cast_from_hand(
+        0, "Builder's Bane", x_value=3, target_permanent_ids=ids,
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.players[0].battlefield
+    assert not game.players[1].battlefield
+    assert game.players[0].life == 19, "one artifact of the caster's"
+    assert game.players[1].life == 18, "two of the opponent's"
+
+
+def test_w2g3_builders_bane_counts_only_what_it_destroyed(set_pool):
+    """An artifact nobody targeted is nobody's loss. The per-seat tally is read
+    off the seat map the destroy froze rather than off a board scan, so a
+    survivor cannot be counted — and a seat that lost nothing takes nothing,
+    which CR 120.8 makes no damage event at all."""
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Builder's Bane"],
+        mine=[_w2g3_Permanent(card=lea["Mox Pearl"])],
+        theirs=[_w2g3_Permanent(card=lea["Icy Manipulator"])],
+    )
+    mine = game.players[0].battlefield[0]
+
+    game.cast_from_hand(
+        0, "Builder's Bane", x_value=1, target_permanent_ids=[mine.permanent_id],
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert [p.card.name for p in game.players[1].battlefield] == ["Icy Manipulator"]
+    assert game.players[0].life == 19
+    assert game.players[1].life == 20, "an untouched artifact is not a loss"
+
+
+def test_w2g3_seeds_of_innocence_heals_each_artifacts_own_controller(set_pool):
+    """"Destroy all artifacts. They can't be regenerated. **The controller of
+    each of those artifacts** gains life equal to its mana value."
+
+    The loop is printed as the sentence's subject, and both the seat and the
+    number are read off the object the iteration is on — the seat from the map
+    the sweep froze before it destroyed anything (CR 608.2h), the mana value off
+    the `Permanent` the loop hands round, which is a card in a graveyard by then
+    (CR 400.7).
+    """
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Seeds of Innocence"],
+        mine=[_w2g3_Permanent(card=lea["Mox Pearl"])],          # mana value 0
+        theirs=[_w2g3_Permanent(card=lea["Icy Manipulator"]),   # 4
+                _w2g3_Permanent(card=lea["Sunglasses of Urza"])],  # 3
+    )
+
+    cast = game.cast_from_hand(0, "Seeds of Innocence")
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.players[0].battlefield
+    assert not game.players[1].battlefield
+    assert game.players[0].life == 20, "a Mox is worth nothing to its controller"
+    assert game.players[1].life == 27, "4 + 3, to the seat that controlled them"
+
+
+def test_w2g3_seeds_of_innocence_leaves_the_creatures_alone(set_pool):
+    """The sweep is artifacts, and the loop's printed noun is checked against
+    the record rather than taken on trust — so a creature is neither destroyed
+    nor counted."""
+    pool = set_pool("MIR")
+    lea = _w2g3_lea()
+    game = _w2g3_game(
+        pool, ["Seeds of Innocence"],
+        theirs=[_w2g3_Permanent(card=lea["Grizzly Bears"])],
+    )
+
+    game.cast_from_hand(0, "Seeds of Innocence")
+    game.resolve_stack()
+    game._settle()
+
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+    assert game.players[1].life == 20
+
+
+def test_w2g3_those_permanents_still_refuse_without_a_producer(set_pool):
+    """"Each of those artifacts" now reads the destroy record as well as the
+    chosen-target one, and the widening stops there: an effect that neither
+    chose nor destroyed anything names nothing, and the loop refuses rather than
+    running over an empty list and reporting itself resolved."""
+    from engine.grammar import compile_line as _compile
+
+    alone = _compile("The controller of each of those artifacts draws a card.")
+    assert alone.parsed, "the printed word order parses"
+    assert alone.lowering_error == (
+        "'those <permanents>' with no earlier step in this effect that chose "
+        "or destroyed any"
+    )
+
+    # The same refusal from the word order the loop was already written in, so
+    # the new production cannot come to admit a sentence the old one refuses.
+    spelled = _compile("For each of those artifacts, its controller draws a card.")
+    assert spelled.lowering_error == alone.lowering_error
+
+
+def test_w2g3_all_three_sorceries_are_supported(set_pool):
+    """The census reading, so a later round that moves any of this sees it."""
+    pool = set_pool("MIR")
+    for name in ("Reign of Terror", "Builder's Bane", "Seeds of Innocence"):
+        program = _w2g3_compile(pool[name])
+        assert program.supported, f"{name}: {program.reason}"

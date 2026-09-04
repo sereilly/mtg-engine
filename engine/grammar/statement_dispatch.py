@@ -27,7 +27,8 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._events import CHOSEN_PLAYER, LOOP_BOUND_PLAYER
+from .lowering._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT,
+                              LOOP_BOUND_PLAYER)
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -664,23 +665,31 @@ def lower_statement(
         # the seats. The tally form ("that died this **turn**") reads no inner
         # instructions at all — the counter lowering turns it into a
         # multiplier — which is why the body is lowered lazily here.
-        def repeated() -> tuple[OracleInstruction, ...]:
+        def repeated(
+            marker: frozenset[str] = frozenset(),
+        ) -> tuple[OracleInstruction, ...]:
             return lower_statement(
-                statement.effect, produced,
+                statement.effect, produced | marker,
                 event=event, event_subject=event_subject, whole_effect=False,
             )
 
+        # The four iterators that bind an **object**. Their bodies are lowered
+        # with `LOOP_BOUND_OBJECT` in hand, which is what lets "its controller"
+        # and "its mana value" read the iteration rather than the whole effect:
+        # the *records* they read are written by any sweep at all, so the marker
+        # is the only thing that can say a loop is there to bind them.
+        object_loop = frozenset({LOOP_BOUND_OBJECT})
         if isinstance(statement.iterator, ast.DiedThisWay):
-            return _lower_for_each_destroyed(statement, repeated(), produced)
+            return _lower_for_each_destroyed(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
-            return _lower_for_each_exiled(statement, repeated(), produced)
+            return _lower_for_each_exiled(statement, repeated(object_loop), produced)
         # "For each creature **tapped this way**, …" (Raiding Party) — the third
         # "this way" window, over a record whose objects never left the
         # battlefield. Beside its two siblings and refused on the same terms.
         if isinstance(statement.iterator, ast.TappedThisWay):
-            return _lower_for_each_tapped(statement, repeated(), produced)
+            return _lower_for_each_tapped(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ChosenThisWay):
-            return _lower_for_each_chosen(statement, repeated(), produced)
+            return _lower_for_each_chosen(statement, repeated(object_loop), produced)
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
             return _lower_for_each_life_lost(statement, repeated(), event)

@@ -71,6 +71,22 @@ def _records_produced(
         for branch in branches:
             for nested in instruction.payload.get(branch) or ():
                 keys |= _records_produced(nested, branches)
+    if instruction.kind == "choose_one":
+        # "**Destroy all green creatures or all white creatures.** They can't
+        # be regenerated. You lose 2 life for each creature that died this
+        # way." (Reign of Terror.) The choice records nothing itself, so the
+        # sentence behind it saw an empty set and refused a back-reference the
+        # mode in front of it certainly writes.
+        #
+        # A union across the modes, exactly as the offer above is: what is
+        # threaded is the *possibility* that the record exists. A mode that
+        # writes nothing leaves the key absent at resolution, and every reader
+        # in this engine already answers an absent record with the number the
+        # card means — the sweep destroyed nothing, so nothing is counted.
+        for mode in instruction.payload.get("modes") or ():
+            nested = mode.get("instruction") if isinstance(mode, dict) else None
+            if nested is not None:
+                keys |= _records_produced(nested, branches)
     return frozenset(keys)
 
 

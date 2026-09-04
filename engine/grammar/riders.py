@@ -400,6 +400,21 @@ def _with_no_regeneration(statement: ast.Statement) -> "ast.Statement | None":
     """
     if isinstance(statement, ast.Destroy):
         return dataclasses.replace(statement, no_regen=True)
+    if isinstance(statement, ast.OneOf):
+        # "Destroy all green creatures **or** all white creatures. They can't
+        # be regenerated." (Reign of Terror.) The rider is printed once and is
+        # about whichever half the player takes, so it is folded into *every*
+        # option that can carry it rather than into the last one parsed — a
+        # mode left unmarked would let the creatures it destroys regenerate,
+        # which is the half of the card nothing would report.
+        folded = tuple(
+            _with_no_regeneration(option) or option for option in statement.options
+        )
+        if folded == statement.options:
+            # No option destroys anything, so the rider names nothing here —
+            # None rather than a rewrite, and the caller rewinds.
+            return None
+        return dataclasses.replace(statement, options=folded)
     if isinstance(statement, ast.Conditional):
         then = _with_no_regeneration(statement.then)
         otherwise = (

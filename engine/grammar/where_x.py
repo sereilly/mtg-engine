@@ -404,10 +404,32 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
     Consumes nothing and returns None when no participle follows, so the plain
     :class:`ast.CountOf` reading is untouched.
     """
+    # "…the number of artifacts **they controlled that were** put into a
+    # graveyard this way" (Builder's Bane). A possessive between the noun and
+    # the participle, in the past tense because by the time the words are read
+    # the objects are cards in a graveyard and nobody controls them any more
+    # (CR 400.7). It is read here rather than by the noun parser for exactly
+    # that reason: "artifacts they controlled" is not a set any board can be
+    # asked for, and admitting it as the present-tense narrowing one word over
+    # would count the artifacts that **survived**.
+    #
+    # "That were" is required rather than optional: without it the sentence
+    # would be "artifacts they controlled put into a graveyard this way", which
+    # nothing prints, and letting the words be absent would let them be deleted
+    # with no change to the parse.
+    per_controller = bool(
+        stream.accept_phrase("they", "controlled", "that", "were")
+    )
     if stream.accept_phrase("that", "died", "this", "way"):
-        return ast.CountOfDeathsThisWay(filt)
+        return ast.CountOfDeathsThisWay(filt, per_controller=per_controller)
     if stream.accept_phrase("put", "into", "a", "graveyard", "this", "way"):
-        return ast.CountOfDeathsThisWay(filt)
+        return ast.CountOfDeathsThisWay(filt, per_controller=per_controller)
+    if per_controller:
+        # The possessive was consumed and no participle followed it, so this
+        # reading is wrong about the sentence. Nothing here can rewind past the
+        # noun the caller already parsed, so the line fails loudly rather than
+        # returning a count with the possessive silently dropped.
+        raise stream.error("expected a 'this way' participle after 'they controlled'")
     if stream.accept_phrase("tapped", "this", "way"):
         return ast.CountOfTapsThisWay(filt)
     return None
