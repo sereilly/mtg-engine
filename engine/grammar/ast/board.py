@@ -645,6 +645,13 @@ class SacrificeUnlessPay:
     """
     subject: Recipient
     cost: ManaCost
+    #: "…unless you pay **its mana cost reduced by {2}**" (Flash). The cost is
+    #: not printed at all: it is read off the object an earlier step of the same
+    #: sentence moved, and is not knowable while the sentence is being read —
+    #: the same reason ``DestroyUnlessPay.per_counter`` names its multiplier
+    #: instead of counting it. ``cost`` then carries the *reduction*, which is
+    #: the only number the card prints.
+    cost_from: str | None = None
 
 
 @dataclass(frozen=True)

@@ -32,6 +32,7 @@ from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
 from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS)
+from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
@@ -3927,8 +3928,24 @@ class PendingChoicesMixin:
             return False
         card = player.hand[hand_index]
         player.hand = [c for i, c in enumerate(player.hand) if i != hand_index]
+        arrival = Permanent(card=card)
         self._put_permanent_onto_battlefield(
-            choice.player_index, Permanent(card=card), None
+            choice.player_index, arrival, None
+        )
+        # "If you do, sacrifice **it** …" (Flash). By id, like every other
+        # producer of a permanent this engine records: the permanent may leave
+        # between two steps of one resolution, and a returning one is a new
+        # object (CR 400.7). Written here rather than in the handler that armed
+        # the prompt, because the permanent does not exist until the answer
+        # arrives — the same reason the reanimation is the only step that can
+        # name what it reanimated.
+        #
+        # Set rather than appended: a repeated round (Eureka) offers the seats
+        # in turn and each answer replaces the last, which is right for a
+        # sentence naming "it" — a card printing "each of them" would want the
+        # list, and there is none in the pool.
+        choice.data["_context"].results[PUT_FROM_HAND_PERMANENTS] = (
+            arrival.permanent_id
         )
         # The record a repeated round ends on — see engine/repeated_offers.py.
         # Appended rather than set, because every seat of the round shares the

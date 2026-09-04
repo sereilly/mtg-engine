@@ -33,6 +33,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
+                      PUT_FROM_HAND_PERMANENTS,
                       LAST_TARGET_CONTROLLER,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
@@ -357,6 +358,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # *card* in a library — so the search is the only step that can say which
     # permanent the sentences behind it name.
     "search_library": SEARCHED_PERMANENTS,
+    # "You may put a creature card from your hand onto the battlefield. If you
+    # do, sacrifice **it** unless you pay its mana cost reduced by {2}."
+    # (Flash.) The third member of the same family: the permanent did not exist
+    # when the spell was cast — its subject is a *card* in a hand — so the move
+    # is the only step that can say which permanent the sentence behind it
+    # names.
+    "put_chosen_card_from_hand_onto_battlefield": PUT_FROM_HAND_PERMANENTS,
     # "Take an extra turn after this one. At the beginning of **that turn's**
     # end step, you lose the game." (Final Fortune.) The queued turn, recorded
     # so the delay behind it has something to refer back to — see

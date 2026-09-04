@@ -32,6 +32,7 @@ from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
+from .lowering.board import _lower_sacrifice_unless_pay
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
@@ -199,6 +200,13 @@ def lower_statement(
     # the name-only table above. The raw `event`, not `dispatch_event`: both
     # are printed inside an offer's branch, which is not the ability's whole
     # effect and would see no event at all.
+    # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
+    # In the chain rather than in the name-only table above because the pronoun
+    # is only a pronoun *relative to what came before it*: with no record from
+    # an earlier step of the same sentence, "it" has no referent but the source,
+    # and the two readings lower to different machinery.
+    if isinstance(statement, ast.SacrificeUnlessPay):
+        return _lower_sacrifice_unless_pay(statement, produced)
     if isinstance(statement, ast.UntapChosenByPaying):
         return _lower_untap_chosen_by_paying(statement, event)
     if isinstance(statement, ast.RevealHandAndChoose):

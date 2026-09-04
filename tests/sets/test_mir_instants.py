@@ -1378,3 +1378,115 @@ def test_ebony_charms_pile_choice_takes_the_first_live_pile_for_an_ai_seat(set_p
     assert [c.kind for c in game.pending_choices] == [], game.log
     assert [c.name for c in game.players[0].exile] == ["Dirtwater Wraith"], game.log
     assert [c.name for c in game.players[1].graveyard] == ["Femeref Knight"]
+
+
+# --- W2G4: a cost read off the permanent the step in front of it made ---
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_flash(set_pool, creature, pool=None, interactive=True):
+    """Flash and one creature card in seat 0's hand."""
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            hand=[set_pool("MIR")["Flash"], set_pool("MIR")[creature]],
+            life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game.players[0].mana_pool.update(pool or {})
+    game.queue_from_hand(0, "Flash")
+    game.resolve_stack()
+    return game
+
+
+def test_flash_is_supported(set_pool):
+    """Two pieces were missing and only one of them was the amount.
+
+    "Sacrifice **it**" names the permanent the step in front of it created, and
+    the pronoun read as the source lowered to ``upkeep_pay_or_sacrifice_self``
+    — a kind the *upkeep registry* dispatches and ``EFFECT_HANDLERS`` does not,
+    so the card would have compiled supported and done nothing.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Flash"])
+    assert program.supported, program.reason
+    offer = program.instructions[0].payload["then"][0]
+    assert offer.kind == "may"
+    assert offer.payload["cost"] == {
+        "cost_from": "put_from_hand_permanents",
+        "reduced_by": {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0,
+                       "generic": 2},
+    }
+    assert [step.kind for step in offer.payload["otherwise"]] == [
+        "sacrifice_recorded_permanent"
+    ]
+
+
+def test_flash_charges_the_creatures_own_cost_less_two(set_pool):
+    """"…unless you pay **its mana cost reduced by {2}**."
+
+    The number is not on Flash at all: Volcanic Dragon costs {4}{R}{R}, so the
+    offer is {2}{R}{R}. CR 601.2f's arithmetic — a generic reduction never takes
+    a coloured pip off — which is why the two {R} survive.
+    """
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert game.confirm_put_from_hand_choice(0, 0), game.log
+
+    offer = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.data["prompt"] for c in offer] == ["Pay {2}{R}{R}?"], game.log
+
+    assert game.confirm_optional_pay(0, accept=True)
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Volcanic Dragon"
+    ], game.log
+    assert not any(v for v in game.players[0].mana_pool.values()), game.log
+
+
+def test_flash_sacrifices_the_creature_it_put_down_when_the_cost_is_declined(set_pool):
+    """The decline branch names the permanent *this* resolution created, by id.
+
+    Not "a creature" — the lowering that read the pronoun as a board sweep would
+    have let the seat sacrifice a different creature, and not the source, which
+    is the spell.
+    """
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    game.confirm_optional_pay(0, accept=True)
+    game.confirm_put_from_hand_choice(0, 0)
+    assert game.confirm_optional_pay(0, accept=False)
+
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Flash", "Volcanic Dragon",
+    ], game.log
+    assert game.players[0].mana_pool["R"] == 2, game.log
+
+
+def test_flash_sacrifices_it_when_the_controller_cannot_pay(set_pool):
+    """CR 601.2b: a cost a player is not *able* to pay is not an offer. With an
+    empty pool the prompt is never armed and the decline branch stands — which
+    is what makes the drawback bite rather than being waived."""
+    game = _w2g4_flash(set_pool, "Volcanic Dragon")
+    game.confirm_optional_pay(0, accept=True)
+    game.confirm_put_from_hand_choice(0, 0)
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert "Volcanic Dragon" in [c.name for c in game.players[0].graveyard]
+
+
+def test_flash_declining_the_first_offer_puts_nothing_down(set_pool):
+    """"**You may** put a creature card…" — declining ends the sentence. The
+    "if you do" branch has no permanent to read, so nothing is offered and
+    nothing is sacrificed."""
+    game = _w2g4_flash(set_pool, "Volcanic Dragon", pool={"R": 2, "C": 2})
+    assert game.confirm_optional_pay(0, accept=False), game.log
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert [c.name for c in game.players[0].hand] == ["Volcanic Dragon"], game.log

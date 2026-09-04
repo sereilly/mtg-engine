@@ -33,7 +33,7 @@ from ._amounts import halved_count_spec
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
                       _is_enchanted, _is_source, _is_target)
-from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS,
+from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT,
                       _BOUND_OBJECT_DELAYED_EVENTS)
@@ -120,15 +120,74 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
 
 
-def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleInstruction, ...]:
+def _lower_sacrifice_unless_pay(
+    node: ast.SacrificeUnlessPay, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
     """"Sacrifice this <permanent> unless you pay <cost>."
 
     Two handlers exist and the noun picks between them — an enchantment's
     prompt is a different registry entry from any other permanent's. Both
     sacrifice the source, so only a self-referential subject is accepted;
     sacrificing something *chosen* needs the pending-choice queue.
+
+    **Both of those kinds are dispatched by the upkeep registry and by nothing
+    else**, which is why the pronoun branch below cannot use them. "It" after a
+    step that put a card onto the battlefield is not the source at all — the
+    source is the spell — and a lowering that read it as one would emit an
+    instruction with no ``EFFECT_HANDLERS`` entry: a card compiling supported
+    and doing nothing, which is the shape ``--hollow-lines`` exists to find.
+
+    *produced* is what earlier steps of the same sentence recorded, which is the
+    whole of what tells the pronoun apart: with no such record "it" has no
+    referent but the source, and the branch refuses.
     """
     subject = node.subject
+    # "…sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
+    # The pronoun names the permanent the step in front of it created, and the
+    # cost is read off that same permanent. Decomposed into the offer machinery
+    # rather than fused, because nothing dispatches the fused kinds outside the
+    # upkeep registry — and because ``may`` already implements an offer with a
+    # penalty on the decline, which is exactly what "unless" says.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and PUT_FROM_HAND_PERMANENTS in produced
+    ):
+        cost: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
+        if node.cost_from == "its_mana_cost":
+            # The printed number is the *reduction*; the cost itself is the
+            # permanent's own mana cost, which is not knowable until the seat
+            # has picked a card. So the payload says where to read it and by
+            # how much to reduce it, and `handlers/control_flow._resolve_cost`
+            # does the arithmetic at resolution.
+            cost = {
+                "cost_from": PUT_FROM_HAND_PERMANENTS,
+                "reduced_by": _full_mana_payload(node.cost),
+            }
+        elif node.cost_from is not None:
+            raise LoweringError(
+                f"no offer reads a cost from {node.cost_from!r}", node=node
+            )
+        return (
+            OracleInstruction(
+                "may", "",
+                {
+                    "actor": "you",
+                    "cost": cost,
+                    "otherwise": (
+                        OracleInstruction(
+                            "sacrifice_recorded_permanent", "",
+                            {"permanents_from": PUT_FROM_HAND_PERMANENTS},
+                        ),
+                    ),
+                },
+            ),
+        )
+    if node.cost_from is not None:
+        raise LoweringError(
+            "a derived cost is read off a permanent an earlier step of this "
+            "sentence created", node=node,
+        )
     if not _is_source(subject):
         raise LoweringError("no handler for sacrificing a chosen permanent", node=node)
     types = subject.filter.card_types if isinstance(subject, ast.TargetSpec) else ()

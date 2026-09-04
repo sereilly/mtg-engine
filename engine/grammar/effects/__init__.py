@@ -8,7 +8,8 @@ precisely so this stays true. Independence is the point: it is what makes
 
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
-    board            destruction, bouncing, sacrificing, attaching
+    board            destruction, sacrificing
+    returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
     cards            drawing, discarding, milling, searching, revealing
     mana             producing it, and changing what a permanent produces
@@ -81,11 +82,13 @@ from .board import (
     _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
-    _parse_return,
-    _parse_put_source_into_zone,
     _parse_destroy,
     _parse_further_subjects,
     _parse_that_object,
+)
+from .returns import (
+    _parse_return,
+    _parse_put_source_into_zone,
 )
 from .attachments import (
     _parse_attach,

@@ -1235,7 +1235,7 @@ def _resolved_life_cost(game, printed, context: OracleExecutionContext) -> int:
     return max(0, int(printed))
 
 
-def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
+def _resolved_cost(printed, context: OracleExecutionContext, game=None) -> dict:
     """An offered cost with its variable amount read at resolution.
 
     "You may pay {X}, where X is the number of +1/+1 counters on it."
@@ -1246,12 +1246,59 @@ def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
     ability *resolves*: a counter added between the trigger and its resolution
     changes the number.
     """
+    printed = dict(printed or {})
+    # "…unless you pay **its mana cost reduced by {2}**" (Flash). The cost is
+    # not printed at all: it is the mana cost of the permanent an earlier step
+    # of the same sentence put onto the battlefield, less what the card does
+    # print. Read here rather than at lowering for the where-clause's reason
+    # above — the object does not exist until the step in front of this one
+    # resolves, and which card the seat picked is not knowable before they pick.
+    key = printed.pop("cost_from", None)
+    if key is not None:
+        return _derived_cost(key, printed.pop("reduced_by", None), context, game)
     resolved = {}
-    for symbol, amount in dict(printed or {}).items():
+    for symbol, amount in printed.items():
         if amount == "x":
             amount = max(0, int(context.x_value or 0))
         resolved[symbol] = int(amount)
     return {symbol: amount for symbol, amount in resolved.items() if amount}
+
+
+def _derived_cost(
+    key: str, reduction, context: OracleExecutionContext, game=None,
+) -> dict:
+    """The mana cost of the permanent recorded under *key*, less *reduction*.
+
+    CR 601.2f's arithmetic in the one direction this engine implements it:
+    a reduction applies to the **generic** part first and never takes a
+    coloured pip off, which is the rule for every cost reduction in Magic
+    (CR 601.2f: coloured requirements are unaffected by a generic reduction).
+    Flash's "{2}" off a {3}{G} creature is {1}{G}, and off a {G}{G} creature is
+    {G}{G}.
+
+    Nothing recorded — the seat declined the offer in front of this one, or the
+    permanent has left — is a cost of nothing, and the offer is not made. The
+    caller then runs the decline branch, which is right either way: with no
+    permanent there is nothing to sacrifice.
+    """
+    from ..mana_payment import mana_cost_from_symbols
+
+    recorded = context.results.get(key)
+    permanent = (
+        game.permanent_by_id(recorded)
+        if isinstance(recorded, int) and game is not None
+        else None
+    )
+    if permanent is None:
+        return {}
+    cost = mana_cost_from_symbols(permanent.effective_card.mana_cost or "")
+    if not cost:
+        return {}
+    cost = dict(cost)
+    generic_off = int(dict(reduction or {}).get("generic", 0) or 0)
+    if generic_off:
+        cost["generic"] = max(0, int(cost.get("generic", 0)) - generic_off)
+    return {symbol: amount for symbol, amount in cost.items() if amount}
 
 
 @effect_handler("may")
@@ -1482,7 +1529,7 @@ def _offer_to_seat(
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
-    cost = _resolved_cost(instruction.payload.get("cost"), context)
+    cost = _resolved_cost(instruction.payload.get("cost"), context, game)
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
     # CR 603.12: a *separate* ability the payment creates, so it is carried
@@ -1507,7 +1554,7 @@ def _offer_to_seat(
     # itself, so a printed {X} in an alternative means what it means in the
     # first one.
     alternatives = [
-        _resolved_cost(alternative, context)
+        _resolved_cost(alternative, context, game)
         for alternative in (instruction.payload.get("cost_alternatives") or ())
     ]
     if (cost or life_cost) and not game._player_can_pay_optional(player, {

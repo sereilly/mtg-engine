@@ -604,9 +604,17 @@ _REANIMATED_PERMANENTS = "reanimated_permanents"
 #: whole registry exists to refuse.
 EXTRA_TURN_GRANTED = "extra_turn_granted"
 
+#: "You may put a creature card from your hand onto the battlefield. If you do,
+#: sacrifice **it** unless you pay…" (Flash.) The permanent that step created,
+#: for the reanimation's reason one entry down: the card was in a hand when the
+#: spell was cast, so nothing on the stack or on the board pointed at the
+#: permanent until this step made it.
+PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
+    PUT_FROM_HAND_PERMANENTS,
     # What a search put onto the battlefield (Zirilan of the Claw). The
     # reanimation's twin one zone over, and a member of this set for that
     # entry's reason: "that creature" behind either step names the permanent

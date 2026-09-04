@@ -282,6 +282,14 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # consequence rather than the counter itself. The one fragment the two families
 # shared, `_expect_counter_kind`, went down into `phrases` rather than staying
 # with either — a production two families need has no home inside one of them.
+# `returns` joined the parse side when `effects/board.py` reached the size guard
+# a third time, reusing the name `lowering/returns.py` has carried since Fallen
+# Empires. The line is `board`'s own docstring: a return names **two** zones,
+# the one an object leaves and the one it goes to, and that pair is what picks
+# the handler, where everything left behind acts on a permanent where it stands.
+# The one fragment both halves read, `_parse_further_subjects`, went down into
+# `phrases` rather than travelling with either — the same move
+# `_expect_counter_kind` made when `counters` left `characteristics`.
 # `tapping` joined the parse side when `effects/board.py` reached the size
 # guard, reusing the name `lowering/tapping.py` had carried since it left the
 # same family one package over — the third time the mirror has re-formed rather
@@ -332,7 +340,7 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # `lowering/exile.py`'s name, which has been a lowering-only family since
 # before the parse half existed, so the mirror re-forms rather than forking:
 # the same move `prevention` and `counters` made, in the other direction.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "returns"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -531,11 +539,17 @@ LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "r
 # measures, never a property of the inventory — and the guard that made
 # `attachments` a family on the other two sides fired on the lowerings and
 # then, five sets later, on the productions.
+# `returns` is the seventh, and the same reason a seventh time: `ReturnToZone`
+# and `PutSourceIntoZone` are two nodes that sit perfectly well beside the board
+# ones — a return is *two zones and a move*, which is what the production reads
+# and what the lowering dispatches on, never a property of the inventory — and
+# the guard that made `returns` a family on the lowering side fired on the
+# lowerings at Fallen Empires and on the productions here.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
         "search", "control_changes", "prevention", "counters",
-        "tapping", "attachments",
+        "tapping", "attachments", "returns",
         # `types` is a parse family and a lowering family with no AST module of
         # its own: what the `becomes` verb produces is `BecomeCreature`,
         # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,
