@@ -27,7 +27,9 @@ from .phrases import (_accept_life_alternative, _accept_number,
                       _accept_self_reference, _parse_mana_payment)
 from .records import accept_additional_cost_paid
 from .effects import (_parse_discard, _parse_gain_control,
-                      _parse_mill, _parse_put_counter, _parse_linked_untap_restriction)
+                      _parse_mill, _parse_put_counter,
+                      _parse_put_hand_cards_on_library,
+                      _parse_linked_untap_restriction)
 
 
 # ---------------------------------------------------------------------------
@@ -795,6 +797,23 @@ def _accept_trailing_toll(
     # offer, the penalty and the "you have nothing to put it on" case all come
     # from machinery that already works.
     if stream.at_word("puts", "put"):
+        # "…unless they **put a card from their hand on top of their library**"
+        # (Tainted Specter). The fourth printed currency beside mana, a discard
+        # and a counter placement, and the same decomposition every one of them
+        # takes: an "unless" is an offer with a penalty, so the placement is the
+        # offer's *action* and the discard behind it is the penalty. Read before
+        # the counter branch because both open on "put" and only one of them can
+        # consume "a card from their hand"; the production refuses without
+        # consuming, so a counter sentence still reaches the branch below.
+        #
+        # Not offered to an enumerated payer, for the counter branch's reason:
+        # `ast.May` is one offer to one seat, and "each player" would be a chain.
+        back_on_top = _parse_put_hand_cards_on_library(stream, payer)
+        if back_on_top is not None:
+            if payer.kind in _ENUMERATED_PAYERS:
+                stream.reset(mark)
+                return None
+            return ast.May(actor=payer, action=back_on_top, otherwise=body)
         try:
             placement = _parse_put_counter(stream)
         except GrammarError:
@@ -826,6 +845,41 @@ def _accept_trailing_toll(
         life_alternative=_accept_life_alternative(stream),
         otherwise=body,
     )
+
+
+def accept_delayed_toll(
+    parse_body, stream: TokenStream, body: "ast.Statement"
+) -> "ast.Statement | None":
+    """``<effect> <delay> unless <player> pays <cost> before that step``
+    — the toll printed *behind* a trailing delay (Sabertooth Cobra).
+
+    :func:`_accept_trailing_toll` runs around the sentence **body**, and this
+    one runs around the sentence's *delay*: "the player gets another poison
+    counter at the beginning of their next upkeep unless they pay {2} before
+    that step" prints the window between the effect and its price, so by the
+    time the words "unless" are reached the body reader has long stopped. The
+    offer belongs inside the delayed ability rather than beside it — it is made
+    when that ability resolves, which is the moment the card names.
+
+    **"Before that step" is required**, and it is why this is not simply the
+    trailing toll read a second time. The phrase is the payment *window*, and
+    this engine has no priority window before a step in which a player could
+    pre-commit — so what it means here is that the offer is made at the start of
+    the named step, ahead of the effect it buys off. That is the same choice
+    with the same information (a player untaps before their own upkeep, so the
+    mana available is the mana the phrase was written about), and stating the
+    requirement is what keeps the words from being a rider that could be deleted
+    with no change to the parse. A card printing the toll after a delay *without*
+    the window refuses, and grows a reading of its own.
+    """
+    mark = stream.mark()
+    offer = _accept_trailing_toll(parse_body, stream, body)
+    if offer is None:
+        return None
+    if not stream.accept_phrase("before", "that", "step"):
+        stream.reset(mark)
+        return None
+    return offer
 
 
 def _round_every_half(node, rounding: str):

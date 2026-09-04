@@ -20,10 +20,10 @@ from ...oracle_types import COUNTERED_SPELL_CONTROLLER, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _filter_payload, _restrictions_beyond
+from ._common import _amount_payload, _filter_payload, _restrictions_beyond
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
-                      _EVENT_SUBJECT_PLAYERS)
+                      _EVENT_SUBJECT_PLAYERS, frozen_seat_record)
 from ._records import produced_keys
 
 
@@ -124,7 +124,13 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
      # is read off the attachment. Its own actor because ``_offered_seats``
      # answers the two by asking different things, and reading one as the other
      # offered Farrel's Mantle's choice to the player being attacked.
-     "attached_controller"}
+     "attached_controller",
+     # "…unless **they** pay {2} before that step." (Sabertooth Cobra.) The
+     # seat the *damage* froze, which is the seat this delayed ability is
+     # about — the same record its own counter placement reads, so the player
+     # offered the price and the player who takes the counter for refusing it
+     # are one answer rather than two.
+     "damaged_player"}
 )
 
 
@@ -367,6 +373,16 @@ def _lower_may(
         # The same mapping the damage recipient one module over already makes
         # for these five events, applied to the seat an *offer* is made to.
         actor = EVENT_SUBJECT_PLAYER
+    elif actor == "that_player" and frozen_seat_record("that_player", event) == "damaged_player":
+        # "…unless **they** pay {2} before that step" (Sabertooth Cobra). Under
+        # an event that froze the *damaged* player, "they" is that seat and not
+        # the resolution's target — a delayed ability created by a damage
+        # trigger has no target at all, so left as ``that_player`` the offer
+        # reached ``_offered_seats``' fallback and asked ``context.target``,
+        # which is None. Read through the one table that already says which
+        # record a printed player word names under which event, so the offer
+        # and the counter behind it cannot name different seats.
+        actor = "damaged_player"
     elif actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
         # "…unless **the player** puts a -1/-1 counter on a creature they
         # control" (Thelon's Chant, Tourach's Chant). Under an event whose
@@ -495,6 +511,29 @@ def _lower_may(
     # payment creates it, and the ``then`` branch has none of its own to choose.
     if reflexive:
         payload["reflexive"] = reflexive
+    if node.looked_at_top is not None:
+        # "Look at the top two cards of your library. You may sacrifice this
+        # enchantment and pay {2}{G}{G}. …" (Preferred Selection.) What the
+        # offered seat has already seen of their own library when the question
+        # is put — see ``ast.May.looked_at_top``.
+        #
+        # A printed number and the offer's own controller, both required rather
+        # than coerced: a computed count would be a look whose size the prompt
+        # could not name, and any other actor would be one seat shown another
+        # seat's hidden zone (CR 400.2).
+        seen = _amount_payload(node.looked_at_top)
+        if not isinstance(seen, int) or seen <= 0:
+            raise LoweringError(
+                "a look before an offer reads a printed number of cards",
+                node=node,
+            )
+        if node.actor.kind != "you":
+            raise LoweringError(
+                "a look before an offer shows the offered seat their own "
+                "library, and this offer is made to somebody else",
+                node=node,
+            )
+        payload["looked_at_library_top"] = seen
     if not (action or then or otherwise or reflexive or payload.get("option_effects")):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)

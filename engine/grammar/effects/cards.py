@@ -745,7 +745,7 @@ def _accept_hand_to_either_end_tail(stream: TokenStream) -> bool:
 
 
 def _parse_put_hand_cards_on_library(
-    stream: TokenStream,
+    stream: TokenStream, player: "ast.PlayerRef | None" = None,
 ) -> "ast.PutHandCardsOnLibrary | None":
     """``Put two cards from your hand on top of your library in any order.``
     (Brainstorm.)
@@ -754,24 +754,38 @@ def _parse_put_hand_cards_on_library(
     no printed subject is about the spell's controller). Refuses without
     consuming, because "put" opens a counter, a permanent and three zone moves;
     every one of those keeps the production it already had.
+
+    *player* is the seat a caller has **already read**, printed in the third
+    person: "…unless they **put a card from their hand on top of their
+    library**" (Tainted Specter), where the toll reader has the payer in hand
+    before the verb. One production for both, because the possessives agree
+    with the subject and nothing else about the sentence changes — a second
+    reader would be a second answer to "where do these cards go", which is the
+    fork ``_accept_hand_to_library_tail`` exists to prevent. Dream Cache's
+    either-end offer is deliberately *not* offered to a third-person payer: the
+    phrase is printed with "your" throughout, so a "their" spelling of it is a
+    sentence nobody prints.
     """
     mark = stream.mark()
+    possessive = "your" if player is None else "their"
     if not stream.accept_word("put"):
         return None
     count = _accept_hand_card_count(stream)
-    if count is None or not stream.accept_phrase("from", "your", "hand"):
+    if count is None or not stream.accept_phrase("from", possessive, "hand"):
         stream.reset(mark)
         return None
     # Dream Cache's offer, read before the ordinary tail because it opens on a
     # word that one does not ("both") and would otherwise fail the line.
-    if _accept_hand_to_either_end_tail(stream):
+    if player is None and _accept_hand_to_either_end_tail(stream):
         return ast.PutHandCardsOnLibrary(
             ast.PlayerRef("you"), count, destination="either_end"
         )
-    if not _accept_hand_to_library_tail(stream, "your", ordered=_orderable(count)):
+    if not _accept_hand_to_library_tail(
+        stream, possessive, ordered=_orderable(count)
+    ):
         stream.reset(mark)
         return None
-    return ast.PutHandCardsOnLibrary(ast.PlayerRef("you"), count)
+    return ast.PutHandCardsOnLibrary(player or ast.PlayerRef("you"), count)
 
 
 def _orderable(count: "ast.Amount") -> bool:

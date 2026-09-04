@@ -60,6 +60,7 @@ from .sentence_clauses import (
     _accept_graded_toll_outcomes,
     _distribute_duration,
     _parse_unless_player_pays,
+    accept_delayed_toll,
     _accept_trailing_toll,
     _parse_leading_controller_of_each,
     _parse_leading_count_scale,
@@ -185,6 +186,16 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     # is what lets `delay_binds_an_object` below see the "that creature" it now
     # contains.
     statement = fold_flip_stakes(stream, statement, parse_statement)
+
+    # "…at the beginning of their next upkeep **unless they pay {2} before that
+    # step**." (Sabertooth Cobra.) The toll printed behind the delay rather than
+    # behind the body, so the reader around the body has already stopped by the
+    # time the word arrives. Folded *inside* the delayed ability, because that
+    # is when the offer is made — wrapped around the delay it would ask for the
+    # payment now and delay only the penalty.
+    tolled = accept_delayed_toll(_parse_statement_body, stream, statement)
+    if tolled is not None:
+        statement = tolled
 
     def _delay(effect: ast.Statement) -> ast.CreateDelayedTrigger:
         return ast.CreateDelayedTrigger(

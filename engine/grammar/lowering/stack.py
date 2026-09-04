@@ -795,7 +795,8 @@ def _lower_create_delayed_trigger(
     no fire site announces would leave an ability waiting forever, and an
     effect that lowered to nothing would leave one firing into nothing.
     """
-    from ...delayed_triggers import DELAYED_EVENTS
+    from ...delayed_triggers import (DELAYED_EVENTS,
+                                     EVENTS_SEATED_BY_BOUND_PLAYER)
 
     from ._events import EXTRA_TURN_GRANTED, _RECORDED_PERMANENTS
 
@@ -864,6 +865,16 @@ def _lower_create_delayed_trigger(
         and _names_a_chosen_player(node.effect)
     ):
         payload["binds_player"] = True
+    if node.event in EVENTS_SEATED_BY_BOUND_PLAYER:
+        # "…at the beginning of **their** next upkeep" (Sabertooth Cobra). The
+        # possessive is the whole of what this event *is*: it fires on one
+        # named player's upkeep, and which player is a fact the creating
+        # trigger knows and the upkeep three turns later does not. So the seat
+        # is frozen as the ability is created, exactly as CR 603.7c freezes the
+        # object a delayed ability is about — and the record it is read from is
+        # the damage event's own, named here rather than guessed at the fire
+        # site.
+        payload["binds_player"] = "damaged_player"
     # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
     # the battlefield". Which object the ability watches, when the opener names
     # one the effect already holds rather than one it targeted — the arming

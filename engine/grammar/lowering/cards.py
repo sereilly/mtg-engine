@@ -923,6 +923,16 @@ def _lower_put_hand_cards_on_library(
     if node.player.kind == "you":
         payload["recipient"] = "caster"
         return (OracleInstruction("put_hand_cards_on_library", "", payload),)
+    if node.player.kind == "that_player":
+        # "Target player discards a card unless **they** put a card from their
+        # hand on top of their library." (Tainted Specter.) The offer's own
+        # payer, which the sentence in front of it already targeted — so the
+        # seat is the resolution's chosen player and no second target is
+        # described. ``recipient`` says which of the two seats the handler reads
+        # rather than leaving it to the key's absence: the same seat
+        # ``_offered_seats`` hands the offer to, spelled once on both sides.
+        payload["recipient"] = "target"
+        return (OracleInstruction("put_hand_cards_on_library", "", payload),)
     raise LoweringError(
         f"no handler puts {node.player.kind!r}'s hand cards on their library",
         node=node,

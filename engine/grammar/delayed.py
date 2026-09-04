@@ -123,6 +123,13 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # and not a second spelling of the row above.
     (("at", "the", "beginning", "of", "the", "next", "turn", "'s", "upkeep"),
      "next_turns_upkeep", True, "until_it_triggers", False),
+    # "…at the beginning of **their** next upkeep" (Sabertooth Cobra). The
+    # third upkeep row and the third seat: not the controller's own and not
+    # whichever comes next, but the one belonging to the player the firing
+    # event was about. See `delayed_triggers.DELAYED_EVENTS` for why the
+    # possessive makes it a separate event rather than a spelling of either.
+    (("at", "the", "beginning", "of", "their", "next", "upkeep"),
+     "damaged_players_next_upkeep", True, "until_it_triggers", False),
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). Unseated for `next_end_step`'s reason — CR 514 gives
     # every turn one cleanup step and the ability names the next one there is —

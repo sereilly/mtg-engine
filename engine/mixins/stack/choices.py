@@ -1237,6 +1237,19 @@ class PendingChoicesMixin:
                 f"{caster.name} put a card back on top of their library"
             )
             return True
+        # "**If you don't**, put one of those cards on the bottom of your
+        # library." (Preferred Selection.) The fourth printed destination for
+        # the taken card, and the one that is a *cost* rather than a gain: the
+        # card the player names is the one they are burying, and the rest of the
+        # pile goes back where it was. Read rather than folded into the bottoming
+        # of "the rest" — those are different cards and the sentence says which.
+        if choice.data.get("pick_destination") == "library_bottom":
+            self.put_card_into_library(caster, kept, position="bottom")
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{caster.name} put a card on the bottom of their library"
+            )
+            return True
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(

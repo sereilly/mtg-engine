@@ -389,6 +389,23 @@ class May:
     #: wherever they come apart (a copy of the spell resolving under another
     #: seat's control). None means CR 101.4's default.
     starting_with: PlayerRef | None = None
+    #: "**Look at the top two cards of your library.** You may sacrifice this
+    #: enchantment and pay {2}{G}{G}. …" (Preferred Selection.) How many cards
+    #: of their own library the offered seat has already seen when the offer is
+    #: made (CR 701.16a).
+    #:
+    #: A field on the offer rather than a step in front of it, because the look
+    #: is not something that *happens* — it is information the decision is made
+    #: with, and this engine has no other channel for showing one seat a hidden
+    #: zone without also asking them something. Dropped, the card would ask its
+    #: controller to pay four mana and sacrifice an enchantment **blind**, which
+    #: is the whole of what the first sentence is printed to prevent.
+    #:
+    #: Only ever the offered seat's own library: the two are one player by
+    #: construction here (the sentence says "your library" and offers to "you"),
+    #: and the lowering refuses any other actor rather than showing one seat
+    #: another's cards.
+    looked_at_top: "Amount | None" = None
 
 
 @dataclass(frozen=True)

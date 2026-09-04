@@ -231,11 +231,23 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # ability would otherwise be about whichever seat the firing resolution
     # happened to carry.
     bound_seat = None
-    if payload.get("binds_player"):
+    binds_player = payload.get("binds_player")
+    if binds_player:
         # The literal, for the reason `choose_permanent` above spells it: the
         # key is declared in `grammar/lowering/_events.CHOSEN_PLAYER`, and the
         # handler layer does not import from the grammar's lowering package.
-        recorded = (context.results or {}).get("chosen_player")
+        #
+        # "…at the beginning of **their** next upkeep" (Sabertooth Cobra) binds
+        # a seat the creating *trigger* named rather than one an earlier step
+        # chose, so the key says which record — the damage event's frozen
+        # recipient, stamped by `damage_events._announce`. Two records, one
+        # field, and the payload is what says which: read as the chosen-player
+        # one it would find nothing and arm no ability at all.
+        recorded = (
+            (context.trigger_context or {}).get("defending_player_index")
+            if binds_player == "damaged_player"
+            else (context.results or {}).get("chosen_player")
+        )
         if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
             game.log.append(f"{context.card.name} had no player to watch")
             return True, "no player"

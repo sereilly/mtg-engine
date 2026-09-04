@@ -1532,3 +1532,151 @@ def test_reparations_draws_when_its_controller_takes_the_offer(set_pool, catalog
 
     assert len(game.players[1].hand) == 1, game.log
     assert len(game.players[1].library) == 4
+
+
+# --- W3G3: Preferred Selection, one looked-at pile and two destinations ---
+#
+# "At the beginning of your upkeep, look at the top two cards of your library.
+# You may sacrifice this enchantment and pay {2}{G}{G}. If you do, put one of
+# those cards into your hand. If you don't, put one of those cards on the
+# bottom of your library."
+#
+# Four sentences and one pile. Both branches pick from the **same** two cards
+# and only the destination differs, so the whole ability is an ordinary
+# `ast.May` — its cost, its accept branch and its decline branch all reach
+# machinery that already existed, and the look rides `May.looked_at_top` into
+# the offer's own prompt.
+#
+# That last part is the card. "Look at the top two cards" is printed **first**,
+# so the decision is not made blind: with the look folded into the branches
+# instead, a player would be asked to sacrifice an enchantment and pay four
+# mana before seeing what they were paying for — a strictly different card, and
+# one no assertion about instruction kinds could tell apart from this one.
+#
+# The two picks are also genuinely different choices, which is why the offer
+# has to come *before* the pick rather than after: paying, you take the best
+# card; declining, you bury the worst.
+
+from engine import (Game as _w3g3e_Game,  # noqa: E402
+                    PlayerState as _w3g3e_PlayerState)
+from engine.card_loader import (load_cards as _w3g3e_load,  # noqa: E402
+                                manifest_set_path as _w3g3e_path)
+from engine.models import Permanent as _w3g3e_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g3e_compile  # noqa: E402
+
+
+def _w3g3e_lea():
+    return {card.name: card for card in _w3g3e_load(_w3g3e_path("LEA"))}
+
+
+def _w3g3e_selection_game(set_pool, lands=4):
+    """Preferred Selection on seat 0, with Black Lotus and Mox Jet on top."""
+    lea = _w3g3e_lea()
+    enchantment = _w3g3e_Permanent(card=set_pool("MIR")["Preferred Selection"])
+    forests = [_w3g3e_Permanent(card=lea["Forest"]) for _ in range(lands)]
+    for forest in forests:
+        forest.metadata["summoning_sickness_turn"] = -99
+    game = _w3g3e_Game(players=[
+        _w3g3e_PlayerState(
+            name="P1", battlefield=[enchantment] + forests,
+            library=[lea["Black Lotus"], lea["Mox Jet"], lea["Island"],
+                     lea["Forest"], lea["Plains"]],
+        ),
+        _w3g3e_PlayerState(name="P2", library=[lea["Forest"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.resolve_upkeep(0)
+    game._settle()
+    return game, enchantment
+
+
+def test_w3g3_preferred_selection_is_supported(set_pool):
+    """One offer, one look, two picks that differ only in where the card goes.
+
+    The unchosen card goes back on **top** in both branches, which is where it
+    already was: the card moves nothing it does not name.
+    """
+    program = _w3g3e_compile(set_pool("MIR")["Preferred Selection"])
+    assert program.supported, program.reason
+
+    offer = program.triggered_abilities[0].instruction
+    assert offer.kind == "may" and offer.payload["actor"] == "you"
+    assert offer.payload["cost"] == {"G": 2, "generic": 2}
+    assert offer.payload["looked_at_library_top"] == 2
+    assert [step.kind for step in offer.payload["action"]] == ["sacrifice_self"]
+
+    taken = offer.payload["then"][0]
+    declined = offer.payload["otherwise"][0]
+    assert taken.kind == declined.kind == "look_top_pick_to_hand"
+    assert taken.payload["amount"] == declined.payload["amount"] == 2
+    assert taken.payload.get("pick_destination") is None       # the hand
+    assert declined.payload["pick_destination"] == "library_bottom"
+    assert taken.payload["rest_destination"] == "library_top"
+    assert declined.payload["rest_destination"] == "library_top"
+
+
+def test_w3g3_preferred_selection_shows_the_cards_before_asking(set_pool):
+    """"**Look at the top two cards of your library.** You may sacrifice…"
+
+    The first sentence is what makes the offer a decision rather than a gamble,
+    and the offer's own prompt is the only channel this engine has for showing
+    one seat a hidden zone without also asking them something else. A card that
+    dropped the sentence would ask for four mana and an enchantment blind.
+    """
+    game, _ = _w3g3e_selection_game(set_pool)
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(owed) == 1 and owed[0].player_index == 0
+    assert owed[0].data["looked_at"] == ["Black Lotus", "Mox Jet"]
+    assert "Black Lotus, Mox Jet" in owed[0].data["prompt"]
+    assert bool(game.waiting_prompt()), game.log
+
+
+def test_w3g3_preferred_selection_paying_takes_a_card_and_keeps_the_rest(set_pool):
+    """Accepting charges both halves of the price — the sacrifice and the mana
+    — and the chosen card reaches the hand. The other stays on top, so the
+    ability is a filtered draw and not a two-card dig."""
+    game, enchantment = _w3g3e_selection_game(set_pool)
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert enchantment not in game.players[0].battlefield
+    assert [c.name for c in game.players[0].graveyard] == ["Preferred Selection"]
+    assert all(perm.tapped for perm in game.players[0].battlefield)
+
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+    assert game.confirm_look_top_pick(0, 0), game.log
+
+    assert [c.name for c in game.players[0].hand] == ["Black Lotus"]
+    assert [c.name for c in game.players[0].library] == [
+        "Mox Jet", "Island", "Forest", "Plains",
+    ], game.log
+
+
+def test_w3g3_preferred_selection_declining_buries_one_card(set_pool):
+    """Declining keeps the enchantment and buries the card the player names.
+    The one they did not name stays on top — which is the difference between
+    this and a card that bottomed "the rest"."""
+    game, enchantment = _w3g3e_selection_game(set_pool)
+    assert game.confirm_optional_pay(0, accept=False), game.log
+    assert enchantment in game.players[0].battlefield
+    assert game.players[0].graveyard == []
+
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+    assert game.confirm_look_top_pick(0, 1), game.log
+
+    assert game.players[0].hand == []
+    assert [c.name for c in game.players[0].library] == [
+        "Black Lotus", "Island", "Forest", "Plains", "Mox Jet",
+    ], game.log
+
+
+def test_w3g3_preferred_selection_still_buries_when_the_price_is_unpayable(set_pool):
+    """CR 601.2h asked of an offer: a board that cannot pay is never offered
+    the choice, and the decline branch is what happens instead. The bottoming
+    is the card's floor, not its penalty for saying no."""
+    game, enchantment = _w3g3e_selection_game(set_pool, lands=0)
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+    assert game.confirm_look_top_pick(0, 1), game.log
+
+    assert enchantment in game.players[0].battlefield
+    assert game.players[0].hand == []
+    assert game.players[0].library[-1].name == "Mox Jet", game.log

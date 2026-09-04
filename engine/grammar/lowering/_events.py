@@ -43,7 +43,19 @@ from ..errors import LoweringError
 # effect families ask it — a discard (Hypnotic Specter) and a player counter
 # (Pit Scorpion) — and a fragment two families need belongs in the shared
 # module.
-_DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({"damage_dealt"})
+_DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({
+    "damage_dealt",
+    # "…that player gets a poison counter. The player gets another poison
+    # counter at the beginning of their next upkeep …" (Sabertooth Cobra.) The
+    # second sentence is a *delayed* ability, so its own event is the upkeep
+    # rather than the damage — but "the player" still names the seat the damage
+    # froze, and it is the only seat this event has: the ability is created by
+    # a damage trigger, is seated on that player's upkeep
+    # (`EVENTS_SEATED_BY_BOUND_PLAYER`), and `create_delayed_trigger` freezes
+    # the whole of the creating trigger's context into ``captured``, which is
+    # where the handler reads the record back from.
+    "damaged_players_next_upkeep",
+})
 
 
 # Trigger events that freeze **which seat is being attacked** into the trigger's

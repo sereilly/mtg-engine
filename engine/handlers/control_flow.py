@@ -1251,6 +1251,49 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)
+    # "Target player discards a card unless they **put a card from their hand on
+    # top of their library**." (Tainted Specter.) An empty hand is a real and
+    # checkable "nothing to give": the handler underneath moves as many cards as
+    # it can (CR 608.2), so an offer taken from an empty hand would put nothing
+    # back and still skip the discard the card prints for not putting one back.
+    # The printed count, for Mold Demon's reason — a hand one card short cannot
+    # cover the offer either.
+    #
+    # Only the ``target`` spelling, which is the one whose recipient is the
+    # offered seat. A put-back out of the *caster's* hand is not a price this
+    # player pays, and answering False for it would withdraw an offer the card
+    # makes.
+    # "Sacrifice it **unless you discard a card at random**." (Balduvian Horde.)
+    # The random half of the same question ``discard_controller_cards`` answers
+    # above, and it was the half nobody asked: an empty hand discarded **zero
+    # cards at random**, the offer counted as taken, and the Horde stayed on the
+    # battlefield for free. CR 601.2h asks what a player is *able* to do, and
+    # discarding a card you do not have is not one of them.
+    #
+    # Only the ``caster`` spelling — the seat an offer with actor "you" is made
+    # to. A random discard out of somebody else's hand is not a price this
+    # player pays, and answering False for it would withdraw an offer the card
+    # makes. A computed count answers True for the same reason: this predicate
+    # has no ``x_value``, and a wrongly-False answer is the one that costs a
+    # card its ability.
+    if instruction.kind == "discard_x_target_cards":
+        amount = instruction.payload.get("amount", 1)
+        if instruction.payload.get("who") != "caster" or not isinstance(amount, int):
+            return True
+        return len(player.hand) >= amount
+    # "**You may sacrifice this enchantment** and pay {2}{G}{G}." (Preferred
+    # Selection.) A source that has left the battlefield cannot be sacrificed
+    # (CR 701.17a), and the handler underneath treats "nothing to sacrifice" as
+    # a no-op — so the offer would be takeable, the mana charged, and the card
+    # taken into hand for a price half of which was never paid.
+    if instruction.kind == "sacrifice_self":
+        return source is not None and game.is_on_battlefield(source)
+    if instruction.kind == "put_hand_cards_on_library":
+        if instruction.payload.get("recipient") != "target":
+            return True
+        if instruction.payload.get("whole_hand"):
+            return bool(player.hand)
+        return len(player.hand) >= int(instruction.payload.get("amount", 1) or 1)
     # "You may remove a vitality counter from this Aura. **If you do**, you gain
     # 1 life." (Living Artifact.) With no counter there is nothing to remove, so
     # the offer is not made and the if-you-do branch never runs. The handler
@@ -1570,6 +1613,19 @@ def _offered_seats(
             return []
         return [] if game.players[seat].lost else [seat]
 
+    if actor == "damaged_player":
+        # "…unless they pay {2} before that step" (Sabertooth Cobra). The seat
+        # the damage event froze (``defending_player_index``, stamped by
+        # ``damage_events._announce`` and carried across the delay in the
+        # entry's ``captured``) — the same record the poison counter behind the
+        # offer reads, so the player asked for the price and the player who
+        # takes the counter for refusing it are one seat. Nobody recorded means
+        # nobody is offered, which is the honest outcome the branches around
+        # this one already give.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
     if actor == "event_subject_player":
         # "…unless **that player** pays {4}" (Mystic Remora). The seat the
         # firing event *is about*, frozen by the fire site (CR 603.10) — one
@@ -1735,17 +1791,34 @@ def _offer_to_seat(
         entry["graded_options"] = [
             mana_cost_label(option) for option in (cost, *alternatives)
         ]
+    # "**Look at the top two cards of your library.** You may sacrifice this
+    # enchantment and pay {2}{G}{G}." (Preferred Selection.) CR 701.16a's look,
+    # carried out here rather than by a step in front of the offer: the seat
+    # being shown the cards is the seat being asked, and the whole point of the
+    # first sentence is that the decision is not made blind. The names ride the
+    # prompt, which is the one channel this engine has for telling one player
+    # something without also asking them a second question.
+    #
+    # Read off the library **now** rather than frozen at lowering time, because
+    # a look is what is there when it happens — and the offer holds priority
+    # (`ChoiceSpec.holds_priority`), so nothing can change the pile between the
+    # look and the pick behind it.
+    looked = int(instruction.payload.get("looked_at_library_top", 0) or 0)
+    seen = [card.name for card in player.library[:looked]] if looked > 0 else []
+    if seen:
+        entry["looked_at"] = seen
+    preamble = f"Top of your library: {', '.join(seen)}. " if seen else ""
     if cost:
         printed = " or ".join(
             mana_cost_label(option) for option in (cost, *alternatives)
         )
-        entry["prompt"] = (
+        entry["prompt"] = preamble + (
             f"Pay {printed} or {life_alternative} life?"
             if life_alternative
             else f"Pay {printed}?"
         )
     elif life_cost:
-        entry["prompt"] = f"Pay {life_cost} life?"
+        entry["prompt"] = f"{preamble}Pay {life_cost} life?"
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.

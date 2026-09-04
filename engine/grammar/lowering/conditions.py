@@ -657,6 +657,19 @@ def _lower_condition(
             "key": "sacrificed_cards",
             "filter": described,
         }
+    if isinstance(condition, ast.DiscardedThisWay):
+        # A back-reference names its producer or refuses, as every other "this
+        # way" in this function does. The record is the count the discard prompt
+        # writes when it is answered ("discarded_count"), and an absent one reads
+        # as zero — which is exactly what an empty hand leaves, so the branch is
+        # skipped rather than run off a discard that never took a card.
+        if "discarded_count" not in produced:
+            raise LoweringError(
+                "'discards a card this way' with no discard before it in this "
+                "effect",
+                node=condition,
+            )
+        return {"kind": "it_happened", "key": "discarded_count"}
     if isinstance(condition, ast.DestroyedThisWay):
         # A back-reference names its producer or refuses, as the coin flip above
         # does: with no earlier step of this effect that armed a destruction,
