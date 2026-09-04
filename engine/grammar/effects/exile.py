@@ -24,6 +24,37 @@ from ..references import parse_player_ref
 from ..stream import TokenStream
 
 
+def _parse_put_exiled_pile_top_into_hand(
+    stream: TokenStream,
+) -> "ast.PutExiledPileTopIntoHand | None":
+    """``Put the top card of the exiled pile into its owner's hand.``
+    (Mangara's Tome.)
+
+    Read before the "that card" production below and refusing without
+    consuming, like every other "put" reader here: the two open on the same
+    verb and differ from the fourth word on, so the order decides which refusal
+    survives rather than which card is read.
+
+    "Its owner's" and "your" are both accepted because they name the same seat
+    for every printing in the pool — the pile is made of cards their controller
+    searched out of their own library — and refusing the second spelling would
+    turn a wording difference into an unsupported card.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "put", "the", "top", "card", "of", "the", "exiled", "pile", "into"
+    ):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("its", "owner", "'s", "hand")
+        or stream.accept_phrase("your", "hand")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.PutExiledPileTopIntoHand()
+
+
 def _parse_put_exiled_card_into_hand(
     stream: TokenStream,
 ) -> "ast.PutExiledCardIntoHand | None":

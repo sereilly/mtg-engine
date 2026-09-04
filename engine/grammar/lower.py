@@ -94,6 +94,13 @@ def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruct
         # into nothing, which is the empty-wrapper refusal below.
         inner = instruction.payload.get("instruction")
         return (inner,) if inner is not None else ()
+    if instruction.kind == "arm_draw_replacement":
+        # "The next time you would draw a card this turn, instead <effect>."
+        # A wrapper for ``create_delayed_trigger``'s reason exactly — the
+        # effect is one instruction rather than a list, and what the line
+        # touches is what the armed effect touches.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
     if instruction.kind == "choose_one":
         return tuple(
             mode["instruction"] for mode in instruction.payload.get("modes") or ()

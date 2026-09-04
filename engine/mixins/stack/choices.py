@@ -29,6 +29,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
+from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
 from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS)
@@ -1543,6 +1544,25 @@ class PendingChoicesMixin:
         if "library" in zones:
             random.shuffle(caster.library)
         ctx = choice.data.get("_context")
+        # "…exile them **in a face-down pile**, and shuffle that pile."
+        # (Mangara's Tome.) The finds become one linked pile on the exiling
+        # permanent (CR 610.3), which is what the artifact's second ability
+        # names — without the record the cards are in exile and nothing on the
+        # board can say which exile they are.
+        #
+        # ``ends_on`` is empty and that is the card: Mangara's Tome never gives
+        # them back, so nothing ends the link and the pile outlives the
+        # artifact in exile, exactly as Knowledge Vault's does.
+        source = getattr(ctx, "source_permanent", None) if ctx is not None else None
+        if choice.data.get("face_down_pile") and source is not None:
+            for card in exiled:
+                link_exiled_card(
+                    source, card, choice.player_index, face_down=True
+                )
+            if choice.data.get("shuffle_pile"):
+                # Through the module RNG the AI simulator seeds, like every
+                # other shuffle here, so a seed still replays a run exactly.
+                shuffle_linked_pile(source, random.shuffle)
         if ctx is not None:
             ctx.results["exiled_cards"] = exiled
         self.discard_pending_choice(choice)

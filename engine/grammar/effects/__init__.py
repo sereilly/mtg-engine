@@ -116,6 +116,7 @@ from .mana import (
 from .exile import (
     _parse_exile_bound_card,
     _parse_put_exiled_card_into_hand,
+    _parse_put_exiled_pile_top_into_hand,
     _parse_exile_cost_sacrifices,
     _parse_exile_graveyard,
     _parse_put_exiled_with_source,
@@ -266,6 +267,7 @@ __all__ = [
     "_parse_cast_permission",
     "_parse_exile_bound_card",
     "_parse_put_exiled_card_into_hand",
+    "_parse_put_exiled_pile_top_into_hand",
     "_parse_exile_cost_sacrifices",
     "_parse_exile_graveyard",
     "_parse_play_with_hand_revealed",

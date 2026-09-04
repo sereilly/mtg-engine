@@ -406,6 +406,19 @@ class Game(
     # you own from outside the game into your hand". Consumed by that player's
     # next draw; cleared at end of turn alongside lamp_draw_replacements.
     outside_game_draw_replacements: set = field(default_factory=set)
+    # "The next time you would draw a card this turn, instead <effect>."
+    # (Mangara's Tome.) The general form of the two above: each entry is
+    # {"player_index", "instruction", "source"} and the next draw that seat
+    # makes this turn runs the instruction instead. Cleared at end of turn
+    # beside them.
+    #
+    # On the game and not on the permanent that armed it, unlike Soul Echo's
+    # counter-removal record: CR 611.2 makes the effect the *resolved ability's*
+    # rather than the source's, so a Mangara's Tome destroyed in response still
+    # replaces the draw it paid for. ``source`` is carried so the armed
+    # instruction can still read a pile recorded on that permanent (CR 610.3
+    # links the two abilities, not the two objects).
+    armed_draw_replacements: list = field(default_factory=list)
     # Both of the above are *armed state*, like a prevention shield. The
     # suspended draw itself waits on pending_replacement_choices.
     # Firestorm Phoenix: cards in a hand that are revealed and can't be played

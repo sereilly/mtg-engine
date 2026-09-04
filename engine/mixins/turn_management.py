@@ -275,6 +275,10 @@ class TurnManagementMixin:
         # Aladdin's Lamp: an armed "next draw this turn" replacement expires
         # with the turn it was activated on.
         self.lamp_draw_replacements = {}
+        # "…this turn" (Mangara's Tome), cleared here beside the two armings it
+        # generalises rather than expiring by comparing turn numbers at the
+        # draw: one sweep, and nothing left behind to be matched by accident.
+        self.armed_draw_replacements = []
         # Ring of Ma'rûf's armed replacement likewise lasts only "this turn".
         self.outside_game_draw_replacements = set()
         # The second-draw sweep's once-per-turn memory (Mystic Skyfish), and the

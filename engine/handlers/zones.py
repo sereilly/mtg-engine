@@ -142,6 +142,73 @@ def arm_outside_game_draw_replacement(game: Game, instruction: OracleInstruction
     return True, "resolved"
 
 
+@effect_handler("arm_draw_replacement")
+def arm_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"The next time you would draw a card this turn, instead <effect>."
+    (Mangara's Tome.)
+
+    CR 614.1's one-shot replacement, recorded on the game rather than on the
+    permanent: the effect belongs to the ability that resolved (CR 611.2), so
+    destroying the source in response does not un-arm it. The source rides
+    along because the armed instruction may still name something recorded on it
+    — Mangara's Tome's own pile — and that is a *link between abilities*
+    (CR 610.3), which survives the object.
+
+    Two activations arm two replacements, and the draw seam spends them one at
+    a time, oldest first: each is its own effect, and CR 614.1 gives each its
+    own event.
+    """
+    inner = instruction.payload.get("instruction")
+    if inner is None:  # pragma: no cover - the lowering refuses an empty effect
+        return True, "resolved"
+    caster = context.caster
+    game.armed_draw_replacements.append({
+        "player_index": game.players.index(caster),
+        "instruction": inner,
+        "source": context.source_permanent,
+    })
+    game.log.append(
+        f"{context.card.name}: {caster.name}'s next draw this turn is replaced"
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_exiled_pile_top_into_hand")
+def put_exiled_pile_top_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the top card of the exiled pile into its owner's hand." (Mangara's
+    Tome.)
+
+    "The exiled pile" is the linked record its other ability made (CR 610.3),
+    read off this ability's own source. An empty pile puts nothing anywhere and
+    says so — the card offers no other outcome, and this is where a Tome that
+    has spent all five cards ends up.
+
+    Into the hand through ``Game.put_card_into_hand``, like every other card
+    reaching a hand, so CR 903.9b sees it.
+    """
+    from ..linked_exile import take_top_linked_entry
+
+    source = context.source_permanent
+    entry = take_top_linked_entry(source)
+    if entry is None:
+        game.log.append(f"{context.card.name}: the exiled pile is empty")
+        return True, "resolved"
+    owner = game.players[int(entry.get("owner_index", 0))]
+    card = entry["card"]
+    # The card leaves exile whether or not the hand accepts it: a commander
+    # diverted to the command zone (CR 903.9b) has still left the pile.
+    for index, held in enumerate(owner.exile):
+        if held is card:
+            owner.exile.pop(index)
+            break
+    game.put_card_into_hand(owner, card)
+    game.log.append(
+        f"{context.card.name}: {card.name} goes from the exiled pile to "
+        f"{owner.name}'s hand"
+    )
+    return True, "resolved"
+
+
 @effect_handler("draw_reveal_discard_unless_land")
 def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sindbad: "Draw a card and reveal it. If it isn't a land card, discard
@@ -4325,6 +4392,12 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
         # absent for the "any number of" spelling — the resolver refuses a
         # longer answer and the non-interactive default trims to it.
         maximum=instruction.payload.get("maximum"),
+        # "…exile them in a face-down pile, and shuffle that pile." (Mangara's
+        # Tome.) Carried to the resolver rather than acted on here, because
+        # nothing has been found yet: the pile is what the *answer* exiles, and
+        # this handler only asks the question.
+        face_down_pile=bool(instruction.payload.get("face_down_pile")),
+        shuffle_pile=bool(instruction.payload.get("shuffle_pile")),
         _context=context,
     )
     game.log.append(f"{caster.name} is searching their {' and '.join(zones)}")

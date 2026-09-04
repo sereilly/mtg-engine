@@ -560,6 +560,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "look_top_pick_to_hand": "zones",
     "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
+    # "Put the top card of the exiled pile into its owner's hand."
+    # (Mangara's Tome.) CR 610.3's linked pile, so the same category as
+    # the search that made it.
+    "put_exiled_pile_top_into_hand": "zones",
+    # "The next time you would draw a card this turn, instead ..."
+    # (Mangara's Tome.) A wrapper like `create_delayed_trigger`, and the
+    # gate walks into it for the same reason: what the line touches is
+    # what the armed effect touches.
+    "arm_draw_replacement": "zones",
     "grant_cast_permission": "zones",
     "grant_look_at_exiled_cards": "zones",
     "grant_extra_turn": "turns",

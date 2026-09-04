@@ -306,6 +306,30 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed
+    # "**The next time you would draw a card this turn, instead** <effect>."
+    # (Mangara's Tome; Aladdin's Lamp and Ring of Ma'rûf print the same
+    # opener with different effects behind it.) CR 614.1's one-shot
+    # replacement, read here rather than in a family because the words wrap a
+    # whole sentence — the same reason `unless <player> pays` and the leading
+    # duration above are read here.
+    #
+    # Gated on the opening word so it costs every other line nothing, and once
+    # the opener has matched the sentence behind "instead" is parsed as an
+    # ordinary statement: a line that consumed the opener and then fell through
+    # would be read as though the replacement were not printed at all. That is
+    # also what leaves the two card hooks theirs — their inner sentences are
+    # not ones this grammar reads, so the line fails here and the compiler goes
+    # on to `card_hooks`.
+    if stream.at_word("the"):
+        next_time = stream.mark()
+        stream.advance()
+        if stream.accept_phrase(
+            "next", "time", "you", "would", "draw", "a", "card", "this", "turn"
+        ):
+            stream.accept_punct(",")
+            if stream.accept_word("instead"):
+                return ast.NextDrawReplacement(_parse_statement_body(stream))
+        stream.reset(next_time)
     # "Create a black Spirit creature token. **Its power is equal to that
     # creature's power** …" (Broken Visage.) Two sentences and one effect, so
     # it is read here rather than by the token production the sentence loop

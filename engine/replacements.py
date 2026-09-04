@@ -205,6 +205,14 @@ DISCARD_DESTINATION = 10  # Library of Leng
 # applies — which CR 616.1e permits, and which is a card fewer.
 DRAW_DOUBLED = 5  # Teferi's Ageless Insight
 DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
+# The general form of the two above, and beside them for that reason: a
+# one-shot the player armed for their own benefit, replacing the draw with
+# something the ability names. Its own slot rather than a shared one --
+# CR 616.1 counts *effects*, and two contenders on one number would be one
+# contender with the second silently dropped -- and between them rather than
+# after, because no card in the pool prints two of the three and CR 616.1e
+# would put the choice to the affected player if one ever did.
+DRAW_ARMED_REPLACEMENT = 15  # Mangara's Tome
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 # Last of the draw replacements, and deliberately so. CR 616.1e gives the choice
 # to the affected player and the lowest order is the default they are taken to
@@ -2177,6 +2185,73 @@ def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: in
     if remaining > 0:
         game._draw_with_replacements(game.players[choice.player_index], remaining)
     return 0
+
+
+def _armed_draw_replacement(game, payload: dict):
+    """The oldest armed replacement this seat has, or None.
+
+    Armed, not "will do something", for ``_applies_lamp_draw``'s reason one
+    entry down: CR 614.1 spends a one-shot on the next event whether or not the
+    effect behind it finds anything to do, so an empty pile has to be handled
+    *inside* the effect rather than in front of it. A predicate that declined
+    there would leave the charge armed for the rest of the turn.
+
+    Oldest first, because two activations are two effects and the player who
+    armed them expects them spent in the order they were paid for.
+    """
+    seat = game.players.index(payload["player"])
+    for entry in getattr(game, "armed_draw_replacements", ()):
+        if entry.get("player_index") == seat:
+            return entry
+    return None
+
+
+def _applies_armed_draw_replacement(game, payload: dict) -> bool:
+    return _armed_draw_replacement(game, payload) is not None
+
+
+@replacement_effect(
+    "draw", DRAW_ARMED_REPLACEMENT, applies=_applies_armed_draw_replacement
+)
+def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | None:
+    """Mangara's Tome: "The next time you would draw a card this turn, instead
+    put the top card of the exiled pile into its owner's hand."
+
+    One draw, because that is what "the next time" replaces (CR 121.2 makes a
+    multi-card instruction that many draws): the charge is spent, the armed
+    instruction is carried out, and the draws queued behind this one go back
+    through the seam so a second armed replacement gets its own.
+
+    Nothing is drawn, so this reports 0 and a "whenever you draw a card" effect
+    correctly sees no draw for the replaced one.
+
+    The armed instruction runs with the arming permanent as its source, which
+    is what lets it read a pile recorded there (CR 610.3) — and it runs even
+    when that permanent has left the battlefield, because the effect is the
+    resolved ability's rather than the object's (CR 611.2).
+    """
+    from .game_types import OracleExecutionContext
+
+    player = payload["player"]
+    entry = _armed_draw_replacement(game, payload)
+    game.armed_draw_replacements.remove(entry)
+    source = entry.get("source")
+    card = getattr(source, "card", None)
+    game._execute_oracle_instruction(
+        entry["instruction"],
+        OracleExecutionContext(
+            caster=player, target=player, card=card, source_permanent=source
+        ),
+    )
+    drawn = 0
+    remaining = int(payload["count"]) - 1
+    if remaining > 0:
+        drawn += game._draw_with_replacements(
+            player, remaining,
+            exclude_sources=tuple(payload.get("exclude_sources") or ()),
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
 
 
 def _applies_lamp_draw(game, payload: dict) -> bool:

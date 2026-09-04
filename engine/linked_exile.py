@@ -98,6 +98,50 @@ def link_exiled_card(
     return entry
 
 
+def shuffle_linked_pile(source: "Permanent", shuffler) -> None:
+    """Randomise the order of everything exiled with *source* (Mangara's Tome:
+    "…exile them in a face-down pile, **and shuffle that pile**").
+
+    Here rather than at the call site because the record's list is this
+    module's — one writer and one reader is the arrangement the whole file is
+    built on, and a caller reordering ``metadata[RECORD_KEY]`` itself would be
+    a second writer with no comment saying so.
+
+    *shuffler* is passed in rather than imported so the caller's RNG is the one
+    used: ``run_ai_simulation`` seeds the module RNG and a given seed has to
+    replay a run exactly, which a private ``random`` here would break.
+    """
+    held = list(source.metadata.get(RECORD_KEY) or ())
+    if len(held) < 2:
+        return
+    shuffler(held)
+    source.metadata[RECORD_KEY] = held
+
+
+def take_top_linked_entry(source: "Permanent | None") -> dict[str, Any] | None:
+    """Remove and return the **top** entry of *source*'s pile, or None when it
+    is empty (Mangara's Tome: "put the top card of the exiled pile into its
+    owner's hand").
+
+    The top is the front of the record. Which end that is makes no observable
+    difference for the one card in the pool that asks — the pile was shuffled
+    as it was made, so its order is random by construction — and taking from
+    the front is what leaves the rest in a stable order across the several
+    draws one turn can replace.
+    """
+    if source is None:
+        return None
+    held = list(source.metadata.get(RECORD_KEY) or ())
+    if not held:
+        return None
+    top = held.pop(0)
+    if held:
+        source.metadata[RECORD_KEY] = held
+    else:
+        source.metadata.pop(RECORD_KEY, None)
+    return top
+
+
 def linked_entries(source: "Permanent | None") -> tuple[dict[str, Any], ...]:
     """Everything currently exiled with *source*, read without draining it."""
     if source is None:

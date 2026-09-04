@@ -160,6 +160,7 @@ from .cards import (
     TransmuteBySacrifice,
     ExileBoundCard,
     PutExiledCardIntoHand,
+    PutExiledPileTopIntoHand,
     RepeatedGraveyardPick,
     NameThenConsult,
     Shuffle,
@@ -240,7 +241,8 @@ Effect = Union[
     DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
     UpkeepCounterToll,
     UpkeepDamageUnlessCost,
-    ExileBoundCard, PutExiledCardIntoHand, RepeatedGraveyardPick, NameThenConsult,
+    ExileBoundCard, PutExiledCardIntoHand, PutExiledPileTopIntoHand,
+    RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,
     AnteOfferOwnershipExchange,
     OwnershipExchangeUnlessPaid,
@@ -541,7 +543,28 @@ class CreateDelayedTrigger:
 
 # ``UnlessPlayerPays`` is a *statement*, not an effect, for the reason ``May``
 # is one: it wraps a whole sentence and its body is an ordinary statement.
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, Effect]
+@dataclass(frozen=True)
+class NextDrawReplacement:
+    """"The next time you would draw a card this turn, instead <effect>."
+    (Mangara's Tome; Aladdin's Lamp and Ring of Ma'rûf print the same opener.)
+
+    CR 614.1's one-shot replacement, armed by the ability that resolves it and
+    spent by the next draw that seat makes this turn. Here beside :class:`May`
+    and :class:`CreateDelayedTrigger` rather than in a family, and for their
+    reason: it wraps a whole :data:`Statement`, so it cannot live below the roof
+    that closes over one.
+
+    Three cards in the pool print the opener with three different effects
+    behind it, which is why the effect is a nested statement rather than part
+    of the node's name. Two of the three still reach ``card_hooks`` — their
+    inner sentences are not ones the grammar reads, so this production refuses
+    the whole line and leaves them theirs, which is the ordering
+    ``tests/engine/test_card_lines.py`` enforces.
+    """
+    effect: "Statement"
+
+
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
 
 
 # ---------------------------------------------------------------------------
