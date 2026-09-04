@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2500,6 +2500,34 @@ function getPlayerChoiceInfo(state = currentState) {
   return info;
 }
 
+// Mind Bend: "...replacing all instances of one color word with another **or**
+// one basic land type with another." Which reading of the two symbols the cast
+// already named - offered only when both would rewrite something.
+function getTextChangeVocabularyInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.text_change_vocabulary;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
+function applyTextChangeVocabularyPrompt(info) {
+  applyChoiceButtonPrompt(
+    {
+      ...info,
+      prompt: `Replace which kind of word in ${info.permanent_name}?`,
+      options: info.options.map((option, index) => ({ ...option, index })),
+    },
+    {
+      title: "Choose a kind of word",
+      action: "text_change_vocabulary_confirm",
+      field: "text_change_mode",
+      labelOf: (option) => `${option.from} → ${option.to}`,
+      valueOf: (option) => option.mode,
+    },
+  );
+}
+
 // Phyrexian Dreadnought: "...sacrifice any number of creatures with total power
 // 12 or greater." A *set* priced by an aggregate rather than by a count, so the
 // Confirm is gated on the running total and each candidate shows what it
@@ -3501,7 +3529,7 @@ function isAnyPromptActive(state = currentState) {
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
   if (getEntryExileInfo(state)) return true;
-  if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
+  if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -3533,7 +3561,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5044,7 +5072,12 @@ function applyBodyChoicePrompt(info) {
 // Backdraft's two decisions: which player, then which of their spells. Both are
 // button lists rather than board targeting -- neither names anything on a
 // battlefield, and the spells being chosen between have already resolved.
-function applyChoiceButtonPrompt(info, { title, action, field, labelOf }) {
+// `valueOf` is what a prompt whose answer is not a number needs: every caller
+// before Mind Bend answered with a seat or a list position, so the wire value
+// was always `Number(...)`. Passing it opts out of that coercion and sends the
+// dataset string as it stands - a `Number("color_word")` is NaN, which the
+// schema then rejects as a missing field.
+function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf }) {
   const panel = q("activationPanel");
   const titleEl = q("promptTitle");
   const body = q("promptBody");
@@ -5065,7 +5098,9 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf }) {
   body.textContent = `${info.card_name || ""}: ${info.prompt || ""}`.trim();
   const buttons = info.options
     .map((option) => {
-      const value = field === "chosen_seat" ? option.seat : option.index;
+      const value = valueOf
+        ? valueOf(option)
+        : (field === "chosen_seat" ? option.seat : option.index);
       return (
         `<button type="button" class="prompt-choice-btn" data-choice-value="${value}">` +
         `${escapeHtml(labelOf(option))}</button>`
@@ -5079,7 +5114,9 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf }) {
       await sendAction({
         seat,
         action,
-        [field]: Number(btn.dataset.choiceValue),
+        [field]: valueOf
+          ? btn.dataset.choiceValue
+          : Number(btn.dataset.choiceValue),
       });
     });
   });
@@ -8351,6 +8388,12 @@ function renderActivationPrompt() {
   const playerChoiceInfo = getPlayerChoiceInfo();
   if (playerChoiceInfo) {
     applyPlayerChoicePrompt(playerChoiceInfo);
+    return;
+  }
+
+  const textChangeVocabularyInfo = getTextChangeVocabularyInfo();
+  if (textChangeVocabularyInfo) {
+    applyTextChangeVocabularyPrompt(textChangeVocabularyInfo);
     return;
   }
 

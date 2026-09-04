@@ -1694,3 +1694,93 @@ def test_meddle_leaves_a_spell_alone_when_there_is_no_other_creature(set_pool):
 
     assert game.players[0].battlefield == [], game.log
     assert "Femeref Knight" in [c.name for c in game.players[0].graveyard]
+
+
+# --- W2G4: a text change that offers two vocabularies ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_mind_bend(set_pool, target, old, new, interactive=True):
+    """Mind Bend in seat 0's hand aimed at *target* on seat 1's battlefield."""
+    perm = Permanent(card=set_pool("MIR")[target])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("MIR")["Mind Bend"]], life=20),
+        PlayerState(name="P2", battlefield=[perm], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game.queue_from_hand(
+        0, "Mind Bend", target_player_index=1, target_permanent_index=0,
+        old_color=old, new_color=new,
+    )
+    game.resolve_stack()
+    return game, perm
+
+
+def test_mind_bend_is_supported(set_pool):
+    """"…one color word with another **or one basic land type with another**."
+    The alternation is between the two modes that already exist, so it is one
+    mode value rather than a third substitution — and the sentence refuses
+    unless the second vocabulary is one of them, which is what keeps a card
+    offering something unimplementable from reaching the handler as a mode it
+    would ignore."""
+    program = compile_card_oracle(set_pool("MIR")["Mind Bend"])
+    assert program.supported, program.reason
+    assert program.instructions[0].payload["mode"] == "color_word_or_land_type"
+
+
+def test_mind_bend_asks_which_vocabulary_when_both_would_bite(set_pool):
+    """Floodgate writes "nonblue" *and* "Islands", and {U} is both words — so
+    the two readings are two different rewrites and its controller picks
+    (CR 612.1)."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    assert [c.kind for c in game.pending_choices] == ["text_change_vocabulary"]
+    assert game.pending_choices[0].data["options"] == ["color_word", "land_type"]
+
+    assert game.confirm_text_change_vocabulary(0, "land_type")
+    text = perm.effective_card.oracle_text
+    assert "Mountains" in text and "nonblue" in text, text
+
+
+def test_mind_bend_can_rewrite_the_colour_word_instead(set_pool):
+    """The other answer to the same prompt, and the half that proves the choice
+    is real rather than a formality."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    assert game.confirm_text_change_vocabulary(0, "color_word")
+    text = perm.effective_card.oracle_text
+    assert "nonred" in text and "Islands" in text, text
+
+
+def test_mind_bend_reaches_inside_a_non_colour_compound(set_pool):
+    """Mind Bend's own reminder text is the evidence: "you may change 'nonblack
+    creature' to 'nongreen creature'". ``\b`` does not reach inside the
+    compound — there is no word boundary between "non" and "blue" — so every
+    ``non<colour>`` in the pool survived a change that named it, Sleight of
+    Mind's included."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R")
+    game.confirm_text_change_vocabulary(0, "color_word")
+    assert "nonblue" not in perm.effective_card.oracle_text
+
+
+def test_mind_bend_asks_nothing_when_only_one_vocabulary_is_written(set_pool):
+    """Dirtwater Wraith prints "Swampwalk" and no colour word at all, so there
+    is one real answer and no decision — the same shortcut the graveyard-pile
+    prompt takes. The land swap happens where the spell resolves."""
+    game, perm = _w2g4_mind_bend(set_pool, "Dirtwater Wraith", "B", "U")
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert "Islandwalk" in perm.effective_card.keywords, perm.effective_card.keywords
+
+
+def test_mind_bend_defaults_to_the_first_offered_vocabulary_for_an_ai_seat(set_pool):
+    """A non-interactive seat never queues it: the resolution has to finish, and
+    the stated default is the first vocabulary offered, which is the colour
+    word. Deterministic rather than valued — a seat that should weigh a
+    type-line rewrite against a colour one needs a weight in
+    ``engine/ai_valuation.py``."""
+    game, perm = _w2g4_mind_bend(set_pool, "Floodgate", "U", "R", interactive=False)
+    assert [c.kind for c in game.pending_choices] == [], game.log
+    assert "nonred" in perm.effective_card.oracle_text

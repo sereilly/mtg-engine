@@ -352,7 +352,7 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # `lowering/exile.py`'s name, which has been a lowering-only family since
 # before the parse half existed, so the mirror re-forms rather than forking:
 # the same move `prevention` and `counters` made, in the other direction.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "returns"]
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "returns", "text_changes"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -471,7 +471,15 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
+# `text_changes` joins `search` in having no twin on the lowering side: the
+# instruction one produces (`mark_text_modified`) lowers in
+# `lowering/characteristics.py` beside the colour and P/T changes it sits
+# with, and the guard that made it a parse family fired on the *productions*
+# alone. A near-empty `lowering/text_changes.py` would buy back the symmetry
+# and cost the thing symmetry is for.
+LOWERING_FAMILIES = [
+    f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
+] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
 # `sequences` is the lowering-only family Mirage's wave 1 split off
 # `lowering/control_flow.py`, along the line that module's own docstring
 # already drew: it names three composers (`sequence`, `may`, `one_of`) and
@@ -562,6 +570,11 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "tapping", "attachments", "returns",
+        # `text_changes` is the eighth, and the same reason again: `ChangeText`
+        # is one node that sits perfectly well beside the characteristics ones,
+        # and the guard that made `text_changes` a parse family fired on the
+        # productions and on nothing else.
+        "text_changes",
         # `types` is a parse family and a lowering family with no AST module of
         # its own: what the `becomes` verb produces is `BecomeCreature`,
         # `GainType`, `ChangeSupertype`, `ChangeLandType` **and** `BecomeColor`,

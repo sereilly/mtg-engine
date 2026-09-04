@@ -926,40 +926,8 @@ def _parse_change_base_pt(stream: TokenStream) -> ast.ChangeBasePT | None:
     )
 
 
-# Vocabularies a printed text change can swap, one literal phrase per mode
-# (CR 612.1). Closed on purpose: `mark_text_modified` substitutes exactly these
-# two, and a card naming a third — a creature type, a card name — is a text
-# change the engine does not perform. Listing the phrases keeps that card
-# failing here instead of reaching the handler as a mode it will ignore.
-_TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("land_type", ("basic", "land", "type")),
-    ("color_word", ("color", "word")),
-)
 
 
-def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
-    """``Change the text of <subject> by replacing all instances of one <what>
-    with another.`` (Magical Hack, Sleight of Mind.)
 
-    One production for the pair: they are the same sentence with one word
-    changed, which is what makes the swapped vocabulary payload rather than part
-    of the effect's name. Every word between the subject and the mode is
-    required — "all instances of **one**" is what says a single word is
-    replaced everywhere, and a card replacing something else, or only the first
-    instance, would be a different effect wearing this one's sentence.
-    """
-    stream.expect_word("change")
-    stream.expect_word("the")
-    stream.expect_word("text")
-    stream.expect_word("of")
-    subject = parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected what to change the text of")
-    if not stream.accept_phrase("by", "replacing", "all", "instances", "of", "one"):
-        raise stream.error("expected 'by replacing all instances of one'")
-    for mode, phrase in _TEXT_CHANGE_MODES:
-        if stream.accept_phrase(*phrase):
-            if not stream.accept_phrase("with", "another"):
-                raise stream.error("expected 'with another'")
-            return ast.ChangeText(subject, mode)
-    raise stream.error("no text substitution replaces this")
+
+

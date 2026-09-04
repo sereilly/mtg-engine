@@ -690,6 +690,27 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("text_change_vocabulary_confirm")
+def _action_text_change_vocabulary_confirm(session, req, seat_type):
+    # Mind Bend: a colour word, or a basic land type. The engine re-checks the
+    # answer against the list it offered, so a client cannot ask for a swap of a
+    # word the permanent does not have.
+    pending = next(
+        (c for c in session.game.pending_choices_of("text_change_vocabulary")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no text change choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.text_change_mode is None:
+        raise HTTPException(status_code=400, detail="text_change_mode is required")
+    if not session.game.confirm_text_change_vocabulary(
+        req.seat, req.text_change_mode
+    ):
+        raise HTTPException(status_code=400, detail="invalid text change choice")
+
+
 @action_handler("aggregate_sacrifice_confirm")
 def _action_aggregate_sacrifice_confirm(session, req, seat_type):
     # Phyrexian Dreadnought: the whole set at once, addressed by stable id. The

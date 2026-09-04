@@ -9,6 +9,7 @@ precisely so this stays true. Independence is the point: it is what makes
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
     board            destruction, sacrificing
+    text_changes     rewriting a printed word (CR 612)
     returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
     cards            drawing, discarding, milling, searching, revealing
@@ -66,9 +67,11 @@ from .characteristics import (
     _parse_has,
     _parse_has_base_pt,
     _parse_for_each,
-    _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
     _parse_becomes_base_pt,
+)
+from .text_changes import (
+    _TEXT_CHANGE_MODES,
     _parse_change_text,
 )
 from .types import (

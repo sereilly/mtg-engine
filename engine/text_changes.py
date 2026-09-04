@@ -84,7 +84,18 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
     rules. No permanent in this pool writes that phrase.
     """
     if kind == COLOR_WORD:
-        return ((old, new),)
+        # "**non**black" is an instance of the word "black", and Mind Bend's own
+        # reminder text says so: "you may change 'nonblack creature' to
+        # 'nongreen creature'". ```` does not reach inside the compound —
+        # there is no word boundary between "non" and "black" — so the bare
+        # pattern fails there and every ``non<colour>`` in the pool survived a
+        # change that names it. Naming the compound covers it, exactly as
+        # "swampwalk" is named below, and ``_compile`` offers the longer form
+        # first so the alternation cannot stop at the prefix.
+        return (
+            (f"non{old}", f"non{new}"),
+            (old, new),
+        )
     pairs = {f"{old}walk": f"{new}walk"}
     if _plural(old) != old:
         pairs[_plural(old)] = _plural(new)
@@ -283,6 +294,12 @@ def changed_words(perm: Permanent) -> list[dict]:
     player actually sees.
     """
     edits: list[dict] = []
+    # The **bare** pair only, deliberately, where the land branch below lists
+    # every written form. This is the renderer's list, and a colour compound
+    # ("nonblack") is highlighted by the bare word inside it just as well —
+    # where "mountainwalk" is not, because the land word is a prefix of a longer
+    # keyword rather than a suffix of a longer adjective. The *applier* rewrites
+    # both forms either way (``_forms``); this is only what is struck through.
     for old, new in _net_map(perm, COLOR_WORD, COLOR_WORDS.values()).items():
         if old != new:
             edits.append({"from": old, "to": new})

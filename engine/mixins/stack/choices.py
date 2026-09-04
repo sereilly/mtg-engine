@@ -4166,6 +4166,142 @@ class PendingChoicesMixin:
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
 
+    # -- Which vocabulary a text change replaces a word from -----------------
+
+    def live_text_change_vocabularies(self, permanent, old_symbol: str) -> list[str]:
+        """The vocabularies whose printed word is actually on *permanent*.
+
+        A text change that rewrites a word the permanent does not have is a
+        legal choice (CR 612.1 puts no such condition on it) and changes
+        nothing, so offering it would be a question one of whose answers is
+        "do nothing" — the shortcut every other picker here takes when a choice
+        has one real answer. The *written* text, not the printed card: a second
+        text change rewrites what the first wrote.
+        """
+        # `text_changes`' own tables, both keyed by mana **symbol**. The
+        # grammar's `COLOR_WORDS` is the same pairs the other way round (word →
+        # symbol) and reading it here would look up "U" and find nothing, which
+        # is a vocabulary silently never offered.
+        from ...text_changes import COLOR_WORDS, LAND_TYPE_WORDS
+
+        symbol = (old_symbol or "").upper()
+        effective = permanent.effective_card
+        written = " ".join(
+            (effective.type_line, effective.oracle_text, *effective.keywords)
+        ).lower()
+        found = []
+        colour = COLOR_WORDS.get(symbol)
+        if colour and colour in written:
+            found.append("color_word")
+        land = LAND_TYPE_WORDS.get(symbol)
+        if land and land in written:
+            found.append("land_type")
+        return found
+
+    def arm_text_change_vocabulary(
+        self, player_index: int, permanent, old_symbol: str, new_symbol: str,
+        card_name: str,
+    ) -> None:
+        """Queue "a colour word, or a basic land type?" for Mind Bend.
+
+        One vocabulary that could do anything is not a decision, and none at all
+        is not a prompt: the swap is performed straight away in the first case
+        and nothing happens in the second, exactly as the pile choice one file
+        over decides whether to ask at all.
+        """
+        live = self.live_text_change_vocabularies(permanent, old_symbol)
+        if not live:
+            self.log.append(
+                f"{card_name} had no effect: {permanent.card.name} has no such "
+                "word in its text"
+            )
+            return
+        if len(live) == 1:
+            self._apply_text_change_vocabulary(
+                permanent, live[0], old_symbol, new_symbol, card_name
+            )
+            return
+        self.arm_pending_choice(
+            "text_change_vocabulary", player_index,
+            card_name=card_name,
+            permanent_name=permanent.card.name,
+            options=list(live),
+            old_symbol=(old_symbol or "").upper(),
+            new_symbol=(new_symbol or "").upper(),
+            _permanent=permanent,
+        )
+
+    def _apply_text_change_vocabulary(
+        self, permanent, mode: str, old_symbol: str, new_symbol: str,
+        card_name: str,
+    ) -> None:
+        """Perform the swap the seat named, through the same two writers the
+        single-vocabulary cards use — a third copy here would be a third answer
+        to what a text change records."""
+        from ...text_changes import (LAND_TYPE_WORDS, change_color_word,
+                                     change_land_word)
+
+        if mode == "color_word":
+            if change_color_word(
+                permanent, old_symbol, new_symbol, label=card_name
+            ):
+                self.log.append(
+                    f"{card_name} changed {old_symbol} text to {new_symbol} on "
+                    f"{permanent.card.name}"
+                )
+            return
+        old_type = LAND_TYPE_WORDS.get((old_symbol or "").upper())
+        new_type = LAND_TYPE_WORDS.get((new_symbol or "").upper())
+        if old_type and new_type and change_land_word(
+            permanent, old_type, new_type, label=card_name
+        ):
+            self.log.append(
+                f"{card_name} changed {old_type} to {new_type} in "
+                f"{permanent.card.name}'s text"
+            )
+            # A land word inside a lord's grant line ("Other Goblins have
+            # mountainwalk") is part of a buff the board caches, so the swap has
+            # to be re-derived — the same call the single-vocabulary handler
+            # makes for the same reason.
+            self._recalculate_lord_buffs()
+
+    def confirm_text_change_vocabulary(self, player_index: int, mode) -> bool:
+        return self.resolve_pending_choice(
+            "text_change_vocabulary", player_index, mode=mode
+        )
+
+    def _resolve_text_change_vocabulary(self, choice: PendingChoice, mode) -> bool:
+        permanent = choice.data.get("_permanent")
+        if mode not in (choice.data.get("options") or ()):
+            return False
+        if permanent is None or not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed (CR 608.2b): nothing to rewrite,
+            # and the decision is over either way.
+            self.discard_pending_choice(choice)
+            return True
+        self.discard_pending_choice(choice)
+        self._apply_text_change_vocabulary(
+            permanent, str(mode), str(choice.data.get("old_symbol") or ""),
+            str(choice.data.get("new_symbol") or ""),
+            str(choice.data.get("card_name") or ""),
+        )
+        return True
+
+    def _default_text_change_vocabulary(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** offered vocabulary, which is the
+        colour word.
+
+        Not a valuation — the order is the one
+        ``live_text_change_vocabularies`` builds and is seed-deterministic. A
+        seat that should weigh a type-line rewrite against a colour one needs a
+        weight in ``engine/ai_valuation.py``, not a branch here.
+        """
+        options = list(choice.data.get("options") or ())
+        if not options or not self._resolve_text_change_vocabulary(
+            choice, options[0]
+        ):
+            self.discard_pending_choice(choice)
+
     # -- A sacrifice priced by an aggregate rather than by a count -----------
 
     def aggregate_sacrifice_candidates(self, seat: int, payload: dict) -> list:
@@ -7096,6 +7232,26 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "text_change_vocabulary",
+    resolve=lambda game, choice, r: game._resolve_text_change_vocabulary(
+        choice, r.get("mode")
+    ),
+    default=lambda game, choice: game._default_text_change_vocabulary(choice),
+    action="text_change_vocabulary_confirm",
+    prompt_key="text_change_vocabulary",
+    blocked_detail="choose which kind of word to replace before other actions",
+    # **Not** ``suspends``: the rewrite *is* the answer and it is the last step
+    # of the spell, so nothing behind it reads a record. ``blocked_detail`` is
+    # what makes the game wait (CR 608.2).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # A text change is a public change to a public object (CR 612), so a
+    # seatless viewer may see the question.
+    spectator_visible=True,
 )
 
 register_choice(

@@ -1165,6 +1165,39 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("text_change_vocabulary")
+def _text_change_vocabulary(ctx: PromptContext, choices: list) -> dict:
+    """Mind Bend: "…replacing all instances of one color word with another **or
+    one basic land type with another**." Which vocabulary, asked only when both
+    would do something.
+
+    The two words were named at the cast and are the same mana symbol read two
+    ways — "R" is red and it is Mountain — so what is offered is the *reading*,
+    spelled out, rather than a second pair of words to choose.
+    """
+    # Both tables keyed by mana symbol, from the module that owns them: the
+    # grammar's `COLOR_WORDS` is the same pairs inverted.
+    from engine.text_changes import COLOR_WORDS, LAND_TYPE_WORDS
+
+    choice = choices[0]
+    old_symbol = str(choice.data.get("old_symbol") or "")
+    new_symbol = str(choice.data.get("new_symbol") or "")
+    words = {"color_word": COLOR_WORDS, "land_type": LAND_TYPE_WORDS}
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "permanent_name": choice.data.get("permanent_name", ""),
+        "options": [
+            {
+                "mode": mode,
+                "from": words[mode].get(old_symbol, ""),
+                "to": words[mode].get(new_symbol, ""),
+            }
+            for mode in (choice.data.get("options") or ())
+        ],
+    }
+
+
 @prompt_renderer("aggregate_sacrifice")
 def _aggregate_sacrifice(ctx: PromptContext, choices: list) -> dict:
     """Phyrexian Dreadnought: "…sacrifice any number of creatures with total
