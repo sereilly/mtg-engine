@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (300/335 supported, still `measured`)
+## Mirage (MIR) — in progress (304/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1531,6 +1531,30 @@ emitted instruction: `lord_buff_payload`/`lord_buff_from_payload` is a **second,
 unchecked** round trip, and `chosen_land_type` passed the first and was dropped
 by the second — an anthem that compiles, reports supported, and gives phasing to
 every land on the board. Two round trips, one checked.
+
+#### W2G2 — upkeep and counters: Soul Echo can lose again
+
+Four newly supported (Grave Servitude, Purgatory, Hall of Gemstone, Consuming
+Ferocity) and **three that were already counted supported and did nothing** —
+Soul Echo, Afiya Grove, Energy Vortex. The set's hollow-line population went
+4 cards / 8 parts to **1 card / 3 parts**.
+
+**The merge's one real collision was semantic rather than textual**, and the
+first of its kind in either wave: this branch and W2G3 each added a damage
+replacement and both claimed order slot 6. `engine/replacements.py` compares
+orders across both registries and raises at import, so the merge had to *decide*
+rather than combine — Benevolent Unicorn changes the damage's **amount** and
+belongs beside the cap, Soul Echo **substitutes the event** and has to run after
+the amount is settled, because how many counters come off is "for each 1 damage
+that would be dealt". 6 and 7.
+
+Six brief corrections, four of them the shape every wave has produced — the
+stated blocker was already built. Soul Echo's enters-with-counters half has
+worked since Iceberg and everything *downstream* was missing; Purgatory's
+linked-exile store already reached the battlefield; Energy Vortex's seat had
+been frozen since Takklemaggot. And one that is worse than a refusal: Consuming
+Ferocity's "standalone sentence parses" was true, and it lowered to a damage
+instruction with **no recipient at all** and the Aura as the dealer.
 
 ### Where the set stands — ten rounds in
 
