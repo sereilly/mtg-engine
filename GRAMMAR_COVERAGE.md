@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 73.9% | 69.7% | 43.9% | 196 |
+| MIR *(measured)* | 335 | 545 | 74.3% | 70.1% | 44.2% | 198 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 347 | 176 | expected a subject |  |
+| 345 | 174 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
 | 92 | 52 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
@@ -725,6 +725,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Chub Toad**
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
+- **Cinder Cloud**
+  - `Destroy target creature. If a white creature dies this way, Cinder Cloud deals damage to that creature's controller equal to the creature's power.`
 - **Circle of Protection: Artifacts**
   - `{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.`
   - `{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.`
@@ -2347,6 +2349,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
 - **Kaervek's Hex**
   - `Kaervek's Hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature.`
+- **Kaervek's Purge**
+  - `Destroy target creature with mana value X. If that creature dies this way, Kaervek's Purge deals damage equal to the creature's power to the creature's controller.`
 - **Kaervek's Torch**
   - `Kaervek's Torch deals X damage to any target.`
 - **Kaervek, the Spiteful**

@@ -37,7 +37,7 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .statics import _lower_static_ability
-from .lowering.control_flow import (_lower_steps)
+from .lowering.sequences import (_lower_steps)
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,

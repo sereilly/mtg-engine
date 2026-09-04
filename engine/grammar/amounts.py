@@ -456,7 +456,21 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     # A different referent from "its power" above and so a different key: read
     # as that one it would deal the Dragon's own power, which is a number the
     # card never mentions.
-    if stream.accept_phrase("that", "creature", "'s", "power"):
+    # "…equal to **the creature's** power" (Cinder Cloud, Kaervek's Purge). The
+    # definite article is the same back-reference under the other determiner —
+    # ``references.py`` has read "**the** creature's controller" beside "that
+    # creature's controller" since Creature Bond, and a possessive whose two
+    # spellings meant two referents would be a fork in a fragment.
+    # …and "equal to **the** creature's power" (Cinder Cloud, Kaervek's Purge),
+    # which arrives here with the article already eaten by the
+    # ``accept_word("the")`` above — so the branch reads the possessive alone.
+    # The definite article is the same back-reference under the other
+    # determiner: ``references.py`` has read "**the** creature's controller"
+    # beside "that creature's controller" since Creature Bond, and a possessive
+    # whose two spellings meant two referents would be a fork in a fragment.
+    if stream.accept_phrase("that", "creature", "'s", "power") or (
+        stream.accept_phrase("creature", "'s", "power")
+    ):
         return ast.ThatMuch("event_subject_power")
 
     # "…and its toughness is equal to **that creature's toughness**" (Broken

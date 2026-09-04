@@ -221,3 +221,116 @@ def test_a_tutor_puts_its_find_on_top_after_the_shuffle(set_pool):
 
     assert game.players[0].library[0].name == "Femeref Knight"
     assert len(game.players[0].library) == len(_R9_LIBRARY)
+
+
+# --- W1G3: damage / prevention / life ---
+
+from engine import Game as _W1G3Game, PlayerState as _W1G3PlayerState
+from engine.models import Permanent as _W1G3Permanent
+
+
+def _w1g3_destroy_rider(set_pool, spell, victim_name, **kwargs):
+    pool = set_pool("MIR")
+    victim = _W1G3Permanent(card=pool[victim_name])
+    p1 = _W1G3PlayerState(name="P1", hand=[pool[spell]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim],
+                          library=[pool["Island"]] * 5, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    result = game.cast_from_hand(
+        0, spell, target_player_index=1, target_permanent_index=0, **kwargs
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    return game, p1, p2, victim
+
+
+def test_cinder_cloud_burns_only_for_a_white_creature(set_pool):
+    """"Destroy target creature. **If a white creature dies this way**, Cinder
+    Cloud deals damage to that creature's controller equal to the creature's
+    power."
+
+    The rider names the destroy family's own record, so it is the same set
+    "for each creature that died this way" iterates — and lowering it to that
+    loop is what gives the arm its per-object reads. An "if" is not a "for
+    each" in general, so the reading is admitted only after a *single-target*
+    destroy, where the record can hold at most one object.
+    """
+    game, p1, p2, victim = _w1g3_destroy_rider(
+        set_pool, "Cinder Cloud", "Zhalfirin Commander"      # white 2/2
+    )
+
+    assert not game.is_on_battlefield(victim)
+    assert p2.life == 18, f"2 power to its controller: {game.log}"
+
+
+def test_cinder_cloud_kills_a_nonwhite_creature_without_burning(set_pool):
+    """The colour narrowing, which the loop's iterator refused to carry until
+    this round — it read the printed card type and nothing else."""
+    game, p1, p2, victim = _w1g3_destroy_rider(
+        set_pool, "Cinder Cloud", "Cadaverous Knight"        # black 2/2
+    )
+
+    assert not game.is_on_battlefield(victim)
+    assert p2.life == 20, f"only a white creature pays: {game.log}"
+
+
+def test_kaerveks_purge_burns_for_whatever_it_destroyed(set_pool):
+    """"Destroy target creature with mana value X. **If that creature dies this
+    way**, Kaervek's Purge deals damage equal to the creature's power to the
+    creature's controller."
+
+    The bound spelling of Cinder Cloud's rider, with no colour on it — and the
+    definite article on both possessives, which the amount reader had never
+    seen ("that creature's power" was the only spelling it took).
+    """
+    pool = set_pool("MIR")
+    victim = _W1G3Permanent(card=pool["Wild Elephant"])      # 3/3, mv 4
+    p1 = _W1G3PlayerState(name="P1", hand=[pool["Kaervek's Purge"]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim],
+                          library=[pool["Island"]] * 5, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.cast_from_hand(
+        0, "Kaervek's Purge", x_value=4,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(victim)
+    assert p2.life == 17, f"3 power to its controller: {game.log}"
+
+
+def test_kaerveks_purge_burns_for_nothing_when_the_creature_regenerates(set_pool):
+    """"If that creature dies this way" is a *record of what actually died*
+    (CR 701.8c), not of what the spell aimed at — a regenerated creature was
+    never destroyed, so the rider finds nothing to burn for."""
+    pool = set_pool("MIR")
+    victim = _W1G3Permanent(card=pool["Cadaverous Knight"])  # regenerate, mv 3
+    victim.regeneration_shield = 1
+    p1 = _W1G3PlayerState(name="P1", hand=[pool["Kaervek's Purge"]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[victim],
+                          library=[pool["Island"]] * 5, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    result = game.cast_from_hand(
+        0, "Kaervek's Purge", x_value=3,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game.is_on_battlefield(victim), "the shield saved it"
+    assert p2.life == 20, f"nothing died this way: {game.log}"

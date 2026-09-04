@@ -570,6 +570,46 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.MilledThisWay(milled_filter)
     stream.reset(milled_mark)
 
+    # "if **a white creature dies this way**" (Cinder Cloud), "if **that
+    # creature dies this way**" (Kaervek's Purge). The present tense, asked in
+    # the same resolution as the destroy in front of it — which is what makes it
+    # a different clause from Infinite Authority's past tense below: that one is
+    # checked at the next end step about a destruction an earlier step *armed*,
+    # and this one is about what the sentence before it just did.
+    #
+    # One node with the loop spelling ("for each creature that died this way"),
+    # because it names the same set: `ast.DiedThisWay` is the destroy family's
+    # own record, and a second node for the same record would be a second
+    # answer to which objects the words mean.
+    #
+    # Read **before** the past tense below, whose "that <noun>" opening this
+    # shares: tried second, the bound reader would consume "that creature" and
+    # then fail on "dies", taking the whole condition with it.
+    dies_mark = stream.mark()
+    stream.accept_word("a", "an")
+    try:
+        dying = parse_object_filter(stream)
+    except GrammarError:
+        dying = None
+    if dying is not None and stream.accept_phrase("dies", "this", "way"):
+        return ast.DiedThisWay(dying)
+    stream.reset(dies_mark)
+    if stream.accept_word("that"):
+        # "if **that creature** dies this way" — the bound spelling, whose noun
+        # is the one the destroy in front of it used. The noun is consumed and
+        # dropped for the reason the past-tense reader below drops its own: the
+        # object is whatever that step recorded, and the lowering is what checks
+        # a step in front of it destroyed something.
+        bound_noun = stream.mark()
+        try:
+            named = parse_object_filter(stream)
+        except GrammarError:
+            named = None
+        if named is not None and stream.accept_phrase("dies", "this", "way"):
+            return ast.DiedThisWay(named)
+        stream.reset(bound_noun)
+        stream.reset(dies_mark)
+
     # "if **that creature was destroyed this way**" (Infinite Authority). The
     # bound object is read through the shared reader rather than skipped: the
     # sentence is checked at the next end step, long after the destruction it

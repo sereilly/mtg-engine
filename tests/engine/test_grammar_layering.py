@@ -451,7 +451,16 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences"]
+# `sequences` is the lowering-only family Mirage's wave 1 split off
+# `lowering/control_flow.py`, along the line that module's own docstring
+# already drew: it names three composers (`sequence`, `may`, `one_of`) and
+# `for_each` had already left as `loops`. The two *offers* stay; the sequence —
+# threading each step's records forward, and folding a step that reads an
+# offer's record into the branch that writes it — moved. Both halves are
+# dispatch, so the cut took the half that **grows with the pool**: every round
+# that teaches a sentence to read what the sentence in front of it did lands
+# there.
 # `permissions` is the sixth lowering-only family, split off `lowering/exile.py`
 # at Alliances' third wave when that module crossed the guard below. The line is
 # the CR's own: everything left in `exile` **moves an object** into or out of
