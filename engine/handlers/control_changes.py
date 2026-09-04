@@ -169,11 +169,21 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     from ..subject_filters import subject_matches
 
     observer = game.players.index(context.caster)
+    # "target artifact **defending player controls**" (Kukemssa Pirates). The
+    # seat the trigger's announcement froze if there is one (CR 603.10), and
+    # otherwise the live combat's — the same two-step reader every other
+    # resolution that can meet the phrase already uses. A seat this cannot
+    # answer refuses the phrase, which offers nothing rather than everything.
+    defending = (context.trigger_context or {}).get(
+        "trigger_defending_player_index"
+    )
+    if not isinstance(defending, int):
+        defending = game.defending_player_index_now()
     target = resolve_target_permanent(
         game, context,
         predicate=lambda perm: subject_matches(
             game, perm, filters, observer=observer,
-            source=context.source_permanent,
+            source=context.source_permanent, defending=defending,
         ),
         fallback_on_invalid_choice=False,
     )

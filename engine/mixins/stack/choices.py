@@ -2732,8 +2732,10 @@ class PendingChoicesMixin:
             # the wrong slot would swap the two players' choices.
             slot = choice.data.get("card_name_slot")
             if slot is not None:
-                from ...grammar.phrases import BASIC_LAND_WORDS
-
+                # ``BASIC_LAND_WORDS`` is the module-level import. A local one
+                # here would shadow it for the *whole* function — Python binds
+                # a name by function, not by block — and Illusionary Terrain's
+                # branch above would raise reading it before this line ran.
                 if card_name:
                     # The one restriction the sentence prints. CR 201.2 leaves
                     # the choice otherwise unbounded, so a name off the offered
