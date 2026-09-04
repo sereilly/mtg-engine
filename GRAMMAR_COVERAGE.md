@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 74.3% | 70.1% | 44.2% | 198 |
+| MIR *(measured)* | 335 | 545 | 74.5% | 70.3% | 44.4% | 199 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 345 | 174 | expected a subject |  |
+| 344 | 173 | expected a subject |  |
 | 119 | 57 | unrecognized effect verb |  |
 | 92 | 52 | unconsumed text |  |
 | 35 | 35 | unrecognized activation cost |  |
@@ -3858,6 +3858,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shadow Guildmage**
   - `{U}, {T}: Put target creature you control on top of its owner's library.`
   - `{R}, {T}: This creature deals 1 damage to any target and 1 damage to you.`
+- **Shadowbane**
+  - `The next time a source of your choice would deal damage to you and/or creatures you control this turn, prevent that damage. If damage from a black source is prevented this way, you gain that much life.`
 - **Shambling Strider**
   - `{R}{G}: This creature gets +1/-1 until end of turn.`
 - **Shaper Guildmage**

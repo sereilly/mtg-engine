@@ -269,6 +269,30 @@ class DamageCantBePreventedOrRedirected:
 
 
 @dataclass(frozen=True)
+class PreventedRider:
+    """CR 615.5's additional effect — the sentence printed *after* a prevention.
+
+    "You gain life equal to the damage prevented this way" (Reverse Damage) is
+    ``effect="gain_life"``; "Exile cards from the top of your library equal to
+    the damage prevented this way" (Bone Mask) is
+    ``effect="exile_from_library"``.
+
+    ``source_colors`` is the condition Shadowbane prints in front of its own:
+    "**If damage from a black source is prevented this way,** you gain that much
+    life." A property of the *source*, rechecked when the damage would be dealt
+    exactly as a shield's own recorded property is (CR 615.9) — which is why it
+    rides here rather than being folded into the shield's ``colors``: that field
+    decides whether the shield **applies at all**, and Shadowbane prevents every
+    colour's damage and pays for only one.
+
+    Empty means unconditional, which is what the two cards above print.
+    """
+
+    effect: str
+    source_colors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
     #: CR 615.5's "additional effect, which may refer to the amount of damage
@@ -278,13 +302,20 @@ class PreventDamage:
     #: your library equal to the damage prevented this way" (Bone Mask) is
     #: ``"exile_from_library"``.
     #:
-    #: A name rather than a nested statement, and the reason is the amount: the
+    #: A node rather than a nested statement, and the reason is the amount: the
     #: rider's quantity does not exist until the shield has absorbed something,
     #: so it cannot be an ordinary lowered step reading the scratchpad — it runs
     #: *inside* the prevention, from the interceptor, with the shields that did
     #: the work in hand. Which is exactly why ``shields.Shield.kind`` names the
     #: interceptor: the rider and the absorption are one effect.
-    prevented_rider: "str | None" = None
+    prevented_rider: "PreventedRider | None" = None
+    #: "…would deal damage to **you and/or creatures you control** this turn"
+    #: (Shadowbane). The recipients beyond ``to``, as printed. The union is a
+    #: *tuple* for ``dealt_by_others``' reason one field over: one shield
+    #: covering several recipients is not several shields, and a reader that
+    #: kept only the first would shield the player and leave every creature the
+    #: card names uncovered.
+    to_others: tuple[Recipient, ...] = ()
     to: Recipient | None = None
     from_filter: ObjectFilter | None = None
     duration: Duration = field(default_factory=Duration)

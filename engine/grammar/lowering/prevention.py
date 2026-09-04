@@ -138,6 +138,23 @@ def _lower_prevent_damage(
     # rider existed and reads none of it: a Circle or a blanket printed with one
     # would arm without it and report the card supported. The dropped-rider
     # class, in the direction that quietly does less than the card says.
+    if node.to_others and (
+        node.from_filter != ast.ObjectFilter()
+        or not isinstance(node.amount, ast.Fixed)
+        or node.combat_only
+        or node.dealt_by is not None
+        or not _is_you(node.to)
+    ):
+        # "…to **you and/or creatures you control**" reaches exactly one shield
+        # below. Refused here rather than in each branch for the reason the
+        # rider is: every other branch was written before a shield covered more
+        # than one recipient, so one printed over a Circle or a blanket would
+        # arm on the player alone and report the card supported.
+        raise LoweringError(
+            "only the unnarrowed chosen-source shield covers more than one "
+            "recipient",
+            node=node,
+        )
     if node.prevented_rider is not None and (
         node.from_filter != ast.ObjectFilter()
         or not isinstance(node.amount, ast.Fixed)
@@ -209,13 +226,25 @@ def _lower_prevent_damage(
             # until this round; the same instruction is what the production
             # emits, so the card's compiled program is unchanged and only the
             # hook is gone.
+            if node.to_others:
+                return _lower_team_shield(node)
             rider_kinds = {
                 "gain_life": "grant_reverse_damage_shield",
                 "exile_from_library": "grant_exile_prevention_shield",
             }
             if node.prevented_rider is not None:
+                if node.prevented_rider.source_colors:
+                    # A conditional rider on a shield that covers one recipient
+                    # is a card nobody has printed; the two unconditional ones
+                    # have interceptors that pay unconditionally, and one handed
+                    # a condition would ignore it.
+                    raise LoweringError(
+                        "only the team shield's rider is conditional", node=node
+                    )
                 return (
-                    OracleInstruction(rider_kinds[node.prevented_rider], "", {}),
+                    OracleInstruction(
+                        rider_kinds[node.prevented_rider.effect], "", {}
+                    ),
                 )
             return (OracleInstruction("grant_whole_prevention_shield", "", {}),)
         # "…a source of your choice **of the chosen color**" (Prismatic
@@ -332,6 +361,67 @@ def _lower_prevent_damage(
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
     return (OracleInstruction("grant_prevention_shield", "", payload),)
+
+
+def _lower_team_shield(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Shadowbane: "The next time a source of your choice would deal damage to
+    **you and/or creatures you control** this turn, prevent that damage. If
+    damage from a black source is prevented this way, you gain that much life."
+
+    CR 615.8's whole-instance shield over a player *and* a printed set of
+    permanents. Its own instruction rather than a flag on the single-recipient
+    one, because ``Shield.kind`` names the interceptor that consumes the shield
+    and this one is found by a different route: a phrase has no object to hang a
+    record on, so it lives on the seat and is matched against each damaged
+    permanent (``prevention._class_shields``).
+
+    Every part of the sentence is checked, because each is a way it could mean
+    more:
+
+    * exactly one further recipient, and it must be a described set rather than
+      a chosen one — nothing enumerates a shield per member of a target list.
+    * the phrase must be one ``subject_matches`` can test in full. A narrowing
+      the matcher drops is a shield covering strictly more permanents than the
+      card names.
+    * the rider, if printed, must be one the interceptor performs. Its condition
+      is a property of the *source*, so it rides beside the shield's own rather
+      than inside it: this card prevents every colour's damage and pays for one.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    if len(node.to_others) != 1:
+        raise LoweringError(
+            "no shield covers a player and more than one printed set", node=node
+        )
+    also = node.to_others[0]
+    if (
+        not isinstance(also, ast.TargetSpec)
+        or also.quantifier not in ("all", "each")
+        or also.targeted
+    ):
+        raise LoweringError(
+            "the second recipient of a team shield is a described set, not a "
+            "chosen one",
+            node=node,
+        )
+    described = _filter_payload(also.filter)
+    if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the team shield cannot test the noun phrase it also covers",
+            node=node,
+        )
+    payload: dict[str, object] = {"recipients": described}
+    rider = node.prevented_rider
+    if rider is not None:
+        if rider.effect != "gain_life":
+            raise LoweringError(
+                "the team shield's interceptor gains life and nothing else",
+                node=node,
+            )
+        payload["rider_colors"] = list(rider.source_colors)
+    return (OracleInstruction("grant_team_prevention_shield", "", payload),)
 
 
 def _lower_named_source_shield(

@@ -275,16 +275,24 @@ def _finish_named_source_shield(
 #: interceptor rather than as a lowered step — and the interceptor is what the
 #: name selects. A card printing a third rider adds a row here, a shield kind
 #: and the code behind it, and is refused until it does.
-_PREVENTED_THIS_WAY_RIDERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("gain_life", ("you", "gain", "life")),
+#: Each row is the rider's name, the sentence as printed **after the
+#: prevention** (which then spells its amount "equal to the damage prevented
+#: this way"), and the sentence as printed **after a condition** — where the
+#: condition already said which damage this is about, so the amount is the
+#: pronoun "that much". ``None`` for a rider no card prints conditionally.
+_PREVENTED_THIS_WAY_RIDERS: tuple[
+    tuple[str, tuple[str, ...], "tuple[str, ...] | None"], ...
+] = (
+    ("gain_life", ("you", "gain", "life"), ("you", "gain", "that", "much", "life")),
     (
         "exile_from_library",
         ("exile", "cards", "from", "the", "top", "of", "your", "library"),
+        None,
     ),
 )
 
 
-def _parse_prevented_this_way_rider(stream: TokenStream) -> str | None:
+def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider | None":
     """``. <effect> equal to the damage prevented this way.`` — the sentence a
     shield's own card prints after the prevention (CR 615.5).
 
@@ -305,13 +313,50 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> str | None:
     mark = stream.mark()
     if not stream.accept_punct("."):
         return None
-    for name, phrase in _PREVENTED_THIS_WAY_RIDERS:
-        if stream.accept_phrase(*phrase):
+    # "**If damage from a black source is prevented this way,** you gain that
+    # much life." (Shadowbane.) The same rider with a condition in front of it
+    # and the quantity spelled "that much" instead of repeating the clause —
+    # one production, because everything it decides is the same: what happens
+    # after the prevention, and how big it is.
+    colours: tuple[str, ...] = ()
+    conditional = False
+    condition_mark = stream.mark()
+    if stream.accept_phrase("if", "damage", "from"):
+        stream.accept_word("a", "an")
+        token = stream.peek()
+        word = str(token.text).lower() if token is not None else ""
+        while word in COLOR_WORDS:
+            colours += (COLOR_WORDS[word],)
+            stream.advance()
+            if not stream.accept_word("or"):
+                break
+            token = stream.peek()
+            word = str(token.text).lower() if token is not None else ""
+        if not colours or not stream.accept_phrase(
+            "source", "is", "prevented", "this", "way"
+        ):
+            stream.reset(mark)
+            return None
+        stream.accept_punct(",")
+        conditional = True
+    else:
+        stream.reset(condition_mark)
+    for name, printed, after_condition in _PREVENTED_THIS_WAY_RIDERS:
+        if conditional:
+            # The condition already said which damage the rider is about, so the
+            # amount is the pronoun rather than a repeat of the clause. One
+            # spelling per row, never both: a sentence readable two ways is a
+            # sentence whose reading depends on which branch was tried first.
+            if after_condition is not None and stream.accept_phrase(*after_condition):
+                stream.accept_punct(".")
+                return ast.PreventedRider(name, colours)
+            continue
+        if stream.accept_phrase(*printed):
             if stream.accept_phrase(
                 "equal", "to", "the", "damage", "prevented", "this", "way"
             ):
                 stream.accept_punct(".")
-                return name
+                return ast.PreventedRider(name)
             stream.reset(mark)
             return None
     stream.reset(mark)
@@ -412,6 +457,21 @@ def _parse_source_of_choice_effect(
     if recipient is None:
         stream.reset(mark)
         return None
+    # "…would deal damage to **you and/or creatures you control** this turn"
+    # (Shadowbane). One shield over several recipients, joined by the printed
+    # "and/or" — CR 615.1's shield goes around whatever the effect is affecting,
+    # and here that is a player *and* a described set. The loop backtracks, so
+    # an "and" that introduces something else is left for whatever follows.
+    others: list[ast.Recipient] = []
+    while True:
+        conjunct = stream.mark()
+        if not (stream.accept_phrase("and", "or") or stream.accept_word("and")):
+            break
+        further = parse_recipient(stream)
+        if further is None:
+            stream.reset(conjunct)
+            break
+        others.append(further)
     duration = _parse_duration(stream)
     stream.accept_punct(",")
     if stream.accept_phrase("that", "damage", "is", "dealt", "to"):
@@ -477,7 +537,8 @@ def _parse_source_of_choice_effect(
     else:
         filt = ast.ObjectFilter()
     return ast.PreventDamage(
-        ast.Fixed(1), to=recipient, from_filter=filt, prevented_rider=rider
+        ast.Fixed(1), to=recipient, from_filter=filt, prevented_rider=rider,
+        to_others=tuple(others),
     )
 
 

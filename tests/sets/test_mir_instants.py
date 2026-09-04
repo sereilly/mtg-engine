@@ -334,3 +334,112 @@ def test_kaerveks_purge_burns_for_nothing_when_the_creature_regenerates(set_pool
 
     assert game.is_on_battlefield(victim), "the shield saved it"
     assert p2.life == 20, f"nothing died this way: {game.log}"
+
+
+def _w1g3_shadowbane(set_pool, source_name):
+    """Cast Shadowbane naming *source_name* on the opponent's board."""
+    pool = set_pool("MIR")
+    mine = _W1G3Permanent(card=pool["Zhalfirin Commander"])
+    threat = _W1G3Permanent(card=pool[source_name])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[mine],
+                          hand=[pool["Shadowbane"]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[threat],
+                          library=[pool["Island"]] * 5, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    result = game.cast_from_hand(
+        0, "Shadowbane", target_player_index=1,
+        target_permanent_ids=[threat.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    return game, p1, p2, mine, threat
+
+
+def test_shadowbane_shields_a_creature_its_caster_controls(set_pool):
+    """"The next time a source of your choice would deal damage to **you
+    and/or creatures you control** this turn, prevent that damage."
+
+    The first shield in the pool whose recipient is a player *and* a described
+    set. A shield lives on the object it protects, and a phrase is not an
+    object — the creatures it covers include ones that have not entered yet —
+    so it lives on the seat and is matched against each damaged permanent, the
+    shape the redirect side has had since Blood of the Martyr.
+    """
+    from tests.helpers import _damage_dealt
+
+    game, p1, p2, mine, threat = _w1g3_shadowbane(set_pool, "Cadaverous Knight")
+
+    assert _damage_dealt(game, mine, 4, source=threat) == 0, (
+        f"the creature is covered by the phrase: {game.log}"
+    )
+
+
+def test_shadowbane_pays_life_only_for_a_black_source(set_pool):
+    """"**If damage from a black source is prevented this way**, you gain that
+    much life."
+
+    The condition is a property of the *source*, so it rides beside the
+    shield's own rather than inside it: the card prevents every colour's damage
+    and pays for one. And the life goes to the caster, not to the creature that
+    was about to be damaged.
+    """
+    from tests.helpers import _damage_dealt
+
+    game, p1, p2, mine, threat = _w1g3_shadowbane(set_pool, "Cadaverous Knight")
+    assert _damage_dealt(game, p1, 3, source=threat) == 0
+    game._settle()
+
+    assert p1.life == 23, f"a black source pays: {game.log}"
+
+
+def test_shadowbane_prevents_without_paying_for_a_nonblack_source(set_pool):
+    """The other direction — the shield still applies, the rider does not."""
+    from tests.helpers import _damage_dealt
+
+    game, p1, p2, mine, threat = _w1g3_shadowbane(set_pool, "Azimaet Drake")
+    assert _damage_dealt(game, p1, 3, source=threat) == 0
+    game._settle()
+
+    assert p1.life == 20, f"a blue source prevents but does not pay: {game.log}"
+
+
+def test_shadowbane_waits_for_the_source_it_chose(set_pool):
+    """Without this the tests above pass for a shield that answers to
+    everything — and a one-shot shield spent on the wrong event is gone."""
+    from tests.helpers import _damage_dealt
+
+    pool = set_pool("MIR")
+    mine = _W1G3Permanent(card=pool["Zhalfirin Commander"])
+    named = _W1G3Permanent(card=pool["Cadaverous Knight"])
+    other = _W1G3Permanent(card=pool["Azimaet Drake"])
+    p1 = _W1G3PlayerState(name="P1", battlefield=[mine],
+                          hand=[pool["Shadowbane"]],
+                          library=[pool["Island"]] * 5, life=20)
+    p2 = _W1G3PlayerState(name="P2", battlefield=[named, other],
+                          library=[pool["Island"]] * 5, life=20)
+    game = _W1G3Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    assert game.cast_from_hand(
+        0, "Shadowbane", target_player_index=1,
+        target_permanent_ids=[named.permanent_id],
+    ).supported
+    game.resolve_stack()
+
+    assert _damage_dealt(game, mine, 2, source=other) == 2
+    assert _damage_dealt(game, mine, 2, source=named) == 0
+
+
+def test_shadowbane_does_not_shield_an_opponents_creature(set_pool):
+    """"creatures **you** control" is the caster's "you" (CR 109.5), captured
+    when the shield was armed — the resolution is long over by damage time."""
+    from tests.helpers import _damage_dealt
+
+    game, p1, p2, mine, threat = _w1g3_shadowbane(set_pool, "Cadaverous Knight")
+
+    assert _damage_dealt(game, threat, 2, source=threat) == 2, (
+        f"the phrase names the caster's creatures: {game.log}"
+    )

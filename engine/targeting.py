@@ -702,6 +702,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "grant_exile_prevention_shield": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
+    # Shadowbane prints the same seven words again; what its shield then covers
+    # is the interceptor's business, not the picker's.
+    "grant_team_prevention_shield": {
+        "kind": "permanent", "source_of_choice": True, "also_stack": True,
+    },
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
