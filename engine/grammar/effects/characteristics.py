@@ -37,7 +37,17 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # lowering, so "gets an energy counter" fails naming the missing store
     # rather than failing to parse.
     if isinstance(subject, ast.PlayerRef):
-        count = parse_amount(stream)
+        # "The player gets **another** poison counter …" (Sabertooth Cobra.)
+        # A count of one written as a comparison with what the sentence in
+        # front of it already placed. It is one more counter and not a
+        # different kind of placement — the store is additive — so it reads as
+        # the number rather than as a node nothing would do anything with.
+        # Read here rather than in `parse_amount`, where the word means
+        # "not this one" about an *object* and never a quantity.
+        if stream.accept_word("another"):
+            count: ast.Amount = ast.Fixed(1)
+        else:
+            count = parse_amount(stream)
         token = _expect_counter_kind(stream, " for a player to get")
         if token.kind == PT:
             raise stream.error("a player cannot get a power/toughness counter")

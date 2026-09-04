@@ -196,6 +196,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # cantrip that drew a turn late would be the wrong card. So it is announced
     # unseated, exactly as `next_end_step` is and for the same reason.
     "next_turns_upkeep": "the upkeep step",
+    # "…that player gets a poison counter. The player gets another poison
+    # counter at the beginning of **their** next upkeep …" (Sabertooth Cobra.)
+    # The third upkeep row, and the seat is what makes it a third: "your" waits
+    # for the *ability's controller's* upkeep and "the next turn's" waits for
+    # whichever comes next, where this one waits for the upkeep of the player
+    # the creating event was about. In a duel the Cobra's damage lands on its
+    # controller's turn and the two other readings happen to agree; at three
+    # seats they do not, and the counter would land on the wrong player's
+    # upkeep or on nobody's.
+    #
+    # Seated by ``bound_player_index`` rather than ``controller_index`` — see
+    # :data:`EVENTS_SEATED_BY_BOUND_PLAYER`.
+    "damaged_players_next_upkeep": "the upkeep step",
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). CR 514.3a names this ability shape in the rule
     # itself — the cleanup step's own exception to "no player receives
@@ -301,6 +314,21 @@ WHILE_SOURCE_TAPPED = "while_source_tapped"
 #: reason: which turn a printed phrase names is a fact about the *event*, and a
 #: per-entry flag would have a default whose safe value differs per card.
 EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({"granted_extra_turns_end_step"})
+
+
+#: Events whose *seat* is the player the creating effect recorded rather than
+#: the ability's controller. "The player gets another poison counter at the
+#: beginning of **their** next upkeep" (Sabertooth Cobra): the possessive names
+#: the damaged player, and the ability is still controlled by the Cobra's
+#: controller (CR 603.7d) — two different seats, one of which decides *when* the
+#: ability fires and the other *whose* ability it is.
+#:
+#: A set beside the table for :data:`EVENTS_AFTER_THIS_TURN`' reason: which seat
+#: a printed possessive names is a fact about the event, and the fire site asks
+#: for one seat either way.
+EVENTS_SEATED_BY_BOUND_PLAYER: frozenset[str] = frozenset({
+    "damaged_players_next_upkeep",
+})
 
 
 # ``eq=False`` so two entries compare by **identity**. Two copies of Reincarnation
@@ -563,7 +591,17 @@ def matching_delayed_triggers(
         return []
     fired: list[DelayedTrigger] = []
     for entry in list(game.delayed_triggers):
-        if seat is not None and entry.controller_index != seat:
+        # Whose ability it is, or whose *turn* the printed possessive named —
+        # see :data:`EVENTS_SEATED_BY_BOUND_PLAYER`. An entry of one of those
+        # events with no bound seat answers to nobody rather than falling back
+        # to its controller, which would fire "their next upkeep" on the wrong
+        # player's turn.
+        entry_seat = (
+            entry.bound_player_index
+            if entry.event in EVENTS_SEATED_BY_BOUND_PLAYER
+            else entry.controller_index
+        )
+        if seat is not None and entry_seat != seat:
             continue
         if not entry.matches(game, event, subject, agent):
             continue

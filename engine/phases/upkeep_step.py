@@ -1220,6 +1220,11 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # on yours. Announced beside the seated one because both are CR 603.7
         # abilities triggering at the same moment as the battlefield's own.
         fire_delayed_triggers(self, "next_turns_upkeep")
+        # "…at the beginning of **their** next upkeep" (Sabertooth Cobra).
+        # Seated like the controller's row above and by a different seat: the
+        # one the creating event recorded, which is what `EVENTS_SEATED_BY_
+        # BOUND_PLAYER` makes `matching_delayed_triggers` compare against.
+        fire_delayed_triggers(self, "damaged_players_next_upkeep", seat=player_index)
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

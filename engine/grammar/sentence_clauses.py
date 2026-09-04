@@ -847,6 +847,41 @@ def _accept_trailing_toll(
     )
 
 
+def accept_delayed_toll(
+    parse_body, stream: TokenStream, body: "ast.Statement"
+) -> "ast.Statement | None":
+    """``<effect> <delay> unless <player> pays <cost> before that step``
+    — the toll printed *behind* a trailing delay (Sabertooth Cobra).
+
+    :func:`_accept_trailing_toll` runs around the sentence **body**, and this
+    one runs around the sentence's *delay*: "the player gets another poison
+    counter at the beginning of their next upkeep unless they pay {2} before
+    that step" prints the window between the effect and its price, so by the
+    time the words "unless" are reached the body reader has long stopped. The
+    offer belongs inside the delayed ability rather than beside it — it is made
+    when that ability resolves, which is the moment the card names.
+
+    **"Before that step" is required**, and it is why this is not simply the
+    trailing toll read a second time. The phrase is the payment *window*, and
+    this engine has no priority window before a step in which a player could
+    pre-commit — so what it means here is that the offer is made at the start of
+    the named step, ahead of the effect it buys off. That is the same choice
+    with the same information (a player untaps before their own upkeep, so the
+    mana available is the mana the phrase was written about), and stating the
+    requirement is what keeps the words from being a rider that could be deleted
+    with no change to the parse. A card printing the toll after a delay *without*
+    the window refuses, and grows a reading of its own.
+    """
+    mark = stream.mark()
+    offer = _accept_trailing_toll(parse_body, stream, body)
+    if offer is None:
+        return None
+    if not stream.accept_phrase("before", "that", "step"):
+        stream.reset(mark)
+        return None
+    return offer
+
+
 def _round_every_half(node, rounding: str):
     """*node* with every :class:`ast.Half` in it rounded *rounding*, or None
     when it contains none.

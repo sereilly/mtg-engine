@@ -586,3 +586,193 @@ def test_w3g3_tainted_specter_is_sorcery_speed(set_pool):
     assert "sorcery-speed" in result.details
     assert game.pending_choices == [], game.log
     assert len(game.players[1].hand) == 2
+
+
+# --- W3G3: Sabertooth Cobra, a delayed toll on somebody else's upkeep ---
+#
+# "Whenever this creature deals damage to a player, that player gets a poison
+# counter. The player gets another poison counter at the beginning of their
+# next upkeep unless they pay {2} before that step."
+#
+# Poison already existed (`player_gets_poison_counters`, and CR 704.5c's ten in
+# `mixins/game_ending.py`), so the whole of what is new is the second sentence:
+# a delayed ability (CR 603.7) that fires on **their** upkeep, not on its
+# controller's.
+#
+# That possessive is the card. `controllers_next_upkeep` waits for the ability's
+# own controller and `next_turns_upkeep` for whichever upkeep comes next; in a
+# duel where the Cobra bites on its controller's turn both happen to agree with
+# "their", and at three seats neither does. So it is a third event, seated by
+# the player the damage froze (`EVENTS_SEATED_BY_BOUND_PLAYER`), and the seat is
+# bound as the ability is created — exactly as CR 603.7c binds the object one is
+# about, and for the same reason: the upkeep it fires on has nothing that
+# remembers who was bitten.
+#
+# "Before that step" is the payment window. This engine has no priority window
+# ahead of a step in which a player could pre-commit, so what it does is make
+# the offer at the start of that upkeep, ahead of the counter it buys off — the
+# same choice with the same information, since a player untaps before their own
+# upkeep. The words are *required* by the production rather than tolerated, so
+# they cannot be deleted with no change to the parse.
+
+from engine import (Game as _w3g3s_Game,  # noqa: E402
+                    PlayerState as _w3g3s_PlayerState)
+from engine.card_loader import (load_cards as _w3g3s_load,  # noqa: E402
+                                manifest_set_path as _w3g3s_path)
+from engine.models import Permanent as _w3g3s_Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g3s_compile  # noqa: E402
+
+from tests.helpers import _damage_dealt as _w3g3s_dealt  # noqa: E402
+
+
+def _w3g3s_lea():
+    return {card.name: card for card in _w3g3s_load(_w3g3s_path("LEA"))}
+
+
+def _w3g3s_cobra_game(set_pool, seats=2, victim_lands=4):
+    """The Cobra on seat 0; the seat it bites holds *victim_lands* Forests."""
+    lea = _w3g3s_lea()
+    cobra = _w3g3s_Permanent(card=set_pool("MIR")["Sabertooth Cobra"])
+    cobra.metadata["summoning_sickness_turn"] = -99
+    forests = [_w3g3s_Permanent(card=lea["Forest"]) for _ in range(victim_lands)]
+    for forest in forests:
+        forest.metadata["summoning_sickness_turn"] = -99
+    players = [
+        _w3g3s_PlayerState(name="P0", battlefield=[cobra],
+                           library=[lea["Island"]] * 8),
+        _w3g3s_PlayerState(name="P1", battlefield=forests,
+                           library=[lea["Forest"]] * 8),
+    ]
+    if seats == 3:
+        third = [_w3g3s_Permanent(card=lea["Forest"]) for _ in range(victim_lands)]
+        for forest in third:
+            forest.metadata["summoning_sickness_turn"] = -99
+        players.append(
+            _w3g3s_PlayerState(name="P2", battlefield=third,
+                               library=[lea["Forest"]] * 8)
+        )
+    game = _w3g3s_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1, 2}
+    return game, cobra
+
+
+def test_w3g3_sabertooth_cobra_is_supported(set_pool):
+    """Two steps: the counter now, and a delayed ability for the one behind it."""
+    program = _w3g3s_compile(set_pool("MIR")["Sabertooth Cobra"])
+    assert program.supported, program.reason
+
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "damage_dealt"
+    assert trigger.instruction.kind == "sequence"
+    now, later = trigger.instruction.payload["steps"]
+    assert now.kind == "player_gets_poison_counters"
+    assert now.payload == {"amount": 1, "player": "damaged_player"}
+
+    assert later.kind == "create_delayed_trigger"
+    assert later.payload["event"] == "damaged_players_next_upkeep"
+    assert later.payload["binds_player"] == "damaged_player"
+    assert later.payload["once"] is True
+    offer = later.payload["instruction"]
+    assert offer.kind == "may" and offer.payload["actor"] == "damaged_player"
+    assert offer.payload["cost"] == {"generic": 2}
+    assert [step.kind for step in offer.payload["otherwise"]] == [
+        "player_gets_poison_counters"
+    ]
+
+
+def test_w3g3_sabertooth_cobra_poisons_on_damage(set_pool):
+    """The first sentence, and the delayed ability it leaves behind — seated on
+    the **bitten** seat rather than on the Cobra's controller."""
+    game, cobra = _w3g3s_cobra_game(set_pool)
+    _w3g3s_dealt(game, game.players[1], 2, source=cobra, combat=True)
+    game._settle()
+
+    assert [player.poison_counters for player in game.players] == [0, 1]
+    assert len(game.delayed_triggers) == 1
+    entry = game.delayed_triggers[0]
+    assert entry.event == "damaged_players_next_upkeep"
+    assert entry.controller_index == 0      # CR 603.7d: whose ability it is
+    assert entry.bound_player_index == 1    # whose upkeep it waits for
+
+
+def test_w3g3_sabertooth_cobra_waits_for_the_bitten_players_upkeep(set_pool):
+    """The inversion this card is one word away from. Read as "your next
+    upkeep" the toll would be offered to the Cobra's controller on the Cobra's
+    own turn — the wrong seat, a turn early, paying for a counter that is not
+    theirs."""
+    game, cobra = _w3g3s_cobra_game(set_pool)
+    _w3g3s_dealt(game, game.players[1], 2, source=cobra, combat=True)
+    game._settle()
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert game.pending_choices == [], game.log
+    assert len(game.delayed_triggers) == 1
+
+    game.resolve_upkeep(1)
+    game._settle()
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(owed) == 1 and owed[0].player_index == 1
+    assert owed[0].data["cost"] == {"generic": 2}
+
+
+def test_w3g3_sabertooth_cobra_paying_stops_the_second_counter(set_pool):
+    """Paying is the whole of what the toll buys, and the ability is one-shot:
+    the entry goes whether or not the price was met."""
+    game, cobra = _w3g3s_cobra_game(set_pool)
+    _w3g3s_dealt(game, game.players[1], 2, source=cobra, combat=True)
+    game._settle()
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert game.confirm_optional_pay(1, accept=True), game.log
+    assert [player.poison_counters for player in game.players] == [0, 1]
+    assert game.delayed_triggers == []
+
+
+def test_w3g3_sabertooth_cobra_refusing_pays_in_poison(set_pool):
+    """The decline branch — the second counter, on the bitten seat."""
+    game, cobra = _w3g3s_cobra_game(set_pool)
+    _w3g3s_dealt(game, game.players[1], 2, source=cobra, combat=True)
+    game._settle()
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert game.confirm_optional_pay(1, accept=False), game.log
+    assert [player.poison_counters for player in game.players] == [0, 2]
+    assert game.delayed_triggers == []
+
+
+def test_w3g3_sabertooth_cobra_finds_the_third_seats_upkeep(set_pool):
+    """Three seats is where "their next upkeep" and "the next turn's upkeep"
+    come apart. The Cobra bites P2; P1's upkeep passes untouched and P2's is
+    the one that collects."""
+    game, cobra = _w3g3s_cobra_game(set_pool, seats=3)
+    _w3g3s_dealt(game, game.players[2], 2, source=cobra, combat=True)
+    game._settle()
+    assert game.delayed_triggers[0].bound_player_index == 2
+
+    game.resolve_upkeep(1)
+    game._settle()
+    assert [player.poison_counters for player in game.players] == [0, 0, 1]
+    assert len(game.delayed_triggers) == 1
+
+    game.resolve_upkeep(2)
+    game._settle()
+    assert game.confirm_optional_pay(2, accept=False), game.log
+    assert [player.poison_counters for player in game.players] == [0, 0, 2]
+
+
+def test_w3g3_sabertooth_cobra_can_win_by_poison(set_pool):
+    """CR 704.5c: ten or more poison counters is a state-based loss, and it
+    already worked — which is why the counter is a counter here and not a
+    bespoke tally. The tenth arrives from the Cobra's own trigger."""
+    game, cobra = _w3g3s_cobra_game(set_pool)
+    game.players[1].poison_counters = 9
+    _w3g3s_dealt(game, game.players[1], 1, source=cobra, combat=True)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert game.players[1].poison_counters == 10
+    assert game.players[1].lost

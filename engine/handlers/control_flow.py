@@ -1588,6 +1588,19 @@ def _offered_seats(
             return []
         return [] if game.players[seat].lost else [seat]
 
+    if actor == "damaged_player":
+        # "…unless they pay {2} before that step" (Sabertooth Cobra). The seat
+        # the damage event froze (``defending_player_index``, stamped by
+        # ``damage_events._announce`` and carried across the delay in the
+        # entry's ``captured``) — the same record the poison counter behind the
+        # offer reads, so the player asked for the price and the player who
+        # takes the counter for refusing it are one seat. Nobody recorded means
+        # nobody is offered, which is the honest outcome the branches around
+        # this one already give.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
     if actor == "event_subject_player":
         # "…unless **that player** pays {4}" (Mystic Remora). The seat the
         # firing event *is about*, frozen by the fire site (CR 603.10) — one
