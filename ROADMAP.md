@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress (304/335 supported, still `measured`)
+## Mirage (MIR) — in progress (323/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1556,49 +1556,140 @@ been frozen since Takklemaggot. And one that is worse than a refusal: Consuming
 Ferocity's "standalone sentence parses" was true, and it lowered to a damage
 instruction with **no recipient at all** and the Aura as the dealer.
 
-### Where the set stands — ten rounds in
+#### W2G4 — zones and cards: nine, and 18 shipped cards fixed by one regex
 
-**227/335 supported (67.8%), from 184/335 (54.9%) at ingest.** Every gate is
-green, the trackers are current, and each round is its own commit with its own
-`oracle_diff` reading. The set is **not finished** and is still `measured`;
-Phase 4 has not been attempted.
+Hakim Loreweaver, Ebony Charm, Flash, Ether Well, Phyrexian Dreadnought, Bazaar
+of Wonders, Meddle, Mind Bend, Sirocco — nine of ten, declining only Forbidden
+Crypt, which it was told not to half-ship and did not.
 
-**The remaining 108 cards have no more big rocks in them, and the census says so
-in a way it did not at ingest.** Nine in ten are blocked by **exactly one
-refused line**, and the refused lines that remain sit one-to-one over their
-distinct sentences — 1.01, and this time the fragment census agrees: the two readings
-that were wrong at ingest (flanking's ten reminder-text lines, phasing's seven)
-are both spent. What is left is one production per card or thereabouts, at the
-three generic refusal sites (`expected a subject` 43, `unconsumed text` 26,
-`unrecognized effect verb` 14) plus singleton sites.
+**A colour-word text change had never reached `non<colour>`, and had not since
+Alpha.** `` does not fit between "non" and "black", so Sleight of Mind, Mind
+Bend and 16 more never rewrote the compound word — Terror, Dark Banishing,
+Blinding Light, Exile and Hellfire among them. Mind Bend's own reminder text is
+the evidence: "change 'nonblack creature' to 'nongreen creature'". **The oracle
+differential cannot see a text-keyed table**, which is the rule this group
+proved by obeying it: it ran a *second* differential over `text_changes._forms`
+and that is where the 18 showed up.
 
-So the shape of the work changed at round 6 and the round plan should follow it:
-**batch several one-card families per round** rather than looking for another
-keyword. Rounds 6–8 are what that looks like. The families still standing, each
-already probed against the live compiler:
+Its brief corrections were the sharpest of either wave. **Flash's "one clause"
+would have shipped a card that reports supported and does nothing**: the
+sentence the brief called "compiles clean right now" lowers to a kind only the
+upkeep registry dispatches, with no `EFFECT_HANDLERS` entry — and "sacrifice it"
+bound to the *spell* rather than to the creature just put down. Ebony Charm's
+`player_choice` could not be "chained in front" because it records and discards,
+so it needed a spec whose *resolver* arms the pick; Ether Well is a rider on the
+**first** sentence's node, because "instead" is one zone change with two ends and
+two statements would tuck and then move again.
 
-| Next | Cards | What it needs |
+Reported and left alone, one module over: **Night Soil's "from a single
+graveyard" cost is unenforced** — `exile_same_zone` reaches `targeting.py`'s
+picker spec and nothing else, so the cost can be paid with one card from each of
+two graveyards.
+
+#### W2G1 — combat: ten of ten, and a brief that was wrong seven times
+
+Barbed Foliage, Mtenda Lion, Reparations, Dream Fighter, Coral Fighters,
+Mindbender Spores, Basalt Golem, Barreling Attack, Blind Fury, Acidic Dagger.
+Zero declined, zero new hooks, and it closed one of the two deliberately-open
+cards named below.
+
+**Seven brief corrections, all one class**: a piece the brief called missing
+already existed, so the real work was one layer in. The plain attack trigger
+already froze the defending player; a conjoined subject already had a production
+and could not read a *bound* phrase inside the union; the granted-ability line
+and the counter-conditional untap lock both already worked, and only the counter
+*placement* was absent. Acidic Dagger's activated ability, whose whole effect is
+two delayed triggers, was the piece the brief said would be the most work and
+the piece that already parsed — while "an `activation_restrictions` row, cheap
+and standalone" was the one that was not, because a row with no card behind it
+is a claim nothing checks.
+
+**Mindbender Spores' grant did not refuse; it mis-aimed.** On the *blocks* half
+of a block trigger the stack item's target is the blocking creature itself, so
+"the creature gains …" fell through to the target-shaped reading and granted
+both abilities to the Spores. Unsupported at the time, so nothing shipped was
+wrong — and the group swept the pool for the class rather than stopping at its
+own card. Three sweeps, all closing clean on shipped cards.
+
+### The integration's own findings — five cap breaches on nobody's branch
+
+Wave 2's merges cost more than wave 1's and every extra hour was the same shape:
+**a guard fired at integration that no branch had broken**, because two groups'
+additions summed past it. Worth recording as a cost of the parallel model rather
+than as five accidents.
+
+Four grammar modules crossed the thousand-line cap in the last merge alone, and
+each split along a line the code had already written down. `lowering/prevention`
+gave `_lower_damage_becomes_counter_removal` to `redirection`, whose newest
+arrival had just stated the taxonomy out loud — CR 614 replacements on a damage
+event, separated by *which half they change*: recipient, amount, or whether it
+happens at all. `triggers` shed CR 603.8's state triggers, its third split and
+its third along a line the family already had. `lowering/destruction` gave its
+fused cost-repeated destroy to `sequences`, the same move one of the branches
+had just made with the tap-then-counters fuser, and the fuser's one piece of
+destroy-specific data travelled with it — which is what made it a move rather
+than a cut. `lowering/damage` gave `_sweep_kind` to `_sweeps`, ending a
+half-exile two docstrings there already described. `engine/grammar/phrases.py`
+had crossed one merge earlier and shed its **price** fragments, a seam it had
+also already written down in prose: the mana alternatives lived there and their
+three life-cost siblings did not, so one printed offer was read in two modules.
+
+Two per-set test files crossed the 2,600-line guard the same way, one of them
+**by a single line**, and both were cut at a section boundary rather than
+mid-topic.
+
+The lesson is cheap to state and was not obvious: *the size guards are the
+integration's findings, not the branches'*. A group cannot see the sum, so the
+integrator has to check every cap before the suite rather than after it — and
+the import-hygiene guard is what then catches the bindings each split leaves
+behind, which is the half of that hazard nothing else fails on.
+
+### Where the set stands — after two waves
+
+**323/335 supported (96.4%), from 184/335 (54.9%) at ingest.** Every gate is
+green, the trackers are current, and each round and each merge is its own commit
+with its own `oracle_diff` reading. The set is **not finished** and is still
+`measured`; Phase 4 has not been attempted.
+
+**Twelve cards remain, and they are the twelve that are each a system rather
+than a template** — which is the opposite of where wave 2 started and is what
+the two waves bought. There is also exactly one hollow card left (Tombstone
+Stairwell, 3 instruction-less parts) and exactly two picker findings (Sealed
+Fate, Shallow Grave), so the promotion gate's three numbers are 12, 1 and 2.
+
+Wave 3 is briefed against those fifteen items, five groups again, split by what
+the work *is* rather than by printed type:
+
+| Group | Items | What they have in common |
 | --- | --- | --- |
-| Chosen-source prevention | 5 | five different shapes, not one family: a shield whose recipient is "any target" (Circle of Despair), one over "you and/or creatures you control" plus a life rider (Shadowbane), a **redirect** rather than a prevention (Reflect Damage), a prevention with an exile rider (Bone Mask), and a source narrowed by a chosen colour (Prismatic Circle, whose line is also the set's last hollow one) |
-| Trailing riders | ~8 | "X. **They can't be regenerated.** You lose 2 life for each creature that died this way" (Reign of Terror), "…and an additional 1 damage to each green creature" (Kaervek's Hex, Tropical Storm) — the `unconsumed text` site is mostly a second sentence on one printed line |
-| `lord_buffs` restrictions | 3 | Spectral Guardian ("as long as this creature is untapped"), Shimmer (a chosen land type), Chaosphere ("creatures without flying") — three different narrowings on the buffed set, not one |
+| W3G1 | Celestial Dawn, Illicit Auction | each a subsystem: layers 4/5 over three populations plus CR 106.6 mana spending; and a bidding round-robin across seats |
+| W3G2 | Forbidden Crypt, Mangara's Tome, Tombstone Stairwell | CR 614 replacements on a draw and on a graveyard-bound card, plus the set's one hollow card — a permanent that reads a record of the tokens it made, after it has left |
+| W3G3 | Tainted Specter, Sabertooth Cobra, Preferred Selection | an offer with a consequence, three times: an *unless* whose alternative is not a payment, a delayed toll at the damaged player's own upkeep, and a look-at whose two branches pick from the same cards |
+| W3G4 | Superior Numbers, Delirium, Cycle of Life | a number or a pronoun read off something else — a difference of two board counts, a back-reference with no producer, and an activation cost that is a zone change |
+| W3G5 | Grinning Totem, Natural Balance, + both picker findings | searching a library, and the set's whole picker debt |
 
-**Two Mirage cards are still deliberately open from an earlier round**, both
-named there and both cheap: Telim'Tor ("all attacking creatures **with**
-flanking get +1/+1" — the global buff cannot narrow by `with_keywords`) and
-Barbed Foliage ("it **loses** flanking until end of turn" — `remove_ability_line`
-has no duration channel, deliberately, because nothing in the pool had needed
-one until now).
+**Delirium is the brief correction already in hand**: it parses cleanly and
+fails in the *lowering*, which is the layer the census could not have told
+anyone. SET_PLAYBOOK's rule — a refusal site is a work-list entry, not a
+diagnosis — was applied to all twelve before the briefs were written, and it
+moved exactly one card between layers.
 
-**Nine live engine defects came out of these eight rounds**, every one of them
-in code that predates Mirage and every one found by giving a card a game rather
-than by any instrument. They are written up in their rounds; the list is the
-answer to "what did the ingest buy besides cards": the dispatcher-less
+**Nine live engine defects came out of the ten solo rounds**, and the two waves
+added more, every one in code that predates Mirage and every one found by giving
+a card a game rather than by any instrument. The solo nine: the dispatcher-less
 `becomes_target`, flanking applied at declaration, CR 702.26m's skipped phasing
 event, Reality Ripple's and the tuck's pinned creature type, `aura_enchants`
 answering no to a qualified clause and yes to the wrong branch of a union, the
 upkeep step's missing CR 603.4 check, the end step's unseated one, and the
-layer-5 colour channel reading "no colours" as "no override".
+layer-5 colour channel reading "no colours" as "no override". Wave 1 added nine
+more mis-playing shipped cards, Blaze of Glory (wrong twice) and **Soul Echo (a
+player at −7 life who never lost, forever)** among them; wave 2 added Runed
+Halo making its own game unfetchable, Shimmer's second unchecked round trip, and
+the eighteen `non<colour>` cards.
+
+**Both deliberately-open cards from the solo rounds are closed.** Barbed Foliage
+landed in W2G1 with a duration channel behind `remove_ability_line`; Telim'Tor
+landed in wave 1 with a `with_keywords` narrowing on the global buff.
 
 
 ## Alliances (ALL) — shipped
