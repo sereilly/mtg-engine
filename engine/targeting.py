@@ -655,7 +655,14 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "mark_text_modified": {"kind": "permanent"},
     "counter_top_stack_spell": {"kind": "stack"},
     "berserk_pump": {"kind": "creature"},
-    "grant_unlimited_blocking": {"kind": "creature"},
+    # "Target creature **defending player controls** can block any number of
+    # creatures this turn." (Blaze of Glory.) The seat was missing from this
+    # row and enforced nowhere else, so the spell granted the permission to the
+    # *caster's* own creature — a printed restriction that reached the picker,
+    # the cast gate and the handler as nothing at all. It is a spec key rather
+    # than a branch because `legality._enumerate_targets` already answers the
+    # flag, and answers it for a spell now: the seat is the live combat's.
+    "grant_unlimited_blocking": {"kind": "creature", "defending_player_only": True},
     "target_gains_life": {"kind": "any"},
     "remove_creature_from_combat": {"kind": "creature"},
     "grant_target_flying_until_eot": {"kind": "creature"},
