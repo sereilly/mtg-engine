@@ -406,6 +406,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_self": "zones",
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
+    # "…sacrifice any number of creatures with total power 12 or greater"
+    # (Phyrexian Dreadnought). The same category as every other sacrifice, so
+    # GRAMMAR_CATEGORIES is unchanged: what differs is how the price is counted,
+    # not what happens to the permanents.
+    "sacrifice_permanents_totalling": "zones",
     "sacrifice_attached_permanent": "zones",
     # CR 702.24a's own kind, reached from the grammar as well as from the
     # keyword rewrite: Phantasmal Sphere prints the ability longhand with a

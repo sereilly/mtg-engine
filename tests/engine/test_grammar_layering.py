@@ -112,6 +112,18 @@ PARSE_LAYERS = [
     # in it calls back.
     "keywords",
     "phrases",
+    # What a "sacrifice …" clause names, and how it is priced. Split out of
+    # `phrases` when Mirage's second wave took that module past the guard below,
+    # reusing the name `lowering/_sacrifices.py` has carried since it left the
+    # same family one package over — the mirror re-forming rather than forking.
+    # The seam is `parse_counted_subject`'s own docstring: these readers are the
+    # shared half of one clause, read by three families that never see each
+    # other (the board family's sacrifice and its "unless you sacrifice" tails,
+    # the combat family's attack cost under CR 508.1g, the stack family's
+    # counter tails). **Above `phrases`**, which it reads and which never reads
+    # it back: a sacrifice clause is built out of noun phrases and numbers, and
+    # none of those is built out of a sacrifice.
+    "sacrifices",
     # The paragraphs whose frame is an **upkeep trigger** (Power Leak / Errant
     # Minion, Mishra's War Machine / Minion of Leshrac, Phantasmal Sphere /
     # Rogue Skycaptain). Split out of `paragraphs` along the boundary that

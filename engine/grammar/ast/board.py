@@ -67,6 +67,13 @@ class Sacrifice:
     #: per-seat count spec the prompt is sized from. None is every sentence
     #: written before fractions existed: the subject's own count decides.
     count: "Amount | None" = None
+    #: "…sacrifice **any number of creatures with total power 12 or greater**."
+    #: (Phyrexian Dreadnought.) A threshold on the *aggregate* of the chosen
+    #: set, as ``(characteristic, minimum)``. It cannot be a count and it cannot
+    #: ride the filter: how many permanents satisfy it depends on which ones are
+    #: chosen, and a filter is asked of one permanent at a time. None is every
+    #: sacrifice printed with a number instead.
+    total_at_least: "tuple[str, int] | None" = None
 
 
 @dataclass(frozen=True)

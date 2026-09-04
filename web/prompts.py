@@ -1165,6 +1165,41 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("aggregate_sacrifice")
+def _aggregate_sacrifice(ctx: PromptContext, choices: list) -> dict:
+    """Phyrexian Dreadnought: "…sacrifice any number of creatures with total
+    power 12 or greater."
+
+    Every candidate with what it contributes, because the contribution *is* the
+    question — a client that showed names alone could not tell whether a
+    selection pays. The floor and the running rule are sent too, and the engine
+    re-checks the answer against both, so a client sending a short set cannot
+    buy the offer cheaply.
+    """
+    choice = choices[0]
+    payload = dict(choice.data.get("_payload") or {})
+    characteristic = str(choice.data.get("characteristic") or "power")
+    candidates = ctx.game.aggregate_sacrifice_candidates(
+        choice.player_index, payload
+    )
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "characteristic": characteristic,
+        "at_least": int(choice.data.get("at_least", 0)),
+        "choices": [
+            {
+                "permanent_id": perm.permanent_id,
+                "name": perm.card.name,
+                "amount": ctx.game.aggregate_sacrifice_total(
+                    [perm], characteristic
+                ),
+            }
+            for perm in candidates
+        ],
+    }
+
+
 @prompt_renderer("library_end_choice")
 def _library_end_choice(ctx: PromptContext, choices: list) -> dict:
     """Ether Well: "If that creature is red, you may put it on the bottom of

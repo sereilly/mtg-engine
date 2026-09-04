@@ -94,6 +94,7 @@ ActionKind = Literal[
     "graveyard_exile_confirm",
     "graveyard_pile_confirm",
     "library_end_confirm",
+    "aggregate_sacrifice_confirm",
     "time_vault_skip",
     "time_vault_decline",
     "island_sanctuary_skip",

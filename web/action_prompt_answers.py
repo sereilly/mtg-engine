@@ -690,6 +690,32 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("aggregate_sacrifice_confirm")
+def _action_aggregate_sacrifice_confirm(session, req, seat_type):
+    # Phyrexian Dreadnought: the whole set at once, addressed by stable id. The
+    # engine re-checks it against the same candidate rule the prompt was drawn
+    # from *and* against the printed floor -- an answer under the floor is not a
+    # cheaper payment, it is no payment, so it is refused rather than applied.
+    pending = next(
+        (c for c in session.game.pending_choices_of("aggregate_sacrifice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no sacrifice choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    # `target_permanent_ids` is the field the set picker beside this one
+    # already carries for the same shape of answer -- a second field meaning
+    # "the permanents this answer names" is a second answer to it.
+    if req.target_permanent_ids is None:
+        raise HTTPException(
+            status_code=400, detail="target_permanent_ids is required"
+        )
+    if not session.game.confirm_aggregate_sacrifice(
+        req.seat, req.target_permanent_ids
+    ):
+        raise HTTPException(status_code=400, detail="that set does not pay the cost")
+
+
 @action_handler("library_end_confirm")
 def _action_library_end_confirm(session, req, seat_type):
     # Ether Well: top or bottom. `to_bottom` is the field Dream Cache's answer

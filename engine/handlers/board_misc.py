@@ -1829,6 +1829,28 @@ def exile_any_number_of_own_tokens(
 
 
 
+@effect_handler("sacrifice_permanents_totalling")
+def sacrifice_permanents_totalling(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…sacrifice **any number of creatures with total power 12 or greater**."
+    (Phyrexian Dreadnought.)
+
+    Its own handler rather than a count on the forced-sacrifice prompt beside
+    it, because the seat is being asked a different question: not "give up N of
+    these" but "give up any set of these whose power adds up", which no number
+    expresses — a set of five may pay where a set of six does not.
+
+    The controller alone is asked (CR 109.5's bare imperative), and the price is
+    checked against the *aggregate* rather than the count, through the same
+    accessor every other reader of a creature's power uses so a pumped creature
+    counts for what CR 613 says it is.
+    """
+    seat = game.players.index(context.caster)
+    payload = dict(instruction.payload)
+    payload["_source"] = context.source_permanent
+    game.arm_aggregate_sacrifice(seat, payload, context)
+    return True, "resolved"
+
+
 @effect_handler("sacrifice_matching_permanent")
 def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Sacrifice a creature" / "sacrifice another creature" as an effect a

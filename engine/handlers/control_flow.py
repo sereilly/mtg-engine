@@ -1110,6 +1110,19 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # battlefield* is asked: a choice drawn from anywhere else is not a price
     # this player pays, and answering False for it would withdraw an offer the
     # card makes.
+    if instruction.kind == "sacrifice_permanents_totalling":
+        # "…unless you sacrifice any number of creatures with **total power 12
+        # or greater**" (Phyrexian Dreadnought). A board that cannot reach the
+        # floor is a real and checkable "nothing to give", and the whole board
+        # is the most that could ever be offered — so if every candidate
+        # together falls short, the offer is not made and the penalty stands.
+        payload = dict(instruction.payload)
+        payload["_source"] = source if payload.get("exclude_self") else None
+        seat = game.players.index(player)
+        every = game.aggregate_sacrifice_candidates(seat, payload)
+        return game.aggregate_sacrifice_total(
+            every, str(payload.get("characteristic") or "power")
+        ) >= int(payload.get("at_least", 0))
     if instruction.kind == "choose_permanent":
         if instruction.payload.get("controlled_by") != "chooser":
             return True

@@ -18,8 +18,8 @@ from .. import ast
 from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
-                       _parse_mana_payment, _parse_zone)
+from ..phrases import (_accept_mana_alternatives, _parse_mana_payment, _parse_zone)
+from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
 
 

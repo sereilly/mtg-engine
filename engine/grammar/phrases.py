@@ -656,51 +656,12 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     return field_name, (not value) if negated else value
 
 
-def _parse_sacrificed_subject(
-    stream: TokenStream, player: ast.PlayerRef
-) -> ast.Statement:
-    """What a "sacrifice …" sentence names when ``parse_recipient`` refused it.
-
-    Two readings reach here, and neither is a noun phrase the recipient parser
-    has: the object an earlier step of this same ability *bound* ("sacrifice
-    **that creature**", Phantasmal Mount), and a bare count in front of an
-    untargeted plural ("sacrifice **two Islands**", Leviathan). The bound one is
-    tried first because "that creature" would otherwise reach
-    :func:`parse_counted_subject`, which has no count to read and would refuse
-    the whole line.
-
-    Only the *sacrifice* verb comes through this door; the "unless you
-    sacrifice" tails go straight to the counted reader, because an alternative
-    cost naming an object the sentence already chose is not a shape any card
-    prints.
-    """
-    bound = parse_bound_subject(stream)
-    if bound is not None:
-        return ast.Sacrifice(player, bound)
-    return _parse_counted_sacrifice(stream, player)
 
 
-def _parse_counted_sacrifice(
-    stream: TokenStream, player: ast.PlayerRef
-) -> ast.Statement:
-    """"two Swamps" / "an Island" — what an "unless you sacrifice" asks for.
 
-    The printed number is read here rather than by ``parse_recipient``, which
-    has no reading for a bare count in front of an untargeted plural: the
-    counted position is the one the noun parser wants told about
-    (``plural=True``), exactly as a counted trigger subject is. One number and
-    one noun phrase, so "an Island" and "two Swamps" are one production with
-    the count as data.
-    """
-    # The noun phrase itself is `parse_counted_subject` above: Leviathan's
-    # "can't attack unless you sacrifice two Islands" is the same phrase read by
-    # the combat family, and one reading is what keeps the offer, the gate and
-    # the charge agreeing about what the card asks for.
-    counted = parse_counted_subject(stream)
-    if counted is None:
-        raise stream.error("expected what to sacrifice")
-    count, described = counted
-    return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
+
+
+
 
 
 def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
@@ -732,34 +693,6 @@ def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
     return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
 
 
-def parse_counted_subject(
-    stream: TokenStream,
-) -> "tuple[int, ast.ObjectFilter] | None":
-    """``two Swamps`` / ``an Island`` — a printed count in front of a plural
-    noun phrase, as ``(count, filter)``; None with the cursor untouched when the
-    words are not that.
-
-    Here rather than with the sacrifice production that first needed it, because
-    two families read the same phrase: "unless you sacrifice **two Islands**"
-    (the `board` family's destroy and sacrifice tails) and "can't attack unless
-    you sacrifice **two Islands**" (the `combat` family's attack cost, CR
-    508.1g). One reading, so the offer, the cost gate and the charge cannot
-    disagree about what the card asks for.
-
-    "**an** Island" (Elder Spawn) prints its count as the article, and
-    ``NUMBER_WORDS`` reads an article as one — so ``_accept_number`` would
-    consume it and leave a bare noun behind, which ``parse_subject_filter_at``
-    quantifies as the sweep "all" and then refuses against the singular it was
-    asked for. The article is left where it is instead: a singular subject is a
-    reading that parser already has.
-    """
-    mark = stream.mark()
-    count = None if stream.peek_word() in ("a", "an") else _accept_number(stream)
-    described = parse_subject_filter_at(stream, plural=(count or 1) != 1)
-    if described is None:
-        stream.reset(mark)
-        return None
-    return count or 1, described
 
 # ---------------------------------------------------------------------------
 # "…of an opponent's choice"

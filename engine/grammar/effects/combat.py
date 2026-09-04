@@ -12,8 +12,8 @@ from ..lexer import MANA
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import (_accept_number, _parse_duration, parse_counted_subject,
-                       parse_subject_filter_at)
+from ..phrases import (_accept_number, _parse_duration, parse_subject_filter_at)
+from ..sacrifices import parse_counted_subject
 
 
 # The printed combat restrictions the engine enforces (CR 506, 509). Several are

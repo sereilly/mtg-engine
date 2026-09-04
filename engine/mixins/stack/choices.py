@@ -4166,6 +4166,142 @@ class PendingChoicesMixin:
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
 
+    # -- A sacrifice priced by an aggregate rather than by a count -----------
+
+    def aggregate_sacrifice_candidates(self, seat: int, payload: dict) -> list:
+        """The permanents *seat* controls that the printed noun phrase names.
+
+        Through ``subject_matches``, the one predicate the picker, the
+        takeability gate and the answer's re-check all ask — three readings of
+        "which creatures may be given up" is three chances to offer one the
+        resolution then refuses.
+        """
+        from ...subject_filters import subject_matches
+
+        described = dict(payload.get("filter") or {})
+        source = payload.get("_source")
+        return [
+            perm for perm in self.controlled_by(seat)
+            if subject_matches(self, perm, described, observer=seat, source=source)
+            and not (payload.get("exclude_self") and perm is source)
+        ]
+
+    def aggregate_sacrifice_total(self, permanents, characteristic: str) -> int:
+        """What a chosen set totals, through CR 613's layers.
+
+        ``effective_power`` rather than the printed number, so a pumped creature
+        counts for what it is now — the same accessor every other reader of a
+        creature's power in this engine goes through.
+        """
+        return sum(
+            int(
+                (perm.effective_power if characteristic == "power"
+                 else perm.effective_toughness) or 0
+            )
+            for perm in permanents
+        )
+
+    def arm_aggregate_sacrifice(self, player_index: int, payload: dict, context) -> None:
+        """Queue "sacrifice any number of <noun> with total <X> N or greater".
+
+        The whole payload travels rather than the candidate list, for
+        ``arm_choose_cards_in_hand``'s reason: it is the *rule* the candidates
+        came from, and re-running it is what keeps the list offered and the list
+        an answer is checked against from being two lists.
+        """
+        self.arm_pending_choice(
+            "aggregate_sacrifice", player_index,
+            card_name=context.card.name,
+            characteristic=str(payload.get("characteristic") or "power"),
+            at_least=int(payload.get("at_least", 0)),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def confirm_aggregate_sacrifice(self, player_index: int, permanent_ids) -> bool:
+        return self.resolve_pending_choice(
+            "aggregate_sacrifice", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_aggregate_sacrifice(self, choice: PendingChoice, permanent_ids) -> bool:
+        """Sacrifice exactly the set named, once it clears the printed floor.
+
+        Validated whole before anything is sacrificed, the shape every
+        list-shaped picker here takes: one bad id rejects the answer and leaves
+        the prompt queued, so a malformed request cannot sacrifice half a
+        selection. **The floor is the whole of the price** — an answer under it
+        is not a cheaper payment, it is no payment at all, so it is refused
+        rather than applied.
+        """
+        payload = dict(choice.data.get("_payload") or {})
+        live = self.aggregate_sacrifice_candidates(choice.player_index, payload)
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            chosen.append(perm)
+        characteristic = str(choice.data.get("characteristic") or "power")
+        if self.aggregate_sacrifice_total(chosen, characteristic) < int(
+            choice.data.get("at_least", 0)
+        ):
+            return False
+        self.discard_pending_choice(choice)
+        for perm in chosen:
+            self.sacrifice_permanent(perm)
+        self.log.append(
+            f"{choice.data.get('card_name', 'An effect')}: "
+            + (", ".join(perm.card.name for perm in chosen) or "nothing")
+            + " sacrificed"
+        )
+        return True
+
+    def _default_aggregate_sacrifice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **fewest** permanents that clear the floor,
+        taking the largest first.
+
+        A toll rather than a gift — "take gifts, pay tolls, make no trades" —
+        and the cheapest way to pay a toll counted in power is to spend as few
+        bodies as possible. Ties break by battlefield order, which is
+        seed-deterministic; a seat that should value the creatures themselves
+        needs a weight in ``engine/ai_valuation.py``, not a branch here.
+
+        **The ability's own source is a candidate** unless the sentence printed
+        "another": nothing in CR 701.17a excludes it, and Phyrexian Dreadnought
+        really can be sacrificed to its own trigger. So the largest-first rule
+        usually pays with the source — which is the *same board state* as
+        declining, and therefore the "make no trades" answer rather than an
+        accident of the ordering.
+        """
+        payload = dict(choice.data.get("_payload") or {})
+        characteristic = str(choice.data.get("characteristic") or "power")
+        wanted = int(choice.data.get("at_least", 0))
+        live = self.aggregate_sacrifice_candidates(choice.player_index, payload)
+        ordered = sorted(
+            live,
+            key=lambda perm: -int(
+                (perm.effective_power if characteristic == "power"
+                 else perm.effective_toughness) or 0
+            ),
+        )
+        taken, total = [], 0
+        for perm in ordered:
+            if total >= wanted:
+                break
+            taken.append(perm)
+            total = self.aggregate_sacrifice_total(taken, characteristic)
+        if total < wanted or not self._resolve_aggregate_sacrifice(
+            choice, [perm.permanent_id for perm in taken]
+        ):
+            # Nothing the seat controls can cover the price. The offer should
+            # never have been made — ``_action_is_takeable`` asks the same
+            # question first — so this is the defensive half, and it declines
+            # rather than sacrificing a set that does not pay.
+            self.discard_pending_choice(choice)
+
     # -- Which end of a library a tuck puts its card on ----------------------
 
     def arm_library_end_choice(
@@ -6960,6 +7096,25 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "aggregate_sacrifice",
+    resolve=lambda game, choice, r: game._resolve_aggregate_sacrifice(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_aggregate_sacrifice(choice),
+    action="aggregate_sacrifice_confirm",
+    prompt_key="aggregate_sacrifice",
+    blocked_detail="choose what to sacrifice before other actions",
+    # **Not** ``suspends``: the sacrifice *is* the answer and it is the last
+    # step of the offer's accept branch, so nothing behind it reads a record.
+    # ``blocked_detail`` is what makes the game wait (CR 608.2), which it must —
+    # the creatures are still on the battlefield until the answer arrives.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

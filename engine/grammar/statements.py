@@ -37,9 +37,10 @@ from .effects import (_parse_untap_chosen_by_paying,
                       _parse_count_objects, _parse_produces_instead,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders, _parse_sacrifice,
-                      _parse_counted_sacrifice, _parse_sacrifice_expansion_permanents,
+                      _parse_sacrifice_expansion_permanents,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
+from .sacrifices import _parse_counted_sacrifice
 
 
 # ---------------------------------------------------------------------------

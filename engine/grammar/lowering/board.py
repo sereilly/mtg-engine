@@ -355,6 +355,29 @@ def _lower_sacrifice(
                 "the sacrifice prompt cannot test this restriction", node=node
             )
         payload: dict[str, object] = {"filter": described}
+        # "…sacrifice **any number of creatures with total power 12 or
+        # greater**." (Phyrexian Dreadnought.) Its own kind rather than a
+        # payload key on the prompt beside it, because the two ask different
+        # questions of the seat and validate different answers: that one owes a
+        # printed number of permanents, this one owes *any* number whose
+        # aggregate clears a floor — and a set of five may be legal where a set
+        # of six is not, which no count can say. Emitted before the count
+        # branches below, none of which applies: "any number" is the absence of
+        # a printed count.
+        if node.total_at_least is not None:
+            if node.player.kind != "you":
+                raise LoweringError(
+                    "only the effect's own controller is asked for an "
+                    "aggregate sacrifice", node=node,
+                )
+            characteristic, minimum = node.total_at_least
+            payload["characteristic"] = characteristic
+            payload["at_least"] = int(minimum)
+            if node.subject.filter.other_than_source:
+                payload["exclude_self"] = True
+            return (
+                OracleInstruction("sacrifice_permanents_totalling", "", payload),
+            )
         # "…sacrifices **a third of** the creatures they control of their
         # choice." (Pox.) One number per seat, so it cannot be the printed
         # count: it is a fraction of *that* player's board, and the handler

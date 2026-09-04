@@ -2407,3 +2407,135 @@ def test_hakims_upkeep_clause_is_still_enforced_beside_it(set_pool):
     assert activation_denial(game, 0, hakim, line) is not None
     game.current_step = "upkeep"
     assert activation_denial(game, 0, hakim, line) is None
+
+
+# --- W2G4: a sacrifice priced by an aggregate rather than by a count ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_dreadnought(set_pool, others=(), interactive=True):
+    """Phyrexian Dreadnought in seat 0's hand over a board of *others*."""
+    perms = [Permanent(card=set_pool("MIR")[name]) for name in others]
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=[set_pool("MIR")["Phyrexian Dreadnought"]],
+            # A *copy*: the battlefield is a live list, and handing the same
+            # object back would make `perms` grow by whatever enters — which is
+            # the Dreadnought itself, one line below.
+            battlefield=list(perms), life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game.queue_from_hand(0, "Phyrexian Dreadnought")
+    game.resolve_stack()
+    return game, perms
+
+
+def test_phyrexian_dreadnought_is_supported(set_pool):
+    """"…unless you sacrifice **any number of creatures with total power 12 or
+    greater**."
+
+    The threshold cannot be a count and cannot ride the filter: how many
+    permanents satisfy it depends on which ones are chosen, and a filter is
+    asked of one permanent at a time. A lowering that dropped it would have
+    priced a twelve-power cost at one creature.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Phyrexian Dreadnought"])
+    assert program.supported, program.reason
+    offer = program.triggered_abilities[0].instruction
+    assert offer.kind == "may"
+    action = offer.payload["action"][0]
+    assert action.kind == "sacrifice_permanents_totalling"
+    assert action.payload["characteristic"] == "power"
+    assert action.payload["at_least"] == 12
+    assert [step.kind for step in offer.payload["otherwise"]] == ["sacrifice_self"]
+
+
+def test_phyrexian_dreadnought_refuses_a_set_that_falls_short(set_pool):
+    """The floor is the whole of the price. An answer under it is not a cheaper
+    payment, it is no payment — so the prompt stands rather than being consumed,
+    and the creature it named is still on the battlefield."""
+    game, perms = _w2g4_dreadnought(
+        set_pool, others=["Crash of Rhinos", "Crimson Hellkite"]
+    )
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert [c.kind for c in game.pending_choices] == ["aggregate_sacrifice"]
+
+    assert not game.confirm_aggregate_sacrifice(0, [perms[0].permanent_id])
+    assert [c.kind for c in game.pending_choices] == ["aggregate_sacrifice"]
+    assert perms[0] in game.players[0].battlefield, game.log
+
+
+def test_phyrexian_dreadnought_accepts_a_set_that_clears_the_floor(set_pool):
+    """An 8/4 and a 6/6 total 14, which pays — and only the two chosen go. The
+    Dreadnought stays, which is the whole of what the cost buys."""
+    game, perms = _w2g4_dreadnought(
+        set_pool, others=["Crash of Rhinos", "Crimson Hellkite"]
+    )
+    game.confirm_optional_pay(0, accept=True)
+    assert game.confirm_aggregate_sacrifice(
+        0, [perm.permanent_id for perm in perms]
+    ), game.log
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Phyrexian Dreadnought"
+    ], game.log
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Crash of Rhinos", "Crimson Hellkite",
+    ], game.log
+
+
+def test_phyrexian_dreadnought_totals_power_through_the_layers(set_pool):
+    """CR 613: what a creature's power *is* now, not what its card prints. A
+    2/2 pumped to 12/12 pays on its own, and a reader that took the printed
+    number would refuse the set the rules allow."""
+    game, perms = _w2g4_dreadnought(set_pool, others=["Femeref Knight"])
+    from engine.pt import add_pt_modifier
+
+    add_pt_modifier(perms[0], 10, 10)
+    game.confirm_optional_pay(0, accept=True)
+    assert perms[0].effective_power == 12
+    assert game.confirm_aggregate_sacrifice(0, [perms[0].permanent_id]), game.log
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Phyrexian Dreadnought"
+    ], game.log
+
+
+def test_phyrexian_dreadnought_may_be_sacrificed_to_its_own_trigger(set_pool):
+    """Nothing in CR 701.17a excludes the ability's own source, and the printed
+    phrase says "any number of creatures" rather than "another" — so the 12/12
+    on the battlefield is a legal payment for its own cost. The offer is
+    takeable even on an otherwise empty board because of it."""
+    game, _ = _w2g4_dreadnought(set_pool)
+    game.confirm_optional_pay(0, accept=True)
+    choice = game.pending_choices[0]
+    candidates = game.aggregate_sacrifice_candidates(
+        0, dict(choice.data["_payload"])
+    )
+    assert [perm.card.name for perm in candidates] == ["Phyrexian Dreadnought"]
+
+    assert game.confirm_aggregate_sacrifice(0, [candidates[0].permanent_id])
+    assert game.players[0].battlefield == [], game.log
+
+
+def test_phyrexian_dreadnought_goes_when_the_offer_is_declined(set_pool):
+    """The decline is the card. "Sacrifice it" is what happens when the price
+    is not paid, and it is the half a dropped threshold would have made
+    unreachable."""
+    game, perms = _w2g4_dreadnought(
+        set_pool, others=["Crash of Rhinos", "Crimson Hellkite"]
+    )
+    assert game.confirm_optional_pay(0, accept=False), game.log
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Crash of Rhinos", "Crimson Hellkite",
+    ], game.log
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Phyrexian Dreadnought"
+    ], game.log
