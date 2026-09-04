@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.2% | 92.9% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 89.4% | 89.0% | 61.3% | 272 |
+| MIR *(measured)* | 335 | 545 | 89.5% | 89.2% | 61.5% | 273 |
 | **All (shipped)** | **3583** | **5267** | **89.3%** | **88.4%** | **57.9%** | **2532** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 310 | 139 | expected a subject |  |
-| 111 | 49 | unrecognized effect verb |  |
+| 110 | 48 | unrecognized effect verb |  |
 | 77 | 32 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -2219,6 +2219,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
 - **Igneous Golem**
   - `{2}: This creature gains trample until end of turn.`
+- **Illicit Auction**
+  - `Each player may bid life for control of target creature. You start the bidding with a bid of 0. In turn order, each player may top the high bid. The bidding ends if the high bid stands. The high bidder loses life equal to the high bid and gains control of the creature. (This effect lasts indefinitely.)`
 - **Illumination**
   - `Counter target artifact or enchantment spell. Its controller gains life equal to its mana value.`
 - **Illusionary Presence**
