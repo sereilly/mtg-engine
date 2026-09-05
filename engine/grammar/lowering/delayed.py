@@ -15,6 +15,14 @@ stack object at all. What these produce is a *record*: an ability that will
 trigger on an event that has not happened, or a target chosen now for a
 sentence that runs later. Neither module reads the other.
 
+**Two wave-2 groups made this split independently, in the same round, and the
+seven functions they moved were byte-identical** — only these docstrings
+differed. Neither knew the other was doing it; both were pushed over the guard
+by their own card and both read the same section divider. That is the strongest
+evidence this repo has produced that a family boundary was already there rather
+than invented at the cap, and it is why the merge kept the code unchanged and
+merely recorded the coincidence.
+
 ``effects/`` and ``ast/`` have no ``delayed`` for ``loops``' reason: the guard
 fired on the lowerings, and ``CreateDelayedTrigger`` and ``ChooseTarget`` are
 nodes that sit perfectly well beside the other statement and stack ones.

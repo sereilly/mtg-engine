@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2391,6 +2391,16 @@ function getPayLifeToSaveInfo(state = currentState) {
   return info;
 }
 
+// Breathstealer's Crypt: "that player discards it unless they pay 3 life",
+// asked of the seat that just drew and revealed a creature card.
+function getDiscardUnlessPayLifeInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.discard_unless_pay_life;
+  if (!info) return null;
+  if (info.player_index !== seat) return null;
+  return info;
+}
+
 // Shyft: "you may have this creature become the color or colors of your
 // choice." A set, so the picker toggles rather than choosing one.
 function getColorSetChoiceInfo(state = currentState) {
@@ -3615,7 +3625,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4647,6 +4657,50 @@ function applyPayLifeToSavePrompt(info) {
         seat,
         action: "pay_life_to_save_confirm",
         accept: btn.dataset.payLifeSave === "yes",
+      });
+    });
+  });
+}
+
+// Breathstealer's Crypt: "If it's a creature card, that player discards it
+// unless they pay 3 life." One card at a time, named by the prompt; the cost
+// comes off the payload rather than being written in, so a second card printing
+// the sentence with another number needs no change here.
+function applyDiscardUnlessPayLifePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+
+  const life = Number(info.life || 0);
+  const cardName = info.card_name || "that card";
+  title.textContent = "Pay Life or Discard?";
+  body.textContent =
+    `${info.source_name || "An effect"} makes you discard ${cardName} ` +
+    `unless you pay ${life} life.`;
+  steps.innerHTML = [
+    `<div>Revealed: ${escapeHtml(cardName)}</div>`,
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" data-discard-pay-life="yes">Pay ${life} life</button>` +
+      `<button type="button" class="prompt-choice-btn" data-discard-pay-life="no">Discard ${escapeHtml(cardName)}</button>` +
+      `</div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-discard-pay-life]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "discard_unless_pay_life_confirm",
+        accept: btn.dataset.discardPayLife === "yes",
       });
     });
   });
@@ -8600,6 +8654,12 @@ function renderActivationPrompt() {
   const payLifeToSaveInfo = getPayLifeToSaveInfo();
   if (payLifeToSaveInfo) {
     applyPayLifeToSavePrompt(payLifeToSaveInfo);
+    return;
+  }
+
+  const discardUnlessPayLifeInfo = getDiscardUnlessPayLifeInfo();
+  if (discardUnlessPayLifeInfo) {
+    applyDiscardUnlessPayLifePrompt(discardUnlessPayLifeInfo);
     return;
   }
 

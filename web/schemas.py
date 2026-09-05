@@ -75,6 +75,7 @@ ActionKind = Literal[
     "effect_order_confirm",
     "resolve_optional_pay",
     "pay_life_to_save_confirm",
+    "discard_unless_pay_life_confirm",
     "revealed_draw_buyout_confirm",
     "color_set_choice_confirm",
     "land_type_confirm",

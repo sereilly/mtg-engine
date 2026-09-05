@@ -28,10 +28,17 @@ from engine.game_types import OracleExecutionContext
 from engine.oracle import compile_card_oracle
 from engine.shields import shields_on
 from tests.helpers import _damage_dealt, _nosick
-
-# --- W1G2: phasing as an effect, and the land-play prohibition ---
-
-
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.card_loader import load_cards as _w2g1_load, manifest_set_path as _w2g1_path
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.alternative_costs import alternative_cost_for_line as _w2g1_alt_line
+from engine.cast_costs import additional_cost_for_line as _w2g1_add_line
+from engine import Game as _W2G5Game, PlayerState as _W2G5Player
+from engine.grammar import compile_line as _w2g5_compile
+from engine.grammar.errors import GrammarError as _W2G5GrammarError
+from engine.grammar.parser import parse_line as _w2g5_parse
+from engine.oracle import compile_card_oracle as _w2g5_program
 
 def _w1g2_game(*battlefields):
     game = Game(players=[
@@ -40,8 +47,6 @@ def _w1g2_game(*battlefields):
     ])
     game.enforce_mana_costs = False
     return game
-
-
 def _w1g2_creature(name: str, keywords=()) -> CardDefinition:
     text = "\n".join(k.title() for k in keywords)
     return CardDefinition(
@@ -53,8 +58,6 @@ def _w1g2_creature(name: str, keywords=()) -> CardDefinition:
         raw={"name": name, "type_line": "Creature - Test",
              "power": "1", "toughness": "1"},
     )
-
-
 def _w1g2_tide_board(set_pool):
     """A phaser and a plain creature out; a third creature already phased out."""
     phaser = Permanent(card=_w1g2_creature("Phaser", keywords=("phasing",)))
@@ -66,8 +69,6 @@ def _w1g2_tide_board(set_pool):
     game.players[0].hand = [set_pool("VIS")["Time and Tide"]]
     game._recompute_continuous_effects()
     return game, phaser, plain, away
-
-
 def test_time_and_tide_swaps_both_sets_of_creatures(set_pool):
     """"Simultaneously, all phased-out creatures phase in and all creatures
     with phasing phase out." (CR 702.26.)"""
@@ -80,8 +81,6 @@ def test_time_and_tide_swaps_both_sets_of_creatures(set_pool):
     assert game.is_on_battlefield(away), "the phased-out creature came back"
     assert not game.is_on_battlefield(phaser), "the phaser went away"
     assert game.is_on_battlefield(plain), "no phasing, so it stayed"
-
-
 def test_time_and_tide_reads_both_sets_before_it_applies_either(set_pool):
     """The printed adverb, and the only thing it buys.
 
@@ -101,8 +100,6 @@ def test_time_and_tide_reads_both_sets_before_it_applies_either(set_pool):
     assert game.is_on_battlefield(phaser), (
         "it was phased out when the sets were read, so it phases in and stays"
     )
-
-
 def test_solfatara_stops_its_target_playing_a_land_this_turn(set_pool):
     """"Target player can't play lands this turn." (CR 305.1.)
 
@@ -123,8 +120,6 @@ def test_solfatara_stops_its_target_playing_a_land_this_turn(set_pool):
 
     assert not game._may_play_another_land(1)
     assert game._may_play_another_land(0), "only the target"
-
-
 def test_solfatara_s_prohibition_ends_with_the_turn(set_pool):
     """"…**this turn**." The record is cleared at the turn boundary, beside the
     land-drop count it modifies."""
@@ -137,8 +132,6 @@ def test_solfatara_s_prohibition_ends_with_the_turn(set_pool):
     game.start_turn(1)
 
     assert game._may_play_another_land(1)
-
-
 def test_solfatara_offers_a_player_picker(set_pool):
     """The other half of the Roots class. ``derive_cast_spec`` reads the
     *compiled program*, so a line that lowered to nothing left the card with no
@@ -151,8 +144,6 @@ def test_solfatara_offers_a_player_picker(set_pool):
     spec = derive_cast_spec(card, compile_card_oracle(card))
     assert spec is not None
     assert spec.get("kind") == "player"
-
-
 def _w1g2_charm_board(set_pool, *, interactive=frozenset()):
     """A Forest for the caster, an Island and a Mountain for the opponent."""
     lea = set_pool("LEA")
@@ -164,8 +155,6 @@ def _w1g2_charm_board(set_pool, *, interactive=frozenset()):
     game.interactive_seats = set(interactive)
     game._recompute_continuous_effects()
     return game, forest, island, mountain
-
-
 def test_vision_charm_swaps_every_land_of_the_chosen_type(set_pool):
     """"Choose a land type and a basic land type. Each land of the first chosen
     type becomes the second chosen type until end of turn." (CR 305.7,
@@ -188,8 +177,6 @@ def test_vision_charm_swaps_every_land_of_the_chosen_type(set_pool):
     assert island.basic_land_types == ("forest",), "CR 305.7 replaces, not adds"
     assert forest.basic_land_types == ("forest",)
     assert mountain.basic_land_types == ("mountain",), "only the chosen type"
-
-
 def test_vision_charm_s_swap_wears_off_in_the_cleanup_step(set_pool):
     """"…**until end of turn**." The duration is read rather than defaulted:
     without the words the change would last as long as the game does
@@ -203,8 +190,6 @@ def test_vision_charm_s_swap_wears_off_in_the_cleanup_step(set_pool):
     game.resolve_cleanup_step(0)
 
     assert island.basic_land_types == ("island",)
-
-
 def test_vision_charm_refuses_a_nonbasic_second_type(set_pool):
     """The two halves draw from different catalogs, and the printed adjective
     says which: "a land type" is all of CR 205.3i's and "a basic land type" is
@@ -218,8 +203,6 @@ def test_vision_charm_refuses_a_nonbasic_second_type(set_pool):
     )
     assert game.confirm_land_type_swap(0, "wizard", "forest") is False
     assert game.confirm_land_type_swap(0, "island", "forest") is True
-
-
 def test_vision_charm_takes_a_real_default_for_a_seat_that_is_not_asked(set_pool):
     """A headless or AI seat is never blocked, and never gets "the first word in
     the catalog": the default is the pair that changes the most colours of mana
@@ -235,8 +218,6 @@ def test_vision_charm_takes_a_real_default_for_a_seat_that_is_not_asked(set_pool
     assert island.basic_land_types == ("forest",)
     assert mountain.basic_land_types == ("mountain",)
     assert forest.basic_land_types == ("forest",)
-
-
 def test_vision_charm_s_other_two_modes_still_do_what_they_did(set_pool):
     """The mode this round added is the third of three, and the differential's
     reason for existing: a card whose modes are compiled together is a card
@@ -250,21 +231,10 @@ def test_vision_charm_s_other_two_modes_still_do_what_they_did(set_pool):
         "swap_land_types_until_eot",
         "phase_out_target",
     ]
-
-
-# --- VIS w1g3: prevention, redirection and divided damage -------------------
-#
-# Imports live inside the block by the per-set convention, so a merge that
-# appends another group's block cannot lose one.
-
-
-
 def _w1g3_duel():
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     game.enforce_mana_costs = False
     return game
-
-
 def _w1g3_bear(name="Bear", power=2, toughness=2, colors=()):
     return CardDefinition(
         name=name,
@@ -281,8 +251,6 @@ def _w1g3_bear(name="Bear", power=2, toughness=2, colors=()):
             "power": str(power), "toughness": str(toughness),
         },
     )
-
-
 def _w1g3_flyer(name):
     card = _w1g3_bear(name)
     return CardDefinition(
@@ -294,8 +262,6 @@ def _w1g3_flyer(name):
             "power": "2", "toughness": "2",
         },
     )
-
-
 def _w1g3_resolve(game, card, *, caster, target=None, choices=None,
                   source_permanent=None, target_permanent_index=None):
     """Run every instruction of *card*'s compiled program, once."""
@@ -309,8 +275,6 @@ def _w1g3_resolve(game, card, *, caster, target=None, choices=None,
     for instruction in program.instructions:
         game._execute_oracle_instruction(instruction, context)
     return context
-
-
 def test_remedy_splits_its_five_points_the_way_its_caster_announced(set_pool):
     """"Prevent the next 5 damage that would be dealt this turn to any number
     of targets, **divided as you choose**."
@@ -335,8 +299,6 @@ def test_remedy_splits_its_five_points_the_way_its_caster_announced(set_pool):
     assert _damage_dealt(game, bear, 5) == 2
     # 2 points on the opponent's face: a 5-damage hit leaves 3.
     assert _damage_dealt(game, p2, 5) == 3
-
-
 def test_remedy_falls_back_to_an_even_split_when_nobody_announced_one(set_pool):
     """A seat with no way to be asked — the AI, a scripted duel — announces no
     division, and ``engine/divided_damage.py`` gives it the even one. Read here
@@ -353,8 +315,6 @@ def test_remedy_falls_back_to_an_even_split_when_nobody_announced_one(set_pool):
 
     assert _damage_dealt(game, p1, 5) == 3
     assert _damage_dealt(game, p2, 5) == 3
-
-
 def test_honorable_passage_sends_a_red_source_s_damage_back_at_its_controller(set_pool):
     """"…prevent that damage. **If damage from a red source is prevented this
     way, this spell deals that much damage to the source's controller.**"
@@ -376,8 +336,6 @@ def test_honorable_passage_sends_a_red_source_s_damage_back_at_its_controller(se
     before = p2.life
     assert _damage_dealt(game, p1, 4, source=red_source) == 0
     assert p2.life == before - 4, "the red source's controller takes it back"
-
-
 def test_honorable_passage_prevents_a_green_source_and_pays_nobody(set_pool):
     """The condition is rechecked against the source when the damage would be
     dealt (CR 615.9's reading applied to the rider): a source of the wrong
@@ -395,8 +353,6 @@ def test_honorable_passage_prevents_a_green_source_and_pays_nobody(set_pool):
     before = p2.life
     assert _damage_dealt(game, p1, 4, source=green_source) == 0
     assert p2.life == before
-
-
 def test_rock_slide_offers_only_creatures_in_combat_and_without_flying(set_pool):
     """"…among any number of target **attacking or blocking creatures without
     flying**."
@@ -430,8 +386,6 @@ def test_rock_slide_offers_only_creatures_in_combat_and_without_flying(set_pool)
     assert "Ground Attacker" in offered
     assert "Idle Bear" not in offered, "not in combat"
     assert "Flying Attacker" not in offered, "in combat, and excluded by name"
-
-
 def test_rock_slide_divides_x_among_the_creatures_its_caster_named(set_pool):
     """The Rock Hydra step for the other half: the targets are offered, and the
     damage announced for each one is the damage each one takes."""
@@ -450,8 +404,6 @@ def test_rock_slide_divides_x_among_the_creatures_its_caster_named(set_pool):
 
     assert big.damage_marked == 3
     assert small.damage_marked == 1
-
-
 def test_simoon_burns_only_the_opponent_it_named(set_pool):
     """"Simoon deals 1 damage to **each creature target opponent controls**."
 
@@ -480,8 +432,6 @@ def test_simoon_burns_only_the_opponent_it_named(set_pool):
     assert named.damage_marked == 1
     assert other.damage_marked == 0, "the opponent the spell did not name"
     assert mine.damage_marked == 0, "and never the caster's own creatures"
-
-
 def test_simoon_asks_for_the_opponent_it_names(set_pool):
     """The picker half of the same finding, asserted separately: the cast spec
     is a player prompt that excludes the caster (CR 115.4), which is what makes
@@ -492,13 +442,6 @@ def test_simoon_asks_for_the_opponent_it_names(set_pool):
     spec = derive_cast_spec(simoon, compile_card_oracle(simoon))
 
     assert spec == {"kind": "player", "opponents_only": True}
-# --- end VIS w1g3 ---
-
-
-# --- W1G5: reanimation and the counter that follows it ---
-
-
-
 def test_miraculous_recovery_counters_the_permanent_it_made(set_pool):
     """"Return target creature card from your graveyard to the battlefield.
     Put a +1/+1 counter on **it**."
@@ -545,8 +488,6 @@ def test_miraculous_recovery_counters_the_permanent_it_made(set_pool):
     assert [p.card.name for p in returned] == ["Grizzly Bears"]
     assert (returned[0].effective_power, returned[0].effective_toughness) == (3, 3)
     assert "Grizzly Bears" not in [c.name for c in game.players[0].graveyard]
-
-
 def test_tithe_offers_the_second_search_only_when_the_condition_holds(set_pool):
     """"Search your library for a Plains card. If target opponent controls more
     lands than you, you may search your library for an additional Plains card.
@@ -629,8 +570,6 @@ def test_tithe_offers_the_second_search_only_when_the_condition_holds(set_pool):
     assert play(rig(2), take_the_offer=False) == ["Plains"]
     # Ahead on lands: the condition fails and no second offer is even made.
     assert play(rig(0), take_the_offer=True) == ["Plains"]
-
-
 def test_foreshadow_draws_only_when_the_named_card_is_the_one_milled(set_pool):
     """"Choose a card name, then target opponent mills a card. If a card with
     the chosen name was milled this way, you draw a card."
@@ -689,20 +628,7 @@ def test_foreshadow_draws_only_when_the_named_card_is_the_one_milled(set_pool):
     miss = play("Shivan Dragon")
     assert miss.players[0].hand == []
     assert [c.name for c in miss.players[1].graveyard] == ["Black Lotus"]
-
-
-# --- W2G1: costs, alternative and additional ---
-
-from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
-from engine.models import Permanent as _W2G1Permanent
-from engine.card_loader import load_cards as _w2g1_load, manifest_set_path as _w2g1_path
-from engine.oracle import compile_card_oracle as _w2g1_compile
-from engine.alternative_costs import alternative_cost_for_line as _w2g1_alt_line
-from engine.cast_costs import additional_cost_for_line as _w2g1_add_line
-
 _W2G1_LEA = {c.name: c for c in _w2g1_load(_w2g1_path("LEA"))}
-
-
 def _w2g1_duel(hand, *, board=(), enforce=True):
     """A duel with *hand* in seat 0 and *board* (LEA card names) under it.
 
@@ -716,8 +642,6 @@ def _w2g1_duel(hand, *, board=(), enforce=True):
     for name in board:
         p1.battlefield.append(_W2G1Permanent(card=_W2G1_LEA[name]))
     return game, p1, p2
-
-
 def test_fireblast_is_cast_by_sacrificing_two_mountains(set_pool):
     """CR 118.9's alternative cost, with the price leaving the board.
 
@@ -743,8 +667,6 @@ def test_fireblast_is_cast_by_sacrificing_two_mountains(set_pool):
     # CR 118.9c: the alternative replaces the *payment*, never the mana cost.
     assert not any(caster.mana_pool.values())
     assert card.mana_cost == "{4}{R}{R}"
-
-
 def test_fireblast_needs_two_mountains_not_one(set_pool):
     """CR 601.2h: the *count* is what makes this unpayable.
 
@@ -764,8 +686,6 @@ def test_fireblast_needs_two_mountains_not_one(set_pool):
     assert [p.card.name for p in caster.battlefield] == ["Mountain"]
     assert [c.name for c in caster.hand] == ["Fireblast"]
     assert victim.life == 20
-
-
 def test_fireblast_will_not_eat_two_forests(set_pool):
     """The printed subtype is charged, not "two lands"."""
     card = set_pool("VIS")["Fireblast"]
@@ -777,8 +697,6 @@ def test_fireblast_will_not_eat_two_forests(set_pool):
 
     assert not result.supported
     assert len(caster.battlefield) == 2
-
-
 def test_kaerveks_spite_sacrifices_the_whole_board_and_the_hand(set_pool):
     """CR 601.2b: "sacrifice all permanents you control and discard your hand".
 
@@ -804,8 +722,6 @@ def test_kaerveks_spite_sacrifices_the_whole_board_and_the_hand(set_pool):
     assert {"Swamp", "Mons's Goblin Raiders", "Black Lotus", "Counterspell"} <= {
         c.name for c in caster.graveyard
     }
-
-
 def test_kaerveks_spite_is_castable_off_an_empty_board(set_pool):
     """"All" of nothing is a payment in full (CR 601.2h), which is why the
     clause is outside the unpayability gate."""
@@ -817,8 +733,6 @@ def test_kaerveks_spite_is_castable_off_an_empty_board(set_pool):
 
     assert result.supported, result.details
     assert victim.life == 15
-
-
 def test_a_cost_clause_nothing_charges_refuses_the_whole_sentence():
     """The all-or-nothing rule, on both tables.
 
@@ -839,3 +753,117 @@ def test_a_cost_clause_nothing_charges_refuses_the_whole_sentence():
         "As an additional cost to cast this spell, sacrifice all lands your "
         "opponents control."
     ) is None
+
+def _w2g5_duel(caster_hand, victim_hand, victim_library):
+    p1 = _W2G5Player(name="P1", hand=list(caster_hand))
+    p2 = _W2G5Player(name="P2", hand=list(victim_hand), library=list(victim_library))
+    game = _W2G5Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+def test_desertion_is_supported_and_carries_both_printed_halves(set_pool):
+    """The narrowing and the destination are separate payload keys.
+
+    They have to be: the class decides *whether* CR 614.1's replacement applies
+    at all, so folding it into the destination would send every countered spell
+    to the battlefield instead of the graveyard.
+    """
+    card = set_pool("VIS")["Desertion"]
+    program = _w2g5_program(card)
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "counter_top_stack_spell"
+    assert instruction.payload["countered_destination"] == "battlefield_your_control"
+    assert instruction.payload["countered_filter"] == {
+        "type_filter": ["artifact", "creature"]
+    }
+def test_desertion_steals_a_countered_creature_spell(set_pool, set_cards):
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Grizzly Bears"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Grizzly Bears")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Grizzly Bears"]
+    assert p2.battlefield == []
+    assert [c.name for c in p2.graveyard] == []
+def test_desertion_steals_a_countered_artifact_spell(set_pool, set_cards):
+    """"an artifact **or** creature spell" is a union, so both halves land."""
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Black Lotus"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Black Lotus")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Black Lotus"]
+def test_desertion_bins_a_countered_spell_outside_the_named_class(set_pool, set_cards):
+    """The narrowing is enforced, not decorative.
+
+    An instant is countered and takes CR 701.5a's ordinary graveyard: the
+    destination is dropped, never the counter.
+    """
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Lightning Bolt"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Lightning Bolt")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert p1.battlefield == []
+    assert [c.name for c in p2.graveyard] == ["Lightning Bolt"]
+    assert p1.life == 20
+def test_the_counter_tail_still_reads_its_two_older_spellings():
+    """Memory Lapse and Dissipate are unchanged by the third possessive.
+
+    "its owner's" and "that player's" name one seat (CR 404.3); accepting
+    either is reading the clause rather than widening it.
+    """
+    lapse = _w2g5_compile(
+        "Counter target spell. If that spell is countered this way, put it on "
+        "top of its owner's library instead of into that player's graveyard."
+    )
+    assert lapse.lowered
+    assert lapse.instructions[0].payload["countered_destination"] == "library_top"
+    assert "countered_filter" not in lapse.instructions[0].payload
+
+    dissipate = _w2g5_compile(
+        "Counter target spell. If that spell is countered this way, exile it "
+        "instead of putting it into its owner's graveyard."
+    )
+    assert dissipate.lowered
+    assert dissipate.instructions[0].payload["countered_destination"] == "exile"
+def test_a_countered_destination_the_flow_cannot_perform_refuses_the_line():
+    """The full-consumption invariant, on the half a card could get wrong.
+
+    Once "countered this way" has matched, a destination no seam performs must
+    make the line refuse — silently keeping the graveyard would be the counter
+    the card already was, with its whole second sentence gone.
+    """
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If that spell is countered this way, put it "
+            "into its owner's sideboard instead of into that player's graveyard."
+        )
+def test_a_narrowed_counter_tail_missing_its_replacement_half_refuses():
+    """"instead of ..." is what makes this CR 614.1 rather than a second effect."""
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If an artifact or creature spell is countered "
+            "this way, put that card onto the battlefield under your control."
+        )
+def test_a_countered_card_put_onto_the_battlefield_must_name_its_controller():
+    """CR 110.2's battlefield is shared, so the sentence has to say whose side.
+
+    Without the words the card would arrive under nobody's control, which is
+    the one thing the destination cannot leave unstated.
+    """
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If an artifact or creature spell is countered "
+            "this way, put that card onto the battlefield instead of into its "
+            "owner's graveyard."
+        )

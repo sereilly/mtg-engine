@@ -1538,6 +1538,7 @@ class LegalityMixin:
                             candidate_seat=seat, controller_index=caster_index,
                             source_permanent=source_permanent,
                             defending=defending_seat,
+                            that_player=that_player_seat,
                         ):
                             continue
                 targets.append({
@@ -1564,6 +1565,7 @@ class LegalityMixin:
         self, instruction, perm: Permanent, *,
         candidate_seat=None, controller_index=None, source_permanent=None,
         defending: int | None = None,
+        that_player: int | None = None,
     ) -> bool:
         """Whether *perm* satisfies an activated ability instruction's own target
         restriction (beyond the text-derived kind).
@@ -1572,6 +1574,15 @@ class LegalityMixin:
         for the generic tail's ``subject_matches`` -- a printed "defending
         player controls" is a narrowing like any other and must be tested, not
         dropped, at the one place that decides what a picker offers.
+
+        *that_player* is CR 603.10's seat, travelling for exactly that reason
+        one phrase over: "target creature or planeswalker **that player**
+        controls" (Chandra's Incinerator) is a narrowing ``subject_matches``
+        refuses outright unless it is given the seat, and refusing is what an
+        empty picker looks like. The caller is the only holder -- the seat was
+        frozen into the trigger's context by the fire site -- so it is handed
+        down rather than re-derived, which is what keeps the picker and the
+        resolution naming one player.
         """
         instruction = _targeting_step(instruction) or instruction
         if instruction.kind == "destroy_target_permanent":
@@ -1756,7 +1767,7 @@ class LegalityMixin:
                 subject_matches(
                     self, perm, slot or {},
                     observer=controller_index, source=source_permanent,
-                    defending=defending,
+                    defending=defending, that_player=that_player,
                 )
                 for slot in slot_filters
             )
@@ -1765,7 +1776,7 @@ class LegalityMixin:
             return subject_matches(
                 self, perm, described,
                 observer=controller_index, source=source_permanent,
-                defending=defending,
+                defending=defending, that_player=that_player,
             )
         return True
 

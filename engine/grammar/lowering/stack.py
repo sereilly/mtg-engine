@@ -14,6 +14,7 @@ of modes the engine can carry out.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from .conditions import _lower_condition
@@ -22,6 +23,7 @@ from ._common import (
     _filter_payload,
     _restrictions_beyond,
     is_mana_value_x,
+    testable_filter_payload,
 )
 
 
@@ -486,6 +488,35 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         # bins the card. Emitted only when the card prints the tail, so every
         # counterspell written before this keeps a byte-identical payload.
         payload["countered_destination"] = _countered_destination(node)
+        if node.countered_filter is not None:
+            # "**If an artifact or creature spell** is countered this way…"
+            # (Desertion.) Which countered spells the redirect applies to.
+            # Refused rather than dropped when the phrase says something the
+            # card matcher cannot test: a narrowing silently ignored here would
+            # put *every* countered spell onto the battlefield, which is the
+            # one direction a lost restriction must never go.
+            payload["countered_filter"] = testable_filter_payload(
+                # The printed head noun is "spell", which the noun parser reads
+                # as ``zone="stack"``. For a *countered* object that restates
+                # what the sentence has already fixed — nothing but a spell on
+                # the stack can be countered (CR 701.5a) — so it is normalised
+                # away here rather than refused, exactly as the forced-sacrifice
+                # filter drops the possessive CR 701.21a already guarantees.
+                # ``battlefield`` is ``_filter_payload``'s "no zone scoping"
+                # value, and the card this tests is the countered one the
+                # handler holds rather than anything a picker enumerates.
+                dataclasses.replace(node.countered_filter, zone="battlefield"),
+                refusal="the countered-card redirect cannot test this restriction",
+                node=node,
+                # The object tested is a **card** — a countered spell's card,
+                # which has no battlefield object and so no computed
+                # characteristics (CR 613.1). ``_card_matches_filter`` is what
+                # answers it, and ``CARD_ONLY_FILTER_KEYS`` is exactly what
+                # that reader can test; the permanent key set beside it would
+                # admit a tapped-state or keyword narrowing nothing here could
+                # ask, which is the silent widening this argument prevents.
+                allowed=CARD_ONLY_FILTER_KEYS,
+            )
 
     if bound_to_trigger:
         # No `targets` description at all: a trigger chooses nothing (CR 603.3),
@@ -516,6 +547,12 @@ _COUNTERED_DESTINATIONS = {
     # below has to skip it rather than refuse it for a part the sentence
     # cannot have.
     ("exile", ""): "exile",
+    # "…put that card **onto the battlefield under your control** instead of
+    # into its owner's graveyard." (Desertion.) CR 110.2's battlefield is a
+    # shared zone like exile, so this destination names a *controller* rather
+    # than a zone owner — the position word carries which seat, and the
+    # possessive gate below skips it for exile's reason.
+    ("battlefield", "your_control"): "battlefield_your_control",
 }
 
 
@@ -533,8 +570,11 @@ def _countered_destination(node: ast.CounterSpell) -> str:
     assert zone is not None
     # Exile is a single zone the whole game shares (CR 406.1), so it has no
     # possessive to check and the gate below would refuse it for a part the
-    # sentence cannot print.
-    if zone.name != "exile" and (zone.owner is None or zone.owner.kind != "owner"):
+    # sentence cannot print. The battlefield (CR 110.2) is shared for the same
+    # reason and names its controller instead, which the parse already read.
+    if zone.name not in ("exile", "battlefield") and (
+        zone.owner is None or zone.owner.kind != "owner"
+    ):
         raise LoweringError(
             "a countered card is redirected to its owner's zone", node=node
         )

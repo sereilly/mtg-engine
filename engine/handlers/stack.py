@@ -7,6 +7,7 @@ from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import COUNTERED_SPELL_CONTROLLER
+from ._common import _card_matches_filter
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -572,6 +573,17 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # later, on a different player's upkeep — the stack item is long gone.
         context.results[COUNTERED_SPELL_CONTROLLER] = countered.caster_index
         destination = instruction.payload.get("countered_destination")
+        # "**If an artifact or creature spell** is countered this way…"
+        # (Desertion.) CR 614.1's replacement is conditional on the countered
+        # spell's class, so a spell outside it takes CR 701.5a's ordinary
+        # graveyard — the destination is dropped rather than the counter.
+        # Tested with ``_card_matches_filter``: what was countered is a *card*
+        # with no battlefield object, so its characteristics are the printed
+        # ones (CR 613.1).
+        described = instruction.payload.get("countered_filter")
+        if destination is not None and described:
+            if not _card_matches_filter(countered.card, described):
+                destination = None
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of
             # going to a graveyard — it has no physical card to put there. Also
@@ -580,7 +592,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # exist wherever the replacement would have sent it.
             game.log.append(f"{card.name} countered {countered.card.name} (copy), which ceases to exist")
         elif destination is not None:
-            _redirect_countered_card(game, card, countered, str(destination))
+            _redirect_countered_card(
+                game, card, countered, str(destination), counterer=context.caster
+            )
         else:
             game._bin_spell_card(
                 game.players[countered.caster_index], countered.card,
@@ -595,7 +609,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
-def _redirect_countered_card(game: Game, card, countered, destination: str) -> None:
+def _redirect_countered_card(
+    game: Game, card, countered, destination: str, counterer=None
+) -> None:
     """"…put it on top of its owner's library instead of into that player's
     graveyard." (Memory Lapse.)
 
@@ -616,6 +632,34 @@ def _redirect_countered_card(game: Game, card, countered, destination: str) -> N
     this pool and is that call site's existing approximation, not one to copy.
     """
     owner = game.players[countered.caster_index]
+    if destination == "battlefield_your_control":
+        # "…put that card onto the battlefield **under your control** instead
+        # of into its owner's graveyard." (Desertion.) The one destination on
+        # this list whose seat is not the countered card's owner: CR 110.2's
+        # battlefield is shared, and the sentence names the *counterspell's*
+        # controller, so the card changes hands. Through the ordinary
+        # enters-the-battlefield path, because it is one (CR 603.6a): the card
+        # arrives as a new object with a new ``permanent_id``, and anything
+        # watching for a permanent entering sees it.
+        seat = game.players.index(counterer) if counterer in game.players else 0
+        from ..models import Permanent
+
+        stolen = Permanent(card=countered.card)
+        # CR 108.3: the owner is the player who started the game with the card,
+        # and nothing here changes it — only who controls it. Recorded on the
+        # permanent because ``owner_index_of`` otherwise reads the seat the
+        # permanent *entered* under, which for every other card in this pool is
+        # its owner and for this one is the thief; without it the stolen
+        # creature would die into the wrong graveyard (CR 400.3). The same
+        # channel reanimation uses for the same reason.
+        stolen.metadata["owner_player_index"] = game.players.index(owner)
+        game._put_permanent_onto_battlefield(seat, stolen, None)
+        game.log.append(
+            f"{countered.card.name} was countered by {card.name} and put onto "
+            f"the battlefield under {game.players[seat].name}'s control "
+            "instead of into their graveyard"
+        )
+        return
     if destination == "exile":
         # "…exile it instead of putting it into its owner's graveyard."
         # (Dissipate.) Exile is one shared zone (CR 406.1), so there is no

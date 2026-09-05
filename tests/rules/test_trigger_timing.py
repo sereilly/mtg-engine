@@ -416,3 +416,134 @@ def test_a_targeted_trigger_with_nothing_to_name_leaves_the_stack():
     assert not game.stack, game.log
     assert not list(game.pending_choices_of("trigger_target"))
     assert [p.card.name for p in p1.battlefield] == ["Sapper", "Our Engine"]
+
+
+# ---------------------------------------------------------------------------
+# 603.3d: a trigger whose printed noun phrase names "that player" (VIS w2g5)
+# ---------------------------------------------------------------------------
+
+from engine.card_loader import load_cards as _w2g5_load
+from engine.card_loader import manifest_set_paths as _w2g5_paths
+from engine.game_types import StackItem
+from engine.events import emit as _w2g5_emit
+
+
+def _w2g5_pool():
+    return {c.name: c for c in _w2g5_load(_w2g5_paths(include_measured=True))}
+
+
+def _w2g5_card(name, type_line):
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "1", "toughness": "1"},
+    )
+
+
+def _w2g5_cat_board(seats, *, interactive):
+    """Feline Sovereign under seat 0, one artifact per other seat named."""
+    pool = _w2g5_pool()
+    players = [PlayerState(name=f"P{i + 1}") for i in range(seats)]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    cat = Permanent(card=pool["Feline Sovereign"])
+    cat.permanent_id = 1
+    cat.metadata["base_controller_index"] = 0
+    players[0].battlefield.append(cat)
+    return game, players, cat
+
+
+@pytest.mark.cr("603.3d", "601.2c")
+def test_603_3d_a_trigger_naming_that_player_offers_only_that_players_board():
+    """"Destroy up to one target artifact or enchantment **that player**
+    controls" (Feline Sovereign).
+
+    The seat is one the *event* picked and the fire site froze (CR 603.10), so
+    the picker has to be given it. Without it the narrowing cannot be tested at
+    all and the ability offers nothing — which reads as "no legal target" and
+    takes the ability off the stack.
+    """
+    game, players, cat = _w2g5_cat_board(3, interactive=True)
+    for seat, name in ((1, "Their Bauble"), (2, "Third Bauble")):
+        perm = Permanent(card=_w2g5_card(name, "Artifact"))
+        perm.permanent_id = 10 + seat
+        perm.metadata["base_controller_index"] = seat
+        players[seat].battlefield.append(perm)
+
+    _w2g5_emit(
+        game, "one_or_more_deal_combat_damage",
+        subject=cat, source_seat=0, defending_player_index=2,
+    )
+
+    (offer,) = game.pending_choices
+    assert offer.kind == "trigger_target"
+    assert [t["name"] for t in offer.data["targets"]] == ["Third Bauble"]
+
+
+@pytest.mark.cr("603.3d", "601.2c")
+def test_603_3d_the_controller_chooses_which_of_several_legal_targets():
+    """Two legal targets means a decision, and the ability waits for it.
+
+    This is the half a fallback hides: with the picker declining, the handler
+    took the first permanent on the board that matched — a legal target nobody
+    chose, and never the second one.
+    """
+    game, players, cat = _w2g5_cat_board(2, interactive=True)
+    for index, name in enumerate(("Cheap Bauble", "Precious Relic")):
+        perm = Permanent(card=_w2g5_card(name, "Artifact"))
+        perm.permanent_id = 20 + index
+        perm.metadata["base_controller_index"] = 1
+        players[1].battlefield.append(perm)
+
+    _w2g5_emit(
+        game, "one_or_more_deal_combat_damage",
+        subject=cat, source_seat=0, defending_player_index=1,
+    )
+
+    (offer,) = game.pending_choices
+    assert [t["name"] for t in offer.data["targets"]] == [
+        "Cheap Bauble", "Precious Relic",
+    ]
+    # Nothing has been destroyed while the decision is owed.
+    assert [p.card.name for p in players[1].battlefield] == [
+        "Cheap Bauble", "Precious Relic",
+    ]
+
+    relic = next(
+        t["permanent_id"] for t in offer.data["targets"]
+        if t["name"] == "Precious Relic"
+    )
+    game.confirm_trigger_target(0, relic)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert [p.card.name for p in players[1].battlefield] == ["Cheap Bauble"]
+
+
+@pytest.mark.cr("603.10", "109.5")
+def test_603_10_the_frozen_seat_is_read_through_one_key_list():
+    """The picker and the resolution must name the same player.
+
+    ``_that_player_seat`` reads ``handlers/_common._THAT_PLAYER_CONTEXT_KEYS``
+    — the tuple ``frozen_that_player_seat`` reads at resolution — so a second
+    copy cannot drift into offering one board and acting on another.
+    """
+    from engine.handlers._common import _THAT_PLAYER_CONTEXT_KEYS
+
+    game, players, cat = _w2g5_cat_board(2, interactive=False)
+    item = StackItem(
+        card=cat.card, caster_index=0, target_player_index=None,
+        target_permanent_index=None, x_value=None,
+        trigger_context={"defending_player_index": 1},
+    )
+
+    assert "defending_player_index" in _THAT_PLAYER_CONTEXT_KEYS
+    assert game._that_player_seat(item) == 1
+    assert game._that_player_seat(
+        StackItem(
+            card=cat.card, caster_index=0, target_player_index=None,
+            target_permanent_index=None, x_value=None, trigger_context={},
+        )
+    ) is None

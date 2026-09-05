@@ -32,6 +32,20 @@ _CONTROLLER_SPEC_FLAGS = {
     "you": "own_only",
     "opponent": "opponent_only",
     "defending_player": "defending_player_only",
+    # "...target creature or planeswalker **that player** controls" (Chandra's
+    # Incinerator); "destroy up to one target artifact or enchantment **that
+    # player** controls" (Feline Sovereign). A seat the *event* picked, which
+    # `_enumerate_targets` narrows on exactly as it narrows the defending
+    # player's — given the seat, which the fire site froze into the trigger's
+    # context (CR 603.10) and `_that_player_seat` below reads back.
+    #
+    # Absent from this table the picker declined the ability entirely, so the
+    # target was never announced and the handler fell through to "the first
+    # permanent on the default opponent's battlefield that matches". At two
+    # seats that is a legal permanent nobody chose; at three it is the wrong
+    # board, where the printed narrowing then matches nothing and the ability
+    # silently does nothing at all.
+    "that_player": "that_player_only",
 }
 
 
@@ -324,6 +338,22 @@ class StackResolutionMixin:
         defending = (item.trigger_context or {}).get("trigger_defending_player_index")
         if isinstance(defending, int):
             spec["defending_player_index"] = defending
+        # "That player" travels the same way and for the same rule, read
+        # through the *same key list* the resolution reads it through
+        # (`handlers/_common._THAT_PLAYER_CONTEXT_KEYS`). One list, because the
+        # picker and the handler must agree about which seat the words name:
+        # a second copy here would be a picker offering one board while
+        # `subject_matches` tested another, and the difference would show as an
+        # ability that resolves against nothing.
+        that_player = self._that_player_seat(item)
+        if that_player is not None:
+            spec["that_player_index"] = that_player
+        elif spec.get("that_player_only"):
+            # Nothing froze the seat, so there is no board to offer. Declining
+            # is the safe direction the three early-outs above take: an
+            # unnarrowed list would offer every permanent in the game for a
+            # phrase that names one player's.
+            return
         candidates = self._enumerate_targets(
             item.caster_index, item.card, spec, for_cast=False,
             ability_instruction=instruction,
@@ -356,6 +386,25 @@ class StackResolutionMixin:
             targets=offered,
             _trigger_item=item,
         )
+
+    def _that_player_seat(self, item: StackItem) -> int | None:
+        """The seat *item*'s printed "that player" names, or None if the firing
+        event froze none.
+
+        The picker's half of ``handlers/_common.frozen_that_player_seat``, and
+        deliberately reading that module's key tuple rather than a list of its
+        own: the two answer the same question at two moments, and a phrase the
+        picker resolved differently from the resolution is an ability offered
+        one board and applied to another.
+        """
+        from ...handlers._common import _THAT_PLAYER_CONTEXT_KEYS
+
+        frozen = item.trigger_context or {}
+        for key in _THAT_PLAYER_CONTEXT_KEYS:
+            seat = frozen.get(key)
+            if isinstance(seat, int) and 0 <= seat < len(self.players):
+                return seat
+        return None
 
     def _default_trigger_mode_target(self, option: dict, controller_index: int) -> dict | None:
         """Which candidate a non-interactive seat takes for *option*.

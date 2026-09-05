@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from ._core import (
     Duration,
+    ObjectFilter,
     PlayerRef,
     TargetSpec,
     Zone,
@@ -157,6 +158,21 @@ class CounterSpell:
     # Appended, for that same field's reason: these nodes are built
     # positionally as well as by keyword.
     unless_pays_life: int = 0
+    # "**If an artifact or creature spell** is countered this way…" (Desertion).
+    # Which countered spells the redirect above applies to, when the card names
+    # a class instead of pointing back at the one spell the sentence countered.
+    # None is "that spell" — the unnarrowed tail Memory Lapse and Dissipate
+    # print, where the condition is already satisfied by the counter itself.
+    #
+    # A filter on the *node* rather than a second destination key, because it
+    # narrows **whether** CR 614.1's replacement applies at all: a countered
+    # spell outside the class takes CR 701.5a's ordinary graveyard, and folding
+    # the two into one destination would send every countered spell to the
+    # battlefield.
+    #
+    # Appended, for the reason the two fields above state: these nodes are
+    # built positionally as well as by keyword.
+    countered_filter: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

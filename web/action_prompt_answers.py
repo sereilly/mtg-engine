@@ -494,6 +494,19 @@ def _action_pay_life_to_save_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="no pay-to-save offer pending for you")
 
+@action_handler("discard_unless_pay_life_confirm")
+def _action_discard_unless_pay_life_confirm(session, req, seat_type):
+    # Breathstealer's Crypt: "that player discards it unless they pay 3 life."
+    # One offer about one card, so the answer is just accept/decline.
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept (true/false) is required")
+    ok = session.game.confirm_discard_unless_pay_life(req.seat, bool(req.accept))
+    if not ok:
+        raise HTTPException(
+            status_code=400, detail="no pay-or-discard offer pending for you"
+        )
+
+
 @action_handler("color_set_choice_confirm")
 def _action_color_set_choice_confirm(session, req, seat_type):
     # Shyft: "become the color or colors of your choice."

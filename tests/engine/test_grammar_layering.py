@@ -590,6 +590,16 @@ LOWERING_FAMILIES = [
 # other. `effects/` and `ast/` have no `delayed` for `loops`' reason: the guard
 # fired on the lowerings, and `CreateDelayedTrigger` and `ChooseTarget` are
 # nodes that sit perfectly well beside the other statement and stack ones.
+# **Both wave-2 groups made this split independently in the same round**, each
+# pushed over the guard by its own card (Mundungu's conjoined life price and
+# Desertion's countered-card redirect), and the seven functions they moved were
+# byte-identical. Only their prose differed. The other account adds two reasons
+# worth keeping: the half that moved is the half that *grows* — every set prints
+# more delayed riders while the counter templates are largely closed, which is
+# the playbook's tiebreak — and `_lower_choose_target` / `_lower_waive_shroud`
+# travelled with it because each is the *first* sentence of a two-sentence spell
+# whose second sentence is the delayed half, so the pair is read together or not
+# at all.
 # `search` is on both sides of the mirror as of Visions' first wave:
 # `lowering/search.py` split off `lowering/library.py` in the same round
 # `effects/search.py` had already split off `effects/library.py`, so the
