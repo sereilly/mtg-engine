@@ -221,6 +221,7 @@ from .game import (
     ExchangeLifeTotals,
     WinGame,
     SkipStep,
+    SkipTurn,
 )
 
 
@@ -244,6 +245,7 @@ Effect = Union[
     Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem, SkipStep,
+    SkipTurn,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,

@@ -239,7 +239,11 @@ def lower_statement(
     if isinstance(statement, ast.DamageUnlessPay):
         return _lower_damage_unless_pay(statement, dispatch_event, produced)
     if isinstance(statement, ast.LoseKeyword):
-        return _lower_lose_keyword(statement, dispatch_event)
+        # The **unfiltered** event and its subject, for `_lower_destroy`'s
+        # reason below: the removal asks whether the trigger bound exactly one
+        # creature, and `binds_block_pair` cannot answer that from the kind
+        # alone (CR 509.3c/509.3d — the printed narrowing is the difference).
+        return _lower_lose_keyword(statement, dispatch_event, event_subject)
     if isinstance(statement, ast.PhaseOut):
         # The **unfiltered** event, for `_lower_destroy`'s reason below: the
         # phase-out asks whether the trigger bound one creature

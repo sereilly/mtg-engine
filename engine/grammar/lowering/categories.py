@@ -194,6 +194,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The board-wide negative twin ("All creatures lose flying until end of
     # turn", Whiteout), beside `grant_team_keyword_until_eot`.
     "remove_team_keyword_until_eot": "pump",
+    # The removal twin of ``grant_keyword_to_block_pair`` below (Talruum
+    # Champion). Same category as every other keyword write, so the two halves
+    # of a block cannot have one switched on without the other.
+    "remove_keyword_from_block_pair": "pump",
     # The durationless half of the same effect, on the ability's own source
     # (Elder Land Wurm). Same family: what changes is how long the removal
     # lasts, not what kind of effect it is.
@@ -482,6 +486,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # is a change to the turn's structure rather than to the board — the family
     # `grant_extra_turn` is already in.
     "skip_next_step": "turns",
+    # CR 500.11's *turn* counter beside CR 500.7's step counter (Chronatog).
+    # The same family the skip above and `grant_extra_turn` are already in —
+    # what changes is the size of the thing skipped, not the kind of effect.
+    "skip_next_turn": "turns",
     # "You may play up to three additional lands this turn." (Summer Bloom) /
     # "Target player can't play lands this turn." (Solfatara.) CR 305.2's land
     # drop is part of the turn's structure rather than of the board, which is
@@ -541,6 +549,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_loyalty_counters_to_chosen": "counters",
     "target_bites_target": "damage",
     "source_fights_target": "damage",
+    # The same CR 701.14 exchange with **neither** fighter being the ability's
+    # source (Triangle of War) — two announcements rather than one, which is a
+    # second picker slot and not a payload key, but the same family.
+    "target_fights_target": "damage",
     "source_bites_target": "damage",
     "prepare_then_interact": "damage",
     "grant_team_assign_unblocked_until_eot": "pump",

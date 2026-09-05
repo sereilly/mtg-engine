@@ -753,7 +753,9 @@ def _team_removal_payload(node: ast.LoseKeyword) -> dict[str, object] | None:
 
 
 def _lower_lose_keyword(
-    node: ast.LoseKeyword, event: str | None = None
+    node: ast.LoseKeyword,
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"It loses indestructible until end of turn." (Soul Sear, bound to the
     damage sentence's target by the pronoun rider.)
@@ -889,6 +891,38 @@ def _lower_lose_keyword(
         if described:
             payload["filter"] = described
         return (OracleInstruction("remove_event_subject_keyword", "", payload),)
+    # "Whenever this creature blocks or becomes blocked by a creature, **that
+    # creature** loses first strike until end of turn." (Talruum Champion.) The
+    # mirror of the block-pair *grant* above, and admitted by the same
+    # question: `binds_block_pair` rather than the kind, because CR 509.3c
+    # makes a bare "becomes blocked" fire once with several blockers in hand
+    # and no way to say which "that creature" is, while CR 509.3d's narrowed
+    # spelling fires once per creature and names exactly one.
+    #
+    # It has to come **before** the target-shaped reading below, and that order
+    # is the card: on the *blocks* half of the event the stack item's target is
+    # the blocking creature itself (the fire site puts it there so a
+    # self-affecting trigger can find itself), so falling through would strip
+    # first strike from the Champion and leave the creature it blocked with it
+    # — the card playing as its own opposite while reporting supported. The
+    # grant one function up records the same trap.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("that", "other")
+        and binds_block_pair(event, event_subject)
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the block-pair keyword removal reads the creature its trigger "
+                "already named and nothing narrower",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "remove_keyword_from_block_pair", "",
+                {"keywords": tuple(node.keywords), "duration": "end_of_turn"},
+            ),
+        )
     if not _is_target(node.subject):
         raise LoweringError("no handler removes a keyword from this subject", node=node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}

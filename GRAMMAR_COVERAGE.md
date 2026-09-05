@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 82.4% | 79.9% | 52.5% | 117 |
+| VIS *(measured)* | 167 | 278 | 82.7% | 81.3% | 54.0% | 121 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -784,6 +784,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, if you control two or more nonland, nontoken permanents with the same name as one another, create a 4/4 colorless Construct artifact creature token.`
 - **Chromium**
   - `At the beginning of your upkeep, sacrifice Chromium unless you pay {W}{U}{B}.`
+- **Chronatog**
+  - `{0}: This creature gets +3/+3 until end of turn. You skip your next turn. Activate only once each turn.`
 - **Chub Toad**
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
@@ -2641,6 +2643,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}: This creature gets +1/+0 until end of turn.`
   - `{B}: This creature gains first strike until end of turn.`
   - `{B}{B}: This creature gets +1/+0 until end of turn.`
+- **Knight of Valor**
+  - `{1}{W}: Each creature without flanking blocking this creature gets -1/-1 until end of turn. Activate only once each turn.`
 - **Knight of the Mists**
   - `When this creature enters, you may pay {U}. If you don't, destroy target Knight and it can't be regenerated.`
 - **Knowledge Vault**
@@ -4618,6 +4622,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Takklemaggot**
   - `At the beginning of the upkeep of enchanted creature's controller, put a -0/-1 counter on that creature.`
   - `When enchanted creature dies, that creature's controller chooses a creature that this card could enchant. If the player does, return this card to the battlefield under your control attached to that creature. If they don't, return this card to the battlefield under your control as a non-Aura enchantment. It loses "enchant creature" and gains "At the beginning of that player's upkeep, this enchantment deals 1 damage to that player."`
+- **Talruum Champion**
+  - `Whenever this creature blocks or becomes blocked by a creature, that creature loses first strike until end of turn.`
 - **Tangle Kelp**
   - `When this Aura enters, tap enchanted creature.`
 - **Taniwha**
@@ -4920,6 +4926,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.`
 - **Tremor**
   - `Tremor deals 1 damage to each creature without flying.`
+- **Triangle of War**
+  - `{2}, Sacrifice this artifact: Target creature you control fights target creature an opponent controls. (Each deals damage equal to its power to the other.)`
 - **Triassic Egg**
   - `{3}, {T}: Put a hatchling counter on this artifact.`
   - `• You may put a creature card from your hand onto the battlefield.`

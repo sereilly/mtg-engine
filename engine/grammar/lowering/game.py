@@ -350,6 +350,31 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
     )
 
 
+def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
+    """"You skip your next turn." (Chronatog.)
+
+    CR 500.11's turn counter — ``Game.skip_next_turn``, spent by
+    ``_compute_next_active_player`` — and deliberately not the step bucket
+    ``_lower_skip_step`` above writes: a turn is not one of the steps
+    ``_phase_steps`` walks, so a record filed there would never be consumed and
+    the card would report supported while taking no turn away.
+
+    Only "you", for the sibling's reason exactly: every other player reference
+    names a seat this instruction would have to resolve at resolution rather
+    than at lowering, and no card in the pool prints one — so it refuses by
+    name rather than silently skipping the controller's turn instead of
+    somebody else's.
+    """
+    who = getattr(node.subject, "kind", None)
+    if who != "you":
+        raise LoweringError(f"no handler skips a turn for {who!r}", node=node)
+    return (
+        OracleInstruction(
+            "skip_next_turn", "", {"seat": "you", "count": int(node.count)}
+        ),
+    )
+
+
 def _lower_extra_land_plays(node: ast.ExtraLandPlays) -> tuple[OracleInstruction, ...]:
     """"You may play up to three additional lands this turn." (Summer Bloom,
     CR 305.2.)

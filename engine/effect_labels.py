@@ -185,6 +185,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # for; life loss is not damage by the rules (CR 118.2) but is the same
     # bucket for a report about what an ability does to a player.
     "source_fights_target": "activated_damage",
+    # Triangle of War's two-target exchange. The same bucket as the fight above
+    # it: what the ability is *for* is dealing damage, and which of the two
+    # fighters the ability's own source is does not change that.
+    "target_fights_target": "activated_damage",
     "source_bites_target": "activated_damage",
     "target_loses_life": "activated_damage",
     # Granting a keyword until end of turn, to the source, a target or the team.

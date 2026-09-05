@@ -1598,6 +1598,69 @@ def prepare_then_interact(game, instruction, context):
     return True, "resolved"
 
 
+@effect_handler("target_fights_target")
+def target_fights_target(game, instruction, context):
+    """"Target creature you control fights target creature an opponent
+    controls." (Triangle of War.)
+
+    CR 701.14's exchange between two creatures the ability announced
+    *independently* (CR 601.2c), neither of them its own source — which is the
+    whole difference from ``source_fights_target`` beside it, where one fighter
+    is read off the context and only the other is picked.
+
+    Both slots are re-checked here rather than trusted from the picker, the
+    rule every narrowed handler in this file follows: a target that stopped
+    matching between announcement and resolution is not one this ability may
+    use (CR 608.2b), and the narrowings are what keep the artifact from
+    fighting two of its own controller's creatures against each other. They go
+    through ``subject_matches`` — the one matcher — because the seat words
+    "you control" and "an opponent controls" are exactly what the pure
+    ``permanent_matches_filter`` cannot answer.
+
+    CR 701.14b's all-or-nothing is checked across both fighters together, as it
+    is for the source-shaped kind: either slot missing means neither deals any
+    damage, and ``_exchange_fight_damage`` is the shared body that reads both
+    powers before dealing either (CR 701.14a).
+    """
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    targets = instruction.payload.get("targets") or {}
+    slot_filters = targets.get("filters") or [targets.get("filter") or {}] * 2
+    observer = game.players.index(context.caster)
+    ids = context.target_permanent_id
+    if not isinstance(ids, list):
+        ids = [ids, None]
+    resolved = [
+        game.permanent_by_id(pid) if isinstance(pid, int) else None for pid in ids
+    ]
+
+    def slot(index: int):
+        perm = resolved[index] if index < len(resolved) else None
+        if perm is None or not perm.is_creature:
+            return None
+        wanted = slot_filters[index] if index < len(slot_filters) else {}
+        if not subject_matches(
+            game, perm, wanted,
+            observer=observer, source=context.source_permanent,
+        ):
+            return None
+        return perm
+
+    first, second = slot(0), slot(1)
+    # CR 701.14b as one condition, for ``source_fights_target``'s reason: a
+    # fighter that has left the battlefield or stopped being a creature stops
+    # *both* halves, so this cannot be two independent damage steps.
+    if first is None or second is None or first is second:
+        game.log.append(
+            f"{card.name}: the fight needs two legal creatures, so neither "
+            "deals damage"
+        )
+        return True, "resolved"
+    _exchange_fight_damage(game, first, second)
+    return True, "resolved"
+
+
 @effect_handler("target_bites_target")
 def target_bites_target(game, instruction, context):
     """"Target creature you control deals damage equal to its power to another

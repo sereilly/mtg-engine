@@ -469,6 +469,27 @@ class SkipStep:
 
 
 @dataclass(frozen=True)
+class SkipTurn:
+    """``You skip your next turn.`` (Chronatog, Time Vault.)
+
+    CR 500.11's *turn* counter, not :class:`SkipStep`'s step counter, and its
+    own node for the reason ``_parse_skip_step``'s docstring gave before this
+    existed: a turn is not a step this engine runs, so a skip keyed by step
+    name would be a record nothing ever consumes and a card that reports
+    supported while doing nothing. ``Game.skip_next_turn`` is the counter
+    ``_compute_next_active_player`` spends, which is a different bucket from
+    the one ``_phase_steps`` reads.
+
+    The seat rides the node for :class:`SkipStep`'s reason exactly — a skipped
+    turn belongs to a player, and "you" is CR 109.5's controller — and the
+    count is payload because "skip your next two turns" is the same sentence.
+    """
+
+    subject: "PlayerRef"
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class ExtraLandPlays:
     """``You may play up to three additional lands this turn.`` (Summer Bloom.)
 
