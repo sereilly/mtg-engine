@@ -684,3 +684,46 @@ def test_ending_the_turn_leaves_no_player_with_priority(set_pool):
     game._settle()
 
     assert not any(game.has_priority(seat) for seat in range(len(game.players)))
+
+
+@pytest.mark.cr("500.8", "500.1")
+def test_the_phases_an_effect_added_are_readable_apart_from_the_turns_own(set_pool):
+    """CR 500.8's extra phases are inserted into the same plan CR 500.1's order
+    fills, so "what is still to come" and "what a card put there" are two
+    different questions of one list.
+
+    ``Game.extra_phases_remaining`` is the second: the plan minus the ordinary
+    remainder. It is empty on every turn nothing has touched — which is what
+    makes a non-empty answer worth acting on, and it is what the web layer's End
+    Turn button reads to say what its jump to the ending phase discards.
+    """
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("VIS")["Relentless Assault"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.begin_turn_bookkeeping(0)
+    game._set_phase_and_step("beginning", "untap")
+    game.enter_next_turn_phase("beginning")
+    game._settle()
+
+    assert game.extra_phases_remaining() == [], "an untouched turn adds nothing"
+
+    assert game.cast_from_hand(0, "Relentless Assault").supported, game.log
+    game._resolve_priority_window()
+
+    assert game.turn_phases_remaining == [
+        "combat", "postcombat_main", "combat", "postcombat_main", "ending",
+    ]
+    assert game.extra_phases_remaining() == ["combat", "postcombat_main"]
+
+    # Entering combat spends the turn's *own* combat phase — the plan and the
+    # ordinary remainder shrink together — so the two the card added are still
+    # both to come. That is the distinction the derivation buys: "how much is
+    # left" and "how much of it is extra" move independently.
+    game.enter_turn_phase("combat")
+    game._settle()
+    assert game.turn_phases_remaining == [
+        "postcombat_main", "combat", "postcombat_main", "ending",
+    ]
+    assert game.extra_phases_remaining() == ["combat", "postcombat_main"]

@@ -921,3 +921,76 @@ def test_402_2_an_effect_can_remove_every_players_maximum_hand_size():
 
     assert maximum_hand_size(game, 0) == DEFAULT_MAXIMUM_HAND_SIZE
     assert maximum_hand_size(game, 1) == DEFAULT_MAXIMUM_HAND_SIZE
+
+
+# ---------------------------------------------------------------------------
+# Rule 406 — leaving exile
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("400.7", "406.7", "406.3")
+def test_400_7_a_card_re_exiled_after_leaving_exile_remembers_nothing(set_pool):
+    """400.7: an object that moves from one zone to another "becomes a new
+    object with no memory of, or relation to, its previous existence", and
+    406.7 says the same of a card in exile that becomes exiled again.
+
+    A card in exile is a bare ``CardDefinition`` shared by every copy in the
+    catalog, so what an exiling said about it — 406.3's face-down flag, the
+    counters an effect put on it — is held in a register keyed on the exiling
+    (``engine/exiled_records.py``). That register derives "is this still in
+    exile" from the pile, which makes an entry for a departed card *inert* but
+    leaves it sitting there: the next effect to exile the same card finds it
+    alive again, and this rule is the one that says it must not.
+
+    ``Game.take_card_from_exile`` is the one departure, and retiring the entry
+    is what it is for.
+    """
+    from engine.exiled_records import live_records
+    from engine.linked_exile import face_down_exiled_cards
+
+    eve = set_pool("LEG")["All Hallow's Eve"]
+    p1 = PlayerState(name="P1", hand=[eve], library=[_mk_card("Filler", "Instant")] * 5)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "All Hallow's Eve").supported
+    game.resolve_stack()
+    assert [record.metadata for record in live_records(game)] == [
+        {"scream_counters": 2}
+    ]
+
+    # It leaves exile — by any route at all; what the rule cares about is that
+    # it left.
+    assert game.take_card_from_exile(p1, eve) is True
+
+    # …and some later, unrelated effect exiles the same card, saying nothing
+    # about counters and nothing about hiding it.
+    p1.exile.append(eve)
+
+    assert [record.metadata for record in live_records(game)] == [], (
+        "the first exiling's counters came back with the card"
+    )
+    assert face_down_exiled_cards(game, 0) == []
+
+
+@pytest.mark.cr("406.2", "400.7")
+def test_406_2_a_card_leaving_one_seats_exile_leaves_only_that_pile():
+    """406.2: an exiled card is a card that has been put into the exile zone —
+    and 400.7 makes each such card its own object, even when two of them are
+    printings of one card.
+
+    The engine gives every player their own exile list, and a deck repeats one
+    immutable ``CardDefinition`` per copy with the catalog shared between seats,
+    so *the same Python object* can be in two piles at once. ``list.remove``
+    compares by value and would take whichever it reached first; the departure
+    seam matches by identity within the named seat.
+    """
+    bear = _mk_creature("Shared Bear")
+    p1 = PlayerState(name="P1", exile=[bear])
+    p2 = PlayerState(name="P2", exile=[bear])
+    game = Game(players=[p1, p2])
+
+    assert game.take_card_from_exile(p1, bear) is True
+
+    assert p1.exile == []
+    assert [card.name for card in p2.exile] == ["Shared Bear"]

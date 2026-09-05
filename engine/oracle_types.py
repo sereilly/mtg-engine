@@ -709,14 +709,17 @@ EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 #: pipeline, and a second spelling between them is how a producer gate goes
 #: vacuous while the amount reads an empty record.
 #:
-#: **Five older sites still spell the string out** — the mill handlers in
+#: The five older sites that spelled the string out — the mill handlers in
 #: ``handlers/zones.py``, the two condition readers in
 #: ``handlers/control_flow.py`` and ``lowering/conditions.py``, the reanimation
-#: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES``. They are
-#: correct today and were deliberately not swept in the round that added this:
-#: three of those modules were open on other branches at the time, and a
-#: cross-module rename with no card behind it is a merge hazard bought for
-#: nothing. Whoever next edits one of them should point it here.
+#: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES`` — now import
+#: it. One fact, one spelling.
+#:
+#: The one deliberate literal left is in ``lowering/conditions.py``: the
+#: *condition kind* ``"milled_this_way"`` is a different namespace that happens
+#: to spell the same words. ``handlers/control_flow`` dispatches on it and never
+#: looks it up in ``context.results``, so binding the two together would tie
+#: facts that are only coincidentally equal.
 MILLED_THIS_WAY = "milled_this_way"
 
 TAPPED_THIS_WAY = "tapped_this_way"

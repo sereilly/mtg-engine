@@ -32,6 +32,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
+                             MILLED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS,
                              SACRIFICED_CARDS_BY_SEAT,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
@@ -325,8 +326,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # graveyard, under the key the repeated mill beside it already writes: "put
     # into that graveyard **this way**" is one question, and a second key would
     # be a second reader of it.
-    "mill_target_player": "milled_this_way",
-    "mill_until_matching": "milled_this_way",
+    "mill_target_player": MILLED_THIS_WAY,
+    "mill_until_matching": MILLED_THIS_WAY,
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
     # back-reference asks is the same one: what did this effect just exile?

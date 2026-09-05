@@ -698,7 +698,16 @@ class CommanderMixin:
                 )
                 if index is None:  # pragma: no cover - _commander_dead_zone found it
                     continue
-                card = held.pop(index)
+                card = held[index]
+                if zone == "exile":
+                    # Leaving exile is one transition, and it retires the exile
+                    # register with the card (``Game.take_card_from_exile``).
+                    # A commander pulled to the command zone is CR 400.7's new
+                    # object like any other zone change, so a record left behind
+                    # would revive the next time this card is exiled.
+                    self.take_card_from_exile(seat, card)
+                else:
+                    held.pop(index)
                 self._offer_command_zone(seat, card, zone, rule="903.9a")
                 changed = True
         return changed

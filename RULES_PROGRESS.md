@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**357 / 612 tracked rules covered (58%)** — 2044 tests, 0 unannotated.
+**358 / 612 tracked rules covered (58%)** — 2047 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 2/3 | 66% |
 | [405. Stack](#405-stack) | 6/6 | 100% |
-| [406. Exile](#406-exile) | 3/8 | 37% |
+| [406. Exile](#406-exile) | 4/8 | 50% |
 | [407. Ante](#407-ante) | 4/4 | 100% |
 | [408. Command](#408-command) | 3/3 | 100% |
 | [500. General](#500-general) | 9/12 | 75% |
@@ -483,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(12 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(14 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -532,12 +532,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 406. Exile
 
 - [x] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje... *(1 tests)*
-- [x] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil... *(1 tests)*
-- [x] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “... *(2 tests)*
+- [x] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil... *(2 tests)*
+- [x] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “... *(3 tests)*
 - [ ] **406.4** Face-down cards in exile should be kept in separate piles based on when they were exiled and how ...
 - [ ] **406.5** Exiled cards that might return to the battlefield or any other zone should be kept in separate pi...
 - [ ] **406.6** An object may have one ability printed on it that causes one or more cards to be exiled, and anot...
-- [ ] **406.7** If an object in the exile zone becomes exiled, it doesn’t change zones, but it becomes a new obje...
+- [x] **406.7** If an object in the exile zone becomes exiled, it doesn’t change zones, but it becomes a new obje... *(1 tests)*
 - [ ] **406.8** Previously, the exile zone was called the “removed-from-the-game zone.” Cards that were printed w...
 
 ### 407. Ante
@@ -555,14 +555,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 500. General
 
-- [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(6 tests)*
+- [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(7 tests)*
 - [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(1 tests)*
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(5 tests)*
-- [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(5 tests)*
+- [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(6 tests)*
 - [ ] **500.9** Some effects can add steps to a phase. They do this by adding the steps directly after a specifie...
 - [x] **500.10** Some effects add a step after a particular phase. In that case, that effect first creates the pha... *(1 tests, subrules a)*
 - [x] **500.11** Some effects can cause a step, phase, or turn to be skipped. To skip a step, phase, or turn is to... *(3 tests)*

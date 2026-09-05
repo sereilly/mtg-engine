@@ -21,6 +21,7 @@ payload the evaluator would answer False to forever.
 from __future__ import annotations
 
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
+from ...oracle_types import MILLED_THIS_WAY
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import card_only_filter, untestable_filter_keys
@@ -660,14 +661,14 @@ def _lower_condition(
         # refuses. Without the name the comparison is against nothing and
         # answers False for ever; without the mill there is no set to compare
         # it to — and either way the card would compile clean and never draw.
-        missing = sorted({"chosen_card_name", "milled_this_way"} - set(produced))
+        missing = sorted({"chosen_card_name", MILLED_THIS_WAY} - set(produced))
         if missing:
             raise LoweringError(
                 "'a card with the chosen name was milled this way' with no "
                 + " and no ".join(
                     {
                         "chosen_card_name": "name chosen",
-                        "milled_this_way": "mill",
+                        MILLED_THIS_WAY: "mill",
                     }[key]
                     for key in missing
                 )
@@ -681,7 +682,7 @@ def _lower_condition(
         # `ItWas`'s reason above: with no loop in front of it the words name a
         # set nothing wrote, and an unwritten record reads as empty - so the
         # branch would never run and the card would still compile supported.
-        if "milled_this_way" not in produced:
+        if MILLED_THIS_WAY not in produced:
             raise LoweringError(
                 "'put into that graveyard this way' with no repeated mill in "
                 "this effect",
@@ -701,6 +702,11 @@ def _lower_condition(
                 "'put into that graveyard this way' reads a printed card type",
                 node=condition,
             )
+        # The *condition* kind, which is a different namespace that happens
+        # to spell the same words — ``handlers/control_flow`` dispatches on it
+        # and never looks it up in ``context.results``. Left as a literal
+        # deliberately: swapping in ``MILLED_THIS_WAY`` here would tie two facts
+        # together that are only coincidentally equal.
         return {
             "kind": "milled_this_way",
             "card_types": list(condition.filter.card_types),

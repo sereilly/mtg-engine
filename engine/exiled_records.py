@@ -25,12 +25,25 @@ upkeep scan, the trigger's stack item, the counter handlers — carries that
 object.
 
 **A record is live only while its card is actually in that seat's exile.**
-Derived rather than maintained, which is what makes this safe without an exile
-*seam*: ~28 places in the engine append to ``player.exile`` and none of them
-knows about this file, so a register that had to be told when a card left would
-go stale in twenty-eight ways. Asking the zone instead means a card pulled out
-of exile by anything at all silently retires its record, and the register never
+Derived rather than maintained: asking the zone means a card pulled out of
+exile by anything at all silently retires its record, and the register never
 speaks for a card that is not there.
+
+**Derivation alone is not enough, and CR 400.7 says why.** An object that
+changes zones "becomes a new object with no memory of, or relation to, its
+previous existence" — and CR 406.7 extends that to a card already in exile that
+becomes exiled again. A *derived* record is inert while its card is elsewhere
+and then **comes back to life the moment the same card is exiled by something
+else**, still saying "face down", still carrying somebody else's scream
+counters. That is precisely the memory the rule forbids. So the departure needs
+a seam after all, and it is affordable because the two sides of this zone are
+nothing like the same size: 52 sites in ``engine/`` and ``web/`` *append* to
+``player.exile`` and none of them has to know about this file, while only
+thirteen take a card back out. ``Game.take_card_from_exile`` is that
+transition, and ``tests/engine/test_exile_removal_seam.py`` is what keeps it
+the only one — the same arrangement ``remove_from_battlefield`` and
+``take_card_from_hand`` already have, for the same reason each of those was
+written.
 
 The record carries a ``metadata`` dict under the *same* key spelling
 ``engine/named_counters.py`` uses on a permanent, so ``counters_on`` /
@@ -174,6 +187,36 @@ def source_object(context):
     if context.source_permanent is not None:
         return context.source_permanent
     return record_in_context(context)
+
+
+def newest_record_for(game, owner_index: int, card) -> ExiledRecord | None:
+    """The most recently registered **live** record for *card* in seat
+    *owner_index*'s exile, or None.
+
+    The singular, owner-scoped sibling of :func:`records_for_cards`, and it
+    exists for the departure seam: when one copy of a card leaves a pile that
+    holds two, exactly one record has to stop speaking, and the two records are
+    not interchangeable — one may be face down with counters and the other
+    neither. Which of the two the departing copy "was" is unanswerable (they are
+    the same ``CardDefinition`` object), so this picks the newest, which is the
+    rule :func:`records_for_cards` already uses; one rule beats two.
+
+    Scoped to the seat because the same object can sit in two players' exiles at
+    once — a deck repeats one immutable definition per copy and the catalog is
+    shared between seats — so a game-wide identity match would retire the wrong
+    player's record.
+
+    Must be asked **before** the card is removed: liveness is derived from the
+    pile, so a record read afterwards answers None when the last copy has gone,
+    which is exactly the case that needs retiring.
+    """
+    newest: ExiledRecord | None = None
+    for record in getattr(game, RECORDS_ATTR, ()) or ():
+        if record.owner_index != owner_index or record.card is not card:
+            continue
+        if is_live(game, record):
+            newest = record
+    return newest
 
 
 def records_for_cards(game, cards) -> list[ExiledRecord]:

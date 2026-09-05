@@ -4,8 +4,8 @@ import dataclasses
 import random
 from typing import TYPE_CHECKING
 
-from ..exiled_records import (forget_record, record_exiled_card,
-                              records_for_cards, source_object)
+from ..exiled_records import (record_exiled_card, records_for_cards,
+                              source_object)
 from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
 from ..keywords import grant_keyword
 from ..models import Permanent
@@ -27,7 +27,8 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                            LAST_TARGET_CONTROLLER,
                             REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                            HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
+                            HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
+                            PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
@@ -225,11 +226,9 @@ def put_exiled_pile_top_into_hand(game: Game, instruction: OracleInstruction, co
     owner = game.players[int(entry.get("owner_index", 0))]
     card = entry["card"]
     # The card leaves exile whether or not the hand accepts it: a commander
-    # diverted to the command zone (CR 903.9b) has still left the pile.
-    for index, held in enumerate(owner.exile):
-        if held is card:
-            owner.exile.pop(index)
-            break
+    # diverted to the command zone (CR 903.9b) has still left the pile. Through
+    # the departure seam, so the exile register retires with it.
+    game.take_card_from_exile(owner, card)
     game.put_card_into_hand(owner, card)
     game.log.append(
         f"{context.card.name}: {card.name} goes from the exiled pile to "
@@ -1147,9 +1146,12 @@ def take_ownership_of_exiled(game: Game, instruction: OracleInstruction, context
         return True, "resolved"
     context.results["ownership_exchange"] = None
     for from_seat, to_seat, card in swap:
-        holder = game.players[from_seat]
-        if card in holder.exile:
-            holder.exile.remove(card)
+        # Out of one exile and into another. CR 406.7 makes that a new object
+        # that has just been exiled even though it never left the zone, so
+        # whatever the register said about the old one stops applying — which
+        # is what the departure seam does, and why the move is spelled as a
+        # departure followed by an arrival rather than a list edit.
+        game.take_card_from_exile(from_seat, card)
         game.players[to_seat].exile.append(card)
         game.log.append(
             f"{game.players[to_seat].name} now owns {card.name}"
@@ -1171,8 +1173,7 @@ def return_exiled_source_to_graveyard(game: Game, instruction: OracleInstruction
         if card is not context.card:
             continue
         holder = game.players[from_seat]
-        if card in holder.exile:
-            holder.exile.remove(card)
+        game.take_card_from_exile(from_seat, card)
         game.put_card_into_graveyard(holder, card)
         game.log.append(f"{card.name} is put into its owner's graveyard")
     return True, "resolved"
@@ -3303,7 +3304,7 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     # same immutable object, so a name match over the pile would find the wrong
     # one. Under the key the repeated mill already writes, because "put into
     # that graveyard **this way**" is one question.
-    put_there = context.results.setdefault("milled_this_way", [])
+    put_there = context.results.setdefault(MILLED_THIS_WAY, [])
     for victim in victims:
         milled = 0
         for _ in range(amount):
@@ -3430,7 +3431,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
         if _card_matches_filter(card, stop_filter, game=game, owner=victim):
             matched.append(card)
             break
-    context.results["milled_this_way"] = matched
+    context.results[MILLED_THIS_WAY] = matched
     game.log.append(
         f"{victim.name} milled {milled} card(s) "
         + (
@@ -3462,7 +3463,11 @@ def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction,
     ``list.remove`` compares by value - it would take whichever copy was
     nearest the bottom of the pile.
     """
-    cards = list(context.results.get(instruction.payload.get("cards_from") or "milled_this_way") or ())
+    cards = list(
+        context.results.get(
+            instruction.payload.get("cards_from") or MILLED_THIS_WAY
+        ) or ()
+    )
     if not cards:
         game.log.append(f"{context.card.name}: nothing was put there this way")
         return True, "resolved"
@@ -5692,14 +5697,6 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     )
     caster = context.caster
     destination = str(instruction.payload.get("zone", "hand"))
-    # Read **before** anything moves: ``exiled_records`` derives liveness from
-    # the zone rather than maintaining it, so a record whose card has already
-    # left answers None here. The records are dropped after the loop for the
-    # cards that actually moved — a stale one is inert until the *same* card is
-    # exiled again by something else, when it would come back to life still
-    # saying "face down". This is the one site that takes a Three Wishes card
-    # out of exile deliberately, so it is the one that owes ``forget_record``.
-    records = records_for_cards(game, cards)
     moved: list = []
     # The caster's own pile first, then everybody else's. Identity alone is not
     # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
@@ -5711,12 +5708,12 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     seats = [context.caster] + [p for p in game.players if p is not context.caster]
     for card in cards:
         for owner in seats:
-            index = next(
-                (i for i, held in enumerate(owner.exile) if held is card), None
-            )
-            if index is None:
+            # Through the departure seam, which locates the copy by identity and
+            # retires the exile record with it — a stale record is inert until
+            # the *same* card is exiled again by something else, when it would
+            # come back to life still saying "face down" (CR 400.7, 406.7).
+            if not game.take_card_from_exile(owner, card):
                 continue
-            owner.exile.pop(index)
             if destination == "graveyard":
                 # CR 400.3: its **owner's** graveyard, and the owner is the
                 # player whose exile held it — the card reached that pile out of
@@ -5731,9 +5728,6 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             elif game.put_card_into_hand(caster, card):
                 moved.append(card)
             break
-    for record in records:
-        if any(held is record.card for held in moved):
-            forget_record(game, record)
     if moved:
         names = ", ".join(card.name for card in moved)
         game.log.append(
@@ -5986,6 +5980,24 @@ def ante_or_exchange_ownership(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+def _take_located_card(game: Game, located: tuple[int, str, int], card) -> None:
+    """Lift *card* out of the zone :func:`_locate_card_for_ownership` found it in.
+
+    Exile is the one of the five that has a departure transition behind it
+    (``Game.take_card_from_exile``, which retires the exile register with the
+    card); the rest are plain lists here, and the index is the address because
+    that is what the locator returned. One helper because both readers of the
+    locator move the card they found, and a zone name reaching a ``pop`` is
+    invisible to the static guard over ``.exile`` — so the branch belongs in the
+    one place a reader of that guard will look.
+    """
+    seat, zone, at = located
+    if zone == "exile":
+        game.take_card_from_exile(seat, card)
+        return
+    getattr(game.players[seat], zone).pop(at)
+
+
 def _give_card_to_graveyard(
     game: Game, card, new_owner_seat: int, prefer_seat: int
 ) -> bool:
@@ -6004,8 +6016,7 @@ def _give_card_to_graveyard(
     located = _locate_card_for_ownership(game, card, prefer_seat)
     if located is None:
         return False
-    seat, zone, at = located
-    getattr(game.players[seat], zone).pop(at)
+    _take_located_card(game, located, card)
     game.put_card_into_graveyard(new_owner_seat, card)
     return True
 
@@ -6144,9 +6155,8 @@ def take_revealed_card_in_exchange(game: Game, instruction: OracleInstruction, c
             f"{card_name} is nowhere to be found, so no ownership is exchanged"
         )
         return True, "resolved"
-    seat, zone, at = located
     victim.hand.pop(index)
-    getattr(game.players[seat], zone).pop(at)
+    _take_located_card(game, located, context.card)
     # Through the one seam every "put this card into a hand" goes through, so
     # CR 903.9b sees it (a commander taken this way is offered its command zone
     # like any other move to a hand). The hand it goes to is the new owner's,
@@ -6291,16 +6301,14 @@ def put_self_into_zone(game: Game, instruction: OracleInstruction, context: Orac
         game.remove_from_battlefield(source)
         game._permanent_to_graveyard(owner, source)
         return True, "resolved"
-    # An exile record. The card leaves exile, the register forgets it — in that
-    # order and by identity, because two copies of the card produce two
-    # equal-looking entries and removing "the first equal one" would strand the
-    # other copy's counters on a card that is no longer there.
+    # An exile record. The card leaves exile and the register forgets it, both
+    # in the departure seam — and *this* record by name rather than the one the
+    # seam would derive, because two copies of the card produce two
+    # equal-looking entries and the trigger resolving here fires for exactly
+    # one of them. Retiring the other would strand this copy's counters on a
+    # card that is no longer there.
     owner = game.players[source.owner_index]
-    for index, card in enumerate(owner.exile):
-        if card is source.card:
-            owner.exile.pop(index)
-            break
-    forget_record(game, source)
+    game.take_card_from_exile(source.owner_index, source.card, record=source)
     game.put_card_into_graveyard(owner, source.card)
     game.log.append(f"{source.card.name} was put into {owner.name}'s graveyard from exile")
     return True, "resolved"

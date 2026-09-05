@@ -31,7 +31,6 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                    cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
-from ...exiled_records import forget_record, records_for_cards
 from ...divided_damage import (
     EVENLY, divided_description, divided_entry, division_refusal,
 )
@@ -700,6 +699,11 @@ class SpellCastingMixin:
         # covered occurrence so a duplicate without permission cannot shadow
         # the copy that has it.
         permission = None
+        # Whose pile ``source_zone`` turns out to be. The caster's on every
+        # path but one — Grinning Totem leaves the card in the *searched*
+        # player's exile — and the departure below needs the seat, not just the
+        # list, because leaving exile goes through a seam that takes one.
+        source_seat = caster_index
         if from_zone == "hand":
             source_zone = caster.hand
             # A card in hand can be *held* and not playable — Firestorm Phoenix
@@ -773,6 +777,7 @@ class SpellCastingMixin:
                     )
                     if grant is not None and grant.zone_seat == seat:
                         source_zone, hand_index, permission = pile, i, grant
+                        source_seat = seat
                         break
                 if permission is not None:
                     break
@@ -1442,19 +1447,17 @@ class SpellCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        # Before the pop, because ``exiled_records`` derives liveness from the
-        # zone: a record read after the card has left answers nothing. A card
-        # played out of exile is being moved on deliberately (CR 400.7 makes it
-        # a new object wherever it lands), so the record that said it was face
+        # A card played out of exile leaves it deliberately (CR 400.7 makes it a
+        # new object wherever it lands), so the record that said it was face
         # down stops speaking for it — otherwise the *next* effect to exile the
         # same card would find that record alive and hide it from the table.
-        leaving_exile = (
-            records_for_cards(self, [source_zone[hand_index]])
-            if from_zone == "exile" else ()
-        )
-        card = source_zone.pop(hand_index)
-        for record in leaving_exile:
-            forget_record(self, record)
+        # That retirement is the departure seam's, which is why this is not a
+        # ``pop``: one transition out of exile, thirteen sites, one place for
+        # anything that must happen when a card leaves.
+        if from_zone == "exile":
+            self.take_card_from_exile(source_seat, card)
+        else:
+            del source_zone[hand_index]
         # Now, and not before: the spell is no longer in the hand, so it cannot
         # be discarded to pay for itself, and the creature it eats is gone from
         # the battlefield before the spell is on the stack.
