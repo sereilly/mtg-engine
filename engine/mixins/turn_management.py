@@ -5,6 +5,7 @@ import random
 
 from ..auras import aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
+from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
 from ..land_play_allowance import clear_turn_land_play_effects
 from ..game_types import OracleExecutionContext, SimulationResult
@@ -274,6 +275,11 @@ class TurnManagementMixin:
         # rather than deciding anything — engine/hand_locks.py derives the
         # answer either way.
         expire_hand_locks(self)
+        # "**Until your next turn**, you may play those cards." (Three Wishes.)
+        # CR 800.4m: the duration ends when that player's turn would have begun,
+        # which is here — beside the hand locks, whose printed duration is the
+        # same words and whose sweep is the same boundary for the same reason.
+        expire_turn_permissions(self, player_index)
         self.creatures_died_this_turn = 0
         self.destroyed_at_end_of_combat_this_turn = []
         self.nontoken_creatures_died_this_turn = 0

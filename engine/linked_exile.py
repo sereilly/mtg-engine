@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Iterable
 
+from .exiled_records import live_records
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import CardDefinition, Permanent
 
@@ -198,6 +200,13 @@ def face_down_exiled_cards(
     permanent that has since left is face up to the reader for the window
     between the permanent leaving and its linked trigger resolving, which is
     the one place this derivation is looser than the record.
+
+    **Two registers, one question.** A *spell* that exiles face down (Three
+    Wishes) never becomes a permanent, so its record lives on the game
+    (``engine/exiled_records.py``) instead. Both are scanned here rather than by
+    two functions the web layer would have to remember to call: "which of these
+    cards are face down to me" has one answer, and a second entry point is how a
+    viewer comes to be shown half a hidden pile.
     """
     hidden: list["CardDefinition"] = []
     for permanent in game.all_permanents():
@@ -212,4 +221,10 @@ def face_down_exiled_cards(
             ):
                 continue
             hidden.append(entry["card"])
+    for record in live_records(game):
+        if not record.face_down or record.owner_index != owner_index:
+            continue
+        if viewer_index is not None and record.looker_index == viewer_index:
+            continue
+        hidden.append(record.card)
     return hidden

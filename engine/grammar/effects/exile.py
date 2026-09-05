@@ -102,6 +102,16 @@ def _parse_bin_unplayed_exiled_card(
     made playable, which is a card it exiled, and the lowering demands that
     producer.
 
+    ``If the player hasn't played the card, they put it into their graveyard.``
+    (Elkin Lair, inside its delayed ability.) The same sentence about a seat the
+    trigger named rather than about the ability's controller — and *only* the
+    condition and the possessive change, which is why it is a branch here and
+    not a production of its own.
+
+    The third printed spelling opens on the verb instead of on the condition and
+    is read from the imperative chain — see
+    :func:`_parse_bin_unplayed_exiled_cards`.
+
     Refuses without consuming, beside the other "If …" productions in
     ``statements.py`` and for their reason: every other conditional keeps the
     reading it has.
@@ -112,20 +122,103 @@ def _parse_bin_unplayed_exiled_card(
     test, and the handler's log says which case it took.
     """
     mark = stream.mark()
-    if not stream.accept_word("if"):
+    if stream.accept_word("if"):
+        # "you haven't played it" / "the player hasn't played the card". The
+        # lexer keeps the contraction whole, so the negation is one word here
+        # rather than the two-token spelling a possessive takes ("owner" + "'s")
+        # a few lines down. The subject goes through the shared player parser,
+        # which declines without consuming — and the *referent* is read the same
+        # way whichever subject was printed, because "it" and "the card" name
+        # the one thing an earlier step of this effect exiled.
+        who = parse_player_ref(stream)
+        if who is None or who.kind not in ("you", "that_player"):
+            stream.reset(mark)
+            return None
+        if not stream.accept_word("haven't", "hasn't"):
+            stream.reset(mark)
+            return None
+        if not (
+            stream.accept_phrase("played", "it")
+            or stream.accept_phrase("played", "the", "card")
+        ):
+            stream.reset(mark)
+            return None
+        stream.accept_punct(",")
+        # "**they** put it into their graveyard" — the same seat again, named a
+        # second time because the clause is a sentence of its own. Consumed and
+        # dropped: which player performs the move decides nothing (CR 400.3
+        # sends the card to its *owner's* graveyard whoever puts it there), and
+        # refusing an unread subject is what the zone below already does.
+        if stream.at_word("they", "you") and stream.peek_word(1) in ("put", "puts"):
+            stream.advance()
+        if not (
+            stream.accept_phrase("put", "it", "into")
+            or stream.accept_phrase("puts", "it", "into")
+        ):
+            raise stream.error(
+                "expected what happens to the card that was not played"
+            )
+        return ast.PutExiledCardIntoZone(_bin_zone(stream), only_if_unplayed=True)
+    stream.reset(mark)
+    return None
+
+
+def _parse_bin_unplayed_exiled_cards(
+    stream: TokenStream,
+) -> "ast.PutExiledCardIntoZone | None":
+    """``Put any of those cards you didn't play into your graveyard.``
+    (Three Wishes, inside its delayed ability.)
+
+    The third printed spelling of :func:`_parse_bin_unplayed_exiled_card`, with
+    the condition folded into the object phrase instead of stated in front of
+    it, and a pile rather than a card. Its own production because it opens on
+    the *verb*: it is reached from the imperative chain, where that one is
+    reached from the "If …" gate, and one function would have to be tried from
+    both.
+
+    It is the same effect and lowers to the same instruction — what moves is
+    whatever is still in exile, which is exactly "the ones you didn't play".
+
+    Every word of the object phrase is required. "Put those cards into your
+    graveyard" without it would bin the ones already played, which is a card
+    nothing can be played out of at all — and it is the card these same four
+    sentences would otherwise compile to.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "any", "of", "those", "cards"):
         stream.reset(mark)
         return None
-    # "you haven't played it". The lexer keeps the contraction whole, so the
-    # negation is one word here rather than the two-token spelling a possessive
-    # takes ("owner" + "'s") three lines down.
-    if not stream.accept_phrase("you", "haven't", "played", "it"):
+    if not (
+        stream.accept_phrase("you", "didn't", "play")
+        and stream.accept_word("into")
+    ):
         stream.reset(mark)
         return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase("put", "it", "into"):
-        raise stream.error("expected what happens to the card that was not played")
-    zone = _parse_zone(stream)
-    return ast.PutExiledCardIntoZone(zone, only_if_unplayed=True)
+    return ast.PutExiledCardIntoZone(_bin_zone(stream), only_if_unplayed=True)
+
+
+def _bin_zone(stream: TokenStream) -> "ast.Zone":
+    """The destination of an unplayed exiled card, including "their graveyard".
+
+    ``_parse_zone`` reads every possessive the pool prints but that one, and
+    deliberately raises on an unrecognized one so a distinction cannot be lost
+    by omission. "**They** put it into **their** graveyard" (Elkin Lair) is that
+    possessive, and it is read here rather than added to the shared fragment
+    because what it means is not general: it is the seat the *sentence in front
+    of it* named, which only this production knows.
+
+    It resolves to the **owner** either way, and that is CR 400.3 rather than a
+    convenience — a card put into a graveyard goes to its owner's, whoever the
+    sentence says is doing the putting. So one payload is right for all three
+    printings, and the handler that locates the card in whichever exile holds it
+    is already binning it into that seat's graveyard.
+    """
+    mark = stream.mark()
+    if stream.accept_word("their"):
+        if stream.accept_word("graveyard"):
+            return ast.Zone("graveyard", ast.PlayerRef("owner"))
+        stream.reset(mark)
+    return _parse_zone(stream)
 
 
 def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":

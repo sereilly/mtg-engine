@@ -867,3 +867,227 @@ def test_a_countered_card_put_onto_the_battlefield_must_name_its_controller():
             "this way, put that card onto the battlefield instead of into its "
             "owner's graveyard."
         )
+
+
+# --- W3G1: Three Wishes, a face-down exile a spell may play out of ---
+
+import pytest as _w3g1_pytest  # noqa: E402
+from engine import Game as _W3G1Game, PlayerState as _W3G1PlayerState  # noqa: E402
+from engine.card_loader import (  # noqa: E402
+    load_cards as _w3g1_load, manifest_set_path as _w3g1_path,
+)
+from engine.cast_permissions import (  # noqa: E402
+    playable_from_zones as _w3g1_playable,
+)
+from engine.exiled_records import live_records as _w3g1_live  # noqa: E402
+from engine.grammar import parse_line as _w3g1_parse  # noqa: E402
+from engine.grammar.errors import (  # noqa: E402
+    GrammarError as _W3G1GrammarError, LoweringError as _W3G1LoweringError,
+)
+from engine.grammar import lower_ability as _w3g1_lower  # noqa: E402
+from engine.linked_exile import (  # noqa: E402
+    face_down_exiled_cards as _w3g1_face_down,
+)
+
+
+@_w3g1_pytest.fixture(scope="module")
+def _w3g1_lea():
+    return {c.name: c for c in _w3g1_load(_w3g1_path("LEA"))}
+
+
+def _w3g1_board(set_pool, lea):
+    """Three Wishes in seat 0's hand over a library whose top three are known."""
+    pool = set_pool("VIS")
+    game = _W3G1Game(players=[
+        _W3G1PlayerState(
+            name="P1", hand=[pool["Three Wishes"]],
+            library=[lea["Mountain"], lea["Black Lotus"], lea["Forest"]]
+            + [lea["Island"]] * 10,
+        ),
+        _W3G1PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    # Armed before anything resolves: a headless seat answers its own prompts,
+    # so a reading taken without this is a reading of the defaults.
+    game.interactive_seats = {0, 1}
+    return game
+
+
+def _w3g1_cast(set_pool, lea):
+    game = _w3g1_board(set_pool, lea)
+    result = game.cast_from_hand(0, "Three Wishes")
+    assert result.supported, result.details
+    game.resolve_stack()
+    return game
+
+
+def test_three_wishes_is_supported(set_pool):
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("VIS")["Three Wishes"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [i.kind for i in steps] == [
+        "exile_top_of_library",
+        "grant_look_at_exiled_cards",
+        "grant_cast_permission",
+        "create_delayed_trigger",
+    ]
+    assert steps[2].payload["duration"] == "your_next_turn"
+
+
+def test_three_wishes_exiles_three_face_down_with_no_permanent_to_hold_it(
+    set_pool, _w3g1_lea
+):
+    """"Exile the top three cards of your library face down."
+
+    An **instant** exiles them, so there is no permanent for the linked-exile
+    record to live on — which used to refuse the exile outright and made this
+    sentence compile, lower and do nothing. ``engine/exiled_records.py`` is the
+    register that answers for an exiler which never becomes a permanent.
+    """
+    game = _w3g1_cast(set_pool, _w3g1_lea)
+
+    assert [c.name for c in game.players[0].exile] == [
+        "Mountain", "Black Lotus", "Forest",
+    ]
+    records = list(_w3g1_live(game))
+    assert [(r.card.name, r.face_down) for r in records] == [
+        ("Mountain", True), ("Black Lotus", True), ("Forest", True),
+    ]
+
+
+def test_three_wishes_hides_the_pile_from_everyone_but_its_caster(
+    set_pool, _w3g1_lea
+):
+    """CR 406.3: a card exiled face down is hidden from every player, and "you
+    may look at those cards" is the effect that opens it to one of them.
+
+    The two registers answer one question, so the caster sees the pile and the
+    opponent does not — with the record on the *game* rather than on a
+    permanent, which is the half a spell could not have before.
+    """
+    game = _w3g1_cast(set_pool, _w3g1_lea)
+
+    # Face down as the rules describe it, with no permission applied.
+    assert [c.name for c in _w3g1_face_down(game, 0)] == [
+        "Mountain", "Black Lotus", "Forest",
+    ]
+    # …and to the caster, nothing is hidden.
+    assert _w3g1_face_down(game, 0, 0) == []
+    assert [c.name for c in _w3g1_face_down(game, 0, 1)] == [
+        "Mountain", "Black Lotus", "Forest",
+    ]
+
+
+def test_three_wishes_lets_its_caster_play_a_land_out_of_the_pile(
+    set_pool, _w3g1_lea
+):
+    """CR 701.18b: to *play* a card is to play it as a land or cast it as a
+    spell, whichever is appropriate — so the printed "play" has to cover the
+    land drop, which a cast-only permission would sit through.
+    """
+    game = _w3g1_cast(set_pool, _w3g1_lea)
+    game.active_player_index = 0
+
+    assert [e["name"] for e in _w3g1_playable(game, 0)] == [
+        "Mountain", "Black Lotus", "Forest",
+    ]
+    # The opponent may play none of them: CR 601.3 grants this to the caster.
+    assert _w3g1_playable(game, 1) == []
+
+    result = game.cast_from_hand(0, "Mountain", from_zone="exile")
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(0)] == ["Mountain"]
+    # The grant is one use per card, so the other two survive it.
+    assert [c.name for c in game.cast_permissions[0].cards] == [
+        "Black Lotus", "Forest",
+    ]
+
+
+def test_three_wishes_permission_ends_as_its_casters_next_turn_begins(
+    set_pool, _w3g1_lea
+):
+    """"Until your next turn" — CR 800.4m states the moment: the duration lasts
+    until that player's turn would have begun. So an opponent's whole turn is
+    inside it and the caster's own turn boundary is what ends it.
+    """
+    game = _w3g1_cast(set_pool, _w3g1_lea)
+    assert game.cast_permissions[0].duration == "your_next_turn"
+
+    game.begin_turn_bookkeeping(1)
+    assert len(game.cast_permissions) == 1, "an opponent's turn does not end it"
+
+    game.begin_turn_bookkeeping(0)
+    assert game.cast_permissions == []
+
+
+def test_three_wishes_bins_only_the_cards_that_were_not_played(
+    set_pool, _w3g1_lea
+):
+    """"At the beginning of your next upkeep, put any of those cards you didn't
+    play into your graveyard." — a CR 603.7 delayed ability over the pile the
+    same resolution exiled.
+
+    "You didn't play" needs no flag: a card that was played is not in exile any
+    more, and this instruction only moves cards out of exile.
+    """
+    game = _w3g1_cast(set_pool, _w3g1_lea)
+    game.active_player_index = 0
+    assert game.cast_from_hand(0, "Black Lotus", from_zone="exile").supported
+
+    game.begin_turn_bookkeeping(0)
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert game.players[0].exile == []
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Three Wishes", "Mountain", "Forest",
+    ]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Black Lotus"]
+    # The register drains with the pile: a record left alive would hide the
+    # same card the next time anything exiled it.
+    assert list(_w3g1_live(game)) == []
+
+
+def test_a_permission_over_a_pile_needs_a_step_that_exiled_one(set_pool):
+    """The producer gate every back-reference here makes: "those cards" with no
+    exile in front of it names nothing, and a permission with nothing to permit
+    is the sentence read wrong."""
+    with _w3g1_pytest.raises(_W3G1LoweringError):
+        _w3g1_lower(_w3g1_parse("Until your next turn, you may play those cards."))
+
+
+def test_a_plural_permission_still_needs_a_printed_duration(set_pool):
+    """CR 611.2a: with no stated duration the permission outlives the card that
+    granted it. The plural referent changes the number, not that rule."""
+    with _w3g1_pytest.raises(_W3G1LoweringError):
+        _w3g1_lower(_w3g1_parse(
+            "Exile the top three cards of your library. You may play those cards."
+        ))
+
+
+def test_the_unplayed_bin_refuses_without_its_condition(set_pool):
+    """"Put any of those cards **you didn't play** into your graveyard."
+
+    Every word of the object phrase is required. Without it the sentence would
+    bin the cards already played, which is a card nothing can be played out of
+    at all — and the grammar must refuse rather than read the shorter sentence.
+    """
+    with _w3g1_pytest.raises(_W3G1GrammarError):
+        _w3g1_parse(
+            "Exile the top three cards of your library face down. "
+            "At the beginning of your next upkeep, put any of those cards "
+            "into your graveyard."
+        )
+
+
+def test_a_look_permission_is_not_granted_to_another_player(set_pool):
+    """The look handler writes the *caster* onto the record, so a printed
+    grantee would be read by nobody and the wrong seat would get the look."""
+    with _w3g1_pytest.raises((_W3G1GrammarError, _W3G1LoweringError)):
+        _w3g1_lower(_w3g1_parse(
+            "At the beginning of each player's upkeep, that player exiles a "
+            "card at random from their hand. That player may look at that card "
+            "for as long as it remains exiled."
+        ))

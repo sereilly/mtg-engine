@@ -1302,3 +1302,216 @@ def test_righteous_war_stops_a_black_spell_targeting_a_white_creature(set_pool):
     assert not game._can_be_targeted(
         lions, catalog["Dark Banishing"], caster_index=1
     ), game.log
+
+
+# --- W3G1: Elkin Lair, an exile-and-permission about a seat that is not you ---
+
+import pytest as _w3g1e_pytest  # noqa: E402
+from engine import Game as _W3G1eGame, PlayerState as _W3G1ePlayerState  # noqa: E402
+from engine.card_loader import (  # noqa: E402
+    load_cards as _w3g1e_load, manifest_set_path as _w3g1e_path,
+)
+from engine.cast_permissions import (  # noqa: E402
+    playable_from_zones as _w3g1e_playable,
+)
+from engine.grammar import (  # noqa: E402
+    lower_ability as _w3g1e_lower, parse_line as _w3g1e_parse,
+)
+from engine.grammar.errors import (  # noqa: E402
+    GrammarError as _W3G1eGrammarError, LoweringError as _W3G1eLoweringError,
+)
+from engine.models import Permanent as _W3G1ePermanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w3g1e_compile  # noqa: E402
+
+
+@_w3g1e_pytest.fixture(scope="module")
+def _w3g1e_lea():
+    return {c.name: c for c in _w3g1e_load(_w3g1e_path("LEA"))}
+
+
+def _w3g1e_board(set_pool, lea, opponent_hand=("Mox Pearl",)):
+    """Elkin Lair under seat 0, with a known card in each hand."""
+    pool = set_pool("VIS")
+    game = _W3G1eGame(players=[
+        _W3G1ePlayerState(
+            name="P1", battlefield=[_W3G1ePermanent(card=pool["Elkin Lair"])],
+            hand=[lea["Black Lotus"]], library=[lea["Island"]] * 10,
+        ),
+        _W3G1ePlayerState(
+            name="P2", hand=[lea[name] for name in opponent_hand],
+            library=[lea["Island"]] * 10,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    # Before anything resolves: a headless seat answers its own prompts, and a
+    # reading taken without this is a reading of the defaults.
+    game.interactive_seats = {0, 1}
+    game.active_player_index = 1
+    return game
+
+
+def test_elkin_lair_is_supported(set_pool):
+    program = _w3g1e_compile(set_pool("VIS")["Elkin Lair"])
+    assert program.supported, program.reason
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "upkeep_each"
+    steps = trigger.instruction.payload["steps"]
+    assert [i.kind for i in steps] == [
+        "exile_random_card_from_hand",
+        "grant_cast_permission",
+        "create_delayed_trigger",
+    ]
+    # Both halves name the seat the firing event froze, not the controller.
+    assert steps[0].payload["recipient"] == "event_subject_player"
+    assert steps[1].payload["recipient"] == "event_subject_player"
+    assert steps[2].payload["event"] == "next_end_step"
+
+
+def test_elkin_lair_exiles_from_the_upkeep_players_own_hand(set_pool, _w3g1e_lea):
+    """"At the beginning of each player's upkeep, **that player** exiles a card
+    at random from their hand."
+
+    The seat varies every upkeep, so it is the one the fire site froze
+    (CR 603.10) rather than the enchantment's controller — read as the
+    controller this would take a card out of seat 0's hand on seat 1's upkeep,
+    which is silent, because both readings exile exactly one card.
+    """
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    assert game.players[1].hand == []
+    assert [c.name for c in game.players[1].exile] == ["Mox Pearl"]
+    # Seat 0 kept its own hand: this was not seat 0's upkeep.
+    assert [c.name for c in game.players[0].hand] == ["Black Lotus"]
+    assert game.players[0].exile == []
+
+
+def test_elkin_lair_permits_the_player_it_exiled_from_and_nobody_else(
+    set_pool, _w3g1e_lea
+):
+    """"**The player** may play that card this turn." — CR 601.3 grants the
+    permission to the player the sentence names.
+
+    Read as "you" the enchantment's controller would be allowed to play a card
+    out of an opponent's exile, which is a strictly different card and a silent
+    one: the grant exists either way.
+    """
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    grant = game.cast_permissions[0]
+    assert (grant.player_index, grant.zone_seat) == (1, 1)
+    assert grant.mode == "play"          # CR 701.18b: a land is played
+    assert grant.duration == "end_of_turn"
+    assert [e["name"] for e in _w3g1e_playable(game, 1)] == ["Mox Pearl"]
+    assert _w3g1e_playable(game, 0) == []
+
+    result = game.cast_from_hand(1, "Mox Pearl", from_zone="exile")
+    assert result.supported, result.details
+    game.resolve_stack()
+    assert [p.card.name for p in game.controlled_by(1)] == ["Mox Pearl"]
+
+
+def test_elkin_lair_bins_the_card_at_the_next_end_step(set_pool, _w3g1e_lea):
+    """"At the beginning of the next end step, if the player hasn't played the
+    card, they put it into their graveyard." — CR 603.7's delayed ability.
+
+    "Their graveyard" resolves to the card's owner's, which is CR 400.3 rather
+    than a convenience: a card put into a graveyard goes to its owner's whoever
+    the sentence says is doing the putting.
+    """
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert game.players[1].exile == []
+    assert [c.name for c in game.players[1].graveyard] == ["Mox Pearl"]
+    assert game.players[0].graveyard == []
+
+
+def test_elkin_lair_bins_nothing_when_the_card_was_played(set_pool, _w3g1e_lea):
+    """The printed condition needs no flag: a card the player played is not in
+    exile any more, and the bin only moves cards out of exile."""
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+    assert game.cast_from_hand(1, "Mox Pearl", from_zone="exile").supported
+    game.resolve_stack()
+
+    game.resolve_end_step(1)
+    game.resolve_stack()
+
+    assert game.players[1].graveyard == []
+    assert [p.card.name for p in game.controlled_by(1)] == ["Mox Pearl"]
+
+
+def test_elkin_lair_on_an_empty_hand_exiles_and_permits_nothing(
+    set_pool, _w3g1e_lea
+):
+    """An empty hand is a legal outcome rather than an error, and the two
+    sentences behind it must not invent a card to permit."""
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.players[1].hand.clear()
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    assert game.players[1].exile == []
+    assert game.cast_permissions == []
+
+
+def test_elkin_lair_fires_on_its_own_controllers_upkeep_too(set_pool, _w3g1e_lea):
+    """"each player's upkeep" is every seat, the controller's included — the
+    seat is payload, not a narrowing to the opponents."""
+    game = _w3g1e_board(set_pool, _w3g1e_lea)
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].exile] == ["Black Lotus"]
+    assert game.cast_permissions[0].player_index == 0
+
+
+def test_a_random_hand_exile_needs_an_event_that_names_the_seat(set_pool):
+    """"That player exiles a card at random from their hand" on a **spell** has
+    no firing event to freeze a seat, so it refuses rather than falling back to
+    the caster — the wrong hand is not a smaller effect."""
+    with _w3g1e_pytest.raises(_W3G1eLoweringError):
+        _w3g1e_lower(_w3g1e_parse(
+            "That player exiles a card at random from their hand."
+        ))
+
+
+def test_a_random_hand_exile_must_consume_its_whole_object_phrase(set_pool):
+    """The production reads "a card at random from their hand" or refuses. A
+    reader that took the verb and shrugged at its object would claim "that
+    player exiles all cards from their library" as well."""
+    with _w3g1e_pytest.raises(_W3G1eGrammarError):
+        _w3g1e_parse(
+            "At the beginning of each player's upkeep, that player exiles a "
+            "card at random from their graveyard."
+        )
+
+
+def test_the_whole_library_exile_still_reads_its_own_sentence(set_pool):
+    """The sibling production under the same verb keeps its reading — neither
+    can claim the other, because they differ from the verb's object on."""
+    node = _w3g1e_parse(
+        "At the beginning of each player's upkeep, that player exiles all "
+        "cards from their library."
+    )
+    assert [i.kind for i in _w3g1e_lower(node)] == ["exile_entire_library"]
+
+
+def test_a_permission_to_the_player_needs_an_event_that_names_one(set_pool):
+    """"The player may play that card this turn" on a spell names nobody the
+    resolution can identify, so it refuses rather than granting to the caster."""
+    with _w3g1e_pytest.raises((_W3G1eGrammarError, _W3G1eLoweringError)):
+        _w3g1e_lower(_w3g1e_parse(
+            "Exile the top card of your library. The player may play that "
+            "card this turn."
+        ))

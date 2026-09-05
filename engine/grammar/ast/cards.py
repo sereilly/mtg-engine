@@ -223,6 +223,22 @@ class RevealRandomFromHand:
 
 
 @dataclass(frozen=True)
+class ExileRandomFromHand:
+    """``<player> exiles a card at random from their hand.`` (Elkin Lair.)
+
+    The same object phrase :class:`RevealRandomFromHand` reads — one card the
+    player does not choose — under a different verb, and a node of its own
+    rather than a mode on that one because the two effects share nothing past
+    the phrase. A reveal leaves the card where it was and records "the revealed
+    card"; this moves it to another zone and records the *pile* every "you may
+    play that card" behind it reads. One node with a verb field would be one
+    referent for two questions, which is how a sentence about the card you
+    revealed comes to be answered with the card you exiled.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class DiscardRevealedUnlessPayLife:
     """``<player> discards it unless they pay <N> life.`` (Wand of Ith.)
 
@@ -638,6 +654,16 @@ class CastPermission:
     mode: str  # "play" | "cast" | "look"
     what: str  # "exiled_this_way" | "target_card" | "spells_from_hand"
     target: TargetSpec | None = None
+    #: Who is permitted, when the sentence prints a subject other than "you":
+    #: "**The player** may play that card this turn" (Elkin Lair), where the
+    #: player is whoever the trigger in front of it was about. None is the
+    #: printed "you may", which CR 601.3 gives to the ability's controller.
+    #:
+    #: A field rather than a second ``what`` because it varies independently of
+    #: which pile is opened — every referent this node reads can in principle be
+    #: printed with either subject, and folding them would be one value
+    #: answering two questions.
+    grantee: PlayerRef | None = None
     until_end_of_turn: bool = False
     #: "…**until you exile another card with this enchantment**" (Furious Rise).
     #: A stated duration (CR 611.2a) whose ending event is this same permanent
@@ -663,6 +689,14 @@ class CastPermission:
     #: already enforces, so what it costs the runtime is nothing and what it
     #: costs to leave unstated is a grant that outlives the card.
     while_exiled: bool = False
+    #: "**Until your next turn**, you may play those cards." (Three Wishes.) A
+    #: fifth stated duration, one step earlier than
+    #: :attr:`until_your_next_upkeep` — CR 800.4m ends it as that player's turn
+    #: would have begun, where the upkeep one survives into that turn's first
+    #: step. Its own field for the reason each of the others has one: the card
+    #: names a moment, and reading it as the nearest moment the engine already
+    #: sweeps is a permission that ends somewhere the card does not say.
+    until_your_next_turn: bool = False
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.

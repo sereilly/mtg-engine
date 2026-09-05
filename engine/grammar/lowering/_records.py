@@ -285,6 +285,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_top_of_library": "exiled_cards",
     # …and Ice Cauldron's hand exile, written when its prompt is answered.
     "exile_chosen_card_from_hand": "exiled_cards",
+    # "That player exiles a card at random from their hand." (Elkin Lair.) The
+    # pile is one card and the seat is not the caster, neither of which the
+    # back-references behind it care about: "that card" names what this step
+    # exiled, whoever exiled it.
+    "exile_random_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
     # "…until a creature card **or X cards have been put into their graveyard
     # this way**" (Helm of Obedience). The loop records the cards it put there
