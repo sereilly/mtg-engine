@@ -627,6 +627,10 @@ _COVERED_ELSEWHERE = {
         "test_cast_by_you_this_turn_reads_a_seat_and_a_turn",
     "any_states":
         "test_a_state_union_admits_either_alternative_and_nothing_else",
+    "shares_name_with_another":
+        "test_shares_name_with_another_is_a_relation_to_the_rest_of_the_board",
+    "exclude_basic_lands":
+        "test_exclude_basic_lands_names_the_pair_not_the_supertype",
 }
 
 
@@ -986,6 +990,65 @@ def test_other_than_attached_host_excludes_one_permanent_by_identity(pool):
     # A source attached to nothing excludes nothing.
     assert subject_matches(game, host, described, source=look_alike)
     assert subject_matches(game, host, described)
+
+
+def test_shares_name_with_another_is_a_relation_to_the_rest_of_the_board(pool):
+    """"destroy each permanent **with the same name as another permanent**"
+    (Eye of Singularity).
+
+    CR 201.2: two objects share a name when they have one in common. The key is
+    demonstrated by what it *keeps* as much as by what it drops, the way
+    ``other_than_attached_host`` above is: a relation that answered yes to
+    everything would pass a one-sided check.
+
+    Its own demonstration rather than a row in ``_REJECTIONS``, because that
+    table asks each key to reject with no game-wide context set up — and a lone
+    copy on an empty board is exactly what this key must reject, which is the
+    board this test builds. Both battlefields are searched: the phrase says
+    "another permanent", not "another permanent you control", so a duplicate
+    across the table counts.
+    """
+    mine = Permanent(card=pool["Grizzly Bears"])
+    theirs = Permanent(card=pool["Grizzly Bears"])
+    lone = Permanent(card=pool["Hill Giant"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine, lone]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+
+    described = {"shares_name_with_another": True}
+    assert subject_matches(game, mine, described)
+    assert subject_matches(game, theirs, described)
+    # The singleton is what says the relation is not vacuous — and it is a
+    # permanent, so a key that simply answered "yes" would pass without it.
+    assert not subject_matches(game, lone, described)
+
+
+def test_exclude_basic_lands_names_the_pair_not_the_supertype(pool):
+    """"…**except for basic lands**" / "…**other than a basic land**" (Eye of
+    Singularity prints both spellings).
+
+    CR 205.4a's Basic supertype **and** the land card type, which is what the
+    printed exemption says — not the supertype alone. The two agree on every
+    card in the pool today, because nothing but a land carries Basic; they are
+    still two questions, and asking one of them is the version that would drop
+    the exemption the day a set prints the other.
+
+    Demonstrated by what it keeps: a nonbasic land and an ordinary creature are
+    both admitted, so a key that rejected everything would fail here.
+    """
+    basic = Permanent(card=pool["Forest"])
+    nonbasic_land = Permanent(card=pool["Badlands"])
+    creature = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[basic, nonbasic_land, creature]),
+        PlayerState(name="P2"),
+    ])
+
+    described = {"exclude_basic_lands": True}
+    assert not subject_matches(game, basic, described)
+    assert subject_matches(game, nonbasic_land, described)
+    assert subject_matches(game, creature, described)
 
 
 def test_attacking_you_is_two_questions_not_one(pool):

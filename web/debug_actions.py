@@ -72,7 +72,12 @@ def _debug_move_permanent_off_battlefield(game, controller_seat: int, index: int
     game.remove_from_battlefield(permanent)
     if "Aura" in permanent.card.type_line:
         game._remove_aura_effects(permanent)
-    game._trigger_aura_death_effects(permanent, controller)
+    # An Aura's death trigger used to be announced here as well. It was wrong
+    # twice over: this move is a bounce or an exile, and CR 700.4 makes "dies"
+    # mean *put into a graveyard from the battlefield* — so "when enchanted
+    # creature dies" fired on a creature that had not died. The one death
+    # announcement is `_fire_creature_dies_triggers`, reached from the graveyard
+    # seam, which this path deliberately does not take.
     if not permanent.metadata.get("is_token", False):
         (owner.hand if zone == "hand" else owner.exile).append(permanent.card)
     game._recompute_continuous_effects()

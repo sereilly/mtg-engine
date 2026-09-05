@@ -852,7 +852,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1101,6 +1101,12 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `_deaths` split out of `_events` when the Death Watch round pushed it
+    # back over the size guard: the tables a *death* freezes (the dying
+    # card, its last-known power and toughness, and which fire sites stamp
+    # them) are read by five unrelated families, where `_events` answers the
+    # same question across every event there is. A floor, not a family.
+    "_deaths",
     # `_core` split twice in one round, when The Dark pushed it past the size
     # guard below. `_references` took the object/player/target nodes
     # (`ObjectFilter` alone was 428 lines), `_primitives` took the two literal

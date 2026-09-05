@@ -448,6 +448,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # delimits them and the noun parser reads the phrase (round 34).
     ("attackers_declared",
      r"whenever you attack with (?P<attackers_count>[a-z]+) or more (?P<attacker_subjects>[^,]+)"),
+    # "Whenever **all** non-Wall creatures you control attack" (Mob Mentality).
+    # A third question about the same declaration, and the one that is not a
+    # count at all: it asks whether the set the noun phrase describes and the
+    # set that attacked are the same. So it is a marker rather than an
+    # `attackers_count` — "all" is not a number, and spelling it as one would
+    # be a trigger that fires on any attack once you control that many.
+    #
+    # The empty named group is the `any_attacking_seat` idiom above: present in
+    # the groupdict exactly when this row matched, carrying no text to re-read.
+    # Ordered above the bare per-creature rows for the reason the two count
+    # rows are — "all non-Wall creatures you control" is a noun phrase
+    # `matching_creature_attacks` would happily read if it opened with "a".
+    ("attackers_declared",
+     r"whenever (?P<all_attackers>)all (?P<attacker_subjects>[^,]+) attack(?![a-z])"),
     # "Whenever this creature and at least two other creatures attack …"
     # (Makeshift Battalion, printed under the ability word "Battalion", which
     # CR 207.2c strips before this table sees the line). The source must be

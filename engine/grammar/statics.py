@@ -650,7 +650,15 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
     if len(effects) == 1 and isinstance(effects[0], ast.Pump):
         pump = effects[0]
         computed = pump.x_definition is not None or pump.per_each is not None
-        if computed and _is_source(pump.subject):
+        # …and the same sentence printed by an Aura about its **host**:
+        # "Enchanted creature gets +1/+1 for each other creature you control"
+        # (Vampirism). Layer 7c either way, sized by the same shared count spec
+        # and rebuilt by the same P/T refresh — only the permanent the delta
+        # lands on differs, which is the split `conditional_static` already
+        # makes with its `subject` key one branch up. Routed rather than
+        # repeated, so the two subjects cannot drift about what "for each other
+        # creature you control" counts.
+        if computed and (_is_source(pump.subject) or _is_enchanted(pump.subject)):
             return _lower_pump(pump)
     buff = _lower_lord_effects(node, effects)
     return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)

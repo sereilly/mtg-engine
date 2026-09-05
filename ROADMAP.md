@@ -1207,6 +1207,127 @@ fired, and neither was a crash:
   it has now been found from inside a docstring (ALL), inside a comment (5ED)
   and inside an assertion that describes itself as not being one (VIS).
 
+### Wave 2, group 3 — the Auras that count, and a name sweep: 139 -> 143
+
+Five cards briefed, four landing. Vampirism, Death Watch, Mob Mentality and Eye
+of Singularity; **Necromancy declined**, with its pieces named below.
+
+**Every refusal site in the brief was a probe-order artifact except two.** Death
+Watch was quoted as "expected a keyword ability" on a sentence containing no
+keyword: the verb table reaches `_parse_loses`, which reads "loses <amount>
+life" and had no branch for the *other* printed word order — "loses **life equal
+to** its power", where the noun comes before the quantity. That production
+exists on the gain side and has since Divine Offering; the two halves of one
+printed sentence were therefore legal and illegal. Vampirism was quoted on its
+third line and its other three already compiled. Mob Mentality's quoted refusal
+("expected a subject") was the trigger condition, and the effect half it seemed
+to indict lowered on its own.
+
+**The collateral is where the round paid.** Freezing the dead creature's power
+and toughness into `_fire_creature_dies_triggers`' context — which the *sibling*
+fire site's comment already claimed this one did — retired a bespoke dispatcher
+and fixed two shipped Auras:
+
+- **Decomposition** (MIR, shipped, 100% supported) — "When enchanted creature
+  dies, its controller loses 2 life" lowered `recipient: last_target_controller`,
+  a scratchpad key only a destroy *step* writes. Under a trigger nothing had
+  written it, the handler logged "no destroyed creature, no life lost", and the
+  card had never taken a point of life from anybody.
+- **Creature Bond** (LEA/LEB/2ED/3ED/4ED, shipped) — its damage was carried by
+  `mixins/effects._trigger_aura_death_effects`, a dispatcher announced from four
+  `on_destroy` callbacks rather than from the graveyard seam. On the ordinary
+  destroy path (Terror, a sweep) no callback ran and **no damage was dealt at
+  all**. With the toughness frozen the sentence compiles like any other, so the
+  dispatcher is gone — keeping both would have dealt the damage twice on the two
+  state-based-action paths.
+- The same dispatcher was called from `web/debug_actions.py`'s **bounce and
+  exile** path, where CR 700.4 makes "dies" false: sending an enchanted creature
+  to hand from the Debug Menu dealt Creature Bond's damage.
+
+**Vampirism is the third card in this file caught by a prefix-matching P/T
+reader.** `aura_static_pt_grant`'s pattern matches "gets +1/+1" inside "gets
++1/+1 **for each other creature you control**", so the flat grant was added on
+top of the count the layer-7c refresh contributes — the host one point too big
+in each half. The per-counter decline at the top of that function had the same
+shape and one card behind it; the decline is now the printed clause ("for each")
+rather than the one multiplier that had a card.
+
+**The two readings of Vampirism's "other" are the same card.** CR 109.5 makes
+"other" relative to the object the ability is on, and an Aura is not a creature —
+so the count includes the host and the -1/-1 anthem reaches it. Read the other
+way (both words excluding the host) the host gets one less of each and no
+penalty. Both are layer-7c additions, so the two readings are **numerically
+identical on every board**, which is why the brief's instruction to exclude the
+enchanted creature is immaterial rather than wrong.
+
+**What was built, and what it buys beyond these four cards:**
+
+| Piece | Home | Second card |
+| --- | --- | --- |
+| `<player> loses life equal to <amount>` | `effects/characteristics._parse_loses` | Lich, Illicit Auction print the shape |
+| `DEAD_CHARACTERISTIC_*`, read by `_back_reference_payload` | `lowering/_deaths.py` (new floor) | every death family, not just life |
+| `dynamic_pt_bonus` / `pump_enchanted_creature` with `subject: attached` | `lowering/characteristics`, `permanent_state` | any counted Aura grant |
+| `attackers_declared` "all <noun> attack" | `oracle.py`, `grammar/triggers`, `events.py` | any all-in attack trigger |
+| `shares_name_with_another`, `exclude_basic_lands`, `name_from_event` | `nouns`/`names`/`subject_filters` | Bazaar of Wonders, Chrome Replicator print name relations |
+
+`lowering/_events.py` crossed the thousand-line guard and shed **`_deaths.py`**:
+the dying card, its last-known power and toughness, and which fire sites stamp
+them. A floor rather than a family, and the seam is real — `_events` answers
+"what did the firing event freeze" across every event there is, and five
+unrelated lowering families ask that question about one event class.
+`postmodifiers.py` crossed it too and shed its two **name comparisons** into
+`names.py`, following `accept_original_expansion`'s precedent: a name comparison
+is about a literal, not about a type line. It is at **999 of 1,000** and the
+next group to touch it will have to split it.
+
+`oracle_diff`: **6 changed of 2348** — the four cards, plus Creature Bond and
+Decomposition. No card lost an instruction.
+
+### Necromancy — declined, and here is the bill
+
+The set's largest card, and it is five pieces rather than one big one. Each was
+probed on its own through the live grammar, so the list is by *feature with its
+refusal*, not by the outermost failure — which is `granted ability in quotes`
+and is the least informative of the five.
+
+1. **"You may cast this spell as though it had flash. If you cast it any time a
+   sorcery couldn't have been cast, …"** — **already implemented, and already
+   enforced.** `cast_timing.casts_at_instant_speed` reads the permission off any
+   card's text, `mixins/stack/casting.py` stamps `CAST_AT_INSTANT_SPEED` from
+   `sacrifices_at_cleanup_if_cast_at_instant_speed(card.oracle_text)` with no
+   type test at all, and `phases/cleanup_step.py` sacrifices what carries it.
+   `cast_permission_line` claims Necromancy's sentence **verbatim**. What is
+   missing is one reader: the gate that asks that table is
+   `auras._aura_line_claimed`, which runs only for a card printing an
+   `Enchant <noun>` line — and Necromancy's enchant clause is inside quotes.
+   The grammar refuses the line ("expected a subject") because it is a
+   text-table line rather than a production, exactly as it does for the Mirage
+   cycle; the cycle is admitted by the Aura gate and this card has none.
+2. **"…it becomes an Aura with '…'."** Two gaps in one clause. `becomes` has no
+   reading for a *card type* ("expected a colour or a creature body after
+   'becomes'"), and the quoted grant is the pool-wide `granted ability in
+   quotes` bucket — 34 lines over 19 distinct sentences in GRAMMAR_COVERAGE.md,
+   already scheduled as phase 3.
+3. **"enchant creature put onto the battlefield with Necromancy."** Not a
+   printed characteristic: `targeting.enchant_subject_spec` derives a picker
+   from a noun phrase, and this one names a **history** — "put onto the
+   battlefield with this card" — that no filter key records. The key would be a
+   stamp written by the reanimation half of the same sentence, which is item 4.
+4. **"Put target creature card from a graveyard onto the battlefield under your
+   control **and attach this enchantment to it**."** The reanimation half
+   lowers today (`reanimate_creature`, `any_graveyard`, `under_your_control`).
+   Fusing the attach refuses with "attach needs one chosen permanent to attach
+   to": the host is the card the *same step* just put onto the battlefield, and
+   the attach lowering knows only a chosen permanent.
+5. **"When this enchantment leaves the battlefield, that creature's controller
+   sacrifices it."** The trigger has a claim and a dispatcher
+   (`remove_all_from_battlefield`, CR 603.6c); the effect refuses with "no
+   handler for another player sacrificing", and "that creature" needs the
+   binding item 4 would write.
+
+Items 1 and 5 are each a round on their own; 2, 3 and 4 are one round together,
+because 3 is unanswerable until 4 records what it asks about.
+
 ## Mirage (MIR) — shipped (335/335, manifest index 13)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**

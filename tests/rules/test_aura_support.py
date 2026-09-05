@@ -242,22 +242,36 @@ def test_303_4_an_attached_death_trigger_needs_more_than_a_parsed_condition():
 
 
 @pytest.mark.cr("303.4", "603.10")
-def test_303_4_the_death_damage_template_is_still_claimed_and_still_fires():
-    """The one attached trigger the engine performs with no instruction behind
-    it: the toughness has to be read while the creature is still on the
-    battlefield (CR 603.10), so no payload can carry it. It is claimed by its
-    printed *line*, which is what the dispatcher reads too."""
-    from engine.auras import aura_death_damage_line
+def test_303_4_the_death_damage_line_compiles_rather_than_being_dispatched():
+    """Creature Bond's line, which used to be the one attached trigger the
+    engine performed with no instruction behind it.
 
+    The toughness has to be read while the creature is still on the battlefield
+    (CR 603.10) - which was a fact about the *fire site*, not about the rule.
+    ``_fire_creature_dies_triggers`` freezes ``dead_toughness`` into every death
+    it announces, so the sentence lowers to an ordinary ``deal_damage`` reading
+    that key and the bespoke dispatcher beside it is gone. Both would have been
+    strictly worse than either: the compiled trigger is announced by the
+    graveyard seam and the dispatcher by four ``on_destroy`` callbacks beside
+    it, so Creature Bond dealt its damage twice on the two state-based-action
+    paths and once everywhere else.
+    """
     line = normalize_creature_line(
         "When enchanted creature dies, this Aura deals damage equal to that "
         "creature's toughness to the creature's controller."
     )
 
-    assert aura_death_damage_line(line)
-    assert compile_card_oracle(
+    program = compile_card_oracle(
         _aura("Enchant creature\n" + line, name="Probe Bond")
-    ).supported
+    )
+
+    assert program.supported
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "attached_creature_dies"
+    assert trigger.instruction is not None
+    assert trigger.instruction.kind == "deal_damage"
+    assert trigger.instruction.payload["amount_from_trigger"] == "dead_toughness"
+    assert trigger.instruction.payload["recipient"] == "event_subject_controller"
 
 
 @pytest.mark.cr("702.5a", "303.4")

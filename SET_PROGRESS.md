@@ -26,7 +26,7 @@ Do not edit by hand — re-run the script instead.
 | 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Complete (115/115 supported) |
 | 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Complete (144/144 supported) |
 | 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Complete (335/335 supported) |
-| 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Measured (139/167 supported, not shipped) |
+| 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Measured (143/167 supported, not shipped) |
 | 16 | Fifth Edition | 5ED | 1997-03-24 | 434 | 0 | Complete (434/434 supported) |
 | 17 | Weatherlight | WTH | 1997-06-09 | 167 | 161 | Not Implemented |
 | 18 | Tempest | TMP | 1997-10-14 | 335 | 299 | Not Implemented |

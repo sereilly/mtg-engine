@@ -31,6 +31,7 @@ from ._common import (
     _describe_targets,
     _restrictions_beyond,
 )
+from ._deaths import DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS
 from ._events import (
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
@@ -38,6 +39,7 @@ from ._events import (
     SWEPT_CONTROLLER_SEATS,
     _EVENT_SUBJECT_PLAYERS,
     DAMAGE_RECIPIENT,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
@@ -101,17 +103,6 @@ def _life_gain_cap_payload(
             f"no reader for life-gain cap {sorted(unknown)!r}", node=node,
         )
     return {"capped_by": terms}
-
-
-#: The trigger-context key each printed characteristic of a **dead** permanent
-#: is frozen under. Two entries rather than a rule, because a fire site records
-#: what it records: a key absent here refuses the back-reference rather than
-#: reading a zero out of a context nothing wrote to — the same discipline
-#: ``_events._EVENT_QUANTITIES`` keeps one module over.
-_DEAD_CHARACTERISTIC_RECORDS: dict[str, str] = {
-    "its_power": "dead_power",
-    "its_toughness": "dead_toughness",
-}
 
 
 def _lower_gain_life(
@@ -187,8 +178,12 @@ def _lower_gain_life(
     # already freeze the power.
     if (
         isinstance(node.amount, ast.ThatMuch)
-        and node.amount.source in _DEAD_CHARACTERISTIC_RECORDS
-        and event in ("dies", "permanent_dies")
+        and node.amount.source in DEAD_CHARACTERISTIC_RECORDS
+        # Widened from a literal pair to the set the fire sites answer for, so
+        # an Aura's "when enchanted creature dies" reads the same frozen number
+        # a creature's own death trigger does. The set is what a site *stamps*,
+        # never what a condition table merely names.
+        and event in DEAD_CHARACTERISTIC_EVENTS
         and node.player.kind == "you"
         # This shortcut returns before the back-reference branch below, which
         # is the only one that carries a cap, so it declines a capped gain
@@ -199,7 +194,7 @@ def _lower_gain_life(
             OracleInstruction(
                 "target_gains_life", "",
                 {
-                    "amount_from_trigger": _DEAD_CHARACTERISTIC_RECORDS[
+                    "amount_from_trigger": DEAD_CHARACTERISTIC_RECORDS[
                         node.amount.source
                     ],
                     "recipient": "caster",
@@ -609,6 +604,24 @@ def _lower_lose_life(
     # this instruction runs the permanent is gone (CR 608.2h, last-known
     # information).
     if node.player.kind == "controller":
+        # "When enchanted creature dies, **its controller** loses life equal to
+        # its power." (Death Watch.) Under a trigger nothing targeted, the
+        # scratchpad key a destroy step writes was never written — and reading
+        # it anyway is a loss aimed at whichever seat an empty record defaults
+        # to. The seat the *event* was about is frozen by the fire site
+        # (CR 603.10: by resolution the creature is a card in a graveyard, and
+        # CR 108.4 gives that no controller at all), which is the same key and
+        # the same table "that player" one branch up already reads.
+        #
+        # The scratchpad record is preferred when a step of this same effect
+        # wrote one, so "Destroy target creature. Its controller loses 2 life."
+        # keeps the reading it has: inside one resolution the pronoun names
+        # what that resolution acted on, not what fired it.
+        if LAST_TARGET_CONTROLLER not in produced and (
+            event in _EVENT_SUBJECT_CONTROLLERS
+        ):
+            payload["recipient"] = EVENT_SUBJECT_CONTROLLER
+            return (OracleInstruction("target_loses_life", "", payload),)
         payload["recipient"] = "last_target_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "you":

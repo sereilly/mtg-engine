@@ -27,7 +27,8 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._events import (BOUND_CARD_EVENTS, CHOSEN_PLAYER,
+from .lowering._deaths import BOUND_CARD_EVENTS
+from .lowering._events import (CHOSEN_PLAYER,
                                LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER,
                                chooser_payload as _chooser_payload)
 from .lowering.where_x import lower_where_x

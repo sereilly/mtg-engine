@@ -135,6 +135,16 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # additionally needs is the ability's source, which that function takes.
     "tapped_to_pay_for_source_this_turn",
     "other_than_attached_host",
+    # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
+    # Singularity's two lines). ``to_payload`` emits it as
+    # ``exclude_basic_lands`` and the pure matcher tests it off the printed type
+    # line, so it is honoured in the sense every type word here is.
+    "excluded_basic_lands",
+    # "…**with the same name as another permanent**" (Eye of Singularity).
+    # Emitted unconditionally and answered by ``subject_matches``, which has the
+    # board the relation compares against — the same footing
+    # ``controller_controls`` below is on.
+    "shares_name_with_another",
     "attached_to_filter",
     # "…**whose controller controls an Island**" (Seasinger). ``to_payload``
     # emits it unconditionally, and ``subject_filters.subject_matches`` is what

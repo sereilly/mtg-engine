@@ -405,36 +405,18 @@ _ATTACHED_TRIGGER = re.compile(rf"^when(?:ever)? [^,]*\b{_ATTACHED} .+$")
 # "When enchanted creature dies, this Aura deals damage equal to that
 # creature's toughness to the creature's controller." (Creature Bond.)
 #
-# The one attached-death trigger the engine carries out without compiling an
-# instruction: ``mixins/effects.py:_trigger_aura_death_effects`` builds the
-# damage at trigger time, because the toughness has to be read while the
-# creature is still on the battlefield (CR 603.10) and no instruction payload
-# can hold a number nobody has measured yet.
+# **The template and its dispatcher are gone.** They existed because the
+# toughness had to be read while the creature was still on the battlefield
+# (CR 603.10) and no instruction payload could hold a number nobody had
+# measured yet — which was true of the *fire site*, not of the rule.
+# ``_fire_creature_dies_triggers`` freezes ``dead_toughness`` into every death
+# it announces now, so "damage equal to that creature's toughness" lowers to an
+# ordinary ``deal_damage`` reading that key and claim 1 below covers the line.
 #
-# It is a *line* pattern rather than a condition kind because that dispatcher
-# used to fire on the condition alone. Every Aura printing "when enchanted
-# creature dies" therefore got Creature Bond's damage: Puppet Master, whose
-# line returns the dead creature's card to its owner's hand, instead dealt its
-# controller damage equal to its toughness — a supported card doing a
-# *different card's* effect, which is worse than doing nothing and is why
-# `attached_trigger_claim` asks this rather than asking whether a trigger
-# condition parsed.
-_ATTACHED_DEATH_DAMAGE = re.compile(
-    rf"^when(?:ever)? {_ATTACHED} creature dies, this (?:aura|enchantment) deals "
-    r"damage equal to that creature's toughness to the creature's controller$"
-)
-
-
-def aura_death_damage_line(line: str) -> bool:
-    """Whether *line* is the death-damage template above.
-
-    One reader for the gate and the dispatcher, so what is claimed and what
-    fires cannot drift — the same pairing every other table in this module
-    keeps.
-    """
-    return _ATTACHED_DEATH_DAMAGE.match(_line_text(line)) is not None
-
-
+# Keeping both would have been strictly worse than either: the compiled trigger
+# is announced by the graveyard seam and the bespoke one by four ``on_destroy``
+# callbacks beside it, so Creature Bond dealt its damage **twice** on the two
+# state-based-action paths and once everywhere else.
 
 
 def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
@@ -460,12 +442,13 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
        claim was satisfied by three cards whose effect clause compiled to
        nothing — and one dispatcher keyed on that condition kind then gave all
        three Creature Bond's damage.
-    1b. **The death-damage template**, which is that dispatcher's line and the
-       one attached trigger the engine performs without an instruction: the
-       toughness must be read while the creature is still on the battlefield
-       (CR 603.10), so no payload can carry it.
     2. **The additional-mana clause** above, which has a dispatcher and no
        trigger.
+
+    There used to be a 1b: a death-damage template claimed by its printed line,
+    for the one attached trigger the engine performed without an instruction.
+    The death fire site freezes the dead creature's toughness now, so the
+    sentence compiles like any other and claim 1 covers it.
 
     There used to be a third: a name-keyed registry of Aura behaviour dispatched
     from inside ``tap_land_for_mana``, whose only entry was Kudzu. It is a
@@ -483,11 +466,6 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
     parsed = _parse_triggered_ability(normalized_line, card_name)
     if parsed is not None and parsed.instruction is not None:
         return "attached trigger — compiled instruction"
-    # The one dispatcher that carries out an attached trigger with no
-    # instruction behind it. Asked by *line*, not by condition kind: see
-    # `aura_death_damage_line` for the card that cost.
-    if aura_death_damage_line(normalized_line):
-        return "attached trigger — death damage, mixins/effects.py"
     if aura_additional_mana_on_tap_line(normalized_line) is not None:
         return "attached trigger — additional mana on tap"
     return None
@@ -595,20 +573,48 @@ def aura_anthem_claim(normalized_line: str) -> str | None:
     return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
 
 
-def aura_conditional_static_claim(normalized_line: str) -> str | None:
-    """Name the code behind "Enchanted creature gets +N/+N as long as …", or None.
+#: The instruction kinds a *static* line printed about the attached permanent
+#: may lower to, and the pass that applies each one. Keyed by the kind, because
+#: what makes the sentence the host's is one shared payload key —
+#: ``subject: "attached"`` — and a claim that read the key without checking the
+#: kind would approve any future instruction carrying it, applied by nobody.
+#:
+#: Two rows, one per printed shape: a delta gated on criteria (Ice Age's five
+#: Scarabs) and a delta whose *size* is a count (Vampirism). They are one claim
+#: rather than two functions because the question is identical — does the P/T
+#: refresh read this instruction on this permanent's behalf — and two copies of
+#: it would drift the way every other pair this module has retired did.
+_ATTACHED_STATIC_KINDS: dict[str, str] = {
+    "conditional_static": (
+        "conditional static on the enchanted permanent — lowered by the "
+        "grammar, applied by _refresh_dynamic_creatures (P/T) and "
+        "_recalculate_lord_buffs (keywords)"
+    ),
+    "dynamic_pt_bonus": (
+        "counted layer-7c bonus on the enchanted permanent — lowered by the "
+        "grammar, applied by _refresh_dynamic_creatures"
+    ),
+}
 
-    Ice Age's five Scarabs ("as long as an opponent controls a black
-    permanent"). Like :func:`aura_anthem_claim` and unlike
+
+def aura_conditional_static_claim(normalized_line: str) -> str | None:
+    """Name the code behind a static line about the *enchanted* permanent, or None.
+
+    "Enchanted creature gets +N/+N as long as …" (Ice Age's five Scarabs) and
+    "Enchanted creature gets +1/+1 for each other creature you control"
+    (Vampirism). Like :func:`aura_anthem_claim` and unlike
     :func:`aura_continuous_claim`, this claim says **the line must lower**: the
-    ``conditional_static`` instruction carrying ``subject: "attached"`` is what
-    the P/T refresh reads, so a claim on the other side would leave the Aura
-    supported with nothing behind the sentence.
+    instruction carrying ``subject: "attached"`` is what the P/T refresh reads,
+    so a claim on the other side would leave the Aura supported with nothing
+    behind the sentence.
 
     Asked of the grammar rather than of a pattern here, which is the point of
     lowering it there: "an opponent controls a black permanent" has one reader
     (``subject_matches``, through the condition lowering), and a regex in this
     file would be a second one free to disagree about what a black permanent is.
+    The same argument covers the count: "other creature you control" is the
+    noun parser's phrase, evaluated by ``evaluate_count``, and a second reading
+    of it here could disagree about which creatures "other" excludes.
     """
     from .grammar import ast as grammar_ast
     from .grammar import compile_line
@@ -618,17 +624,13 @@ def aura_conditional_static_claim(normalized_line: str) -> str | None:
         return None
     if not isinstance(compiled.node, grammar_ast.StaticAbilityNode):
         return None
-    if not any(
-        instruction.kind == "conditional_static"
-        and instruction.payload.get("subject") == "attached"
-        for instruction in compiled.instructions
-    ):
-        return None
-    return (
-        "conditional static on the enchanted permanent — lowered by the "
-        "grammar, applied by _refresh_dynamic_creatures (P/T) and "
-        "_recalculate_lord_buffs (keywords)"
-    )
+    for instruction in compiled.instructions:
+        if instruction.payload.get("subject") != "attached":
+            continue
+        claim = _ATTACHED_STATIC_KINDS.get(instruction.kind)
+        if claim is not None:
+            return claim
+    return None
 
 
 def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
@@ -700,6 +702,23 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
         return (
             "the last-counter-removed trigger (CR 121.3) — "
             "mixins/game_ending.py's counter sweep"
+        )
+    if cond == "attackers_declared" and kind in EFFECT_HANDLERS:
+        # "Whenever all non-Wall creatures you control attack, enchanted
+        # creature gets +X/+0 until end of turn." (Mob Mentality.) CR 508.1's
+        # declaration, announced through the event bus by
+        # ``phases/declare_attackers_step.py`` — which scans **every**
+        # permanent whose compiled trigger matches, not only the creatures in
+        # the declaration, so an Aura watching its controller's attack is
+        # announced like any other observer.
+        #
+        # Its own row rather than a widening of the ones above for their
+        # reason: each names one condition and the site that fires it, and a
+        # claim that could not name a site is the wildcard this function
+        # replaced.
+        return (
+            "the attack-declaration trigger (CR 508.1) — "
+            "phases/declare_attackers_step.py"
         )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
@@ -1017,6 +1036,21 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # ``conditional_static`` instruction instead (grammar/statics.py) and
         # the P/T refresh asks the condition on every recompute.
         if re.match(r"(?:for )?as long as\b", tail):
+            continue
+        # "...gets +1/+1 **for each other creature you control**" (Vampirism).
+        # A *counted* grant, which is a different kind of answer from the
+        # constant this function knows how to give - and this pattern matches
+        # its prefix, so answering here would grant a flat +1/+1 **on top of**
+        # the count the layer-7c refresh already contributes from the
+        # ``dynamic_pt_bonus`` the line lowers to: the enchanted creature came
+        # out one point too big in each half.
+        #
+        # The same decline ``aura_pt_grant_per_counter`` gets at the top of this
+        # function, widened from the one multiplier that had a card to the
+        # printed clause itself. "For each" says the size is a count, whatever
+        # is counted, and a multiplier this reader cannot see is one it must not
+        # answer past.
+        if re.match(r"for each\b", tail):
             continue
         return int(match.group(1)), int(match.group(2))
     return None

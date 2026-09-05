@@ -205,6 +205,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             "attached_to", "bypass_regeneration", "targets",
             "blocked_by_bound_object", "blocked_by_target_object",
             "in_combat_with_bound_object",
+            # The two halves of "all **other** permanents with **that name**"
+            # (Eye of Singularity), both resolved below against the firing
+            # event's context — which `subject_matches` never sees.
+            "name_from_event", "other_than_event_subject",
         )
     }
     # "…all creatures that were blocked by **that creature** this turn."
@@ -281,6 +285,32 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         blocked_controllers = dict(
             blocker.metadata.get("blocked_attacker_controllers_this_turn") or {}
         )
+    # "…destroy all other permanents with **that name**." (Eye of Singularity.)
+    # CR 201.2's comparison against the permanent whose entry fired the trigger.
+    # The name is read from the context the fire site froze rather than from the
+    # id beside it: this resolves after the entry, and a permanent that has left
+    # by then is a card in another zone the id no longer resolves to (CR 400.7)
+    # — while the sentence still names the name the event had (CR 603.10).
+    #
+    # An unresolvable name ends the resolution, for the reason every relation
+    # around it does: a dropped narrowing on a sweep is not a card that does
+    # less, it is one that takes the board.
+    event_name: str | None = None
+    event_subject_id: int | None = None
+    if instruction.payload.get("name_from_event"):
+        tctx = context.trigger_context or {}
+        event_name = tctx.get("event_subject_name")
+        if not event_name:
+            game.log.append(
+                f"{context.card.name}: no name for 'that name' to be"
+            )
+            return True, "resolved"
+        # "**Other** permanents" — every one but the permanent the sentence is
+        # about. By id rather than by name, because the exclusion is one object
+        # and a second copy with the same name is a different permanent that the
+        # card destroys (CR 400.7).
+        if instruction.payload.get("other_than_event_subject"):
+            event_subject_id = tctx.get("event_subject_permanent_id")
     attached_to = instruction.payload.get("attached_to")
     host = None
     if attached_to is not None:
@@ -349,6 +379,8 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             observer=observer, source=context.source_permanent,
         )
         and (host is None or perm.metadata.get("attached_to") is host)
+        and (event_name is None or perm.effective_card.name == event_name)
+        and (event_subject_id is None or perm.permanent_id != event_subject_id)
         and (blocked_ids is None or perm.permanent_id in blocked_ids)
         and (
             blocked_by_blocker_id is None

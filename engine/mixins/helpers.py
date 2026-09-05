@@ -2546,6 +2546,23 @@ class GameHelpersMixin:
             # immutable object, and a name match would find whichever entry came
             # first. The identity is what locates the one that just died.
             "dead_card": dead_permanent.card,
+            # "…loses life equal to **its power** and you gain life equal to
+            # **its toughness**" (Death Watch). Last known information
+            # (CR 603.10 / 608.2h): the numbers the creature had on the
+            # battlefield, so one that died pumped or shrunk is worth what it
+            # was worth. By resolution it is a card in a graveyard with a
+            # printed number and no anthem on it, which is the wrong answer and
+            # an invisible one.
+            #
+            # Frozen for **every** trigger this site announces whether or not it
+            # asks, exactly as the two sibling death sites do. The comment
+            # beside the permanent-death site already claimed this one froze
+            # them; it did not, so every condition announced from here — an
+            # Aura's "when enchanted creature dies", "whenever a creature dies",
+            # both controller-scoped spellings — was refused the phrase for want
+            # of a key nobody wrote.
+            "dead_power": max(0, dead_permanent.effective_power),
+            "dead_toughness": max(0, dead_permanent.effective_toughness),
             "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
             # "…**if it had a death counter on it**" (Bogardan Phoenix). The
             # counters with no rules meaning of their own (CR 122.3), which live
@@ -2794,6 +2811,15 @@ class GameHelpersMixin:
             # on every entry for `entering_power`'s reason: one integer, against
             # a fire site that would have to know which cards care.
             event_subject_permanent_id=permanent.permanent_id,
+            # "…destroy all other permanents with **that name**." (Eye of
+            # Singularity.) CR 201.2's name, frozen for the reason the id and
+            # the power beside it are: the trigger resolves after the entry, and
+            # a permanent that has left by then is a card in another zone the id
+            # no longer resolves to (CR 400.7). Off the **effective** card, so a
+            # Clone that entered as something else is swept under the name the
+            # board showed (CR 707.2). One string, on every entry, for
+            # `entering_power`'s reason.
+            event_subject_name=permanent.effective_card.name,
             # "…deals damage equal to **that creature's** power" (Terror of the
             # Peaks). Frozen here rather than read at resolution: the trigger
             # resolves after the entry, and by then the creature may have been

@@ -649,3 +649,75 @@ def test_every_filter_draft_field_is_carried_into_the_object_filter():
         "these draft fields are never copied into ObjectFilter, so a parser "
         f"setting one drops the restriction silently: {missing}"
     )
+
+
+# ---------------------------------------------------------------------------
+# W2G3: the name comparisons, the basic-land exemption, and "all <noun> attack"
+# ---------------------------------------------------------------------------
+
+
+def test_the_same_name_relation_reads_its_two_printed_forms():
+    """"…with the same name as another permanent" (Eye of Singularity's entry
+    sweep) and "…with that name" (its per-entry one).
+
+    Two narrowings on one axis, and both are asserted as *fields* rather than
+    through a sweep: the whole hazard is a phrase that parses with the relation
+    dropped, which reads on a board exactly like a sweep the card describes.
+    """
+    entry = _statement("destroy each permanent with the same name as another permanent")
+    assert entry.subject.filter.shares_name_with_another is True
+    assert entry.subject.filter.name_from_event is False
+
+    per_entry = _statement("destroy all other permanents with that name")
+    assert per_entry.subject.filter.name_from_event is True
+    assert per_entry.subject.filter.shares_name_with_another is False
+    # "Other" is still recorded here; which object it excludes is the lowering's
+    # question, because only there is the firing event known.
+    assert per_entry.subject.filter.other_than_source is True
+
+
+def test_the_same_name_relation_refuses_a_second_class():
+    """The noun after "as another" must name the class the phrase already did.
+
+    "Creature with the same name as another artifact" is a comparison across two
+    sets, which nothing here implements — so the words stay on the stream and
+    the line fails the full-consumption invariant rather than being read as the
+    one-class relation it is not.
+    """
+    with pytest.raises(GrammarError):
+        parse_line("destroy each creature with the same name as another artifact")
+
+
+def test_the_basic_land_exemption_reads_both_printed_word_orders():
+    """"…except for basic lands" and "…other than a basic land" (Eye of
+    Singularity prints one on each of its two lines).
+
+    One field, because they name one set: a permanent that is both a land and
+    CR 205.4a's Basic. Separate fields would be two answers to one question the
+    same card asks twice.
+    """
+    swept = _statement(
+        "destroy each permanent with the same name as another permanent, "
+        "except for basic lands"
+    )
+    assert swept.subject.filter.excluded_basic_lands is True
+
+    node = parse_line("whenever a permanent other than a basic land enters, draw a card")
+    assert node.event.subject.excluded_basic_lands is True
+
+
+def test_the_all_attack_trigger_needs_its_verb():
+    """"Whenever **all** non-Wall creatures you control attack" (Mob Mentality).
+
+    The verb is what makes the sentence a trigger on CR 508.1's declaration. A
+    line that merely opens "all <noun phrase>" and then says something else must
+    not be claimed here — so the production consumes the verb or nothing, and
+    the refusal is what proves it consumed nothing.
+    """
+    node = parse_line("whenever all non-Wall creatures you control attack, draw a card")
+    assert node.event.kind == "attackers_declared"
+    assert node.event.subject.excluded_subtypes == ("wall",)
+    assert node.event.subject.controller == "you"
+
+    with pytest.raises(GrammarError):
+        parse_line("whenever all creatures you control are tapped, draw a card")

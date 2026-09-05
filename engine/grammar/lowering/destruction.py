@@ -242,6 +242,49 @@ def _lower_destroy(
             return (
                 OracleInstruction("destroy_all_matching", "", blocked_payload),
             )
+        # "Destroy all other permanents with **that name**." (Eye of
+        # Singularity.) A relation to the object the *firing event* was about,
+        # which `subject_matches` cannot answer — it is handed a permanent, a
+        # seat and a source, and never the trigger's context — so the key
+        # travels to the handler, exactly as the two block relations above do.
+        #
+        # A branch rather than a payload key for their reason as well:
+        # `_filter_payload` does not carry the field, so falling through to the
+        # generic paths below would leave the sweep with no narrowing at all and
+        # destroy every permanent on the battlefield.
+        if filt.name_from_event:
+            if event not in _EVENT_SUBJECT_OBJECTS:
+                raise LoweringError(
+                    "\"that name\" is the name of the object this "
+                    "trigger's event was about, and this event records none",
+                    node=node,
+                )
+            named_payload = _filter_payload(
+                filt, carried_separately=frozenset({"name_from_event"}),
+            )
+            # "**other** permanents with that name". The determiner is printed
+            # about the permanent the sentence is already about — the one that
+            # entered — and not about the ability's source, which is the Eye
+            # itself and is not a permanent with that name in the first place.
+            # So the pronoun is resolved here, where the event is known, rather
+            # than left as the `exclude_self` the noun parser wrote: dropped, it
+            # would destroy the permanent whose entry fired the trigger.
+            other_than_enterer = bool(named_payload.pop("exclude_self", None))
+            # Both halves are lifted out before the testability gate and put
+            # back after it, the way Bronze Tablet's ownership half is: the gate
+            # asks what ``subject_matches`` can answer, and these two are
+            # answered by the handler against a context that matcher never sees.
+            named_payload.pop("name_from_event", None)
+            if untestable_filter_keys(named_payload):
+                raise LoweringError("no sweep handler for this narrowing", node=node)
+            named_payload["name_from_event"] = True
+            if other_than_enterer:
+                named_payload["other_than_event_subject"] = True
+            if node.no_regen:
+                named_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", named_payload),
+            )
         # "Destroy all creatures that were blocked by **target Wall** this
         # turn." (Glyph of Reincarnation.) The sibling of the branch above, and
         # a branch for its reason: the relation has no payload form, so falling

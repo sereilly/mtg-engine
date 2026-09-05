@@ -626,6 +626,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                         "attackers_declared", "whenever", subject=subject
                     )
         stream.reset(mark)
+        # "Whenever **all** non-Wall creatures you control attack" (Mob
+        # Mentality). The declaration again, asked as a comparison of two sets
+        # rather than as a count — and printed in the other word order, with
+        # the verb after the noun phrase instead of before it. The verb is
+        # required, so a sentence that merely opens "all <noun phrase>" leaves
+        # its tokens unconsumed and falls through rather than being claimed as
+        # a trigger on a combat it never mentions.
+        if stream.accept_word("all"):
+            subject = parse_subject_filter_at(stream, plural=True)
+            if subject is not None and stream.accept_word("attack"):
+                return ast.TriggerEvent(
+                    "attackers_declared", "whenever", subject=subject
+                )
+        stream.reset(mark)
         if stream.accept_phrase("this", "creature", "and", "at", "least"):
             count = _accept_number(stream)
             if count is not None and stream.accept_phrase("other", "creatures", "attack"):

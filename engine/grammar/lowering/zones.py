@@ -20,7 +20,7 @@ from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
-from ._events import BOUND_CARD_EVENTS
+from ._deaths import BOUND_CARD_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     dropped_narrowings,

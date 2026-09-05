@@ -35,6 +35,9 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, BASE_PT_SET_PERMANEN
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
+from ._deaths import (DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS,
+                      _EVENT_SUBJECT_POWER_RECORD,
+                      _EVENT_SUBJECT_TOUGHNESS_RECORD)
 
 # Trigger events that hand a *damaged player* to the effect after them: "that
 # player" names the player the trigger recorded taking the damage
@@ -118,6 +121,10 @@ def frozen_seat_record(player_kind: str, event: str | None) -> str | None:
 # families need belongs in the shared module, which is the same rule the parse
 # side's `phrases.py` follows.
 _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
+    # Death Watch, Decomposition — the dead **enchanted** creature's, from the
+    # same ``died_context`` the two rows below read. Not the Aura's controller
+    # and not the caster: an Aura on somebody else's creature is the point.
+    "attached_creature_dies",
     "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
     # Earthlink — the dead creature's, from the same stamp
     # (`_fire_creature_dies_triggers` freezes one `died_context` for every
@@ -223,32 +230,6 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # end of the event from the permanent it damaged.
     "damage_dealt",
 })
-
-
-#: The trigger events whose fire site records the dying card, so "that card" /
-#: "it" in the effect behind them names something the handler can find. Written
-#: as a set rather than one literal because three fire sites stamp ``dead_card``
-#: and a fourth would only have to be added here — where an event *not* listed
-#: refuses the sentence rather than resolving to nothing.
-#:
-#: Public, because it is not this family's question: ``zones`` asks it too, for
-#: "put **that card** onto the battlefield under your control" (Seraph,
-#: Krovikan Vampire). One set, so a fire site taught to record the card reaches
-#: both readings of the phrase at once — two copies would let a card be returned
-#: to a hand and refused onto the battlefield under the same trigger.
-BOUND_CARD_EVENTS = frozenset({
-    "attached_creature_dies",
-    "permanent_dies",
-    # "Whenever a creature dealt damage by this creature this turn dies, …"
-    # (Seraph, Krovikan Vampire, Sengir Vampire). The scan in
-    # ``mixins/helpers._fire_creature_dies_triggers`` stamps the same
-    # ``dead_card`` its three sibling scans do — it did not until Seraph asked,
-    # which is why the set is what says an event is admitted rather than the
-    # condition table that merely names it.
-    "creature_dealt_damage_by_self_dies",
-})
-
-#: The private spelling this module used before ``zones`` needed the same set.
 
 
 #: Trigger conditions whose subject **is a player** rather than an object, so
@@ -514,20 +495,12 @@ EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
 # than a rule — an event either carries a number or it does not, and a kind
 # absent here refuses the back-reference instead of reading a zero out of an
 # empty context.
-#: The scratchpad key "that creature's power" falls back to when the sentence
-#: sits under no trigger — the power an earlier step of the same effect froze
-#: about the permanent it acted on (Broken Visage's destroy). Named here beside
-#: the event table because ``_back_reference_payload`` is what chooses between
-#: the two, and ``_records._PRODUCES`` writes the same string: a second spelling
-#: would make the producer gate vacuous while the handler read an empty record.
-_EVENT_SUBJECT_POWER_RECORD = "its_power"
-
-#: Its toughness twin, for the other half of the same printed sentence. A
-#: constant rather than a literal for the reason above, and separate from the
-#: power because the two are different characteristics of one object rather than
-#: one number under two names.
-_EVENT_SUBJECT_TOUGHNESS_RECORD = "its_toughness"
-
+# What a bare "that much" names when the effect is a *triggered ability*: the
+# quantity the firing event carried, frozen into the trigger's context by the
+# fire site. Keyed by trigger-condition kind, and deliberately a table rather
+# than a rule — an event either carries a number or it does not, and a kind
+# absent here refuses the back-reference instead of reading a zero out of an
+# empty context.
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
     # The mirror, from the state-based sweep that announces it: "for each 1
@@ -818,6 +791,14 @@ def _back_reference_payload(
         alias = _SPELL_POSSESSIVE_RECORDS.get(amount.source)
         if alias is not None and alias in produced:
             return {"amount_from": alias}
+        # "…**its controller** loses life equal to **its power** and you gain
+        # life equal to **its toughness**." (Death Watch.) "It" is the dead
+        # permanent, so no step of this effect produced the number — the fire
+        # site froze it. Read here, where a back-reference's home is already
+        # decided, so the two halves of one sentence cannot answer differently.
+        record = DEAD_CHARACTERISTIC_RECORDS.get(amount.source)
+        if record is not None and event in DEAD_CHARACTERISTIC_EVENTS:
+            return {"amount_from_trigger": record}
         raise LoweringError(
             f"back-reference to {amount.source!r} with no producer in this effect",
             node=amount,

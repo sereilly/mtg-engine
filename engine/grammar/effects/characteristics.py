@@ -490,6 +490,28 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 ),
             )
     stream.reset(half_mark)
+    # "loses **life equal to its power**" (Death Watch, Lich, Illicit Auction).
+    # The mirror of the gain production's own first branch, in the word order
+    # this shape prints: "life" comes *before* the quantity, so the
+    # amount-then-noun reading below cannot see it — `parse_amount` refuses on
+    # the word "life", the whole production falls through to the keyword list,
+    # and the line dies on "expected a keyword ability" naming a word the
+    # sentence does not contain.
+    #
+    # One printed idea, two verbs. A gain and a loss of the same amount are the
+    # same clause with the sign flipped (CR 118.2/118.3), and reading it for one
+    # verb only is what made "you gain life equal to its toughness" legal and
+    # "its controller loses life equal to its power" not — on the two halves of
+    # a single printed sentence.
+    equal_mark = stream.mark()
+    if stream.at_word("life"):
+        stream.advance()
+        amount = parse_equal_to(stream)
+        if amount is None:
+            stream.reset(equal_mark)
+        else:
+            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+            return ast.LoseLife(player, amount)
     try:
         amount = parse_amount(stream)
         if stream.accept_word("life"):

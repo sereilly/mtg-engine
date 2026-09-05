@@ -209,7 +209,6 @@ def _action_debug_destroy_permanent(session, req, seat_type):
     # so dies-triggers and Aura cleanup fire exactly as in a real destruction.
     session.game.remove_from_battlefield(permanent)
     session.game._permanent_to_graveyard(controller, permanent)
-    session.game._trigger_aura_death_effects(permanent, controller)
     if permanent.card.primary_type == "land":
         session.game._process_land_dies(controller_seat)
     session.game._recompute_continuous_effects()
