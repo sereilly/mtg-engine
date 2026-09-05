@@ -882,25 +882,18 @@ class SpellCastingMixin:
         # ``derive_cast_spec`` reads a creature's ETB trigger targets, chosen
         # later (CR 603.3d), and gating the cast on them refuses to cast the
         # creature at all.
-        if self.targeting_bans and (
-            card.primary_type in ("instant", "sorcery")
-            or "aura" in (card.type_line or "").lower()
-        ):
-            ban_spec = derive_cast_spec(
-                card, compile_card_oracle(card), from_zone=from_zone
+        # CR 113.3c, through the one predicate the AI's proposal path also asks
+        # (`legality.targeting_ban_refusal`). It was spelled out here and
+        # nowhere else, so the AI kept offering Auras into Peace Talks' two-turn
+        # ban — thirty refused casts across eight games at Visions' Phase 5.
+        from ...legality import targeting_ban_refusal
+
+        banned = targeting_ban_refusal(self, card, from_zone=from_zone)
+        if banned is not None:
+            self.log.append(banned)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, banned
             )
-            if ban_spec is not None and ban_spec.get("kind") not in (
-                "none", "modal", "hand_card", "stack", "spell_or_permanent",
-            ):
-                source_name = self.targeting_bans[-1].get("source_name", "an effect")
-                details = (
-                    f"{card.name} has no legal target: nothing can be targeted "
-                    f"({source_name})"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, details
-                )
 
         naming_permanent = chosen_name_ban(self, card)
         if naming_permanent is not None:

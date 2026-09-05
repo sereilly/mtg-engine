@@ -21,6 +21,7 @@ from .ai_valuation import (
 from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
 from .cast_restrictions import global_cast_ban
+from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                              spell_cost_tax, spell_symbol_tax)
@@ -1197,6 +1198,16 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         # path refuses, nothing is spent, and a seat that re-proposes the card
         # every turn does nothing for the rest of the game — which is exactly
         # what `simulate_ai_games.py`'s `refused_casts` counts.
+        return False
+
+    if targeting_ban_refusal(game, card) is not None:
+        # "This turn and next turn, ... players and permanents can't be the
+        # targets of spells or activated abilities." (Peace Talks, CR 113.3c.)
+        # The fourth ban on this list and the newest, found by Phase 5's
+        # simulation rather than by a test: thirty refused casts across eight
+        # games, every one an Aura or a targeted spell offered while the ban
+        # stood. Asked through the same predicate the cast path refuses with,
+        # so the two cannot answer differently.
         return False
 
     if global_cast_ban(game, card) is not None:

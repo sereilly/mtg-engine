@@ -2476,3 +2476,50 @@ def _targeting_step(instruction):
             if step.kind not in _COMPOSED_STEP_KEYS:
                 return step
     return None
+
+
+#: Cast specs that name no object or player for a targeting ban to bite on, so a
+#: spell carrying one is castable under CR 113.3c's prohibition. "none" targets
+#: nothing; "modal" picks its mode before its targets; "hand_card", "stack" and
+#: "spell_or_permanent" name something that is not a permanent or a player on
+#: the battlefield.
+_UNBANNABLE_CAST_KINDS = frozenset({
+    "none", "modal", "hand_card", "stack", "spell_or_permanent",
+})
+
+
+def targeting_ban_refusal(game, card, *, from_zone: str = "hand") -> str | None:
+    """Why *card* cannot be cast while a targeting ban stands, or ``None``.
+
+    "This turn and next turn, ... players and permanents can't be the targets of
+    spells or activated abilities" (Peace Talks). CR 113.3c: the prohibition is
+    on spells and activated abilities, so a spell that targets a permanent or a
+    player has no legal target while one is up.
+
+    **One predicate, two readers.** The cast path asks it to refuse, and
+    ``ai_policy._can_cast_with_targets`` asks it before proposing — because a
+    refused cast costs nothing and breaks no rule, and a seat that re-proposes
+    the same card every turn does nothing until the ban expires. That is what
+    ``simulate_ai_games.py``'s ``refused_casts`` counts, and Visions' Phase 5
+    run counted thirty of them across eight games. Written here rather than
+    copied into the policy for the reason the three sibling bans above it are:
+    two readers of one gate drift, and this one drifts towards a cast the AI
+    offers and the engine declines.
+    """
+    if not game.targeting_bans:
+        return None
+    if card.primary_type not in ("instant", "sorcery") and "aura" not in (
+        card.type_line or ""
+    ).lower():
+        return None
+    from .oracle import compile_card_oracle
+    from .targeting import derive_cast_spec
+
+    spec = derive_cast_spec(card, compile_card_oracle(card), from_zone=from_zone)
+    if spec is None or spec.get("kind") in _UNBANNABLE_CAST_KINDS:
+        return None
+    source_name = game.targeting_bans[-1].get("source_name", "an effect")
+    return (
+        f"{card.name} has no legal target: nothing can be targeted "
+        f"({source_name})"
+    )
