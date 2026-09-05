@@ -246,3 +246,30 @@ def test_peace_talks_stops_an_aura_spell_too(set_pool):
     assert not aura.supported, game.log
 
     assert game.cast_from_hand(0, "Nekrataal").supported, game.log
+
+
+def test_peace_talks_stops_an_activated_ability_aimed_at_a_face(set_pool):
+    """CR 602.2b routes an activation through CR 601.2c, so an ability that
+    must choose a target and has none legal cannot be begun.
+
+    Rod of Ruin is the shape the picker-side check cannot see: "deals 1 damage
+    to any target" names no permanent when it is aimed at a player, so every
+    gate keyed on a named permanent index let it through. A targetless mana
+    ability is untouched -- the ban is about being chosen, not about acting.
+    """
+    catalog = _w2g2_catalog()
+    game, _bear, _hill = _w2g2_peace_talks_board(set_pool)
+    rod = _W2G2Permanent(card=catalog["Rod of Ruin"])
+    birds = _W2G2Permanent(card=catalog["Birds of Paradise"])
+    for perm in (rod, birds):
+        perm.metadata["summoning_sickness_turn"] = -99
+        game.players[0].battlefield.append(perm)
+    assert game.cast_from_hand(0, "Peace Talks").supported, game.log
+
+    refused = game.activate_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+    assert not refused.supported, game.log
+    assert game.players[1].life == 20
+
+    assert game.activate_permanent_ability(
+        0, "Birds of Paradise", mana_color="G"
+    ).supported, game.log

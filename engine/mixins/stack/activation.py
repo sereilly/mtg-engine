@@ -33,6 +33,7 @@ from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...cast_restrictions import global_play_timing
+from ...targeting import derive_activation_spec
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
@@ -615,6 +616,32 @@ class AbilityActivationMixin:
             return SimulationResult(
                 permanent.card.name, False, "unsupported", details
             )
+
+        # "…players and permanents can't be the targets of spells or activated
+        # abilities." (Peace Talks.) CR 602.2b sends an activation through
+        # CR 601.2c, so an ability that must choose a target and has none legal
+        # cannot be begun — the refusal lands here, with nothing paid.
+        #
+        # Asked of the *spec* rather than left to ``activation_target_refusal``
+        # for the reason the cast gate is: that one goes through
+        # ``_enumerate_targets`` and so already refuses an ability with a
+        # mandatory **object** target, but an ability that may aim at a face
+        # ("deals 1 damage to any target", Rod of Ruin) names no permanent and
+        # walked straight through.
+        if self.targeting_bans:
+            ban_spec = derive_activation_spec(ability)
+            if ban_spec is not None and ban_spec.get("kind") not in (
+                "none", "modal", "hand_card", "stack", "spell_or_permanent",
+            ):
+                source_name = self.targeting_bans[-1].get("source_name", "an effect")
+                details = (
+                    f"{permanent.card.name} has no legal target: nothing can be "
+                    f"targeted ({source_name})"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
 
         banned_by = global_activation_ban(self, permanent)
         if banned_by is not None:
