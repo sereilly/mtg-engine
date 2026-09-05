@@ -1261,3 +1261,171 @@ def test_nekrataal_destroys_through_a_regeneration_shield(set_pool):
     ).supported, game.log
     game._settle()
     assert not game.is_on_battlefield(troll), game.log
+
+
+# --- VIS W3G5: Pygmy Hippo ---
+# "Whenever this creature attacks and isn't blocked, you may have defending
+# player activate a mana ability of each land they control and lose all unspent
+# mana. If you do, this creature assigns no combat damage this turn and at the
+# beginning of your next main phase this turn, you add an amount of {C} equal to
+# the amount of mana that player lost this way."
+from engine import Game as _W3G5Game, PlayerState as _W3G5PlayerState
+from engine.delayed_triggers import expire_delayed_triggers as _w3g5_expire
+from engine.models import Permanent as _W3G5Permanent
+from engine.oracle import compile_card_oracle as _w3g5_compile
+
+
+def _w3g5_hippo_board(
+    set_pool, catalog_by_name, defender_lands, *, interactive=False, pool=None
+):
+    """Pygmy Hippo attacking seat 1 unblocked, its trigger resolved.
+
+    *defender_lands* are card names on seat 1's battlefield and *pool* is what
+    that seat already holds. With *interactive* the offer is a real prompt the
+    caller answers; without it the AI default takes it, which is what
+    ``auto_resolve_pending_choices`` does everywhere else in this file.
+    """
+    hippo = _W3G5Permanent(card=set_pool("VIS")["Pygmy Hippo"])
+    hippo.metadata["summoning_sickness_turn"] = -99
+    p1 = _W3G5PlayerState(name="P1", battlefield=[hippo], life=20)
+    p2 = _W3G5PlayerState(
+        name="P2", life=20,
+        battlefield=[
+            _W3G5Permanent(card=catalog_by_name[name]) for name in defender_lands
+        ],
+        mana_pool=dict(pool or {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}),
+    )
+    game = _W3G5Game(players=[p1, p2])
+    if interactive:
+        game.interactive_seats = {0}
+    game._settle()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game._fire_unblocked_attack_triggers()
+    while game.stack:
+        game.resolve_top_of_stack()
+    if not interactive:
+        game.auto_resolve_pending_choices()
+        while game.stack:
+            game.resolve_top_of_stack()
+    return game, p1, p2, hippo
+
+
+def _w3g5_next_main_phase(game):
+    game._enter_main_phase(precombat=False)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+
+def test_pygmy_hippo_taps_the_defender_out_and_pays_it_back_next_main_phase(
+    set_pool, catalog_by_name
+):
+    """All four halves of the sentence, because three of them are the price of
+    the fourth.
+
+    Mishra's Workshop is in the board on purpose: it makes {C}{C}{C} from one
+    activation, so the count is 4 rather than 2 — and a reading that taps each
+    land for one mana of its first printed symbol, which is the fused handler
+    this family replaced, would be off by two.
+    """
+    game, p1, p2, hippo = _w3g5_hippo_board(
+        set_pool, catalog_by_name, ["Mishra's Workshop", "Forest"]
+    )
+
+    assert all(land.tapped for land in p2.battlefield), game.log
+    assert sum(p2.mana_pool.values()) == 0, "the defender keeps none of it"
+    assert hippo.metadata.get("assigns_no_combat_damage_until_eot") is True
+    assert not p1.mana_pool.get("C"), "the mana arrives at the main phase, not now"
+
+    _w3g5_next_main_phase(game)
+
+    assert p1.mana_pool["C"] == 4, game.log
+
+
+def test_pygmy_hippo_counts_mana_the_defender_already_had(set_pool, catalog_by_name):
+    """"**All** unspent mana" is the pool as it stands after the tap-out, not
+    only what the tap-out made — so a defender holding mana loses that too and
+    the Hippo's controller is paid for it."""
+    game, p1, p2, _hippo = _w3g5_hippo_board(
+        set_pool, catalog_by_name, ["Forest"],
+        pool={"W": 0, "U": 0, "B": 0, "R": 2, "G": 0, "C": 0},
+    )
+    _w3g5_next_main_phase(game)
+
+    assert p1.mana_pool["C"] == 3, game.log       # one Forest plus the two held
+    assert sum(p2.mana_pool.values()) == 0
+
+
+def test_pygmy_hippos_offer_is_a_real_prompt_and_declining_keeps_the_damage(
+    set_pool, catalog_by_name
+):
+    """The "you may" is the Hippo controller's choice, and declining is the
+    whole reason the card is not strictly better than a 2/2: the lands stay
+    untapped and the creature keeps its combat damage."""
+    game, _p1, p2, hippo = _w3g5_hippo_board(
+        set_pool, catalog_by_name, ["Forest", "Forest"], interactive=True
+    )
+
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert not any(land.tapped for land in p2.battlefield)
+    assert hippo.metadata.get("assigns_no_combat_damage_until_eot") is None
+    assert not game.delayed_triggers, "nothing is armed for a declined offer"
+
+
+def test_pygmy_hippos_offer_taken_by_hand_does_the_whole_sentence(
+    set_pool, catalog_by_name
+):
+    """The other answer, so the test above cannot pass because the prompt was
+    never armed at all."""
+    game, p1, p2, hippo = _w3g5_hippo_board(
+        set_pool, catalog_by_name, ["Forest", "Forest"], interactive=True
+    )
+
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True)
+    while game.stack:
+        game.resolve_top_of_stack()
+    _w3g5_next_main_phase(game)
+
+    assert all(land.tapped for land in p2.battlefield)
+    assert hippo.metadata.get("assigns_no_combat_damage_until_eot") is True
+    assert p1.mana_pool["C"] == 2, game.log
+
+
+def test_pygmy_hippos_delayed_mana_expires_with_the_turn(set_pool, catalog_by_name):
+    """"…at the beginning of your next main phase **this turn**" — the two words
+    that made the sentence refuse.
+
+    Without them the entry waits ``until_it_triggers``, which is Mana Drain's
+    window: a main phase two turns later would still pay out. The mana is a
+    consolation for the damage the Hippo gave up in *this* combat, so an entry
+    that survives the turn is a different card.
+    """
+    game, p1, _p2, _hippo = _w3g5_hippo_board(
+        set_pool, catalog_by_name, ["Forest"]
+    )
+    assert [t.duration for t in game.delayed_triggers] == ["end_of_turn"]
+
+    _w3g5_expire(game)
+    assert game.delayed_triggers == []
+
+    _w3g5_next_main_phase(game)
+    assert not p1.mana_pool.get("C")
+
+
+def test_pygmy_hippo_is_supported_and_keyed_to_no_name(set_pool):
+    """No card hook, on either card: the whole line is grammar, which is what
+    makes Drain Power read through the same three productions."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+
+    program = _w3g5_compile(set_pool("VIS")["Pygmy Hippo"])
+
+    assert program.supported
+    assert "Pygmy Hippo" not in CARD_LINE_INSTRUCTIONS
+    assert "Drain Power" not in CARD_LINE_INSTRUCTIONS
+# --- end VIS W3G5 ---

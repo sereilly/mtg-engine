@@ -10,6 +10,12 @@ and *when*:
     _parse_produces_instead     "If target Plains is tapped for mana, it
                                 produces … instead of …" — nothing now, and a
                                 different symbol every time afterwards
+    _parse_activates_each_lands_mana_ability
+                                "<player> activates a mana ability of each land
+                                they control" — somebody else's lands, into
+                                somebody else's pool
+    _parse_loses_unspent_mana   "<player> loses all unspent mana" — the pool
+                                emptied as an effect, and the amount recorded
 
 `_parse_mana_multiplier` is shared between the first two and lives here for
 that reason; nothing outside this family reads it.
@@ -208,6 +214,16 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     if noted is not None:
         return ast.AddMana((), from_noted=noted, source_text=_clause())
 
+    # "…and you add **the mana lost this way**." (Drain Power.) No symbol and
+    # no count: what is added is exactly the mana an earlier step of this same
+    # effect emptied out of a pool, colour for colour. Read before the pip loop
+    # for `_accept_noted_mana`'s reason above — the clause names no mana symbol
+    # for the loop to find.
+    if stream.accept_phrase("the", "mana", "lost", "this", "way"):
+        return ast.AddMana(
+            (), mana_lost_in_kind=True, source_text=_clause(),
+        )
+
     pips: dict[str, int] = {}
     choice = False
     # One dict per alternative of a printed "or", in printed order. Kept apart
@@ -299,6 +315,20 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             ):
                 return ast.AddMana(
                     (), source_text=_clause(), from_bound_creature=symbol,
+                )
+            # "…equal to **the amount of mana that player lost this way**."
+            # (Pygmy Hippo.) A fourth referent for this printed shape, and the
+            # first that is not a mana value: the number is how much an earlier
+            # step of this effect emptied out of the named seat's pool. Every
+            # word is matched — "that player" is the seat the same sentence
+            # drained, and a production that stopped at "the amount of mana"
+            # would read a quantity nobody recorded.
+            if stream.accept_phrase(
+                "equal", "to", "the", "amount", "of", "mana", "that", "player",
+                "lost", "this", "way",
+            ):
+                return ast.AddMana(
+                    (), source_text=_clause(), from_mana_lost=symbol,
                 )
             if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
                 # The noun repeats what the cost already named ("artifact"), so
@@ -550,6 +580,18 @@ def _parse_player_adds_mana(
     first instead of replacing it and the third would be an effect nothing
     performs.
     """
+    if recipient.kind == "you" and not optional:
+        # "…**you add** an amount of {C} equal to …" (Pygmy Hippo), "…and
+        # **you add** the mana lost this way" (Drain Power). The subject is
+        # the ability's own controller, which is exactly what the bare
+        # imperative "Add {C}" means — so it is the same production, and the
+        # printed pronoun is the only difference. Read here rather than in
+        # `subject_verb`, because this is the function that knows what its
+        # node can express: `AddManaForTappedLand` has no "you" recipient at
+        # all (`_TAPPED_LAND_MANA_RECIPIENTS` holds "that player" and "its
+        # controller"), so every such sentence refused at lowering with a
+        # message about a trigger the card does not print.
+        return _parse_add_mana(stream)
     stream.expect_word("adds", "add")
     additional = bool(stream.accept_phrase("an", "additional"))
 
@@ -876,3 +918,53 @@ def _parse_spend_mana_as_though(stream: TokenStream) -> "ast.SpendManaAsThough |
         stream.reset(mark)
         return None
     return ast.SpendManaAsThough(count=count.value, any_type=any_type)
+
+
+def _parse_activates_each_lands_mana_ability(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.ActivateEachLandsManaAbility | None":
+    """``<player> activates a mana ability of each land they control``
+    (Drain Power, Pygmy Hippo).
+
+    The subject has already been read and the verb is the current token, which
+    is the shape every player-action production in ``subject_verb`` has.
+    Declines **without consuming** on anything else: "activate" opens sentences
+    this has no business claiming (a cost, a restriction on when an ability may
+    be activated), and one it cannot finish keeps the refusal the line had.
+
+    Every word after the verb is required. "A mana ability" is CR 605.1a's
+    class, "each land" is which permanents, and "they control" is whose board —
+    a production that consumed "a mana ability" and stopped would read Pygmy
+    Hippo's clause as being about the *ability's controller's* lands, which is
+    the opposite board.
+    """
+    mark = stream.mark()
+    stream.expect_word("activates", "activate")
+    if not stream.accept_phrase(
+        "a", "mana", "ability", "of", "each", "land", "they", "control"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ActivateEachLandsManaAbility(player)
+
+
+def _parse_loses_unspent_mana(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.LoseUnspentMana | None":
+    """``<player> loses all unspent mana`` (Drain Power, Mana Short, Pygmy
+    Hippo).
+
+    Read in front of ``_parse_loses``, which is about life and keywords, and
+    declining without consuming so that every other "loses …" keeps its own
+    reading. The word "unspent" is matched rather than skipped: mana in a pool
+    is by definition unspent, but the clause is what the card prints and a
+    production that dropped the word could not tell it from a sentence about
+    mana somewhere else.
+    """
+    mark = stream.mark()
+    stream.expect_word("loses", "lose")
+    if not stream.accept_phrase("all", "unspent", "mana"):
+        stream.reset(mark)
+        return None
+    return ast.LoseUnspentMana(player)
+

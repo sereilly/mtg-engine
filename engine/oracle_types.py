@@ -722,6 +722,31 @@ MILLED_THIS_WAY = "milled_this_way"
 TAPPED_THIS_WAY = "tapped_this_way"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
+#: What "**the mana lost this way**" (Drain Power) and "the amount of mana that
+#: player **lost this way**" (Pygmy Hippo) name: the pool one step of this
+#: effect emptied. CR 106.4 is where "lose this mana" is defined; CR 500.5 is
+#: the *turn-based* emptying these two cards perform out of turn.
+#:
+#: ``{restriction key or "": {symbol: count}}``. Nested rather than flat
+#: because **CR 106.13 is written about this exact pair of cards** and says the
+#: restrictions survive: "Which permanents, spells, and/or abilities produced
+#: that mana are unchanged, as are any restrictions or additional effects
+#: associated with any of that mana." A flat ``{symbol: count}`` would hand a
+#: Mishra's Workshop's artifacts-only {C}{C}{C} back as mana that pays for
+#: anything, which is a strictly larger effect than the card's.
+#:
+#: Recorded rather than re-read, for the reason every record in this file is:
+#: by the time either sentence runs the pool is empty, and Pygmy Hippo's runs a
+#: whole phase later.
+MANA_LOST_THIS_WAY = "mana_lost_this_way"
+#: How much of it there was, restricted and unrestricted together — written
+#: beside the record so a reader that wants a number is not summing a nested
+#: dict it also has to know the shape of. Pygmy Hippo is that reader: it adds
+#: {C} for the *amount*, which is new mana and carries no restriction. The
+#: delayed trigger that reads it freezes the whole scratchpad (CR 608.2h), so
+#: both travel together.
+MANA_LOST_COUNT = "mana_lost_count"
+
 #: What "**+1/+1 counters you put on a creature this way**" names (Bounty of the
 #: Hunt). One entry **per counter**, not per creature, because that is what the
 #: sentence counts: a creature given two of them is named twice and the loop

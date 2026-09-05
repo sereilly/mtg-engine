@@ -420,10 +420,31 @@ class TurnManagementMixin:
         land_name: str,
         chosen_color: str = "G",
         permanent_index: int | None = None,
+        *,
+        permanent_id: int | None = None,
     ) -> bool:
+        """Tap one land for mana (CR 605.1a), as its controller.
+
+        *permanent_id* addresses the land the way the rest of the engine does
+        and takes precedence over the name-and-slot pair above it, which exists
+        because the web layer addresses a permanent by its **slot**. A caller
+        walking a whole battlefield has no slot to quote and cannot use the
+        name either: two Forests are one name, and
+        ``_find_controlled_permanent`` answers with the first — which on a
+        forced tap-out is the one already tapped, so the untapped one is
+        skipped and the seat pays nothing. The id is stable across the loop
+        (CR 400.7) where a slot is not.
+        """
         player = self.players[player_index]
-        resolved = self._find_controlled_permanent(player, land_name, permanent_index)
-        land = resolved[1] if resolved else None
+        if permanent_id is not None:
+            land = self.permanent_by_id(permanent_id)
+            if land is not None and self.controller_index_of(land) != player_index:
+                land = None
+        else:
+            resolved = self._find_controlled_permanent(
+                player, land_name, permanent_index
+            )
+            land = resolved[1] if resolved else None
         if land is not None and land.card.primary_type != "land":
             land = None
         if land is None or land.tapped:

@@ -709,7 +709,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # the source itself, so no picker is offered and none is missing.
     "recolor_self_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
-    "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
     "reorder_target_library_top": {"kind": "player"},
     # "…can be the target of spells and abilities controlled by **target
@@ -2833,16 +2832,27 @@ _TARGET_WORD = re.compile(r"\btargets?\b")
 # * A **static cost tax** that says "spells your opponents cast that **target**
 #   this creature cost more" (Pursued Whale) uses the word about somebody
 #   else's spell.
-# * A **shroud-shaped restriction** ("can't be the target of Aura spells",
-#   Bartel Runeaxe) says what somebody else's spell may not do.
 # * A **static effect keyed on what another object targeted** — Bronze Horse's
 #   "prevent all damage … by spells that target it", Wall of Shadows'
 #   "abilities that can target only Walls".
 _LOYALTY_PREFIX = re.compile(r"^\s*[+−-]?\s*[0-9x]+\s*:", re.I)
 _MODAL_BULLET = re.compile(r"^\s*•")
 _TAXES_TARGETING_SPELLS = re.compile(r"spells .*that target .*cost")
-_CANT_BE_TARGETED = re.compile(r"can't be the target of")
 _OTHERS_TARGETING = re.compile(r"(?:spells|abilities)[^.]*? that (?:can )?target")
+
+# A **shroud-shaped prohibition** — "can't be the target of Aura spells"
+# (Bartel Runeaxe), "players and permanents can't be the targets of spells or
+# activated abilities" (Peace Talks). The word is what somebody else's spell
+# may *not* do, so it names no choice this card's caster makes; the plural is
+# the same prohibition and used to read as a cast target.
+#
+# **Erased from the line, not a veto over it.** The other five exclusions above
+# are shapes of a whole line, so vetoing the line loses nothing; a prohibition
+# is one clause of a sentence that may also contain a real cast target
+# ("Destroy target creature. It can't be the target of spells this turn."), and
+# a veto would read such a line as naming nothing at all. Erasing runs to the
+# end of the clause, which every printing in the pool ends at the sentence.
+_CANT_BE_TARGETED = re.compile(r"can't be the targets? of[^.;]*")
 
 
 def line_names_a_cast_target(line: str) -> bool:
@@ -2857,14 +2867,17 @@ def line_names_a_cast_target(line: str) -> bool:
     """
     if not _TARGET_WORD.search(line):
         return False
-    return not (
+    if (
         _TRIGGER_PREFIX.match(line)
         or _LOYALTY_PREFIX.match(line)
         or _MODAL_BULLET.match(line)
         or _TAXES_TARGETING_SPELLS.search(line)
-        or _CANT_BE_TARGETED.search(line)
         or _OTHERS_TARGETING.search(line)
-    )
+    ):
+        return False
+    # Last, because it subtracts rather than vetoes: whatever the prohibition
+    # does not cover still has to name a target for this to be one.
+    return bool(_TARGET_WORD.search(_CANT_BE_TARGETED.sub("", line)))
 
 
 def cast_picker_expected(card, program) -> bool:

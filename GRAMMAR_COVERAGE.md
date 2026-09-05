@@ -16,24 +16,24 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 85.6% | 84.0% | 47.4% | 167 |
-| LEB | 292 | 389 | 85.6% | 84.1% | 47.6% | 168 |
-| 2ED | 292 | 389 | 85.6% | 84.1% | 47.6% | 168 |
+| LEA | 290 | 388 | 85.8% | 84.3% | 47.7% | 168 |
+| LEB | 292 | 389 | 85.9% | 84.3% | 47.8% | 169 |
+| 2ED | 292 | 389 | 85.9% | 84.3% | 47.8% | 169 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 87.9% | 85.9% | 50.1% | 175 |
+| 3ED | 296 | 389 | 88.2% | 86.1% | 50.4% | 176 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 91.5% | 91.0% | 54.6% | 248 |
+| 4ED | 368 | 520 | 91.7% | 91.2% | 54.8% | 249 |
 | ICE | 373 | 601 | 89.5% | 89.0% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
-| 5ED | 434 | 631 | 93.5% | 93.2% | 60.5% | 317 |
+| 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 88.1% | 88.1% | 60.1% | 134 |
-| **All (shipped)** | **3918** | **5812** | **89.9%** | **89.1%** | **58.6%** | **2818** |
+| VIS *(measured)* | 167 | 278 | 88.5% | 88.5% | 60.4% | 135 |
+| **All (shipped)** | **3918** | **5812** | **90.0%** | **89.2%** | **58.7%** | **2824** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -45,8 +45,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 312 | 133 | expected a subject |  |
-| 103 | 45 | unrecognized effect verb |  |
+| 311 | 132 | expected a subject |  |
+| 97 | 44 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -73,7 +73,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-2818 cards, 3404 lines.
+2824 cards, 3410 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -1294,6 +1294,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Drain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
   - `Drain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
   - `Drain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
+- **Drain Power**
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
+  - `Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.`
 - **Dread Specter**
   - `Whenever this creature blocks or becomes blocked by a nonblack creature, destroy that creature at end of combat.`
 - **Dread Wight**
@@ -3668,6 +3675,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may pay {4} and 2 life. If you do, return a card exiled with this enchantment to the battlefield.`
 - **Pursued Whale**
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
+- **Pygmy Hippo**
+  - `Whenever this creature attacks and isn't blocked, you may have defending player activate a mana ability of each land they control and lose all unspent mana. If you do, this creature assigns no combat damage this turn and at the beginning of your next main phase this turn, you add an amount of {C} equal to the amount of mana that player lost this way.`
 - **Pyknite**
   - `When this creature enters, draw a card at the beginning of the next turn's upkeep.`
 - **Pyramids**

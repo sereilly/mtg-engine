@@ -67,6 +67,20 @@ class AddMana:
     # lowering's question, and the producer gate there is what makes the words
     # legal at all.
     from_bound_creature: str | None = None
+    # "…you add an amount of {C} equal to **the amount of mana that player
+    # lost this way**." (Pygmy Hippo.) The fourth back-reference of the same
+    # printed shape, and the first whose number is not a mana value at all: it
+    # is how much mana an earlier step of this effect emptied out of somebody
+    # else's pool. The symbol travels, so a card printing another colour needs
+    # no code, and the *count* is read out of the record that step wrote.
+    from_mana_lost: str | None = None
+    # "…and you add **the mana lost this way**." (Drain Power.) The same
+    # record read the other way: not a count of colourless, but the mana
+    # itself, symbol for symbol, into the adding player's pool. Its own field
+    # rather than a flag on the one above, because the two say different
+    # things about colour — one adds {C} whatever was lost, and this one adds
+    # back exactly what was lost.
+    mana_lost_in_kind: bool = False
     # "…then add an additional {B} **for each charge counter removed this way**"
     # (the five Mana Batteries). A multiplier like `per_each` below, over a
     # number that is not on the board at all: the counters were removed to pay
@@ -294,3 +308,39 @@ class SpendManaAsThough:
 
     count: int
     any_type: bool
+
+
+@dataclass(frozen=True)
+class ActivateEachLandsManaAbility:
+    """"**Target player activates a mana ability of each land they control.**"
+    (Drain Power.) "…you may have **defending player activate a mana ability of
+    each land they control**…" (Pygmy Hippo.)
+
+    CR 605: one seat is made to activate a mana ability of every land they
+    control, and the mana lands in *their* pool — nothing is taken and nothing
+    is added by this clause alone. The taking is the sentence beside it
+    (:class:`LoseUnspentMana`), which is why the two are separate nodes on two
+    cards that print them in different orders and with different wrappers.
+
+    ``player`` is the printed subject, so "target player", "that player" and
+    "defending player" are the same node with different referents.
+    """
+
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class LoseUnspentMana:
+    """"…**that player loses all unspent mana**." (Drain Power, Mana Short.)
+    "…**lose all unspent mana**." (Pygmy Hippo, under a causative "you may
+    have <player> …".)
+
+    CR 500.5's pool emptying written as an *effect* rather than as the
+    turn-based action at a step boundary: the named player's pool goes to zero
+    right now, in the middle of a resolution, and CR 106.4 is what makes "lose"
+    the word for it. How much went is recorded for the sentence behind it —
+    both cards that print this go on to ask about the amount.
+    """
+
+    player: PlayerRef
+

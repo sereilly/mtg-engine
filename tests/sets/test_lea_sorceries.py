@@ -1016,3 +1016,96 @@ def test_armageddon_land_deaths_reach_dingus_egg(set_pool):
     # controller: P0 lost one land, P1 two.
     assert p0.life == 18, "P0's Plains died under P0's control"
     assert p1.life == 16, "P1's two lands each cost P1 2 life"
+
+
+# --- VIS W3G5: Drain Power, read by the grammar instead of by its name ---
+# "Target player activates a mana ability of each land they control. Then that
+# player loses all unspent mana and you add the mana lost this way."
+#
+# Three productions Pygmy Hippo (VIS) needed and this card already had, fused
+# into one name-keyed handler: `drain_target_lands_mana`, retired here. The
+# tests above this block are the parity check — this one is what the fused
+# handler could not do.
+from engine import Game as _W3G5Game, PlayerState as _W3G5PlayerState
+from engine.models import Permanent as _W3G5Permanent
+from engine.oracle import compile_card_oracle as _w3g5_compile
+
+
+def test_drain_power_runs_each_lands_own_mana_ability(catalog_by_name):
+    """CR 605.1a: what a land makes is its **ability**, not Scryfall's summary
+    of which symbols it can produce.
+
+    The handler this replaced tapped each land and credited one mana of
+    ``produced_mana[0]``. Mishra's Workshop prints "{T}: Add {C}{C}{C}" and paid
+    **one**; every filter and storage land in the pool was wrong the same way.
+    Routed through ``Game.tap_land_for_mana`` the compiled ability runs, so the
+    count is what the card says.
+    """
+    p1 = _W3G5PlayerState(name="P1", hand=[catalog_by_name["Drain Power"]])
+    p2 = _W3G5PlayerState(name="P2", battlefield=[
+        _W3G5Permanent(card=catalog_by_name["Mishra's Workshop"]),
+        _W3G5Permanent(card=catalog_by_name["Island"]),
+    ])
+    game = _W3G5Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Drain Power", target_player_index=1)
+
+    assert result.supported, game.log
+    assert all(land.tapped for land in p2.battlefield)
+    assert sum(p2.mana_pool.values()) == 0
+    assert p1.mana_pool["U"] == 1
+    # The Workshop's whole ability — three mana, and artifacts-only on the way
+    # in, so artifacts-only on the way out (CR 106.13, below).
+    assert sum(
+        bucket.get("C", 0) for bucket in p1.restricted_mana.values()
+    ) == 3, game.log
+
+
+def test_drain_power_carries_a_restriction_across_with_the_mana(catalog_by_name):
+    """CR 106.13 — a rule the Comprehensive Rules writes about *this card*:
+    "Which permanents, spells, and/or abilities produced that mana are
+    unchanged, **as are any restrictions or additional effects associated with
+    any of that mana**."
+
+    "All unspent mana" is all of it, restricted buckets included
+    (``engine/restricted_mana.py`` holds mana that may pay only for certain
+    things — still mana, and still unspent). Handing it back unrestricted would
+    turn Mishra's Workshop's artifacts-only {C}{C}{C} into three mana that pays
+    for anything, which is a strictly larger effect than the card's.
+    """
+    p1 = _W3G5PlayerState(name="P1", hand=[catalog_by_name["Drain Power"]])
+    p2 = _W3G5PlayerState(name="P2", battlefield=[
+        _W3G5Permanent(card=catalog_by_name["Mishra's Workshop"]),
+    ])
+    game = _W3G5Game(players=[p1, p2])
+    game.cast_from_hand(0, "Drain Power", target_player_index=1)
+
+    assert all(not bucket for bucket in p2.restricted_mana.values()), game.log
+    assert not p1.mana_pool.get("C"), "it did not become unrestricted mana"
+    assert [
+        (key, dict(bucket))
+        for key, bucket in p1.restricted_mana.items() if bucket
+    ] == [(next(iter(p2.restricted_mana)), {"C": 3})], p1.restricted_mana
+
+
+def test_drain_power_no_longer_has_a_card_hook(catalog_by_name):
+    """The entry the grammar overtook. ``tests/engine/test_card_lines.py`` fails
+    on a dead one, which is how this retirement was found rather than
+    remembered — but the card is what the entry was about, so the check is
+    here too."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+
+    program = _w3g5_compile(catalog_by_name["Drain Power"])
+    kinds = {
+        step.kind
+        for instruction in program.instructions
+        for step in (instruction.payload.get("steps") or [instruction])
+    }
+
+    assert "Drain Power" not in CARD_LINE_INSTRUCTIONS
+    assert kinds == {
+        "activate_each_lands_mana_ability",
+        "lose_all_unspent_mana",
+        "add_mana_from_text",
+    }, kinds
+# --- end VIS W3G5 ---

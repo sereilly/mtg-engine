@@ -114,6 +114,8 @@ from .control_changes import (
 from .mana import (
     _parse_add_mana,
     _parse_note_mana_spent,
+    _parse_activates_each_lands_mana_ability,
+    _parse_loses_unspent_mana,
     _parse_player_adds_mana,
     _parse_produces_instead,
     _parse_tapped_lands_produce_chosen,
@@ -317,6 +319,8 @@ __all__ = [
     "_parse_player_puts_whole_hand_on_library",
     "_parse_repeated_graveyard_pick",
     "_parse_player_puts_hand_cards_on_library",
+    "_parse_activates_each_lands_mana_ability",
+    "_parse_loses_unspent_mana",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
     "_parse_tapped_lands_produce_chosen",

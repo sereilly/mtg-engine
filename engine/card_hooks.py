@@ -202,11 +202,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 mana={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0, "generic": 0},
             ),
     },
-    'Drain Power': {
-        'target player activates a mana ability of each land they control. then '
-        'that player loses all unspent mana and you add the mana lost this way':
-            _line('drain_target_lands_mana', 'spell_pattern'),
-    },
     'Drop of Honey': {
         "at the beginning of your upkeep, destroy the creature with the least "
         "power. it can't be regenerated. if two or more creatures are tied for "
