@@ -577,7 +577,26 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # where each find lands.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("text_changes",)
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed"]
+# `delayed` split out of `lowering/stack.py` at Visions' second wave, when
+# Desertion's countered-card redirect took that module forty lines past the
+# guard. The cut is the section header the module had already written:
+# everything left in `stack` lowers a sentence about an object **on the stack
+# right now** -- countering it, copying it, re-aiming it, choosing its mode --
+# where what left creates an ability that fires **later** (CR 603.7) against a
+# board no lowering can see, which is why what it may refer to is a closed
+# event set and what it may carry forward is only what an earlier step of the
+# same effect recorded.
+# The half that grows is the one that moved, which is the playbook's tiebreak:
+# every set prints more delayed riders, while the counter templates are
+# largely closed.
+# `_lower_choose_target` and `_lower_waive_shroud` moved with it rather than
+# staying: each is the *first* sentence of a two-sentence spell whose second
+# sentence is the delayed half, so the pair is read together or not at all.
+# Asymmetric like `life`, `counters`, `base_pt`, `tokens` and `prohibitions`:
+# the parse side stays in `effects/stack.py`, where the delayed rider is read
+# as a tail of the sentence that creates it, and the guard fired on the
+# lowering.
 # `search` is on both sides of the mirror as of Visions' first wave:
 # `lowering/search.py` split off `lowering/library.py` in the same round
 # `effects/search.py` had already split off `effects/library.py`, so the

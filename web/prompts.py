@@ -853,6 +853,25 @@ def _pay_life_to_save(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("discard_unless_pay_life")
+def _discard_unless_pay_life(ctx: PromptContext, choices: list) -> dict:
+    """Breathstealer's Crypt: "that player discards it unless they pay 3 life",
+    asked about the card that was just drawn and revealed.
+
+    One offer at a time — the replacement arms it per draw — so the first queued
+    choice is the whole prompt. ``life`` travels rather than being a constant
+    here, because the number is the printing's and a second card saying it
+    differently must not need a second renderer.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "source_name": data.get("source_name", ""),
+        "life": int(data.get("life", 0)),
+    }
+
+
 @prompt_renderer("color_set_choice")
 def _color_set_choice(ctx: PromptContext, choices: list) -> dict:
     """Shyft: "you may have this creature become the color or colors of your

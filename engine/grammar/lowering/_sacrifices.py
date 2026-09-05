@@ -44,9 +44,21 @@ def _names_a_set(filt: ast.ObjectFilter) -> bool:
     permanent"). All four are in ``_PAYLOAD_HONOURED_FILTER_FIELDS``, which is
     what makes them safe to ask here: a field the payload always emits and the
     matcher always tests cannot be the narrowing that got lost.
+
+    CR 111.1's axis is the fifth, and it was missing: "Sacrifice a **nontoken**
+    permanent" (Forbidden Ritual) names every nontoken permanent, which is a
+    real set and exactly what the card says. ``nontoken`` and its twin
+    ``token_only`` sit in ``_PAYLOAD_HONOURED_FILTER_FIELDS`` beside ``colors``
+    — ``to_payload`` emits both unconditionally and ``permanent_matches_filter``
+    tests both — so neither can *be* the lost narrowing this guard is aimed at.
+    Left out, the phrase was refused for saying something the payload carries
+    perfectly well, which is the same false refusal ``subtype_match``,
+    ``any_classes``, ``any_states`` and ``token_only`` were each added to
+    ``_PAYLOAD_HONOURED_FILTER_FIELDS`` to end one gate over.
     """
     return bool(
         filt.card_types or filt.subtypes or filt.colors or filt.any_classes
+        or filt.nontoken or filt.token_only
     )
 
 

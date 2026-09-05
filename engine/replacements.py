@@ -256,6 +256,14 @@ DRAW_REVEALED_UNLESS_PAID = 32  # Zur's Weirding
 # applies, which is the order the drawing player would pick and the rule
 # permits.
 DRAW_RETURNS_FROM_GRAVEYARD = 33  # Forbidden Crypt
+# Last of the draw replacements, and the only one here that does **not** consume
+# the draw: "instead they draw a card and reveal it" still draws (CR 614.1
+# replaces the event with a modified one). So it is a rider, and its order is
+# the same CR 616.1e argument the four above make from the other side — every
+# consuming replacement is one the drawing player would rather have applied,
+# because a draw a Lamp or a Renewal has already taken away never reaches this
+# rider at all. Being last is what lets them.
+DRAW_REVEALED_AND_TAXED = 34  # Breathstealer's Crypt
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # Before it, and before every other entry replacement. CR 614.17c: an event that
@@ -2962,6 +2970,126 @@ def _reveal_draw_unless_paid(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+#: Breathstealer's Crypt, both printed sentences. The constant is the whole line
+#: because the interceptor performs the whole line — the draw, the reveal, and
+#: the offer behind a creature card. A claim stopping at the first sentence
+#: would admit a card whose entire effect is the second.
+REVEALED_DRAW_TAXED_TEXT = (
+    "if a player would draw a card, instead they draw a card and reveal it. "
+    "if it's a creature card, that player discards it unless they pay 3 life"
+)
+
+#: What the offer costs, read by the interceptor and the prompt so the two
+#: cannot disagree about the number the card prints.
+REVEALED_DRAW_TAX_LIFE = 3
+
+
+def _revealed_draw_tax_sources(game, payload: dict) -> list:
+    """Every permanent whose text is this replacement and that has not already
+    had its opportunity on this event (CR 614.5).
+
+    The whole board, not one seat's: the sentence says "**a** player", so the
+    enchantment taxes its controller's own draws as well as their opponents' —
+    the same scope ``_chains_sources`` and ``_zurs_weirding_sources`` take for
+    the same printed word, against ``_reveal_top_sources``' one seat for "you".
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        perm
+        for perm in game.all_permanents()
+        if REVEALED_DRAW_TAXED_TEXT in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _applies_revealed_draw_tax(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _revealed_draw_tax_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_REVEALED_AND_TAXED, applies=_applies_revealed_draw_tax
+)
+def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
+    """Breathstealer's Crypt: "If a player would draw a card, instead they draw
+    a card and reveal it. If it's a creature card, that player discards it
+    unless they pay 3 life."
+
+    The one draw replacement in this file that **does not take the draw away**.
+    CR 614.1 replaces the event with a modified one, and the modification here
+    is a reveal and a rider — so the card really is drawn, and the offer is put
+    about a card that is already in its owner's hand.
+
+    The draw goes back through ``_draw_with_replacements`` rather than
+    ``player.draw``: that is the seam every armed replacement is asked at, and
+    reaching past it is what skips a second one. It carries this source in
+    ``exclude_sources`` so the draw it just created is not replaced by the same
+    enchantment again (CR 614.5) — a loop, not a tax. A *second* Crypt is a
+    different effect and does apply, which is why the exclusion names the
+    source rather than the wording.
+
+    One draw at a time, because that is what the sentence replaces (CR 121.2
+    makes an N-card draw N individual draws); the draws queued behind it are
+    made through the seam again and each gets its own reveal.
+
+    The card is identified **by the hand growing**, not by reading the top of
+    the library before the draw: a replacement armed underneath this one may
+    have changed which card arrives, and the sentence reveals the card that was
+    drawn rather than the one that was going to be.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    count = int(payload["count"])
+    source = min(
+        _revealed_draw_tax_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    queued = max(0, count - 1)
+    queued_excludes = tuple(payload.get("exclude_sources") or ())
+    before = len(player.hand)
+    drawn = game._draw_with_replacements(player, 1, exclude_sources=excludes)
+    revealed = player.hand[-1] if len(player.hand) > before else None
+    if revealed is not None:
+        game.record_reveal(seat, [revealed.name])
+        game.log.append(
+            f"{player.name} drew and revealed {revealed.name} ({source.card.name})"
+        )
+    if revealed is not None and card_has_type(revealed, "creature"):
+        # The offer is the second sentence, and it is put to the drawing player
+        # rather than performed: "unless they pay" is a decision, so it goes on
+        # the standing queue like every other one.
+        #
+        # **The draws queued behind this one ride the prompt**, the arrangement
+        # Zur's Weirding uses one interceptor over: an interactive seat answers
+        # on a later request, so a loop here would make the rest of a two-card
+        # draw happen while the offer was still open — and CR 608.2 says nothing
+        # of the resolution may run until it is answered. The resolver makes
+        # them once the answer is in. A non-interactive seat answers at once
+        # (``default_at_arm``), so headless and AI play still finish the draw
+        # here, in order.
+        game.arm_discard_unless_pay_life(
+            seat,
+            card=revealed,
+            life=REVEALED_DRAW_TAX_LIFE,
+            source_name=source.card.name,
+            queued_draws=queued,
+            queued_exclude_sources=queued_excludes,
+        )
+        payload["drawn"] = drawn
+        return ReplacementOutcome(replaced=True)
+    # No offer to make, so the draws queued behind this one happen here. They
+    # are their own events (CR 121.2) and get their own trip through the seam —
+    # including this replacement again, which is what a two-card draw under a
+    # Crypt is.
+    if queued:
+        drawn += game._draw_with_replacements(
+            player, queued, exclude_sources=queued_excludes,
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
 RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT = (
     "if you would draw a card, return a card from your graveyard to your hand "
     "instead. if you can\'t, you lose the game"
@@ -3218,6 +3346,11 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # three printed sentences, because the interceptor performs all three — the
     # reveal, the graveyard for a creature card and the draw for anything else.
     (REVEAL_TOP_INSTEAD_OF_DRAW_TEXT, ""),
+    # _revealed_draw_taxed (Breathstealer's Crypt): the constant is both printed
+    # sentences, because the interceptor performs both — the draw-and-reveal and
+    # the pay-or-discard offer behind a creature card. A claim stopping at the
+    # first sentence would admit a card whose whole effect is the second.
+    (REVEALED_DRAW_TAXED_TEXT, ""),
     # _reveal_draw_unless_paid (Zur's Weirding): the constant is all four
     # printed sentences, because the interceptor performs all four — the reveal,
     # the offer to every other player in turn order, the graveyard behind a

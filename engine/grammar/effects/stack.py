@@ -15,6 +15,7 @@ subject and nobody else's.
 """
 
 from .. import ast
+from ..errors import GrammarError
 from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
@@ -189,17 +190,18 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     # tail *and* an "unless … pays" would be a shape no flow performs — the
     # counter that never happens has no card to redirect — and refusing the
     # whole line is this grammar's answer to a shape it cannot honour.
-    zone, position = _parse_countered_destination(stream)
+    zone, position, narrowing = _parse_countered_destination(stream)
     if zone is not None:
         return ast.CounterSpell(
-            subject, countered_to=zone, countered_to_position=position
+            subject, countered_to=zone, countered_to_position=position,
+            countered_filter=narrowing,
         )
     return ast.CounterSpell(subject)
 
 
 def _parse_countered_destination(
     stream: TokenStream,
-) -> "tuple[ast.Zone | None, str]":
+) -> "tuple[ast.Zone | None, str, ast.ObjectFilter | None]":
     """``If that spell is countered this way, put it <zone> instead of into
     that player's graveyard.`` (Memory Lapse; Remand's zone is the hand.)
 
@@ -219,12 +221,21 @@ def _parse_countered_destination(
     mark = stream.mark()
     if not stream.accept_punct("."):
         stream.reset(mark)
-        return None, ""
+        return None, "", None
+    narrowing = None
     if not stream.accept_phrase(
         "if", "that", "spell", "is", "countered", "this", "way"
     ):
-        stream.reset(mark)
-        return None, ""
+        # "**If an artifact or creature spell** is countered this way…"
+        # (Desertion.) The same tail with a *class* in place of the pronoun:
+        # the redirect applies only to a countered spell the noun phrase
+        # matches, and every other one takes CR 701.5a's graveyard. Read
+        # through the ordinary object noun parser, so the class it may name is
+        # whatever a printed noun phrase can say rather than a list kept here.
+        narrowing = _parse_countered_narrowing(stream)
+        if narrowing is None:
+            stream.reset(mark)
+            return None, "", None
     stream.accept_punct(",")
     # "…**exile it** instead of putting it into its owner's graveyard."
     # (Dissipate.) The same CR 614.1 replacement of CR 701.5a's destination
@@ -236,9 +247,14 @@ def _parse_countered_destination(
     # forgotten.
     if stream.accept_phrase("exile", "it"):
         _expect_replaced_graveyard(stream)
-        return ast.Zone("exile"), ""
+        return ast.Zone("exile"), "", narrowing
     stream.expect_word("put")
-    stream.expect_word("it")
+    # "put **that card**" (Desertion) beside Memory Lapse's "put **it**". The
+    # narrowed opening cannot say "it" — the pronoun would point at the class
+    # rather than at the spell that was countered — so the card is named
+    # outright, and both spellings mean the countered card.
+    if not stream.accept_phrase("that", "card"):
+        stream.expect_word("it")
     position = ""
     if stream.accept_word("on"):
         # "on top of" / "on the bottom of" — one zone, two places in it, which
@@ -251,11 +267,54 @@ def _parse_countered_destination(
         else:
             raise stream.error("expected 'top' or 'bottom' of the library")
         stream.expect_word("of")
+    elif stream.accept_phrase("onto", "the", "battlefield"):
+        # "…put that card **onto the battlefield under your control** instead
+        # of into its owner's graveyard." (Desertion.) CR 614.1 again, with a
+        # destination that is nobody's private zone and so names its
+        # *controller* rather than a zone owner — which is why the possessive
+        # gate in the lowering skips it, exactly as it skips exile.
+        if not stream.accept_phrase("under", "your", "control"):
+            raise stream.error(
+                "expected 'under your control' for a countered card put onto "
+                "the battlefield"
+            )
+        _expect_replaced_graveyard(stream)
+        return ast.Zone("battlefield"), "your_control", narrowing
     elif not stream.accept_word("into"):
         raise stream.error("expected where a countered spell goes instead")
     zone = _parse_zone(stream)
     _expect_replaced_graveyard(stream)
-    return zone, position
+    return zone, position, narrowing
+
+
+def _parse_countered_narrowing(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``if <noun phrase> is countered this way`` — the class the redirect
+    applies to, or None when the words are not that clause (Desertion).
+
+    Non-consuming on failure, like the pronoun opening it stands beside: the
+    caller rewinds to before the sentence's full stop, so a line whose second
+    sentence is something else entirely is still read as two statements.
+
+    The article is consumed here rather than in the noun parser because that
+    parser reads a bare class ("artifact or creature spell") and a countered
+    narrowing is always printed with one.
+    """
+    from ..nouns import parse_object_filter
+
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("an") or stream.accept_word("a")
+    try:
+        narrowing = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("is", "countered", "this", "way"):
+        stream.reset(mark)
+        return None
+    return narrowing
 
 
 def _expect_replaced_graveyard(stream: TokenStream) -> None:
@@ -266,21 +325,28 @@ def _expect_replaced_graveyard(stream: TokenStream) -> None:
     "instead" is the whole of what makes this a replacement (CR 614.1) rather
     than a second effect.
 
-    Two spellings, because the two verbs take different grammar: Memory Lapse's
-    "put it on top of its owner's library **instead of into that player's
-    graveyard**" and Dissipate's "exile it **instead of putting it into its
-    owner's graveyard**". They name one destination — CR 404.3's owner's
-    graveyard, which "that player" refers back to — so they are one clause read
-    two ways rather than two clauses.
+    Three spellings, because the verbs take different grammar and the
+    possessive is printed both ways: Memory Lapse's "put it on top of its
+    owner's library **instead of into that player's graveyard**", Dissipate's
+    "exile it **instead of putting it into its owner's graveyard**", and
+    Desertion's "put that card onto the battlefield under your control
+    **instead of into its owner's graveyard**". They name one destination —
+    CR 404.3's owner's graveyard, which "that player" refers back to — so they
+    are one clause read three ways rather than three clauses.
     """
     stream.expect_word("instead")
     stream.expect_word("of")
-    if stream.accept_phrase("putting", "it"):
-        stream.expect_word("into")
-        for word in ("its", "owner", "'s", "graveyard"):
+    stream.accept_phrase("putting", "it")
+    stream.expect_word("into")
+    # "its owner's" and "that player's" are the same seat (CR 404.3); which one
+    # a card prints depends only on whether the sentence has already named the
+    # player, so accepting either here is reading the clause rather than
+    # widening it.
+    if stream.accept_word("its"):
+        for word in ("owner", "'s", "graveyard"):
             stream.expect_word(word)
         return
-    for word in ("into", "that", "player", "'s", "graveyard"):
+    for word in ("that", "player", "'s", "graveyard"):
         stream.expect_word(word)
 
 

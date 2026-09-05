@@ -264,6 +264,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "If it's a creature card, that player discards it **unless they pay
+        # 3 life**." (Breathstealer's Crypt.) The answer decides whether the
+        # card that was just drawn stays in the hand, and the step behind it is
+        # the rest of the replaced draw — CR 121.2 makes an N-card draw N
+        # events, and the second of them is made by the resolver once this is
+        # answered. Drawn before it, the second card would arrive while the
+        # offer about the first was still open, which is exactly what CR 608.2
+        # forbids.
+        "discard_unless_pay_life",
         # "Discard X cards, **then** return a card from your graveyard to your
         # hand for each card discarded this way" (Recall): the answer is the
         # count and the identity the next step of the same sentence works from.
