@@ -490,7 +490,20 @@ class GameEndingMixin:
                     zone = getattr(player, zone_name, None)
                     if not zone or not any(is_token_card(c) for c in zone):
                         continue
-                    setattr(player, zone_name, [c for c in zone if not is_token_card(c)])
+                    if zone_name == "exile":
+                        # Exile has a departure transition and the other two do
+                        # not: ``take_card_from_exile`` retires the exile
+                        # register with the card, so a token that ceases to
+                        # exist takes its record with it. One call per token
+                        # rather than one rebuild, because the seam removes one
+                        # occurrence and each token is its own definition.
+                        for token in [c for c in zone if is_token_card(c)]:
+                            self.take_card_from_exile(player, token)
+                    else:
+                        setattr(
+                            player, zone_name,
+                            [c for c in zone if not is_token_card(c)],
+                        )
                     changed = True
 
             # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)

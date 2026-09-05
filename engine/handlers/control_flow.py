@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
+from ..oracle_types import (MILLED_THIS_WAY, PER_OBJECT_SEAT_RECORDS,
+                            OracleInstruction)
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
@@ -674,7 +675,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         wanted = name_key(named)
         return any(
             name_key(card.name) == wanted
-            for card in (context.results.get("milled_this_way") or ())
+            for card in (context.results.get(MILLED_THIS_WAY) or ())
         )
 
     if kind == "milled_this_way":
@@ -688,7 +689,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # ``any``, not ``all``: the printed floor is "one or more", where the
         # exiled-card test one branch up asks about a set the sentence in front
         # of it defined in full.
-        cards = context.results.get("milled_this_way") or []
+        cards = context.results.get(MILLED_THIS_WAY) or []
         wanted = tuple(payload.get("card_types") or ())
         return any(
             any(name in card.type_line.lower() for name in wanted)

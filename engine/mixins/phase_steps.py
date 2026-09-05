@@ -174,6 +174,32 @@ class PhaseStepsMixin:
             self.turn_phases_remaining = phases_after(self.current_turn_phase)
         return self.turn_phases_remaining
 
+    def extra_phases_remaining(self) -> list[str]:
+        """The phases still to come that CR 500.1's order did not put there.
+
+        The plan starts as ``phases_after(current)`` and is only ever *inserted*
+        into, by CR 500.8's extra phases — so whatever the plan holds beyond
+        that remainder is what an effect added and has not happened yet.
+        Relentless Assault's "there is an additional combat phase followed by an
+        additional main phase" is two entries here until they are spent.
+
+        Derived rather than recorded, for the reason the plan itself is: a
+        second list of "what was added" would be a second answer, and the one
+        that goes stale is always the one nobody reads on the path that
+        matters. Empty on an ordinary turn, which is every turn no card has
+        touched.
+
+        The reader is the web layer's End Turn button, which jumps to the ending
+        phase from wherever it is and so discards these — a skip worth naming in
+        the log, because unlike the turn's own combat phase somebody paid a card
+        for it.
+        """
+        remaining = list(self._remaining_turn_phases())
+        for phase in phases_after(self.current_turn_phase):
+            if phase in remaining:
+                remaining.remove(phase)
+        return remaining
+
     def _enter_planned_phase(self, phase: str) -> None:
         """Spend *phase* out of the plan as it is entered.
 

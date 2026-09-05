@@ -475,7 +475,46 @@ def _start_next_turn(session: Session) -> None:
     _begin_turn(session, session.current_turn, defer_untap_selection=should_defer_untap)
 
 
+#: How a phase name reads in the log. Only the two CR 500.8 can add are
+#: spelled out; anything else falls back to its own name.
+_PHASE_LABELS = {
+    "combat": "combat phase",
+    "precombat_main": "main phase",
+    "postcombat_main": "main phase",
+    "beginning": "beginning phase",
+    "ending": "ending phase",
+}
+
+
 def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) -> bool:
+    """The End Turn button: jump from wherever the active player is standing to
+    the end step, then the cleanup step, then the next turn.
+
+    **It jumps, deliberately, and it always has** — pressing it in a precombat
+    main phase skips that turn's own combat. The two turn controls are already
+    different things: ``next_phase`` walks CR 500.1's order one phase at a time
+    and honours the turn's plan, and this one is the "I am finished" shortcut.
+    Making it walk the phases instead would leave no way to decline a combat
+    phase, and would make the button a synonym for holding down the other one.
+
+    What CR 500.8 changed is that the plan can now hold a phase *no rule put
+    there* — Relentless Assault's "After this main phase, there is an additional
+    combat phase followed by an additional main phase" (CR 500.8) — and jumping
+    over one of those loses something the player paid a card for rather than
+    something the turn structure was always going to offer. That stays a jump
+    too, for the reason above, but it stops being **silent**:
+    ``Game.extra_phases_remaining`` is the plan minus CR 500.1's ordinary
+    remainder, which is exactly what an effect added, and it is named in the log
+    where every other thing the turn did to itself is named.
+    """
+    added = session.game.extra_phases_remaining()
+    if added:
+        session.game.log.append(
+            f"{session.game.players[session.current_turn].name} ended the turn, "
+            "skipping the extra "
+            + ", ".join(_PHASE_LABELS.get(phase, phase) for phase in added)
+            + " (CR 500.8)"
+        )
     if session.game.current_turn_phase in {"precombat_main", "postcombat_main"}:
         session.game._close_current_priority_step()
     if session.game.current_turn_phase == "combat":

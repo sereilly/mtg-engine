@@ -15,6 +15,7 @@ from ..control import (
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
+from ..exiled_records import forget_record, newest_record_for
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
@@ -701,10 +702,24 @@ class GameHelpersMixin:
 
     def _owner_seat(self, owner) -> int:
         """A seat index from either a seat index or a ``PlayerState``. Both
-        spellings reach these two seams from call sites that already hold one or
-        the other, and converting at the boundary is cheaper than making every
-        caller convert."""
-        return owner if isinstance(owner, int) else self.players.index(owner)
+        spellings reach these seams from call sites that already hold one or the
+        other, and converting at the boundary is cheaper than making every
+        caller convert.
+
+        By **identity**, not ``list.index``. ``PlayerState`` is a plain
+        ``@dataclass``, so its generated ``__eq__`` compares field by field and
+        two seats that happen to match — the pregame board, a test's two fresh
+        players, an emptied-out endgame — answer the *first* of them. Every seam
+        that converts here then writes to the wrong player's zone, which is the
+        look-alike bug ``tests/engine/test_control_reads.py`` documents one zone
+        over, arriving through the seat rather than through the object.
+        """
+        if isinstance(owner, int):
+            return owner
+        for seat, player in enumerate(self.players):
+            if player is owner:
+                return seat
+        raise ValueError(f"{getattr(owner, 'name', owner)!r} is not in this game")
 
     def take_card_from_hand(self, owner, card) -> bool:
         """Remove **one** copy of *card* from *owner*'s hand. True if it was there.
@@ -736,6 +751,59 @@ class GameHelpersMixin:
             if held is card:
                 del player.hand[index]
                 return True
+        return False
+
+    def take_card_from_exile(self, owner, card, *, record=None) -> bool:
+        """Remove **one** copy of *card* from *owner*'s exile. True if it was there.
+
+        Leaving exile is one transition (CR 406.2 read backwards), for the
+        reason leaving the battlefield and leaving a hand are: something has to
+        happen when a card goes, and thirteen open-coded departures are thirteen
+        places to forget it — ten of which had. What has to happen here is the
+        exile register
+        (``engine/exiled_records.py``): a record keyed on the exiled *object*
+        carries its counters, its face-down flag and who may look at it, and its
+        liveness is derived from the pile rather than maintained.
+
+        Derivation makes a stale record inert but not gone, and CR 400.7 is
+        exactly the rule that breaks: a card that changes zones becomes a new
+        object "with no memory of, or relation to, its previous existence", and
+        CR 406.7 says the same of a card re-exiled out of exile. A record left
+        behind is that memory — the *next* effect to exile the same card finds
+        it live again and hides a card nobody exiled face down, or hands it
+        counters nobody put there. Retiring the record here is what makes the
+        derivation one-way.
+
+        Removing by index is what makes it exactly one, and **identity** is what
+        picks the index. ``list.remove``/``list.index`` compare by value, and
+        four of the sites this replaced spelled it that way: two printings of
+        one card are equal-looking objects, and the same ``CardDefinition`` can
+        sit in two seats' exiles at once (a deck repeats one immutable
+        definition per copy and the catalog is shared), so the value spelling
+        reaches a look-alike. That is the bug class
+        ``tests/engine/test_control_reads.py`` was written for, one zone over.
+
+        *record* is the :class:`~engine.exiled_records.ExiledRecord` the caller
+        already holds — the upkeep trigger that fires *for* a record knows which
+        one it is finishing with, which is stronger than any derivation, and a
+        named record is retired whether or not a card was found (the caller is
+        saying it is done with it). Left off, the newest live record for this
+        seat and card is retired, and only when a card actually left.
+        """
+        seat = self._owner_seat(owner)
+        player = self.players[seat]
+        # Both reads happen before the removal: liveness is derived from the
+        # pile, so a record asked for afterwards answers None in exactly the
+        # case that needs retiring.
+        doomed = record if record is not None else newest_record_for(self, seat, card)
+        for index, held in enumerate(player.exile):
+            if held is card:
+                del player.exile[index]
+                if doomed is not None:
+                    forget_record(self, doomed)
+                return True
+        if record is not None:
+            forget_record(self, record)
         return False
 
     def put_card_into_hand(self, owner, card, *, from_battlefield=None) -> bool:
@@ -1828,13 +1896,16 @@ class GameHelpersMixin:
         A hand or a library goes through ``put_card_into_hand`` /
         ``put_card_into_library`` rather than appending, because CR 903.9b has
         no single fire site and this is one more of the places that would have
-        forgotten it.
+        forgotten it. Out of exile through ``take_card_from_exile`` for the
+        matching reason on the other side — and because ``card not in
+        owner.exile`` followed by ``.remove(card)`` is the value comparison that
+        finds a look-alike printing rather than the card this entry recorded.
         """
-        owner = self.players[int(entry["owner_index"])]
+        owner_index = int(entry["owner_index"])
+        owner = self.players[owner_index]
         card = entry["card"]
-        if card not in owner.exile:
+        if not self.take_card_from_exile(owner_index, card):
             return None
-        owner.exile.remove(card)
         if zone == "hand":
             self.put_card_into_hand(owner, card)
             return None
@@ -1845,7 +1916,6 @@ class GameHelpersMixin:
             getattr(owner, zone).append(card)
             return None
         arrival = Permanent(card=card)
-        owner_index = int(entry["owner_index"])
         seat = owner_index if controller_index is None else int(controller_index)
         if seat != owner_index:
             # The base controller and the owner differ, which is the one fact
