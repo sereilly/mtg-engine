@@ -791,6 +791,43 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     return unclaimed
 
 
+def aura_claim(normalized_lines: list[str], card_name: str = "") -> str | None:
+    """``"auras"`` when this card is an Aura this module implements in full.
+
+    The **positive** half of :func:`unclaimed_aura_lines`, and the reason it had
+    to exist: this module was a refusal and never an approval. It could say an
+    Aura's effect line was unimplemented, but nothing here said that a fully
+    implemented Aura *was* implemented — so the support gate got that from a
+    substring, ``"enchant creature"`` in ``SUPPORTED_SPELL_PATTERNS``, and an
+    Aura was supported because its text contained two words.
+
+    Armor of Thorns is what that cost. Its clause is "Enchant **nonblack**
+    creature", which the literal never matched, so the card was carried by
+    ``"gets +"`` instead — a different substring, matching a different line, for
+    a card this module claims in full. The support of an Aura had nothing to do
+    with whether the Aura worked.
+
+    Three conditions, and the third is the one a substring can never ask:
+
+    * the card prints an ``Enchant <subject>`` line at all;
+    * **every** line is claimed — the same question ``unclaimed_aura_lines``
+      answers, so the approval and the refusal cannot disagree;
+    * at least one *effect* line exists. An Aura whose only line is the enchant
+      clause does nothing when it attaches, and would otherwise be approved for
+      having no effects to fail on. No card in the pool is shaped that way,
+      which is what makes requiring it free.
+    """
+    if not any(line.startswith("enchant ") for line in normalized_lines):
+        return None
+    if unclaimed_aura_lines(normalized_lines, card_name):
+        return None
+    effects = [
+        line for line in normalized_lines
+        if line and not line.startswith("enchant ")
+    ]
+    return "auras" if effects else None
+
+
 def _enchant_line_claimed(line: str) -> bool:
     """Whether an ``Enchant <subject>`` line has both its readers behind it.
 

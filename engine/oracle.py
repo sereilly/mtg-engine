@@ -47,7 +47,7 @@ from .oracle_types import (
     strip_ability_word,
 )
 from .characteristic_defining import dynamic_pt_for
-from .auras import unclaimed_aura_lines
+from .auras import aura_claim, unclaimed_aura_lines
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import alternative_cost_claims_line
 from .cast_costs import cast_cost_claims_line
@@ -136,39 +136,35 @@ UNSUPPORTED_KEYWORDS: set[str] = set()
 UNSUPPORTED_PATTERNS: tuple[str, ...] = ()
 
 
-SUPPORTED_SPELL_PATTERNS = (
-    # An Aura's ``Enchant <noun>`` line, and the ``gets +N/+N`` its effect line
-    # opens with. Five entries, and they are what is left of a table that had
-    # **seventy-three**.
-    #
-    # The other sixty-eight were whole printed sentences — Timetwister's, Wheel
-    # of Fortune's, the five landwalk grants, the ante cards, "take an extra
-    # turn after this one" — admitted before the grammar could read them. Every
-    # one was deleted at Mirage's cleanup after a deletion probe showed what
-    # each was worth: remove the entry, recompile the pool, count who loses
-    # support. Sixty-eight lost nobody. The grammar had grown past them years of
-    # sets ago and the table had not noticed, which is the failure mode of a
-    # whitelist — it never reports that it has stopped being needed.
-    #
-    # The three that mattered most were bare words. ``"deals"``, ``"loses"`` and
-    # ``"gain"`` matched any sentence containing them, and six of Mirage's
-    # thirteen unimplemented sentences were admitted into the support gate on
-    # exactly those three. They carry nobody now and they are gone.
-    #
-    # **These five remain because an Aura is gated differently**: ``Enchant
-    # creature`` is a keyword ability declaring what the Aura may be attached to
-    # (CR 702.5), so it produces no instruction, and ``engine/auras.py`` is what
-    # decides whether the Aura's *effect* is implemented. Until the gate asks
-    # that module directly, these substrings are what let the enchant line past.
-    # Twenty-five, five, four and one card depend on them; ``gets +`` depends on
-    # one. Adding to this table is adding a card admitted on a substring — the
-    # thing the other sixty-eight entries turned out to be.
-    "enchant creature",
-    "enchant land",
-    "enchant artifact",
-    "enchant wall",
-    "gets +",
-)
+#: **Empty**, and that is the whole story of this table.
+#:
+#: It admitted a card into the support gate on a *substring*. It held 73
+#: entries; a deletion probe — remove one, recompile all 2,181 cards, count who
+#: stops being supported — found that 68 of them carried nobody. They were whole
+#: printed sentences from before the grammar could read them (Timetwister's,
+#: Wheel of Fortune's, the landwalk grants, the ante cards), and the table never
+#: reported that it had stopped being needed. Three of the rest were the bare
+#: words ``deals``, ``loses`` and ``gain``, which matched any sentence
+#: containing them and let six of Mirage's thirteen unimplemented sentences
+#: through the gate.
+#:
+#: The last five were Auras, and they were the interesting ones: an Aura's
+#: ``Enchant <subject>`` line is a keyword ability (CR 702.5) producing no
+#: instruction, and its effects are continuous rather than instructions, so a
+#: fully implemented Aura had **no evidence of support** for the gate to find.
+#: ``engine/auras.py`` was a refusal and never an approval. It is both now
+#: (:func:`auras.aura_claim`), asked by ``_derived_static_claims`` like every
+#: other derivation table, so an Aura is supported because this engine
+#: implements it rather than because its text contains two words.
+#:
+#: Armor of Thorns is the epitaph. Its clause reads "Enchant **nonblack**
+#: creature", which the literal ``"enchant creature"`` never matched, so the
+#: card was carried by ``"gets +"`` — a different substring on a different line
+#: — for an Aura that worked perfectly. Support had come loose from working.
+#:
+#: Keep it empty. A card the engine implements has something to show for it; a
+#: card that has nothing to show for it is not implemented.
+SUPPORTED_SPELL_PATTERNS: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -4625,6 +4621,17 @@ def _derived_static_claims(
     # working perfectly.
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
+    # An Aura this module implements in full. Its ``Enchant <subject>`` line is
+    # a keyword ability (CR 702.5) that produces no instruction and its effects
+    # are continuous, derived from the attachment — so without this the card had
+    # no evidence of support at all, and the gate took it from the substring
+    # "enchant creature". Asked of the same reader that *refuses* an
+    # unimplemented Aura, so the approval and the refusal cannot drift apart.
+    if aura_claim(
+        [normalize_creature_line(line) for line in (oracle_text or "").split("\n")],
+        card_name or "",
+    ) is not None:
+        claims.append("auras")
     # CR 113.6b: a static ability that functions while the card is a **spell on
     # the stack** (Kaervek's Torch's tax on spells that target it, the ability
     # Torrent of Lava grants each creature). Its behaviour is a cost table and

@@ -611,7 +611,11 @@ def test_yare_compiles_both_of_its_sentences(set_pool):
     ``lowering/keywords.py`` established for the identical pronoun."""
     program = compile_card_oracle(set_pool("MIR")["Yare"])
     assert program.supported, program.reason
-    (sequence, _pattern) = program.instructions
+    # One instruction, not two. This used to destructure a trailing
+    # ``spell_pattern`` marker beside the sequence — an artifact of the
+    # substring whitelist that admitted the card, which is now empty. The card
+    # is supported because the sequence below is real.
+    (sequence,) = program.instructions
     steps = sequence.payload["steps"]
     assert [step.kind for step in steps] == [
         "pump_target_creature_until_eot", "grant_additional_blocks_until_eot",
