@@ -107,6 +107,14 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "any_classes",
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
+    # "**attacking or blocking** creatures without flying" (Rock Slide),
+    # "**tapped or blocking** creature" (Tetsuo Umezawa). ``to_payload`` emits
+    # it unconditionally and ``permanent_matches_filter`` tests it, so it is
+    # honoured in exactly the sense the three state fields beside it are — and
+    # it is listed for ``any_classes``' reason: it is the *union*, which no
+    # pair of those fields can state, so a lowering refusing it as an
+    # unhonoured field refuses a phrase the payload carries perfectly well.
+    "any_states",
     # "a creature **that has been dealt damage this turn**" (Giant Shark).
     # ``to_payload`` emits it as ``dealt_damage_this_turn``; its agent-naming
     # sibling ``dealt_damage_to_source_this_turn`` is deliberately absent, being
@@ -274,6 +282,65 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # somewhere to put a scope (``owner: "all"``).
     "on_the_battlefield": "on_the_battlefield",
 }
+
+
+def testable_filter_payload(
+    filt: "ast.ObjectFilter",
+    *,
+    refusal: str,
+    node=None,
+    allowed: "frozenset[str] | None" = None,
+    require_narrowing: bool = True,
+) -> dict[str, object]:
+    """A printed noun phrase's payload, or a ``LoweringError`` naming why not.
+
+    The two questions a lowering asks of a phrase it is about to hand a
+    dispatcher, in the one order that answers them: what does the phrase
+    *become* (``_filter_payload``, which refuses a field with no payload form),
+    and can whoever receives it **test** every key of what it became
+    (``untestable_filter_keys``, which recurses exactly where the matcher does).
+    A key that falls between the two is a narrowing dropped in silence, which
+    for a filter is an effect reaching further than the card prints.
+
+    Both halves were open-coded. `lowering/prevention.py` alone opened four of
+    its lowerings with the same two lines — ``described = _filter_payload(x)``
+    then ``if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS``
+    — and the looser spelling appears across the lowering package in several
+    forms. Not a duplicate *definition*, so no merge scan could see it, and
+    every copy was correct on the day it was written; what makes it worth
+    folding is the direction a drifted copy fails in, and that two of the
+    spellings had already drifted. ``set(payload) - TESTABLE_SUBJECT_FILTER_KEYS``
+    is a **flat** difference, so a nested phrase ("Auras attached to permanents
+    you control") answers "testable" whatever the inner phrase says — the exact
+    hole ``untestable_filter_keys`` was written to close one round earlier, in
+    modules that then kept the flat form.
+
+    *refusal* is the sentence the card's reader sees, and the untestable keys
+    are appended to it: a refusal that names the missing piece is a mechanism
+    rather than an absence (SET_PLAYBOOK Phase 3), and every one of the folded
+    copies stopped at the prose.
+
+    *require_narrowing* is the ``not described`` half. A shield sized by "if
+    it's a green creature" means nothing if the phrase reduces to no keys at
+    all, so those callers refuse it; a caller for which the unnarrowed phrase
+    is a legitimate reading passes ``False``.
+    """
+    from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
+                                    untestable_filter_keys)
+
+    payload = _filter_payload(filt)
+    if require_narrowing and not payload:
+        raise LoweringError(
+            f"{refusal}: the phrase narrows nothing at all", node=node
+        )
+    untestable = untestable_filter_keys(
+        payload, allowed=TESTABLE_SUBJECT_FILTER_KEYS if allowed is None else allowed
+    )
+    if untestable:
+        raise LoweringError(
+            f"{refusal}: {', '.join(sorted(untestable))}", node=node
+        )
+    return payload
 
 
 def is_mana_value_x(comparison: "ast.Comparison | None") -> bool:

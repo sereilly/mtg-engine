@@ -779,6 +779,18 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         named_tap = _parse_named_subject_tap_event(stream, "when")
         if named_tap is not None:
             return named_tap
+        # "**When** enchanted creature is dealt damage, destroy it." (Mortal
+        # Wound.) Blight's argument one production over, and the asymmetry it
+        # closes was invisible from either side alone: `engine/oracle.py`'s
+        # table reads this condition under **both** printed words — it falls
+        # back to the whenever table for any "when" line — while this front end
+        # read it under one. So the condition parsed, the *effect* behind it
+        # did not, and the card compiled with a trigger whose clause had no
+        # instruction. CR 603.1 makes the two words one kind of ability; how
+        # often it triggers while it exists is not something a fire site reads.
+        attached = _parse_attached_event(stream, "when")
+        if attached is not None:
+            return attached
         # "When you remove the last intervention counter from this enchantment"
         # (Divine Intervention). Read here as well as in `engine/oracle.py`'s
         # table for the reason stated above the threshold trigger: both front

@@ -499,6 +499,18 @@ def _narrowing_flags(source: dict) -> dict:
     any_states = source.get("any_states")
     if any_states:
         flags["any_states"] = list(any_states)
+    # "…target attacking or blocking creatures **without flying**" (Rock
+    # Slide). Carried by value beside the union above and for its reason: which
+    # keyword is excluded is the narrowing, and a bare True would tell the
+    # picker that something is excluded without saying what.
+    #
+    # Here rather than left to the instruction's own filter for
+    # ``blocked_only``'s stated reason: a narrowing the picker does not apply is
+    # one the player can announce past — and for a *cast* this same spec is
+    # what CR 601.2c checks, so the announcement was legal too.
+    without = source.get("without_keywords")
+    if without:
+        flags["without_keywords"] = list(without)
     if source.get("subtype_filter") == "wall":
         # The picker's name for a Wall subtype filter (Ali Baba, Dwarven
         # Demolition Team). Kept as a flag rather than left to the instruction
@@ -1392,6 +1404,30 @@ def _forced_sacrifice_spec(payload: dict) -> dict | None:
     return None
 
 
+def _each_matching_damage_spec(payload: dict) -> dict | None:
+    """"Simoon deals 1 damage to each creature **target opponent** controls."
+
+    A sweep over a described set that nonetheless *targets*, and the two facts
+    live in different halves of the payload: the noun phrase says which
+    permanents are hit, the ``controller`` key inside it says whose, and only
+    the second is a choice (CR 115.4).
+
+    One instruction kind serves both readings, exactly as
+    ``_forced_sacrifice_spec`` does one entry down, so only the payload can tell
+    them apart — "each Goblin creature" (Goblin Shrine) picks nobody and must
+    not raise a prompt whose answer nothing reads, while this one picks a seat
+    and was refusing every cast for want of it. The client sent a bare cast, the
+    engine refused it, and the card reported supported the whole time: the Roots
+    class, found by ``scripts/picker_sweep.py`` and by nothing else.
+    """
+    controller = (payload.get("filter") or {}).get("controller")
+    if controller == "target_opponent":
+        return {"kind": "player", "opponents_only": True}
+    if controller == "target_player":
+        return {"kind": "player"}
+    return None
+
+
 # One kind, several specs, decided by payload.
 def _graveyard_to_library_spec(payload: dict) -> dict:
     """Drafna's Restoration's picker: cards of one type, in *any* graveyard.
@@ -1473,6 +1509,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
+    "deal_damage_each_matching": _each_matching_damage_spec,
     "target_gains_life": _life_gain_spec,
     "target_loses_life": _player_recipient_spec,
     "mill_target_player": _player_recipient_spec,
@@ -1493,6 +1530,11 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,
+    # Honorable Passage names its protected object the way Circle of
+    # Despair does — "would deal damage to **any target**" — and its
+    # chosen source the way every CR 615.8 shield does. Same two
+    # prompts, same reader, one rider later.
+    "grant_reflecting_prevention_shield": _whole_prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,
     "look_top_pick_to_hand": _look_top_pick_spec,
@@ -2097,6 +2139,18 @@ def _from_targets_payload(targets) -> dict | None:
         narrowing = targets.get("filter") or {}
         if narrowing.get("type_filter") == "creature":
             spec["creatures_only"] = True
+        # "…among any number of target **attacking or blocking creatures
+        # without flying**" (Rock Slide). The noun is not the whole phrase, and
+        # everything past it was being dropped: the picker offered an idle
+        # creature and a flyer for a spell that names neither, and CR 601.2c's
+        # cast check reads this same spec, so the announcement was legal too.
+        #
+        # Read through ``_narrowing_flags``, the one reader every other kind
+        # already asks, so a divided spell's picker narrows by exactly what a
+        # single-target one does — which is the property that made this
+        # omission invisible: no card had printed a divided target with a
+        # narrowing the flags carry until now.
+        spec.update(_narrowing_flags(narrowing))
         bound = targets.get("max_targets")
         if isinstance(bound, int):
             # "…among **one or two** target creatures" (Contagion). A divided

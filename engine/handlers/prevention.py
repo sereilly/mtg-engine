@@ -18,10 +18,13 @@ from ..shields import (
     make_life_gain_charge,
     make_life_gain_source,
     make_numeric_pool,
+    make_reflect_charge,
+    make_reflect_source,
     make_subject_shield,
     make_whole_charge,
     make_whole_source,
 )
+from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ._common import (attached_host, bound_permanent, resolve_amount,
                       resolve_target_permanent)
 from .registry import effect_handler
@@ -243,6 +246,53 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
                 else f"a {'/'.join(prevention_colors)} source"
             )
         )
+        return True, "resolved"
+
+    # "Prevent the next 5 damage that would be dealt this turn to **any number
+    # of targets, divided as you choose**." (Remedy.) CR 615.7's point pool
+    # split across CR 601.2d's announced targets — one shield per recipient,
+    # each holding the share its controller announced.
+    #
+    # One shield each rather than one shield with several recipients: CR 615.1
+    # puts a shield around *the thing it affects*, and a 5-point pool split 3/2
+    # is two pools that expire and are spent independently. The division itself
+    # is `engine/divided_damage.py`'s, the same reader the burn spells use, so
+    # "divided as you choose" and "divided evenly" cannot come to mean
+    # different things on the two sides of a damage event — and a seat with no
+    # way to be asked (the AI, a scripted duel) gets the even split that module
+    # already falls back to.
+    divided = context.choices.get(DIVIDED_TARGETS)
+    if divided and (instruction.payload.get("targets") or {}).get("kind") == "divided":
+        # Each entry is resolved through the seam rather than by indexing a
+        # battlefield: a shield armed on the slot a dead permanent used to hold
+        # would protect whoever slid into it (`engine/mixins/helpers.py`).
+        live = []
+        for entry in divided:
+            seat, index, _share = divided_entry(entry)
+            if not (0 <= seat < len(game.players)):
+                continue
+            if index is None:
+                live.append((entry, game.players[seat]))
+                continue
+            permanent = game.permanent_at(seat, index)
+            if permanent is not None:
+                live.append((entry, permanent))
+        if not live:
+            # CR 608.2b: every chosen recipient is gone, so the spell shields
+            # nobody. It must not fall back to the caster, which is what a
+            # targetless resolution would otherwise reach below.
+            game.log.append(f"{source_name}: no remaining targets to shield")
+            return True, "resolved"
+        division = (instruction.payload.get("targets") or {}).get("division", EVENLY)
+        shares = divide(amount, [entry for entry, _who in live], division=division)
+        for (_entry, recipient), (_seat, _index, share) in zip(live, shares):
+            if share <= 0:
+                continue
+            _grant_pool(recipient, share, source_name, source_filter)
+            name = getattr(recipient, "name", None) or recipient.card.name
+            game.log.append(
+                f"{name} gains prevention shield for {share} damage"
+            )
         return True, "resolved"
 
     if instruction.payload.get("to_self"):
@@ -501,6 +551,46 @@ def grant_exile_prevention_shield(game: Game, instruction: OracleInstruction, co
             make_exile_source(chosen, by) if chosen is not None
             else make_exile_charge(by)
         ),
+    )
+
+
+@effect_handler("grant_reflecting_prevention_shield")
+def grant_reflecting_prevention_shield(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Honorable Passage: "The next time a source of your choice would deal
+    damage to any target this turn, prevent that damage. If damage from a red
+    source is prevented this way, this spell deals that much damage to the
+    source's controller."
+
+    Pentagram of the Ages' any-target shield with CR 615.5's sentence after it,
+    so it makes the same two choices that one makes and in the same two places:
+    the *protected* object comes from the ability's own target channel, and the
+    *source* from the announcement's separate ``chosen_source`` field. Reading
+    the source off the target channel would arm the shield against the very
+    permanent it protects — the bug that branch of ``grant_whole_prevention_shield``
+    records — so ``from_target_channel`` is off here for that reason too.
+
+    What differs from Pentagram is entirely in ``Shield.kind``: which
+    interceptor consumes the shield, and therefore what happens once it has
+    absorbed. The colours the rider tests ride the shield rather than being
+    rechecked here, because CR 615.9 asks about the source when the damage would
+    be dealt and this resolution is over by then.
+    """
+    granted_by = context.card.name if context.card else None
+    rider_colors = tuple(instruction.payload.get("rider_colors") or ())
+    protected = _shield_target(game, context)
+    if protected is None:
+        game.log.append(f"{granted_by}: nothing is there to protect")
+        return True, "resolved"
+    return _arm_chosen_source_shield(
+        game, context,
+        lambda chosen, by: (
+            make_reflect_source(chosen, rider_colors, by) if chosen is not None
+            else make_reflect_charge(rider_colors, by)
+        ),
+        recipient=protected, from_target_channel=False,
+        verb="will prevent the next damage and answer it",
     )
 
 

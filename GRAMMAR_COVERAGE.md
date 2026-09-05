@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 75.9% | 69.4% | 42.8% | 95 |
+| VIS *(measured)* | 167 | 278 | 77.7% | 72.3% | 45.3% | 102 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 328 | 149 | expected a subject |  |
+| 325 | 146 | expected a subject |  |
 | 107 | 49 | unrecognized effect verb |  |
-| 83 | 38 | unconsumed text |  |
+| 82 | 37 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
@@ -2123,6 +2123,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Destroy target artifact creature.`
   - `• Attacking creatures get +1/+0 until end of turn.`
   - `• Target creature with power 2 or less can't be blocked this turn.`
+- **Heat Wave**
+  - `Blue creatures can't block creatures you control.`
 - **Heaven's Gate**
   - `One or more target creatures become white until end of turn.`
 - **Hecatomb**
@@ -2190,6 +2192,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Homarid Warrior**
   - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap it. (A creature with shroud can't be the target of spells or abilities.)`
   - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap it. (A creature with shroud can't be the target of spells or abilities.)`
+- **Honorable Passage**
+  - `The next time a source of your choice would deal damage to any target this turn, prevent that damage. If damage from a red source is prevented this way, Honorable Passage deals that much damage to the source's controller.`
 - **Hooded Blightfang**
   - `Whenever a creature you control with deathtouch attacks, each opponent loses 1 life and you gain 1 life.`
   - `Whenever a creature you control with deathtouch deals damage to a planeswalker, destroy that planeswalker.`
@@ -3115,6 +3119,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Morale**
   - `Attacking creatures get +1/+1 until end of turn.`
   - `Attacking creatures get +1/+1 until end of turn.`
+- **Mortal Wound**
+  - `When enchanted creature is dealt damage, destroy it.`
 - **Moss Diamond**
   - `{T}: Add {G}.`
 - **Mountain Valley**
@@ -3779,6 +3785,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target player gains 1 life.`
   - `• This Aura deals 1 damage to target player or planeswalker.`
   - `• Target player gains 1 life.`
+- **Remedy**
+  - `Prevent the next 5 damage that would be dealt this turn to any number of targets, divided as you choose.`
 - **Remove Enchantments**
   - `Return to your hand all enchantments you both own and control, all Auras you own attached to permanents you control, and all Auras you own attached to attacking creatures your opponents control. Then destroy all other enchantments you control, all other Auras attached to permanents you control, and all other Auras attached to attacking creatures your opponents control.`
 - **Remove Soul**
@@ -3793,6 +3801,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature with power 4 or greater. It can't be regenerated.`
 - **Reset**
   - `Untap all lands you control.`
+- **Resistance Fighter**
+  - `Sacrifice this creature: Prevent all combat damage target creature would deal this turn.`
 - **Restless Dead**
   - `{B}: Regenerate this creature.`
 - **Resurrection**
@@ -3874,6 +3884,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
   - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
   - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
+- **Rock Slide**
+  - `Rock Slide deals X damage divided as you choose among any number of target attacking or blocking creatures without flying.`
 - **Rocket Launcher**
   - `{2}: This artifact deals 1 damage to any target. Destroy this artifact at the beginning of the next end step. Activate only if you've controlled this artifact continuously since the beginning of your most recent turn.`
   - `{2}: This artifact deals 1 damage to any target. Destroy this artifact at the beginning of the next end step. Activate only if you've controlled this artifact continuously since the beginning of your most recent turn.`
@@ -5364,6 +5376,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target creature gets +2/+0 for as long as this artifact remains tapped.`
 - **Zhalfirin Commander**
   - `{1}{W}{W}: Target Knight creature gets +1/+1 until end of turn.`
+- **Zhalfirin Crusader**
+  - `{1}{W}: The next 1 damage that would be dealt to this creature this turn is dealt to any target instead.`
 - **Zhalfirin Knight**
   - `{W}{W}: This creature gains first strike until end of turn.`
 - **Zirilan of the Claw**

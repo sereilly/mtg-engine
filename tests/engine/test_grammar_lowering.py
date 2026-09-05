@@ -685,16 +685,37 @@ def test_a_sacrifice_narrowing_the_prompt_cannot_test_still_refuses():
     ``OBJECT_ONLY_FILTER_KEYS``), never a hope that some matcher downstream
     happens to answer.
 
-    The example has moved twice, and both moves are the guard working rather
-    than rotting: it was "an attacking creature" until ``attacking_only`` joined
-    the set for Disharmony's untap, and "a blocking creature" until
+    The example has moved three times, and every move is the guard working
+    rather than rotting: it was "an attacking creature" until ``attacking_only``
+    joined the set for Disharmony's untap, "a blocking creature" until
     ``blocking_only`` joined it for Righteousness' picker and Sorrow's Path's
-    two blockers. What is left outside the promise is the *union* spelling —
-    ``any_states``, "attacking **or** blocking" — so that is what the guard
-    names now.
+    two blockers, and the *union* spelling — "attacking **or** blocking" —
+    until ``any_states`` joined it for Rock Slide.
+
+    The example it has moved **to** is a better one, because it exercises the
+    distinction the two key sets exist to draw rather than the presence of a
+    matcher at all. "A creature you cast this turn" is in
+    ``TESTABLE_SUBJECT_FILTER_KEYS``: ``subject_matches`` answers it perfectly
+    for a caller holding the observing seat. The forced-sacrifice prompt is not
+    such a caller — it lists one player's battlefield and has no observer — so
+    the key is outside ``OBJECT_ONLY_FILTER_KEYS`` and the line refuses here.
+    A guard whose example can only be retired by a *matcher* being written is
+    one that will keep moving; this one can only be retired by the prompt
+    growing an observer, which is a design change.
     """
-    result = compile_line("Sacrifice an attacking or blocking creature.", card_name="Test")
+    result = compile_line("Sacrifice a creature you cast this turn.", card_name="Test")
     assert result.parsed and not result.lowered
+
+    # The union the guard used to name, now that it has a promise behind it:
+    # the phrase lowers and the narrowing survives into the payload, rather
+    # than the line being refused for a restriction the matcher can answer.
+    union = compile_line(
+        "Sacrifice an attacking or blocking creature.", card_name="Test"
+    )
+    assert union.parsed and union.lowered
+    assert union.instructions[0].payload["filter"]["any_states"] == [
+        "attacking", "blocking",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -5033,3 +5054,100 @@ def test_a_count_scoped_both_ways_refuses():
     assert count_spec(filt, None)["owner"] == "all"
     with pytest.raises(LoweringError):
         count_spec(dataclasses.replace(filt, controller="you"), None)
+
+
+# --- VIS w1g3: what the new prevention/redirection productions refuse -------
+#
+# A production that ends in a catch-all has to parse its own tail and refuse
+# what it cannot read; the refusal test is the half that finds what the
+# positive cases all pass (SET_PLAYBOOK Phase 3). Imports live inside the block
+# by the per-set convention.
+
+import pytest as _w1g3_pytest
+
+from engine.grammar import parse_line as _w1g3_parse_line
+from engine.grammar.errors import GrammarError as _W1G3GrammarError
+
+
+def test_the_active_voice_shield_refuses_a_subject_it_cannot_read():
+    """"Prevent all combat damage **target creature** would deal this turn."
+    The subject is read through the ordinary noun-phrase reader, so a phrase it
+    cannot read leaves the line refused at the words that failed rather than
+    arming a shield against nothing.
+
+    Non-consuming, which is the property that matters: the refusal the passive
+    spelling would have given is what the card still gets.
+    """
+    with _w1g3_pytest.raises(_W1G3GrammarError):
+        _w1g3_parse_line(
+            "Prevent all combat damage frobnicate would deal this turn."
+        )
+
+
+def test_the_active_voice_shield_reads_the_same_node_as_the_passive_one():
+    """The two spellings are one sentence, so they lower to one instruction.
+    Asserted as *equality* rather than as two working cards, because a second
+    reading that merely happens to work today is a second reading."""
+    active = compile_line("Prevent all combat damage target creature would deal this turn.")
+    passive = compile_line(
+        "Prevent all combat damage that would be dealt by target creature this turn."
+    )
+
+    assert active.instructions == passive.instructions
+
+
+def test_a_divided_shield_refuses_a_single_named_recipient():
+    """"…divided as you choose" over one chosen creature is not a division, and
+    the handler splits its pool across an announced list. Refused by name
+    rather than armed at the full amount on one target, which is the direction
+    that shields more than the card prints."""
+    result = compile_line(
+        "Prevent the next 5 damage that would be dealt this turn to target "
+        "creature, divided as you choose."
+    )
+
+    assert result.parsed and not result.lowered
+    assert "divided shield" in (result.lowering_error or "")
+
+
+def test_a_counted_redirect_off_the_source_refuses_a_narrowed_target():
+    """Zhalfirin Crusader's sentence admits only "any target" (CR 115.4): the
+    printed words are what make the taker a player as readily as a permanent,
+    and a narrowed object target is a different picker. Refused rather than
+    widened."""
+    result = compile_line(
+        "The next 1 damage that would be dealt to this creature this turn is "
+        "dealt to target creature instead."
+    )
+
+    assert result.parsed and not result.lowered
+
+
+def test_a_counted_redirect_refuses_to_move_the_damage_nowhere():
+    """Both ends the source. The sentence moves nothing and no card prints it;
+    refusing names it rather than arming a record redirecting a permanent to
+    itself, which would silently do nothing at all (CR 614.9)."""
+    result = compile_line(
+        "The next 1 damage that would be dealt to this creature this turn is "
+        "dealt to this creature instead."
+    )
+
+    assert result.parsed and not result.lowered
+
+
+def test_a_board_wide_block_restriction_refuses_an_untestable_subject():
+    """"Blue creatures can't block creatures you control" (Heat Wave) narrows
+    on **both** sides, and the blocker gate tests both through
+    ``subject_matches``. A subject the matcher cannot answer is refused rather
+    than dropped — a dropped subject here forbids every block on the table,
+    which is over-restriction and exactly as silent as the widening this gate
+    usually guards."""
+    ok = compile_line("Blue creatures can't block creatures you control.")
+    assert ok.lowered
+    assert ok.instructions[0].kind == "subject_cant_block_subject"
+
+    # A keyword nothing is registered under makes the filter inert rather than
+    # unreadable, which is the case the gate has to name.
+    result = compile_line("Creatures with frobnication can't block creatures you control.")
+    assert not result.lowered
+# --- end VIS w1g3 ---

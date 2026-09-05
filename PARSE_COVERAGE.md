@@ -25,16 +25,13 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**15 unclaimed sentence(s) across 11 supported card(s).**
+**11 unclaimed sentence(s) across 9 supported card(s).**
 
 - **Anvil of Bogardan**
   - `players have no maximum hand size`
 - **Corrosion**
   - `at the beginning of your upkeep, put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated`
   - `when this enchantment leaves the battlefield, remove all rust counters from all permanents`
-- **Elephant Grass**
-  - `black creatures can't attack you`
-  - `nonblack creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you`
 - **Fireblast**
   - `you may sacrifice two mountains rather than pay this spell's mana cost`
 - **Foreshadow**
@@ -42,9 +39,6 @@ anything anyone did, and every ingest would arrive red.
   - `if a card with the chosen name was milled this way, you draw a card`
 - **Griffin Canyon**
   - `{t}: untap target griffin. if it's a creature, it gets +1/+1 until end of turn`
-- **Heat Wave**
-  - `blue creatures can't block creatures you control`
-  - `nonblue creatures can't block creatures you control unless their controller pays 1 life for each blocking creature they control`
 - **Infernal Harvest**
   - `as an additional cost to cast this spell, return x swamps you control to their owner's hand`
 - **Juju Bubble**

@@ -456,10 +456,23 @@ def _lower_next_damage_redirect(
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
     if not _is_source(node.new_recipient):
+        # "{1}{W}: **The next 1 damage that would be dealt to this creature**
+        # this turn **is dealt to any target instead**." (Zhalfirin Crusader.)
+        # The same sentence with its two ends swapped: the record still hangs
+        # off the recipient it watches and still moves N points, but here the
+        # watched recipient is the ability's own source and the *taker* is what
+        # the ability chose. One production reads both, because from the
+        # quantity onwards they are the identical clause — and one
+        # ``DamageRedirect`` carries both, because that record has never cared
+        # which end of it was named and which was chosen.
+        return _lower_next_damage_redirect_from_source(node)
+    if _is_source(node.to):
+        # Both ends the source. "The next 1 damage that would be dealt to this
+        # creature is dealt to this creature instead" moves nothing and is a
+        # sentence no card prints; refusing names it rather than arming a
+        # record that redirects a permanent to itself.
         raise LoweringError(
-            "a counted redirect moves the damage onto the permanent whose "
-            "ability it is",
-            node=node,
+            "a counted redirect moves the damage somewhere else", node=node
         )
     spec = node.to
     # "…dealt to **target creature, planeswalker, or player**" (Martyrdom's
@@ -486,6 +499,48 @@ def _lower_next_damage_redirect(
     _describe_targets(payload, spec)
     return (
         OracleInstruction("redirect_next_damage_to_source_until_eot", "", payload),
+    )
+
+
+def _lower_next_damage_redirect_from_source(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"The next 1 damage that would be dealt to **this creature** this turn is
+    dealt to **any target** instead." (Zhalfirin Crusader.)
+
+    :func:`_lower_next_damage_redirect` with the two ends of the event
+    exchanged: there the ability's source *takes* the damage and a chosen object
+    is protected, here the source is protected and a chosen object takes it.
+
+    Its own instruction rather than a flag, because the two halves of the
+    payload change meaning: ``targets`` there describes who is *shielded* and
+    the record is armed on it, and ``targets`` here describes who is *hit* and
+    the record is armed on the source. A handler reading one payload as the
+    other would arm a redirect pointing back at the creature it protects, which
+    is a card that silently does nothing at all.
+
+    Only "any target" (CR 115.4) is admitted: the printed word is what makes the
+    taker a player as readily as a permanent, and ``DamageRedirect`` has carried
+    both since it was written. A narrowed object target would be a different
+    picker and is refused rather than widened.
+    """
+    spec = node.new_recipient
+    if (
+        not isinstance(spec, ast.TargetSpec)
+        or spec.quantifier != "any_target"
+        or _names_several_targets(spec)
+    ):
+        raise LoweringError(
+            "a counted redirect off the source moves the damage onto one "
+            "chosen target",
+            node=node,
+        )
+    payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    _describe_targets(payload, spec)
+    return (
+        OracleInstruction(
+            "redirect_next_damage_from_source_until_eot", "", payload
+        ),
     )
 
 

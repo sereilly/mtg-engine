@@ -434,6 +434,18 @@ class DeclareBlockersStepMixin:
         # leave nothing spent - the same order the attack side takes at
         # CR 508.1g.
         if not _camouflage_resolution:
+            # CR 118.4 again, over the whole declaration: a per-pair predicate
+            # can say "you could afford this one" and not "and again for the
+            # next", so a defender at 2 life would declare three Heat-Waved
+            # blockers and pay for two. Checked before anything is spent, the
+            # same order the mana plan below takes.
+            life_owed = self._block_declaration_life(
+                assignments, resolved_blockers, resolved_attackers
+            )
+            if life_owed and self.players[controller_index].life < life_owed:
+                return False, (
+                    f"can't pay {life_owed} life to declare those blockers"
+                )
             block_total, block_plan = self._block_declaration_mana_plan(
                 controller_index, assignments, resolved_blockers, resolved_attackers
             )
@@ -442,6 +454,13 @@ class DeclareBlockersStepMixin:
                     f"can't pay {mana_cost_label(block_total)} to declare those blockers"
                 )
             self._pay_block_declaration_mana(controller_index, block_total, block_plan)
+            if life_owed:
+                defender_paying = self.players[controller_index]
+                defender_paying.life -= life_owed
+                self.log.append(
+                    f"{defender_paying.name} paid {life_owed} life to declare "
+                    "blockers"
+                )
 
         # Nested by defender (CR 802): only this defender's own entry is replaced,
         # so an earlier defender's declaration in the same combat survives.
@@ -906,6 +925,19 @@ class DeclareBlockersStepMixin:
         # declaration-wide check adds several blockers' costs together, the way
         # `_declaration_mana_plan` does on the attack side.
         blocker_seat = self.controller_index_of(blocker)
+        # "Nonblue creatures can't block creatures you control **unless their
+        # controller pays 1 life for each blocking creature they control**."
+        # (Heat Wave.) CR 509.1d's cost paid in life rather than mana, and the
+        # per-creature half of it — this predicate can honestly say "you could
+        # afford this one", and the declaration below adds up the creatures.
+        if blocker_seat is not None:
+            owed = self._block_life_cost_of(blocker, attacker)
+            # CR 118.4: a player may pay N life only with a life total of at
+            # least N. Asked here so an unpayable toll makes the block illegal
+            # rather than being discovered at the charge, where CR 509 has
+            # already locked the declaration in.
+            if owed and self.players[blocker_seat].life < owed:
+                return False
         if blocker_seat is not None:
             for cost in self._block_mana_costs_of(blocker, attacker):
                 if plan_payment(
@@ -958,32 +990,36 @@ class DeclareBlockersStepMixin:
                 ):
                     return False
 
-        # "Creatures with flying can block only creatures with flying."
-        # (Chaosphere.) The restriction above printed about the board, so it is
-        # found by scanning every permanent rather than read off the blocker —
-        # its source is a World Enchantment nobody is attacking or blocking, and
-        # the sentence says "creatures", so it reaches both seats' creatures
-        # including its own controller's.
+        # "**Blue creatures** can't block creatures you control." (Heat Wave.)
+        # CR 509.1b's restriction printed about a described *set* of blockers
+        # rather than about the permanent carrying it, so it is found by the
+        # same board scan the block-only restriction above needs and for the
+        # same reason: the source is an enchantment nobody is attacking or
+        # blocking.
         #
-        # Both halves through ``subject_matches`` with **no** observer: neither
-        # noun phrase names a seat, and supplying one would let a future
-        # "creatures you control" printing quietly mean the wrong board. CR
-        # 509.1b keeps every such restriction cumulative, so each is asked
-        # separately and satisfying one answers only that one.
-        for permanent in self.all_permanents():
+        # The observer is the seat controlling the **restricting permanent**,
+        # not the blocker's: "creatures **you** control" on the blockee half is
+        # that seat's "you" (CR 109.5), and this is precisely the card that
+        # proves it — read with the blocker's seat it would protect the wrong
+        # player's creatures, which in a duel is the opposite of the printed
+        # card.
+        for source_seat, source_perm in self.permanents_with_controller():
             for restriction in compile_card_oracle(
-                permanent.effective_card
+                source_perm.effective_card
             ).instructions:
-                if restriction.kind != "subject_can_block_only":
+                if restriction.kind != "subject_cant_block_subject":
                     continue
                 if not subject_matches(
-                    self, blocker, restriction.payload.get("subject") or {}
+                    self, blocker, restriction.payload.get("subject") or {},
+                    observer=source_seat, source=source_perm,
                 ):
                     continue
-                if not subject_matches(
-                    self, attacker, restriction.payload.get("allowed") or {}
-                ):
-                    return False
+                for described in restriction.payload.get("blockee_filters") or ():
+                    if subject_matches(
+                        self, attacker, described,
+                        observer=source_seat, source=source_perm,
+                    ):
+                        return False
 
         # Landwalk (CR 702.14): the attacker can't be blocked if the defending
         # player controls a land of the matching basic type. The blocker is one of
@@ -1047,6 +1083,78 @@ class DeclareBlockersStepMixin:
             if cost:
                 costs.append(cost)
         return costs
+
+    def _block_life_cost_of(self, blocker: Permanent, attacker: Permanent) -> int:
+        """The life *blocker*'s controller owes to block *attacker* (CR 509.1d).
+
+        "Nonblue creatures can't block creatures you control unless their
+        controller pays 1 life for each blocking creature they control." (Heat
+        Wave.) Found by scanning the board, like the restriction it is a toll
+        on: the source is an enchantment nobody is attacking or blocking.
+
+        Both noun phrases are asked with the **restricting permanent's** seat as
+        the observer — "creatures you control" is that seat's "you" (CR 109.5),
+        which on this card is the difference between a toll on blocking the
+        enchantment's controller and a toll on blocking anybody.
+
+        One reader for the gate in ``_can_block_attacker`` and the charge in
+        ``declare_blockers``, exactly as ``_block_mana_costs_of`` beside it is:
+        a cost checked by one rule and paid by another is how a block gets
+        accepted and then left unpaid.
+        """
+        owed = 0
+        for source_seat, source_perm in self.permanents_with_controller():
+            for restriction in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if restriction.kind != "subject_cant_block_subject_unless_pay_life":
+                    continue
+                if not subject_matches(
+                    self, blocker, restriction.payload.get("subject") or {},
+                    observer=source_seat, source=source_perm,
+                ):
+                    continue
+                if not any(
+                    subject_matches(
+                        self, attacker, described,
+                        observer=source_seat, source=source_perm,
+                    )
+                    for described in restriction.payload.get("blockee_filters") or ()
+                ):
+                    continue
+                owed += int(restriction.payload.get("life", 0))
+        return owed
+
+    def _block_declaration_life(
+        self,
+        assignments: dict[int, list[int]],
+        resolved_blockers: dict[int, Permanent],
+        resolved_attackers: dict[int, Permanent],
+    ) -> int:
+        """The whole declaration's CR 509.1d life cost.
+
+        Counted **per blocking creature**, which is what the card prints — "for
+        each blocking creature they control" — and deliberately not per
+        (blocker, attacker) pair the way the mana total beside it is. That
+        difference is the two sentences', not an inconsistency: Hipparion's
+        toll is owed for disobeying a restriction, and a creature blocking two
+        attackers disobeys it twice, while Heat Wave counts creatures. A
+        creature blocking two attackers pays once here, and the maximum over its
+        attackers is what it owes — a creature restricted against only one of
+        the two still pays the toll it triggered.
+        """
+        total = 0
+        for blocker_idx, attacker_indices in assignments.items():
+            blocker = resolved_blockers.get(blocker_idx)
+            if blocker is None:
+                continue
+            owed = 0
+            for attacker_idx in attacker_indices:
+                attacker = resolved_attackers.get(attacker_idx)
+                if attacker is not None:
+                    owed = max(owed, self._block_life_cost_of(blocker, attacker))
+            total += owed
+        return total
 
     def _block_declaration_mana_plan(
         self,

@@ -67,6 +67,10 @@ class CombatRestriction:
 #   creatures_cant_attack_you_unless_pay
 #                                   phases/declare_attackers_step.can_attack
 #                                   + declare_attackers (the charge)
+#   creatures_cant_attack_you       phases/declare_attackers_step.can_attack
+#   subject_cant_block_subject_unless_pay_life
+#                                   phases/declare_blockers_step._can_block_attacker
+#                                   + declare_blockers (the charge)
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
@@ -158,12 +162,58 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         # per-attacker {2} *is* {2} for each attacking creature. A payload
         # carrying the multiplication would be a second way to say what the
         # summing already says, free to disagree with it.
+        # The subject is a **printed noun phrase**, not the bare word: "Nonblack
+        # creatures can't attack you unless…" (Elephant Grass) is the same toll
+        # narrowed, and Koskun Falls' unnarrowed printing reduces to
+        # "creatures", which is a filter matching every creature. One row rather
+        # than two, because the narrowing is data — a card printing any other
+        # colour, type or keyword needs no pattern here.
         re.compile(
-            r"^creatures can't attack you unless their controller pays "
+            r"^(?P<attack_pay_subject>[a-z' -]*creatures) can't attack you "
+            r"unless their controller pays "
             r"(?P<attack_mana>(?:\{[^}]+\})+) for each creature they control "
             r"that's attacking you$"
         ),
         "creatures_cant_attack_you_unless_pay",
+    ),
+    (
+        # "Black creatures can't attack you." (Elephant Grass.) The row above
+        # with no toll at all — a flat prohibition, and one scoped to a
+        # *defender*: "you" is the permanent's controller (CR 109.5), which is
+        # what separates this from `creatures_cant_attack` beside it. That kind
+        # forbids the attack outright wherever it is aimed (Moat), and reading
+        # this sentence as one would ground the creature against every seat at
+        # the table instead of against the one the card protects.
+        #
+        # Below the toll row so a line printing both clauses reaches the toll:
+        # the anchors already keep them apart (that sentence does not end in
+        # "can't attack you"), and the order is what keeps that from being a
+        # coincidence.
+        re.compile(r"^(?P<attack_you_subject>[a-z' -]*creatures) can't attack you$"),
+        "creatures_cant_attack_you",
+    ),
+    (
+        # "Nonblue creatures can't block creatures you control unless their
+        # controller pays 1 life for each blocking creature they control."
+        # (Heat Wave.) The blocking twin of Elephant Grass' toll two rows up,
+        # and the first cost in this file paid in **life** rather than mana
+        # (CR 118.4/509.1d) — which is why the capture is its own key: what a
+        # printed symbol run means and what a printed number of life means are
+        # two different payments, and one key would let the two enforcement
+        # sites read a life total as a mana pool.
+        #
+        # Read here rather than by the grammar because the grammar refuses the
+        # line in full: `effects/combat.py`'s "can't block <noun phrase>"
+        # production has no reading for the "unless" tail, so it leaves the
+        # words unconsumed and the whole line comes to this table — which is
+        # the ordering CLAUDE.md requires, a parsed-but-unlowered sentence
+        # would take the table's line away.
+        re.compile(
+            r"^(?P<block_pay_subject>[a-z' -]*creatures) can't block "
+            r"(?P<block_pay_blockees>.+) unless their controller pays "
+            r"(?P<block_life>\d+) life for each blocking creature they control$"
+        ),
+        "subject_cant_block_subject_unless_pay_life",
     ),
     # "…unless **you** control four or more artifacts" (Gadrak). The count and
     # the type are payload for the reason the land type above is: a card printed
@@ -881,6 +931,39 @@ def combat_restriction_for(
         # "Creatures **you** control can't attack." The seat alone, built into
         # the same one `subject` filter its two narrowed siblings build, so the
         # enforcement site reads one payload shape for all three.
+        # "**Nonblack** creatures can't attack you unless…" / "**Black**
+        # creatures can't attack you." Both rows delimit a printed noun phrase
+        # and both read it here, through the one noun reader on this page — a
+        # phrase it cannot read refuses the line rather than admitting a toll or
+        # a prohibition scoped to a set nobody can test, which for a *defensive*
+        # restriction is the direction that stops legal attacks.
+        # "**Nonblue** creatures can't block **creatures you control** unless…"
+        # Both halves are printed noun phrases and both are read here, through
+        # the one noun reader on this page: the regex ends the blockee half in
+        # `.+`, and a phrase admitted unread would be a toll charged for
+        # blocking a set nobody described — which on this sentence is every
+        # attacker at the table.
+        block_pay_subject = payload.pop("block_pay_subject", None)
+        if block_pay_subject is not None:
+            subject = _printed_noun(block_pay_subject)
+            blockees = _printed_noun(payload.pop("block_pay_blockees", ""))
+            if subject is None or blockees is None:
+                return None
+            payload["subject"] = subject
+            payload["blockee_filters"] = [blockees]
+        # The printed number of life, as an int the payment reads. Converted
+        # for the reason the mana run above is: a payload whose shape depends
+        # on which regex matched is how a cost silently stops being charged.
+        block_life = payload.pop("block_life", None)
+        if block_life is not None:
+            payload["life"] = int(block_life)
+        for captured in ("attack_pay_subject", "attack_you_subject"):
+            phrase = payload.pop(captured, None)
+            if phrase is not None:
+                described = _printed_noun(phrase)
+                if described is None:
+                    return None
+                payload["subject"] = described
         attack_controller = payload.pop("attack_controller", None)
         if attack_controller is not None:
             payload["subject"] = {

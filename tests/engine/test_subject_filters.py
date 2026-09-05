@@ -592,6 +592,8 @@ _COVERED_ELSEWHERE = {
         "test_a_source_relative_bound_is_read_through_the_layers",
     "cast_by_you_this_turn":
         "test_cast_by_you_this_turn_reads_a_seat_and_a_turn",
+    "any_states":
+        "test_a_state_union_admits_either_alternative_and_nothing_else",
 }
 
 
@@ -1579,3 +1581,79 @@ def test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role(pool
     assert subject_matches(game, attacker, {"not_blocking": True})
     assert subject_matches(game, blocker, {"not_attacking": True})
 # --- end W2G1 ---
+
+
+# --- VIS w1g3: the printed union of two state words -------------------------
+#
+# Imports live inside the block by the per-set convention, so a merge that
+# appends the block cannot lose one.
+
+
+def test_a_state_union_admits_either_alternative_and_nothing_else(pool):
+    """"any number of target **attacking or blocking** creatures without
+    flying" (Rock Slide); "target **tapped or blocking** creature" (Tetsuo
+    Umezawa).
+
+    Its own demonstration rather than a row in ``_REJECTIONS``, for
+    ``not_attacking``'s reason one test up: that table builds a permanent
+    outside combat, and this key's whole content is what happens *inside* one.
+
+    Three assertions, and the third is the one that makes this not a second
+    copy of ``attacking_only``/``blocking_only``:
+
+    * an attacker matches, so the first alternative is read;
+    * a blocker matches, so the second is — a matcher ANDing the list would
+      reject both, which is exactly what setting the two boolean keys together
+      would have done;
+    * a creature in neither role is rejected, so the union narrows at all.
+
+    The key was tested by ``permanent_matches_filter`` from the day the Legends
+    pinger cycle was read and was never *promised* in
+    ``TESTABLE_SUBJECT_FILTER_KEYS``, so every gate asking "can the matcher
+    test this?" refused a phrase the matcher tests. Rock Slide is the card that
+    cost, and this is the assertion that would have found it.
+    """
+    from engine.subject_filters import subject_matches
+
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[attacker, idle])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    union = {"type_filter": "creature", "any_states": ["attacking", "blocking"]}
+    assert subject_matches(game, attacker, union)
+    assert subject_matches(game, blocker, union)
+    assert not subject_matches(game, idle, union)
+
+
+def test_an_unreadable_state_word_narrows_to_nothing(pool):
+    """A union nobody can test admits *nothing*, not everything.
+
+    The promise the key set makes is that a narrowing reaching a dispatcher is
+    one the matcher answers. ``state_holds`` answers an unknown word False, so
+    a phrase this engine cannot read shrinks the set rather than widening it —
+    which is what makes ``any_states`` safe to promise even though the word
+    list is open.
+    """
+    from engine.subject_filters import subject_matches
+
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(
+        players=[PlayerState(name="P1", battlefield=[perm]),
+                 PlayerState(name="P2")]
+    )
+
+    assert subject_matches(game, perm, {"type_filter": "creature"})
+    assert not subject_matches(
+        game, perm, {"type_filter": "creature", "any_states": ["three-headed"]}
+    )
+# --- end VIS w1g3 ---

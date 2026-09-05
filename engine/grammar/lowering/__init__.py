@@ -104,10 +104,10 @@ from .redirection import (
     _lower_double_combat_damage,
     _lower_redirect_damage,
 )
+from ._blankets import _lower_prevent_all
 from .prevention import (
     _lower_prevent_damage,
     _lower_prevent_half,
-    _lower_prevent_all,
     _lower_damage_cant_be_prevented,
 )
 from .base_pt import _lower_change_base_pt, _lower_set_base_pt
@@ -295,10 +295,10 @@ from .stack import (
     _lower_create_delayed_trigger,
     _lower_modal_head,
 )
+from .prohibitions import _lower_cant_be
 from .combat import (
     _lower_combat_restriction,
     lower_block_count_grant,
-    _lower_cant_be,
     _lower_attack_as_though,
     _lower_assigns_no_combat_damage,
     _lower_attacking_doesnt_tap,

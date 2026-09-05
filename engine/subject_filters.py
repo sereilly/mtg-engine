@@ -147,6 +147,24 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # declare-blockers step, so it is answerable from the object alone exactly
     # as ``attacking_only`` is.
     "blocking_only",
+    # "any number of target **attacking or blocking** creatures without flying"
+    # (Rock Slide); "target **tapped or blocking** creature" (Tetsuo Umezawa).
+    # The printed *union* of the two keys above, which neither of them and no
+    # pair of them can state — every matcher ANDs its payload keys, so
+    # ``attacking_only`` and ``blocking_only`` together describe a creature
+    # doing both, a set that is always empty.
+    #
+    # It arrived here late, and the lateness is the finding: the matcher has
+    # answered the key since the Legends pinger cycle
+    # (``handlers/_common.permanent_matches_filter``, through the same
+    # ``state_holds`` table ``layer_bridge`` reads), and the *promise* was
+    # simply never made — so every gate asking "are all these keys testable?"
+    # refused a phrase the engine tests perfectly. That is this set's failure
+    # mirrored: not an effect reaching further than the card prints, but a card
+    # refused for a narrowing nothing was dropping. An unknown state word
+    # narrows to nothing rather than to everything (``state_holds`` answers
+    # False), so the promise is safe in the direction that matters.
+    "any_states",
     # "target **nonattacking, nonblocking** creature" (Unlikely Alliance). The
     # two above read the other way, answerable from the object for the same
     # reason and through the same accessors.
@@ -488,6 +506,7 @@ def subject_matches(
     source: "Permanent | None" = None,
     defending: int | None = None,
     that_player: int | None = None,
+    targeted_player: int | None = None,
 ) -> bool:
     """Whether *obj* is in the set the filter payload *described* names.
 
@@ -637,6 +656,21 @@ def subject_matches(
             if that_player is None:
                 return False
             return game.controls(that_player, obj)
+        # "…each creature **target opponent** controls" (Simoon). A seat the
+        # *spell* chose (CR 115.4), which is the third of these and the one that
+        # was not here: it fell through to the "not you" test below and became
+        # **any** opponent — right in a two-player game by coincidence, and in a
+        # free-for-all a spell that burns three boards where the card names one.
+        # The card reported supported the whole time and no test could see it,
+        # because the two readings agree wherever the pool is usually exercised.
+        #
+        # Answered when the caller supplies the seat and refused when it does
+        # not, exactly as the two above are: a caller that cannot say which
+        # opponent was named must narrow to nothing rather than to everyone.
+        if controller in ("target_opponent", "target_player"):
+            if targeted_player is None:
+                return False
+            return game.controls(targeted_player, obj)
         seat = game.controller_index_of(obj)
         if seat is None or observer is None:
             return False

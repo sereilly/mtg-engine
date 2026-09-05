@@ -339,6 +339,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # family is `activated_damage` — a label saying the ability deals damage
     # when it deals none.
     "redirect_next_damage_to_source_until_eot": "activated_prevent",
+    "redirect_next_damage_from_source_until_eot": "activated_prevent",
     # Quarum Trench Gnomes changes what a land produces. The mana is the point,
     # which is what `activated_mana` answers.
     "produce_mana_instead": "activated_mana",

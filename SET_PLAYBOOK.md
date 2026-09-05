@@ -359,8 +359,26 @@ dropped, which is the same failure `TESTABLE_SUBJECT_FILTER_KEYS` exists to
 prevent — so a copy that drifts admits a card and then ignores half its noun
 phrase. W4G2 declined to fold it because at `prevention.py`'s size the helper
 costs more lines than it saves; that argument expires the moment that module is
-split. **Fold it into `_common` as part of the next `lowering/prevention.py`
-split**, which the size guard will force soon (see below).
+split.
+
+**Drained 2026-09-05, at VIS wave 1**, the round Remedy and Honorable Passage
+took `lowering/prevention.py` past the guard. It was **four** copies rather than
+the three counted here, and they are now one call to
+`lowering/_filters.testable_filter_payload`, re-exported through `_common`. The
+fold bought more than the line count, and the extra is the reason the entry was
+worth keeping: the helper asks `untestable_filter_keys`, which **recurses** into
+a nested noun phrase where a flat `set(payload) - TESTABLE_SUBJECT_FILTER_KEYS`
+answers "testable" whatever the inner phrase says — so two of the copied
+spellings had already drifted from the rule they were copies of. Its refusal
+also names the offending keys, which turns each one from a work-list entry into
+a diagnosis.
+
+**What is left is a number, not an impression: 39 flat spellings of the same
+check across eleven `lowering/` modules**, each blind to a nested phrase in
+exactly that way. They were deliberately not swept in the same round — they sit
+in modules four other wave branches were editing, and a cross-module sweep with
+no card behind it is a merge hazard bought for nothing. Whoever next splits one
+of those modules should fold its copies the same way.
 
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game

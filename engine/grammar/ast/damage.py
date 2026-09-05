@@ -425,6 +425,20 @@ class PreventDamage:
     unaffected_if_cost_paid: "ObjectFilter | None" = None
     alternate_amount: "Amount | None" = None
     alternate_subject: "ObjectFilter | None" = None
+    #: "Prevent the next 5 damage that would be dealt this turn to any number
+    #: of targets, **divided as you choose**." (Remedy.) CR 601.2d's division,
+    #: announced with the spell — the same sentence a burn spell prints, on the
+    #: other side of the event. ``None`` is every prevention that names one
+    #: recipient; ``"chosen"`` and ``"evenly"`` are the two printed divisions,
+    #: spelled the way ``divided_damage`` already spells them so the shield's
+    #: payload and a damage payload cannot come to mean different things by the
+    #: same word.
+    #:
+    #: The *word* rather than a bare flag, for the reason ``DamageRiders``
+    #: keeps both: the engine divided evenly for both sentences until the
+    #: distinction had a payload, and four burn spells were played strictly
+    #: weaker than printed.
+    division: "str | None" = None
 
 
 @dataclass(frozen=True)

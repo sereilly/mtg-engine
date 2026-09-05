@@ -110,6 +110,7 @@ from engine.untap_restrictions import (  # noqa: E402
     untap_restriction_for,
 )
 from engine.hand_size import hand_size_line  # noqa: E402
+from engine.lethal_damage import single_source_lethal_line  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_board_counted_penalty_sentences,
     aura_cost_reduction_sentences,
@@ -334,6 +335,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # and Pyrokinesis sat in the unclaimed list with their defining line, which
     # is what an alternative cost with nothing behind it looks like from here.
     ("alternative_costs.py", alternative_cost_claims_line),
+    # "This creature can't be destroyed by lethal damage unless lethal damage
+    # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
+    # narrowed by the permanent's own text — a state-based action, so there is
+    # no instruction and the sentence would read unclaimed. Asked of the reader
+    # `mixins/game_ending.py` enforces with.
+    ("lethal_damage.py", single_source_lethal_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
     # The per-source untap lines — "this artifact doesn't untap during your
     # untap step" and "you may choose not to untap this artifact …" — which the

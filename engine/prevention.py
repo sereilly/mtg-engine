@@ -69,7 +69,8 @@ from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
 from .pt import remove_plus1_counters
 from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
-                      PREVENT_AND_GAIN_LIFE, PREVENT_HALF, PREVENT_FROM_COLOR,
+                      PREVENT_AND_DAMAGE_SOURCE, PREVENT_AND_GAIN_LIFE,
+                      PREVENT_HALF, PREVENT_FROM_COLOR,
                       PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
                       PREVENT_NEXT_N, PREVENT_WHOLE, PREVENT_AND_EXILE,
                       PREVENT_TEAM, Shield, drop_spent, shields_on)
@@ -140,6 +141,14 @@ SOURCE_EXILE_SHIELD = 305
 # other two: all three absorb the whole instance from one chosen source and
 # differ only in what they do afterwards.
 SOURCE_TEAM_SHIELD = 307
+# "…prevent that damage. If damage from a red source is prevented this way, ~
+# deals that much damage to the source's controller." (Honorable Passage.) The
+# fourth CR 615.5 rider, beside the other three for their reason — one chosen
+# source, the whole instance absorbed — and behind them because it is the only
+# rider that *hurts somebody*. CR 616.1e gives the choice to the affected
+# player, and a shield they can spend for a gain is one they would spend before
+# a shield they can spend for an attack on a third party.
+SOURCE_REFLECT_SHIELD = 308
 # "…prevent that damage", with nothing after it (Pentagram of the Ages). The
 # same absorption as Reverse Damage's shield against the same chosen source, so
 # it sits beside it — behind, because Reverse Damage's rider gains its
@@ -149,6 +158,7 @@ SOURCE_WHOLE = 310
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
 GENERIC_EXILE_SHIELD = 405  # Bone Mask with no chosen source
 GENERIC_TEAM_SHIELD = 407  # Shadowbane with no chosen source
+GENERIC_REFLECT_SHIELD = 408  # Honorable Passage with no chosen source
 GENERIC_WHOLE = 410  # the same rider-less shield with no source recorded
 COLOR_SHIELD = 500  # Circle of Protection
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
@@ -947,6 +957,84 @@ def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     the next damage event from any source is prevented."""
     return _spend(
         game, event, PREVENT_TEAM, chosen=False, rider=_gain_life_if_rider_colour
+    )
+
+
+def _damage_the_source_controller(
+    game, event: dict, used: list[Shield], prevented: int
+) -> None:
+    """Honorable Passage's rider (CR 615.5): the prevention happens first, then
+    the damage comes back — but only when the source was one of the colours the
+    shield recorded.
+
+    Three things are read *now* rather than at the arming, and each is a rule
+    rather than a convenience:
+
+    * the colour, because CR 615.9's recheck is against the source as it is when
+      the damage would be dealt (the same reading ``_gain_life_if_rider_colour``
+      takes one rider over);
+    * how much, because "that much" is what this shield absorbed and no arming
+      knows it;
+    * **whose** source it was — ``source_seat``, derived once inside
+      ``deal_damage`` for CR 109.5's reason: a spell's ``source`` is the card as
+      printed, shared by every copy and controlled by nobody, so no read of it
+      can answer.
+
+    The damage is dealt by the *card that armed the shield*, not by the
+    prevented source: "Honorable Passage deals that much damage" names itself.
+    ``source_name`` is the only handle the shield keeps on it, so the shield's
+    own recorded name is what a later reader sees on the log line.
+    """
+    shield = used[0]
+    game.log.append(
+        f"{shield.source_name or 'A shield'} prevented {prevented} damage to "
+        f"{recipient_label(event['recipient'])}"
+    )
+    if prevented <= 0:
+        return
+    if shield.rider_colors and not (
+        set(shield.rider_colors)
+        & set(damage_source_colors(game, event.get("source")))
+    ):
+        return
+    seat = event.get("source_seat")
+    if seat is None or not (0 <= seat < len(game.players)):
+        # CR 109.5 has no answer for a source nobody controls (a turn-based
+        # action), and the card names one. Nothing happens rather than the
+        # damage landing on a guessed seat.
+        return
+    controller = game.players[seat]
+    if getattr(controller, "lost", False):
+        return
+    game._deal_damage_to_player(
+        controller, prevented, source=shield.source_name, asks=True,
+        then=lambda dealt, name=shield.source_name, who=controller: game.log.append(
+            f"{name or 'A shield'} dealt {dealt} damage to {who.name}"
+        ),
+    )
+
+
+@prevention_effect(
+    SOURCE_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=True)
+)
+def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Honorable Passage: the whole instance from the chosen source, wherever
+    on the table it was headed."""
+    return _spend(
+        game, event, PREVENT_AND_DAMAGE_SOURCE, chosen=True,
+        rider=_damage_the_source_controller,
+    )
+
+
+@prevention_effect(
+    GENERIC_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=False)
+)
+def _reflect_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """The same shield cast without recording a chosen source (AI / headless):
+    the next damage event from any source is prevented and answered."""
+    return _spend(
+        game, event, PREVENT_AND_DAMAGE_SOURCE, chosen=False,
+        rider=_damage_the_source_controller,
     )
 
 

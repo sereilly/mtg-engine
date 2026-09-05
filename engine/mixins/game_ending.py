@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from ..lethal_damage import lethal_damage_destroys
 from ..control import (
     LINKED_CONTROL_CONDITIONS,
     control_changes,
@@ -545,7 +546,18 @@ class GameEndingMixin:
                 if perm.effective_toughness <= 0:
                     return False  # 704.5f above owns this case
                 if perm.damage_marked >= perm.effective_toughness:
-                    return True
+                    # "This creature can't be destroyed by lethal damage unless
+                    # lethal damage dealt by a **single source** is marked on
+                    # it." (Ogre Enforcer.) A printed narrowing of this exact
+                    # rule, derived off the permanent's own text rather than
+                    # compiled — there is no instruction a state-based action
+                    # could carry (`engine/lethal_damage.py`).
+                    #
+                    # Only this branch. CR 704.5h below destroys a creature
+                    # with any damage from a deathtouch source, which is not
+                    # destruction "by lethal damage" and which the clause
+                    # therefore does not reach.
+                    return lethal_damage_destroys(self, perm)
                 return bool(
                     perm.metadata.get("received_deathtouch") and perm.damage_marked > 0
                 )

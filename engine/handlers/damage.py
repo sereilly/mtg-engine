@@ -1847,6 +1847,70 @@ def redirect_next_damage_to_source_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_next_damage_from_source_until_eot")
+def redirect_next_damage_from_source_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Zhalfirin Crusader: "{1}{W}: The next 1 damage that would be dealt to
+    this creature this turn is dealt to any target instead."
+
+    ``redirect_next_damage_to_source_until_eot`` with the two ends of the event
+    exchanged. The record still hangs off the **protected** recipient, which is
+    where one always hangs (``engine/damage_redirects.py``) — here that is the
+    permanent whose ability this is, and the *taker* is what the activation
+    chose.
+
+    A **point pool** rather than a whole-event record, read with CR 614.9's
+    verb: each point moves one point and a larger event leaves the rest marked
+    on the Crusader as normal. The damage is still dealt in full by the same
+    source, so lifelink and "whenever ~ deals damage" see all of it — which is
+    why this is a redirect record and not a shield.
+
+    CR 614.9 is a liveness rule, and it is `applicable_redirect` that enforces
+    it: a taker that has left the battlefield or stopped being a creature makes
+    the effect do nothing, and the damage lands on the Crusader as though the
+    ability had never been activated. Nothing here has to hold the taker in
+    play.
+    """
+    card_name = getattr(context.card, "name", "")
+    protected = context.source_permanent
+    if protected is None or not game.is_on_battlefield(protected):
+        game.log.append(f"{card_name}: its own source is gone")
+        return True, "resolved"
+    # "…is dealt to **any target** instead" — CR 115.4's union, read the way
+    # every other any-target effect reads it: a permanent when one was named,
+    # and the resolution's player otherwise. The permanent is asked first
+    # because naming one also fills the player slot with whoever controls it.
+    taker = resolve_target_permanent(
+        game, context, predicate=lambda perm: True, fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if taker is None:
+        taker = context.target
+    if taker is None or getattr(taker, "lost", False):
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    if amount <= 0:
+        game.log.append(f"{card_name}: no damage to move")
+        return True, "resolved"
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            amount=amount,
+            uses=None,
+            source_name=card_name or None,
+        ),
+    )
+    taker_name = getattr(taker, "name", None) or taker.card.name
+    game.log.append(
+        f"{card_name}: the next {amount} damage that would be dealt to "
+        f"{protected.card.name} this turn is dealt to {taker_name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_matching_damage_to_you_until_eot")
 def redirect_matching_damage_to_you_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -2012,10 +2076,23 @@ def deal_damage_each_matching(
     per_recipient = instruction.payload.get("per_recipient_count")
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
+    # "…each creature **target opponent** controls" (Simoon). A seat this
+    # resolution chose (CR 115.4), which no read of a permanent can supply — so
+    # it is handed to the matcher, which refuses the word without one. Before
+    # it did, "target opponent" fell through to the matcher's "not you" test and
+    # the spell burned **every** opponent's creatures: right in a duel by
+    # coincidence, and a strictly larger effect than the card prints the moment
+    # a third seat is at the table.
+    targeted = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
     struck = []
     for perm in list(game.all_permanents()):
         if not subject_matches(
-            game, perm, described, observer=observer, source=context.source_permanent
+            game, perm, described, observer=observer,
+            source=context.source_permanent, targeted_player=targeted,
         ):
             continue
         dealt = damage

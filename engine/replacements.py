@@ -167,6 +167,21 @@ DAMAGE_SOURCE_REDUCTION = 6  # Benevolent Unicorn
 # source. CR 616.1e lets the affected player choose either; the default should
 # not be the one that costs them a shield for nothing.
 DAMAGE_TO_COUNTER_REMOVAL = 7  # Soul Echo
+# "If damage would be dealt to this creature, put that many -1/-1 counters on
+# it instead." (Lichenthrope; Phytohydra prints the same sentence with +1/+1.)
+# CR 614's substitution read at the other end of the event from Soul Echo's:
+# there a *player* spends counters to escape damage, here the damage **becomes**
+# counters on the creature it was headed for. Beside it and one step later, for
+# the same reason it sits after the cap and the reduction: how many counters
+# arrive is "that many", so the number has to be the one every amount effect
+# above has already settled.
+#
+# Ahead of the prevention shields at 10-600 for `DAMAGE_TO_COUNTER_REMOVAL`'s
+# reason exactly, and the arithmetic is starker here: this consumes the whole
+# event, so a shield spent first is a shield spent on damage that was never
+# going to be marked. CR 616.1e lets the affected player choose either; the
+# default should not be the one that costs them a shield for nothing.
+DAMAGE_BECOMES_COUNTERS = 8  # Lichenthrope
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -1346,6 +1361,97 @@ def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     creature by Deserts." / Camel: same shield while attacking, extended to
     creatures banded with it. Checked against oracle text directly (like
     Lich's life-gain replacement) rather than a compiled instruction."""
+    return ReplacementOutcome(replaced=True)
+
+
+_DAMAGE_BECOMES_COUNTERS_RE = re.compile(
+    r"^if damage would be dealt to this creature, put that many "
+    r"(?P<counter>[+-]\d+/[+-]\d+) counters on it instead$"
+)
+
+
+def damage_becomes_counters(line: str) -> str | None:
+    """The counter kind *line* turns damage into, or None if it is not that
+    sentence.
+
+    "If damage would be dealt to this creature, put that many **-1/-1**
+    counters on it instead." (Lichenthrope.) Phytohydra prints the identical
+    sentence with **+1/+1**, which is why the kind is payload and this is a
+    shape rather than a constant in ``REPLACEMENT_LINES``: two cards, one
+    sentence, and a literal would buy one of them.
+
+    One reader for the support gate and for the interceptor, so what is claimed
+    and what fires cannot drift — the pairing every text-keyed table in this
+    engine keeps.
+    """
+    match = _DAMAGE_BECOMES_COUNTERS_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    kind = match.group("counter")
+    # A kind ``engine/pt.py`` cannot read is a counter nothing would place, so
+    # the line stays unclaimed and its card visibly unsupported rather than
+    # entering play with the substitution silently absent. `pt_counter_deltas`
+    # derives the deltas from the *name* (CR 122.1a), so any printed pair works
+    # and no list of kinds has to be maintained here.
+    from .pt import pt_counter_deltas
+
+    return kind if pt_counter_deltas(kind) is not None else None
+
+
+def _counters_instead_of_damage(game, payload: dict) -> str | None:
+    """The counter kind the damaged creature's own text substitutes, or None.
+
+    Pure, like every applicability predicate here: ``effect_ordering`` counts
+    the contenders before any of them runs.
+
+    Read off ``effective_card`` rather than the printed text, because a Clone of
+    a Lichenthrope has the sentence (CR 707.2) and a Lichenthrope whose text was
+    changed does not.
+    """
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or isinstance(recipient, PlayerState):
+        return None
+    for line in (recipient.effective_card.oracle_text or "").splitlines():
+        kind = damage_becomes_counters(line)
+        if kind is not None:
+            return kind
+    return None
+
+
+def _applies_damage_becomes_counters(game, payload: dict) -> bool:
+    return _counters_instead_of_damage(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_creature", DAMAGE_BECOMES_COUNTERS,
+    applies=_applies_damage_becomes_counters,
+)
+def _damage_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
+    """Lichenthrope: "If damage would be dealt to this creature, put that many
+    -1/-1 counters on it instead."
+
+    CR 614's substitution: the damage is **not dealt at all** — no lifelink
+    (CR 120.3f), no "whenever ~ deals damage", nothing marked — and that many
+    counters arrive instead. Which is why it returns ``replaced=True`` rather
+    than a new amount: an amount effect leaves a damage event happening, and
+    this sentence removes it.
+
+    ``add_pt_counters`` rather than a P/T poke, because the counters are real
+    CR 122.1a counters: the 704.5q sweep cancels them against +1/+1, the card
+    face renders them, and Lichenthrope's own upkeep trigger takes one off.
+    """
+    kind = _counters_instead_of_damage(game, payload)
+    if kind is None:
+        return None
+    from .pt import add_pt_counters
+
+    recipient = payload["recipient"]
+    amount = int(payload["amount"])
+    add_pt_counters(recipient, kind, amount)
+    game.log.append(
+        f"{recipient.card.name}: {amount} damage becomes {amount} {kind} "
+        "counter(s) instead"
+    )
     return ReplacementOutcome(replaced=True)
 
 
@@ -3159,6 +3265,13 @@ def replacement_claims_line(line: str) -> bool:
     # controller's untap step, remove all wind counters from it instead."
     # (Freyalise's Winds), matched by shape because the counter word is payload.
     if counters_instead_of_untap(normalized) is not None:
+        return True
+    # "If damage would be dealt to this creature, put that many -1/-1 counters
+    # on it instead." (Lichenthrope), matched by shape because the counter kind
+    # is payload — Phytohydra prints the same sentence with +1/+1 — and asked
+    # of the same reader the interceptor uses, so a kind it cannot read leaves
+    # the line unclaimed rather than admitted with no counters arriving.
+    if damage_becomes_counters(normalized) is not None:
         return True
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.

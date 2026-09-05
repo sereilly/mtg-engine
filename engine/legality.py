@@ -1892,6 +1892,17 @@ class LegalityMixin:
                 state_holds(perm, word) for word in any_states
             ):
                 return False
+            # "…creatures **without flying**" (Rock Slide). Asked of layer 6
+            # through the same accessor `flying_only` beside it uses, so a
+            # creature *granted* flying is excluded exactly as a printed flyer
+            # is (CR 613.1f) and one that lost it is offered. Enforced here as
+            # well as at resolution, for `blocked_only`'s reason: a narrowing
+            # the picker does not apply is one CR 601.2c then admits.
+            if any(
+                self._has_keyword(perm, str(word))
+                for word in spec.get("without_keywords") or ()
+            ):
+                return False
             # Island of Wak-Wak: only flying creatures are legal choices.
             if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
                 return False

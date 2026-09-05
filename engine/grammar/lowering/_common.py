@@ -34,7 +34,7 @@ from ..errors import LoweringError
 from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
                        _restrictions_beyond, chargeable_card_filter,
                        chargeable_tap_filter, dropped_narrowings,
-                       is_mana_value_x)
+                       is_mana_value_x, testable_filter_payload)
 
 
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*
