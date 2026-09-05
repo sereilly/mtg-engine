@@ -23,7 +23,7 @@ from typing import Union
 # uses for the shared vocabulary, and the 1,000-line split that moved these
 # nodes out must not become 60 edited import lines elsewhere.
 from ._primitives import AnyNumber, Fixed
-from ._references import (Comparison, ObjectFilter, PlayerRef,
+from ._references import (Comparison, ObjectFilter, PlayerDeed, PlayerRef,
                           SourceRelativeComparison, TargetSpec)
 
 
@@ -91,6 +91,31 @@ class CountOfDeathsThisWay:
     #: reading the shared number where it printed the per-seat one deals every
     #: player the whole spell's damage.
     per_controller: bool = False
+
+
+@dataclass(frozen=True)
+class CountOfMillsThisWay:
+    """"…for each creature card **put into your graveyard this way**" (Song of
+    Blood) — how many of what an earlier step of this same effect *milled*
+    answer a printed noun phrase.
+
+    :class:`CountOfDeathsThisWay` one zone-change over, and its own node for
+    that class's own reason: a mill puts cards there from a **library**, so the
+    two records hold different sets and neither is a reading of the graveyard
+    itself, which also holds everything that arrived by any other route.
+
+    Unlike its two siblings the count is **filtered**, and that is the whole
+    reason the record it reads is a list of cards rather than a number: four
+    cards were milled and the sentence asks how many of them were creature
+    cards. Only what is *printed* on a card is testable off a record
+    (``subject_filters.CARD_ONLY_FILTER_KEYS``), so the lowering refuses any
+    other narrowing rather than counting it as though it were not there.
+
+    A back-reference, so lowering refuses it unless a step of the same effect
+    really recorded one: with no producer "this way" names nothing, and a zero
+    is a number the card never printed.
+    """
+    filter: "ObjectFilter"
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from ._core import (
     Amount,
+    CountOfMillsThisWay,
     Duration,
     Fixed,
     PlayerRef,
@@ -47,6 +48,12 @@ class Pump:
     # was already tapped. A flag rather than an `ObjectFilter`, because the set
     # is not describable: only the sentence in front of it knows which ones.
     per_each_tapped_this_way: bool = False
+    # "gets +1/+0 until end of turn **for each creature card put into your
+    # graveyard this way**" (Song of Blood). The flag above with a noun phrase
+    # on it, and the phrase is why it is a node rather than a second boolean:
+    # the record holds the *cards* a mill put there, so how many of them count
+    # is a question the sentence asks and a flag has nowhere to put.
+    per_each_milled: "CountOfMillsThisWay | None" = None
     # "gets +2/+2 **for each Aura attached to it**" (Rabid Wombat). A count of
     # the board rather than a back-reference, so unlike the flag above the set
     # *is* describable and the noun phrase describes it. The printed P/T is the

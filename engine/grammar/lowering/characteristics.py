@@ -25,7 +25,9 @@ from ._amounts import (
     _static_x_amount,
     _x_definition_spec,
 )
+from ...oracle_types import MILLED_THIS_WAY
 from ._common import (
+    chargeable_card_filter,
     _describe_targets,
     _durationless_reason,
     _filter_payload,
@@ -106,7 +108,77 @@ _GLOBAL_BUFF_PAYLOAD_KEYS = frozenset({
 })
 
 
+
+def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
+    """"…**it** gets +1/+0 until end of turn **for each creature card put into
+    your graveyard this way**." (Song of Blood, in the sentence its delayed
+    ability carries.)
+
+    A one-shot boost on the ability's own source, sized by a back-reference —
+    the same ``pump_self`` shape the "for each" branch below already emits, and
+    the same ``x_from_count`` channel; only where the number comes from
+    differs. So it is a branch rather than a kind: what an instruction *does*
+    is unchanged, and only the count is read out of a record instead of off a
+    board.
+
+    Three refusals, each because the alternative is a card doing something it
+    did not print:
+
+    - **No duration** would be a continuous contribution whose size is a frozen
+      record, which the layer-7 refresh would keep re-applying for the rest of
+      the game.
+    - **A subject that is not the source** points a boost at a permanent this
+      instruction cannot address; the "for each" branch below refuses the same
+      shape for the same reason.
+    - **A narrowing the card matcher cannot answer** would be dropped, and a
+      dropped narrowing here counts every milled card as a creature card.
+
+    The producer gate is **not** here, and that is the one thing this lowering
+    cannot check: the sentence is compiled on its own by
+    ``oracle._parse_delayed_attack_trigger``, which never sees the "Mill four
+    cards." in front of it. ``oracle._split_trailing_delayed_trigger`` is where
+    the two halves meet and is where the record is required to exist.
+    """
+    if node.duration.kind is None:
+        raise LoweringError(
+            'a "this way" pump with no duration would be a continuous effect '
+            "sized by a frozen record", node=node,
+        )
+    duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+    if duration is None or not _is_source(node.subject):
+        raise LoweringError(
+            'a "put into your graveyard this way" pump is a one-shot boost on '
+            "its own source", node=node,
+        )
+    # Through the one gate every printed **card** phrase runs through, not
+    # `_filter_payload` — that wrapper refuses a card-scoped filter on purpose,
+    # because the handlers it feeds search the battlefield, and here the card
+    # scope is the whole point. It also refuses a phrase that never printed the
+    # word "card": a mill puts cards into a graveyard, and "for each creature
+    # put into your graveyard this way" is a sentence about permanents that
+    # nothing here could answer.
+    described = chargeable_card_filter(node.per_each_milled.filter)
+    if not described:
+        raise LoweringError(
+            "a milled-card count cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction("pump_self", "", {
+            # The sign rides inside `times_x`, exactly as the "for each" branch
+            # below relies on — so the negation flags must not be emitted too.
+            "power": _per_each_amount(node.power, node.power_negative, node),
+            "toughness": _per_each_amount(
+                node.toughness, node.toughness_negative, node
+            ),
+            "x_from_count": {
+                "recorded_cards": MILLED_THIS_WAY, "filter": described,
+            },
+        }),
+    )
+
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
+    if node.per_each_milled is not None:
+        return _lower_pump_per_milled(node)
     if node.per_each_tapped_this_way:
         # "…for each creature tapped **this way**" reaching here means no fuser
         # claimed the sentence, so there is no tap in front of it and nothing for

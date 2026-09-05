@@ -18,6 +18,8 @@ from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..readers import accept_source_reference_spec
+from ..nouns import parse_object_filter
+from ..records import accept_player_deed
 from ..references import parse_player_ref, parse_recipient
 from ..lexer import WORD
 from ..stream import TokenStream
@@ -47,6 +49,23 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     widened = accept_or_planeswalker(stream, recipient)
     if widened is not recipient:
         return widened
+    if (
+        isinstance(recipient, ast.PlayerRef)
+        # "…deals 2 damage to **each player who sacrificed a Plains this way**."
+        # (Desolation.) The relative clause the sentence in front of it also
+        # prints, read here beside the two narrowings below and for their exact
+        # reason: this lowering is what carries it to the handler that loops the
+        # seats, so a clause read anywhere else would be one nobody applies —
+        # and unapplied, the card damages every player at the table.
+        #
+        # Not restricted to the chosen forms the two below are: "who sacrificed
+        # … this way" is answered by a record rather than by a picker, so the
+        # seat sets are exactly the kinds that can carry it.
+        and recipient.kind in ("each_player", "each_opponent")
+    ):
+        deed = accept_player_deed(stream, parse_object_filter)
+        if deed is not None:
+            return dataclasses.replace(recipient, did=deed)
     if (
         isinstance(recipient, ast.PlayerRef)
         and recipient.kind in ("target_player", "target_opponent")

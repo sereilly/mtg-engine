@@ -33,6 +33,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
+                             SACRIFICED_CARDS_BY_SEAT,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       _BASE_PT_SET_PERMANENTS,
@@ -336,7 +337,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # answered, which is the opposite half of the note above and is why the two
     # are separate keys rather than one: only the first is available
     # synchronously, and only the second says what was chosen.
-    "sacrifice_matching_permanent": ("sacrificed_this_way", "sacrificed_cards"),
+    #
+    # ``SACRIFICED_CARDS_BY_SEAT`` is the third and asks a question neither of
+    # the two above can: **which seats** gave something up. "…deals 2 damage to
+    # each player who sacrificed a Plains this way" (Desolation) is one
+    # sentence about several payers, and the flat list would answer it for
+    # every seat at once the moment any one of them lost a Plains.
+    "sacrifice_matching_permanent": (
+        "sacrificed_this_way", "sacrificed_cards", SACRIFICED_CARDS_BY_SEAT,
+    ),
     # "…that creature's controller sacrifices it at end of combat. **If the
     # player does**, **they** create a 0/2 … Wall …" (Basalt Golem.) The same
     # two questions the row above answers, asked of the bound sacrifice: whether

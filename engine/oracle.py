@@ -40,6 +40,7 @@ from .oracle_types import (
     ParsedActivatedAbility,
     ParsedTriggeredAbility,
     TriggerCondition,
+    X_FROM_COUNT,
     _COLOR_WORD_TO_SYMBOL,
     _MANA_TOKEN_RE,
     _NUMBER_WORDS,
@@ -3501,6 +3502,102 @@ def _parse_delayed_attack_trigger(
     )
 
 
+
+#: Where a sentence ends, for :func:`_split_trailing_delayed_trigger`. A period
+#: and a space, which is how every printed paragraph in the pool joins two
+#: sentences — deliberately not a general sentence splitter, because the only
+#: thing this needs to find is a boundary the delayed-trigger table can be
+#: offered the right-hand side of, and an offer that is wrong simply does not
+#: match.
+_SENTENCE_BREAK = ". "
+
+
+def _split_trailing_delayed_trigger(
+    line: str, card_name: str | None
+) -> OracleInstruction | None:
+    """One ``sequence`` for a spell line whose **last** sentence creates a
+    delayed triggered ability (CR 603.7), or None when it is not that shape.
+
+    "**Mill four cards.** Whenever a creature attacks this turn, it gets +1/+0
+    until end of turn for each creature card put into your graveyard this way."
+    (Song of Blood.)
+
+    A sequence rather than two lines, and that is the whole reason this is here
+    rather than in ``expand_static_then_trigger_lines``. That rewrite is gated
+    on its first sentence being a *static ability the engine implements in
+    full*, and its own docstring names this card as the reason: split into two
+    lines, the trigger would be an ability of the card instead of something the
+    **resolution** creates, and the mill in front of it — whose record the
+    trigger reads — would not have happened yet. Here the two sentences stay one
+    resolution, in printed order, exactly as ``Choose target Wall creature.
+    Whenever that creature is dealt damage…`` (Glyph of Life) already does one
+    layer down in the grammar.
+
+    The head is compiled through the ordinary spell-line front end, so it is a
+    sentence that already worked or the split does not happen.
+
+    **The producer gate lives here**, because this is the one place both halves
+    are in hand: the delayed clause is compiled on its own and cannot see what
+    precedes it, so a "this way" count inside it would silently read an empty
+    record. Refusing returns None, which leaves the card unsupported naming the
+    line — the loud direction.
+    """
+    at = line.find(_SENTENCE_BREAK)
+    while at != -1:
+        head, tail = line[:at + 1].strip(), line[at + len(_SENTENCE_BREAK):].strip()
+        delayed = _parse_delayed_attack_trigger(tail, card_name)
+        if delayed is not None:
+            found = _line_instruction(head, card_name, spell_line_only=True)
+            if found is not None and _records_the_delay_reads(found[0], delayed):
+                return OracleInstruction(
+                    "sequence", "", {"steps": (found[0], delayed)}
+                )
+        at = line.find(_SENTENCE_BREAK, at + 1)
+    return None
+
+
+def _records_the_delay_reads(head: OracleInstruction, delayed: OracleInstruction) -> bool:
+    """Whether *head* records every scratchpad key the delayed ability's own
+    effect counts.
+
+    CR 608.2h: what a delayed ability refers to is frozen when it is created —
+    ``handlers/board_misc.create_delayed_trigger`` copies the whole resolution
+    scratchpad into the entry — so the number is right *if and only if* a step
+    in front of it actually wrote the record. With no producer the count is a
+    silent zero, which on Song of Blood is a delayed ability that pumps nothing
+    while the card reports supported.
+
+    Asked through ``produced_keys``, the one declaration of what a step of each
+    kind records, so a new producer is covered the day it is declared rather
+    than the day someone remembers this function.
+    """
+    from .grammar.lowering._records import produced_keys
+
+    wanted = _recorded_card_keys(delayed)
+    if not wanted:
+        return True
+    return wanted <= produced_keys(head)
+
+
+def _recorded_card_keys(instruction: OracleInstruction) -> frozenset[str]:
+    """Every ``recorded_cards`` key *instruction* and its nested steps count.
+
+    A walk rather than a single payload read: the delayed ability carries its
+    effect inside its own payload, and that effect may itself be a sequence.
+    """
+    keys: set[str] = set()
+    spec = instruction.payload.get(X_FROM_COUNT)
+    if isinstance(spec, dict) and spec.get("recorded_cards"):
+        keys.add(str(spec["recorded_cards"]))
+    for value in instruction.payload.values():
+        if isinstance(value, OracleInstruction):
+            keys |= _recorded_card_keys(value)
+        elif isinstance(value, tuple):
+            for item in value:
+                if isinstance(item, OracleInstruction):
+                    keys |= _recorded_card_keys(item)
+    return frozenset(keys)
+
 def _parse_loyalty_ability(line: str, card_name: str | None) -> ParsedActivatedAbility | None:
     """Parse one loyalty-ability line, or None when *line* is not one.
 
@@ -4443,6 +4540,15 @@ def _noncreature_line_instructions(
         delayed = _parse_delayed_attack_trigger(line, card_name)
         if delayed is not None:
             instructions.append(delayed)
+            continue
+        # "Mill four cards. **Whenever a creature attacks this turn**, …"
+        # (Song of Blood.) The same clause printed as a line's *last* sentence
+        # rather than as the whole of it — one resolution that does something
+        # and then arranges for something later, so the two sentences fuse into
+        # a `sequence` here instead of being split into two abilities.
+        fused = _split_trailing_delayed_trigger(line, card_name)
+        if fused is not None:
+            instructions.append(fused)
             continue
         if not whole_card:
             continue

@@ -654,3 +654,76 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
                 "a lowering with a slot per clause",
                 node=spec,
             )
+
+
+#: What a ``who <did …>`` clause needs to be answerable, per
+#: :class:`ast.PlayerDeed` kind: whether the clause names a noun phrase, and
+#: what a handler reads the seats out of.
+#:
+#: A table rather than two branches for this package's usual reason — the rows
+#: differ by two values and no structure — and because the *count* is the point:
+#: a kind with no row here is one no handler was taught, and the refusal below
+#: says so by name instead of letting a narrowing be dropped.
+_PLAYER_DEEDS: dict[str, bool] = {
+    # "…each player **who tapped a land for mana this turn**" (Desolation).
+    # A seat's own per-turn record (``PlayerState``), so no noun phrase: the
+    # clause names an action, and "a land" is part of the action's name rather
+    # than a set the sentence narrows.
+    "tapped_land_for_mana_this_turn": False,
+    # "…each player **who sacrificed a Plains this way**" (Desolation). The
+    # seat-keyed record an earlier step of this same resolution wrote, and the
+    # noun phrase is what decides which of the given-up cards count — so it is
+    # required rather than optional, because a "this way" clause with nothing to
+    # test would be every seat that sacrificed anything.
+    "sacrificed_this_way": True,
+}
+
+
+def player_deed_payload(player, node) -> "dict[str, object] | None":
+    """The seat narrowing a ``who <did …>`` clause carries, or None when the
+    reference prints no such clause.
+
+    One reader for both of Desolation's sentences — the sacrifice its trigger
+    performs and the damage that follows — so what "who" introduces cannot mean
+    two things one line apart.
+
+    **Raises rather than returns None** for a clause it cannot express. A seat
+    narrowing that reaches a handler as nothing is a sentence acting on *every*
+    player, which is silent and in the caster's favour; the whole reason these
+    clauses are parsed only where a reader exists is to keep that impossible,
+    and this is the second half of the same guarantee.
+
+    The noun phrase is held to ``card_only_filter``: the record is a list of
+    cards in a graveyard, which has no computed characteristics at all
+    (CR 613.1), so a narrowing outside what a printed card can answer is
+    refused instead of being handed to a matcher that would ignore it.
+    """
+    deed = getattr(player, "did", None)
+    if deed is None:
+        return None
+    from ...subject_filters import card_only_filter
+
+    wants_filter = _PLAYER_DEEDS.get(deed.kind)
+    if wants_filter is None:
+        raise LoweringError(
+            f"no seat record answers {deed.kind!r}", node=node
+        )
+    payload: dict[str, object] = {"kind": deed.kind}
+    if not wants_filter:
+        if deed.filter is not None:
+            raise LoweringError(
+                f"the {deed.kind!r} narrowing names no objects", node=node
+            )
+        return payload
+    if deed.filter is None:
+        raise LoweringError(
+            f"the {deed.kind!r} narrowing needs the noun phrase it counts",
+            node=node,
+        )
+    described = card_only_filter(_filter_payload(deed.filter))
+    if not described:
+        raise LoweringError(
+            "a seat record cannot test this restriction", node=node
+        )
+    payload["filter"] = described
+    return payload

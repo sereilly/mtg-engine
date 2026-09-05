@@ -34,7 +34,7 @@ from ._sacrifices import _forced_sacrifice_filter
 from ._filters import split_bound_card_type
 from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
                       _is_enchanted, _is_source, _is_target,
-                      _restrictions_beyond)
+                      _restrictions_beyond, player_deed_payload)
 from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT,
                       PUT_FROM_HAND_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER,
@@ -388,6 +388,16 @@ def _lower_sacrifice(
                 "the sacrifice prompt cannot test this restriction", node=node
             )
         payload: dict[str, object] = {"filter": described}
+        # "…**each player who tapped a land for mana this turn** sacrifices a
+        # land of their choice." (Desolation.) Which of the payers the printed
+        # clause actually names, carried to the handler that builds the list —
+        # the *only* reader, which is why the clause is parsed nowhere else.
+        # Raises rather than dropping the narrowing, so a clause no record
+        # answers takes the card down instead of asking every seat at the
+        # table.
+        deed = player_deed_payload(node.player, node)
+        if deed is not None:
+            payload["who_did"] = deed
         # "…sacrifice **any number of creatures with total power 12 or
         # greater**." (Phyrexian Dreadnought.) Its own kind rather than a
         # payload key on the prompt beside it, because the two ask different

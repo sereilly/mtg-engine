@@ -21,7 +21,7 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, bound_permanent, evaluate_count,
                       permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
-                      resolve_target_permanents)
+                      resolve_target_permanents, seats_matching_deed)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -2109,6 +2109,14 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
+    # "…**each player who tapped a land for mana this turn** sacrifices a land
+    # of their choice." (Desolation.) The printed relative clause, applied to
+    # the list the branches above built rather than inside each of them: what
+    # the clause narrows is *which of the payers*, and which payers there are
+    # is the only thing those branches disagree about.
+    payers = seats_matching_deed(
+        game, context, payers, instruction.payload.get("who_did")
+    )
     # "…a third of the creatures **they** control" (Pox): one number per payer,
     # so it cannot be the printed count — a fraction of a board has a different
     # answer for every seat asked. Evaluated against each payer through the same

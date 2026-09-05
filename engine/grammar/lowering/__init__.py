@@ -69,6 +69,7 @@ from ._common import (
     _full_mana_payload,
     _REST_OF_TURN,
     _refuse_unfused_distinctness,
+    player_deed_payload,
 )
 from ._amounts import (
     _mentions_x,
@@ -362,6 +363,7 @@ __all__ = [
     "_stamp_x_from_count",
     "_fused_upkeep_pay_to_untap",
     "_filter_payload",
+    "player_deed_payload",
     "_restrictions_beyond",
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "_describe_targets",

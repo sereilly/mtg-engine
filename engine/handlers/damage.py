@@ -16,7 +16,7 @@ from ._common import (recorded_permanent_ids,
     apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
     flip_coin,
     frozen_that_player_seat, permanent_matches_filter, resolve_amount,
-    resolve_target_permanent, resolve_target_permanents,
+    resolve_target_permanent, resolve_target_permanents, seats_matching_deed,
 )
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                            LAST_DAMAGER_CONTROLLER,
@@ -559,7 +559,17 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         run_resumable(
             game,
-            [i for i, p in enumerate(game.players) if not p.lost],
+            # "…deals 2 damage to **each player who sacrificed a Plains this
+            # way**." (Desolation.) The printed relative clause, narrowing the
+            # loop's list — never the amount and never the event, so a seat the
+            # clause does not name is dealt no damage at all rather than zero
+            # (CR 120.8 makes those the same thing, and a loop that visited it
+            # would still ask every shield and replacement it has).
+            seats_matching_deed(
+                game, context,
+                [i for i, p in enumerate(game.players) if not p.lost],
+                instruction.payload.get("recipient_did"),
+            ),
             _hit_player,
         )
         return True, "resolved"
@@ -574,7 +584,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
-        run_resumable(game, game.opponents_of(game.players.index(caster)), _hit_opponent)
+        run_resumable(
+            game,
+            seats_matching_deed(
+                game, context,
+                game.opponents_of(game.players.index(caster)),
+                instruction.payload.get("recipient_did"),
+            ),
+            _hit_opponent,
+        )
         return True, "resolved"
     # A divided spell's cross-seat list: any mix of creatures and player faces
     # on both sides. How much each one gets is `engine/divided_damage.py` —

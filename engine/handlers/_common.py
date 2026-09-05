@@ -16,7 +16,8 @@ if TYPE_CHECKING:
     from ..game_types import OracleExecutionContext
     from ..oracle_types import OracleInstruction
 from ..layer_bridge import printed_shape, printed_supertypes
-from ..oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
+from ..oracle_types import (BLOCK_PAIR_SUBJECT, SACRIFICED_CARDS_BY_SEAT,
+                           SUBJECT_FROM_TRIGGER)
 from ..models import Permanent, PlayerState
 from ..search_filters import card_has_type, name_key
 
@@ -154,6 +155,30 @@ def count_from_payload(
         # earlier producer carries neither key, so `_scaled` is the identity
         # for all of them.
         return max(0, _scaled(int(context.results.get(back_reference, 0) or 0), spec))
+    # "…for each **creature card** put into your graveyard this way" (Song of
+    # Blood). The branch above one question over: that one reads a record that
+    # is already a number, and this reads a record of the *cards themselves* and
+    # asks how many of them the printed noun phrase names. A count could not
+    # answer it — four cards were milled and the sentence is about the creatures
+    # among them — which is why the mill records the list.
+    #
+    # Off the record and never off the graveyard: the pile also holds everything
+    # that arrived by any other route, and the words say "this way". Matched
+    # against each card's *printed* characteristics, because a card in a zone
+    # has no computed ones (CR 613.1) — the same restriction
+    # ``chargeable_card_filter`` puts on the lowering that wrote this spec.
+    #
+    # A delayed ability reads it through the very same channel: what the
+    # creating resolution knew is handed back as ``captured_results``
+    # (CR 608.2h), so the number is the one frozen when the spell resolved
+    # however many attacks later the ability fires.
+    recorded_cards = spec.get("recorded_cards")
+    if recorded_cards is not None:
+        described = spec.get("filter") or {}
+        return max(0, _scaled(sum(
+            1 for card in (context.results.get(str(recorded_cards)) or ())
+            if _card_matches_filter(card, described)
+        ), spec))
     # "…where X is the number of **+1/+1 counters on it**" (Primordial Ooze).
     # Counters sitting on the ability's own source: not a set of objects in any
     # zone, so `evaluate_count` has nothing to scan for it. The kind is data,
@@ -2089,3 +2114,54 @@ def _as_slots(chosen: object) -> list:
     if isinstance(chosen, list):
         return list(chosen)
     return [] if chosen is None else [chosen]
+
+
+def seats_matching_deed(game, context, seats, deed) -> list:
+    """*seats*, narrowed to the ones a ``who <did …>`` clause names.
+
+    "…each player **who tapped a land for mana this turn** sacrifices a land of
+    their choice. … deals 2 damage to each player **who sacrificed a Plains
+    this way**." (Desolation.) One reader for both sentences, so the two halves
+    of that card cannot disagree about which seats "who" introduced — and the
+    same reader the lowering's ``player_deed_payload`` is the parse-side half
+    of.
+
+    ``None`` is no clause printed, which leaves the list exactly as it was.
+
+    A kind this cannot answer returns **no seats** rather than all of them. It
+    is not reachable — the lowering refuses an unknown kind, so nothing
+    compiles one — but a narrowing that fails open is a sentence acting on
+    every player at the table, and the direction to fail in is the one where a
+    bug does nothing rather than everything.
+    """
+    if not deed:
+        return list(seats)
+    kind = deed.get("kind")
+    if kind == "tapped_land_for_mana_this_turn":
+        # The seat's own per-turn record, written at the one tap-for-mana seam
+        # (``mixins/turn_management.tap_land_for_mana``) and cleared with the
+        # rest of the turn histories. Never a read of the board: a land that
+        # untapped, left, or was tapped again for something that is not mana
+        # would answer the wrong question, and CR 106.11's mana is long gone by
+        # the end step this asks in.
+        return [
+            seat for seat in seats
+            if getattr(game.players[seat], "tapped_land_for_mana_this_turn", False)
+        ]
+    if kind == "sacrificed_this_way":
+        # The seat-keyed record an earlier step of this same resolution wrote
+        # (``SACRIFICED_CARDS_BY_SEAT``). Never a read of a graveyard: the pile
+        # holds whatever else has gone there, and the words say "this way".
+        # Compared against each card's *printed* characteristics, because a card
+        # in a graveyard has no computed ones (CR 613.1) — the same restriction
+        # ``card_only_filter`` puts on the lowering that built this payload.
+        by_seat = (context.results or {}).get(SACRIFICED_CARDS_BY_SEAT) or {}
+        described = deed.get("filter") or {}
+        return [
+            seat for seat in seats
+            if any(
+                _card_matches_filter(card, described)
+                for card in (by_seat.get(seat) or ())
+            )
+        ]
+    return []

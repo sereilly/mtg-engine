@@ -568,3 +568,111 @@ def _accept_printed_number(stream: "TokenStream") -> int | None:
         stream.advance()
         return int(NUMBER_WORDS[word])
     return None
+
+
+# ---------------------------------------------------------------------------
+# "…each player **who <did something>**" — a seat narrowed by a record
+# ---------------------------------------------------------------------------
+
+def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | None":
+    """``who <did something>`` — which seats a sentence is about, or None.
+
+    "…each player **who tapped a land for mana this turn** sacrifices a land of
+    their choice. … deals 2 damage to each player **who sacrificed a Plains
+    this way**." (Desolation.) Both clauses narrow a player reference by
+    something the seat *did*, one within the turn and one within this very
+    resolution, and one reader answers both so the two sentences of that card
+    cannot drift about what "who" introduces.
+
+    Here rather than in ``references``, where the word "who" is read: this
+    module is where a quantity named by an *event* is parsed, and a seat named
+    by an event is the same question with a seat for an answer. It is also the
+    module with room, and ``references`` is the one that has none.
+
+    *parse_filter* is ``nouns.parse_object_filter``, handed down rather than
+    imported — this module sits below ``nouns`` in the parse layering, the same
+    inversion :func:`_parse_for_each_put_into_graveyard` already makes.
+
+    **Every word is required and nothing is defaulted.** "This turn" and "this
+    way" are two different windows over two different records, so a reader that
+    let either be absent would let the words be *deleted* with no change to the
+    parse. Returning None leaves the cursor where it was, so a caller that does
+    not find the clause still owes the rest of its line to full-token
+    consumption — which is what makes a clause no lowering can carry fail the
+    line rather than widen the sentence to every seat.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("who"):
+        return None
+    if stream.accept_phrase(
+        "tapped", "a", "land", "for", "mana", "this", "turn"
+    ):
+        return ast.PlayerDeed("tapped_land_for_mana_this_turn")
+    if stream.accept_word("sacrificed"):
+        # "…who sacrificed **a Plains** this way". The noun phrase is read by
+        # the shared parser rather than matched as a bare word, so a card
+        # printed about an artifact or a black creature is the same clause with
+        # one word changed — and so the lowering can refuse a narrowing the
+        # card-record matcher cannot test instead of dropping it.
+        # The indefinite article, consumed here rather than by the noun parser
+        # — which reads "Plains" and not "a Plains", because everywhere else an
+        # article marks a different noun phrase. Nothing is lost by consuming
+        # it: "a Plains" and "Plains" describe the same card, where the *words*
+        # that follow ("this way") are the ones that would change the set.
+        stream.accept_word("a", "an")
+        try:
+            filt = parse_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not stream.accept_phrase("this", "way"):
+            stream.reset(mark)
+            return None
+        return ast.PlayerDeed("sacrificed_this_way", filter=filt)
+    stream.reset(mark)
+    return None
+
+
+def parse_for_each_milled_this_way(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfMillsThisWay | None":
+    """``for each <objects> put into your graveyard this way`` — how many of
+    what an earlier step of this same effect *milled* answer a noun phrase.
+
+    "Mill four cards. Whenever a creature attacks this turn, it gets +1/+0
+    until end of turn **for each creature card put into your graveyard this
+    way**." (Song of Blood.)
+
+    Its own reader beside :func:`_parse_for_each_put_into_graveyard`, which
+    shares six of its words and names a different set: that one is CR 700.4's
+    "dies" spelled out — *from the battlefield*, a window of the whole turn
+    anything may have contributed to — and this is exactly the cards one step
+    of this effect put there from a library. A mill is not a death, so reading
+    either as the other counts a set the card never named.
+
+    And distinct from ``where_x``'s "put into **a** graveyard this way", which
+    is the same participle over the *destruction* record. The possessive is the
+    whole difference and it is the honest one: a mill goes to its own
+    controller's graveyard, and a sweep goes to each victim's.
+
+    The count is **filtered**, which is what makes it a node rather than a bare
+    back-reference: "four cards" were milled and the sentence asks how many of
+    them were creature cards. The lowering is what refuses a narrowing the
+    card-record matcher cannot answer.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "put", "into", "your", "graveyard", "this", "way"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CountOfMillsThisWay(filt)

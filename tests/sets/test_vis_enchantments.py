@@ -1302,3 +1302,175 @@ def test_righteous_war_stops_a_black_spell_targeting_a_white_creature(set_pool):
     assert not game._can_be_targeted(
         lions, catalog["Dark Banishing"], caster_index=1
     ), game.log
+
+
+# --- W3G2: Desolation — a per-turn record and a per-seat one ---
+#
+# Two sentences, two records, one resolution. The first narrows *which seats*
+# sacrifice by something they did earlier in the **turn**; the second narrows
+# which seats take damage by what they gave up **this way**, one step earlier
+# in the same resolution.
+
+import pytest as _w3g2_pytest
+from engine import Game as _W3G2Game, PlayerState as _W3G2Player
+from engine.card_loader import (load_cards as _w3g2_load,
+                                manifest_set_paths as _w3g2_paths)
+from engine.grammar import parse_line as _w3g2_parse
+from engine.grammar.errors import GrammarError as _W3G2GrammarError
+from engine.grammar.lower import lower_ability as _w3g2_lower
+from engine.models import Permanent as _W3G2Permanent
+from engine.oracle import compile_card_oracle as _w3g2_compile
+
+_W3G2_POOL: dict = {}
+for _w3g2_path in _w3g2_paths(include_measured=True):
+    for _w3g2_card in _w3g2_load(_w3g2_path):
+        _W3G2_POOL.setdefault(_w3g2_card.name, _w3g2_card)
+
+
+def _w3g2_perm(name: str) -> "_W3G2Permanent":
+    return _W3G2Permanent(card=_W3G2_POOL[name])
+
+
+def _w3g2_game(p0_lands, p1_lands, *, interactive=()) -> "_W3G2Game":
+    """Desolation on seat 0's battlefield, with the lands each seat holds."""
+    game = _W3G2Game(players=[_W3G2Player(name="P0"), _W3G2Player(name="P1")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.players[0].battlefield = (
+        [_w3g2_perm("Desolation")] + [_w3g2_perm(n) for n in p0_lands]
+    )
+    game.players[1].battlefield = [_w3g2_perm(n) for n in p1_lands]
+    game._sync_control()
+    game.active_player_index = 0
+    return game
+
+
+def _w3g2_end_step(game: "_W3G2Game") -> "_W3G2Game":
+    game.resolve_end_step(0)
+    game.resolve_stack()
+    return game
+
+
+def _w3g2_names(game: "_W3G2Game", seat: int) -> list[str]:
+    return [perm.card.name for perm in game.players[seat].battlefield]
+
+
+def test_w3g2_desolation_compiles_both_sentences_as_one_trigger():
+    program = _w3g2_compile(_W3G2_POOL["Desolation"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_step"
+    sacrifice, damage = trigger.instruction.payload["steps"]
+    # The narrowing rides the payload of each step — never a kind of its own,
+    # and never dropped: a sacrifice with no `who_did` is every seat at the
+    # table, which is the failure this card's whole family guards against.
+    assert sacrifice.payload["who"] == "each_player"
+    assert sacrifice.payload["who_did"] == {
+        "kind": "tapped_land_for_mana_this_turn"
+    }
+    assert damage.payload["recipient"] == "each_player"
+    assert damage.payload["recipient_did"] == {
+        "kind": "sacrificed_this_way", "filter": {"subtype_filter": "plains"},
+    }
+
+
+def test_w3g2_desolation_asks_only_the_seat_that_tapped_a_land_for_mana():
+    game = _w3g2_game(["Plains", "Forest"], ["Plains", "Island"])
+    assert game.tap_land_for_mana(0, "Plains"), game.log
+    _w3g2_end_step(game)
+    # P0 tapped and paid; P1 tapped nothing and keeps both lands.
+    assert _w3g2_names(game, 0) == ["Desolation", "Forest"], game.log
+    assert _w3g2_names(game, 1) == ["Plains", "Island"], game.log
+    assert [p.life for p in game.players] == [18, 20], game.log
+
+
+def test_w3g2_desolation_damages_only_the_seat_that_gave_up_a_plains():
+    # The only land this seat has is a Forest, so it sacrifices — and takes
+    # nothing, because the second sentence asks what went and not whether
+    # anything did.
+    game = _w3g2_game(["Forest"], [])
+    assert game.tap_land_for_mana(0, "Forest"), game.log
+    _w3g2_end_step(game)
+    assert _w3g2_names(game, 0) == ["Desolation"], game.log
+    assert [p.life for p in game.players] == [20, 20], game.log
+
+
+def test_w3g2_desolation_does_nothing_when_nobody_tapped_for_mana():
+    game = _w3g2_game(["Plains"], ["Plains"])
+    _w3g2_end_step(game)
+    assert _w3g2_names(game, 0) == ["Desolation", "Plains"], game.log
+    assert _w3g2_names(game, 1) == ["Plains"], game.log
+    assert [p.life for p in game.players] == [20, 20], game.log
+
+
+def test_w3g2_desolation_hits_both_seats_when_both_tapped():
+    game = _w3g2_game(["Plains"], ["Plains"])
+    assert game.tap_land_for_mana(0, "Plains"), game.log
+    assert game.tap_land_for_mana(1, "Plains"), game.log
+    _w3g2_end_step(game)
+    assert [p.life for p in game.players] == [18, 18], game.log
+
+
+@_w3g2_pytest.mark.parametrize(
+    "picked, expected_life, expected_board",
+    [("Plains", 18, ["Desolation", "Forest"]),
+     ("Forest", 20, ["Desolation", "Plains"])],
+)
+def test_w3g2_desolation_reads_an_interactive_seats_own_pick(
+    picked, expected_life, expected_board
+):
+    """The record is written where the sacrifice happens, and the damage step
+    resumes behind the prompt — so which land a *human* seat gives up is what
+    decides the damage, exactly as the headless default does."""
+    game = _w3g2_game(["Plains", "Forest"], [], interactive=(0,))
+    assert game.tap_land_for_mana(0, "Forest"), game.log
+    _w3g2_end_step(game)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("sacrifice", 0)
+    ], game.log
+    assert [p.life for p in game.players] == [20, 20], game.log
+    index = _w3g2_names(game, 0).index(picked)
+    assert game.resolve_pending_choice("sacrifice", 0, indices=[index]), game.log
+    assert _w3g2_names(game, 0) == expected_board, game.log
+    assert game.players[0].life == expected_life, game.log
+
+
+def test_w3g2_the_tap_record_forgets_at_the_next_turn():
+    game = _w3g2_game(["Plains"], ["Plains"])
+    assert game.tap_land_for_mana(0, "Plains"), game.log
+    assert game.players[0].tapped_land_for_mana_this_turn
+    game.begin_turn_bookkeeping(1)
+    assert not any(p.tapped_land_for_mana_this_turn for p in game.players)
+
+
+def test_w3g2_a_seat_narrowing_no_reader_enforces_refuses_the_line():
+    """The clause parses only where a lowering carries it. Under any other verb
+    it is put back and the line fails on it — loud, rather than a sentence that
+    quietly acts on every player."""
+    with _w3g2_pytest.raises(_W3G2GrammarError):
+        _w3g2_parse(
+            "Each player who tapped a land for mana this turn draws a card."
+        )
+    with _w3g2_pytest.raises(_W3G2GrammarError):
+        _w3g2_parse("Each player who ate a sandwich this turn sacrifices a land.")
+    # And the damage recipient takes it only on the seat *sets*: a chosen seat
+    # is answered by a picker, which has no record to read.
+    with _w3g2_pytest.raises(_W3G2GrammarError):
+        _w3g2_parse(
+            "This enchantment deals 2 damage to target player who sacrificed "
+            "a Plains this way."
+        )
+
+
+def test_w3g2_a_this_way_narrowing_the_card_matcher_cannot_test_refuses():
+    """"Who sacrificed …" reads a list of cards in a graveyard, which has no
+    computed characteristics (CR 613.1) — so a narrowing outside what a printed
+    card answers is refused rather than dropped."""
+    from engine.grammar.errors import LoweringError as _W3G2LoweringError
+
+    node = _w3g2_parse(
+        "This enchantment deals 2 damage to each player who sacrificed "
+        "a tapped creature this way."
+    )
+    with _w3g2_pytest.raises(_W3G2LoweringError):
+        _w3g2_lower(node)
