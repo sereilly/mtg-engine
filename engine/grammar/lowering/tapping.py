@@ -533,6 +533,47 @@ def _lower_untap_chosen_by_paying(
     return (OracleInstruction("untap_up_to_matching", "", payload),)
 
 
+def _lower_simultaneous_untap_and_tap(
+    node: ast.SimultaneousUntapAndTap,
+) -> tuple[OracleInstruction, ...]:
+    """Sands of Time: "…that player simultaneously untaps each tapped artifact,
+    creature, and land they control and taps each untapped one."
+
+    One instruction, not a ``sequence`` of the two sweeps — CR 611.2c fixes each
+    set when the effect begins, and run in order the untap would go first and
+    the tap sweep would then find every permanent untapped, tapping the board
+    down instead of inverting it.
+
+    Both filters are held to ``TESTABLE_SUBJECT_FILTER_KEYS`` for the reason
+    every sweep in this file is: the handler resolves them through
+    ``subject_matches``, and a narrowing it cannot test is one that would be
+    silently dropped — which on a sweep *widens* what is touched.
+
+    The seat refuses unless the sentence names one this engine can settle. "That
+    player" under a per-player trigger is the seat the fire site froze
+    (CR 603.10); anywhere else the pronoun points at nothing, and a sweep taken
+    on the wrong battlefield is the failure that neither crashes nor goes
+    missing.
+    """
+    if node.who.kind not in ("that_player", "you"):
+        raise LoweringError(
+            f"no handler inverts {node.who.kind!r}'s permanents", node=node
+        )
+    untap = _filter_payload(node.untap)
+    tap = _filter_payload(node.tap)
+    for described in (untap, tap):
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the tap/untap inversion cannot test this restriction", node=node
+            )
+    return (
+        OracleInstruction(
+            "untap_and_tap_matching", "",
+            {"untap_filter": untap, "tap_filter": tap},
+        ),
+    )
+
+
 def _lower_tap_or_untap(node: ast.TapOrUntap) -> tuple[OracleInstruction, ...]:
     """"Tap or untap target <objects>." (Twiddle.)
 

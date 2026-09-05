@@ -105,6 +105,7 @@ from .board import (
     Tap,
     TapOrUntap,
     DoesntUntapNextStep,
+    SimultaneousUntapAndTap,
     Untap,
     UntapChosenByPaying,
 )
@@ -227,6 +228,7 @@ Effect = Union[
     ShuffleLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
+    SimultaneousUntapAndTap,
     DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, RebalanceLands, Attach, ExchangeControl,
     ExchangeGreatestManaValue,

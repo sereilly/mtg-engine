@@ -18,6 +18,7 @@ from ..phrases import (
     _expect_counter_kind, _parse_mana_payment, parse_bound_subject,
     parse_subject_filter_at,
 )
+from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
@@ -214,6 +215,72 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     if either_way:
         return ast.TapOrUntap(subject)
     return ast.Tap(subject) if verb == "tap" else ast.Untap(subject)
+
+
+def _accept_object_filter(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """The noun phrase after "each", or None with the cursor put back.
+
+    ``parse_object_filter`` raises where a sentence merely does not continue the
+    way it expected, which in an optional position is a refusal rather than a
+    failure — the production above has to be able to decline without taking the
+    line down.
+    """
+    mark = stream.mark()
+    try:
+        return parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+
+
+def _parse_simultaneous_untap_and_tap(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.SimultaneousUntapAndTap | None":
+    """``<player> simultaneously untaps each <phrase> and taps each <phrase>.``
+    (Sands of Time.) The subject has already been read, so this starts at the
+    adverb.
+
+    "Simultaneously" is required and is the whole reason this is one production:
+    without it the sentence is two sweeps in order, and in order the untap runs
+    first and the tap then finds every one of them untapped — a board wholly
+    tapped where the card inverts it. Consuming the word and then emitting two
+    statements would be the same bug with the evidence thrown away.
+
+    Both noun phrases are read in full and kept apart. Nothing in the sentence
+    makes them agree, and a production that read one and reused it would apply
+    one card's noun to the other card's sweep.
+
+    Refuses without consuming, so every other sentence a player subject can open
+    keeps the reading it has — including the plain "that player untaps …" the
+    verb table below already reaches.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("simultaneously"):
+        return None
+    if not stream.accept_word("untaps", "untap"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("each"):
+        stream.reset(mark)
+        return None
+    untap = _accept_object_filter(stream)
+    if untap is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("taps", "tap"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("each"):
+        stream.reset(mark)
+        return None
+    tapped = _accept_object_filter(stream)
+    if tapped is None:
+        stream.reset(mark)
+        return None
+    return ast.SimultaneousUntapAndTap(player, untap, tapped)
 
 
 def _parse_untap_chosen_by_paying(stream: TokenStream) -> "ast.Statement | None":

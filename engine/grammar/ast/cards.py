@@ -96,7 +96,21 @@ class PutHandCardsOnLibrary:
     #: the same one. A field rather than two nodes, because the choice is the
     #: only difference: the same cards leave the same hand through the same
     #: prompt.
+    #:
+    #: ``"bottom"`` is Teferi's Puzzle Box — "on **the bottom** of their
+    #: library in any order", where the end is the card's and only the order is
+    #: the player's. Beside ``"either_end"`` rather than folded into it: one
+    #: offers the player a choice of end and this one does not, and a prompt
+    #: that could not tell them apart would let a Puzzle Box be answered onto
+    #: the top.
     destination: str = "top"
+    #: "…, **then draws that many cards**." (Teferi's Puzzle Box.) The draw is
+    #: part of this node rather than a sentence after it, for the reason
+    #: :class:`ShuffleHandIntoLibrary` carries the same flag: "that many" is the
+    #: number this step moved, which nothing else in the line knows — parsed
+    #: apart it would be a draw with no producer, and a producerless
+    #: back-reference reads as zero.
+    then_draw: bool = False
 
 
 @dataclass(frozen=True)

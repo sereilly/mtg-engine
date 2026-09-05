@@ -204,6 +204,11 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 #: it" already reads the same key from its own handler.
 _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+    # "Whenever a Djinn or Efreet enters, **destroy it**." (Suleiman's Legacy.)
+    # The entering permanent, stamped by the one entry transition
+    # (`_put_permanent_onto_battlefield`) — every path onto a battlefield goes
+    # through it, so the announcement and the freeze are one place.
+    "matching_permanent_enters",
     # "Whenever a creature attacks you, **it** loses flanking until end of
     # turn" / "…this enchantment deals 1 damage to **it**" (Barbed Foliage).
     # The declared attacker, stamped by `_fire_matching_creature_attacks_triggers`

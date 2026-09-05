@@ -7,6 +7,7 @@ card each test names. See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState, classify_card, load_cards
+from engine.hand_size import maximum_hand_size
 from engine.models import CardDefinition, Permanent
 import json
 from web.app import app, store
@@ -260,6 +261,15 @@ def test_kormus_bell_animates_swamps(all_cards):
 
 
 def test_library_of_leng_sets_no_max_hand_size(all_cards):
+    """"You have no maximum hand size." — CR 402.2, derived from the board.
+
+    Asserted through ``maximum_hand_size`` rather than off
+    ``PlayerState.has_no_max_hand_size``: the permission used to be *stamped* on
+    that field as the artifact entered and nothing ever cleared it, so the test
+    below — the artifact leaving and the limit coming back (CR 611.3a) — could
+    not have passed. The field survives for an effect with no permanent behind
+    it; what the cleanup step reads is this function.
+    """
     library = _get(all_cards, "Library of Leng")
     p1 = PlayerState(name="P1", hand=[library])
     p2 = PlayerState(name="P2")
@@ -268,7 +278,26 @@ def test_library_of_leng_sets_no_max_hand_size(all_cards):
     result = game.cast_from_hand(0, "Library of Leng", target_player_index=0)
 
     assert result.supported
-    assert p1.has_no_max_hand_size is True
+    assert maximum_hand_size(game, 0) is None
+    # The opponent is not covered: the line says "**you**".
+    assert maximum_hand_size(game, 1) == 7
+
+
+def test_library_of_leng_stops_covering_you_once_it_leaves(all_cards):
+    """CR 611.3a: a static ability lasts as long as its source is on the
+    battlefield. The permission was stamped and never cleared, so a destroyed
+    Library of Leng left its controller with no maximum hand size for the rest
+    of the game."""
+    library = _get(all_cards, "Library of Leng")
+    p1 = PlayerState(name="P1", hand=[library])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    assert game.cast_from_hand(0, "Library of Leng", target_player_index=0).supported
+    assert maximum_hand_size(game, 0) is None
+
+    game.remove_from_battlefield(p1.battlefield[0])
+
+    assert maximum_hand_size(game, 0) == 7
 
 
 def test_cyclopean_tomb_marks_land_as_swamp(all_cards):

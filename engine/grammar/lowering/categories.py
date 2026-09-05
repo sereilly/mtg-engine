@@ -282,6 +282,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…destroy **that creature**" inside a delayed ability (War Barge):
     # the object the creating ability bound, by id, rather than a pick.
     "destroy_bound_permanent": "destruction",
+    # "Whenever a Djinn or Efreet enters, destroy it." (Suleiman's Legacy.) The
+    # object the trigger's own event was about, which the fire site froze — no
+    # pick, so it is not the targeted destroy. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "destroy_event_subject": "destruction",
     # "…destroy **that non-Wall creature**" (Acidic Dagger): the same
     # destroy at the other end of the event, on the creature the entry was
     # bound to having damaged rather than on the entry's own object.
@@ -344,6 +349,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # choice: the set is what an earlier step of the same effect recorded.
     "tap_recorded_permanents": "tapping",
     "untap_all_matching": "tapping",
+    # "…simultaneously untaps each tapped <phrase> they control and taps each
+    # untapped <phrase> they control" (Sands of Time). One instruction for both
+    # sweeps, because "simultaneously" is what the card says and two in order
+    # would tap the whole board. Same category, so GRAMMAR_CATEGORIES is
+    # unchanged.
+    "untap_and_tap_matching": "tapping",
     "grant_prevention_shield": "prevention",
     # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8
     # whole-instance shield that absorbs a share of the event. Same category, so

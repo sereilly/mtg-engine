@@ -31,7 +31,6 @@ from ..enter_effects import (
     enters_with_pt_counters,
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
-    NO_MAXIMUM_HAND_SIZE,
     choosable_bodies,
 )
 from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
@@ -983,8 +982,15 @@ class PermanentStateMixin:
                 # the artifact is not copied (CR 707.2's last sentence).
                 self._apply_copy(permanent, source)
 
-        if any(instr.kind == "spell_pattern" and instr.value == NO_MAXIMUM_HAND_SIZE for instr in program.instructions) or NO_MAXIMUM_HAND_SIZE in text:
-            self.players[caster_index].has_no_max_hand_size = True
+        # "You have no maximum hand size." used to be stamped here too, onto
+        # `PlayerState.has_no_max_hand_size`, and nothing ever cleared it — so a
+        # destroyed Library of Leng left its controller with no maximum hand
+        # size for the rest of the game (CR 611.3a ends a static ability with
+        # its source). It is derived from the board on every read now, by
+        # `engine/hand_size.maximum_hand_size`, which is the same reader Cursed
+        # Rack's limit and Anvil of Bogardan's all-players spelling go through.
+        # The field survives for an effect that really does set the permission
+        # on a player with no permanent behind it.
 
         # The two mana-spending permissions used to be stamped here and never
         # cleared, so a destroyed Sunglasses of Urza or Chromatic Orrery left

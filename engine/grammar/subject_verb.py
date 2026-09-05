@@ -74,6 +74,7 @@ from .effects import (
     _parse_return,
     _parse_sacrifice,
     parse_player_chooses_permanent,
+    _parse_simultaneous_untap_and_tap,
     _parse_tap_untap,
     _parse_wins,
 )
@@ -300,6 +301,17 @@ def parse_subject_verb(
         # rather than carried: the same instruction results whoever the sentence
         # names. Read here because only the bare imperative had a production, so
         # a printed subject came back as an unrecognized verb.
+        # "…that player **simultaneously** untaps each tapped artifact,
+        # creature, and land they control and taps each untapped one." (Sands
+        # of Time.) The adverb is the verb here — the sentence's two sweeps are
+        # one effect, and read as two the untap would run first and the tap
+        # would then find everything untapped. Above the tap table below, which
+        # its second word would otherwise be claimed by; declines without
+        # consuming, so a plain "that player untaps …" keeps its reading.
+        if token.text == "simultaneously" and isinstance(source_spec, ast.PlayerRef):
+            both = _parse_simultaneous_untap_and_tap(stream, source_spec)
+            if both is not None:
+                return both
         if token.text in ("taps", "tap", "untaps", "untap") and isinstance(
             source_spec, ast.PlayerRef
         ):

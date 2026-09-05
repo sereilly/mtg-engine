@@ -113,6 +113,16 @@ def _parse_postmodifiers(
         if stream.accept_phrase("your", "opponents", "control"):
             d.controller = "opponent"
             continue
+        # "each creature **each opponent** controls" (Aku Djinn) — the
+        # distributive spelling of the two above. CR 109.5 reads "opponent"
+        # against the ability's controller, and "each opponent" names exactly
+        # the set "your opponents" does, so it is the same filter key rather
+        # than a third one: a quantifier over the seats is not a narrowing of
+        # the objects. Kept beside its siblings so the three spellings of one
+        # scope are read in one place.
+        if stream.accept_phrase("each", "opponent", "controls"):
+            d.controller = "opponent"
+            continue
         # "each creature target opponent controls" (Teferi, Timeless Voyager's
         # −8): the controller is a chosen player — the spell targets the
         # opponent, not the creatures.

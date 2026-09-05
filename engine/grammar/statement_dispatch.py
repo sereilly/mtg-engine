@@ -76,7 +76,6 @@ from .lowering import (
     _fused_cost_repeated_destroys,
     _lower_fight,
     _lower_destroy,
-    _lower_discard,
     _lower_draw,
     _lower_exile,
     _lower_repeat_process,
@@ -100,9 +99,7 @@ from .lowering import (
     _lower_play_with_hand_revealed,
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
-    _lower_mill,
     _lower_put_milled_card_onto_battlefield,
-    _lower_exile_entire_library,
     _lower_player_gets_counters,
     _lower_put_counter,
     _lower_put_onto_battlefield,
@@ -140,7 +137,7 @@ from .lowering import (
 #: inspection: no class in this table appears anywhere else in the chain and
 #: none of them inherits from another, so at most one branch could ever have
 #: matched a given node.
-from .by_node import _BY_NODE_TYPE
+from .by_node import _BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +199,17 @@ def lower_statement(
     lowering = _BY_NODE_TYPE.get(type(statement))
     if lowering is not None:
         return lowering(statement)
+    # The same registry one argument wider (see `_BY_NODE_TYPE_WITH_EVENT`).
+    # The **raw** `event`, not `dispatch_event`: every row here reads the event
+    # to answer a printed "that player", and a seat pronoun means the firing
+    # event's seat wherever in the sentence it is printed — including inside an
+    # offer's branch, which is not the ability's whole effect and so sees no
+    # `dispatch_event` at all. The three branches this table absorbed all passed
+    # the raw one, and passing the narrowed one instead silently pointed Cloak
+    # of Confusion's and Mindstab Thrull's discards at the wrong seat.
+    lowering = _BY_NODE_TYPE_WITH_EVENT.get(type(statement))
+    if lowering is not None:
+        return lowering(statement, event)
 
     # Both act on a seat that can be the one the *firing event* froze — "look
     # at **that player's** hand" (Leshrac's Sigil), "**that player** may
@@ -387,22 +395,6 @@ def lower_statement(
         raise LoweringError(
             "a modal head is a whole clause, not a step inside one", node=statement
         )
-
-    if isinstance(statement, ast.Discard):
-        return _lower_discard(statement, event)
-
-    if isinstance(statement, ast.ExileEntireLibrary):
-        # Here rather than in `by_node.py` for the reason the mill below is:
-        # "that player exiles all cards from their library" (Thought Lash) names
-        # the seat the *firing event* froze, so the node cannot answer on its
-        # own.
-        return _lower_exile_entire_library(statement, event)
-
-    if isinstance(statement, ast.Mill):
-        # Here rather than in `by_node.py` since Reef Pirates: "that player
-        # mills a card" names the seat the *firing event* froze, so the
-        # lowering needs the event and the node no longer answers on its own.
-        return _lower_mill(statement, event)
 
     if isinstance(statement, ast.PutMilledCardOntoBattlefield):
         # Here rather than in `by_node.py` because "one of **them**" names a

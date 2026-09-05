@@ -224,6 +224,7 @@ from .tapping import (
     _lower_for_each_tapped,
     _lower_tap,
     _lower_untap_chosen_by_paying,
+    _lower_simultaneous_untap_and_tap,
     _lower_tap_or_untap,
     _fused_upkeep_pay_to_untap,
 )
@@ -233,11 +234,6 @@ from .untap_restrictions import (
     _lower_doesnt_untap_while_source_tapped,
 )
 from .cards import (
-    CHOSEN_HAND_CARDS_RESULT,
-    _lower_choose_cards_in_hand,
-    _lower_for_each_chosen,
-    _lower_for_each_short_of_this_way,
-    _lower_put_iterated_card_on_library,
     _lower_discard,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
@@ -246,8 +242,19 @@ from .cards import (
     _lower_mill,
     _lower_mill_until,
     _lower_put_milled_card_onto_battlefield,
-    _lower_put_hand_cards_on_library,
     _lower_scry,
+)
+# The hand family, split off `.cards` at the size guard in the same round its
+# parse mirror was. Every name keeps its address: this package re-exports flat,
+# so no caller learns where the split fell.
+from .hand import (
+    CHOSEN_HAND_CARDS_RESULT,
+    HAND_CARDS_TO_LIBRARY_RESULT,
+    _lower_choose_cards_in_hand,
+    _lower_for_each_chosen,
+    _lower_for_each_short_of_this_way,
+    _lower_put_iterated_card_on_library,
+    _lower_put_hand_cards_on_library,
 )
 from .mana import (
     _lower_add_mana,
@@ -439,6 +446,7 @@ __all__ = [
     "_lower_put_source_into_zone",
     "_lower_reveal_top",
     "_lower_reveal_until",
+    "_lower_simultaneous_untap_and_tap",
     "_lower_tap_or_untap",
     "_lower_attach",
     "_lower_choose_permanent",
@@ -466,6 +474,7 @@ __all__ = [
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
     "CHOSEN_HAND_CARDS_RESULT",
+    "HAND_CARDS_TO_LIBRARY_RESULT",
     "_lower_choose_cards_in_hand",
     "_lower_for_each_chosen",
     "_lower_for_each_short_of_this_way",

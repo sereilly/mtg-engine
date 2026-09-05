@@ -546,14 +546,26 @@ class TestLibraryOfLengDiscards:
         assert [c.name for c in p1.graveyard] == ["Forest"]
         assert p1.library == []
 
-    def test_cleanup_discard_goes_to_top_with_leng(self, cards):
+    def test_leng_on_the_battlefield_means_no_cleanup_discard_at_all(self, cards):
+        """The card's *other* line, and why the cleanup step never reaches the
+        redirect: "You have no maximum hand size" is a continuous static
+        (CR 402.2), so a player with Library of Leng out discards nothing at
+        cleanup however many cards they hold.
+
+        This test used to assert the opposite — eight cards down to seven, with
+        the eighth landing on top of the library — and passed only because the
+        permission was *stamped* as the artifact entered and this rig put the
+        artifact on the battlefield directly, never running the entry code. The
+        redirect itself is covered by the two helper tests above, which is where
+        a discard this card can actually see comes from.
+        """
         leng = Permanent(card=cards["Library of Leng"])
-        hand = [cards["Forest"]] * 8  # one over the max hand size of 7
+        hand = [cards["Forest"]] * 8  # one over the ordinary max hand size of 7
         p1 = PlayerState(name="P1", battlefield=[leng], hand=list(hand), library=[])
         game = _game(p1, PlayerState(name="P2"))
-        game.resolve_cleanup_step(0)  # auto-discards the excess
-        assert len(p1.hand) == 7
-        assert len(p1.library) == 1   # the discarded card went on top, not to the yard
+        game.resolve_cleanup_step(0)
+        assert len(p1.hand) == 8
+        assert p1.library == []
         assert p1.graveyard == []
 
 
