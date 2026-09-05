@@ -410,6 +410,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     "add_named_counter_to_target": "activated_counter",
     # Orcish Spy, beside `look_at_target_hand` above — the same ability about
     # a different hidden zone.
+    "graveyard_top_to_library": "activated_look",
     "look_at_target_library_top": "activated_look",
     # Thelonite Druid's "Forests you control become 2/3 creatures until end of
     # turn. They're still lands", beside `animate_target_until_eot` and the two

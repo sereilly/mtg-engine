@@ -203,6 +203,26 @@ def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":
     return ast.CountObjects(counted)
 
 
+def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
+    """``Choose a card name.`` (Foreshadow.)
+
+    Beside :func:`_parse_choose_color` and refusing the same way: None with the
+    cursor untouched for every other "choose" sentence, so the naming, modal and
+    player productions keep the ones they own.
+
+    Exactly four words and nothing after them but the punctuation that ends a
+    clause. Foreshadow prints ", **then** target opponent mills a card" behind
+    it, which is the sentence loop's join and not this production's business.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("choose", "a", "card", "name") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        return ast.ChooseCardName()
+    stream.reset(mark)
+    return None
+
+
 def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
     """``Choose a color.`` (Chromatic Armor's activated ability.)
 

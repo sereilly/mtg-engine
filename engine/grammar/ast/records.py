@@ -115,6 +115,19 @@ class ExiledThisWay:
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 @dataclass(frozen=True)
+class ChosenNameMilledThisWay:
+    """``if a card with the chosen name was milled this way`` (Foreshadow).
+
+    Two records in one question: the name a "choose a card name" step recorded,
+    and the cards a mill step of the same resolution put into a graveyard. Its
+    own node rather than a filter on :class:`MilledThisWay` beside it, which
+    asks what *kind* of card was milled — a filter cannot carry "the name
+    somebody chose a moment ago", and ``ObjectFilter.named`` is a printed
+    literal.
+    """
+
+
+@dataclass(frozen=True)
 class MilledThisWay:
     """"If one or more creature cards **were put into that graveyard this
     way**" (Helm of Obedience).
@@ -522,6 +535,27 @@ class HadPlus1Counter:
     last-known information (CR 603.10): the fire site records the answer as
     the trigger goes on the stack, and the resolution-side gate reads that
     record rather than a board the creature has already left."""
+@dataclass(frozen=True)
+class HadNamedCounter:
+    """"exile it **if it had a death counter on it**" (Bogardan Phoenix,
+    CR 603.4).
+
+    :class:`HadPlus1Counter`'s twin for a counter with no rules meaning of its
+    own (CR 122.3) — and a separate node rather than a word on that one,
+    because they read **two different records**. A P/T counter lives in
+    ``engine/pt.py``'s persistent channel and the death event freezes it as one
+    bool; a named counter lives in ``engine/named_counters.py``'s per-word
+    store, and freezing that is a map. "A second producer means a second key,
+    never this one widened" is the rule the pronoun conditions already state,
+    and it applies a level up: two records, two nodes, two payload kinds.
+
+    Last-known information either way (CR 603.10): the creature is in a
+    graveyard by the time the trigger resolves, and a graveyard card has no
+    counters at all.
+    """
+    counter: str
+
+
 @dataclass(frozen=True)
 class EnteredFrom:
     """"if it entered from your graveyard **or you cast it from your

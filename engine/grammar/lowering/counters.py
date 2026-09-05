@@ -39,6 +39,7 @@ from ._common import (
     describe_target_roles,
 )
 from ._records import counts_prevented_damage, names_the_shielded_object
+from ._sweeps import lower_counter_sweep
 from ._counter_stores import lower_loyalty_counters
 from ._events import (
     _BOUND_OBJECT_DELAYED_EVENTS,
@@ -47,6 +48,7 @@ from ._events import (
     EVENT_SUBJECT_CONTROLLER,
     _EVENT_SUBJECT_OBJECTS,
     binds_block_pair,
+    _REANIMATED_PERMANENTS,
     _RECORDED_PERMANENTS,
 )
 
@@ -184,6 +186,34 @@ def _lower_put_counter(
     # engine/named_counters.py holds them, and what they mean is whatever the
     # card's other lines say about them. Only on the source, because that is the
     # only permanent the placement can name without a picker.
+    # "When this creature dies, … **return it to the battlefield** under your
+    # control **and put a death counter on it**." (Bogardan Phoenix.) The
+    # pronoun names the permanent the step in front of it created, not the
+    # ability's own source — the source is the object that died, and CR 400.7
+    # makes what came back a different one. Placed on the source it is a counter
+    # on a permanent that is not on the battlefield, which reads as placed in
+    # the log and is gone the next time anything looks: the Phoenix returns for
+    # ever.
+    #
+    # Gated on ``_REANIMATED_PERMANENTS`` alone rather than on the whole
+    # recorded set: only a step that *put the source back* changes what the
+    # pronoun means, and "put a soul counter on this Equipment" after a tap
+    # still means the Equipment.
+    if (
+        not is_pt_counter(node.counter)
+        and not node.up_to
+        and _is_source(node.subject)
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
+        and _REANIMATED_PERMANENTS in produced
+        and isinstance(node.count, ast.Fixed)
+    ):
+        payload: dict[str, object] = {
+            "counter": node.counter,
+            "count": node.count.value,
+            "permanents_from": _REANIMATED_PERMANENTS,
+        }
+        return (OracleInstruction("add_named_counter_to_target", "", payload),)
     if not is_pt_counter(node.counter) and not node.up_to and _is_source(node.subject):
         # "{X}{1}, {T}: Put **X** charge counters on this artifact."
         # (Ventifact Bottle.) The count is the cast's announced X, which is
@@ -490,6 +520,23 @@ def _lower_put_counter(
             frozenset({
                 "card_types", "in_combat_with_source",
                 "excluded_types", "excluded_colors", "attacked_you_this_turn",
+                # "Put a +2/+2 counter on target **Chimera** creature."
+                # (Visions' four Chimeras.) A printed creature type, which
+                # ``to_payload`` emits as ``subtype_filter`` and both readers of
+                # the description honour — ``permanent_matches_filter`` at
+                # resolution and ``targeting.py``'s picker at activation — so
+                # admitting it costs the placement nothing. It was the one
+                # narrowing this branch refused while the payload carried it
+                # perfectly well, which is a false refusal rather than a silent
+                # drop: four cards printing one sentence, unsupported for a word
+                # the matcher already tests.
+                #
+                # ``subtype_match`` travels with it for the reason
+                # ``_PAYLOAD_HONOURED_FILTER_FIELDS`` keeps the pair together —
+                # two adjacent subtypes are a conjunction the payload spells
+                # differently, and the field naming which spelling it is has to
+                # be honoured wherever ``subtypes`` is.
+                "subtypes", "subtype_match",
             }),
         )
         if leftover or filt.card_types != ("creature",):
@@ -768,7 +815,7 @@ def _lower_put_counter(
         and node.cap is None
         and not node.distributed
     ):
-        return _lower_counter_sweep(node)
+        return lower_counter_sweep(node)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
@@ -908,57 +955,3 @@ def _lower_put_counter(
         _describe_targets(payload, node.subject)
         return (OracleInstruction("add_counter_to_target", "", payload),)
     raise LoweringError("counters on a non-source subject", node=node)
-
-
-def _lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
-    """"Put a <pair> counter on **each** <noun phrase>." (Basri's Solidarity,
-    Misfortune.)
-
-    The set is a *description*, so nothing is targeted and nothing is chosen —
-    the handler reads the board as the effect resolves (CR 611.2c) and places
-    the counter on every permanent the phrase matches. Which is why the printed
-    noun phrase travels as a filter the shared matcher tests, rather than being
-    baked into the handler's own name: a kind called
-    ``add_counter_to_each_you_control`` cannot honestly carry "each creature
-    **that player** controls", and a second kind beside it would be one effect
-    with two spellings.
-
-    Every refusal below is a way the sentence could otherwise reach more
-    permanents than it names:
-
-    * the counter must be a CR 122.1a P/T pair, because ``place_pt_counters``
-      derives the P/T from the counter's own name and has nowhere to put one
-      that has none;
-    * the count must be a printed number, since nothing resolves an X over a
-      swept set;
-    * every narrowing must be one ``subject_matches`` can *test*. A key it
-      would ignore is a counter on strictly more permanents than the card
-      names, and on a -1/-1 sweep that is the board.
-
-    "**that player** controls" is the one narrowing the matcher refuses outright
-    rather than ignores (it names a seat no read of a board can make), so it is
-    carried through to the handler, which answers it from the seat the
-    announcement froze — the same split ``destroy_all_matching`` already makes
-    of the same two words.
-    """
-    if not is_pt_counter(node.counter):
-        raise LoweringError(
-            f"no handler sweeps a {node.counter} counter onto a described set",
-            node=node,
-        )
-    if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
-        raise LoweringError("a swept counter count is a printed number", node=node)
-    described = _filter_payload(node.subject.filter)
-    seat_scoped = described.get("controller") == "that_player"
-    testable = dict(described)
-    if seat_scoped:
-        testable.pop("controller")
-    leftover = sorted(set(testable) - set(TESTABLE_SUBJECT_FILTER_KEYS))
-    if leftover:
-        raise LoweringError(
-            "a counter sweep cannot narrow by: " + ", ".join(leftover), node=node
-        )
-    payload: dict[str, object] = {"counter": node.counter, "filter": described}
-    if node.count.value != 1:
-        payload["count"] = node.count.value
-    return (OracleInstruction("add_counter_to_each_matching", "", payload),)

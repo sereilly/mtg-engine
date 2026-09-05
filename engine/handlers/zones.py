@@ -501,11 +501,36 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
     # resolution recorded (Jester's Mask's emptied hand). Read here rather than
     # baked into the payload, because the count is a fact about the board.
     counted_from = instruction.payload.get("amount_from")
-    count = (
-        max(0, int(context.results.get(counted_from, 0) or 0))
-        if counted_from is not None
-        else int(instruction.payload.get("count", 1))
-    )
+    printed_count = instruction.payload.get("count", 1)
+    if counted_from is not None:
+        count = max(0, int(context.results.get(counted_from, 0) or 0))
+    elif printed_count == "any":
+        # "…for **any number of** Goblin cards" (Goblin Recruiter). CR 701.19a:
+        # a search looks at every card in the zone, so the only ceiling is how
+        # many of them the phrase admits — counted here, where the zones and the
+        # seat are known, rather than baked into a payload that would then be a
+        # printed ceiling the card does not have.
+        #
+        # It is a ceiling on the *slots*, not a promise: `up_to` rides with it,
+        # so finding fewer (none included) stays a legal answer.
+        from ..search_filters import search_matches
+        searched_seat_index = seats.get("zone_seat", caster_index)
+        looked_in = game.players[searched_seat_index]
+        pool = [
+            card
+            for zone_name in zones
+            for card in (
+                looked_in.library if zone_name == "library" else looked_in.graveyard
+            )
+        ]
+        count = sum(
+            1 for card in pool
+            if search_matches(
+                card, instruction.payload, game=game, owner=caster_index,
+            )
+        )
+    else:
+        count = int(printed_count)
     destinations = list(instruction.payload.get("destinations") or ())
     if not destinations and count > 1:
         # A search for several cards that all go to one place (Jester's Cap's
@@ -585,6 +610,125 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     return True, "pending_reorder_library"
 
 
+@effect_handler("choose_card_name")
+def choose_card_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Choose a card name**, then target opponent mills a card…"
+    (Foreshadow.)
+
+    A step that produces a *value* and no effect, exactly as "choose a color"
+    does. The name is chosen as the spell resolves (CR 608.2) and CR 202.1 lets
+    a player name any card at all, so nothing is offered and nothing is
+    validated — whatever the seat types is the name.
+
+    Its own prompt kind rather than a fused whole-effect handler like the three
+    naming paragraphs beside it (Demonic Consultation, Nebuchadnezzar,
+    Necromentia). Those three read *what the name is for* in the same handler
+    because their sentences share one pile; this one's name is read by an
+    ordinary condition two sentences later, so the choice is a step and the
+    reading is a condition.
+
+    The prompt suspends the resolution (CR 608.2, CR 117.3b): the mill behind
+    it must not run while the name is still owed, because a seat that saw the
+    milled card before naming would be choosing with information the card does
+    not give them.
+    """
+    seat = game.players.index(context.caster)
+    game.arm_pending_choice(
+        "choose_card_name", seat,
+        card_name=context.card.name if context.card is not None else "",
+        # A non-interactive seat names the commonest card it may legally look
+        # at — the opponents' graveyards, which CR 400.2 makes public. Naming
+        # from a library or a hand would be the AI reading hidden information.
+        # Nothing to see names nothing, which is legal and simply misses.
+        default_name=_commonest_visible_name(
+            game,
+            next(iter(game.opponents_of(seat)), seat),
+            ("graveyard",), exclude_basics=False,
+        ),
+        record=context.results,
+    )
+    return True, "pending_choose_card_name"
+
+
+@effect_handler("bin_revealed_card")
+def bin_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**put it into that player's graveyard**." (Wand of Denial.)
+
+    The card an earlier step of this same resolution turned up, moved from
+    wherever it still is to its **owner's** graveyard (CR 400.3) — which is the
+    player whose library it came out of, not the seat that looked at it.
+
+    Located by identity and removed by index: two copies of a card in a deck are
+    the same immutable ``CardDefinition``, so ``list.remove`` would take
+    whichever entry came first. A card that has moved since is left alone, which
+    is CR 608.2 doing as much as it can.
+
+    Through ``Game.put_card_into_graveyard``, the one seam a card reaches a
+    graveyard by.
+    """
+    card = context.results.get("revealed_card")
+    if card is None:
+        game.log.append(f"{context.card.name}: no card was turned up")
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.library):
+            if held is card:
+                player.library.pop(index)
+                game.put_card_into_graveyard(player, held)
+                game.log.append(
+                    f"{context.card.name}: {held.name} goes into "
+                    f"{player.name}'s graveyard"
+                )
+                return True, "resolved"
+    game.log.append(f"{context.card.name}: {card.name} has already moved")
+    return True, "resolved"
+
+
+@effect_handler("graveyard_top_to_library")
+def graveyard_top_to_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If the top card of target player's graveyard is a creature card, put
+    that card on top of that player's library." (Guiding Spirit.)
+
+    The printed "if" is performed here rather than as a condition over this
+    step, because both halves name the same card: the top of the graveyard is
+    read once, tested, and moved. Split into an ``if_then`` the test would ask
+    about one card and the move would go and find the top again — the same card
+    today and a different one the moment anything at all happens between them.
+
+    **The top of a graveyard is the last card put into it**, which this engine
+    keeps as the *end* of the list: every path that bins a card appends. So the
+    read is ``[-1]``, and getting that backwards would move the oldest card in
+    the pile — a card that plays, reports supported and does the wrong thing.
+
+    Through ``Game.put_card_into_library``, the one seam every "put this card
+    into a library" goes through (CR 903.9b has no single fire site).
+    """
+    target = context.target
+    if target is None:
+        return False, "no target player"
+    if not target.graveyard:
+        game.log.append(f"{context.card.name}: {target.name}'s graveyard is empty")
+        return True, "resolved"
+    top = target.graveyard[-1]
+    described = instruction.payload.get("filter") or {}
+    if described and not _card_matches_filter(
+        top, described, game=game, owner=target
+    ):
+        game.log.append(
+            f"{context.card.name}: {top.name} is not what the ability names"
+        )
+        return True, "resolved"
+    # Popped by index rather than by ``remove``: two copies of a card in a deck
+    # are the same immutable ``CardDefinition``, so a value comparison would
+    # take whichever entry came first.
+    target.graveyard.pop(len(target.graveyard) - 1)
+    game.put_card_into_library(target, top, "top")
+    game.log.append(
+        f"{context.card.name}: {top.name} goes on top of {target.name}'s library"
+    )
+    return True, "resolved"
+
+
 @effect_handler("look_at_target_library_top")
 def look_at_target_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Look at the top five cards of target player's library. You may then
@@ -608,6 +752,20 @@ def look_at_target_library_top(game: Game, instruction: OracleInstruction, conte
         resolve_amount(instruction.payload.get("amount", 0), context.x_value),
         len(target.library),
     )
+    # "Look at the top card of target player's library. **If it's a nonland
+    # card**, …" (Wand of Denial.) The sentences behind a look name the card it
+    # turned up, and this is the only step that can say which one that is —
+    # by the time they run the resolution has suspended on the prompt and come
+    # back. Under the key every "is it a …?" clause in this engine already
+    # reads: a look and a reveal differ in *who sees* the card (CR 701.20 shows
+    # it to everybody), and the pronoun behind either names the same object.
+    #
+    # Only the single-card look records one, because "it" is unambiguous only
+    # there — a look at five cards names no single card at all. The prompt this
+    # arms cannot reorder or shuffle, so the card recorded here is still the
+    # card on top when the sentences behind it run.
+    if top_count == 1 and target.library:
+        context.results["revealed_card"] = target.library[0]
     game.arm_pending_choice(
         "reorder_library", game.players.index(caster),
         target_index=game.players.index(target),
@@ -1768,6 +1926,16 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         permanent.metadata["chosen_player_index"] = chosen_seat
 
     game._put_permanent_onto_battlefield(seat, permanent, None)
+    # "…return it to the battlefield under your control **and put a death
+    # counter on it**." (Bogardan Phoenix.) The permanent this step created,
+    # recorded by id for the sentence behind it — CR 400.7 makes it a *new
+    # object*, so "it" cannot mean the one that died, and every other reader in
+    # the resolution is still holding the dead one. The reanimation's own
+    # channel, because the question is the reanimation's question asked of the
+    # ability's own source.
+    context.results.setdefault(REANIMATED_PERMANENTS, []).append(
+        permanent.permanent_id
+    )
     game.log.append(
         f"{card.name} returned to the battlefield under {game.players[seat].name}'s control"
     )
@@ -2364,6 +2532,32 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
             game.log.append(f"{context.card.name} will be exiled as it resolves")
             _register(game.players.index(context.caster), context.card)
             return True, "resolved"
+        # "When this creature dies, **exile it** if it had a death counter on
+        # it." (Bogardan Phoenix.) A dies-trigger's source is in a graveyard by
+        # the time the ability resolves (CR 603.3 puts the trigger on the stack
+        # *after* the state-based action moved the card), and "it" means that
+        # card — CR 603.10's last-known information names the object, and the
+        # object's current zone is where the move comes from. Without this the
+        # exile branch of a dies-trigger logged "nothing to exile" and the card
+        # stayed in the graveyard, which for the Phoenix is the card returning
+        # for ever.
+        #
+        # By identity through the hand/graveyard seam's own reasoning: two
+        # copies of a card in a deck are the same immutable ``CardDefinition``,
+        # so a name match would take whichever entry came first.
+        if source is not None and context.card is not None:
+            for player in game.players:
+                for index, held in enumerate(player.graveyard):
+                    if held is context.card:
+                        player.graveyard.pop(index)
+                        player.exile.append(held)
+                        context.results["exiled_self"] = True
+                        _register(game.players.index(player), held)
+                        game.log.append(
+                            f"{context.card.name} was exiled from "
+                            f"{player.name}'s graveyard"
+                        )
+                        return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
     owner_index = game.owner_index_of(source)
@@ -3128,12 +3322,22 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
         victims = [game.players[seat]]
     else:
         victims = [context.target]
+    # "…**If a card with the chosen name was milled this way**, you draw a
+    # card." (Foreshadow.) What this step actually put into a graveyard, for
+    # the sentence behind it — and nothing else can say: a graveyard holds
+    # whatever else has gone there, and two copies of a card in a deck are the
+    # same immutable object, so a name match over the pile would find the wrong
+    # one. Under the key the repeated mill already writes, because "put into
+    # that graveyard **this way**" is one question.
+    put_there = context.results.setdefault("milled_this_way", [])
     for victim in victims:
         milled = 0
         for _ in range(amount):
             if not victim.library:
                 break
-            game.put_card_into_graveyard(victim, victim.library.pop(0))
+            card = victim.library.pop(0)
+            game.put_card_into_graveyard(victim, card)
+            put_there.append(card)
             milled += 1
         game.log.append(f"{victim.name} milled {milled} card(s)")
     return True, "resolved"

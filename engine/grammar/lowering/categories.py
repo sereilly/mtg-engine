@@ -538,6 +538,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # ones beside it; only who picks differs, and here nobody does.
     "discard_all_matching_cards": "zones",
     "look_at_target_hand": "zones",
+    "bin_revealed_card": "zones",
+    "choose_card_name": "zones",
+    "graveyard_top_to_library": "zones",
     "look_at_target_library_top": "zones",
     # "…You may put that card on the bottom of that player's library"
     # (Coral Fighters): the same look with the one offer that moves a card.

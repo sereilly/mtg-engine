@@ -113,6 +113,47 @@ class LookTopCycleForLife:
     life_cost: Amount
 
 @dataclass(frozen=True)
+class BinRevealedCard:
+    """``Put it into <player>'s graveyard.`` (Wand of Denial.)
+
+    "It" is the card an earlier step of this same effect turned up — the look
+    at that player's library, whose whole point is that the looker now knows
+    what the card is. Its own node rather than a reading of
+    :class:`PutSourceIntoZone` beside it, which moves the *ability's source*: a
+    node that meant either would be resolved from whichever half of the
+    resolution context happened to hold something.
+
+    The player is carried because the card goes to **its owner's** graveyard
+    (CR 400.3) and the owner is the player whose library it came out of, which
+    is not the seat that looked.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class GraveyardTopToLibrary:
+    """``If the top card of <player>'s graveyard is a <filter>, put that card on
+    top of that player's library.`` (Guiding Spirit.)
+
+    **The printed "if" is part of the effect, not a condition over it**, and
+    that is why this is one node rather than a condition plus an arm. Both
+    halves name the same object — the top card of one graveyard — and neither
+    can name it on its own: a condition node would ask about a card the arm
+    would then have to find again, and "put that card on top" as a free-standing
+    statement is a back-reference to whatever sentence happened to precede it.
+    One node reads the whole sentence, so the two halves cannot disagree about
+    which card they mean.
+
+    Nothing is moved when the top card does not match, which is the card doing
+    exactly what it says rather than a failure — and it is why the filter rides
+    the node: a card naming a different type is this sentence with a different
+    word in it.
+    """
+    player: PlayerRef
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class SearchLibrary:
     player: PlayerRef
     filter: ObjectFilter
@@ -133,6 +174,14 @@ class SearchLibrary:
     #: "Up to" — finding fewer, none included, is a legal answer (CR 701.19b's
     #: fail-to-find is always legal, but this says so on the card).
     up_to: bool = False
+    #: "…for **any number of** Goblin cards" (Goblin Recruiter). An "up to"
+    #: with no printed ceiling, so ``extra_destinations`` and ``tapped`` cannot
+    #: be sized here at all — the ceiling is the zone, and only the resolution
+    #: knows how many cards the library holds. Its own flag rather than a
+    #: sentinel in ``extra_destinations``: how many finds there are and where
+    #: each goes are the same fact everywhere else on this node, and this is
+    #: the one shape where the first half is not known until the effect runs.
+    unbounded: bool = False
     #: "…, **reveal it**, …" / "…, **reveal those cards**, …" (CR 701.20). What
     #: the word buys is the public record: a search that prints it shows the
     #: found cards' faces to every player, and the engine's reveal-event feed

@@ -355,7 +355,15 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
             revealed_filter = parse_object_filter(stream)
         except GrammarError:
             revealed_filter = None
-        if revealed_filter is not None and revealed_filter.card_types:
+        if revealed_filter is not None and (
+            revealed_filter.card_types or revealed_filter.excluded_types
+        ):
+            # "If it's a **nonland** card" (Wand of Denial) is Wand of Ith's
+            # "if it **isn't** a land card" with the negation inside the noun
+            # phrase instead of on the copula — one question, two printed
+            # spellings, and only one of them was read. The filter carries the
+            # exclusion either way, so admitting the phrase costs the test
+            # nothing and refusing it cost the card.
             return ast.RevealedCardIs(revealed_filter, negated=negated)
     stream.reset(it_mark)
 
@@ -363,6 +371,19 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     # way**" (Helm of Obedience). A back-reference to the set the loop in front
     # of it recorded, read before the bound-subject clause below because both
     # open on a noun phrase and only this one opens on the printed floor.
+    # "if **a card with the chosen name was milled this way**" (Foreshadow).
+    # Read before the counted spelling below, whose "one or more" opening this
+    # does not share but whose tail it does — and read as its own clause rather
+    # than as a filter on it, because "the chosen name" is a record and an
+    # ``ObjectFilter``'s ``named`` is a printed literal.
+    chosen_mark = stream.mark()
+    if stream.accept_phrase(
+        "a", "card", "with", "the", "chosen", "name", "was", "milled",
+        "this", "way",
+    ):
+        return ast.ChosenNameMilledThisWay()
+    stream.reset(chosen_mark)
+
     milled_mark = stream.mark()
     if stream.accept_phrase("one", "or", "more"):
         try:

@@ -12,7 +12,7 @@ from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
-from ._common import (
+from ._common import (recorded_permanent_ids, 
     apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
     flip_coin,
     frozen_that_player_seat, permanent_matches_filter, resolve_amount,
@@ -1115,9 +1115,9 @@ def deal_damage_to_recorded_permanents(
     described = instruction.payload.get("filter") or {}
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
-    recorded = (context.results or {}).get(
-        str(instruction.payload.get("permanents_from", ""))
-    ) or ()
+    recorded = recorded_permanent_ids(
+        context, instruction.payload.get("permanents_from")
+    )
     struck = []
     for permanent_id in recorded:
         permanent = game.permanent_by_id(permanent_id)
@@ -1450,7 +1450,7 @@ def bound_bites_source(game, instruction, context):
     strength.
     """
     key = instruction.payload.get("permanents_from")
-    recorded = context.results.get(key) or ()
+    recorded = recorded_permanent_ids(context, key)
     target = context.source_permanent
     if target is None or not game.is_on_battlefield(target):
         game.log.append(f"{context.card.name}: nothing left to bite back")
@@ -1500,7 +1500,7 @@ def bound_bites_player(game, instruction, context):
     zero.
     """
     key = instruction.payload.get("permanents_from")
-    recorded = context.results.get(key) or ()
+    recorded = recorded_permanent_ids(context, key)
     card = context.card
     for permanent_id in recorded:
         biter = game.permanent_by_id(permanent_id)

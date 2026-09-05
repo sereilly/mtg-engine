@@ -37,6 +37,9 @@ from .paragraphs import (
     _parse_rebalance_lands,
     _parse_transmute_by_sacrifice,
 )
+from .conditions import _parse_condition
+from .errors import GrammarError
+from .nouns import parse_object_filter
 from .references import parse_recipient
 from .stream import TokenStream
 from .upkeep import parse_upkeep_paragraph
@@ -48,6 +51,7 @@ from .references import _parse_further_subjects
 # under the name this module used, so nothing else here changed.
 from .readers import _parse_entering_counters
 from .effects import (
+    parse_bin_revealed_card,
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
     _parse_ante,
@@ -58,6 +62,7 @@ from .effects import (
     _parse_change_text,
     _parse_choose_cards_in_hand,
     _parse_choose_color,
+    parse_choose_card_name,
     _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_copy_that_spell,
@@ -307,6 +312,15 @@ def parse_imperative(
         moved = _parse_put_source_into_zone(stream)
         if moved is not None:
             return moved
+        # "**If you do,** put it into that player's graveyard." (Wand of
+        # Denial.) The same three opening words as the source move above and a
+        # different referent — the card the look turned up — so it is read
+        # after it: "put it into **your** graveyard" is the source's sentence
+        # and keeps its reading, and only a possessive naming somebody else
+        # reaches here.
+        binned = parse_bin_revealed_card(stream)
+        if binned is not None:
+            return binned
         # "Put one of them onto the battlefield under your control." (Helm of
         # Obedience.) The last of the back-references and the same treatment:
         # the counter production reads "one" as a count and then refuses with a
@@ -511,6 +525,16 @@ def parse_imperative(
     if stream.at_word("look"):
         return _parse_look_at_hand(stream)
     if stream.at_word("search"):
+        # "Search your library for a Plains card. If target opponent controls
+        # more lands than you, you may search your library for an additional
+        # Plains card. Reveal those cards, put them into your hand, then
+        # shuffle." (Tithe.) Three printed sentences and one effect
+        # (CR 701.23h), so it is read whole and before the ordinary search —
+        # which refuses this line at "expected 'put'", the first sentence
+        # having no destination clause of its own. Non-consuming on refusal.
+        deferred = _parse_conditional_additional_search(stream)
+        if deferred is not None:
+            return deferred
         return _parse_search_library(stream)
     # "Scry N" has no subject for the same reason "draw a card" has none: the
     # effect's controller is implied. It belongs with the other bare
@@ -591,6 +615,22 @@ def parse_imperative(
         random_reveal = _parse_name_then_random_reveal(stream)
         if random_reveal is not None:
             return random_reveal
+        # "Choose a card name, then target opponent mills a card. …"
+        # (Foreshadow.) The bare naming *sentence*, and it is read **last of
+        # the naming productions** — Demonic Consultation, Nebuchadnezzar and
+        # Necromentia all open with these same four words and then read two or
+        # three more printed sentences as one paragraph, so a single-sentence
+        # reading tried first takes the first sentence and strands the rest.
+        #
+        # That is not hypothetical: probed above the colour choice it claimed
+        # Nebuchadnezzar's opening and the card went from supported to
+        # unsupported. The suite caught it through ``test_effect_labels``,
+        # whose "every table entry is still reached" is the guard that sees a
+        # kind quietly stop being produced — which is what widening a gate does
+        # to whatever was keyed on the refused shape.
+        chosen_name = parse_choose_card_name(stream)
+        if chosen_name is not None:
+            return chosen_name
         return _parse_name_and_strip(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))
@@ -631,3 +671,104 @@ def parse_imperative(
     if life_total is not None:
         return life_total
     return None
+
+
+def _parse_conditional_additional_search(
+    stream: TokenStream,
+) -> "ast.Statement | None":
+    """``Search your library for <filter>. If <condition>, you may search your
+    library for an additional <filter>. Reveal those cards, put them into your
+    hand, then shuffle.`` (Tithe.)
+
+    Three printed sentences, one effect. CR 701.23h says so outright: a player
+    told to search a library more than once before being told to shuffle
+    searches it **once**, for all those cards — which is why the destination
+    clause is printed after both searches and belongs to neither of them alone.
+
+    Read here rather than in ``effects/search.py`` for a layering reason and
+    not a taste one: the middle sentence carries a *condition*, and the
+    condition parser sits at ``effects``' own rank (``conditions``), so the
+    search family may not call it. ``imperatives`` is the first layer above
+    both, and it is already where a sentence opening with "search" is routed.
+
+    Refuses without consuming, so an ordinary search keeps its reading and its
+    own refusal — the singular production's "expected 'put'" is still what a
+    line with a missing destination clause gets.
+
+    The second phrase must be the **same** noun phrase as the first. A card
+    naming different cards for its two finds is a different sentence: the one
+    destination clause behind them describes both, and admitting a mismatch
+    would send a find somewhere the card never said.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("search", "your", "library", "for"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        wanted = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not wanted.is_card or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return None
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "you", "may", "search", "your", "library", "for", "an", "additional",
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        again = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if again != wanted or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    # "Reveal those cards, put them into your hand, then shuffle." The clause
+    # both searches share, and every word of it is required: a card sending its
+    # finds anywhere else is a different effect, and reading the destination
+    # loosely here is how a tutor to hand becomes a tutor to the battlefield.
+    if not stream.accept_phrase("reveal", "those", "cards"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("put", "them", "into", "your", "hand"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("then", "shuffle"):
+        stream.reset(mark)
+        return None
+
+    def _one_search() -> ast.SearchLibrary:
+        return ast.SearchLibrary(
+            ast.PlayerRef("you"), wanted,
+            ast.Zone("hand", ast.PlayerRef("you")),
+            tapped=(False,), reveal=True,
+        )
+
+    # Two search steps rather than one for two finds, which is what the flow
+    # can express: a counted search takes its whole answer at once, and the
+    # second find here exists only if a condition holds and only if its
+    # controller wants it. CR 701.23h makes the two one search in the rules;
+    # what a player sees is two prompts, and every card that could be found is
+    # findable in exactly one of them.
+    return ast.Sequence((
+        _one_search(),
+        ast.Conditional(
+            condition,
+            ast.May(ast.PlayerRef("you"), action=_one_search()),
+        ),
+    ))
+

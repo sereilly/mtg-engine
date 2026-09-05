@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**21 unclaimed sentence(s) across 17 supported card(s).**
+**18 unclaimed sentence(s) across 15 supported card(s).**
 
 - **Anvil of Bogardan**
   - `players have no maximum hand size`
@@ -43,11 +43,6 @@ anything anyone did, and every ingest would arrive red.
   - `when this land enters, sacrifice it unless you return an untapped swamp you control to its owner's hand`
 - **Fireblast**
   - `you may sacrifice two mountains rather than pay this spell's mana cost`
-- **Foreshadow**
-  - `choose a card name, then target opponent mills a card`
-  - `if a card with the chosen name was milled this way, you draw a card`
-- **Griffin Canyon**
-  - `{t}: untap target griffin. if it's a creature, it gets +1/+1 until end of turn`
 - **Heat Wave**
   - `blue creatures can't block creatures you control`
   - `nonblue creatures can't block creatures you control unless their controller pays 1 life for each blocking creature they control`

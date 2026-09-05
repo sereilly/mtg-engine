@@ -31,7 +31,8 @@ from .prices import (_accept_conjoined_life_cost,  # noqa: F401
                      _accept_life_alternative,
                      _accept_mana_alternatives,
                      _accept_per_counter_multiplier,
-                     _parse_mana_payment, _parse_pay_life)
+                     _parse_mana_payment, _parse_pay_life,
+                     _accept_life_only_offer)
 # The back-references left for `references` when this module crossed the
 # thousand-line guard — they answer CR 115's question with an earlier step as
 # the referent, which is that module's subject and not this one's word tables.

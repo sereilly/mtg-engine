@@ -26,6 +26,15 @@ of the half-exile: two docstrings here already named it as the thing consulted
 decision is the module that should hold it. It is the same question this file
 answers — which printed recipient set is one batch — asked of the three sets
 that earned a fused kind of their own.
+
+:func:`lower_counter_sweep` followed at Visions' first wave, when
+``lowering/counters.py`` reached the guard. It is the same question again asked
+of a *counter* instead of damage — "put a +1/+1 counter on **each** creature you
+control" describes its set exactly as "deals 2 damage to each creature" does,
+nothing is targeted and nobody picks — so it lands here under the family name
+the mirror already carries rather than forking a third home for one printed
+idiom. Public rather than module-private now that it crosses a module line;
+``counters.py`` is still its only caller.
 """
 
 from __future__ import annotations
@@ -33,8 +42,10 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
+from ..phrases import is_pt_counter
 from ._amounts import count_spec
 from ._common import _filter_payload
 
@@ -292,3 +303,57 @@ def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
     if filt.attacking and not filt.with_keywords and not filt.without_keywords:
         return "deal_damage_each_attacking_creature"
     return None
+
+
+def lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+    """"Put a <pair> counter on **each** <noun phrase>." (Basri's Solidarity,
+    Misfortune.)
+
+    The set is a *description*, so nothing is targeted and nothing is chosen —
+    the handler reads the board as the effect resolves (CR 611.2c) and places
+    the counter on every permanent the phrase matches. Which is why the printed
+    noun phrase travels as a filter the shared matcher tests, rather than being
+    baked into the handler's own name: a kind called
+    ``add_counter_to_each_you_control`` cannot honestly carry "each creature
+    **that player** controls", and a second kind beside it would be one effect
+    with two spellings.
+
+    Every refusal below is a way the sentence could otherwise reach more
+    permanents than it names:
+
+    * the counter must be a CR 122.1a P/T pair, because ``place_pt_counters``
+      derives the P/T from the counter's own name and has nowhere to put one
+      that has none;
+    * the count must be a printed number, since nothing resolves an X over a
+      swept set;
+    * every narrowing must be one ``subject_matches`` can *test*. A key it
+      would ignore is a counter on strictly more permanents than the card
+      names, and on a -1/-1 sweep that is the board.
+
+    "**that player** controls" is the one narrowing the matcher refuses outright
+    rather than ignores (it names a seat no read of a board can make), so it is
+    carried through to the handler, which answers it from the seat the
+    announcement froze — the same split ``destroy_all_matching`` already makes
+    of the same two words.
+    """
+    if not is_pt_counter(node.counter):
+        raise LoweringError(
+            f"no handler sweeps a {node.counter} counter onto a described set",
+            node=node,
+        )
+    if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+        raise LoweringError("a swept counter count is a printed number", node=node)
+    described = _filter_payload(node.subject.filter)
+    seat_scoped = described.get("controller") == "that_player"
+    testable = dict(described)
+    if seat_scoped:
+        testable.pop("controller")
+    leftover = sorted(set(testable) - set(TESTABLE_SUBJECT_FILTER_KEYS))
+    if leftover:
+        raise LoweringError(
+            "a counter sweep cannot narrow by: " + ", ".join(leftover), node=node
+        )
+    payload: dict[str, object] = {"counter": node.counter, "filter": described}
+    if node.count.value != 1:
+        payload["count"] = node.count.value
+    return (OracleInstruction("add_counter_to_each_matching", "", payload),)

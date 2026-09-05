@@ -79,6 +79,10 @@ _SIMULATED_CHOICES = (
     # suspends, because the sentence after it reads the pick and the round
     # after that may not choose it again.
     "graveyard_pick_for_price",
+    # "Choose a card name." (Foreshadow.) Appended for the reason the entries
+    # above are — the position cannot change an existing seed — and it
+    # suspends, so a seat left owing it would wedge every later resumable loop.
+    "choose_card_name",
     # "Each player may draw up to two cards" (Truce). Appended for the reason
     # the four above are — the position cannot change an existing seed — and it
     # suspends, so a seat left owing it would wedge every later resumable loop.

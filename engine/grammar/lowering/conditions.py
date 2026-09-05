@@ -172,12 +172,48 @@ def _lower_condition(
         # there is nothing for "it" to name and the branch would answer False
         # forever while the card compiled clean (idiom #7).
         if "revealed_card" not in produced:
+            # "Untap target Griffin. **If it's a creature**, it gets +1/+1
+            # until end of turn." (Griffin Canyon.) The same printed words
+            # asking a different question, and **the parse cannot tell them
+            # apart**: Prophecy prints "reveal the top card …, if it's a land"
+            # and this prints "untap target Griffin, if it's a creature" —
+            # one clause, one shape, two referents. What separates them is the
+            # *producer*, and the producer is only in view here. That is the
+            # arrangement ``ItIsColor`` beside this already documents for the
+            # colour half of the same pronoun ("which object the pronoun names
+            # is not settled here; lowering reads it off the effect this
+            # condition guards"), and CR 608.2c is why it can be: the
+            # instruction and its "if" are one sentence.
+            #
+            # So a reveal claims the clause first, and only a line with no
+            # reveal at all falls through to the target reading — which still
+            # refuses when the guarded branch names no object, rather than
+            # asking the question of whichever half of the resolution context
+            # happened to hold something.
+            if referent == "permanent":
+                leftover = _restrictions_beyond(
+                    condition.filter, {"card_types", "is_card", "type_match"}
+                )
+                if leftover or not condition.filter.card_types:
+                    raise LoweringError(
+                        "'it's …' reads a printed type line here too: "
+                        + ", ".join(leftover or ("no type at all",)),
+                        node=condition,
+                    )
+                return {
+                    "kind": "target_is_type",
+                    "card_types": list(condition.filter.card_types),
+                    "type_match": condition.filter.type_match,
+                    "negated": condition.negated,
+                    "target": referent,
+                }
             raise LoweringError(
                 "'it' with nothing in this effect that revealed a card",
                 node=condition,
             )
         leftover = _restrictions_beyond(
-            condition.filter, {"card_types", "is_card", "type_match"}
+            condition.filter,
+            {"card_types", "is_card", "type_match", "excluded_types"},
         )
         if leftover:
             raise LoweringError(
@@ -185,7 +221,7 @@ def _lower_condition(
                 + ", ".join(leftover),
                 node=condition,
             )
-        if not condition.filter.card_types:
+        if not condition.filter.card_types and not condition.filter.excluded_types:
             raise LoweringError(
                 "'it's …' reads a card's printed type line", node=condition
             )
@@ -194,6 +230,13 @@ def _lower_condition(
             "card_types": list(condition.filter.card_types),
             "type_match": condition.filter.type_match,
         }
+        if condition.filter.excluded_types:
+            # "If it's a **nonland** card" (Wand of Denial). The exclusion the
+            # noun phrase carries, emitted only when printed so every payload
+            # written before this stays byte-identical — and emitted at all,
+            # because a word the production consumes and the payload drops is a
+            # test that passes for every card.
+            payload["excluded_types"] = list(condition.filter.excluded_types)
         # "If it **isn't** a land card" (Wand of Ith). Carried rather than
         # lowered into a separate kind, so the two spellings reach the one
         # evaluator that knows how to read the record — and emitted only when
@@ -612,6 +655,26 @@ def _lower_condition(
             "op": condition.comparison.op,
             "value": bound.value,
         }
+    if isinstance(condition, ast.ChosenNameMilledThisWay):
+        # Two producers, both demanded: a back-reference names its producers or
+        # refuses. Without the name the comparison is against nothing and
+        # answers False for ever; without the mill there is no set to compare
+        # it to — and either way the card would compile clean and never draw.
+        missing = sorted({"chosen_card_name", "milled_this_way"} - set(produced))
+        if missing:
+            raise LoweringError(
+                "'a card with the chosen name was milled this way' with no "
+                + " and no ".join(
+                    {
+                        "chosen_card_name": "name chosen",
+                        "milled_this_way": "mill",
+                    }[key]
+                    for key in missing
+                )
+                + " before it in this effect",
+                node=condition,
+            )
+        return {"kind": "chosen_name_milled_this_way"}
     if isinstance(condition, ast.MilledThisWay):
         # "If one or more creature cards were put into that graveyard this
         # way" (Helm of Obedience). The producer is demanded for
@@ -722,6 +785,11 @@ def _lower_condition(
         return {"kind": "returned_to_hand_this_turn"}
     if isinstance(condition, ast.HadPlus1Counter):
         return {"kind": "had_plus1_counter"}
+    if isinstance(condition, ast.HadNamedCounter):
+        # The counter word is payload the whole way down, exactly as it is for
+        # ``SourceExiledWithCounter`` below — a card printing a differently
+        # named counter needs nothing here.
+        return {"kind": "had_named_counter", "counter": condition.counter}
     if isinstance(condition, ast.SourceExiledWithCounter):
         # The counter word is payload the whole way down, so a card printing a
         # differently-named counter needs nothing here.

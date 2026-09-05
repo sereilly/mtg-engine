@@ -277,6 +277,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "scry",             # arranges the library a later draw reads
         "search_library",   # removes a card from it and shuffles the rest
         "reorder_library",  # same, by permutation
+        # "Choose a card name, **then** target opponent mills a card. If a card
+        # with the chosen name was milled this way, …" (Foreshadow.) The mill is
+        # the next step of the same resolution and the condition behind it reads
+        # the answer — and a seat that saw the milled card before naming would
+        # be choosing with information the card does not give them.
+        "choose_card_name",
         # The picks are the cards the same resolution's next step ("You may
         # cast them this turn.") grants permission over.
         "search_exile_cards",

@@ -994,6 +994,27 @@ class GameHelpersMixin:
                     trigger_context={
                         "dead_power": max(0, permanent.effective_power),
                         "dead_toughness": max(0, permanent.effective_toughness),
+                        # The counters it carried, frozen for the paragraph
+                        # above's reason and spelled the way the *other* death
+                        # fire site spells them: "when a creature dies" and
+                        # "when **this** creature dies" are two loops over one
+                        # event, and last-known information that only one of
+                        # them records is a condition that answers differently
+                        # depending on which loop announced it.
+                        #
+                        # "…exile it **if it had a death counter on it**"
+                        # (Bogardan Phoenix) is the card that needs the second
+                        # of these, and it needs it here: its own death is what
+                        # fires it, and its counters are gone the instant the
+                        # card reaches the graveyard (CR 400.7).
+                        "had_plus1_counter": (
+                            int(permanent.metadata.get("plus_counters", 0)) > 0
+                        ),
+                        "dead_counters": {
+                            key[: -len("_counters")]: int(value or 0)
+                            for key, value in permanent.metadata.items()
+                            if isinstance(key, str) and key.endswith("_counters")
+                        },
                     },
                 )
                 self.log.append(f"{permanent.card.name} triggered (died)")
@@ -2472,6 +2493,18 @@ class GameHelpersMixin:
             # first. The identity is what locates the one that just died.
             "dead_card": dead_permanent.card,
             "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
+            # "…**if it had a death counter on it**" (Bogardan Phoenix). The
+            # counters with no rules meaning of their own (CR 122.3), which live
+            # one metadata key per word and so cannot be frozen as the single
+            # bool above. Its own key rather than that one widened — two records,
+            # and a reader of one must fail by name rather than receive the
+            # other. Frozen here for CR 603.10's reason: a graveyard card has no
+            # counters at all, so nothing downstream could read the answer.
+            "dead_counters": {
+                key[: -len("_counters")]: int(value or 0)
+                for key, value in dead_permanent.metadata.items()
+                if isinstance(key, str) and key.endswith("_counters")
+            },
             # Who controlled it, for "that player loses 2 life" (Massacre
             # Wurm): the graveyard card cannot say, and under Control Magic
             # the controller is not the owner. One key across every event that

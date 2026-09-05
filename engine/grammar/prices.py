@@ -213,3 +213,23 @@ def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
         stream.reset(mark)
         return None
     return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
+
+
+def _accept_life_only_offer(stream: TokenStream) -> "ast.May | None":
+    """``pay <N> life`` after "you may", as a whole offer — or None, unmoved.
+
+    ``_parse_pay_life`` reads the same three words as a bare *imperative*
+    ("Pay 4 life", Sylvan Library); this reads them as the price of an offer.
+    Same fragment, same reader, so the two cannot come to disagree about what
+    was paid — which is the rule that fragment's own docstring states.
+    """
+    mark = stream.mark()
+    payment = _parse_pay_life(stream)
+    if payment is None:
+        return None
+    if not isinstance(payment.amount, ast.Fixed) or payment.amount.value <= 0:
+        # An offer of nothing is not a choice, and a variable one has nowhere
+        # here to take its value from.
+        stream.reset(mark)
+        return None
+    return ast.May(ast.PlayerRef("you"), life_cost=payment.amount)

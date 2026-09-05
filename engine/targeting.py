@@ -1680,6 +1680,41 @@ def derive_instruction_spec(instructions) -> dict | None:
     return _from_instructions(instructions)
 
 
+#: The condition payload keys whose value is a **player reference**, and the
+#: picker each targeted spelling of one means. A condition may be the only place
+#: a spell says "target" (Tithe), and a spec derived from the arms alone cannot
+#: see it. Keyed by the word rather than by the condition kind: "target
+#: opponent" means the same announcement whatever question is asked of it, and a
+#: table per kind would have to grow an entry for every clause that ever takes a
+#: seat.
+_TARGETED_CONDITION_PLAYERS: dict[str, dict] = {
+    "target_opponent": {"kind": "player", "opponents_only": True},
+    "target_player": {"kind": "player"},
+}
+
+
+def _condition_target_spec(condition) -> dict | None:
+    """The picker a condition announces, or None when it announces nothing.
+
+    Only the seat, deliberately. A condition that counted *objects* would be
+    describing a set rather than choosing one, and the only instances of the
+    word "target" the pool prints inside a condition today name a player.
+    """
+    if not isinstance(condition, dict):
+        return None
+    spec = _TARGETED_CONDITION_PLAYERS.get(str(condition.get("who") or ""))
+    if spec is not None:
+        return dict(spec)
+    # "If <a> and <b>" / "If <a> or <b>": the joined halves are conditions in
+    # their own right, and a target inside one of them is still announced.
+    for key in ("conditions", "parts", "all", "any"):
+        for part in condition.get(key) or ():
+            nested = _condition_target_spec(part)
+            if nested is not None:
+                return nested
+    return None
+
+
 def _from_instructions(instructions) -> dict | None:
     """The first spec any instruction in *instructions* describes.
 
@@ -1708,6 +1743,23 @@ def _from_instructions(instructions) -> dict | None:
             )
             if nested is not None:
                 return nested
+            # "If **target opponent** controls more lands than you, …" (Tithe.)
+            # The instance of the word "target" is in the *condition*, and
+            # CR 601.2c does not care which half of the sentence it appears in —
+            # the spell announces the opponent as it is cast, and nothing in the
+            # arms describes anybody. Read after the arms, because a card whose
+            # arms target as well announces those (this one's do not), and
+            # because the arms are what the effect acts on.
+            #
+            # Without it Tithe compiled supported, carried no hollow line and
+            # claimed every printed sentence, and derived a cast spec of None —
+            # the exact value the client tests to decide whether to ask for a
+            # target, so it sent a bare cast and the engine refused it. The
+            # Roots class, arriving through a door nothing had come through
+            # before.
+            condition_spec = _condition_target_spec(instruction.payload.get("condition"))
+            if condition_spec is not None:
+                return condition_spec
             continue
         if instruction.kind == "unless_player_pays":
             # "Unless an opponent pays {2}, gain control of **target artifact**

@@ -797,6 +797,19 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             stream.advance()
             if stream.accept_phrase("counter", "on", "it"):
                 return ast.HadPlus1Counter()
+        # "…**if it had a death counter on it**" (Bogardan Phoenix). The same
+        # sentence about a counter with no rules meaning of its own (CR 122.3),
+        # whose word is invented by the card — so it is read as a word and
+        # carried as payload, and a set inventing another needs nothing here.
+        # Its own node because the *record* is a different one; see
+        # ``ast.HadNamedCounter``.
+        word = stream.peek_word()
+        if word is not None and word not in ("counter",):
+            named_mark = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("counter", "on", "it"):
+                return ast.HadNamedCounter(word)
+            stream.reset(named_mark)
     stream.reset(counter_mark)
 
     # "if this artifact is tapped" (Mana Vault), "if it's untapped" (Aladdin's

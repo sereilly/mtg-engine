@@ -53,12 +53,10 @@ from .lowering import (
     _fused_exile_then_controller_life,
     _lower_add_mana,
     _lower_put_exiled_card_into_zone,
-    _lower_note_mana_spent,
     _lower_add_mana_for_tapped_land,
     _amount_payload,
     _lower_become_color,
     _lower_cant_be,
-    _lower_become_blocked,
     _lower_remove_from_combat,
     _lower_combat_restriction,
     lower_block_count_grant,
@@ -87,7 +85,6 @@ from .lowering import (
     _lower_for_each_short_of_this_way,
     _lower_choose_permanent,
     _lower_choose_permanents,
-    _lower_bid_life_for_control,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_prevent_damage,
@@ -101,13 +98,13 @@ from .lowering import (
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
     _lower_mill,
+    _lower_bin_revealed_card,
     _lower_put_milled_card_onto_battlefield,
     _lower_exile_entire_library,
     _lower_player_gets_counters,
     _lower_put_counter,
     _lower_put_onto_battlefield,
     _lower_reveal_until,
-    _lower_move_counter,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -260,8 +257,6 @@ def lower_statement(
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
-    if isinstance(statement, ast.MoveCounter):
-        return _lower_move_counter(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
@@ -324,8 +319,6 @@ def lower_statement(
         # neither". That seam now walks a sequence's steps, so the nesting is
         # reachable and the filtered event was the wrong question.
         return _lower_add_mana_for_tapped_land(statement, event)
-    if isinstance(statement, ast.NoteManaSpent):
-        return _lower_note_mana_spent(statement)
     if isinstance(statement, ast.CreateToken):
         # ``event`` for the P/T back-reference: "its power is equal to that
         # creature's power" is read through the one place that decides where a
@@ -367,12 +360,6 @@ def lower_statement(
         # effect and `dispatch_event` is already None there.
         return _lower_gain_control(statement, produced, event)
 
-    if isinstance(statement, ast.BidLifeForControl):
-        # Illicit Auction. Beside the control change above rather than inside
-        # it: what the two share is where the permanent ends up, and what
-        # differs is that this one has to run an auction first to find out
-        # whose it becomes.
-        return _lower_bid_life_for_control(statement)
 
     if isinstance(statement, ast.ModalNode):
         # Reached only when the head is a *step* of something larger — "Draw a
@@ -403,6 +390,13 @@ def lower_statement(
         # mills a card" names the seat the *firing event* froze, so the
         # lowering needs the event and the node no longer answers on its own.
         return _lower_mill(statement, event)
+
+    if isinstance(statement, ast.BinRevealedCard):
+        # Here rather than in `by_node.py` for the milled-card entry's reason
+        # below: "it" names the card an earlier step of this same effect turned
+        # up, so the lowering needs `produced` and the node cannot answer on its
+        # own.
+        return _lower_bin_revealed_card(statement, produced)
 
     if isinstance(statement, ast.PutMilledCardOntoBattlefield):
         # Here rather than in `by_node.py` because "one of **them**" names a
@@ -715,8 +709,6 @@ def lower_statement(
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
 
-    if isinstance(statement, ast.BecomeBlocked):
-        return _lower_become_blocked(statement)
 
     # In the chain: the event decides whether "that creature gains first
     # strike" names a block pair's other half or nothing at all.

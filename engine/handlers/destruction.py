@@ -9,7 +9,7 @@ from ..models import Permanent, PlayerState
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
                             PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
-from ._common import (
+from ._common import (one_recorded_permanent_id, 
     frozen_that_player_seat,
     permanent_matches_filter, resolve_role_permanent,
     resolve_target_permanent, resolve_target_permanents,
@@ -520,7 +520,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # (CR 400.7 — what comes back is a new object).
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
-        permanent_id = context.results.get(recorded_key)
+        permanent_id = one_recorded_permanent_id(context, recorded_key)
         victim = (
             game.permanent_by_id(permanent_id) if permanent_id is not None else None
         )
@@ -1423,11 +1423,10 @@ def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, con
     Nothing recorded, or a permanent that has left since, sacrifices nothing —
     CR 608.2b doing as much as it can rather than a failure.
     """
-    key = instruction.payload.get("permanents_from")
-    recorded = context.results.get(key) if key is not None else None
-    victim = (
-        game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    recorded = one_recorded_permanent_id(
+        context, instruction.payload.get("permanents_from")
     )
+    victim = game.permanent_by_id(recorded) if recorded is not None else None
     if victim is None or not game.is_on_battlefield(victim):
         game.log.append(f"{context.card.name}: nothing was chosen to sacrifice")
         return True, "resolved"

@@ -1440,6 +1440,39 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     observer = game.players.index(context.caster)
     source = context.source_permanent
     subject_role = instruction.payload.get("subject_role")
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        # "…return it to the battlefield under your control **and put a death
+        # counter on it**." (Bogardan Phoenix.) Nothing was targeted: the
+        # permanent did not exist when the trigger went on the stack, and the
+        # step in front of this one is the only thing that can say which one it
+        # is. The same ``permanents_from`` channel the P/T twin reads, through
+        # the one reader that decides its arity.
+        #
+        # Nothing recorded is a legal outcome (the card was no longer in a
+        # graveyard), not an error.
+        from ._common import recorded_permanent_ids
+
+        placed = 0
+        for permanent_id in recorded_permanent_ids(context, recorded_key):
+            returned = game.permanent_by_id(permanent_id)
+            if returned is None:
+                continue
+            counter = str(instruction.payload.get("counter", ""))
+            total = add_counters(
+                returned,
+                counter,
+                resolve_amount(instruction.payload.get("count", 1), context.x_value),
+            )
+            placed += 1
+            game.log.append(
+                f"{returned.card.name} gets a {counter} counter ({total} total)"
+            )
+        if not placed:
+            game.log.append(
+                f"{context.card.name}: nothing was left to put a counter on"
+            )
+        return True, "resolved"
     if instruction.payload.get("on_event_subject"):
         # "Whenever a permanent becomes tapped, put a wind counter on **it**."
         # (Freyalise's Winds.) Nothing was chosen: the object is the one the

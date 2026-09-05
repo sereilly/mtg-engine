@@ -277,6 +277,22 @@ class ChooseNumber:
 
 
 @dataclass(frozen=True)
+class ChooseCardName:
+    """``Choose a card name.`` (Foreshadow.)
+
+    Beside :class:`ChooseColor` and for its reason: the sentence produces a
+    *value* and no effect of its own, and what reads the value is a later
+    sentence of the same card.
+
+    A separate node from the colour choice rather than a word on it, because
+    the two are answered from different vocabularies — a colour is one of five
+    and CR 202.1 lets a player name **any** card, printed or not — and because
+    a reader written for one that received the other would be comparing a
+    colour symbol against a card name and always answering no.
+    """
+
+
+@dataclass(frozen=True)
 class ChooseColor:
     """``Choose a color.`` (Chromatic Armor's activated ability.)
 

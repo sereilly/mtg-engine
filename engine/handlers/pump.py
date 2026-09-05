@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
-from ._common import (
+from ._common import (recorded_permanent_ids, 
     apply_temp_pt_boost,
     bound_permanent,
     block_pair_permanents,
@@ -936,21 +936,24 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     #
     # An empty record is a legal outcome (nothing came back), not an error.
     #
-    # **The channel carries one id or a list of them, and both reach here.**
-    # ``reanimated_permanents`` is a list because "return target creature card"
-    # is one step of a sentence that could return several; ``attach_host`` is a
-    # bare id, because a choose-one prompt picks exactly one (Thelon's Chant,
-    # Tourach's Chant). Every other reader of ``permanents_from``
-    # (``destruction``, ``control_changes``) reads the scalar shape only and
-    # would raise on the list, so normalising here is the *local* half of a
-    # wider question recorded in ROADMAP.md rather than a settled convention.
+    # **The channel is a sequence, and that is now the channel's own answer.**
+    # This handler used to normalise here and say so, calling itself "the local
+    # half of a wider question"; the question is settled in
+    # ``_common.recorded_permanent_ids``, which every reader of
+    # ``permanents_from`` in the engine now goes through — a producer writing a
+    # bare id (a choose-one prompt: Thelon's Chant, Tourach's Chant) and one
+    # writing a list (a reanimation, which could return several) reach every
+    # reader as the same shape.
+    #
+    # "…put a +1/+1 counter on **the first creature**" (Infinite Authority) and
+    # the chosen-creature toll above used to have a **second, unreachable**
+    # block below this one, asking the same key again with the scalar reading:
+    # dead the moment this branch grew its `return`, and the second copy of the
+    # fact this comment is about.
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
         placed_on = 0
-        recorded = (context.results or {}).get(str(recorded_key))
-        if isinstance(recorded, int):
-            recorded = (recorded,)
-        for permanent_id in recorded or ():
+        for permanent_id in recorded_permanent_ids(context, recorded_key):
             creature = game.permanent_by_id(permanent_id)
             if creature is None:
                 # It left between the two steps of one resolution; a returning
@@ -964,33 +967,6 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             )
         if not placed_on:
             game.log.append(f"{card.name}: nothing was left to put a counter on")
-        return True, "resolved"
-
-    # "…put a +1/+1 counter on **the first creature**." (Infinite Authority.)
-    # No target was ever chosen: the sentence names one half of the pair a block
-    # trigger bound, and the ids were frozen when the earlier step of this same
-    # effect armed the destruction. Read by id, so a creature that left and came
-    # back is a different object (CR 400.7) and gets nothing.
-    # "…unless the player puts a -1/-1 counter on a creature they control"
-    # (Thelon's Chant, Tourach's Chant.) Nobody targeted anything: the seat the
-    # offer was made to picked a creature one step earlier in this same
-    # resolution (CR 608.2d), and the pick is in the scratchpad under the key
-    # that step always writes. By id, so a creature that left and came back is a
-    # different object (CR 400.7) and gets nothing.
-    recorded_key = instruction.payload.get("permanents_from")
-    if recorded_key is not None:
-        chosen_id = context.results.get(recorded_key)
-        creature = (
-            game.permanent_by_id(chosen_id) if chosen_id is not None else None
-        )
-        if creature is None:
-            game.log.append(f"{card.name}: no creature was chosen to take a counter")
-            return True, "resolved"
-        if how_many:
-            game.place_pt_counters(creature, kind, how_many)
-            game.log.append(
-                f"{creature.card.name} gets a {kind} counter ({card.name})"
-            )
         return True, "resolved"
 
     pair_member = instruction.payload.get("pair_member")
@@ -1364,10 +1340,98 @@ def grant_self_flying_until_eot(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+def granted_target_legal(game, instruction, context, *, characteristics=True):
+    """The predicate a "target … gains <keyword>" grant resolves through.
+
+    One reader for the printed noun phrase, because there are two handlers for
+    one sentence — ``grant_target_flying_until_eot`` and
+    ``grant_target_keyword_until_eot`` — and only the second of them asked. The
+    first read **no filter at all**, so five shipped cards handed flying to
+    whatever the fallback scan reached first: Chariot of the Sun and Krovikan
+    Elementalist ("target creature **you control**") could give it to an
+    opponent's creature, and Goblin Kites, Phantasmal Mount ("…**with toughness
+    2 or less**") and Whalebone Glider ("…**with power 3 or less**") ignored the
+    printed bound entirely. A picker and a resolution that disagree are a target
+    the player may announce and the effect then declines to affect.
+
+    The three questions are the split ``add_counter_to_target`` already makes:
+    ``permanent_matches_filter`` answers about a permanent alone, so "another"
+    (CR 109.5's source exclusion) and "you control" (a seat) are asked here.
+
+    *characteristics* is CR 608.2b's "once", and :func:`granted_target` is the
+    only caller that turns it off — see there.
+    """
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    source = context.source_permanent
+
+    def legal(perm) -> bool:
+        if not perm.is_creature:
+            return False
+        if characteristics and not permanent_matches_filter(perm, filters):
+            return False
+        if filters.get("exclude_self") and perm is source:
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(context.caster), perm
+        ):
+            return False
+        return True
+
+    return legal
+
+
+def granted_target(game, instruction, context):
+    """The creature a "target … gains <keyword>" grant lands on.
+
+    Two resolutions, and the second one is CR 608.2b read as the rule is
+    written. The check happens **once**, before the first instruction of the
+    resolution runs (608.2c: the controller then follows the instructions in
+    the order written), and one printed instance of the word "target" is one
+    check however many steps the sentence lowers to. Phantasmal Mount is the
+    card that proves it: "target creature you control **with toughness 2 or
+    less** gets +1/+1 **and** gains flying until end of turn" is one noun
+    phrase and two lowered steps, the pump runs first and takes a 2/2 rider to
+    toughness 3, and re-asking the printed bound at the second step finds
+    nothing — so the card's only ability would grant flying to nobody, on the
+    board it was printed for.
+
+    So the **announced** target is asked for first with the scan switched off,
+    in full and then with its characteristics settled; only when neither
+    answers does the fallback scan run, with the phrase in full. The order is
+    the whole of it: ``pick_target_permanent`` is written "honour the choice,
+    else scan", and a chosen creature that fails the predicate falls through to
+    a scan — which for Phantasmal Mount found the *Mount itself* (a creature
+    its controller controls with toughness 2) and flew that instead of the
+    rider. A scan is for a seat that named nothing, never a second opinion
+    about a seat that did.
+
+    The seat and the identity are asked every time. Those are not
+    characteristics an earlier step of the same resolution changes, and they are
+    the half a scan gets wrong — which is how ``grant_target_flying_until_eot``
+    used to hand flying to whatever it reached first.
+    """
+    full = granted_target_legal(game, instruction, context)
+    named = resolve_target_permanent(
+        game, context, predicate=full, fallback_players=(),
+    )
+    if named is not None:
+        return named
+    named = resolve_target_permanent(
+        game, context,
+        predicate=granted_target_legal(
+            game, instruction, context, characteristics=False,
+        ),
+        fallback_players=(),
+    )
+    if named is not None:
+        return named
+    return resolve_target_permanent(game, context, predicate=full)
+
+
 @effect_handler("grant_target_flying_until_eot")
 def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    target_creature = resolve_target_permanent(game, context)
+    target_creature = granted_target(game, instruction, context)
     if target_creature is not None:
         lifetime = grant_lifetime(game, instruction, context)
         grant_keyword(target_creature, "flying", **lifetime)
@@ -1407,7 +1471,7 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
         lifetime = grant_lifetime(game, instruction, context)
         lasting = DURATION_WORDS.get(lifetime["duration"], "")
         granted = 0
-        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+        for permanent_id in recorded_permanent_ids(context, recorded_key):
             permanent = game.permanent_by_id(permanent_id)
             if permanent is None:
                 # It left between the two steps of one resolution; what comes
@@ -1428,22 +1492,10 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
             game.log.append(f"{card.name}: nothing was left to grant to")
         game._refresh_dynamic_creatures()
         return True, "resolved"
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
-    source = context.source_permanent
-
-    def grant_target_legal(perm) -> bool:
-        if not perm.is_creature or not permanent_matches_filter(perm, filters):
-            return False
-        # "another" (CR 109.5's source exclusion) and "you control" are identity
-        # and seat questions, which permanent_matches_filter deliberately does
-        # not answer — it is about one permanent alone.
-        if filters.get("exclude_self") and perm is source:
-            return False
-        if filters.get("controller") == "you" and not game.controls(
-            game.players.index(context.caster), perm
-        ):
-            return False
-        return True
+    # The same three questions the flying twin above asks, through the same
+    # reader: two handlers for one printed sentence, and the one that kept its
+    # own copy was the one that had none.
+    grant_target_legal = granted_target_legal(game, instruction, context)
 
     keywords = tuple(instruction.payload.get("keywords") or ())
 
@@ -1475,9 +1527,7 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
         )
         return True, "resolved"
 
-    target_creature = resolve_target_permanent(
-        game, context, predicate=grant_target_legal
-    )
+    target_creature = granted_target(game, instruction, context)
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
@@ -1541,7 +1591,7 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
         granted = 0
-        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+        for permanent_id in recorded_permanent_ids(context, recorded_key):
             permanent = game.permanent_by_id(permanent_id)
             if permanent is None:
                 continue

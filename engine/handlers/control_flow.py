@@ -397,9 +397,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         if revealed is None:
             return False
         wanted = [str(t) for t in (payload.get("card_types") or ())]
-        if not wanted:
-            return False
         line = (revealed.type_line or "").lower()
+        # "If it's a **nonland** card" (Wand of Denial). The printed exclusion,
+        # asked before the union below because it is the whole of what these
+        # phrases say: "nonland card" names no type at all, so a reader that
+        # needed one answered False for every card and the clause was a gate
+        # nothing could pass.
+        excluded = [str(t) for t in (payload.get("excluded_types") or ())]
+        if excluded and any(t in line for t in excluded):
+            return bool(payload.get("negated"))
+        if not wanted:
+            # An exclusion on its own is satisfied by anything the exclusion
+            # did not name, which is what "nonland card" means.
+            answer = bool(excluded)
+            return (not answer) if payload.get("negated") else answer
         matches = [t for t in wanted if t in line]
         # "creature **or** land card" is a union; "artifact creature" is one
         # object that is both. The same distinction `type_match` draws
@@ -643,6 +654,28 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             payload.get("value"),
         )
 
+    if kind == "chosen_name_milled_this_way":
+        # "**If a card with the chosen name was milled this way**, you draw a
+        # card." (Foreshadow.) Two records, both written by earlier steps of
+        # this same resolution — the name a seat chose, and the cards a mill
+        # actually put into a graveyard. Never a read of the pile: a graveyard
+        # holds whatever else has gone there, and the words say "this way".
+        #
+        # Compared against each card's own printed name, because nothing in a
+        # library is a permanent and nothing there can be copying anything
+        # (CR 706.2). An empty name matches nothing, which is the honest
+        # answer for a seat that named nothing.
+        from ..search_filters import name_key
+
+        named = str(context.results.get("chosen_card_name") or "").strip()
+        if not named:
+            return False
+        wanted = name_key(named)
+        return any(
+            name_key(card.name) == wanted
+            for card in (context.results.get("milled_this_way") or ())
+        )
+
     if kind == "milled_this_way":
         # "If one or more creature cards were put into that graveyard this
         # way." (Helm of Obedience.) The record the loop wrote, not the
@@ -699,6 +732,43 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         matched = wanted in colors
         return (not matched) if payload.get("negated") else matched
+
+    if kind == "target_is_type":
+        # "Untap target Griffin. **If it's a creature**, it gets +1/+1 until
+        # end of turn." (Griffin Canyon.) The type twin of the colour clause
+        # above, asked of the same object through the same resolver so the
+        # branch and the effect beside it cannot disagree about which permanent
+        # the pronoun meant.
+        #
+        # CR 613 answers it, not the printed type line: a Griffin land animated
+        # into a creature is one, and a creature that has stopped being one is
+        # not — which is the whole reason the card prints the question at all,
+        # since "target Griffin" is a phrase a non-creature can satisfy.
+        #
+        # CR 608.2c: read while the instruction is followed, not when the target
+        # was chosen. An object that is gone answers no to both readings — the
+        # same call the two clauses either side of this one make.
+        from ._common import resolve_target_permanent
+
+        target = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: True,
+            fallback_players=(),
+            fallback_on_invalid_choice=False,
+        )
+        if target is None:
+            return False
+        wanted = [str(t) for t in (payload.get("card_types") or ())]
+        if not wanted:
+            return False
+        matches = [t for t in wanted if target.has_type(t)]
+        # "artifact creature" is one object that is both; "creature or land" is
+        # a union. The same distinction `type_match` draws everywhere else.
+        if payload.get("type_match") == "all":
+            answer = len(matches) == len(wanted)
+        else:
+            answer = bool(matches)
+        return (not answer) if payload.get("negated") else answer
 
     if kind == "target_has_keyword":
         # "If it doesn't have rampage" (Rapid Fire). Asked of the same target
@@ -789,6 +859,17 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # (CR 603.10). No record means nothing observed the death — False,
         # rather than a guess at a board that no longer holds the answer.
         return bool((context.trigger_context or {}).get("had_plus1_counter"))
+
+    if kind == "had_named_counter":
+        # "…exile it **if it had a death counter on it**" (Bogardan Phoenix).
+        # The named-counter twin of the clause above, and last-known information
+        # for its reason: the Phoenix is in a graveyard by the time this
+        # resolves, and a graveyard card carries no counters. No record means
+        # nothing observed the death — False, rather than a guess at a board
+        # that no longer holds the answer, which for this card is the reading
+        # that brings it back rather than the one that exiles it forever.
+        frozen = (context.trigger_context or {}).get("dead_counters") or {}
+        return int(frozen.get(str(payload.get("counter", "")), 0) or 0) > 0
 
     if kind == "source_exiled_with_counter":
         # "if this card is exiled with a scream counter on it" (All Hallow's

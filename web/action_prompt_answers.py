@@ -120,6 +120,21 @@ def _action_name_and_random_reveal_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="card_name is required")
     session.game.confirm_name_and_random_reveal(req.seat, req.card_name)
 
+@action_handler("choose_card_name_confirm")
+def _action_choose_card_name_confirm(session, req, seat_type):
+    pending = next(
+        (c for c in session.game.pending_choices_of("choose_card_name")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no name choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not req.card_name:
+        raise HTTPException(status_code=400, detail="card_name is required")
+    if not session.game.confirm_choose_card_name(req.seat, req.card_name):
+        raise HTTPException(status_code=400, detail="the name could not be applied")
+
 @action_handler("name_then_reveal_top_confirm")
 def _action_name_then_reveal_top_confirm(session, req, seat_type):
     pending = next(

@@ -285,6 +285,22 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("choose_card_name")
+def _choose_card_name(ctx: PromptContext, choices: list) -> dict:
+    """Foreshadow's "choose a card name".
+
+    No suggestion list, for the reason Petra Sphinx's below has none: CR 202.1
+    lets the chooser name any card at all, and a list built over what they can
+    see would either be useless or would hand them the answer — here the answer
+    is the top of an opponent's library, which nobody may look at.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+    }
+
+
 @prompt_renderer("name_then_reveal_top")
 def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
     """Petra Sphinx's "choose a card name".
