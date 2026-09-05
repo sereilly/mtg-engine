@@ -3537,6 +3537,92 @@ def phase_out_self(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+@effect_handler("phase_in_and_out_matching")
+def phase_in_and_out_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Simultaneously, all phased-out creatures phase in and all creatures with
+    phasing phase out." (Time and Tide, CR 702.26.)
+
+    **Both sets are read before either is applied**, which is the whole of what
+    the printed adverb buys: a creature with phasing that phases in here must
+    not be swept straight back out, and one that phases out must not be counted
+    as arriving. That is the same simultaneity ``Game.resolve_phasing_for``
+    implements for the untap-step event (CR 702.26a), and it is written the same
+    way — read, then apply — rather than with a per-permanent flag to keep in
+    step.
+
+    The incoming half reads each seat's ``phased_out`` holding list, because a
+    phased-out permanent is on no battlefield (CR 702.26b) and no scan of one
+    can find it. The outgoing half reads the board through the same
+    ``subject_matches`` every other sweep uses, with the caster as observer
+    (CR 109.5).
+
+    A phase-out lock (Spatial Binding) is not consulted here: ``phase_out_permanent``
+    asks it at the one transition every phase-out passes through, which is
+    exactly why that check lives there and not at each call site.
+    """
+    from ..subject_filters import subject_matches
+
+    payload = instruction.payload
+    returning_filter = payload.get("returning") or {}
+    leaving_filter = payload.get("leaving") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+
+    def _matches(perm, described) -> bool:
+        return subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        )
+
+    # Read both sets first — see the docstring.
+    returning: list[tuple[int, list]] = []
+    for seat, player in enumerate(game.players):
+        chosen = [p for p in player.phased_out if _matches(p, returning_filter)]
+        if chosen:
+            returning.append((seat, chosen))
+    leaving = [
+        perm for perm in game.all_permanents()
+        if _matches(perm, leaving_filter)
+    ]
+
+    for seat, permanents in returning:
+        game.phase_in_for(seat, permanents=permanents)
+    for perm in leaving:
+        game.phase_out_permanent(perm)
+    game.log.append(
+        f"{context.card.name}: "
+        f"{sum(len(p) for _, p in returning)} phased in, {len(leaving)} phased out"
+    )
+    return True, "resolved"
+
+
+@effect_handler("phase_out_enchanted")
+def phase_out_enchanted(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{U}{U}: Enchanted creature phases out." (Vanishing, CR 702.26.)
+
+    The Aura's own attachment, read off ``attached_to`` the way every other
+    enchanted-subject handler reads it — no target is chosen, so there is
+    nothing to describe and nothing to re-check at resolution.
+
+    **The Aura goes with it and comes back with it.** That is not this
+    handler's doing: ``phase_out_permanent`` drags a host's attached Auras
+    along (CR 702.26d), so Vanishing phases out beside the creature it
+    enchants and phases in attached to the same object — which is why phasing
+    an enchanted creature is not the same as removing it, and why CR 702.26j
+    is right that no attach or unattach trigger fires either way.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    host = source.metadata.get("attached_to")
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{context.card.name}: nothing enchanted to phase out")
+        return True, "resolved"
+    game.phase_out_permanent(host)
+    return True, "resolved"
+
+
 @effect_handler("phase_out_block_pair")
 def phase_out_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"This creature and **that creature** phase out." (Dream Fighter.)

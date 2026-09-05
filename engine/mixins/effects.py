@@ -13,7 +13,8 @@ from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelin
 from ..events import emit
 from ..life_prohibitions import life_gain_banned
 from ..land_play_allowance import (
-    LandPlayAllowance, land_play_allowance_for, lands_cannot_be_played,
+    LandPlayAllowance, extra_land_plays_this_turn, land_play_allowance_for,
+    land_plays_forbidden_this_turn, lands_cannot_be_played,
 )
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
@@ -1624,11 +1625,23 @@ class EffectsMixin:
         )
         if banning is not None:
             return f"no player can play lands ({banning.card.name})"
+        # "Target player can't play lands this turn." (Solfatara.) The same
+        # withdrawal for one seat and one turn, asked in the same place and for
+        # the same reason: no number of extra plays adds up to one a prohibited
+        # player may take, so a Summer Bloom resolved before a Solfatara is
+        # still no land drops.
+        if land_plays_forbidden_this_turn(self, player_index):
+            return "can't play lands this turn"
         allowed = 1
         for _, allowance in self._land_play_allowances(player_index):
             if allowance.extra is None:
                 return None
             allowed += allowance.extra
+        # "You may play up to three additional lands this turn." (Summer Bloom.)
+        # A resolved effect's grant, added to the permanents' — the two are the
+        # same permission with different lifetimes, and a seat holding both gets
+        # both.
+        allowed += extra_land_plays_this_turn(self, player_index)
         if self.lands_played_this_turn.get(player_index, 0) < allowed:
             return None
         return "already played a land this turn"

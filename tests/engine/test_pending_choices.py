@@ -398,6 +398,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # out of that pile — armed by this answer, which is how a chain of
         # decisions stays one resolution (CR 608.2).
         "graveyard_pile_choice",
+        # "…that player chooses artifact, creature, land, or non-Aura
+        # enchantment. **All nontoken permanents of that type phase out.**"
+        # (Teferi's Realm.) The step behind it is a one-shot sweep reading
+        # exactly this answer, so an answer arriving after it would change
+        # nothing — a prompt that lies. This is why the choice is its own kind
+        # rather than a shape of `enter_choice`, which does not suspend and must
+        # not start: that one's readers are continuous effects that re-read the
+        # record on every recompute, so a late answer there really does apply.
+        "card_type_choice",
     }, suspending
 
 

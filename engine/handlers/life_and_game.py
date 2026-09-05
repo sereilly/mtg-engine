@@ -765,3 +765,51 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
         f"{game.players[seat].name} will skip their next {step} step"
     )
     return True, "resolved"
+
+
+@effect_handler("grant_extra_land_plays_this_turn")
+def grant_extra_land_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may play up to three additional lands this turn." (Summer Bloom,
+    CR 305.2.)
+
+    Recorded on the game rather than granted as a permanent's static ability,
+    because there is no permanent: the spell resolves and leaves nothing behind
+    but a permission that expires at the turn boundary. The record and the
+    static table are read by **one** gate (``Game._land_play_refusal``), so a
+    Summer Bloom and a Fastbond add up and a Worms of the Earth still refuses
+    both.
+
+    The seat is the ability's controller (CR 109.5), which is what the printed
+    "you" means; the lowering refuses every other subject rather than letting
+    one arrive here.
+    """
+    from ..land_play_allowance import grant_extra_land_plays
+
+    seat = game.seat_index(context.caster)
+    amount = int(instruction.payload.get("amount", 1) or 1)
+    grant_extra_land_plays(game, seat, amount)
+    game.log.append(
+        f"{game.players[seat].name} may play {amount} additional land(s) this turn"
+    )
+    return True, "resolved"
+
+
+@effect_handler("forbid_land_plays_this_turn")
+def forbid_land_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player can't play lands this turn." (Solfatara, CR 305.1.)
+
+    The mirror of the grant above and the same record, asked by the same gate.
+    A *withdrawal* rather than a negative count, for the reason
+    ``land_play_allowance.py`` keeps the two apart: no number of extra plays
+    adds up to one a prohibited player may take, so a seat holding a Fastbond
+    and hit by this plays no lands at all.
+    """
+    from ..land_play_allowance import forbid_land_plays_this_turn as record
+
+    victim = context.target
+    if victim not in game.players:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    record(game, game.players.index(victim))
+    game.log.append(f"{victim.name} can't play lands this turn ({context.card.name})")
+    return True, "resolved"

@@ -30,7 +30,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .handlers._common import (_comparison_holds, _resolve_chosen_color,
+from .handlers._common import (CHOSEN_CARD_TYPE, _comparison_holds,
+                               _resolve_chosen_card_type, _resolve_chosen_color,
                                _resolve_chosen_subtype,
                                permanent_matches_filter)
 
@@ -108,6 +109,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # CR 205.3m's creature types — needing the same source and resolved through
     # the same helper into the same ordinary subtype key.
     "chosen_land_type",
+    # "All nontoken permanents **of that type**" (Teferi's Realm). The fourth
+    # recorded choice, and the one on CR 205.2's half of the type line rather
+    # than CR 205.3's — so it resolves into ``type_filter`` (and, for the
+    # "non-Aura enchantment" option, an exclusion beside it) instead of into
+    # ``subtype_filter``. Needs the same source as the three above and is
+    # testable for the same reason.
+    CHOSEN_CARD_TYPE,
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch). Per-turn records the permanent carries,
     # frozen when the combat asked the question — so they are answerable from
@@ -594,6 +602,7 @@ def subject_matches(
             return False
     described = _resolve_chosen_color(described, source)
     described = _resolve_chosen_subtype(described, source)
+    described = _resolve_chosen_card_type(described, source)
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")

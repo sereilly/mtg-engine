@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**21 unclaimed sentence(s) across 17 supported card(s).**
+**20 unclaimed sentence(s) across 16 supported card(s).**
 
 - **Anvil of Bogardan**
   - `players have no maximum hand size`
@@ -61,8 +61,6 @@ anything anyone did, and every ingest would arrive red.
   - `as an additional cost to cast this spell, sacrifice all permanents you control and discard your hand`
 - **Karoo**
   - `when this land enters, sacrifice it unless you return an untapped plains you control to its owner's hand`
-- **Solfatara**
-  - `target player can't play lands this turn`
 - **Suleiman's Legacy**
   - `whenever a djinn or efreet enters, destroy it. it can't be regenerated`
 

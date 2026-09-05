@@ -32,8 +32,9 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import (_card_matches_filter, attached_host, flip_coin,
-                      permanent_matches_filter, permanent_state_holds)
+from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
+                      flip_coin, permanent_matches_filter,
+                      permanent_state_holds)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -1184,6 +1185,91 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     )
     game.log.append(f"{card_name}: {game.players[seat].name} chooses a color")
     return True, "resolved"
+
+
+@effect_handler("choose_card_type")
+def choose_card_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of each player's upkeep, that player chooses artifact,
+    creature, land, or non-Aura enchantment." (Teferi's Realm.)
+
+    ``choose_color``'s sibling one characteristic over, and written the same
+    way for the same reasons: the sentence produces a value and no effect, the
+    value is recorded on the ability's own source (which is where the next
+    sentence of the same ability looks for it), and a deterministic default is
+    stamped **first** so a headless or AI seat is never blocked.
+
+    The default is the option that would phase out the most of the *chooser's
+    opponents'* nontoken permanents — a real answer rather than the first item,
+    because the first item is a choice no player would make when a better one is
+    on the list, and the card is one a seat faces every upkeep.
+
+    The options come from the printed sentence rather than from the card-type
+    catalog: the prompt is bounded by what the card offered, and a player who
+    could answer "instant" would name a type no permanent has.
+    """
+    permanent = context.source_permanent
+    card_name = getattr(context.card, "name", "an effect")
+    options = [str(word) for word in (instruction.payload.get("options") or ())]
+    if permanent is None or not options:
+        game.log.append(f"{card_name}: no permanent to record a chosen type on")
+        return True, "resolved"
+    seat = game.controller_index_of(permanent)
+    if instruction.payload.get("chooser") == "event_subject_player":
+        # The seat the fire site froze (CR 603.10) — a different player every
+        # upkeep, and never the enchantment's controller except on their own
+        # turn. No record means the words named nobody and nothing is asked,
+        # which is the rule every other reading of this key follows.
+        recorded = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{card_name}: no recorded player to choose a type")
+            return True, "resolved"
+        seat = recorded
+    if seat is None:
+        return True, "resolved"
+    default = _fewest_own_permanents_type(game, seat, options)
+    permanent.metadata[CHOSEN_CARD_TYPE] = default
+    game.arm_pending_choice(
+        "card_type_choice", seat,
+        card_name=permanent.card.name, permanent=permanent,
+        options=list(options), default_card_type=default,
+    )
+    game.log.append(
+        f"{card_name}: {game.players[seat].name} chooses a type "
+        f"({', '.join(options)})"
+    )
+    return True, "resolved"
+
+
+def _fewest_own_permanents_type(game: Game, seat: int, options: list[str]) -> str:
+    """The offered option that costs *seat* least and their opponents most.
+
+    Teferi's Realm phases out **every** nontoken permanent of the chosen type,
+    the chooser's included, so the choice is a real one: the option maximising
+    (opponents' permanents − own permanents). Ties keep the printed order, which
+    keeps the answer deterministic — the property the AI-simulation regressions
+    depend on.
+    """
+    from ..subject_filters import subject_matches
+    from ._common import chosen_card_type_filter
+
+    best, best_score = options[0], None
+    for word in options:
+        described = chosen_card_type_filter(word)
+        if described is None:
+            continue
+        described = {**described, "nontoken": True}
+        score = 0
+        for other in range(len(game.players)):
+            if game.players[other].lost:
+                continue
+            hit = sum(
+                1 for perm in game.controlled_by(other)
+                if subject_matches(game, perm, described, observer=other)
+            )
+            score += -hit if other == seat else hit
+        if best_score is None or score > best_score:
+            best, best_score = word, score
+    return best
 
 
 @effect_handler("if_then")

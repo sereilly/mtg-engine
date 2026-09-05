@@ -105,6 +105,8 @@ ActionKind = Literal[
     "word_of_command_confirm",
     "opponent_damage_choose",
     "enter_choice_confirm",
+    "card_type_choice_confirm",
+    "land_type_swap_confirm",
     "body_choice_confirm",
     "entry_exile_confirm",
     "least_power_choice_confirm",
@@ -533,6 +535,20 @@ class GameActionRequest(BaseModel):
     # Checked against `data/vocabulary` (the list the prompt offers), like the
     # creature type it sits beside.
     chosen_land_type: str | None = None
+    # Vision Charm: the *second* of the two land types its third mode asks for,
+    # sent with `land_type_swap_confirm` beside `chosen_land_type` above. Its
+    # own field rather than a list, because the two halves draw from different
+    # catalogs — "a land type" and then "a basic land type" — and a pair in one
+    # field would have to say which is which by position, which is exactly the
+    # fact the ordinals in the printed sentence carry and a list would lose.
+    second_land_type: str | None = None
+    # Teferi's Realm: the card type the *upkeep's* player chose, sent with
+    # `card_type_choice_confirm`. A plain string like the two above rather than a
+    # Literal, and for a reason neither of them has: the legal answers are the
+    # options the card printed ("non-Aura enchantment" among them), not a
+    # catalog — so the engine checks it against the list carried on the prompt,
+    # which is the same list the prompt offered.
+    card_type: str | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.

@@ -40,6 +40,8 @@ from .phrases import (
 )
 from .effects import (
     parse_block_count_grant,
+    parse_cant_play_lands,
+    parse_choose_card_type,
     _parse_ante,
     _parse_bid_life_for_control,
     _parse_gain_control,
@@ -350,6 +352,15 @@ def parse_subject_verb(
             ):
                 return ast.ChooseColor(chooser=source_spec)
             stream.reset(mark_colour)
+            # "At the beginning of each player's upkeep, **that player chooses
+            # artifact, creature, land, or non-Aura enchantment**." (Teferi's
+            # Realm.) The colour branch's sibling one characteristic over, and
+            # read beside it rather than inside it for the reason that one is
+            # read first: each is the only reading of the verb whose object is
+            # what it names. Non-consuming on refusal.
+            types = parse_choose_card_type(stream, source_spec)
+            if types is not None:
+                return types
             # "That creature's controller **chooses a creature that this card
             # could enchant**." (Takklemaggot.) Read first because it declines
             # without consuming, where the paragraph below expects "a card
@@ -680,6 +691,15 @@ def parse_subject_verb(
                 # the field is a `Duration` node with an empty default rather
                 # than the string the lock itself is keyed by.
                 return ast.CantPhaseOut(source_spec, _parse_duration(stream))
+            # "Target player **can't play lands** this turn." (Solfatara,
+            # CR 305.1.) Beside the phase-out reader above and for its reason:
+            # the combat production below is the `can't` reader for attacking
+            # and blocking and refuses everything else with "expected 'be'" — a
+            # word this sentence never prints, and the refusal that hid this
+            # card's first line while its second line kept it "supported".
+            lands = parse_cant_play_lands(stream, source_spec)
+            if lands is not None:
+                return lands
             stream.reset(phase_mark)
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap

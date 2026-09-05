@@ -792,3 +792,111 @@ def test_701_24a_shuffling_a_graveyard_into_a_library_preserves_every_card(set_p
     ]
     assert [c.name for c in p1.exile] == ["Feldon's Cane"]
     assert p1.battlefield == []
+
+
+# ---------------------------------------------------------------------------
+# 702.26d/f/g — what phasing out is *not*
+# ---------------------------------------------------------------------------
+#
+# The engine has one transition off the battlefield, and it carries every
+# consequence of leaving. A phase-out went through it because the list mechanics
+# and the combat renumbering really are the same — and so, until this round, did
+# all the consequences, which CR 702.26 spends four subrules saying must not
+# happen. Nothing failed: the permanent came back, and what came back was
+# missing its Auras.
+
+
+def _phase_out_only(*permanents, oracle_text: str = ""):
+    """One seat holding *permanents*, ready to phase the first one out."""
+    p1 = PlayerState(name="P1", battlefield=list(permanents))
+    game = _duel(p1, PlayerState(name="P2"))
+    return game, p1
+
+
+@pytest.mark.cr("702.26d", "603.6c")
+def test_702_26d_a_leaves_the_battlefield_ability_does_not_trigger_on_a_phase_out():
+    """"Zone-change triggers don't trigger when a permanent phases in or out."
+
+    Asserted through the ability's *effect* rather than through a queue, because
+    an announced trigger is not something a caller can take back: by the time
+    anyone noticed, the life had been gained.
+    """
+    watcher = CardDefinition(
+        name="Watcher", mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text="When this creature leaves the battlefield, you gain 3 life.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Watcher", "type_line": "Creature — Test",
+             "power": "1", "toughness": "1"},
+    )
+    perm = Permanent(card=watcher)
+    game, p1 = _phase_out_only(perm)
+    before = p1.life
+
+    game.phase_out_permanent(perm)
+    game._settle()
+
+    assert perm in p1.phased_out
+    assert p1.life == before
+
+
+@pytest.mark.cr("702.26g", "702.26i", "704.5m")
+def test_702_26g_an_attached_aura_phases_out_with_its_host_and_stays_attached(set_pool):
+    """"When a permanent phases out, any Auras… attached to that permanent
+    phase out at the same time", and CR 702.26i brings them back attached.
+
+    The ordinary removal detaches an Aura (CR 611.3), which is right for every
+    other way a permanent leaves and wrong for this one: an Aura that phased in
+    unattached is one CR 704.5m puts into a graveyard, so every phase-out of an
+    enchanted creature quietly destroyed its Auras.
+    """
+    from engine.auras import attach_aura
+
+    aura = Permanent(card=set_pool("VIS")["Vanishing"])
+    host = Permanent(card=_creature("Host"))
+    game, p1 = _phase_out_only(host, aura)
+    attach_aura(aura, host)
+    game._recompute_continuous_effects()
+
+    game.phase_out_permanent(host)
+
+    assert aura in p1.phased_out, "CR 702.26g: indirectly, at the same time"
+    assert aura.metadata.get("attached_to") is host
+
+    game.phase_in_for(0)
+    game._settle()
+
+    assert game.is_on_battlefield(aura) and game.is_on_battlefield(host)
+    assert aura.metadata.get("attached_to") is host
+    assert aura.card not in p1.graveyard, "CR 704.5m never had cause to fire"
+
+
+@pytest.mark.cr("702.26f", "611.2b")
+def test_702_26f_a_for_as_long_as_effect_tracking_the_permanent_still_ends():
+    """The one consequence of leaving that a phase-out keeps: "effects with 'for
+    as long as' durations that track that permanent end when that permanent
+    phases out because they can no longer see it."
+
+    Asserted at the seam rather than through a card, because what the rule names
+    is the *record* the duration lives on — the phase-out drops it, and a later
+    untap has nothing to end.
+    """
+    from engine.delayed_triggers import WHILE_SOURCE_TAPPED, DelayedTrigger
+
+    perm = Permanent(card=_creature("Source"), tapped=True)
+    game, p1 = _phase_out_only(perm)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0,
+        event="bound_permanent_leaves_or_untaps",
+        instruction=None,
+        source_name="Source",
+        source_permanent_id=perm.permanent_id,
+        duration=WHILE_SOURCE_TAPPED,
+    ))
+
+    game.phase_out_permanent(perm)
+
+    assert perm in p1.phased_out
+    assert game.delayed_triggers == [], (
+        "CR 702.26f: the duration tracked the permanent, and it can no longer "
+        "see it"
+    )

@@ -509,6 +509,41 @@ def _action_land_type_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="no land-type choice pending for you")
 
+@action_handler("land_type_swap_confirm")
+def _action_land_type_swap_confirm(session, req, seat_type):
+    # Vision Charm: the ordered pair, as two free strings.
+    #
+    # Not the five-way `land_type` Literal for either half, and not the
+    # colour-coded pair Illusionary Terrain's prompt uses: *which* catalog each
+    # half draws from is the printed adjective's business, and this card asks
+    # for any land type and then a basic one. An encoding that could only carry
+    # the five basics would refuse Desert on the half that may name it, and the
+    # engine checks each answer against the catalog the sentence named anyway.
+    if not req.chosen_land_type or not req.second_land_type:
+        raise HTTPException(
+            status_code=400,
+            detail="chosen_land_type (first chosen type) and second_land_type are required",
+        )
+    if not session.game.confirm_land_type_swap(
+        req.seat, req.chosen_land_type, req.second_land_type
+    ):
+        raise HTTPException(
+            status_code=400, detail="no land-type swap pending for you"
+        )
+
+@action_handler("card_type_choice_confirm")
+def _action_card_type_choice_confirm(session, req, seat_type):
+    # Teferi's Realm: the upkeep's player names one of the types the card
+    # printed. The word travels as itself rather than as one of the five
+    # colour-encoded basics — the legal answers are a *sentence's* list and
+    # include "non-Aura enchantment", which no catalog encoding has a slot for.
+    if not req.card_type:
+        raise HTTPException(status_code=400, detail="card_type is required")
+    if not session.game.confirm_card_type_choice(req.seat, req.card_type):
+        raise HTTPException(
+            status_code=400, detail="no card-type choice pending for you"
+        )
+
 @action_handler("confirm_mana_payment")
 def _action_confirm_mana_payment(session, req, seat_type):
     # Power Sink: the targeted spell's controller pays {X} to keep their spell,

@@ -2462,6 +2462,33 @@ function getLandTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Vision Charm: "Choose a land type and a basic land type." Two picks in one
+// prompt, so the first answer is held here and the second submits the pair.
+let landTypeSwapFirst = null;
+
+function getLandTypeSwapInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.land_type_swap;
+  if (!info || info.player_index !== seat) {
+    landTypeSwapFirst = null;
+    return null;
+  }
+  if (!Array.isArray(info.from_options) || info.from_options.length === 0) return null;
+  return info;
+}
+
+// Teferi's Realm: "that player chooses artifact, creature, land, or non-Aura
+// enchantment." Its own prompt rather than a shape of `enter_choice`, because
+// the sentence that reads the answer is a one-shot sweep in the same resolution
+// and has to wait for it.
+function getCardTypeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.card_type_choice;
+  if (!info || info.player_index !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
 function getEnterChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5061,6 +5088,107 @@ function applyLandTypeChoicePrompt(info) {
         seat,
         action: "land_type_confirm",
         land_type: btn.dataset.landType,
+      });
+    });
+  });
+}
+
+// Teferi's Realm: one button per printed option, the same shape the basic
+// land-type prompt above takes. The options come from the server rather than
+// from a list here, because the *card* is what offers them — a client with its
+// own list would offer a type the engine's answer path refuses.
+// Vision Charm: the first click picks the type to swap *from*, the second the
+// type to swap *to*. One prompt in two steps rather than two prompts, because
+// it is one printed decision (CR 609.3) and the engine takes the pair together.
+function applyLandTypeSwapPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "an effect";
+  const picking = landTypeSwapFirst === null ? "from" : "to";
+  const options = picking === "from" ? info.from_options : info.to_options;
+  title.textContent =
+    picking === "from" ? "Choose a land type" : "Choose a basic land type";
+  body.textContent =
+    picking === "from"
+      ? `${cardName}: every land of this type changes.`
+      : `${cardName}: every ${landTypeSwapFirst} becomes this type until end of turn.`;
+  const buttons = options
+    .map(
+      (type) =>
+        `<button type="button" class="prompt-choice-btn" data-swap-type="${escapeHtml(type)}">` +
+        `${escapeHtml(type.charAt(0).toUpperCase() + type.slice(1))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-swap-type]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (landTypeSwapFirst === null) {
+        landTypeSwapFirst = btn.dataset.swapType;
+        applyLandTypeSwapPrompt(info);
+        return;
+      }
+      const first = landTypeSwapFirst;
+      landTypeSwapFirst = null;
+      await sendAction({
+        seat,
+        action: "land_type_swap_confirm",
+        chosen_land_type: first,
+        second_land_type: btn.dataset.swapType,
+      });
+    });
+  });
+}
+
+function applyCardTypeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "an effect";
+  title.textContent = "Choose a type";
+  body.textContent = `${cardName}: all nontoken permanents of the chosen type phase out.`;
+  const buttons = info.options
+    .map(
+      (type) =>
+        `<button type="button" class="prompt-choice-btn" data-card-type="${escapeHtml(type)}">` +
+        `${escapeHtml(type.charAt(0).toUpperCase() + type.slice(1))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-card-type]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "card_type_choice_confirm",
+        card_type: btn.dataset.cardType,
       });
     });
   });
@@ -8455,6 +8583,18 @@ function renderActivationPrompt() {
   const landTypeChoiceInfo = getLandTypeChoiceInfo();
   if (landTypeChoiceInfo) {
     applyLandTypeChoicePrompt(landTypeChoiceInfo);
+    return;
+  }
+
+  const landTypeSwapInfo = getLandTypeSwapInfo();
+  if (landTypeSwapInfo) {
+    applyLandTypeSwapPrompt(landTypeSwapInfo);
+    return;
+  }
+
+  const cardTypeChoiceInfo = getCardTypeChoiceInfo();
+  if (cardTypeChoiceInfo) {
+    applyCardTypeChoicePrompt(cardTypeChoiceInfo);
     return;
   }
 

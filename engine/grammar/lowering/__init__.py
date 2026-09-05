@@ -34,7 +34,8 @@ what is missing — never as a lowering that quietly drops the part the engine
 cannot do.
 """
 
-from .categories import INSTRUCTION_CATEGORIES, categories_of
+from .categories import INSTRUCTION_CATEGORIES
+from .control_flow import categories_of
 from ._records import _COST_PRODUCES, _PRODUCES
 from .where_x import lower_where_x
 from .conditions import _lower_condition, pronoun_target_referent
@@ -119,6 +120,7 @@ from .characteristics import (
     _lower_change_text,
 )
 from .types import (
+    _lower_land_type_swap,
     _lower_become_color,
     _lower_become_creature,
     _lower_change_land_type,
@@ -196,6 +198,7 @@ from .attachments import (
 from .board import (
     _lower_cant_phase_out,
     _lower_phase_out,
+    _lower_simultaneous_phasing,
     _lower_put_on_library_bottom,
     _lower_put_graveyard_top_on_library_bottom,
     _lower_delayed_self_action,
@@ -318,6 +321,8 @@ from .game import (
     _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
     _lower_skip_step,
+    _lower_extra_land_plays,
+    _lower_cant_play_lands,
 )
 from .life import (
     _lower_exchange_life_totals,
@@ -375,6 +380,8 @@ __all__ = [
     "_lower_damage",
     "_lower_damage_reduced_by_paid_mana",
     "_lower_skip_step",
+    "_lower_extra_land_plays",
+    "_lower_cant_play_lands",
     "_lower_upkeep_counter_toll",
     "_lower_upkeep_damage_unless_cost",
     "_lower_damage_dealt_riders",
@@ -430,6 +437,8 @@ __all__ = [
     "_reads_no_return_restriction",
     "_lower_cant_phase_out",
     "_lower_phase_out",
+    "_lower_land_type_swap",
+    "_lower_simultaneous_phasing",
     "_lower_put_on_library_bottom",
     "_lower_put_graveyard_top_on_library_bottom",
     "_lower_put_on_library_top",

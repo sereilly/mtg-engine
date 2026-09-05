@@ -22,7 +22,8 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
-from ..vocabulary import CARD_TYPES, singular
+from ..phrases import _parse_duration
+from ..vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular
 
 
 def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -221,6 +222,63 @@ def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
         return ast.ChooseColor()
     stream.reset(mark)
     return None
+
+
+def parse_choose_card_type(
+    stream: TokenStream, chooser: "ast.PlayerRef | None" = None
+) -> "ast.ChooseCardType | None":
+    """``chooses artifact, creature, land, or non-Aura enchantment``
+    (Teferi's Realm) — the verb and its object list, without the subject.
+
+    A printed *list* of card types, read as a list rather than assumed to be all
+    of them: the card offers four, and "instant" is not among them because no
+    permanent is one. A card offering a different three needs no code here.
+
+    One option may name a subtype to exclude ("**non-Aura** enchantment"), which
+    is one adjective and not a general noun phrase — a full filter here would be
+    a second noun parser, and what the sentence is doing is naming an option a
+    player picks by its printed words.
+
+    Non-consuming on refusal, because the ``chooses`` dispatcher hands every
+    sentence it cannot finish to the readers below it and one that had eaten a
+    word would replace their refusals with its own.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    options: list[str] = []
+    while True:
+        probe = stream.mark()
+        prefix = ""
+        # "non-Aura enchantment" lexes as one hyphenated word plus the noun,
+        # the same shape "phased-out" takes one family over.
+        word = stream.peek_word() or ""
+        if word.startswith("non-"):
+            excluded = word[4:]
+            if not excluded or excluded not in ALL_SUBTYPES:
+                stream.reset(mark)
+                return None
+            stream.advance()
+            prefix = f"non-{excluded} "
+        noun = stream.peek_word()
+        if noun is None or singular(noun) not in CARD_TYPES:
+            stream.reset(probe)
+            break
+        stream.advance()
+        options.append(prefix + singular(noun))
+        if stream.accept_punct(","):
+            stream.accept_word("or")
+            continue
+        if stream.accept_word("or"):
+            continue
+        break
+    # Two is the floor: "chooses a creature" is a different sentence entirely
+    # (a permanent, not a type), and a one-item "list" would let this production
+    # claim it.
+    if len(options) < 2 or not (stream.exhausted or stream.at_punct(".", ",")):
+        stream.reset(mark)
+        return None
+    return ast.ChooseCardType(tuple(options), chooser)
 
 
 def _parse_choose_player_who_cast(stream: TokenStream) -> "ast.Statement | None":
@@ -450,3 +508,91 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     if not stream.accept_word("step"):
         raise stream.error("expected 'step' after the step's name")
     return ast.SkipStep(subject, step)
+
+
+def parse_extra_land_plays(stream: TokenStream) -> "ast.ExtraLandPlays | None":
+    """``You may play up to three additional lands this turn.`` (Summer Bloom.)
+
+    CR 305.2's ceiling raised for one turn. Read as **one** production rather
+    than as the ordinary "you may <action>" wrapper, because the "may" is the
+    permission and not an offer: nothing is asked of anybody as the spell
+    resolves, and the wrapper would put a yes/no prompt in front of a card that
+    prints no decision. That is why it is tried in ``statements.py`` *ahead* of
+    the "you may" branch.
+
+    Non-consuming on every refusal. Two sentences it must leave alone sit one
+    word away and both belong to ``engine/land_play_allowance.py``'s derivation
+    table — "You may play **any number of** lands on each of your turns"
+    (Fastbond) and "You may play an additional land **on each of your turns**" —
+    and a production that consumed either would take that table's line and give
+    it to nobody, since a parsed-but-unlowered line is still parsed
+    (``derived.py`` is consulted only where the grammar refuses in full).
+    The duration is what separates them, so the duration is required.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("you"):
+        return None
+    if not stream.accept_word("may"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("play"):
+        stream.reset(mark)
+        return None
+    # "up to three additional lands" (Summer Bloom) and "an additional land"
+    # (the shape a one-turn printing of Fastbond's sibling would take) are the
+    # same clause with the count spelled differently, so the count is payload.
+    # "up to" is CR 601.2c's ceiling and adds nothing here: a land drop is a
+    # permission a player uses or does not, so "up to three more" and "three
+    # more" grant the same thing.
+    stream.accept_phrase("up", "to")
+    amount = 1
+    if not stream.accept_word("an", "a"):
+        word = stream.peek_word()
+        number = NUMBER_WORDS.get(word or "")
+        if number is None:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        amount = number
+    if not stream.accept_word("additional"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("land", "lands"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        # The derivation table's two sentences end here, in the parse, with
+        # nothing consumed — see the docstring.
+        stream.reset(mark)
+        return None
+    return ast.ExtraLandPlays(ast.PlayerRef("you"), amount, duration)
+
+
+def parse_cant_play_lands(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantPlayLands | None":
+    """``… can't play lands this turn.`` (Solfatara.) The verb only — the
+    subject has already been read by the caller.
+
+    CR 305.1's permission withdrawn from one seat for one turn, and the mirror
+    of :func:`parse_extra_land_plays`. Non-consuming on refusal, because the
+    ``can't`` dispatcher hands every other sentence on to the combat production
+    and a consumed word there would replace its refusal with one naming a verb
+    the line never printed.
+
+    The duration is required for the same reason as above: "Players can't play
+    lands" (Worms of the Earth) is a permanent's static ability read by
+    ``engine/land_play_allowance.py``, and it prints no duration at all.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("play", "lands"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        stream.reset(mark)
+        return None
+    return ast.CantPlayLands(subject, duration)

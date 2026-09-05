@@ -61,6 +61,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # for a permanent leaving and coming back is `activated_recursion`; the
     # keyword removal is a layer-6 change to what the permanent *is*.
     "phase_out_self": "activated_recursion",
+    # Vanishing phases out what it enchants. The same word for the same reason:
+    # a permanent leaving and coming back, and which permanent is not the
+    # question the bucket answers.
+    "phase_out_enchanted": "activated_recursion",
     "remove_self_keyword": "activated_pump",
     # Spatial Binding stops somebody else phasing out -- a restriction it
     # imposes on another permanent, which is the `activated_combat` family's

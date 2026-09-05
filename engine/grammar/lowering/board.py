@@ -31,6 +31,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
 from ._sacrifices import _forced_sacrifice_filter
+from ._filters import split_bound_card_type
 from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
                       _is_enchanted, _is_source, _is_target,
                       _restrictions_beyond)
@@ -521,6 +522,28 @@ def _lower_phase_out(
                 "the phase-in block rider only rides the opponent sweep", node=node
             )
         return (OracleInstruction("phase_out_self", "", {}),)
+    # "{U}{U}: **Enchanted creature** phases out." (Vanishing.) The Aura's own
+    # attachment, which is neither a target nor the source: the sentence names
+    # nothing to pick and the permanent is known from the attachment, so it is
+    # its own kind for the reason `untap_enchanted_creature` and
+    # `grant_regeneration_to_enchanted_creature` are — routing it through the
+    # targeted kind would phase out whatever the resolution happened to hold.
+    if _is_enchanted(subject):
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        # Idiom 2: the noun is the attachment's own, so "creature" is the only
+        # word the attachment already answers. Anything further ("enchanted
+        # **untapped** creature") would be a narrowing nothing here tests, and a
+        # dropped narrowing on an attachment phases out a permanent the card
+        # did not name.
+        if _restrictions_beyond(subject.filter, frozenset({"card_types", "is_enchanted"})):
+            raise LoweringError(
+                "the enchanted phase-out reads no narrowing beyond the noun",
+                node=node,
+            )
+        return (OracleInstruction("phase_out_enchanted", "", {}),)
     # "**All lands you control** phase out." (Taniwha.) A sweep over a printed
     # noun phrase, so the noun phrase is payload and a card printing a different
     # one needs no code here.
@@ -531,7 +554,12 @@ def _lower_phase_out(
     ):
         from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 
-        described = _filter_payload(subject.filter)
+        # "All nontoken permanents **of that type** phase out." (Teferi's
+        # Realm.) The phrase has no payload form of its own, so it is split off
+        # and carried as the recorded-choice key the matcher resolves against
+        # the ability's source.
+        narrowed, bound = split_bound_card_type(subject.filter)
+        described = {**_filter_payload(narrowed), **bound}
         # Idiom 2 again: a restriction the matcher cannot test is one the
         # handler would drop, and a dropped narrowing on a *sweep* phases out
         # strictly more of the board than the card prints — here, everyone's
@@ -580,6 +608,42 @@ def _lower_phase_out(
             )
         return (OracleInstruction("phase_out_block_pair", "", {}),)
     raise LoweringError("no handler phases out this subject", node=node)
+
+
+def _lower_simultaneous_phasing(
+    node: ast.SimultaneousPhasing,
+) -> tuple[OracleInstruction, ...]:
+    """Time and Tide, CR 702.26. One instruction, because "simultaneously" is
+    what the sentence says and a pair of instructions in a sequence would apply
+    in order — phasing a creature in and then straight back out.
+
+    Both noun phrases are payload and both are gated on the keys the matcher can
+    actually test, for the reason every sweep in this file is: a dropped
+    narrowing here does not phase out fewer permanents, it phases out more.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    returning = _filter_payload(node.returning)
+    leaving = _filter_payload(node.leaving.filter)
+    if node.leaving.quantifier not in ("all", "each") or node.leaving.targeted:
+        raise LoweringError(
+            "the phasing swap's outgoing half names a described set, not a "
+            "chosen permanent",
+            node=node,
+        )
+    for described in (returning, leaving):
+        leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+        if leftover:
+            raise LoweringError(
+                "the phasing swap cannot narrow by: " + ", ".join(sorted(leftover)),
+                node=node,
+            )
+    return (
+        OracleInstruction(
+            "phase_in_and_out_matching", "",
+            {"returning": returning, "leaving": leaving},
+        ),
+    )
 
 
 #: The printed durations a phase-out lock can carry, mapped to the key the

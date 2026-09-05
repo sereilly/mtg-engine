@@ -759,13 +759,20 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # writes happened to run in (engine/land_types.py).
     for change in land_type_changes(perm):
         land_type = str(change["land_type"])
+        # "…**in addition to its other land types**" (Blanket of Night) is the
+        # one printed rider that switches CR 305.7 off, and it is the *record*
+        # that says so: this collector has the contribution and not the
+        # sentence. Dropping it would make a Swamp-granting static take away
+        # every Island's blue mana, which is the same effect written as a
+        # strictly harsher card.
+        replaces = not change.get("additive")
         effects.append(
             add_types(
                 only,
                 subtypes=[land_type],
-                replace_subtypes=True,
+                replace_subtypes=replaces,
                 timestamp=int(change.get("timestamp", 0)),
-                label=f"is a {land_type}",
+                label=("is a " if replaces else "is also a ") + land_type,
             )
         )
 

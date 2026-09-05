@@ -1447,6 +1447,49 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("land_type_swap")
+def _land_type_swap(ctx: PromptContext, choices: list) -> dict:
+    """"Choose a land type and a basic land type." (Vision Charm.)
+
+    Two catalogs rather than one, because the printed adjective differs between
+    the halves — all of CR 205.3i's types for the first, the five basics for the
+    second — and the resolver checks each answer against its own. Offered from
+    the same constants the resolver checks against (idiom 9), so the picker
+    cannot show a word the answer path would decline.
+    """
+    data = choices[0].data
+    basics = list(BASIC_LAND_WORDS)
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "from_options": basics if data.get("first_basic") else sorted(LAND_TYPES),
+        "to_options": basics if data.get("second_basic") else sorted(LAND_TYPES),
+        "default_from": data.get("default_from"),
+        "default_to": data.get("default_to"),
+    }
+
+
+@prompt_renderer("card_type_choice")
+def _card_type_choice(ctx: PromptContext, choices: list) -> dict:
+    """"…chooses artifact, creature, land, or non-Aura enchantment."
+    (Teferi's Realm.)
+
+    The offered list comes from the *card* rather than from a catalog, so it
+    travels on the arming and is handed straight to the client — the same list
+    the resolver refuses to go outside (idiom 9), so the picker cannot show an
+    option the answer path would decline. There is no catalog to fall back to
+    that would be right: "every card type" includes instant, which no permanent
+    is.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "options": [str(option) for option in (data.get("options") or ())],
+        "default_card_type": data.get("default_card_type"),
+    }
+
+
 @prompt_renderer("entry_exile")
 def _entry_exile(ctx: PromptContext, choices: list) -> dict:
     """The entry cost paid out of a graveyard (Frankenstein's Monster): the

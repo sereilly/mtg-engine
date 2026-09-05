@@ -300,6 +300,54 @@ def test_chosen_land_type_is_read_off_the_ability_s_source(pool):
     )
 
 
+def test_chosen_card_type_is_read_off_the_ability_s_source(pool):
+    """"All nontoken permanents **of that type**" (Teferi's Realm).
+
+    The fourth of these, and the one on the other half of the type line:
+    CR 205.2's card types rather than CR 205.3's subtypes, so it resolves into
+    ``type_filter`` where its three siblings resolve into ``subtype_filter``.
+    That is the whole reason it is a fourth key — a card type recorded under the
+    subtype keys would be looked for among a permanent's subtypes and never
+    found, which reads exactly like "no permanent is of the chosen type".
+
+    Without a source it refuses every permanent, for its siblings' reason and
+    then some: this sentence is a **sweep**, so a dropped narrowing phases out
+    every nontoken permanent on the board rather than one type's.
+    """
+    from engine.handlers._common import CHOSEN_CARD_TYPE
+
+    bear = Permanent(card=pool["Grizzly Bears"])
+    forest = Permanent(card=pool["Forest"])
+    realm = Permanent(
+        card=pool["Grizzly Bears"], metadata={CHOSEN_CARD_TYPE: "creature"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bear, forest, realm]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, bear, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, bear, {CHOSEN_CARD_TYPE: True}, source=realm)
+    assert not subject_matches(game, forest, {CHOSEN_CARD_TYPE: True}, source=realm)
+    assert not subject_matches(game, bear, {CHOSEN_CARD_TYPE: True})
+    # "Non-Aura enchantment" is an option, not a type: the printed exclusion
+    # travels with the word, so an Aura is not one of the permanents chosen.
+    aura = Permanent(card=pool["Holy Strength"])
+    plain = Permanent(card=pool["Circle of Protection: Red"])
+    chooser = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CHOSEN_CARD_TYPE: "non-aura enchantment"},
+    )
+    game.players[0].battlefield.extend([aura, plain, chooser])
+    assert subject_matches(game, plain, {CHOSEN_CARD_TYPE: True}, source=chooser)
+    assert not subject_matches(game, aura, {CHOSEN_CARD_TYPE: True}, source=chooser)
+
+
 def test_the_combat_records_are_read_off_the_permanent(pool):
     """"…creatures **that didn't attack this turn**, except for creatures
     **that couldn't attack**." (Season of the Witch.)
@@ -513,6 +561,8 @@ _COVERED_ELSEWHERE = {
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
     "chosen_land_type":
         "test_chosen_land_type_is_read_off_the_ability_s_source",
+    "chosen_card_type":
+        "test_chosen_card_type_is_read_off_the_ability_s_source",
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",

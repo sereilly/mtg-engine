@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from ._core import (
     Amount,
+    Duration,
     ObjectFilter,
     PlayerRef,
     TargetSpec,
@@ -299,6 +300,34 @@ class ChooseColor:
 
 
 @dataclass(frozen=True)
+class ChooseCardType:
+    """``That player chooses artifact, creature, land, or non-Aura
+    enchantment.`` (Teferi's Realm.)
+
+    :class:`ChooseColor`'s sibling one characteristic over, and written the same
+    way for the same reason: the sentence produces a *value* and no effect of
+    its own, and the sentence after it ("All nontoken permanents **of that
+    type** phase out") is what reads it back. The value is recorded on the
+    ability's own source, which is where every CR 614.1c entry choice already
+    records one.
+
+    ``options`` is the printed list, in printed order, lowercased. It is carried
+    rather than assumed to be "every card type" because the card *offers* four
+    of them: a prompt that accepted a fifth would let a seat choose something the
+    card never said, and one that offered every type would let them choose
+    "instant", which no permanent is.
+
+    ``chooser`` is who names it, with :class:`ChooseColor`'s meaning exactly:
+    None is CR 601.2b's default (the ability's controller) and a
+    :class:`PlayerRef` is the seat the firing event froze — which for this card
+    is a different player every upkeep.
+    """
+
+    options: tuple[str, ...]
+    chooser: PlayerRef | None = None
+
+
+@dataclass(frozen=True)
 class ChoosePlayerWhoCast:
     """``Choose a player who cast one or more sorcery spells this turn.``
     (Backdraft.)
@@ -421,3 +450,49 @@ class SkipStep:
     subject: "PlayerRef"
     step: str
     count: int = 1
+
+
+@dataclass(frozen=True)
+class ExtraLandPlays:
+    """``You may play up to three additional lands this turn.`` (Summer Bloom.)
+
+    CR 305.2's one-a-turn ceiling raised for one turn. **Not a**
+    :class:`~engine.grammar.ast.control_flow.May`: the word "may" here is the
+    permission itself, not an offer taken at resolution — nobody is asked
+    anything as the spell resolves, and wrapping it would put a yes/no prompt in
+    front of a card that prints no decision. The number of extra plays is the
+    only thing a second printing would change, so it is payload.
+
+    ``duration`` is read rather than assumed, and for the reason the printed
+    words demand: the *static* spelling of this permission ("You may play an
+    additional land **on each of your turns**", Fastbond) is a permanent's
+    continuous ability with its own derivation table
+    (``engine/land_play_allowance.py``), and the two differ by nothing but this
+    clause. A production that defaulted the duration would claim that table's
+    sentence and hand it to a one-shot that ends at the turn boundary.
+    """
+
+    player: PlayerRef
+    amount: int
+    duration: Duration
+
+
+@dataclass(frozen=True)
+class CantPlayLands:
+    """``Target player can't play lands this turn.`` (Solfatara.)
+
+    CR 305.1's permission withdrawn from one seat, the mirror of
+    :class:`ExtraLandPlays` above — and its own node rather than a negative
+    amount on that one, because they are different answers rather than different
+    numbers: no count of extra plays adds up to one a prohibited player may
+    take. ``engine/land_play_allowance.py`` keeps the same split for the same
+    reason one layer down.
+
+    The duration is required here too, and again because a table already reads
+    the durationless sentence: "Players can't play lands" (Worms of the Earth) is
+    a permanent's static ability, and a production that read it would take that
+    table's line and give it to an effect that expires at the turn boundary.
+    """
+
+    player: PlayerRef
+    duration: Duration

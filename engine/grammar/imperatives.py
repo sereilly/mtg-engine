@@ -48,6 +48,8 @@ from .references import _parse_further_subjects
 # under the name this module used, so nothing else here changed.
 from .readers import _parse_entering_counters
 from .effects import (
+    parse_simultaneous_phasing,
+    parse_land_type_swap,
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
     _parse_ante,
@@ -131,6 +133,22 @@ def parse_imperative(
     # "You and target player exchange control of …" (Juxtapose) — a whole
     # paragraph, and it opens with a noun phrase the subject parser would read
     # as a player and then choke on the conjunction. Refuses without consuming.
+    # "Simultaneously, all phased-out creatures phase in and all creatures with
+    # phasing phase out." (Time and Tide.) An adverb no other production claims,
+    # and one sentence rather than two because the word is what makes the two
+    # halves read their sets before either applies. Refuses without consuming.
+    tide = parse_simultaneous_phasing(stream)
+    if tide is not None:
+        return tide
+    # "Choose a land type and a basic land type. Each land of the first chosen
+    # type becomes the second chosen type until end of turn." (Vision Charm.)
+    # Two sentences the productions below would take one of and strand the
+    # other — the card-name reader claims the first four words and fails on
+    # "land", which is the refusal ("expected 'card'") this card carried.
+    # Refuses without consuming.
+    swap = parse_land_type_swap(stream)
+    if swap is not None:
+        return swap
     juxtaposition = _parse_exchange_greatest_mana_value(stream)
     if juxtaposition is not None:
         return juxtaposition
