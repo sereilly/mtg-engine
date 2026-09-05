@@ -1074,3 +1074,161 @@ def test_614_6_a_token_has_no_card_for_the_replacement_to_exile():
         game, {"permanent": permanent, "player": player, "destination": "hand"}
     )
     assert player.exile == []
+
+
+# ---------------------------------------------------------------------------
+# 614.1a with the word "instead" leaving the event standing, and 701.6a's
+# destination replaced (VIS w2g5)
+# ---------------------------------------------------------------------------
+
+from engine.card_loader import load_cards as _w2g5_load, manifest_set_path as _w2g5_path
+
+
+def _w2g5_cards(code):
+    return {c.name: c for c in _w2g5_load(_w2g5_path(code, include_measured=True))}
+
+
+def _w2g5_crypt_table(library, *, life=20, interactive=False):
+    crypt = _w2g5_cards("VIS")["Breathstealer's Crypt"]
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2", library=list(library))
+    p2.life = life
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {1}
+    permanent = Permanent(card=crypt)
+    permanent.permanent_id = 1
+    p1.battlefield.append(permanent)
+    return game, p2
+
+
+@pytest.mark.cr("614.1a", "121.6")
+def test_614_1a_an_instead_that_still_lets_the_event_happen():
+    """"Instead they **draw a card** and reveal it" (Breathstealer's Crypt).
+
+    Every other draw replacement in this engine consumes the draw. CR 614.1a
+    only says the event is replaced with a different one — and here the
+    different event still contains the draw, so the card really arrives. A
+    reading that treated "instead" as "not" would be a card that stops every
+    draw in the game.
+    """
+    lea = _w2g5_cards("LEA")
+    game, drawer = _w2g5_crypt_table([lea["Lightning Bolt"]])
+
+    game._draw_with_replacements(drawer, 1)
+
+    assert [c.name for c in drawer.hand] == ["Lightning Bolt"]
+
+
+@pytest.mark.cr("121.2a", "614.5")
+def test_121_2a_each_draw_of_a_multi_card_draw_is_replaced_separately():
+    """An N-card draw is N events, so a per-draw replacement applies N times.
+
+    CR 614.5 is the other half: the replacement must not replace the draw it
+    itself created, or the first card would loop forever. It is excluded by
+    *source*, not by wording, so a second copy of the card would still apply.
+    """
+    lea = _w2g5_cards("LEA")
+    game, drawer = _w2g5_crypt_table([lea["Grizzly Bears"], lea["Grizzly Bears"]])
+
+    game._draw_with_replacements(drawer, 2)
+
+    assert [c.name for c in drawer.hand] == ["Grizzly Bears", "Grizzly Bears"]
+    # Two reveals, two offers, two payments of 3.
+    assert drawer.life == 14
+
+
+@pytest.mark.cr("608.2", "117.3b")
+def test_608_2_the_rest_of_a_replaced_draw_waits_for_the_offer_it_armed():
+    """A resolution is not over until its last instruction is done, and nobody
+    receives priority until then.
+
+    The second card of a two-card draw may not arrive while the offer about the
+    first is still open — so the queued draw rides the prompt and is made by the
+    answer, rather than by a loop that would run straight past an interactive
+    seat.
+    """
+    lea = _w2g5_cards("LEA")
+    game, drawer = _w2g5_crypt_table(
+        [lea["Grizzly Bears"], lea["Lightning Bolt"]], interactive=True
+    )
+
+    game._draw_with_replacements(drawer, 2)
+
+    assert [c.name for c in drawer.hand] == ["Grizzly Bears"]
+    assert [c.kind for c in game.pending_choices] == ["discard_unless_pay_life"]
+
+    game.confirm_discard_unless_pay_life(1, True)
+
+    assert [c.name for c in drawer.hand] == ["Grizzly Bears", "Lightning Bolt"]
+    assert game.pending_choices == []
+
+
+@pytest.mark.cr("119.4")
+def test_119_4_a_seat_without_the_life_cannot_pay_it():
+    """A player may pay N life only with at least N life to pay.
+
+    Declining is then not a choice but a fact, and the printed consequence
+    follows.
+    """
+    lea = _w2g5_cards("LEA")
+    game, drawer = _w2g5_crypt_table([lea["Grizzly Bears"]], life=2)
+
+    game._draw_with_replacements(drawer, 1)
+
+    assert drawer.hand == []
+    assert [c.name for c in drawer.graveyard] == ["Grizzly Bears"]
+    assert drawer.life == 2
+
+
+@pytest.mark.cr("701.6a", "614.1a")
+def test_701_6a_a_countered_card_goes_where_a_replacement_says_instead():
+    """CR 701.6a puts a countered spell into its owner's graveyard; a
+    replacement may name somewhere else instead (Desertion).
+
+    The replacement is conditional on the countered spell's class, so it is two
+    assertions and not one: the named class is redirected, and everything else
+    still takes 701.6a's own destination.
+    """
+    lea = _w2g5_cards("LEA")
+    desertion = _w2g5_cards("VIS")["Desertion"]
+
+    for victim, stolen in ((lea["Grizzly Bears"], True), (lea["Lightning Bolt"], False)):
+        p1 = PlayerState(name="P1", hand=[desertion])
+        p2 = PlayerState(name="P2", hand=[victim], library=[lea["Island"]] * 3)
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+
+        game.queue_from_hand(1, victim.name)
+        game.queue_from_hand(0, "Desertion", target_stack_index=0)
+        game.resolve_stack()
+
+        if stolen:
+            assert [p.card.name for p in p1.battlefield] == [victim.name]
+            assert p2.graveyard == []
+        else:
+            assert p1.battlefield == []
+            assert [c.name for c in p2.graveyard] == [victim.name]
+
+
+@pytest.mark.cr("110.2", "108.3")
+def test_110_2_a_countered_card_put_onto_the_battlefield_changes_hands():
+    """CR 110.2's battlefield is a shared zone, so the sentence names a
+    controller rather than a zone's owner — and the card's *owner* is unchanged
+    (CR 108.3), which is what makes this a control change rather than a gift.
+    """
+    lea = _w2g5_cards("LEA")
+    desertion = _w2g5_cards("VIS")["Desertion"]
+    p1 = PlayerState(name="P1", hand=[desertion])
+    p2 = PlayerState(name="P2", hand=[lea["Grizzly Bears"]], library=[lea["Island"]] * 3)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(1, "Grizzly Bears")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    (stolen,) = p1.battlefield
+    assert game.controller_index_of(stolen) == 0
+    assert game.owner_index_of(stolen) == 1

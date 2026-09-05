@@ -818,3 +818,144 @@ def test_rowen_does_not_fire_on_an_opponents_first_draw(set_pool):
 
     assert game.reveal_events == []
     assert len(game.players[1].hand) == 1
+
+
+# --- W2G5: Breathstealer's Crypt, a draw replacement with an offer inside ----
+
+from engine import Game as _W2G5EGame, PlayerState as _W2G5EPlayer
+from engine.models import Permanent as _W2G5EPermanent
+from engine.oracle import compile_card_oracle as _w2g5e_program
+
+
+def _w2g5e_table(set_pool, library, *, interactive=False, life=20):
+    crypt = set_pool("VIS")["Breathstealer's Crypt"]
+    p1 = _W2G5EPlayer(name="P1")
+    p2 = _W2G5EPlayer(name="P2", library=list(library))
+    p2.life = life
+    game = _W2G5EGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {1}
+    permanent = _W2G5EPermanent(card=crypt)
+    permanent.permanent_id = 1
+    p1.battlefield.append(permanent)
+    return game, p1, p2
+
+
+def test_breathstealers_crypt_is_supported(set_pool):
+    card = set_pool("VIS")["Breathstealer's Crypt"]
+    assert _w2g5e_program(card).supported
+
+
+def test_the_crypt_still_draws_the_card(set_pool, set_cards):
+    """The one draw replacement here that does not consume the draw.
+
+    "instead they draw a card and reveal it" — CR 614.1 replaces the event with
+    a modified one, and the modification is a reveal and a rider.
+    """
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(set_pool, [lea["Lightning Bolt"]])
+
+    game._draw_with_replacements(p2, 1)
+
+    assert [c.name for c in p2.hand] == ["Lightning Bolt"]
+    assert p2.life == 20
+    assert game.pending_choices == []
+    assert any("drew and revealed Lightning Bolt" in line for line in game.log)
+
+
+def test_a_drawn_creature_card_is_taxed_and_kept_when_the_life_is_paid(
+    set_pool, set_cards
+):
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(set_pool, [lea["Grizzly Bears"]])
+
+    game._draw_with_replacements(p2, 1)
+
+    assert [c.name for c in p2.hand] == ["Grizzly Bears"]
+    assert p2.life == 17
+
+
+def test_a_seat_that_cannot_pay_discards_the_card_it_drew(set_pool, set_cards):
+    """CR 119.4: a payment of N life needs N life to pay with.
+
+    The stated default never pays a seat down to nothing for one card, so at
+    exactly the price the card goes.
+    """
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(set_pool, [lea["Grizzly Bears"]], life=3)
+
+    game._draw_with_replacements(p2, 1)
+
+    assert p2.hand == []
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+    assert p2.life == 3
+
+
+def test_an_interactive_seat_is_asked_rather_than_defaulted(set_pool, set_cards):
+    """The prompt has to be armed for a seat that answers its own questions to
+    prove nothing — a headless reading only ever shows the default running."""
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(set_pool, [lea["Grizzly Bears"]], interactive=True)
+
+    game._draw_with_replacements(p2, 1)
+
+    assert [c.kind for c in game.pending_choices] == ["discard_unless_pay_life"]
+    offer = game.pending_choices[0]
+    assert offer.player_index == 1
+    assert offer.data["card_name"] == "Grizzly Bears"
+    assert offer.data["life"] == 3
+    assert p2.life == 20
+
+    game.confirm_discard_unless_pay_life(1, False)
+
+    assert p2.hand == []
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+    assert p2.life == 20
+
+
+def test_the_draws_queued_behind_the_offer_wait_for_it(set_pool, set_cards):
+    """CR 608.2 / CR 121.2. A two-card draw is two events, and the second may
+    not arrive while the offer about the first is still open."""
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(
+        set_pool, [lea["Grizzly Bears"], lea["Lightning Bolt"]], interactive=True
+    )
+
+    game._draw_with_replacements(p2, 2)
+
+    assert [c.name for c in p2.hand] == ["Grizzly Bears"]
+    assert [c.kind for c in game.pending_choices] == ["discard_unless_pay_life"]
+
+    game.confirm_discard_unless_pay_life(1, True)
+
+    assert [c.name for c in p2.hand] == ["Grizzly Bears", "Lightning Bolt"]
+    assert p2.life == 17
+    assert game.pending_choices == []
+
+
+def test_each_card_of_a_multi_card_draw_gets_its_own_offer(set_pool, set_cards):
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(
+        set_pool, [lea["Grizzly Bears"], lea["Grizzly Bears"]]
+    )
+
+    game._draw_with_replacements(p2, 2)
+
+    assert [c.name for c in p2.hand] == ["Grizzly Bears", "Grizzly Bears"]
+    assert p2.life == 14
+
+
+def test_the_discard_takes_one_copy_and_not_every_copy(set_pool, set_cards):
+    """A hand repeats one immutable ``CardDefinition`` per copy, so filtering a
+    hand by identity removes all of them. Three Bears in, two Bears left."""
+    lea = {c.name: c for c in set_cards("LEA")}
+    game, _, p2 = _w2g5e_table(set_pool, [lea["Grizzly Bears"]], life=1)
+    p2.hand = [lea["Grizzly Bears"], lea["Grizzly Bears"]]
+
+    game._draw_with_replacements(p2, 1)
+
+    assert [c.name for c in p2.hand] == ["Grizzly Bears", "Grizzly Bears"]
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+
+# --- end W2G5 ---

@@ -689,3 +689,145 @@ def test_foreshadow_draws_only_when_the_named_card_is_the_one_milled(set_pool):
     miss = play("Shivan Dragon")
     assert miss.players[0].hand == []
     assert [c.name for c in miss.players[1].graveyard] == ["Black Lotus"]
+
+
+# --- W2G5: Desertion, and the countered card's replaced destination ---------
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5Player
+from engine.grammar import compile_line as _w2g5_compile
+from engine.grammar.errors import GrammarError as _W2G5GrammarError
+from engine.grammar.parser import parse_line as _w2g5_parse
+from engine.oracle import compile_card_oracle as _w2g5_program
+
+
+def _w2g5_duel(caster_hand, victim_hand, victim_library):
+    p1 = _W2G5Player(name="P1", hand=list(caster_hand))
+    p2 = _W2G5Player(name="P2", hand=list(victim_hand), library=list(victim_library))
+    game = _W2G5Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_desertion_is_supported_and_carries_both_printed_halves(set_pool):
+    """The narrowing and the destination are separate payload keys.
+
+    They have to be: the class decides *whether* CR 614.1's replacement applies
+    at all, so folding it into the destination would send every countered spell
+    to the battlefield instead of the graveyard.
+    """
+    card = set_pool("VIS")["Desertion"]
+    program = _w2g5_program(card)
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "counter_top_stack_spell"
+    assert instruction.payload["countered_destination"] == "battlefield_your_control"
+    assert instruction.payload["countered_filter"] == {
+        "type_filter": ["artifact", "creature"]
+    }
+
+
+def test_desertion_steals_a_countered_creature_spell(set_pool, set_cards):
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Grizzly Bears"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Grizzly Bears")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Grizzly Bears"]
+    assert p2.battlefield == []
+    assert [c.name for c in p2.graveyard] == []
+
+
+def test_desertion_steals_a_countered_artifact_spell(set_pool, set_cards):
+    """"an artifact **or** creature spell" is a union, so both halves land."""
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Black Lotus"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Black Lotus")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Black Lotus"]
+
+
+def test_desertion_bins_a_countered_spell_outside_the_named_class(set_pool, set_cards):
+    """The narrowing is enforced, not decorative.
+
+    An instant is countered and takes CR 701.5a's ordinary graveyard: the
+    destination is dropped, never the counter.
+    """
+    lea = {c.name: c for c in set_cards("LEA")}
+    desertion = set_pool("VIS")["Desertion"]
+    game, p1, p2 = _w2g5_duel([desertion], [lea["Lightning Bolt"]], [lea["Island"]] * 3)
+
+    game.queue_from_hand(1, "Lightning Bolt")
+    game.queue_from_hand(0, "Desertion", target_stack_index=0)
+    game.resolve_stack()
+
+    assert p1.battlefield == []
+    assert [c.name for c in p2.graveyard] == ["Lightning Bolt"]
+    assert p1.life == 20
+
+
+def test_the_counter_tail_still_reads_its_two_older_spellings():
+    """Memory Lapse and Dissipate are unchanged by the third possessive.
+
+    "its owner's" and "that player's" name one seat (CR 404.3); accepting
+    either is reading the clause rather than widening it.
+    """
+    lapse = _w2g5_compile(
+        "Counter target spell. If that spell is countered this way, put it on "
+        "top of its owner's library instead of into that player's graveyard."
+    )
+    assert lapse.lowered
+    assert lapse.instructions[0].payload["countered_destination"] == "library_top"
+    assert "countered_filter" not in lapse.instructions[0].payload
+
+    dissipate = _w2g5_compile(
+        "Counter target spell. If that spell is countered this way, exile it "
+        "instead of putting it into its owner's graveyard."
+    )
+    assert dissipate.lowered
+    assert dissipate.instructions[0].payload["countered_destination"] == "exile"
+
+
+def test_a_countered_destination_the_flow_cannot_perform_refuses_the_line():
+    """The full-consumption invariant, on the half a card could get wrong.
+
+    Once "countered this way" has matched, a destination no seam performs must
+    make the line refuse — silently keeping the graveyard would be the counter
+    the card already was, with its whole second sentence gone.
+    """
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If that spell is countered this way, put it "
+            "into its owner's sideboard instead of into that player's graveyard."
+        )
+
+
+def test_a_narrowed_counter_tail_missing_its_replacement_half_refuses():
+    """"instead of ..." is what makes this CR 614.1 rather than a second effect."""
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If an artifact or creature spell is countered "
+            "this way, put that card onto the battlefield under your control."
+        )
+
+
+def test_a_countered_card_put_onto_the_battlefield_must_name_its_controller():
+    """CR 110.2's battlefield is shared, so the sentence has to say whose side.
+
+    Without the words the card would arrive under nobody's control, which is
+    the one thing the destination cannot leave unstated.
+    """
+    with __import__("pytest").raises(_W2G5GrammarError):
+        _w2g5_parse(
+            "Counter target spell. If an artifact or creature spell is countered "
+            "this way, put that card onto the battlefield instead of into its "
+            "owner's graveyard."
+        )
+
+# --- end W2G5 ---

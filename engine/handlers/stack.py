@@ -630,7 +630,16 @@ def _redirect_countered_card(
         seat = game.players.index(counterer) if counterer in game.players else 0
         from ..models import Permanent
 
-        game._put_permanent_onto_battlefield(seat, Permanent(card=countered.card), None)
+        stolen = Permanent(card=countered.card)
+        # CR 108.3: the owner is the player who started the game with the card,
+        # and nothing here changes it — only who controls it. Recorded on the
+        # permanent because ``owner_index_of`` otherwise reads the seat the
+        # permanent *entered* under, which for every other card in this pool is
+        # its owner and for this one is the thief; without it the stolen
+        # creature would die into the wrong graveyard (CR 400.3). The same
+        # channel reanimation uses for the same reason.
+        stolen.metadata["owner_player_index"] = game.players.index(owner)
+        game._put_permanent_onto_battlefield(seat, stolen, None)
         game.log.append(
             f"{countered.card.name} was countered by {card.name} and put onto "
             f"the battlefield under {game.players[seat].name}'s control "
