@@ -1975,7 +1975,7 @@ def aura_combat_restriction(line: str):
     if compound is not None:
         noun, clause = compound
         restriction = combat_restriction_for(f"this {noun} {clause}")
-        if restriction is None or restriction.kind not in (
+        if restriction is None or restriction.also_kinds or restriction.kind not in (
             ENFORCED_ATTACHED_COMBAT_RESTRICTIONS
         ):
             return None
@@ -1989,6 +1989,13 @@ def aura_combat_restriction(line: str):
     if restriction is None:
         return None
     if restriction.kind not in ENFORCED_ATTACHED_COMBAT_RESTRICTIONS:
+        return None
+    # A row naming several kinds over one sentence
+    # (``CombatRestriction.also_kinds``) has only its first honoured here: this
+    # channel returns one restriction per line and every reader asks about one
+    # kind. Refusing keeps the Aura unsupported and named, where returning the
+    # first would enforce one clause of its sentence and drop the others.
+    if restriction.also_kinds:
         return None
     return restriction
 

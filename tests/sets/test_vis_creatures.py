@@ -34,6 +34,12 @@ from engine.models import Permanent as _W2G1cPermanent
 from engine.card_loader import load_cards as _w2g1c_load, manifest_set_path as _w2g1c_path
 from engine.grammar import parse_line as _w2g1c_parse
 from engine.grammar.errors import GrammarError as _W2G1cGrammarError
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.card_loader import load_cards as _w2g2_load
+from engine.card_loader import manifest_set_paths as _w2g2_paths
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.pt import add_pt_counters as _w2g2_add_counters
 
 def test_kyscu_drake_charges_both_halves_of_its_conjoined_sacrifice(set_pool):
     """"Sacrifice this creature **and a creature named Spitting Drake**".
@@ -1048,7 +1054,6 @@ def test_w2g4_talruum_champions_removal_is_read_off_the_pair_not_chosen(set_pool
     program = _w2g4_compile(set_pool("VIS")["Talruum Champion"])
     kinds = [t.instruction.kind for t in program.triggered_abilities if t.instruction]
     assert kinds == ["remove_keyword_from_block_pair"], kinds
-
 _W2G1C_LEA = {c.name: c for c in _w2g1c_load(_w2g1c_path("LEA"))}
 def _w2g1c_scene(set_pool, *, opp_life=20, opp_lands=2):
     p1 = _W2G1cPlayerState(name="A")
@@ -1107,3 +1112,152 @@ def test_the_life_rider_refuses_a_currency_nothing_charges():
     # paid.
     with _w2g1c_pytest.raises(_W2G1cGrammarError):
         _w2g1c_parse("Counter target spell unless its controller pays 1 life.")
+
+def _w2g2_catalog():
+    return {card.name: card for card in _w2g2_load(_w2g2_paths(include_measured=True))}
+def _w2g2_game(*battlefields):
+    players = [
+        _W2G2PlayerState(name=f"P{i + 1}", battlefield=list(pile))
+        for i, pile in enumerate(battlefields)
+    ]
+    game = _W2G2Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for player in players:
+        for perm in player.battlefield:
+            perm.metadata["summoning_sickness_turn"] = -99
+    return game
+def _w2g2_slot(player, permanent):
+    """The battlefield index of *permanent*, by identity — never ``.index()``,
+    which compares ``Permanent`` by value and finds a look-alike."""
+    return next(i for i, perm in enumerate(player.battlefield) if perm is permanent)
+def _w2g2_combat(game, seat):
+    game.start_turn(seat)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+def test_phyrexian_marauder_enters_with_x_counters_and_prices_its_attack_by_them(set_pool):
+    """"This creature enters with X +1/+1 counters on it." / "…can't attack
+    unless you pay {1} for each +1/+1 counter on it."
+
+    The card is a 0/0 whose whole body is the X it was cast for, and whose
+    attack costs exactly what that body is worth. Both halves read the same
+    counter pile, so a Marauder that grew or shrank between casts pays what it
+    is now rather than what it was cast for.
+    """
+    catalog = _w2g2_catalog()
+    marauder = _W2G2Permanent(card=set_pool("VIS")["Phyrexian Marauder"])
+    _w2g2_add_counters(marauder, "+1/+1", 2)
+    lands = [_W2G2Permanent(card=catalog["Mountain"]) for _ in range(2)]
+    game = _w2g2_combat(_w2g2_game([marauder, *lands], []), 0)
+
+    assert marauder.effective_power == 2 and marauder.effective_toughness == 2
+    assert game._attack_mana_costs_of(marauder, 1) == [{"generic": 2}]
+    assert game.declare_attackers(0, [_w2g2_slot(game.players[0], marauder)])[0]
+    assert sum(land.tapped for land in lands) == 2, game.log
+def test_phyrexian_marauder_cannot_block_at_all(set_pool):
+    """"This creature can't block." — a restriction on the *blocker*, which is
+    the one question the blockers step asks about the creature declaring rather
+    than about the attacker."""
+    catalog = _w2g2_catalog()
+    marauder = _W2G2Permanent(card=set_pool("VIS")["Phyrexian Marauder"])
+    _w2g2_add_counters(marauder, "+1/+1", 4)
+    attacker = _W2G2Permanent(card=catalog["Grizzly Bears"])
+    game = _w2g2_game([marauder], [attacker])
+
+    assert not game._can_block_attacker(marauder, attacker)
+def test_phyrexian_marauder_with_no_counters_owes_nothing_to_attack(set_pool):
+    """"For each" at zero is zero, not one.
+
+    A toll rounded up to {1} would stop a Marauder whose counters had been
+    removed from attacking at all, which the card does not say — and the
+    dropped-multiplier reading in the other direction would let a nine-counter
+    Marauder attack for {1}.
+    """
+    marauder = _W2G2Permanent(card=set_pool("VIS")["Phyrexian Marauder"])
+    game = _w2g2_game([marauder], [])
+
+    assert game._attack_mana_costs_of(marauder, 1) == []
+
+    _w2g2_add_counters(marauder, "+1/+1", 9)
+    assert game._attack_mana_costs_of(marauder, 1) == [{"generic": 9}]
+def test_talruum_piper_compels_only_fliers_to_block_it(set_pool):
+    """"All creatures with flying able to block this creature do so."
+
+    Lure's requirement (CR 509.1c) narrowed by an *ability*, which is why the
+    printed noun is a filter here: the two rows this replaced could spell a
+    creature type or the bare word "creatures" and had nowhere to put "with
+    flying".
+    """
+    catalog = _w2g2_catalog()
+    piper = _W2G2Permanent(card=set_pool("VIS")["Talruum Piper"])
+    flier = _W2G2Permanent(card=catalog["Air Elemental"])
+    ground = _W2G2Permanent(card=catalog["Grizzly Bears"])
+    game = _w2g2_combat(_w2g2_game([piper], [flier, ground]), 0)
+    assert game.declare_attackers(0, [_w2g2_slot(game.players[0], piper)])[0]
+    game.advance_combat_phase()
+
+    declared, message = game.declare_blockers(1, {})
+    assert not declared and "must block" in message, (message, game.log)
+
+    piper_slot = _w2g2_slot(game.players[0], piper)
+    assert game.declare_blockers(
+        1, {_w2g2_slot(game.players[1], flier): [piper_slot]}
+    )[0], game.log
+def test_talruum_piper_does_not_compel_a_flier_that_cannot_block_it(set_pool):
+    """CR 509.1c compels only creatures *able* to block, so a tapped flier is
+    not one — a requirement that ignored ability would make the declaration
+    impossible and the attack illegal."""
+    catalog = _w2g2_catalog()
+    piper = _W2G2Permanent(card=set_pool("VIS")["Talruum Piper"])
+    flier = _W2G2Permanent(card=catalog["Air Elemental"])
+    flier.tapped = True
+    game = _w2g2_combat(_w2g2_game([piper], [flier]), 0)
+    assert game.declare_attackers(0, [_w2g2_slot(game.players[0], piper)])[0]
+    game.advance_combat_phase()
+
+    assert game.declare_blockers(1, {})[0], game.log
+def test_nekrataal_destroys_through_a_regeneration_shield(set_pool):
+    """"When this creature enters, destroy target nonartifact, nonblack
+    creature. **That creature** can't be regenerated."
+
+    The rider is printed as a back-reference where Terror prints a pronoun, and
+    that one word is the whole of it: read as a standalone sentence it is a
+    restriction with no duration, which lowers to nothing — so the trigger
+    compiled as unsupported and the card was unplayable.
+    """
+    catalog = _w2g2_catalog()
+    program = _w2g2_compile(set_pool("VIS")["Nekrataal"])
+    assert program.supported, program.reason
+    payload = program.triggered_abilities[0].instruction.payload
+    assert payload["bypass_regeneration"] is True
+    assert payload["exclude_types"] == ["artifact"]
+    assert payload["exclude_colors"] == ["B"]
+
+    # The shield is real: the same Troll survives a lethal Bolt.
+    def rig():
+        troll = _W2G2Permanent(card=catalog["Uthden Troll"])
+        troll.metadata["summoning_sickness_turn"] = -99
+        game = _w2g2_game([], [troll])
+        game.players[0].hand = [set_pool("VIS")["Nekrataal"], catalog["Lightning Bolt"]]
+        game.players[0].library = [catalog["Swamp"]] * 20
+        game.players[1].library = [catalog["Swamp"]] * 20
+        game.start_turn(0)
+        game.activate_permanent_ability(1, "Uthden Troll")
+        return game, troll
+
+    game, troll = rig()
+    game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    assert game.is_on_battlefield(troll), game.log
+
+    # Nekrataal's destruction is the one it cannot answer.
+    game, troll = rig()
+    assert game.cast_from_hand(
+        0, "Nekrataal", target_player_index=1, target_permanent_index=0
+    ).supported, game.log
+    game._settle()
+    assert not game.is_on_battlefield(troll), game.log

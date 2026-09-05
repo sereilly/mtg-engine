@@ -56,10 +56,7 @@ def _parse_cant_attack_or_block(
         # "Creatures can't attack this turn." (Festival.) The attack twin of
         # the blanket can't-block below: no "unless", just a duration — the
         # restriction is a blanket over the *subject* for the rest of the turn
-        # rather than a property of any permanent. Only the durationed form is
-        # claimed; a bare "<subject> can't attack" is a static ability and
-        # falls through to the refusal below, which is where the pool's
-        # printed statics ("This creature can't attack") already go.
+        # rather than a property of any permanent.
         if not stream.at_word("unless"):
             duration_mark = stream.mark()
             duration = _parse_duration(stream)
@@ -68,6 +65,35 @@ def _parse_cant_attack_or_block(
                     subject, "cant_attack_until_eot", (("duration", duration.kind),)
                 )
             stream.reset(duration_mark)
+            # "Creatures without flying can't attack." (Moat.) The same
+            # sentence with **no** duration, which makes it a static ability
+            # over a described set — and one the engine has always
+            # implemented, through `engine/combat_restrictions.py`'s three
+            # rows. It is claimed here now because the durationed reading has
+            # to be reachable from a duration printed in *front* of the verb
+            # ("This turn and next turn, creatures can't attack, and …", Peace
+            # Talks), and a production that refuses the durationless sentence
+            # has nothing for `_distribute_duration` to attach the prefix to.
+            #
+            # The lowering produces the table's own instruction, byte for byte,
+            # which is what `test_grammar_derived_lines` compares over the
+            # whole pool — the sanctioned second state for a line a derivation
+            # table also reads.
+            #
+            # A **plural** subject only, and the sentence must end here. "This
+            # creature can't attack" (Pacifism's half) is a restriction on one
+            # permanent with its own kind and no grammar production, so it must
+            # keep failing the parser; and "can't attack **or block**"
+            # (Katabatic Winds) is a longer sentence the table reads whole, so
+            # stopping at "attack" would take three prohibitions down to one.
+            if (
+                isinstance(subject, ast.TargetSpec)
+                and subject.quantifier in ("all", "each")
+                and (stream.exhausted or stream.at_punct(".", ","))
+            ):
+                return ast.CombatRestriction(
+                    subject, "cant_attack_until_eot", ()
+                )
         # "This creature can't attack **unless you sacrifice two Islands**."
         # (Leviathan.) CR 508.1g: an additional *cost* to attack, paid as
         # attackers are declared — not a target and not a board condition, so

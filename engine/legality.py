@@ -1312,6 +1312,27 @@ class LegalityMixin:
         kind = spec["kind"]
         if kind in ("none", "modal"):
             return []
+        # "…players and permanents can't be the targets of spells or activated
+        # abilities." (Peace Talks.) CR 115.1 with nothing left to choose, so
+        # the answer is the empty list and every gate above already knows what
+        # to do with it — the picker offers nothing, `cast_target_refusal`
+        # declines the announcement (CR 601.2c) and
+        # `activation_target_refusal` declines the activation (CR 602.2b) with
+        # nothing paid.
+        #
+        # Here rather than in ``_can_be_targeted``: that predicate is asked
+        # about a **permanent** and would leave the player half unenforced, and
+        # it cannot tell an activated ability from a triggered one, which this
+        # sentence separates. Everything reaching this function is a spell
+        # (``for_cast``) or an activated ability's picker; a trigger chooses its
+        # targets at its fire site and is untouched, which is what the card
+        # says.
+        #
+        # A **cost** payment is not a target (CR 601.2b vs 601.2c), and the
+        # spec says so — the same flag the seat loop below reads — so a
+        # sacrifice cost keeps enumerating while the ban is up.
+        if self.targeting_bans and not spec.get("sacrifice_cost"):
+            return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which
         # combat depends on who is asking: a *trigger* names the one it fired

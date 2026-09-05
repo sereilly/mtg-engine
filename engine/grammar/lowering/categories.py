@@ -610,6 +610,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Creatures can't attack this turn." (Festival.) The same category as its
     # blocking twin above, so GRAMMAR_CATEGORIES is unchanged.
     "cant_attack_until_eot": "combat_restrictions",
+    # "Players and permanents can't be the targets of spells or activated
+    # abilities." (Peace Talks.) In `targeting` beside the retarget and
+    # choose-target kinds rather than in a restriction family: what it changes
+    # is which objects CR 115.1 offers, which is that category's whole subject.
+    "ban_targeting": "targeting",
     # "This creature can't attack unless you sacrifice two Islands."
     # (Leviathan.) A restriction with a cost behind it, enforced by the
     # declaration rather than by a handler — same category, so

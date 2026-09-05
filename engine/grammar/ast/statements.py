@@ -222,6 +222,7 @@ from .game import (
     WinGame,
     SkipStep,
     SkipTurn,
+    TargetingBan,
 )
 
 
@@ -246,6 +247,7 @@ Effect = Union[
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem, SkipStep,
     SkipTurn,
+    TargetingBan,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,

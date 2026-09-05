@@ -147,9 +147,15 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # it was looked at, and a kind the grammar *does* read (the two that
         # reach the comparison below) must not be able to slip in silently.
         #
-        # Moat and Evil Eye of Orms-by-Gore, over a described set of creatures
-        # rather than over the carrier.
-        "creatures_cant_attack",
+        # `creatures_cant_attack` (Moat, Glacial Chasm, Evil Eye of
+        # Orms-by-Gore) **left this list** at Visions W2G2. The grammar reads
+        # the durationless sentence now, because the durationed one has to be
+        # reachable from a duration printed in *front* of the verb ("This turn
+        # and next turn, creatures can't attack, and …", Peace Talks) and
+        # `_distribute_duration` needs a node to attach the prefix to. It
+        # therefore falls through to the comparison below, which is the
+        # stronger check: the grammar must produce the table's kind and the
+        # table's payload, on every such line in the shipped pool.
         # Akron Legionnaire: "Except for creatures named Akron Legionnaire and
         # artifact creatures, creatures you control can't attack." The
         # exceptions are a union of noun-phrase filters in the payload, tested

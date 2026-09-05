@@ -20,6 +20,7 @@ from ._common import (
     _is_enchanted,
     _is_source,
     _REST_OF_TURN,
+    RESTRICTION_TURNS,
     _names_several_targets,
     _restrictions_beyond,
 )
@@ -144,13 +145,9 @@ def _lower_combat_restriction(
     # ground creatures the card never named.
     if node.kind == "cant_attack_until_eot":
         payload = dict(node.payload)
-        if payload.get("duration") not in _REST_OF_TURN:
-            raise LoweringError(
-                "a blanket can't-attack with no end-of-turn duration is a "
-                "static ability",
-                node=node,
-            )
-        if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "all":
+        if not isinstance(node.subject, ast.TargetSpec) or (
+            node.subject.quantifier not in ("all", "each")
+        ):
             raise LoweringError(
                 "the blanket can't-attack reads a plural subject", node=node
             )
@@ -162,8 +159,38 @@ def _lower_combat_restriction(
                 + ", ".join(sorted(untestable)),
                 node=node,
             )
+        duration = payload.get("duration")
+        # No duration at all: "Creatures without flying can't attack." (Moat.)
+        # A **static** ability of the permanent printing it, which is a
+        # different rule from the one-shot above — it is re-derived from the
+        # board at every declaration and ends when its source leaves, with
+        # nothing to sweep. `engine/combat_restrictions.py` has implemented it
+        # since Moat arrived, and this produces that table's instruction and
+        # payload exactly, which `test_grammar_derived_lines` compares over the
+        # whole pool.
+        if duration is None:
+            return (
+                OracleInstruction(
+                    "creatures_cant_attack", "", {"subject": described}
+                ),
+            )
+        # "This turn **and next turn**" (Peace Talks). The same one-shot
+        # restriction over a longer window, and the window is a count of
+        # cleanup steps rather than a second kind: the sweep decrements it, so
+        # a printed "this turn and the next two turns" would be a row in
+        # `_common.RESTRICTION_TURNS` and nothing else.
+        turns = RESTRICTION_TURNS.get(str(duration))
+        if turns is None:
+            raise LoweringError(
+                "a blanket can't-attack with no end-of-turn duration is a "
+                "static ability",
+                node=node,
+            )
+        armed: dict[str, object] = {"filter": described}
+        if turns != 1:
+            armed["remaining_turns"] = turns
         return (
-            OracleInstruction("cant_attack_until_eot", "", {"filter": described}),
+            OracleInstruction("cant_attack_until_eot", "", armed),
         )
     # "This creature can't attack unless you sacrifice two Islands." (Leviathan
     # — "This cost is paid as attackers are declared".) CR 508.1g. The filter is

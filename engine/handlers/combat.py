@@ -1013,6 +1013,11 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
     game.attack_restrictions_until_eot.append({
         "filter": dict(instruction.payload.get("filter") or {}),
         "source_name": context.card.name,
+        # How many cleanups the window survives — 1 for every printed "this
+        # turn", 2 for "this turn and next turn" (Peace Talks). Carried from
+        # the payload rather than assumed, because the sweep is subtraction and
+        # an assumed 1 ends the longer window a whole turn early.
+        "remaining_turns": int(instruction.payload.get("remaining_turns", 1)),
     })
     game.log.append(f"{context.card.name}: the named creatures can't attack this turn")
     return True, "resolved"

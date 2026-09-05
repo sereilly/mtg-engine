@@ -11,7 +11,8 @@ through when this module crossed a thousand lines, exactly as
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import _amount_payload, _describe_targets, _filter_payload
+from ._common import (RESTRICTION_TURNS, _amount_payload, _describe_targets,
+                      _filter_payload)
 from ._events import COUNTED_NUMBER
 from ._seats import _player_recipient
 
@@ -414,3 +415,26 @@ def _lower_cant_play_lands(node: ast.CantPlayLands) -> tuple[OracleInstruction, 
     payload: dict[str, object] = {}
     _describe_targets(payload, node.player)
     return (OracleInstruction("forbid_land_plays_this_turn", "", payload),)
+
+
+def _lower_targeting_ban(node: "ast.TargetingBan") -> tuple[OracleInstruction, ...]:
+    """"…players and permanents can't be the targets of spells or activated
+    abilities." (Peace Talks.)
+
+    The window is a count of cleanup steps rather than a kind per phrase, so a
+    card printing a longer one is a row in ``_common.RESTRICTION_TURNS`` and
+    nothing else. A sentence with **no** window is a static ability of some
+    permanent, and there is no such card and no channel for one — the ban is
+    armed on the game rather than derived from a source, so nothing would end
+    it when that permanent left. It refuses by name instead.
+    """
+    turns = RESTRICTION_TURNS.get(str(node.duration.kind))
+    if turns is None:
+        raise LoweringError(
+            "a targeting ban with no stated window is a static ability, which "
+            "nothing derives from a source",
+            node=node,
+        )
+    return (
+        OracleInstruction("ban_targeting", "", {"remaining_turns": turns}),
+    )

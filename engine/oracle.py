@@ -4152,9 +4152,16 @@ def _parse_creature_program(
                 # here matched exact strings and hardcoded Island, so a card
                 # naming any other land type fell through to `static_line` and
                 # attacked freely while still reporting supported.
-                instructions.append(
-                    OracleInstruction(restriction.kind, "", restriction.payload)
-                )
+                #
+                # One sentence may name several prohibitions over one noun
+                # phrase (``CombatRestriction.also_kinds``); each gets its own
+                # instruction over the same payload, because each is answered
+                # at a different step. Emitting only the first is a card that
+                # enforces one clause of its sentence and drops the rest.
+                for kind in (restriction.kind, *restriction.also_kinds):
+                    instructions.append(
+                        OracleInstruction(kind, "", dict(restriction.payload))
+                    )
             else:
                 instructions.append(OracleInstruction("static_line", normalized))
             static_lines.append(normalized)
@@ -4471,9 +4478,11 @@ def _noncreature_line_instructions(
             _restriction_line(line, card_name), card_name
         )
         if restriction is not None:
-            instructions.append(
-                OracleInstruction(restriction.kind, "", restriction.payload)
-            )
+            # Every kind the one sentence names — see the creature path above.
+            for kind in (restriction.kind, *restriction.also_kinds):
+                instructions.append(
+                    OracleInstruction(kind, "", dict(restriction.payload))
+                )
     return instructions
 
 
@@ -4842,6 +4851,21 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("global_activation_ban")
+    # "Players can cast spells and activate abilities only during their own
+    # turns." (City of Solitude.) The timing half of CR 601.3a/602.5, read off
+    # the board at every cast and every activation, so there is no instruction
+    # to produce — and on an enchantment whose whole text is this sentence, no
+    # instruction means the card reports unsupported however well the
+    # restriction works. Its own claim name for the two bans' reason: it is
+    # what the permanent *does*, and it is about everybody else's turns.
+    from .cast_restrictions import (GLOBAL_PLAY_TIMING_CLAIM,
+                                    global_play_timing_line)
+
+    if any(
+        global_play_timing_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(GLOBAL_PLAY_TIMING_CLAIM)
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
     # asks this same table on every gain, so there is no instruction to produce
     # — and a permanent whose whole text is the sentence would report
@@ -5273,9 +5297,11 @@ def _compile_card_oracle(
                 _restriction_line(line, name), name
             )
             if restriction is not None:
-                land_statics.append(
-                    OracleInstruction(restriction.kind, "", dict(restriction.payload))
-                )
+                # Every kind the one sentence names — see the creature path.
+                for kind in (restriction.kind, *restriction.also_kinds):
+                    land_statics.append(
+                        OracleInstruction(kind, "", dict(restriction.payload))
+                    )
                 land_static_lines.append(normalized)
 
         return OracleProgram(

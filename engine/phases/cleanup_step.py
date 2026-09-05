@@ -28,6 +28,23 @@ from ..shields import clear_shields
 from ..pt import remove_temporary_pt
 
 
+def _turn_expired(entries: list) -> list:
+    """*entries* with this cleanup counted against each one's window.
+
+    An entry lasts one turn unless it says otherwise (``remaining_turns``), so
+    the list this returns holds exactly the entries whose window outlives the
+    turn ending now — with one fewer to go. That is what "this turn and next
+    turn" means and what a bare ``clear()`` could not say.
+    """
+    kept = []
+    for entry in entries:
+        remaining = int(entry.get("remaining_turns", 1)) - 1
+        if remaining > 0:
+            kept.append({**entry, "remaining_turns": remaining})
+    return kept
+
+
+
 class CleanupStepMixin:
     def resolve_cleanup_step(
         self,
@@ -106,11 +123,25 @@ class CleanupStepMixin:
         # −2) survives the sweep and dies with its card's zone instead.
         expire_end_of_turn_permissions(self)
         # "…can't block this turn" blanket restrictions end with the turn too.
-        self.blocking_restrictions_until_eot.clear()
+        self.blocking_restrictions_until_eot = _turn_expired(
+            self.blocking_restrictions_until_eot
+        )
         # "Creatures can't attack this turn." (Festival.) CR 514.2 ends it with
         # the same cleanup, beside its blocking twin rather than anywhere else,
         # so the two cannot come to disagree about when "this turn" is over.
-        self.attack_restrictions_until_eot.clear()
+        #
+        # "This turn **and next turn**" (Peace Talks) is the same restriction
+        # over a longer window, so the sweep *counts down* rather than clearing:
+        # an entry arrives carrying how many cleanups it survives, and the
+        # default of one is every entry written before that existed. A second
+        # list for the two-turn case would be a second place to ask when a
+        # restriction ends.
+        self.attack_restrictions_until_eot = _turn_expired(
+            self.attack_restrictions_until_eot
+        )
+        # The same countdown for the targeting ban Peace Talks' other clause
+        # arms, read by `legality._enumerate_targets`.
+        self.targeting_bans = _turn_expired(self.targeting_bans)
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
         # cleanup ends the active player's turn, so their countdowns tick.

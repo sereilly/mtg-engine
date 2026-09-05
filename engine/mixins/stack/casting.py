@@ -24,6 +24,7 @@ from ...alternative_costs import AlternativeCost, alternative_costs
 from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
+                                  global_play_timing,
                                   global_cast_ban)
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
@@ -839,6 +840,62 @@ class SpellCastingMixin:
         # and one gate for both halves of the printed sentence: playing a land
         # reaches this function too, and the land-drop refusal above is behind
         # `enforce_mana_costs` while a prohibition is not.
+        # "Players can cast spells and activate abilities only during their own
+        # turns." (City of Solitude.) The *timing* half of CR 601.3a, and a
+        # board scan for the reason the two bans above are: the sentence is
+        # printed on a permanent and names no seat, so it binds its own
+        # controller too. Nothing about the spell decides it — only whose turn
+        # it is — which is why it sits beside them rather than in
+        # `check_cast_timing`, whose whole table reads the *casting card's* own
+        # printed clause.
+        wrong_turn = global_play_timing(self, caster_index)
+        if wrong_turn is not None:
+            details = (
+                f"can't cast {card.name} on another player's turn ({wrong_turn})"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "…players and permanents can't be the targets of spells or activated
+        # abilities." (Peace Talks.) CR 601.2c: a spell that must choose a
+        # target and has none legal cannot be announced at all, so the refusal
+        # lands here with nothing spent.
+        #
+        # Asked of the *spec* rather than left to ``cast_target_refusal``,
+        # which checks only what the caller **named** among permanents — a
+        # Lightning Bolt aimed at a face names no permanent and reached no
+        # check, so it resolved through the ban. Instants and sorceries only,
+        # for that method's own reason: ``derive_cast_spec`` reads a permanent
+        # spell's *trigger's* targets, which are chosen later (CR 603.3d), and
+        # gating the cast on them refuses to cast the creature at all.
+        # Instants, sorceries **and Auras**. An Aura spell is targeted
+        # (CR 115.1b) and its enchant line is the target, so its derived spec is
+        # its own rather than a trigger's — which is the one thing that makes a
+        # permanent spell's spec unsafe to gate on here. Every other permanent
+        # spell is excluded for ``cast_target_refusal``'s reason:
+        # ``derive_cast_spec`` reads a creature's ETB trigger targets, chosen
+        # later (CR 603.3d), and gating the cast on them refuses to cast the
+        # creature at all.
+        if self.targeting_bans and (
+            card.primary_type in ("instant", "sorcery")
+            or "aura" in (card.type_line or "").lower()
+        ):
+            ban_spec = derive_cast_spec(
+                card, compile_card_oracle(card), from_zone=from_zone
+            )
+            if ban_spec is not None and ban_spec.get("kind") not in (
+                "none", "modal", "hand_card", "stack", "spell_or_permanent",
+            ):
+                source_name = self.targeting_bans[-1].get("source_name", "an effect")
+                details = (
+                    f"{card.name} has no legal target: nothing can be targeted "
+                    f"({source_name})"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, details
+                )
+
         naming_permanent = chosen_name_ban(self, card)
         if naming_permanent is not None:
             details = f"can't play {card.name}: {naming_permanent}"

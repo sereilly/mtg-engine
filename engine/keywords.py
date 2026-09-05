@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Iterable
 
 from .continuous import next_timestamp
+from .oracle_types import _COLOR_WORD_TO_SYMBOL
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -150,6 +151,45 @@ def keyword_ability_name(keyword: str) -> str:
         return BANDS_WITH_OTHER
     head = keyword.split(" ")[0]
     return head if head in NUMERIC_ARGUMENT_KEYWORDS else keyword
+
+
+def protection_quality(word: str) -> tuple[str, str] | None:
+    """The canonical quality one word of a protection clause names, or None.
+
+    Four families (CR 702.16, the qualities this engine models): a colour
+    ("white"), "multicolored" (Basri's Lieutenant), a card type
+    ("planeswalkers", Sparkhunter Masticore), and a creature subtype
+    ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Subtypes print
+    pluralized, the catalog stores singulars.
+
+    Here rather than beside its consumer for :func:`keyword_ability_name`'s
+    reason exactly: both sides of the grant need it. ``permanent_state``
+    reads it to turn a printed clause into the quality a shield answers to,
+    and the two front ends that *admit* a "have protection from X" anthem —
+    ``lord_buffs.lord_buff_for`` and ``grammar/statics.py``'s lowering — read
+    it to refuse a word nothing can answer. A quality only one of them knew
+    would be an anthem that compiles, reports supported, and protects nobody.
+    """
+    word = (word or "").strip().lower()
+    if not word:
+        return None
+    symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+    if symbol:
+        return ("color", symbol)
+    if word == "multicolored":
+        return ("multicolored", "")
+    if word in ("planeswalker", "planeswalkers"):
+        return ("card_type", "planeswalker")
+    # Lazily for the reason :func:`keyword_ability_name` imports lazily: this
+    # module sits underneath the grammar in the import order.
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    singular = word[:-1] if word.endswith("s") else word
+    if word in CREATURE_TYPES:
+        return ("subtype", word)
+    if singular in CREATURE_TYPES:
+        return ("subtype", singular)
+    return None
 
 
 #: How long a layer-6 keyword grant or removal lasts, each key naming the sweep

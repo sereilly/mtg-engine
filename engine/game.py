@@ -393,6 +393,17 @@ class Game(
     # reader rather than a flag stamped per creature, for that list's reason: a
     # creature entering after this resolves is restricted too.
     attack_restrictions_until_eot: list = field(default_factory=list)
+    # "…and players and permanents can't be the targets of spells or activated
+    # abilities." (Peace Talks.) CR 115.1's choice denied outright for a stated
+    # window, over *both* populations at once — which is why it is a list of
+    # windows rather than a shroud grant: shroud is a keyword on one object
+    # (CR 702.18) and a player cannot have one.
+    #
+    # Each entry: {"source_name", "remaining_turns"}. Read by
+    # `legality._enumerate_targets`, the one list both the target picker and
+    # the announcement gates go through, and swept by the same cleanup
+    # countdown the two restriction lists above use.
+    targeting_bans: list = field(default_factory=list)
     # "attacking doesn't cause creatures you control to tap this combat if
     # Johan is untapped" (Johan) — standing exemptions from CR 508.1f's tap,
     # each an ``attack_tapping.AttackTapExemption``. That module holds what a

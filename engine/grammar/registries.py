@@ -33,7 +33,9 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
                                  chosen_name_ban_line,
-                                 global_cast_ban_line)
+                                 global_cast_ban_line,
+                                 global_play_timing_line,
+                                 GLOBAL_PLAY_TIMING_CLAIM)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
@@ -131,6 +133,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # enforces it, so the claim cannot outlive the ban.
     if chosen_name_ban_line(normalized):
         return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the *timing* half of CR 601.3a and CR
+    # 602.5 at once: "Players can cast spells and activate abilities only
+    # during their own turns." (City of Solitude.) One printed sentence, two
+    # gates, one reader — claimed through the reader both of them enforce with,
+    # so the claim cannot outlive either half.
+    if global_play_timing_line(normalized):
+        return GLOBAL_PLAY_TIMING_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)

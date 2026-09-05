@@ -27,6 +27,11 @@ from engine.card_loader import load_cards as _w2g3_load, manifest_set_paths as _
 from engine.models import Permanent as _W2G3Permanent
 from engine.pt import add_pt_modifier as _w2g3_pump
 from engine import Game as _W2G3Game, PlayerState as _W2G3Player
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.card_loader import load_cards as _w2g2_load
+from engine.card_loader import manifest_set_paths as _w2g2_paths
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
 
 def _rig():
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
@@ -903,7 +908,6 @@ def test_the_discard_takes_one_copy_and_not_every_copy(set_pool, set_cards):
 
     assert [c.name for c in p2.hand] == ["Grizzly Bears", "Grizzly Bears"]
     assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
-
 def _w2g3_rig():
     alice, bob = _W2G3Player(name="Alice"), _W2G3Player(name="Bob")
     game = _W2G3Game(players=[alice, bob])
@@ -1148,3 +1152,153 @@ def test_eye_of_singularity_sweeps_past_a_regeneration_shield(set_pool, catalog_
     # a shield and then destroying the survivor on a second pass would pass the
     # board check above and fail this one.
     assert (first.regeneration_shield, second.regeneration_shield) == (1, 1)
+
+def _w2g2_catalog():
+    return {card.name: card for card in _w2g2_load(_w2g2_paths(include_measured=True))}
+def _w2g2_board(*battlefields, hands=None):
+    players = [
+        _W2G2PlayerState(
+            name=f"P{i + 1}",
+            battlefield=list(pile),
+            hand=list((hands or {}).get(i, [])),
+        )
+        for i, pile in enumerate(battlefields)
+    ]
+    game = _W2G2Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for player in players:
+        for perm in player.battlefield:
+            perm.metadata["summoning_sickness_turn"] = -99
+    return game
+def _w2g2_slot(player, permanent):
+    return next(i for i, perm in enumerate(player.battlefield) if perm is permanent)
+def test_city_of_solitude_binds_its_own_controller_on_another_players_turn(set_pool):
+    """"Players can cast spells and activate abilities only during their own
+    turns."
+
+    The sentence names no seat, so it binds everybody -- the enchantment's
+    controller included (CR 601.3, CR 602.5). A gate that exempted the
+    controller would be a strictly better card than the one printed, and it
+    would be silent about it.
+    """
+    catalog = _w2g2_catalog()
+    city = _W2G2Permanent(card=set_pool("VIS")["City of Solitude"])
+    icy = _W2G2Permanent(card=catalog["Icy Manipulator"])
+    bear = _W2G2Permanent(card=catalog["Grizzly Bears"])
+    game = _w2g2_board([city, icy], [bear], hands={0: [catalog["Lightning Bolt"]]})
+    game.start_turn(1)
+
+    refused = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert not refused.supported and "City of Solitude" in refused.details
+    assert game.players[1].life == 20, game.log
+
+    refused = game.activate_permanent_ability(
+        0, "Icy Manipulator", target_player_index=1, target_permanent_index=0
+    )
+    assert not refused.supported and "City of Solitude" in refused.details
+    assert not bear.tapped, game.log
+def test_city_of_solitude_is_a_window_not_a_lock(set_pool):
+    """The same seat plays freely on its own turn -- the restriction is when,
+    not whether."""
+    catalog = _w2g2_catalog()
+    city = _W2G2Permanent(card=set_pool("VIS")["City of Solitude"])
+    icy = _W2G2Permanent(card=catalog["Icy Manipulator"])
+    bear = _W2G2Permanent(card=catalog["Grizzly Bears"])
+    game = _w2g2_board([city, icy], [bear], hands={0: [catalog["Lightning Bolt"]]})
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    assert game.activate_permanent_ability(
+        0, "Icy Manipulator", target_player_index=1, target_permanent_index=0
+    ).supported
+    assert bear.tapped
+def test_katabatic_winds_grounds_fliers_and_shuts_off_their_tap_abilities(set_pool):
+    """"Creatures with flying can't attack or block, and their activated
+    abilities with {T} in their costs can't be activated."
+
+    One printed sentence, three prohibitions, one noun phrase -- so one
+    derivation row arms all three and the three enforcement sites read one
+    subject. The enchantment sits on the opponent's side here because it also
+    prints phasing: on its own controller's untap step it would phase out
+    before the first declaration, which is the card working.
+    """
+    catalog = _w2g2_catalog()
+    winds = _W2G2Permanent(card=set_pool("VIS")["Katabatic Winds"])
+    flier = _W2G2Permanent(card=catalog["Birds of Paradise"])
+    ground = _W2G2Permanent(card=catalog["Grizzly Bears"])
+    attacker = _W2G2Permanent(card=catalog["Hill Giant"])
+
+    game = _w2g2_board([flier, ground], [winds])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert not game.declare_attackers(0, [_w2g2_slot(game.players[0], flier)])[0]
+    assert game.declare_attackers(0, [_w2g2_slot(game.players[0], ground)])[0]
+
+    blocks = _w2g2_board([flier, ground], [winds, attacker])
+    assert not blocks._can_block_attacker(flier, attacker)
+    assert blocks._can_block_attacker(ground, attacker)
+
+    taps = _w2g2_board([flier], [winds])
+    taps.start_turn(0)
+    refused = taps.activate_permanent_ability(0, "Birds of Paradise", mana_color="G")
+    assert not refused.supported and "Katabatic Winds" in refused.details
+    assert taps.players[0].mana_pool.get("G", 0) == 0
+def test_katabatic_winds_leaves_the_grounded_alone(set_pool):
+    """The narrowing is the card. A restriction that dropped "with flying"
+    would ground the whole board and shut off every tap ability there is --
+    over-restriction, exactly as silent as the widening this family usually
+    guards against."""
+    catalog = _w2g2_catalog()
+    winds = _W2G2Permanent(card=set_pool("VIS")["Katabatic Winds"])
+    llanowar = _W2G2Permanent(card=catalog["Llanowar Elves"])
+    game = _w2g2_board([llanowar], [winds])
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Llanowar Elves", mana_color="G"
+    ).supported, game.log
+def test_righteous_war_protects_only_the_creatures_its_controller_has(set_pool):
+    """"White creatures you control have protection from black." / "Black
+    creatures you control have protection from white."
+
+    Two lines, two anthems, one derivation. Both halves are a layer-6 grant
+    whose *parameter* is a colour, which is why protection travels on its own
+    field rather than in the keyword list: "protection" names a quality and a
+    keyword list has nowhere to put one.
+    """
+    catalog = _w2g2_catalog()
+    war = _W2G2Permanent(card=set_pool("VIS")["Righteous War"])
+    mine_white = _W2G2Permanent(card=catalog["Savannah Lions"])
+    mine_black = _W2G2Permanent(card=catalog["Bog Wraith"])
+    theirs_white = _W2G2Permanent(card=catalog["Savannah Lions"])
+    game = _w2g2_board([war, mine_white, mine_black], [theirs_white])
+
+    program = _w2g2_compile(set_pool("VIS")["Righteous War"])
+    assert program.supported, program.reason
+    assert [i.payload.get("protection_from") for i in program.instructions] == [
+        ["black"], ["white"],
+    ]
+
+    assert ("color", "B") in game._protection_qualities(mine_white)
+    assert ("color", "W") in game._protection_qualities(mine_black)
+    assert game._protection_qualities(theirs_white) == set()
+def test_righteous_war_stops_a_black_spell_targeting_a_white_creature(set_pool):
+    """CR 702.16b is what the grant then does, and it is what a player sees.
+
+    Watching the refusal is the point: a grant that reached the metadata and no
+    gate would look exactly like one that worked.
+    """
+    catalog = _w2g2_catalog()
+    war = _W2G2Permanent(card=set_pool("VIS")["Righteous War"])
+    lions = _W2G2Permanent(card=catalog["Savannah Lions"])
+    game = _w2g2_board([war, lions], [])
+    game.players[1].hand = [catalog["Dark Banishing"]]
+    game.players[1].library = [catalog["Swamp"]] * 20
+    game.start_turn(1)
+
+    assert not game._can_be_targeted(
+        lions, catalog["Dark Banishing"], caster_index=1
+    ), game.log

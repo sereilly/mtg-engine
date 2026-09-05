@@ -118,6 +118,18 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # out one family over.
     ("until_controllers_next_untap_step",
      ("until", "its", "controller", "'s", "next", "untap", "step")),
+    # "**This turn and next turn**, creatures can't attack, and …" (Peace
+    # Talks.) A duration spanning two turns, and its own kind rather than
+    # "this turn" with a number beside it: every sweep in this engine ends an
+    # effect at a cleanup step, and what this phrase says is *survive one of
+    # them*. Reading it as "this turn" would end the effect a whole turn early
+    # — the half of the card the opponent is paying for.
+    #
+    # Before "this turn", which is its own prefix: ``_parse_duration`` takes
+    # the first row that matches, so the longer phrase has to be tried first or
+    # the sentence would read as the shorter one and leave "and next turn"
+    # unconsumed.
+    ("this_turn_and_next_turn", ("this", "turn", "and", "next", "turn")),
     ("this_turn", ("this", "turn")),
     # "…until the end of **that** turn" (Giant Slug). Which turn "that" names
     # is not in the sentence: it comes from the delay the sentence sits inside

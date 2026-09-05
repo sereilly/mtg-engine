@@ -533,3 +533,30 @@ class CantPlayLands:
 
     player: PlayerRef
     duration: Duration
+
+
+@dataclass(frozen=True)
+class TargetingBan:
+    """"…players and permanents can't be the targets of spells or activated
+    abilities." (Peace Talks.)
+
+    CR 115.1's choice denied outright for a stated window, and denied to two
+    populations at once. **Not** a shroud grant: shroud is a keyword ability on
+    one object (CR 702.18) and a player cannot have one, so a grant would carry
+    half the sentence and leave the other half — the half that stops a Lightning
+    Bolt to the face — doing nothing.
+
+    It carries no subject because the sentence names none that narrows: "players
+    and permanents" is every object a spell or an activated ability may choose
+    in this engine. A card printing a narrowed version is a different sentence
+    and will want a filter here; the ban with no filter must not be made to
+    stand in for it, because a dropped narrowing here stops targeting that the
+    card allows.
+
+    *duration* is a field rather than payload so a duration printed in **front**
+    of the clause reaches it: ``sentence_clauses._distribute_duration`` attaches
+    a leading prefix by ``dataclasses.replace``, and Peace Talks prints its
+    window first.
+    """
+
+    duration: Duration = Duration()

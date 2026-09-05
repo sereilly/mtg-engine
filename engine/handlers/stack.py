@@ -1069,3 +1069,26 @@ def waive_shroud_for_target_player(game: Game, instruction: OracleInstruction, c
         f"abilities this turn"
     )
     return True, "resolved"
+
+
+@effect_handler("ban_targeting")
+def ban_targeting(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…players and permanents can't be the targets of spells or activated
+    abilities." (Peace Talks.)
+
+    State plus a reader, never a flag stamped on each object — the same shape
+    ``cant_attack_until_eot`` takes and for the same reason: a permanent that
+    enters after this resolves is covered too, and a player has nowhere to
+    stamp a flag at all. ``legality._enumerate_targets`` is the reader, which
+    is the one list the target picker and the announcement gates share, and
+    the cleanup step's countdown is what ends the window.
+    """
+    game.targeting_bans.append({
+        "source_name": context.card.name,
+        "remaining_turns": int(instruction.payload.get("remaining_turns", 1)),
+    })
+    game.log.append(
+        f"{context.card.name}: nothing can be targeted by spells or activated "
+        f"abilities"
+    )
+    return True, "resolved"

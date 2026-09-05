@@ -562,6 +562,23 @@ def _full_mana_payload(cost: ast.ManaCost) -> dict[str, int]:
 # duration (or none) is not.
 _REST_OF_TURN = ("this_turn", "until_end_of_turn")
 
+#: How many cleanup steps a *stated-window* one-shot restriction survives, by
+#: printed duration. One is every spelling of "this turn"; two is "this turn
+#: and next turn" (Peace Talks). A count rather than a kind per phrase, because
+#: what the sweep does with it is subtraction —
+#: ``engine/phases/cleanup_step.py``'s ``_turn_expired``.
+#:
+#: Here rather than in one of the families that reads it: the blanket
+#: can't-attack (``lowering/combat.py``) and the targeting ban
+#: (``lowering/game.py``) are two families and neither may import the other, so
+#: the table sits on the floor they share. Two copies would be two answers to
+#: "how long is this turn and next turn", free to differ.
+RESTRICTION_TURNS: dict[str, int] = {
+    "this_turn": 1,
+    "until_end_of_turn": 1,
+    "this_turn_and_next_turn": 2,
+}
+
 #: The same pair one phase down: "this combat" and "until end of combat" are two
 #: printed spellings of CR 511's window, and a shield or a grant that reads one
 #: and refuses the other would be a card failing on its printing rather than on
