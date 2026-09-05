@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from ...auras import aura_enchant_clause
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
+from ...events import emit
 from ...extra_triggers import additional_triggers
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
@@ -913,6 +914,14 @@ class StackResolutionMixin:
                                 ),
                             )
                 self._process_land_enters(caster_index)
+                # "When **you play a card**" (Juju Bubble). CR 701.18b's other
+                # half: a land is played rather than cast, so the cast
+                # announcement never reaches it. Beside `_process_land_enters`
+                # rather than beside the `lands_played_this_turn` bump above,
+                # because that bump is inside the cost-enforcement branch and
+                # a land played in a game with costs off is still a land
+                # played.
+                emit(self, "you_play_card", subject=card, caster_index=caster_index)
             return
 
         # Sorceries and instants resolve immediately in this basic engine.

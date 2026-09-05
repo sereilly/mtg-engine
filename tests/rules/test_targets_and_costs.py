@@ -1544,3 +1544,92 @@ def test_601_2c_a_players_face_counts_as_the_named_target_only_where_the_card_ad
 
         assert result.supported is expected, (name, result.details)
 # --- end W3-divided ---
+
+
+# --- W2G1 (Visions): an "unless they pay" with two currencies ---
+
+import pytest as _w2g1_pytest
+from engine.card_loader import (
+    load_cards as _w2g1_load, manifest_set_path as _w2g1_path,
+)
+from engine.grammar import parse_line as _w2g1_parse
+from engine.grammar.errors import GrammarError as _W2G1GrammarError
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+
+_W2G1_LEA2 = {c.name: c for c in _w2g1_load(_w2g1_path("LEA"))}
+_W2G1_VIS2 = {
+    c.name: c
+    for c in _w2g1_load(_w2g1_path("VIS", include_measured=True))
+}
+
+
+def _w2g1_counter_scene(*, opp_life=20, opp_lands=2):
+    p1 = _W2G1PlayerState(name="A")
+    p2 = _W2G1PlayerState(name="B", hand=[_W2G1_LEA2["Giant Growth"]])
+    game = _W2G1Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    source = _W2G1Permanent(card=_W2G1_VIS2["Mundungu"])
+    source.summoning_sick = False
+    p1.battlefield.append(source)
+    for _ in range(opp_lands):
+        p2.battlefield.append(_W2G1Permanent(card=_W2G1_LEA2["Forest"]))
+    p2.life = opp_life
+    game.queue_from_hand(1, "Giant Growth")
+    return game, p2
+
+
+@_w2g1_pytest.mark.cr("118.3c", "119.4")
+def test_119_4_an_unless_they_pay_offer_can_carry_two_currencies():
+    """"…unless its controller pays {1} **and 1 life**" (Mundungu).
+
+    One offer with two prices, both of which must be paid — CR 118.8's "or 1
+    life" is the opposite word and the opposite meaning, which is why the two
+    have never shared a reader. It rides the one payment prompt rather than
+    arming a second: two prompts would be two decisions and two counters, and
+    declining the first would counter the spell before the second was made.
+    """
+    game, payer = _w2g1_counter_scene()
+
+    result = game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert result.supported, result.details
+    assert payer.life == 19
+    assert any(p.tapped for p in payer.battlefield)
+    assert game.stack == []
+    # It went to the graveyard by *resolving*, not by being countered — which
+    # is the whole difference the log records, since both endings empty the
+    # stack and bin the card.
+    assert any("is not countered" in line for line in game.log), game.log
+
+
+@_w2g1_pytest.mark.cr("119.4")
+def test_119_4_a_payer_who_cannot_meet_the_life_half_spends_no_mana():
+    """"A player may pay life only if their life total is greater than or equal
+    to the amount."
+
+    Both halves are gated together, so a payer who can meet one and not the
+    other meets neither — the mana must not leave the board for a payment that
+    then fails.
+    """
+    game, payer = _w2g1_counter_scene(opp_life=0)
+
+    game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert game.stack == []
+    assert [c.name for c in payer.graveyard] == ["Giant Growth"]
+    assert not any(p.tapped for p in payer.battlefield)
+
+
+@_w2g1_pytest.mark.cr("118.3c")
+def test_118_3c_the_life_rider_refuses_a_currency_nothing_charges():
+    """A production consumes every token of its line or refuses it."""
+    with _w2g1_pytest.raises(_W2G1GrammarError):
+        _w2g1_parse(
+            "Counter target spell unless its controller pays {1} and 1 card."
+        )
+    # And the mana half stays required: a life-only payment would reach the
+    # prompt as a cost of {0}, which every board covers, so the offer would
+    # read as always paid.
+    with _w2g1_pytest.raises(_W2G1GrammarError):
+        _w2g1_parse("Counter target spell unless its controller pays 1 life.")

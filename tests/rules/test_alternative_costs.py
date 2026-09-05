@@ -318,3 +318,85 @@ def test_601_2h_a_narrowed_discard_with_no_answering_card_refuses_the_cast():
     assert not result.supported
     assert "no card in hand answers this cost" in result.details
     assert [c.name for c in caster.hand] == ["Surge of Strength", "Island"]
+
+
+# --- W2G1 (Visions): the sacrifice an alternative cost can name ---
+
+from engine.card_loader import manifest_set_path as _w2g1_path
+from engine.cast_costs import read_sacrifice_clause as _w2g1_read_sacrifice
+
+_VIS = {
+    c.name: c
+    for c in load_cards(_w2g1_path("VIS", include_measured=True))
+}
+
+
+@pytest.mark.cr("118.9", "601.2b")
+def test_118_9_a_sacrifice_is_read_by_the_additional_cost_s_own_reader():
+    """CR 601.2b's additional cost and CR 118.9's alternative one print this
+    clause identically — "sacrifice a Goblin", "sacrifice two Mountains" — so
+    one function reads it for both.
+
+    Two readers of one printed phrase drift, and the direction a *cost* drifts
+    in is a price charged more widely, or not at all, than the card prints.
+    """
+    cost = alternative_cost_for_line(
+        "You may sacrifice two Mountains rather than pay this spell's mana cost."
+    )
+    assert cost is not None
+    assert (cost.sacrifice_filter, cost.sacrifice_count) == (
+        {"subtype_filter": "mountain"}, 2,
+    )
+    assert _w2g1_read_sacrifice("two mountains") == (
+        cost.sacrifice_filter, cost.sacrifice_count,
+    )
+
+    # An un-narrowed phrase refuses on both sides: "sacrifice two permanents"
+    # would let the payment eat a land the card never named.
+    assert alternative_cost_for_line(
+        "You may sacrifice two permanents rather than pay this spell's mana cost."
+    ) is None
+
+
+@pytest.mark.cr("601.2h", "118.9")
+def test_601_2h_an_alternative_sacrifice_is_gated_on_its_printed_count():
+    """One Mountain is no more a payment than none.
+
+    The sharper half of CR 601.2h: a dropped *additional* cost is a spell cast
+    for less than it prints, and a dropped *alternative* one is a spell cast
+    for nothing — the mana payment has already been replaced by whatever this
+    was supposed to collect.
+    """
+    game, caster, victim = _duel([_VIS["Fireblast"]])
+    caster.battlefield.append(Permanent(card=_LEA["Mountain"]))
+
+    refused = game.cast_from_hand(
+        0, "Fireblast", alternative_cost=True, target_player_index=1,
+    )
+    assert not refused.supported
+    assert "CR 601.2h" in refused.details
+    assert len(caster.battlefield) == 1
+    assert victim.life == 20
+
+    caster.battlefield.append(Permanent(card=_LEA["Mountain"]))
+    paid = game.cast_from_hand(
+        0, "Fireblast", alternative_cost=True, target_player_index=1,
+    )
+    assert paid.supported, paid.details
+    assert caster.battlefield == []
+    assert victim.life == 16
+
+
+@pytest.mark.cr("118.9b")
+def test_118_9b_the_sacrifice_is_never_taken_by_default():
+    """A caster who does not announce it pays the mana cost. The engine
+    sacrificing a board nobody offered is the same bug as a cost nobody
+    charges, pointing the other way."""
+    game, caster, _ = _duel([_VIS["Fireblast"]])
+    for _ in range(2):
+        caster.battlefield.append(Permanent(card=_LEA["Mountain"]))
+
+    result = game.cast_from_hand(0, "Fireblast", target_player_index=1)
+
+    assert not result.supported
+    assert len(caster.battlefield) == 2

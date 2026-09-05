@@ -131,6 +131,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    # Juju Bubble prints "when", which this table rewrites to "whenever"
+    # (CR 603.1 makes them one kind of ability), so the canonical example
+    # is the whenever spelling both front ends actually match on.
+    "you_play_card": "whenever you play a card",
     "opponent_attackers_declared": "whenever an opponent attacks with creatures",
     "opponent_casts_nth_spell_each_turn":
         "whenever an opponent casts their second spell each turn",

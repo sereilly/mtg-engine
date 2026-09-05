@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 82.7% | 81.3% | 54.0% | 121 |
+| VIS *(measured)* | 167 | 278 | 83.8% | 82.4% | 55.0% | 123 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 321 | 142 | expected a subject |  |
+| 320 | 141 | expected a subject |  |
 | 105 | 47 | unrecognized effect verb |  |
-| 82 | 37 | unconsumed text |  |
+| 81 | 36 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
@@ -2514,6 +2514,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Jovial Evil**
   - `Jovial Evil deals X damage to target opponent, where X is twice the number of white creatures that player controls.`
 - **Juju Bubble**
+  - `When you play a card, sacrifice this artifact.`
   - `{2}: You gain 1 life.`
 - **Jump**
   - `Target creature gains flying until end of turn.`
@@ -3179,6 +3180,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, defending player may pay {U}. If that player does, prevent all combat damage that would be dealt by this creature this turn.`
 - **Mudslide**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. If the player does, untap those creatures.`
+- **Mundungu**
+  - `{T}: Counter target spell unless its controller pays {1} and 1 life.`
 - **Murk Dwellers**
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
@@ -4459,6 +4462,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove three spore counters from this creature: Prevent all combat damage that would be dealt this turn.`
 - **Sporeweb Weaver**
   - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
+- **Squandered Resources**
+  - `Sacrifice a land: Add one mana of any type the sacrificed land could produce.`
 - **Staff of Zegon**
   - `{3}, {T}: Target creature gets -2/-0 until end of turn.`
 - **Stampede**

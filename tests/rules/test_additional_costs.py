@@ -382,3 +382,172 @@ def test_601_2h_an_x_life_cost_is_charged_the_announced_x():
     assert cost.life_charged(4) == 4
     assert cost.life_charged(None) == 0, "an unannounced X is CR 107.3b's zero"
     assert cost.describe() == "pay X life"
+
+
+# --- W2G1 (Visions): a cost the tables cannot charge, and the two new clauses ---
+
+from engine.alternative_costs import (
+    unread_alternative_cost_sentence as _w2g1_unread_alt,
+)
+from engine.card_loader import manifest_set_paths as _w2g1_paths
+from engine.cast_costs import (
+    additional_cost_for_line,
+    unread_cost_sentence as _w2g1_unread_add,
+)
+from engine.oracle import (
+    chargeable_sacrifice_payload as _w2g1_chargeable,
+    compile_card_oracle as _w2g1_compile,
+)
+
+_W2G1_VIS = {
+    c.name: c
+    for c in load_cards(manifest_set_path("VIS", include_measured=True))
+}
+
+
+@pytest.mark.cr("601.2b", "118.9")
+def test_601_2b_a_printed_cost_nothing_charges_makes_the_card_unsupported():
+    """The standing invariant, as a gate.
+
+    A card is supported when **any** of its lines is, so a spell whose effect
+    line compiles reports supported however many of its other lines were
+    dropped — and a dropped *cost* is not a missing feature, it is a card that
+    resolves for a price it does not print. Three Visions cards were exactly
+    that, green in every instrument except ``scripts/parse_coverage.py``,
+    because a card that is not refused is invisible to a refusal census.
+
+    Each table answers for its own sentence, so a clause taught to either one
+    closes the gate for the card in the same edit; there is no whitelist here
+    to fall behind.
+    """
+    assert _w2g1_unread_add(
+        "As an additional cost to cast this spell, hum a tune."
+    ) == "as an additional cost to cast this spell, hum a tune"
+    assert _w2g1_unread_alt(
+        "You may hum a tune rather than pay this spell's mana cost."
+    ) is not None
+    # A sentence the table *does* read is not "unread", which is the whole
+    # distinction the boolean claim seam collapses.
+    assert _w2g1_unread_add(
+        "As an additional cost to cast this spell, sacrifice a creature."
+    ) is None
+    assert _w2g1_unread_add("Destroy target creature.") is None
+
+    # …and a card whose cost the table *does* read stays supported, which is
+    # the direction this gate must never move.
+    assert _w2g1_compile(_M21["Village Rites"]).supported
+
+
+@pytest.mark.cr("601.2b")
+def test_601_2b_no_shipped_card_carries_a_cost_sentence_nothing_charges():
+    """The measurement that made the gate above safe to add, kept as a test.
+
+    A gate that refuses a printed cost is only safe while nothing shipped
+    prints one the tables cannot read — and "safe today" is not a property a
+    brief can carry forward, so it is asserted over the pool instead.
+    """
+    unread = []
+    for path in _w2g1_paths(include_measured=True):
+        for card in load_cards(path):
+            for line in (card.oracle_text or "").split("\n"):
+                if _w2g1_unread_add(line) or _w2g1_unread_alt(line):
+                    unread.append((card.name, line.strip()))
+    assert unread == [], f"cards printing a cost nothing charges: {unread}"
+
+
+@pytest.mark.cr("601.2b", "701.21a")
+def test_701_21a_a_sacrifice_cost_names_only_the_payer_s_own_permanents():
+    """"A player can't sacrifice … a permanent they don't control."
+
+    The charger drops the ``controller`` narrowing on the premise that every
+    path enumerates the payer's own battlefield first. That holds for "you
+    control" and inverts for anyone else — so "sacrifice all lands your
+    opponents control" was read as *your own* lands. Refusing the phrase is
+    what leaves such a card unsupported instead of charging a price nobody
+    printed.
+    """
+    assert _w2g1_chargeable({"type_filter": "land", "controller": "you"}) == {
+        "type_filter": "land",
+    }
+    assert _w2g1_chargeable({"type_filter": "land", "controller": "opponent"}) is None
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice a creature an "
+        "opponent controls."
+    ) is None
+
+
+@pytest.mark.cr("601.2b", "601.2h")
+def test_601_2b_sacrifice_all_and_discard_your_hand_are_one_sentence():
+    """Kaervek's Spite: a quantifier rather than a count, and the one sacrifice
+    cost admitted with no card type named.
+
+    Every other must name one — an unnamed cost lets the payment eat the
+    cheapest thing on the board — and "all" is exactly the phrase for which
+    that reasoning inverts: there is no cheapest thing, and the un-narrowed
+    reading is the most expensive rather than the least. It is outside the
+    CR 601.2h gate for the same reason: a board of nothing pays it in full.
+    """
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice all permanents "
+        "you control and discard your hand."
+    )
+    assert cost is not None
+    assert cost.sacrifice_all_filter == {}
+    assert cost.discard_whole_hand
+    assert cost.sacrifice_count == 1  # untouched: "all" is not a count
+
+    game, caster, victim = _duel([_W2G1_VIS["Kaervek's Spite"], _LEA["Black Lotus"]])
+    caster.battlefield.append(Permanent(card=_LEA["Mons's Goblin Raiders"]))
+    victim.battlefield.append(Permanent(card=_LEA["Forest"]))
+
+    result = game.cast_from_hand(0, "Kaervek's Spite", target_player_index=1)
+
+    assert result.supported, result.details
+    assert caster.battlefield == []
+    assert caster.hand == []
+    assert [p.card.name for p in victim.battlefield] == ["Forest"]
+
+
+@pytest.mark.cr("107.3a", "601.2b", "601.2h")
+def test_107_3a_an_x_in_an_additional_cost_is_announced_as_the_spell_is_cast():
+    """"If a spell … has a mana cost, alternative cost, **additional cost** …
+    with an X in it, and the value of X isn't defined by the text of that
+    spell, the controller … announces the value of X as part of casting."
+
+    Infernal Harvest is the case that makes the rule visible: its printed mana
+    cost is {1}{B} with no {X} at all, so this clause is the only place its X
+    lives, and a reader that understood only digits would have charged one
+    Swamp for however much damage the caster announced.
+    """
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, return X Swamps you "
+        "control to their owner's hand."
+    )
+    assert cost is not None
+    assert cost.return_count_x
+    assert cost.return_filter == {"subtype_filter": "swamp"}
+    # One reader for the gate and the payment, so the two cannot disagree.
+    assert cost.returned_count(3) == 3
+    assert cost.returned_count(None) == 0
+
+    game, caster, victim = _duel([_W2G1_VIS["Infernal Harvest"]])
+    for _ in range(3):
+        caster.battlefield.append(Permanent(card=_LEA["Swamp"]))
+    victim.battlefield.append(Permanent(card=_LEA["Hurloon Minotaur"]))
+
+    # Targets first (CR 601.2c/d), costs after (CR 601.2h) — the rule order the
+    # cast path walks, and why a divided spell is asked for a target before it
+    # is asked whether it can pay.
+    refused = game.cast_from_hand(
+        0, "Infernal Harvest", x_value=4, divided_targets=[(1, 0)],
+    )
+    assert not refused.supported
+    assert "CR 601.2h" in refused.details
+    assert len(caster.battlefield) == 3
+
+    paid = game.cast_from_hand(
+        0, "Infernal Harvest", x_value=2, divided_targets=[(1, 0)],
+    )
+    assert paid.supported, paid.details
+    assert len(caster.battlefield) == 1
+    assert [c.name for c in caster.hand] == ["Swamp", "Swamp"]

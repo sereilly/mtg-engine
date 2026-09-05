@@ -73,6 +73,12 @@ class CounterAbility:
     """
     subject: TargetSpec
     unless_pays: "ManaCost | None" = None
+    # "…unless its controller pays {1} **and 1 life**." The life half of one
+    # offer, appended for the reason :class:`CounterSpell`'s own trailing
+    # fields state: these nodes are constructed positionally as well as by
+    # keyword, so a field inserted in the middle re-reads a caller's argument
+    # as this one. See that class's ``unless_pays_life``.
+    unless_pays_life: int = 0
 
 
 @dataclass(frozen=True)
@@ -135,6 +141,22 @@ class CounterSpell:
     # nodes are built positionally as well as by keyword.
     countered_to: Zone | None = None
     countered_to_position: str = ""
+    # "…unless its controller pays {1} **and 1 life**." (Mundungu.) One offer
+    # with two prices, both of which have to be paid — CR 118.8's "or 1 life"
+    # is the opposite word and the opposite meaning, which is why the two have
+    # never shared a reader (``prices._accept_conjoined_life_cost`` states it).
+    # A bare int rather than an ``Amount``: the reader admits only a printed
+    # ``Fixed``, and every reader of this field downstream is arithmetic over a
+    # life total.
+    #
+    # It rides ``unless_pays`` rather than arming a prompt of its own, for the
+    # reason ``unless_pays_alternatives`` above does: two prompts would be two
+    # decisions and two counters, and declining the first would counter the
+    # spell before the second was ever made.
+    #
+    # Appended, for that same field's reason: these nodes are built
+    # positionally as well as by keyword.
+    unless_pays_life: int = 0
 
 
 @dataclass(frozen=True)

@@ -74,6 +74,20 @@ class AlternativeCost:
     #: free one, so this is checked before anything is spent.
     pay_life: int = 0
     exile_from_hand: tuple[dict, ...] | None = None
+    #: "You may **sacrifice two Mountains** rather than pay this spell's mana
+    #: cost." (Fireblast, and the same cycle's Snuff Out one colour over.) The
+    #: same ``(filter, count)`` pair ``cast_costs.AdditionalCost`` carries, read
+    #: by the same function (``cast_costs.read_sacrifice_clause``) and tested by
+    #: the same matcher — CR 601.2b's additional cost and CR 118.9's
+    #: alternative one print this clause identically, so what may pay it is one
+    #: answer wherever it is printed.
+    #:
+    #: ``None`` means "no sacrifice", never "anything": an empty filter would
+    #: let the payment be a land the card never named, and the *count* is what
+    #: makes such a cost unpayable at all — one Mountain is no more a payment
+    #: than none (CR 601.2h).
+    sacrifice_filter: dict | None = None
+    sacrifice_count: int = 1
 
     def describe(self) -> str:
         """The cost as a player would say it, for a log line and a prompt label.
@@ -84,11 +98,19 @@ class AlternativeCost:
         stopped matching the card — which is the direction a cost description
         should fail in.
         """
+        from .subject_filters import filter_head_noun
+
         parts = []
         if self.pay_life:
             parts.append(f"pay {self.pay_life} life")
         if self.exile_from_hand is not None:
             parts.append(f"exile {_a_card_answering(self.exile_from_hand)} from your hand")
+        if self.sacrifice_filter is not None:
+            noun = filter_head_noun(self.sacrifice_filter)
+            parts.append(
+                f"sacrifice a {noun}" if self.sacrifice_count == 1
+                else f"sacrifice {self.sacrifice_count} {noun}s"
+            )
         return " and ".join(parts) or "pay nothing"
 
 
@@ -162,9 +184,15 @@ def _read_cost_clauses(costs: str) -> dict | None:
     cast for **nothing** — the mana cost has already been replaced by whatever
     was read.
     """
+    from .cast_costs import read_sacrifice_clause
     from .oracle import _chargeable_discard_filters
 
-    fields: dict = {"pay_life": 0, "exile_from_hand": None}
+    fields: dict = {
+        "pay_life": 0,
+        "exile_from_hand": None,
+        "sacrifice_filter": None,
+        "sacrifice_count": 1,
+    }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
         if not clause:
@@ -188,8 +216,32 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 return None
             fields["exile_from_hand"] = named
             continue
+        # "**sacrifice two Mountains**" (Fireblast). Read through the additional
+        # cost's own reader, never a second split of the same words: the two
+        # rules print one clause, and a phrase admitted here that
+        # ``cast_costs`` would refuse is a price this table claims and the cast
+        # path cannot collect.
+        if clause.startswith("sacrifice "):
+            if fields["sacrifice_filter"] is not None:
+                # Two sacrifice clauses would need two filters and one field
+                # cannot hold two; folded together they would read as a single
+                # cheaper cost, which is the direction this file must never
+                # drift in.
+                return None
+            read = read_sacrifice_clause(clause[len("sacrifice "):])
+            if read is None:
+                # The phrase names something the payment path cannot enumerate
+                # or cannot test. Refused whole rather than charged as the part
+                # that was read — the all-or-nothing rule above.
+                return None
+            fields["sacrifice_filter"], fields["sacrifice_count"] = read
+            continue
         return None
-    if not fields["pay_life"] and fields["exile_from_hand"] is None:
+    if (
+        not fields["pay_life"]
+        and fields["exile_from_hand"] is None
+        and fields["sacrifice_filter"] is None
+    ):
         # "You may — rather than pay this spell's mana cost." A sentence whose
         # every clause was read as nothing is a free spell, which is the one
         # answer this table must never give by accident.
@@ -230,6 +282,23 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     return tuple(found)
 
 
+def unread_alternative_cost_sentence(line: str) -> str | None:
+    """*line* if it announces an alternative cost this table cannot charge,
+    else None.
+
+    The twin of ``cast_costs.unread_cost_sentence``, and the sharper case of
+    the same defect: an unread *additional* cost is a spell cast for less than
+    it prints, and an unread *alternative* cost would be one cast for nothing
+    at all if it were ever announced — while today it is quietly cast at the
+    mana cost the card offers to replace, with the printed alternative
+    unavailable and unmentioned. Fireblast was exactly that.
+    """
+    match = _ALTERNATIVE_COST_PREAMBLE.match(line.strip().lower().rstrip("."))
+    if match is not None and _read_cost_clauses(match.group("costs")) is None:
+        return match.group(0)
+    return None
+
+
 def alternative_cost_claims_line(line: str) -> bool:
     """Whether this table reads *line*.
 
@@ -245,4 +314,5 @@ __all__ = [
     "alternative_cost_claims_line",
     "alternative_cost_for_line",
     "alternative_costs",
+    "unread_alternative_cost_sentence",
 ]

@@ -91,6 +91,61 @@ class AdditionalCost:
     #: "is there a creature?" would admit the cast and then charge one -- a
     #: spell cast for less than it prints, which is this module's whole subject.
     sacrifice_count: int = 1
+    #: "As an additional cost to cast this spell, **sacrifice all permanents
+    #: you control**." (Kaervek's Spite.) A *quantifier*, not a count, and so
+    #: its own field: "all" names however many the board holds, where
+    #: ``sacrifice_count`` names a number the card printed -- folding the two
+    #: together would price a board of one permanent and a board of six the
+    #: same.
+    #:
+    #: It is also the one sacrifice cost that may name no card type. Every
+    #: other one must (``_chargeable_object``'s last paragraph: an unnamed cost
+    #: would let the payment eat a land the card never named), and "all" is
+    #: exactly the phrase for which that reasoning inverts -- the payment eats
+    #: everything *because the card says so*, and there is no cheaper reading
+    #: for a dropped narrowing to slide onto. It is never part of
+    #: ``_unpayable_additional_cost`` for the same reason: a board of nothing
+    #: pays this cost in full (CR 601.2h), which is what makes Kaervek's Spite
+    #: castable off an empty board.
+    sacrifice_all_filter: dict | None = None
+    #: "..., and **discard your hand**." (Kaervek's Spite.) The same field name
+    #: ``ActivatedAbilityCost`` carries for the identical printed clause, so
+    #: what a whole-hand discard costs is one answer wherever it is printed
+    #: (CR 601.2b and CR 602.2b are one announcement step). Always payable -- an
+    #: empty hand pays it -- so it too is outside the CR 601.2h gate.
+    discard_whole_hand: bool = False
+    #: "As an additional cost to cast this spell, **return X Swamps you control
+    #: to their owner's hand**." (Infernal Harvest.) The same noun-phrase
+    #: vocabulary the sacrifice one field up carries, one destination over --
+    #: and its own field for the reason ``exile_filter`` is separate from
+    #: ``sacrifice_filter``: a returned permanent is a *card in its owner's
+    #: hand* afterwards, a sacrificed one is in a graveyard, and the cost is
+    #: repayable where the others are not. ``None`` means "no return", never
+    #: "anything".
+    return_filter: dict | None = None
+    #: How many the return eats. A printed number ("return two Swamps"), or the
+    #: announced X when :attr:`return_count_x` is set.
+    return_count: int = 1
+    #: "…return **X** Swamps you control…" (Infernal Harvest.) CR 107.3a: an X
+    #: in an **additional** cost is announced by the caster as part of casting,
+    #: exactly as an X in a mana cost is -- and Infernal Harvest's X is *only*
+    #: here, since its printed mana cost is {1}{B} with no {X} at all. A
+    #: separate flag rather than a sentinel in ``return_count``, for the reason
+    #: ``pay_life_x`` is separate from ``pay_life``: every reader of that field
+    #: is arithmetic, and a string in it would be charged as garbage.
+    #:
+    #: **The engine takes the announcement; today's client cannot make it.**
+    #: ``x_value`` reaches the cast path from the action, and the gate and the
+    #: payment both read it here -- but ``web/static/app.js``'s "does this card
+    #: need an X?" test is a substring probe of the printed *mana cost*, which
+    #: for Infernal Harvest is ``{1}{B}``. So a human seat is offered no X box
+    #: and the cast defaults to X=0, which is legal (CR 107.3a lets the
+    #: controller choose, and 0 is a choice) and useless. That is a fifth part
+    #: of SET_PLAYBOOK.md's "an optional cost has no picker" gap, found here
+    #: and not listed there: the client's X question has to be asked of the
+    #: costs a card prints, not of the mana cost string alone. Nothing is broken
+    #: while Visions is ``measured``; it must be closed before the set ships.
+    return_count_x: bool = False
     #: "As an additional cost to cast this spell, **exile a creature you
     #: control**." (Soul Exchange.) The same noun-phrase vocabulary one field
     #: up, one zone over -- and its own field for the reason
@@ -157,6 +212,21 @@ class AdditionalCost:
             return max(0, int(x_value or 0))
         return self.pay_life
 
+    def returned_count(self, x_value: int | None) -> int:
+        """How many permanents this cost returns, given the announced X.
+
+        One reader for the gate and the payment, for :meth:`life_charged`'s
+        reason one method up: CR 601.2h refuses the cast when the answer is
+        more permanents than the caster controls, and CR 107.3a's announcement
+        is what makes the answer knowable at all. A cost that read X and
+        charged the printed 1 would be a spell cast for a fraction of its
+        price -- and for Infernal Harvest, whose X *is* this cost, it would
+        also make the spell's damage and its price disagree.
+        """
+        if self.return_count_x:
+            return max(0, int(x_value or 0))
+        return self.return_count
+
     def describe(self) -> str:
         parts = []
         for offer in self.optional_mana:
@@ -164,11 +234,26 @@ class AdditionalCost:
                 f"you may pay {offer.symbols}"
                 + (" any number of times" if offer.repeatable else "")
             )
+        if self.sacrifice_all_filter is not None:
+            parts.append(
+                f"sacrifice all {filter_head_noun(self.sacrifice_all_filter)}s "
+                f"you control"
+            )
         if self.sacrifice_filter is not None:
             noun = filter_head_noun(self.sacrifice_filter)
             parts.append(
                 f"sacrifice a {noun}" if self.sacrifice_count == 1
                 else f"sacrifice {self.sacrifice_count} {noun}s"
+            )
+        if self.discard_whole_hand:
+            parts.append("discard your hand")
+        if self.return_filter is not None:
+            noun = filter_head_noun(self.return_filter)
+            how_many = "X" if self.return_count_x else str(self.return_count)
+            parts.append(
+                f"return {how_many} {noun}"
+                + ("" if how_many == "1" else "s")
+                + " you control to their owner's hand"
             )
         if self.exile_filter is not None:
             parts.append(f"exile a {filter_head_noun(self.exile_filter)}")
@@ -259,6 +344,11 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # is admitted, for the reason ``grammar/costs.py`` states on the activation
     # side: a counted "discard two cards" is a shape nothing charges, and
     # admitting it would describe a payment that never happens.
+    # "..., and **discard your hand**." (Kaervek's Spite.) Above the counted
+    # discard below, whose noun phrase must begin with an article and so cannot
+    # claim these words -- the order is what keeps the two from ever being one
+    # question, not what resolves a fight between them.
+    (re.compile(r"^(?:discard|discarding) your hand$"), "discard_whole_hand"),
     (re.compile(r"^(?:discard|discarding) (?P<noun>(?:a|an|one) .+)$"), "discard"),
     # The **noun phrase is read, not spelled out**. This row was
     # ``sacrifice a creature`` as a literal, so Goblin Grenade's "sacrifice a
@@ -268,6 +358,28 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # phrase goes through the same reader an activation cost's does
     # (``oracle.chargeable_sacrifice_payload``), so what may pay a printed
     # cost is one answer wherever the cost is printed.
+    # "..., **return X Swamps you control to their owner's hand**." (Infernal
+    # Harvest.) The destination is part of the clause and not an afterthought:
+    # this is the only zone the payment can reach, and a sentence naming
+    # another one must refuse rather than be charged against the hand. The
+    # apostrophe is either kind because the ingested text prints the curly one.
+    (
+        re.compile(
+            r"^(?:return|returning) (?P<noun>.+) to (?:their|its) "
+            r"owner(?:s(?:'|’)|(?:'|’)s)? hands?$"
+        ),
+        "return",
+    ),
+    # "..., **sacrifice all permanents you control**." (Kaervek's Spite.) Read
+    # **before** the counted sacrifice below, which would otherwise claim these
+    # words through its catch-all noun and then refuse them: "all permanents
+    # you control" pins no card type, and every counted sacrifice must
+    # (``_chargeable_object``). A row that refuses is a row that costs the card
+    # its support, so the specific quantifier goes first.
+    (
+        re.compile(r"^(?:sacrifice|sacrificing) (?P<noun>all .+)$"),
+        "sacrifice_all",
+    ),
     (re.compile(r"^(?:sacrifice|sacrificing) (?P<noun>.+)$"), "sacrifice"),
     # "…, **exile a creature you control**." (Soul Exchange.) The same clause
     # one zone over, gated by the exile charger's own reader for the same
@@ -275,6 +387,105 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # in is a cost nobody pays.
     (re.compile(r"^(?:exile|exiling) (?P<noun>.+)$"), "exile"),
 )
+
+
+def read_sacrifice_clause(phrase: str) -> tuple[dict, int] | None:
+    """What "sacrifice <noun phrase>" charges — ``(filter, count)`` — or None.
+
+    "…, sacrifice **two** creatures." (Phyrexian Tribute.) The count is printed
+    in front of the noun phrase, which leaves that phrase the bare plural the
+    noun parser reads with ``plural=True`` -- the same split ``oracle`` makes
+    for the identically shaped activation cost, with the same table reading the
+    word. Anything that is not a number of two or more falls through to the
+    singular, which is where "a creature" has always been read:
+    ``_NUMBER_WORDS`` maps "a", "an" and "one" to 1, so the article cannot be
+    mistaken for a count.
+
+    **One reader for both cost kinds.** CR 601.2b's additional cost and
+    CR 118.9's alternative cost print this clause identically — "sacrifice a
+    Goblin", "sacrifice two Mountains" — and ``engine/alternative_costs.py``
+    calls this rather than spelling the split out again, for the reason
+    ``_chargeable_object`` states one level down: two readers of one printed
+    phrase drift, and the direction a *cost* drifts in is a price charged more
+    widely, or not at all, than the card prints.
+
+    "all" is deliberately absent. "Sacrifice **all** permanents you control"
+    (Kaervek's Spite) is a different quantifier, not a count, and it reaches
+    :func:`read_sacrifice_all_clause` below — folding it in here would make a
+    board of one permanent and a board of six the same printed price.
+    """
+    count, _, rest = phrase.partition(" ")
+    number = int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
+    if number >= 2 and rest:
+        described = _chargeable_object(rest, "sacrifice", plural=True)
+        return None if described is None else (described, number)
+    described = _chargeable_object(phrase, "sacrifice")
+    return None if described is None else (described, 1)
+
+
+def read_return_clause(phrase: str) -> tuple[dict, int, bool] | None:
+    """What "return <noun phrase> to their owner's hand" charges, as
+    ``(filter, count, count_is_x)``, or None.
+
+    The count is split off the front exactly as :func:`read_sacrifice_clause`
+    splits one, with the one addition CR 107.3a asks for: an **X** may stand
+    where the number does, and the caster announces its value as part of
+    casting. Infernal Harvest is the whole reason -- its printed mana cost is
+    {1}{B} with no {X} in it, so this clause is the only place its X lives, and
+    a reader that only understood digits would have charged one Swamp for a
+    spell that deals however much damage the caster announced.
+
+    The noun phrase goes through the **sacrifice** charger, not a reader of its
+    own. Both name a permanent on the payer's own battlefield -- which is the
+    whole of what a charger has to answer -- and they differ only in where the
+    permanent goes afterwards, which is the payment's business. Two readers of
+    one phrase drift, and the direction a cost drifts in is a price charged
+    more widely, or not at all, than the card prints.
+    """
+    count, _, rest = phrase.partition(" ")
+    if count == "x" and rest:
+        described = _chargeable_object(rest, "sacrifice", plural=True)
+        return None if described is None else (described, 0, True)
+    number = int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
+    if number >= 2 and rest:
+        described = _chargeable_object(rest, "sacrifice", plural=True)
+        return None if described is None else (described, number, False)
+    described = _chargeable_object(phrase, "sacrifice")
+    return None if described is None else (described, 1, False)
+
+
+def read_sacrifice_all_clause(phrase: str) -> dict | None:
+    """What "sacrifice **all** <noun phrase>" charges, as a filter, or None.
+
+    "As an additional cost to cast this spell, sacrifice all permanents you
+    control" (Kaervek's Spite). The quantifier is the price: what is charged is
+    every permanent the phrase names, however many that is, so there is no
+    count to read and nothing for :func:`read_sacrifice_clause` to do with it.
+
+    This is the one sacrifice cost admitted with **no card type named**.
+    ``_chargeable_object`` refuses those, because "sacrifice a permanent" would
+    let the payment eat a land the card never mentioned and the payer would
+    take the cheapest thing on their board -- but under "all" there is no
+    cheapest thing, and the un-narrowed phrase is the *most expensive* reading
+    rather than the least. What is still required is that the phrase be
+    testable: it goes through the same ``chargeable_sacrifice_payload`` reader
+    every other sacrifice cost does, so a narrowing ``subject_matches`` cannot
+    answer refuses the line instead of being silently dropped -- which would
+    charge more than the card prints, this file's failure in the other
+    direction.
+    """
+    from .grammar import subject_filter_payload
+    from .oracle import chargeable_sacrifice_payload
+
+    rest = phrase[len("all "):].strip() if phrase.startswith("all ") else ""
+    if not rest:
+        return None
+    described = subject_filter_payload(rest, plural=True)
+    if described is None:
+        return None
+    if described.get("zone") not in (None, "battlefield"):
+        return None
+    return chargeable_sacrifice_payload(described)
 
 
 def _read_cost_clauses(costs: str) -> dict | None:
@@ -290,6 +501,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (),
         "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
+        "sacrifice_all_filter": None, "discard_whole_hand": False,
+        "return_filter": None, "return_count": 1, "return_count_x": False,
         "optional_mana": (),
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
@@ -330,33 +543,37 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     return None
                 fields["discard_cards"] += 1
                 fields["discard_filters"] = narrowed
-            elif field == "sacrifice":
-                # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
-                # count is printed in front of the noun phrase, which leaves
-                # that phrase the bare plural the noun parser reads with
-                # ``plural=True`` -- the same split ``oracle`` makes for the
-                # identically shaped activation cost, with the same table
-                # reading the word. Anything that is not a number of two or
-                # more falls through to the singular below, which is where "a
-                # creature" has always been read: ``_NUMBER_WORDS`` maps "a",
-                # "an" and "one" to 1, so the article cannot be mistaken for a
-                # count.
-                noun = found.group("noun")
-                count, _, rest = noun.partition(" ")
-                number = (
-                    int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
-                )
-                if number >= 2 and rest:
-                    described = _chargeable_object(rest, field, plural=True)
-                    if described is None:
-                        return None
-                    fields["sacrifice_filter"] = described
-                    fields["sacrifice_count"] = number
-                    break
-                described = _chargeable_object(noun, field)
+            elif field == "return":
+                if fields["return_filter"] is not None:
+                    # Two return clauses would need two filters and one field
+                    # cannot hold two; folded together they read as a union,
+                    # which is a strictly cheaper cost than the two printed.
+                    return None
+                read = read_return_clause(found.group("noun"))
+                if read is None:
+                    return None
+                (
+                    fields["return_filter"],
+                    fields["return_count"],
+                    fields["return_count_x"],
+                ) = read
+            elif field == "discard_whole_hand":
+                fields["discard_whole_hand"] = True
+            elif field == "sacrifice_all":
+                if fields["sacrifice_all_filter"] is not None:
+                    # Two "all" clauses would need two filters and one field
+                    # cannot hold two; folded together they read as a union,
+                    # which is a strictly cheaper cost than the two printed.
+                    return None
+                described = read_sacrifice_all_clause(found.group("noun"))
                 if described is None:
                     return None
-                fields["sacrifice_filter"] = described
+                fields["sacrifice_all_filter"] = described
+            elif field == "sacrifice":
+                read = read_sacrifice_clause(found.group("noun"))
+                if read is None:
+                    return None
+                fields["sacrifice_filter"], fields["sacrifice_count"] = read
             else:
                 described = _chargeable_object(found.group("noun"), field)
                 if described is None:
@@ -517,6 +734,33 @@ def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
     return tuple(found)
 
 
+def unread_cost_sentence(line: str) -> str | None:
+    """*line* if it announces a cost of this table's kind that it cannot
+    charge, else None.
+
+    The **table's own** answer to "is this my sentence?", asked by the support
+    gate in ``engine/oracle.py``. Not a second reader: the preambles are the
+    ones :func:`additional_cost_for_line` matches with, and the refusal is that
+    function's own — this only distinguishes "no cost here" from "a cost here I
+    refused", which the boolean seam above collapses.
+
+    That distinction is the whole of the gate. A card whose cost line nothing
+    reads is not a card missing a feature: it is a card *cheaper than it
+    prints*, and because a card is supported when **any** of its lines is, it
+    reports supported and casts at its printed mana cost with the extra price
+    skipped. Kaervek's Spite sacrificed nothing and Infernal Harvest returned
+    no Swamp, both green in every instrument except this one. The gate makes it
+    loud, which is the standing invariant: a card may fail as unsupported; it
+    may never resolve as something other than what it says.
+    """
+    normalized = line.strip().lower().rstrip(".")
+    for preamble in (_ADDITIONAL_COST_PREAMBLE, _SELF_PERMISSION_COSTS):
+        match = preamble.match(normalized)
+        if match is not None and _read_cost_clauses(match.group("costs")) is None:
+            return match.group(0)
+    return None
+
+
 def cast_cost_claims_line(line: str) -> bool:
     """Whether this table reads *line*.
 
@@ -530,7 +774,11 @@ def cast_cost_claims_line(line: str) -> bool:
 __all__ = [
     "AdditionalCost",
     "OptionalManaCost",
+    "read_return_clause",
+    "read_sacrifice_all_clause",
+    "read_sacrifice_clause",
     "additional_cost_for_line",
     "additional_costs",
     "cast_cost_claims_line",
+    "unread_cost_sentence",
 ]

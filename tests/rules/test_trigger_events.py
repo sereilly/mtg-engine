@@ -759,3 +759,59 @@ def test_ankh_of_mishra_burns_the_entering_lands_controller_not_a_bystander(set_
 
     assert any(perm.card.name == "Fen" for perm in game.controlled_by(2))
     assert [p.life for p in game.players] == [20, 20, 18], game.log
+
+
+# --- W2G1 (Visions): playing a card is not only casting one ---
+
+from engine.card_loader import load_cards as _w2g1_load, manifest_set_path as _w2g1_path
+
+_W2G1_LEA = {c.name: c for c in _w2g1_load(_w2g1_path("LEA"))}
+
+
+def _w2g1_watcher():
+    return _card(
+        "W2G1 Watcher", "When you play a card, sacrifice this artifact.",
+        type_line="Artifact",
+    )
+
+
+@pytest.mark.cr("701.18b", "603.3")
+def test_701_18b_playing_a_card_is_a_land_drop_as_well_as_a_cast():
+    """"To play a card means to play that card as a land **or** to cast that
+    card as a spell, whichever is appropriate."
+
+    One condition with two fire sites, not the cast event under a wider name:
+    a land is played rather than cast, so the cast announcement never reaches
+    it, and a trigger that watched only casts would sit through a land drop.
+    """
+    for played, expect_land in (("Forest", True), ("Lightning Bolt", False)):
+        p1 = PlayerState(name="A", hand=[_W2G1_LEA[played]])
+        p2 = PlayerState(name="B")
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+        p1.battlefield.append(Permanent(card=_w2g1_watcher()))
+
+        game.queue_from_hand(
+            0, played, **({} if expect_land else {"target_player_index": 1}),
+        )
+        game.resolve_stack()
+
+        assert "W2G1 Watcher" in {c.name for c in p1.graveyard}, played
+        assert not any(
+            p.card.name == "W2G1 Watcher" for p in p1.battlefield
+        ), played
+
+
+@pytest.mark.cr("701.18b")
+def test_701_18b_the_trigger_is_scoped_to_the_permanent_s_own_controller():
+    """The printed word is "**you**", so another seat's land drop is not it."""
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B", hand=[_W2G1_LEA["Forest"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    p1.battlefield.append(Permanent(card=_w2g1_watcher()))
+
+    game.queue_from_hand(1, "Forest")
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["W2G1 Watcher"]
+    assert p1.graveyard == []

@@ -20,6 +20,20 @@ from engine import Game as _G5Game, PlayerState as _G5PlayerState
 from engine.models import Permanent as _G5Permanent
 from engine.named_counters import counters_on as _g5_counters_on
 from engine.oracle import compile_card_oracle as _g5_compile
+import pytest as _w2g4_pytest
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from engine.grammar import parse_line as _w2g4_parse_line
+from engine.grammar.errors import LoweringError as _W2G4LoweringError
+from engine.grammar.lower import lower_ability as _w2g4_lower
+from engine.models import (CardDefinition as _W2G4CardDefinition,
+                           Permanent as _W2G4Permanent)
+from engine.oracle import compile_card_oracle as _w2g4_compile
+import pytest as _w2g1c_pytest
+from engine import Game as _W2G1cGame, PlayerState as _W2G1cPlayerState
+from engine.models import Permanent as _W2G1cPermanent
+from engine.card_loader import load_cards as _w2g1c_load, manifest_set_path as _w2g1c_path
+from engine.grammar import parse_line as _w2g1c_parse
+from engine.grammar.errors import GrammarError as _W2G1cGrammarError
 
 def test_kyscu_drake_charges_both_halves_of_its_conjoined_sacrifice(set_pool):
     """"Sacrifice this creature **and a creature named Spitting Drake**".
@@ -50,15 +64,6 @@ def test_kyscu_drake_charges_both_halves_of_its_conjoined_sacrifice(set_pool):
         "type_filter": "creature",
         "named": "spitting drake",
     }
-
-
-# --- G1: the return-to-hand family ---
-#
-# Imports at the top of this block, so a merge that appends another group's
-# block below cannot lose them (SET_PLAYBOOK.md, "give every group's test block
-# its own imports").
-
-
 def _g1_rig():
     """A two-seat game with seat 0 interactive.
 
@@ -71,18 +76,12 @@ def _g1_rig():
     game.enforce_mana_costs = False
     game.interactive_seats = {0}
     return game, alice, bob
-
-
 def _g1_enters(game, seat, card):
     permanent = Permanent(card=card)
     game._put_permanent_onto_battlefield(seat, permanent, None)
     return permanent
-
-
 def _g1_names(permanents):
     return [permanent.card.name for permanent in permanents]
-
-
 def test_bull_elephant_takes_exactly_two_forests(set_pool, catalog_by_name):
     """"When this creature enters, sacrifice it unless you return two Forests
     you control to their owner's hand."
@@ -107,8 +106,6 @@ def test_bull_elephant_takes_exactly_two_forests(set_pool, catalog_by_name):
 
     assert _g1_names(alice.battlefield) == ["Forest", "Bull Elephant"]
     assert [card.name for card in alice.hand] == ["Forest", "Forest"]
-
-
 def test_bull_elephant_is_sacrificed_when_one_forest_is_all_there_is(
     set_pool, catalog_by_name
 ):
@@ -124,8 +121,6 @@ def test_bull_elephant_is_sacrificed_when_one_forest_is_all_there_is(
     assert game.pending_choices == []
     assert _g1_names(alice.battlefield) == ["Forest"]
     assert [card.name for card in alice.graveyard] == ["Bull Elephant"]
-
-
 def test_ovinomancer_returns_three_basic_lands(set_pool, catalog_by_name):
     """"...sacrifice it unless you return three basic lands you control to
     their owner's hand."
@@ -152,8 +147,6 @@ def test_ovinomancer_returns_three_basic_lands(set_pool, catalog_by_name):
 
     assert _g1_names(alice.battlefield) == ["Bayou", "Ovinomancer"]
     assert sorted(card.name for card in alice.hand) == ["Forest", "Island", "Mountain"]
-
-
 def test_ovinomancer_gives_the_sheep_to_the_destroyed_creatures_controller(
     set_pool, catalog_by_name
 ):
@@ -192,8 +185,6 @@ def test_ovinomancer_gives_the_sheep_to_the_destroyed_creatures_controller(
     assert [card.name for card in bob.graveyard] == ["Grizzly Bears"]
     assert _g1_names(bob.battlefield) == ["Sheep Token"]
     assert _g1_names(alice.battlefield) == []
-
-
 def test_waterspout_djinn_pays_its_upkeep_with_an_untapped_island(
     set_pool, catalog_by_name
 ):
@@ -215,8 +206,6 @@ def test_waterspout_djinn_pays_its_upkeep_with_an_untapped_island(
     assert _g1_names(alice.battlefield) == ["Waterspout Djinn"]
     assert [card.name for card in alice.hand] == ["Island"]
     assert game.is_on_battlefield(djinn)
-
-
 def test_waterspout_djinn_is_sacrificed_when_the_upkeep_cannot_be_paid(
     set_pool, catalog_by_name
 ):
@@ -231,8 +220,6 @@ def test_waterspout_djinn_is_sacrificed_when_the_upkeep_cannot_be_paid(
 
     assert _g1_names(alice.battlefield) == ["Island"]
     assert [card.name for card in alice.graveyard] == ["Waterspout Djinn"]
-
-
 def test_shrieking_drake_bounces_a_creature_its_controller_picks(
     set_pool, catalog_by_name
 ):
@@ -253,8 +240,6 @@ def test_shrieking_drake_bounces_a_creature_its_controller_picks(
     assert _g1_names(alice.battlefield) == ["Shrieking Drake"]
     assert [card.name for card in alice.hand] == ["Grizzly Bears"]
     assert game.is_on_battlefield(drake)
-
-
 def test_shrieking_drake_can_only_pick_itself_on_an_empty_board(set_pool):
     """The Drake is a creature its controller controls, so it is a legal answer
     to its own trigger - and the only one when nothing else is there."""
@@ -265,8 +250,6 @@ def test_shrieking_drake_can_only_pick_itself_on_an_empty_board(set_pool):
 
     assert alice.battlefield == []
     assert [card.name for card in alice.hand] == ["Shrieking Drake"]
-
-
 def test_stampeding_wildebeests_only_offers_green_creatures(
     set_pool, catalog_by_name
 ):
@@ -289,8 +272,6 @@ def test_stampeding_wildebeests_only_offers_green_creatures(
 
     assert _g1_names(alice.battlefield) == ["Savannah Lions"]
     assert [card.name for card in alice.hand] == ["Stampeding Wildebeests"]
-
-
 def test_quirion_ranger_charges_a_forest_and_may_untap_once_a_turn(
     set_pool, catalog_by_name
 ):
@@ -327,8 +308,6 @@ def test_quirion_ranger_charges_a_forest_and_may_untap_once_a_turn(
     # The refused activation spent nothing: the second Forest is still there.
     assert len(alice.hand) == 1
     assert any(permanent is forests[1] for permanent in alice.battlefield)
-
-
 def test_quirion_ranger_is_refused_with_no_forest(set_pool, catalog_by_name):
     """CR 601.2h via 602.2b: an unpayable cost refuses the activation with
     nothing spent, rather than making the ability free."""
@@ -346,12 +325,6 @@ def test_quirion_ranger_is_refused_with_no_forest(set_pool, catalog_by_name):
     assert result.supported is False
     assert ranger.tapped is True
     assert alice.hand == []
-
-
-# --- W1G2: land animation with a colour ---
-
-
-
 def _w1g2_druid_board(set_pool):
     druid = Permanent(card=set_pool("VIS")["Quirion Druid"])
     forest = Permanent(card=set_pool("LEA")["Forest"])
@@ -362,8 +335,6 @@ def _w1g2_druid_board(set_pool):
     ])
     game.enforce_mana_costs = False
     return game, forest
-
-
 def test_quirion_druid_animates_a_land_indefinitely(set_pool):
     """"{G}, {T}: Target land becomes a 2/2 green creature that's still a land.
     (This effect lasts indefinitely.)"
@@ -385,8 +356,6 @@ def test_quirion_druid_animates_a_land_indefinitely(set_pool):
     assert forest.is_creature
     assert (forest.effective_power, forest.effective_toughness) == (2, 2)
     assert forest.has_type("land"), "that's still a land"
-
-
 def test_quirion_druid_makes_the_land_green(set_pool):
     """CR 613 layer 5, the half of the sentence the animation record cannot
     carry. A colourless land animated without its colour is a permanent Circle
@@ -399,8 +368,6 @@ def test_quirion_druid_makes_the_land_green(set_pool):
     game._settle()
 
     assert forest.effective_colors == {"G"}
-
-
 def test_quirion_druid_s_animation_survives_the_turn(set_pool):
     """CR 611.2a: no stated duration, so it lasts as long as the game does. The
     printed reminder says so and the lexer drops it, which is why the *absence*
@@ -417,23 +384,10 @@ def test_quirion_druid_s_animation_survives_the_turn(set_pool):
 
     assert forest.is_creature
     assert forest.effective_colors == {"G"}
-
-
-# --- VIS w1g3: prevention, redirection and lethal damage --------------------
-#
-# Imports live inside the block by the per-set convention, so a merge that
-# appends another group's block cannot lose one. Every test here drives a real
-# ``Game``: a shield that is armed and never consumed looks exactly like one
-# that works.
-
-
-
 def _w1g3c_duel():
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     game.enforce_mana_costs = False
     return game
-
-
 def _w1g3c_bear(name="Bear", power=2, toughness=2):
     return CardDefinition(
         name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
@@ -444,8 +398,6 @@ def _w1g3c_bear(name="Bear", power=2, toughness=2):
             "power": str(power), "toughness": str(toughness),
         },
     )
-
-
 def _w1g3c_activate(game, permanent, ability, *, caster, target=None,
                     target_permanent_index=None):
     context = OracleExecutionContext(
@@ -455,8 +407,6 @@ def _w1g3c_activate(game, permanent, ability, *, caster, target=None,
     )
     game._execute_oracle_instruction(ability.instruction, context)
     return context
-
-
 def test_resistance_fighter_stops_the_creature_it_named_dealing_combat_damage(set_pool):
     """"Sacrifice this creature: Prevent all combat damage **target creature
     would deal** this turn."
@@ -485,8 +435,6 @@ def test_resistance_fighter_stops_the_creature_it_named_dealing_combat_damage(se
     # Only combat damage, and only that creature's.
     assert _damage_dealt(game, p1, 3, source=dangerous, combat=False) == 3
     assert _damage_dealt(game, p1, 3, source=bystander, combat=True) == 3
-
-
 def test_zhalfirin_crusader_moves_one_point_onto_the_target_it_chose(set_pool):
     """"{1}{W}: The next 1 damage that would be dealt to this creature this turn
     is dealt to **any target** instead."
@@ -518,8 +466,6 @@ def test_zhalfirin_crusader_moves_one_point_onto_the_target_it_chose(set_pool):
 
     assert taker.damage_marked == 1, "one point moved, as the card counts them"
     assert crusader.damage_marked == 2, "and the rest landed where it was aimed"
-
-
 def test_lichenthrope_turns_damage_into_counters_and_takes_none(set_pool):
     """"If damage would be dealt to this creature, put that many -1/-1 counters
     on it instead."
@@ -538,8 +484,6 @@ def test_lichenthrope_turns_damage_into_counters_and_takes_none(set_pool):
     assert _damage_dealt(game, plant, 3) == 0
     assert plant.damage_marked == 0
     assert plant.effective_toughness == printed_toughness - 3
-
-
 def test_lichenthrope_sheds_one_counter_each_upkeep(set_pool):
     """The card's other line, and the reason the substitution above is
     survivable. Asserted in the same file because the two sentences are one
@@ -558,8 +502,6 @@ def test_lichenthrope_sheds_one_counter_each_upkeep(set_pool):
     game._close_current_priority_step()
 
     assert plant.effective_toughness == printed_toughness - 1
-
-
 def test_ogre_enforcer_survives_lethal_damage_spread_across_two_sources(set_pool):
     """"This creature can't be destroyed by lethal damage unless lethal damage
     dealt by a **single source** is marked on it."
@@ -583,8 +525,6 @@ def test_ogre_enforcer_survives_lethal_damage_spread_across_two_sources(set_pool
 
     assert ogre.damage_marked >= ogre.effective_toughness, "the damage is lethal"
     assert any(p is ogre for p in p1.battlefield), "and the Ogre is still here"
-
-
 def test_ogre_enforcer_dies_to_one_source_that_dealt_lethal(set_pool):
     """The other half, which is what makes the exception an exception rather
     than indestructibility."""
@@ -599,8 +539,6 @@ def test_ogre_enforcer_dies_to_one_source_that_dealt_lethal(set_pool):
     game.check_state_based_actions()
 
     assert not any(p is ogre for p in p1.battlefield)
-
-
 def test_an_ordinary_creature_still_dies_to_shared_lethal_damage(set_pool):
     """The control: the narrowing is derived from the Ogre's own text, so every
     other creature keeps CR 704.5g exactly as printed. A sweep that had learned
@@ -618,20 +556,12 @@ def test_an_ordinary_creature_still_dies_to_shared_lethal_damage(set_pool):
     game.check_state_based_actions()
 
     assert not any(p is victim for p in p1.battlefield)
-# --- end VIS w1g3 ---
-
-
-# --- W1G4: upkeep, end-step and per-player step triggers ---
-
-
 def _w1g4_bear(name: str) -> _W1G4Permanent:
     return _W1G4Permanent(card=_W1G4CardDefinition(
         name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
         oracle_text="", colors=(), color_identity=(), keywords=(),
         produced_mana=(), raw={"name": name}, power="2", toughness="2",
     ))
-
-
 def test_aku_djinn_grows_every_opponents_creatures_and_none_of_yours(set_pool):
     """"At the beginning of your upkeep, put a +1/+1 counter on each creature
     each opponent controls."
@@ -662,8 +592,6 @@ def test_aku_djinn_grows_every_opponents_creatures_and_none_of_yours(set_pool):
     assert _w1g4_counters_on(theirs, "+1/+1") == 1
     assert _w1g4_counters_on(mine, "+1/+1") == 0
     assert _w1g4_counters_on(djinn, "+1/+1") == 0
-
-
 def test_brood_of_cockroaches_returns_itself_at_the_next_end_step(set_pool):
     """"When this creature is put into your graveyard from the battlefield, at
     the beginning of the next end step, you lose 1 life and return this card to
@@ -705,8 +633,6 @@ def test_brood_of_cockroaches_returns_itself_at_the_next_end_step(set_pool):
     assert game.players[0].life == 19
     assert [c.name for c in game.players[0].hand] == ["Brood of Cockroaches"]
     assert len(game.players[0].graveyard) == 1, "exactly one copy left the yard"
-
-
 def test_kookus_only_bites_while_its_keeper_is_absent(set_pool):
     """"At the beginning of your upkeep, if you don't control a creature named
     Keeper of Kookus, this creature deals 3 damage to you and attacks this turn
@@ -753,20 +679,12 @@ def test_kookus_only_bites_while_its_keeper_is_absent(set_pool):
     assert not triggered, "CR 603.4: a gated trigger whose condition is false does not trigger"
     assert game.players[0].life == 20
     assert kookus.metadata.get("must_attack_until_eot") is None
-
-
-# --- W1G5: the library, the graveyard and a counter read at death ---
-
-
-
 def _g5_game(players):
     game = _G5Game(players=players)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game._settle()
     return game
-
-
 def test_goblin_recruiter_searches_for_any_number_of_goblins(set_pool):
     """"Search your library for **any number of** Goblin cards, reveal them,
     then shuffle and put those cards on top in any order."
@@ -821,8 +739,6 @@ def test_goblin_recruiter_searches_for_any_number_of_goblins(set_pool):
         goblins[0].name, goblins[1].name,
     ]
     assert game.players[0].hand == []
-
-
 def test_bogardan_phoenix_comes_back_once_and_then_is_exiled(set_pool):
     """"When this creature dies, exile it if it had a death counter on it.
     Otherwise, return it to the battlefield under your control and put a death
@@ -873,8 +789,6 @@ def test_bogardan_phoenix_comes_back_once_and_then_is_exiled(set_pool):
     assert list(game.controlled_by(game.players[0])) == []
     assert [c.name for c in game.players[0].exile] == ["Bogardan Phoenix"]
     assert "Bogardan Phoenix" not in [c.name for c in game.players[0].graveyard]
-
-
 def test_guiding_spirit_moves_only_a_creature_card(set_pool):
     """"{T}: If the top card of target player's graveyard is a creature card,
     put that card on top of that player's library."
@@ -919,23 +833,6 @@ def test_guiding_spirit_moves_only_a_creature_card(set_pool):
     game.resolve_stack()
     assert game.players[1].library[0].name == "Island"
     assert [c.name for c in game.players[1].graveyard] == ["Black Lotus", "Mountain"]
-
-
-# --- VIS w2g4: combat and turn structure ------------------------------------
-#
-# Imports at the top of this block, per the file header: a merge that appends
-# the block cannot then lose them.
-
-import pytest as _w2g4_pytest
-from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
-from engine.grammar import parse_line as _w2g4_parse_line
-from engine.grammar.errors import LoweringError as _W2G4LoweringError
-from engine.grammar.lower import lower_ability as _w2g4_lower
-from engine.models import (CardDefinition as _W2G4CardDefinition,
-                           Permanent as _W2G4Permanent)
-from engine.oracle import compile_card_oracle as _w2g4_compile
-
-
 def _w2g4_creature(name, *, power="2", toughness="2", keywords=()):
     """A vanilla body, optionally carrying printed keywords.
 
@@ -950,8 +847,6 @@ def _w2g4_creature(name, *, power="2", toughness="2", keywords=()):
         produced_mana=(), raw={"name": name},
         power=power, toughness=toughness,
     ))
-
-
 def _w2g4_board(mine, theirs):
     """Two seats, combat walkable, mana unenforced, nothing summoning-sick."""
     p0 = _W2G4PlayerState(name="P0", life=20, battlefield=list(mine))
@@ -963,15 +858,11 @@ def _w2g4_board(mine, theirs):
     for perm in list(p0.battlefield) + list(p1.battlefield):
         perm.metadata["summoning_sickness_turn"] = -99
     return game, p0, p1
-
-
 def _w2g4_settle_stack(game):
     for _ in range(len(game.stack) + 8):
         if not game.stack or not game.resolve_top_of_stack():
             break
     game._settle()
-
-
 def _w2g4_to_blocks(game, *, attackers, blocks):
     """Walk seat 0's combat to a declared set of blocks and settle the stack."""
     game._close_current_priority_step()
@@ -984,10 +875,6 @@ def _w2g4_to_blocks(game, *, attackers, blocks):
     assert game.declare_blockers(1, blocks)[0], game.log
     game._settle()
     _w2g4_settle_stack(game)
-
-
-# -- Chronatog: CR 500.11's turn counter -------------------------------------
-
 def test_w2g4_chronatog_activation_really_costs_its_controller_the_next_turn(set_pool):
     """"{0}: This creature gets +3/+3 until end of turn. **You skip your next
     turn.**"
@@ -1014,8 +901,6 @@ def test_w2g4_chronatog_activation_really_costs_its_controller_the_next_turn(set
     # Seat 0's next turn is the one that never happens.
     assert game.start_next_turn() == 1, game.log
     assert game.start_next_turn() == 0, game.log
-
-
 def test_w2g4_chronatog_pumps_as_well_as_skipping(set_pool):
     """Both halves of the sequence, because a lowering that dropped either
     would still report the card supported. The +3/+3 is what the skip buys."""
@@ -1027,8 +912,6 @@ def test_w2g4_chronatog_pumps_as_well_as_skipping(set_pool):
 
     assert (atog.effective_power, atog.effective_toughness) == (4, 5), game.log
     assert game.skip_turn_counts.get(0) == 1, game.log
-
-
 def test_w2g4_skipping_a_turn_refuses_for_a_seat_the_lowering_cannot_name():
     """"Target player skips their next turn" is not this instruction.
 
@@ -1039,10 +922,6 @@ def test_w2g4_skipping_a_turn_refuses_for_a_seat_the_lowering_cannot_name():
     with _w2g4_pytest.raises(_W2G4LoweringError) as raised:
         _w2g4_lower(_w2g4_parse_line("Target player skips their next turn."))
     assert "skips a turn" in raised.value.reason
-
-
-# -- Knight of Valor: a sweep narrowed by a keyword and by a block -----------
-
 def test_w2g4_knight_of_valor_shrinks_only_its_own_blockers_without_flanking(set_pool):
     """"{1}{W}: Each creature without flanking blocking this creature gets
     -1/-1 until end of turn."
@@ -1085,8 +964,6 @@ def test_w2g4_knight_of_valor_shrinks_only_its_own_blockers_without_flanking(set
     assert (mate.effective_power, mate.effective_toughness) == (3, 3), (
         "the sweep reaches creatures blocking the Knight, not the whole board"
     )
-
-
 def test_w2g4_knight_of_valors_sweep_refuses_a_keyword_with_no_behaviour():
     """The refusal that matters more than the grant.
 
@@ -1109,10 +986,6 @@ def test_w2g4_knight_of_valors_sweep_refuses_a_keyword_with_no_behaviour():
         "{1}{W}: Each creature without flanking blocking this creature "
         "gets -1/-1 until end of turn."
     ))
-
-
-# -- Talruum Champion: a keyword removal on the other half of a block --------
-
 def test_w2g4_talruum_champion_strips_first_strike_from_what_it_blocked(set_pool):
     """"Whenever this creature blocks or becomes blocked by a creature, **that
     creature** loses first strike until end of turn."
@@ -1136,8 +1009,6 @@ def test_w2g4_talruum_champion_strips_first_strike_from_what_it_blocked(set_pool
     assert game._has_keyword(champion, "first strike"), (
         "the trigger names the other half of the pair, never its own source"
     )
-
-
 def test_w2g4_talruum_champion_strips_from_its_blocker_too(set_pool):
     """The other half of "blocks **or becomes blocked by**".
 
@@ -1154,8 +1025,6 @@ def test_w2g4_talruum_champion_strips_from_its_blocker_too(set_pool):
 
     assert not game._has_keyword(blocker, "first strike"), game.log
     assert game._has_keyword(champion, "first strike"), game.log
-
-
 def test_w2g4_a_block_pair_removal_refuses_a_restated_narrowing():
     """"That creature" is the object the trigger already named, so it carries
     no narrowing to honour -- and a restated *subtype* refuses rather than
@@ -1172,8 +1041,6 @@ def test_w2g4_a_block_pair_removal_refuses_a_restated_narrowing():
             "that Wall loses first strike until end of turn."
         ))
     assert "nothing narrower" in raised.value.reason
-
-
 def test_w2g4_talruum_champions_removal_is_read_off_the_pair_not_chosen(set_pool):
     """The compiled program is the assertion: the trigger lowered to the
     block-pair kind rather than to a target-shaped one, which is what says the
@@ -1181,3 +1048,62 @@ def test_w2g4_talruum_champions_removal_is_read_off_the_pair_not_chosen(set_pool
     program = _w2g4_compile(set_pool("VIS")["Talruum Champion"])
     kinds = [t.instruction.kind for t in program.triggered_abilities if t.instruction]
     assert kinds == ["remove_keyword_from_block_pair"], kinds
+
+_W2G1C_LEA = {c.name: c for c in _w2g1c_load(_w2g1c_path("LEA"))}
+def _w2g1c_scene(set_pool, *, opp_life=20, opp_lands=2):
+    p1 = _W2G1cPlayerState(name="A")
+    p2 = _W2G1cPlayerState(name="B", hand=[_W2G1C_LEA["Giant Growth"]])
+    game = _W2G1cGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    source = _W2G1cPermanent(card=set_pool("VIS")["Mundungu"])
+    source.summoning_sick = False
+    p1.battlefield.append(source)
+    for _ in range(opp_lands):
+        p2.battlefield.append(_W2G1cPermanent(card=_W2G1C_LEA["Forest"]))
+    p2.life = opp_life
+    game.queue_from_hand(1, "Giant Growth")
+    return game, p1, p2
+def test_mundungu_charges_both_halves_of_one_offer(set_pool):
+    """"…unless its controller pays {1} **and 1 life**" — one offer with two
+    prices, not CR 118.8's "or 1 life", which is one offer the payer may cover
+    either way."""
+    game, _, victim = _w2g1c_scene(set_pool)
+
+    result = game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert result.supported, result.details
+    assert victim.life == 19
+    assert any(p.tapped for p in victim.battlefield)
+    assert game.stack == []
+    assert victim.graveyard[-1].name == "Giant Growth"  # it resolved
+def test_mundungu_counters_a_payer_who_can_meet_only_the_mana(set_pool):
+    """CR 119.4 caps a life payment at the payer's life total, and a payer who
+    can meet one price and not the other can meet neither: the mana must not
+    leave the board for a payment that then fails."""
+    game, _, victim = _w2g1c_scene(set_pool, opp_life=0)
+
+    game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert game.stack == []
+    assert victim.life == 0
+    assert not any(p.tapped for p in victim.battlefield)
+def test_mundungu_counters_a_payer_with_no_mana(set_pool):
+    game, _, victim = _w2g1c_scene(set_pool, opp_lands=0)
+
+    game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert game.stack == []
+    assert victim.life == 20
+    assert [c.name for c in victim.graveyard] == ["Giant Growth"]
+def test_the_life_rider_refuses_a_currency_nothing_charges():
+    """A production must consume every token of its line or refuse it: a
+    trailing clause this reader does not know leaves the words unconsumed."""
+    with _w2g1c_pytest.raises(_W2G1cGrammarError):
+        _w2g1c_parse(
+            "Counter target spell unless its controller pays {1} and 1 card."
+        )
+    # A life-only payment refuses too — it would reach the payment prompt as a
+    # cost of {0}, which every board covers, so the offer would read as always
+    # paid.
+    with _w2g1c_pytest.raises(_W2G1cGrammarError):
+        _w2g1c_parse("Counter target spell unless its controller pays 1 life.")

@@ -17,10 +17,19 @@ from engine.card_loader import manifest_set_path, load_cards
 from engine.models import Permanent
 from engine.targeting import derive_activation_spec
 from engine.oracle import compile_card_oracle as _g5w_compile
-
-# --- W1G4: upkeep, end-step and per-player step triggers ---
-
-
+import pytest as _w2g4a_pytest
+from engine import Game as _W2G4aGame, PlayerState as _W2G4aPlayerState
+from engine.grammar import parse_line as _w2g4a_parse_line
+from engine.grammar.errors import LoweringError as _W2G4aLoweringError
+from engine.grammar.lower import lower_ability as _w2g4a_lower
+from engine.models import (CardDefinition as _W2G4aCardDefinition,
+                           Permanent as _W2G4aPermanent)
+from engine.oracle import compile_card_oracle as _w2g4a_compile
+from engine.game_types import OracleExecutionContext as _W2G4aContext
+from engine.targeting import derive_activation_spec as _w2g4a_spec
+from engine import Game as _W2G1aGame, PlayerState as _W2G1aPlayerState
+from engine.models import Permanent as _W2G1aPermanent
+from engine.card_loader import load_cards as _w2g1a_load, manifest_set_path as _w2g1a_path
 
 def _w1g4_forest(name: str) -> CardDefinition:
     """A basic land under a made-up name, so a hand or library is countable."""
@@ -29,8 +38,6 @@ def _w1g4_forest(name: str) -> CardDefinition:
         oracle_text="", colors=(), color_identity=(), keywords=(),
         produced_mana=("G",), raw={"name": name},
     )
-
-
 def _w1g4_bear(name: str, tapped: bool = False) -> Permanent:
     return Permanent(
         card=CardDefinition(
@@ -40,8 +47,6 @@ def _w1g4_bear(name: str, tapped: bool = False) -> Permanent:
         ),
         tapped=tapped,
     )
-
-
 def _w1g4_game(*, hands=(0, 0), libraries=(0, 0)) -> Game:
     game = Game(players=[
         PlayerState(
@@ -53,8 +58,6 @@ def _w1g4_game(*, hands=(0, 0), libraries=(0, 0)) -> Game:
     ])
     game.enforce_mana_costs = False
     return game
-
-
 def _w1g4_drain(game: Game) -> None:
     """Resolve everything the step just put on the stack."""
     for _ in range(20):
@@ -62,8 +65,6 @@ def _w1g4_drain(game: Game) -> None:
             return
         game.resolve_top_of_stack()
     raise AssertionError("the stack never drained")
-
-
 def test_anvil_of_bogardan_removes_every_players_maximum_hand_size(set_pool):
     """"Players have no maximum hand size." - CR 402.2, for everyone at the
     table, and derived from the board so it ends with the artifact (CR 611.3a).
@@ -88,8 +89,6 @@ def test_anvil_of_bogardan_removes_every_players_maximum_hand_size(set_pool):
     assert maximum_hand_size(game, 0) == 7
     game.resolve_cleanup_step(0)
     assert len(game.players[0].hand) == 7
-
-
 def test_sands_of_time_makes_every_player_skip_their_untap_step(set_pool):
     """"Each player skips their untap step." - the distributive spelling of
     Stasis's "Players skip their untap steps", and the same CR 502 restriction,
@@ -110,8 +109,6 @@ def test_sands_of_time_makes_every_player_skip_their_untap_step(set_pool):
     game.resolve_untap_step(0)
 
     assert bear.tapped is True
-
-
 def test_sands_of_time_inverts_only_the_upkeeps_own_players_permanents(set_pool):
     """"At the beginning of each player's upkeep, that player **simultaneously**
     untaps each tapped artifact, creature, and land they control and taps each
@@ -144,8 +141,6 @@ def test_sands_of_time_inverts_only_the_upkeeps_own_players_permanents(set_pool)
     assert sands.tapped is True
     # Somebody else's upkeep, somebody else's board.
     assert theirs_tapped.tapped is True
-
-
 def test_teferis_puzzle_box_bottoms_a_hand_and_redraws_it(set_pool):
     """"At the beginning of each player's draw step, that player puts the cards
     in their hand on the **bottom** of their library in any order, then draws
@@ -188,8 +183,6 @@ def test_teferis_puzzle_box_bottoms_a_hand_and_redraws_it(set_pool):
     assert [card.name for card in game.players[1].hand][:2] == top_before[1:]
     # The Puzzle Box's controller is not the seat whose draw step it was.
     assert len(game.players[0].hand) == 3
-
-
 def test_teferis_puzzle_box_compiles_the_bottoming_and_the_redraw_as_one_step(set_pool):
     """The two halves are one ``sequence``, and the draw reads the record the
     put wrote - "that many" has no other producer, and a back-reference with
@@ -207,8 +200,6 @@ def test_teferis_puzzle_box_compiles_the_bottoming_and_the_redraw_as_one_step(se
     assert draw.kind == "draw_target_cards"
     assert draw.payload["amount_from"] == "hand_cards_to_library"
     assert draw.payload["drawer_seat_record"] == "event_subject_player"
-
-
 @pytest.mark.parametrize("line", [
     # The ordering rider is the whole of what the player still decides once the
     # card has named the end, so a bottoming sentence without it must refuse
@@ -221,8 +212,6 @@ def test_the_bottoming_production_refuses_what_it_cannot_read(line):
     """A production consumes every token of its line or raises (CLAUDE.md)."""
     with pytest.raises(GrammarError):
         parse_line(line)
-
-
 @pytest.mark.parametrize("line", [
     # Half a sentence: the tap sweep is what makes it an inversion.
     "That player simultaneously untaps each tapped creature they control.",
@@ -231,12 +220,6 @@ def test_the_inversion_production_refuses_what_it_cannot_read(line):
     """The refusal test for the other production this block added."""
     with pytest.raises(GrammarError):
         parse_line(line)
-
-
-# --- W1G5: the Chimera cycle (CR 122.1, CR 611.2b) ---
-
-
-
 #: The four Chimeras print one sentence with one keyword changed, which is the
 #: whole reason they are one production rather than four hooks.
 CHIMERAS = {
@@ -245,8 +228,6 @@ CHIMERAS = {
     "Lead-Belly Chimera": "trample",
     "Tin-Wing Chimera": "flying",
 }
-
-
 def _g5_board(set_pool, *creatures):
     """A board of the named VIS/LEA cards on seat 0, all able to act."""
     vis = set_pool("VIS")
@@ -265,8 +246,6 @@ def _g5_board(set_pool, *creatures):
     for permanent in permanents:
         permanent.metadata["summoning_sickness_turn"] = -99
     return game, permanents
-
-
 @pytest.mark.parametrize("name,keyword", sorted(CHIMERAS.items()))
 def test_every_chimera_compiles_its_sacrifice_ability(set_pool, name, keyword):
     """One sentence with one word changed, so the fourth one comes for free.
@@ -298,8 +277,6 @@ def test_every_chimera_compiles_its_sacrifice_ability(set_pool, name, keyword):
     # rides the *kind* where it has a dedicated one — flying is the engine's
     # one keyword with its own handler.
     assert keyword in str(steps[1].payload) or keyword in steps[1].kind
-
-
 @pytest.mark.parametrize("name,keyword", sorted(CHIMERAS.items()))
 def test_a_chimera_picker_offers_only_chimeras(set_pool, name, keyword):
     """The activation picker and the resolution have to agree on the noun
@@ -311,8 +288,6 @@ def test_a_chimera_picker_offers_only_chimeras(set_pool, name, keyword):
     assert derive_activation_spec(ability) == {
         "kind": "creature", "filter": {"subtype_filter": "chimera"},
     }
-
-
 def test_a_chimera_pumps_and_arms_another_chimera_indefinitely(set_pool):
     """The Rock Hydra test. Brass-Talon sacrifices itself, Tin-Wing takes the
     +2/+2 counter and first strike, and the grant survives the turn because
@@ -348,8 +323,6 @@ def test_a_chimera_pumps_and_arms_another_chimera_indefinitely(set_pool):
     game.resolve_stack()
     assert (tin.effective_power, tin.effective_toughness) == (4, 4)
     assert tin.has_keyword("first strike")
-
-
 def test_a_chimera_refuses_to_activate_with_no_chimera_to_aim_at(set_pool):
     """CR 602.2b/601.2c: a mandatory object target that cannot be filled is
     refused with nothing paid, rather than activated onto a bystander. Written
@@ -370,8 +343,6 @@ def test_a_chimera_refuses_to_activate_with_no_chimera_to_aim_at(set_pool):
     assert not bear.has_keyword("first strike")
     # Nothing was paid: the Chimera is still on the battlefield.
     assert game.is_on_battlefield(brass)
-
-
 def test_the_counter_placement_still_refuses_a_narrowing_it_cannot_test(set_pool):
     """The allow-set was widened by exactly two fields, so a phrase outside it
     still refuses rather than being silently dropped — which is the direction
@@ -383,12 +354,6 @@ def test_the_counter_placement_still_refuses_a_narrowing_it_cannot_test(set_pool
         lower_ability(parse_line(
             "put a +2/+2 counter on target tapped chimera creature"
         ))
-
-
-# --- W1G5: a look, a price and the card it turned up (Wand of Denial) ---
-
-
-
 def test_wand_of_denial_bins_only_a_nonland_and_only_if_paid_for(set_pool):
     """"{T}: Look at the top card of target player's library. If it's a nonland
     card, you may pay 2 life. If you do, put it into that player's graveyard."
@@ -454,24 +419,6 @@ def test_wand_of_denial_bins_only_a_nonland_and_only_if_paid_for(set_pool):
     assert land.players[0].life == 20
     assert land.players[1].graveyard == []
     assert land.players[1].library[0].name == "Mountain"
-
-
-# --- VIS w2g4: Triangle of War ----------------------------------------------
-#
-# Imports at the top of this block, per the file header.
-
-import pytest as _w2g4a_pytest
-from engine import Game as _W2G4aGame, PlayerState as _W2G4aPlayerState
-from engine.grammar import parse_line as _w2g4a_parse_line
-from engine.grammar.errors import LoweringError as _W2G4aLoweringError
-from engine.grammar.lower import lower_ability as _w2g4a_lower
-from engine.models import (CardDefinition as _W2G4aCardDefinition,
-                           Permanent as _W2G4aPermanent)
-from engine.oracle import compile_card_oracle as _w2g4a_compile
-from engine.game_types import OracleExecutionContext as _W2G4aContext
-from engine.targeting import derive_activation_spec as _w2g4a_spec
-
-
 def _w2g4a_creature(name, power, toughness):
     return _W2G4aPermanent(card=_W2G4aCardDefinition(
         name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
@@ -479,8 +426,6 @@ def _w2g4a_creature(name, power, toughness):
         produced_mana=(), raw={"name": name},
         power=str(power), toughness=str(toughness),
     ))
-
-
 def _w2g4a_board(pool, mine, theirs):
     p0 = _W2G4aPlayerState(name="P0", life=20, battlefield=list(mine))
     p1 = _W2G4aPlayerState(name="P1", life=20, battlefield=list(theirs))
@@ -491,15 +436,11 @@ def _w2g4a_board(pool, mine, theirs):
     for perm in list(p0.battlefield) + list(p1.battlefield):
         perm.metadata["summoning_sickness_turn"] = -99
     return game, p0, p1
-
-
 def _w2g4a_settle(game):
     for _ in range(len(game.stack) + 8):
         if not game.stack or not game.resolve_top_of_stack():
             break
     game._settle()
-
-
 def test_w2g4_triangle_of_war_exchanges_damage_between_two_chosen_creatures(set_pool):
     """"{2}, Sacrifice this artifact: Target creature you control fights target
     creature an opponent controls." (CR 701.14 -- Fight, not CR 701.12, which
@@ -530,8 +471,6 @@ def test_w2g4_triangle_of_war_exchanges_damage_between_two_chosen_creatures(set_
     assert not game.is_on_battlefield(theirs), game.log
     assert [c.name for c in p0.graveyard] == ["Triangle of War", "My Fighter"], game.log
     assert [c.name for c in p1.graveyard] == ["Their Fighter"], game.log
-
-
 def test_w2g4_triangle_of_war_will_not_fight_two_of_the_same_seats_creatures(set_pool):
     """The printed controllers are a restriction, and a restriction the
     resolution does not re-check is one the card works more often than.
@@ -560,8 +499,6 @@ def test_w2g4_triangle_of_war_will_not_fight_two_of_the_same_seats_creatures(set
     assert one.damage_marked == 0, game.log
     assert two.damage_marked == 0, game.log
     assert game.is_on_battlefield(one) and game.is_on_battlefield(two), game.log
-
-
 def test_w2g4_triangle_of_war_refuses_at_announcement_if_a_fighter_is_gone(set_pool):
     """CR 601.2c: a named target that is not one the picker offers refuses the
     activation with **nothing paid** — the Triangle is not sacrificed, which is
@@ -581,8 +518,6 @@ def test_w2g4_triangle_of_war_refuses_at_announcement_if_a_fighter_is_gone(set_p
     assert not result.supported, result.details
     assert mine.damage_marked == 0
     assert game.is_on_battlefield(triangle), "a refused activation pays nothing"
-
-
 def test_w2g4_triangle_of_war_deals_nothing_when_one_fighter_has_gone(set_pool):
     """CR 701.14b at **resolution**, which is the half the announcement gate
     cannot cover: a creature that leaves after the ability is announced makes
@@ -615,8 +550,6 @@ def test_w2g4_triangle_of_war_deals_nothing_when_one_fighter_has_gone(set_pool):
         "701.14b is all-or-nothing: the survivor deals and takes nothing"
     )
     assert game.is_on_battlefield(mine), game.log
-
-
 def test_w2g4_triangle_of_war_asks_for_two_targets(set_pool):
     """The picker's side of CR 601.2c. A spec of ``max_targets`` 2 is what the
     client tests to decide how many prompts to run -- the Roots class is a
@@ -628,8 +561,6 @@ def test_w2g4_triangle_of_war_asks_for_two_targets(set_pool):
     assert ability.instruction.kind == "target_fights_target"
     spec = _w2g4a_spec(ability)
     assert spec is not None and spec.get("max_targets") == 2, spec
-
-
 def test_w2g4_a_two_target_fight_needs_both_slots_announced():
     """"Target creature you control fights **another creature**" is a different
     card: CR 601.2c announces nothing for the second phrase, so the choice
@@ -641,8 +572,6 @@ def test_w2g4_a_two_target_fight_needs_both_slots_announced():
             "Target creature you control fights another creature."
         ))
     assert "source" in raised.value.reason
-
-
 def test_w2g4_a_two_target_fight_refuses_a_keyword_with_no_behaviour():
     """The same guard the sweep one file over carries, and for the same reason
     one step earlier: the picker enumerates from these filters, so a keyword no
@@ -654,3 +583,41 @@ def test_w2g4_a_two_target_fight_refuses_a_keyword_with_no_behaviour():
             "an opponent controls."
         ))
     assert "shadow" in raised.value.reason
+
+_W2G1A_LEA = {c.name: c for c in _w2g1a_load(_w2g1a_path("LEA"))}
+def _w2g1a_scene(set_pool, hand):
+    p1 = _W2G1aPlayerState(name="A", hand=list(hand))
+    p2 = _W2G1aPlayerState(name="B")
+    game = _W2G1aGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    p1.battlefield.append(_W2G1aPermanent(card=set_pool("VIS")["Juju Bubble"]))
+    return game, p1, p2
+def test_juju_bubble_goes_when_its_controller_plays_a_land(set_pool):
+    """CR 701.18b: to play a card is to play it as a land **or** cast it as a
+    spell. A trigger that watched only casts would leave the artifact sitting
+    through a land drop, which is half the card."""
+    game, caster, _ = _w2g1a_scene(set_pool, [_W2G1A_LEA["Forest"]])
+
+    game.queue_from_hand(0, "Forest")
+    game.resolve_stack()
+
+    assert [p.card.name for p in caster.battlefield] == ["Forest"]
+    assert [c.name for c in caster.graveyard] == ["Juju Bubble"]
+def test_juju_bubble_goes_when_its_controller_casts_a_spell(set_pool):
+    """The other half of the same rule."""
+    game, caster, _ = _w2g1a_scene(set_pool, [_W2G1A_LEA["Lightning Bolt"]])
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.resolve_stack()
+
+    assert "Juju Bubble" in {c.name for c in caster.graveyard}
+def test_juju_bubble_ignores_the_other_seat(set_pool):
+    """The printed word is "**you**"."""
+    game, caster, opponent = _w2g1a_scene(set_pool, [])
+    opponent.hand.append(_W2G1A_LEA["Forest"])
+
+    game.queue_from_hand(1, "Forest")
+    game.resolve_stack()
+
+    assert [p.card.name for p in caster.battlefield] == ["Juju Bubble"]
+    assert caster.graveyard == []

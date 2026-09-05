@@ -577,7 +577,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # where each find lands.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("text_changes",)
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed"]
+# `delayed` is the lowering-only family Visions' second wave split off
+# `lowering/stack.py`, when the counter's "unless its controller pays {1} **and
+# 1 life**" (Mundungu) took that module past the guard below. The line is the
+# one that module's own section divider had already drawn: everything left in
+# `stack` lowers a sentence about an object **waiting on the stack right now**
+# -- countering it, copying it, retargeting it, choosing a mode for it -- where
+# nothing in `delayed` has a stack object at all. What it produces is a
+# *record*: a triggered ability for an event that has not happened (CR 603.7),
+# or a target chosen now for a sentence that runs later. Neither reads the
+# other. `effects/` and `ast/` have no `delayed` for `loops`' reason: the guard
+# fired on the lowerings, and `CreateDelayedTrigger` and `ChooseTarget` are
+# nodes that sit perfectly well beside the other statement and stack ones.
 # `search` is on both sides of the mirror as of Visions' first wave:
 # `lowering/search.py` split off `lowering/library.py` in the same round
 # `effects/search.py` had already split off `effects/library.py`, so the

@@ -151,6 +151,10 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("opponent_casts_spell", ("an", "opponent", "casts", "a", "spell")),
     ("enchantment_cast", ("you", "cast", "an", "enchantment", "spell")),
     ("you_cast_spell", ("you", "cast", "a", "spell")),
+    # "…**you play a card**" (Juju Bubble). Listed on both front ends because
+    # the card prints it and a line only one of them reads is a card the other
+    # refuses -- the same reason the two draw spellings are both here.
+    ("you_play_card", ("you", "play", "a", "card")),
     # Ankh of Mishra's, which has its own fire site. The bare creature and
     # artifact entries that used to sit beside it are gone: they had no
     # dispatcher and no card, and the subject-led production below reads the

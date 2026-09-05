@@ -12,30 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **206**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**4 unclaimed sentence(s) across 4 supported card(s).**
-
-- **Fireblast**
-  - `you may sacrifice two mountains rather than pay this spell's mana cost`
-- **Infernal Harvest**
-  - `as an additional cost to cast this spell, return x swamps you control to their owner's hand`
-- **Juju Bubble**
-  - `when you play a card, sacrifice this artifact`
-- **Kaervek's Spite**
-  - `as an additional cost to cast this spell, sacrifice all permanents you control and discard your hand`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

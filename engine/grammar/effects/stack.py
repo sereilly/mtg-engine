@@ -18,13 +18,16 @@ from .. import ast
 from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (_accept_mana_alternatives, _parse_mana_payment, _parse_zone)
+from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
+                       _parse_mana_payment, _parse_zone)
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
 
 
-def _parse_unless_pays(stream: TokenStream) -> "ast.ManaCost | None":
-    """``unless <the object's controller> pays <cost>``, or None if absent.
+def _parse_unless_pays(stream: TokenStream) -> "tuple[ast.ManaCost | None, int]":
+    """``unless <the object's controller> pays <cost> [and <n> life]``.
+
+    Returns ``(mana, life)``; ``(None, 0)`` when the clause is absent.
 
     One reader for a spell's clause and an ability's, because it is the same
     clause: the cost is offered to the *countered object's* controller while
@@ -33,7 +36,7 @@ def _parse_unless_pays(stream: TokenStream) -> "ast.ManaCost | None":
     silently read as the controller.
     """
     if not stream.accept_word("unless"):
-        return None
+        return None, 0
     payer = parse_player_ref(stream)
     if payer is None:
         raise stream.error("expected who pays after 'unless'")
@@ -46,7 +49,19 @@ def _parse_unless_pays(stream: TokenStream) -> "ast.ManaCost | None":
             "only the countered object's controller can pay to avoid a counter"
         )
     stream.expect_word("pays", "pay")
-    return _parse_mana_payment(stream, allow_variable=True)
+    mana = _parse_mana_payment(stream, allow_variable=True)
+    # "…pays {1} **and 1 life**." (Mundungu.) The same reader Purgatory's offer
+    # uses for the identical printed phrase, so what "and N life" costs is one
+    # answer wherever it trails a mana payment — and it refuses without
+    # consuming, so "counter target spell unless its controller pays {2} and
+    # draw a card" keeps whatever reading it had.
+    #
+    # The mana half stays required. A life-only payment would arrive at the
+    # payment prompt as a cost of {0}, which every board can cover, so the
+    # offer would read as always paid; no card in the pool prints one, and
+    # refusing the line is what keeps that from being discovered in play.
+    life = _accept_conjoined_life_cost(stream)
+    return mana, (int(life.value) if life is not None else 0)
 
 
 def _parse_counter(stream: TokenStream) -> ast.Statement:
@@ -70,7 +85,10 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # branch below because the spell branch's own trailers ("instead",
         # "that spell") are about a *spell* that an earlier sentence named, and
         # none of them can follow an ability.
-        return ast.CounterAbility(subject, unless_pays=_parse_unless_pays(stream))
+        mana, life = _parse_unless_pays(stream)
+        return ast.CounterAbility(
+            subject, unless_pays=mana, unless_pays_life=life,
+        )
     if subject is None:
         # "**Counter that ability.**" (Imprison.) The ability the trigger's own
         # condition was about, not one this sentence chose — so it is the bound
@@ -84,9 +102,11 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # `_GENERIC_NOUNS` for that reason.
         bound_ability = stream.mark()
         if stream.accept_phrase("that", "ability"):
+            mana, life = _parse_unless_pays(stream)
             return ast.CounterAbility(
                 ast.TargetSpec("that", ast.ObjectFilter()),
-                unless_pays=_parse_unless_pays(stream),
+                unless_pays=mana,
+                unless_pays_life=life,
             )
         stream.reset(bound_ability)
         # "counter **that spell**" (Lofty Denial's second sentence, Invoke
@@ -160,7 +180,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         )
     stream.reset(sacrifice_mark)
 
-    payment = _parse_unless_pays(stream)
+    payment, payment_life = _parse_unless_pays(stream)
     if payment is not None:
         # "…pays {4} **instead**" (Lofty Denial). The word is the whole
         # difference between a second counter and a replacement amount for the
@@ -175,6 +195,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
 
         return ast.CounterSpell(
             subject, unless_pays=payment,
+            unless_pays_life=payment_life,
             # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
             # before "instead" above because the two clauses are about
             # different things: "instead" replaces an amount an earlier
