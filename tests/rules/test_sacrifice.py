@@ -158,3 +158,32 @@ def test_regeneration_does_not_save_a_sacrificed_creature():
     assert [p.card.name for p in p1.battlefield] == []
     assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Sacrifice"]
     assert bears.regeneration_shield == 1, "the shield was never spent"
+
+
+# ---------------------------------------------------------------------------
+# W1G4 (VIS): the *other* direction of CR 700.4 — the long spelling is the word
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("700.4")
+def test_the_long_spelling_of_dies_is_the_same_trigger_condition():
+    """CR 700.4 defines *dies* as "is put into a graveyard from the
+    battlefield", so a card printing the definition instead of the word names
+    the same event and must compile to the same trigger condition.
+
+    A rules test rather than a card test: the two front ends each keep their own
+    table of printed conditions, and a wording only one of them reads leaves the
+    other refusing the effect behind it — which is what the long spelling did.
+    Both are asked here, because agreeing about the *kind* is the whole of what
+    makes the pair one event.
+    """
+    from engine.grammar import parse_line
+    from engine.oracle import _parse_trigger_condition
+
+    short = "when this creature dies"
+    long = "when this creature is put into your graveyard from the battlefield"
+
+    assert _parse_trigger_condition(short)[0].kind == "dies"
+    assert _parse_trigger_condition(long)[0].kind == "dies"
+    assert parse_line(f"{short.capitalize()}, you lose 1 life.").event.kind == "dies"
+    assert parse_line(f"{long.capitalize()}, you lose 1 life.").event.kind == "dies"
