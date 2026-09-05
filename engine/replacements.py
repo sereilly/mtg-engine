@@ -265,6 +265,11 @@ UNPAYABLE_ENTRY_SACRIFICE = 16  # the Alliances sac lands
 # nothing.
 SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
 COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
+# After it, and only because nothing prints both: Freyalise's Winds spends a
+# counter and leaves the permanent on the battlefield, so a land that has
+# already gone to its owner's hand has no counter left to remove. CR 616.1e
+# would put the choice to the affected player if a card ever printed the pair.
+RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING = 11  # Undiscovered Paradise
 # CR 106.12b's kind: what a land produces is decided while its mana ability is
 # resolving. One slot, because ``engine/land_mana_swaps.py`` answers "what does
 # this land make instead?" for every producer of the effect at once — a
@@ -1966,6 +1971,55 @@ def _remove_counters_instead_of_untapping(
         return None
     game.log.append(
         f"{permanent.card.name} does not untap; {removed} counter(s) removed instead"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+def _applies_return_instead_of_untapping(game, payload: dict) -> bool:
+    from .handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+
+    permanent = payload.get("permanent")
+    if permanent is None:
+        return False
+    seat = permanent.metadata.get(RETURN_AT_NEXT_UNTAP_SEAT)
+    if not isinstance(seat, int):
+        return False
+    # "**Your** next untap step": the step the ability's controller takes, which
+    # is not automatically the one this permanent's current controller takes.
+    # A land stolen in between waits for the step the card named.
+    player = payload.get("player")
+    return player is not None and game.players.index(player) == seat
+
+
+@replacement_effect(
+    "would_untap", RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING,
+    applies=_applies_return_instead_of_untapping,
+)
+def _return_to_hand_instead_of_untapping(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Undiscovered Paradise: "During your next untap step, as you untap your
+    permanents, return this land to its owner's hand."
+
+    A genuine CR 614 replacement rather than a delayed triggered ability, and
+    the difference is the card: the untap step gives nobody priority (CR 502.4),
+    so a delayed ability would fire at the upkeep — after the land had already
+    untapped — and hand its controller a free untapped land every turn.
+
+    The marker is cleared as it fires. It names *one* untap step (CR 611.2a),
+    and the permanent that comes back is a new object anyway (CR 400.7), so
+    nothing carries it forward.
+    """
+    from .handlers._common import return_permanent_to_owners_hand
+    from .handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+
+    permanent = payload["permanent"]
+    permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
+    owner = return_permanent_to_owners_hand(
+        game, permanent, payload.get("player")
+    )
+    game.log.append(
+        f"{permanent.card.name} does not untap; returned to {owner.name}'s hand"
     )
     return ReplacementOutcome(replaced=True)
 

@@ -337,8 +337,16 @@ class UntapStepMixin:
 
         untapped = 0
         untapped_by_type: dict[str, int] = {}
-        for idx, permanent in enumerate(player.battlefield):
-            if not permanent.tapped:
+        # A **snapshot**, because one of the replacements below takes the
+        # permanent off the battlefield: Undiscovered Paradise goes to its
+        # owner's hand instead of untapping, and a live list would renumber
+        # every later slot under the loop — so the permanent that slid into the
+        # gap would be skipped and `idx` would stop naming the permanent the
+        # caller's `keep_tapped_indices` and per-type selections were built
+        # against. The indices stay the ones the caller was offered, and the
+        # liveness check below is what keeps a departed permanent out.
+        for idx, permanent in enumerate(list(player.battlefield)):
+            if not permanent.tapped or not self.is_on_battlefield(permanent):
                 continue
 
             # Permanents that read "doesn't untap during your untap step" (e.g.

@@ -112,6 +112,27 @@ class Exile:
 
 
 @dataclass(frozen=True)
+class ReturnSelfInsteadOfUntapping:
+    """``During your next untap step, as you untap your permanents, return this
+    land to its owner's hand.`` (Undiscovered Paradise.)
+
+    A **replacement of the untap**, not a delayed trigger, and the difference is
+    the whole card. A delayed ability fires at the beginning of a step and waits
+    for priority; the untap step gives nobody priority (CR 502.4), so a delayed
+    reading would untap the land, hold the return until the upkeep, and give its
+    controller a free untapped land for the turn — the one thing the card is
+    printed to deny. What the sentence says is "instead of untapping": the
+    engine's ``would_untap`` replacement, armed for one step.
+
+    No fields. The window is the sentence's own ("your next untap step"), the
+    object is the ability's own source, and the destination is CR 400.3's
+    owner's hand — none of the three can vary without being a different
+    sentence, so there is nothing here for a payload to carry.
+    """
+    pass
+
+
+@dataclass(frozen=True)
 class PutSourceIntoZone:
     """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
 

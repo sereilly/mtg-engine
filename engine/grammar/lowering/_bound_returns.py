@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -35,6 +35,7 @@ from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     chargeable_card_filter,
     _filter_payload,
+    _is_enchanted,
     _is_source,
     _restrictions_beyond,
 )
@@ -750,5 +751,129 @@ def lower_untargeted_return(
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",
                 {"filter": swept, "who": who},
+            ),
+        )
+    # "{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)
+    # The Aura's own attachment, which CR 303.4b names rather than chooses — so
+    # there is no target, no picker and nothing in the resolution context to
+    # read. Its own instruction kind for `destroy_attached_permanent`'s reason
+    # one family over: what the handler has to *find* is different from every
+    # other bounce here, and a payload flag on the targeted kind would leave a
+    # handler that resolves an index looking for one nobody collected.
+    #
+    # The card types are honoured because on this phrase they are not a
+    # restriction: "enchanted creature" is the Aura's enchant clause said again
+    # (CR 303.4a), and an Aura attached to something its own clause excludes has
+    # already been swept away by CR 704.5m. Any *other* narrowing refuses —
+    # dropping one would bounce a permanent the sentence spared.
+    if (
+        _is_enchanted(subject)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+    ):
+        assert isinstance(subject, ast.TargetSpec)
+        if node.entering_tapped or node.under_control_of or node.repetitions:
+            raise LoweringError("the attached bounce reads no rider", node=node)
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"is_enchanted", "card_types"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the attached bounce does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("return_attached_permanent_to_hand", "", {}),)
+    # "Return **a creature you control** to its owner's hand." (Shrieking Drake,
+    # Stampeding Wildebeests.) "…**two Forests** you control to their owner's
+    # hand" (Bull Elephant), "…**three basic lands** you control" (Ovinomancer),
+    # "…**an untapped Island** you control" (the Karoo land cycle, Waterspout
+    # Djinn) — one production, the count and the noun phrase as data.
+    #
+    # Chosen, not targeted (CR 115.1): the sentence names a set on the
+    # controller's own battlefield and the controller picks out of it, so
+    # nothing is announced, nothing is re-checked at CR 608.2b, and shroud
+    # cannot save a permanent from its own controller's hand. That makes it the
+    # pick-then-act pair three other lowering families already emit
+    # (`tapping`'s Koskun Falls price, `counters`, `destruction`): the prompt
+    # records which permanents, the step behind it acts on the record.
+    #
+    # Narrow on purpose, and every clause below is load-bearing:
+    #
+    # * the quantifier is an article or a bare count — "target" is `returns`'
+    #   bounce and "all" is the sweep above, and reading either here would take
+    #   a picker away from a card that prints one;
+    # * `controller == "you"` is what makes this a price the offered seat pays,
+    #   which is the question `_action_is_takeable` puts in front of the
+    #   "sacrifice it unless you return …" offer;
+    # * every remaining key must be one `subject_matches` answers, or the
+    #   prompt would offer permanents the printed phrase excludes — "an
+    #   **untapped** Island" being exactly that.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("a", "an")
+        and not subject.targeted
+        and not subject.filter.is_card
+        and subject.filter.zone == "battlefield"
+        and subject.filter.controller == "you"
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+    ):
+        if (
+            node.entering_tapped
+            or node.under_control_of
+            or node.repetitions
+            or node.also_stack
+            or node.attached_to is not None
+        ):
+            raise LoweringError("the chosen bounce reads no rider", node=node)
+        # The seat clause is read *here* — it becomes the prompt's
+        # ``controlled_by`` — so it is taken off the filter rather than left on
+        # it, exactly as the tap price one family over does. Leaving it would
+        # be the one narrowing named twice, and a phrase named twice is a
+        # phrase two readers are free to disagree about.
+        described = _filter_payload(
+            dataclasses.replace(subject.filter, controller=None)
+        )
+        untestable = untestable_filter_keys(described)
+        if untestable:
+            raise LoweringError(
+                "the chosen bounce cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        count = int(subject.count or 1)
+        return (
+            OracleInstruction(
+                "choose_permanents", "",
+                {
+                    "result_key": CHOSEN_THIS_WAY_OBJECTS,
+                    "chooser": "you",
+                    # Off the *chooser's* own battlefield, which is what "you
+                    # control" says — named once as the seat asked and once as
+                    # the board drawn from.
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "up_to": count,
+                    # **A floor as well as a ceiling**, and this is the half
+                    # "up to two Plains" never needed. The printed count here
+                    # is indivisible: returning one of Bull Elephant's two
+                    # Forests is not paying its price, and a prompt that
+                    # accepted one would let the Elephant stay for half of what
+                    # it costs. CR 601.2h asks what a player is *able* to do,
+                    # and a partial answer is not one of them.
+                    "at_least": count,
+                    "prompt": (
+                        "Choose a permanent to return to its owner's hand."
+                        if count == 1 else
+                        f"Choose {count} permanents to return to their "
+                        "owners' hands."
+                    ),
+                },
+            ),
+            OracleInstruction(
+                "return_recorded_permanents_to_hand", "",
+                {"permanents_from": CHOSEN_THIS_WAY_OBJECTS},
             ),
         )

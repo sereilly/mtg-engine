@@ -24,6 +24,7 @@ from ..errors import GrammarError
 from ..readers import _parse_entering_counters, accept_source_reference
 from ..records import _parse_for_each_this_way
 from ..references import parse_player_ref, parse_recipient
+from ..sacrifices import parse_counted_subject
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES
 from ..phrases import _parse_further_subjects, _parse_zone
@@ -150,6 +151,18 @@ def _parse_return(
     else:
         stream.reset(bound)
         subject = parse_recipient(stream)
+    if subject is None:
+        # "Return **two Islands** you control to their owner's hand." (Flooded
+        # Shoreline's cost, Bull Elephant's price.) A bare printed count in
+        # front of an untargeted plural, which `parse_recipient` has no reading
+        # for — the counted position is the one the noun parser wants told about
+        # — so it goes through the same floor the sacrifice clauses use. One
+        # reading of "two Islands", which is what keeps a cost, an offer and an
+        # effect printing the phrase from meaning three different things.
+        counted = parse_counted_subject(stream)
+        if counted is not None:
+            count, described = counted
+            subject = ast.TargetSpec("a", described, count=count)
     if subject is None:
         raise stream.error("expected something to return")
     further = _parse_further_subjects(stream, subject)
@@ -279,3 +292,51 @@ def _parse_return(
     if further:
         return ast.Conjunction(tuple(_one(each) for each in (subject, *further)))
     return _one(subject)
+
+
+def _parse_return_instead_of_untapping(
+    stream: TokenStream,
+) -> "ast.Statement | None":
+    """``During your next untap step, as you untap your permanents, return this
+    land to its owner's hand.`` (Undiscovered Paradise.)
+
+    None with the cursor untouched when the sentence is not this one, because it
+    is tried in front of the ordinary sentence reader: "during" opens no effect
+    the subject-verb reader has, so a refusal here has to leave the line to
+    whatever comes next rather than failing it.
+
+    Read whole rather than as "a fronted window plus a return". Every word of it
+    is fixed — the window is the controller's next untap step, the object is the
+    ability's own source, the destination is CR 400.3's owner's hand — so there
+    is nothing for a general reader to vary, and a version that consumed the
+    window and handed the tail to `_parse_return` would produce an ordinary
+    self-bounce with the timing dropped. That is the failure this grammar
+    refuses by construction: the card would report supported and return the land
+    the moment the ability resolved, which is a strictly better card.
+
+    The middle clause is the one that has to be consumed rather than skipped:
+    "as you untap your permanents" is CR 502.2's turn-based action, and it is
+    what makes this a replacement of the untap instead of a delayed trigger.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("during", "your", "next", "untap", "step"):
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("as", "you", "untap", "your", "permanents"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("return"):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("to", "its", "owner", "'s", "hand"):
+        stream.reset(mark)
+        return None
+    return ast.ReturnSelfInsteadOfUntapping()

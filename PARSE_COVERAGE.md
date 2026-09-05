@@ -25,22 +25,16 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**21 unclaimed sentence(s) across 17 supported card(s).**
+**16 unclaimed sentence(s) across 12 supported card(s).**
 
 - **Anvil of Bogardan**
   - `players have no maximum hand size`
-- **Coral Atoll**
-  - `when this land enters, sacrifice it unless you return an untapped island you control to its owner's hand`
 - **Corrosion**
   - `at the beginning of your upkeep, put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated`
   - `when this enchantment leaves the battlefield, remove all rust counters from all permanents`
-- **Dormant Volcano**
-  - `when this land enters, sacrifice it unless you return an untapped mountain you control to its owner's hand`
 - **Elephant Grass**
   - `black creatures can't attack you`
   - `nonblack creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you`
-- **Everglades**
-  - `when this land enters, sacrifice it unless you return an untapped swamp you control to its owner's hand`
 - **Fireblast**
   - `you may sacrifice two mountains rather than pay this spell's mana cost`
 - **Foreshadow**
@@ -55,12 +49,8 @@ anything anyone did, and every ingest would arrive red.
   - `as an additional cost to cast this spell, return x swamps you control to their owner's hand`
 - **Juju Bubble**
   - `when you play a card, sacrifice this artifact`
-- **Jungle Basin**
-  - `when this land enters, sacrifice it unless you return an untapped forest you control to its owner's hand`
 - **Kaervek's Spite**
   - `as an additional cost to cast this spell, sacrifice all permanents you control and discard your hand`
-- **Karoo**
-  - `when this land enters, sacrifice it unless you return an untapped plains you control to its owner's hand`
 - **Solfatara**
   - `target player can't play lands this turn`
 - **Suleiman's Legacy**

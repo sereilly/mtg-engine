@@ -3404,14 +3404,29 @@ class PendingChoicesMixin:
         context,
         candidates,
         up_to: int,
+        at_least: int = 0,
     ) -> PendingChoice | None:
-        """Queue "choose up to *up_to* of these permanents" for *player_index*."""
+        """Queue "choose up to *up_to* of these permanents" for *player_index*.
+
+        *at_least* is the **floor**, and it is what makes this prompt able to
+        ask a printed count rather than only a ceiling. "Chooses up to two
+        Plains" (Raiding Party) has none — none is a legal answer — but "return
+        **two** Forests you control to their owner's hand" (Bull Elephant) is
+        indivisible: returning one Forest is not paying the price, and a prompt
+        that took it would leave the Elephant on the battlefield for half of
+        what it costs. CR 601.2h asks what a player is *able* to do, and a
+        partial answer is not one of them.
+
+        Zero is every prompt that existed before the floor did, so nothing that
+        does not ask for one is changed by it.
+        """
         return self.arm_pending_choice(
             "permanent_set_choice", player_index,
             card_name=card_name,
             prompt=prompt,
             result_key=result_key,
             up_to=int(up_to),
+            at_least=int(at_least),
             _payload=dict(payload),
             _context=context,
             _candidates=tuple(candidates),
@@ -3452,6 +3467,11 @@ class PendingChoicesMixin:
         if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
             return False
         if len(ids) > int(choice.data.get("up_to", 1)):
+            return False
+        if len(ids) < int(choice.data.get("at_least", 0) or 0):
+            # A printed count is indivisible (see ``arm_permanent_set_choice``).
+            # Rejected rather than truncated, so the prompt stays queued and the
+            # seat answers the question the card actually asked.
             return False
         live = self.live_permanent_set_choices(choice)
         chosen = []
@@ -3495,7 +3515,14 @@ class PendingChoicesMixin:
         ][:limit]
         chosen = [pid for pid in picks if pid is not None]
         if not self._resolve_permanent_set_choice(choice, chosen):
-            self._resolve_permanent_set_choice(choice, [])
+            # The empty answer is the fallback only where it is a *legal*
+            # answer. Under a floor it is not, and re-offering it twice would
+            # leave the prompt queued forever with nobody left to answer it —
+            # so the choice is discarded, which is the outcome a seat that
+            # cannot meet the floor has anyway. `_default_loyalty_recipient`
+            # takes the same last step for the same reason.
+            if not self._resolve_permanent_set_choice(choice, []):
+                self.discard_pending_choice(choice)
 
     # -- A player, and one of their casts this turn --------------------------
 

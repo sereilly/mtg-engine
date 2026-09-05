@@ -862,6 +862,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Return to your hand all enchantments you both own and control" (Remove
     # Enchantments) — the sweep twin of the bounce above.
     "return_all_matching": "zones",
+    # "Return a creature you control to its owner's hand" (Shrieking Drake) —
+    # the same move again, over the permanents a `choose_permanents` step in
+    # front of it recorded rather than over a target or a sweep.
+    "return_recorded_permanents_to_hand": "zones",
+    # "{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)
+    "return_attached_permanent_to_hand": "zones",
+    # "During your next untap step, as you untap your permanents, return this
+    # land to its owner's hand." (Undiscovered Paradise.)
+    "return_self_instead_of_untapping": "zones",
     "add_mana_from_text": "mana",
     # "Note the type of mana spent to pay this activation cost."
     # (Jeweled Amulet.) No mana is produced; what the instruction does is

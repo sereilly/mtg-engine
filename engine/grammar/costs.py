@@ -458,12 +458,49 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # source.
             mark = stream.mark()
             stream.advance()
-            returned = _parse_cost_object(stream, "return")
-            if (
-                returned.is_source
-                and stream.accept_phrase("to", "its", "owner", "'s", "hand")
+            # "Return **two** Islands you control…" (Flooded Shoreline). The
+            # count is printed in front of the phrase, which leaves the phrase
+            # the bare plural the noun parser calls "all" — the same shape the
+            # counted sacrifice below reads, admitted the same way.
+            counted = _accept_cost_count(stream)
+            returned = _parse_cost_object(
+                stream, "return", bare_plural=counted is not None
+            )
+            # "…to **its** owner's hand" and "…to **their** owner's hand" are
+            # English inflection over one destination, so both spellings are
+            # read here; any *other* destination refuses below, because a cost
+            # that put the permanent somewhere else is a cost nothing charges.
+            if returned.is_source and stream.accept_phrase(
+                "to", "its", "owner", "'s", "hand"
             ):
                 costs.append(ast.ReturnSelfToHandCost())
+                stream.accept_punct(",")
+                continue
+            # "Return **a Forest you control** to its owner's hand" (Quirion
+            # Ranger). The chosen twin, gated the way the tap cost above is
+            # gated and for its reason: the charger enumerates the payer's own
+            # battlefield with ``subject_matches``, so a phrase that predicate
+            # cannot test would be *dropped* rather than refused and the cost
+            # would be payable off a wider set than the card names.
+            if not returned.is_source and (
+                stream.accept_phrase("to", "its", "owner", "'s", "hand")
+                or stream.accept_phrase("to", "their", "owner", "'s", "hand")
+            ):
+                if chargeable_tap_filter(returned) is None:
+                    stream.reset(mark)
+                    raise stream.error("no cost path charges this return")
+                if returned.controller not in (None, "you"):
+                    # The charger draws from the *activating* player's own
+                    # battlefield, so a phrase naming another seat is a cost it
+                    # cannot pay — refused rather than charged off the wrong
+                    # board.
+                    stream.reset(mark)
+                    raise stream.error("a return cost is paid from your own board")
+                costs.append(
+                    ast.ReturnPermanentsToHandCost(
+                        1 if counted is None else counted.value, returned
+                    )
+                )
                 stream.accept_punct(",")
                 continue
             stream.reset(mark)

@@ -342,11 +342,65 @@ def is_mana_ability(ability) -> bool:
     mana abilities" (Faith's Fetters) is a rule about this predicate, and a
     second reading of it would shut off an ability the rules leave open — or,
     worse, leave one open that should be shut.
+
+    **It takes an ability or a bare instruction, and it used to take only one.**
+    ``getattr(ability, "instruction", None)`` is None for an ``OracleInstruction``,
+    so the four call sites in ``ai_policy``/``ai_valuation`` that pass one — every
+    caller on the AI side — got False for every mana ability there is. Nothing
+    raised and nothing was missing; the AI simply never recognised a mana ability
+    through those paths.
+
+    **And "could add mana when it resolves" is asked of the whole effect, not of
+    its first step.** "{T}: Add {W} or {U}. This land deals 1 damage to you"
+    (Adarkar Wastes and the four other Ice Age painlands) and "{T}: Add {U} or
+    {B}. Put a depletion counter on this land" (the five depletion lands) lower
+    to a ``sequence``, whose kind is not in :data:`MANA_PRODUCING_KINDS` — so
+    twelve shipped cards answered False here. That is CR 605.1a read backwards:
+    the rule asks whether the ability *could* add mana, and a two-step effect
+    whose first step does is a mana ability with a drawback, which is the whole
+    design of both cycles. The consequence was silent in the direction that does
+    more work — they used the stack (CR 605.3a says they must not), Imprison's
+    "a {T} ability that isn't a mana ability" would have fired on them, and an
+    effect shutting off everything but mana abilities shut them off too.
+
+    The no-target clause is asked of every step for the same reason: a sentence
+    that adds mana and then targets something is not a mana ability, and asking
+    only the outer instruction would have admitted it.
     """
-    instruction = getattr(ability, "instruction", None)
-    if instruction is None or instruction.kind not in MANA_PRODUCING_KINDS:
+    instruction = getattr(ability, "instruction", ability)
+    if instruction is None or not hasattr(instruction, "kind"):
         return False
-    return not (instruction.payload or {}).get("targets")
+    steps = (instruction, *_every_nested_step(instruction))
+    if not any(step.kind in MANA_PRODUCING_KINDS for step in steps):
+        return False
+    return not any((step.payload or {}).get("targets") for step in steps)
+
+
+def _every_nested_step(instruction) -> tuple:
+    """Every instruction inside *instruction*, at any depth.
+
+    Through the grammar's own reader of what a control-flow instruction
+    contains, so "which keys hold steps" has one answer here: a branch key
+    added there and not here would be an effect this predicate cannot see into.
+
+    Named apart from ``targeting._nested_steps`` on purpose. That one walks a
+    single level off a *third* copy of the step-key table
+    (``targeting._WRAPPER_STEP_KEYS``), and this one walks all of them off the
+    grammar's; sharing the name would be one word for two facts, which is the
+    shape ``_per_recipient_count`` is already recorded under in SET_PLAYBOOK's
+    Known gaps. That the two tables exist at all is the real debt, and it
+    belongs to whoever next needs a third reader.
+    """
+    from .grammar.lowering.categories import nested_instructions
+
+    inner = nested_instructions(instruction)
+    if not inner:
+        return ()
+    found: list = []
+    for step in inner:
+        found.append(step)
+        found.extend(_every_nested_step(step))
+    return tuple(found)
 
 
 def generic_cost(amount: int) -> dict[str, int]:

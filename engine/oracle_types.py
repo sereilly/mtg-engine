@@ -315,6 +315,25 @@ class ActivatedAbilityCost:
     # ``sacrifice_filter`` gives.
     tap_filter: dict | None = None
     tap_count: int = 0
+    # Quirion Ranger: "Return a Forest you control to its owner's hand: …";
+    # Flooded Shoreline: "{U}{U}, Return **two** Islands you control to their
+    # owner's hand: …". The same shape as the tap cost above one zone over
+    # (CR 118.3): N permanents the payer picks off their own battlefield, named
+    # by the printed noun phrase, and the source is not among them unless the
+    # phrase names it.
+    #
+    # Its own pair rather than a value on ``return_self_to_hand``, for the
+    # reason that flag is its own field beside ``sacrifice_self``: *which*
+    # permanent goes is the whole difference. The self-return is a fact about
+    # the source and needs no picker; this one has to be paid out of a set, can
+    # be unpayable (CR 601.2h), and the payer chooses.
+    #
+    # None means "no such cost", never "any permanent", for the reason
+    # ``sacrifice_filter`` gives: an empty filter would let the charger take a
+    # land where the card named a Forest, and None is also the answer for a
+    # phrase the charger cannot test.
+    return_to_hand_filter: dict | None = None
+    return_to_hand_count: int = 0
     # Tavern Swindler: "{T}, Pay 3 life: …" — a life payment as an activation
     # cost (CR 118.3b, 119.4). A count rather than a flag, because the amount is
     # printed; 0 is the honest "no such cost", since CR 119.4b makes paying 0

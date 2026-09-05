@@ -29,7 +29,8 @@ from .lowering import (_lower_produces_mana_instead, _lower_spend_mana_as_though
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
-                       _lower_put_source_into_zone, _lower_extra_turn,
+                       _lower_put_source_into_zone,
+                       _lower_return_self_instead_of_untapping, _lower_extra_turn,
                        _lower_choose_cards_in_hand, _lower_put_iterated_card_on_library,
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
@@ -189,4 +190,5 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.PutSourceIntoZone: _lower_put_source_into_zone,
+    ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
 }

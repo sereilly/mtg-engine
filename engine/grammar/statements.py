@@ -38,6 +38,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
                       _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
                       _parse_create_token, _parse_reveal_hand_and_choose,
+                      _parse_return_instead_of_untapping,
                       _parse_count_objects, _parse_produces_instead,
                       _parse_tapped_lands_produce_chosen,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
@@ -315,6 +316,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     leading_link = _parse_leading_linked_duration(stream, _parse_statement_body)
     if leading_link is not None:
         return leading_link
+    # "**During your next untap step, as you untap your permanents,** return
+    # this land to its owner's hand." (Undiscovered Paradise.) A sentence whose
+    # first word opens no effect, so it is read here rather than by the
+    # subject-verb reader, which would fail the line on a subject it never
+    # finds.
+    untap_return = _parse_return_instead_of_untapping(stream)
+    if untap_return is not None:
+        return untap_return
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed

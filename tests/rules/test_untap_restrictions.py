@@ -383,3 +383,86 @@ def test_611_2_a_lock_ends_when_its_holder_leaves_the_battlefield():
     game.resolve_untap_step(1)
 
     assert not held.tapped
+
+
+# ---------------------------------------------------------------------------
+# 614.1a over 502.3 — a replacement can take a permanent *out* of the untap
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("614.1a")
+@pytest.mark.cr("502.3")
+def test_614_1a_a_replaced_untap_may_remove_the_permanent_from_the_battlefield():
+    """A ``would_untap`` replacement that moves the permanent to a hand leaves
+    the rest of the untap intact.
+
+    Every other effect over this turn-based action keeps the permanent where it
+    is: 502.3's own restrictions leave it tapped, and Freyalise's Winds spends a
+    counter instead. This one is the first that makes the permanent *leave* -
+    "During your next untap step, as you untap your permanents, return this land
+    to its owner's hand" (Undiscovered Paradise) - and 502.3 says the active
+    player untaps their permanents *simultaneously*, so one of them going has to
+    leave the others untapping.
+
+    Written with the marker stamped by hand rather than by activating the card:
+    the claim is about the untap step, and a test that had to play a land first
+    would pass or fail on that land instead.
+    """
+    from engine import Game, PlayerState
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from engine.models import Permanent
+
+    basics = {card.name: card for card in load_cards(manifest_set_path("LEA"))}
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+
+    kept = []
+    for name in ("Forest", "Island", "Mountain"):
+        permanent = Permanent(card=basics[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        game.become_tapped(permanent)
+        kept.append(permanent)
+    leaving = kept.pop(1)
+    leaving.metadata[RETURN_AT_NEXT_UNTAP_SEAT] = 0
+
+    game.turn = 3
+    game.resolve_untap_step(0)
+
+    assert [permanent.card.name for permanent in alice.battlefield] == [
+        "Forest", "Mountain",
+    ]
+    assert all(not permanent.tapped for permanent in alice.battlefield), (
+        "a permanent leaving mid-step must not stop the ones behind it untapping"
+    )
+    assert [card.name for card in alice.hand] == ["Island"]
+
+
+@pytest.mark.cr("614.1a")
+def test_614_1a_the_replaced_untap_marker_names_one_players_step():
+    """"During **your** next untap step": the step the ability's controller
+    takes, which is not automatically the one this permanent's current
+    controller takes. An opponent's untap step is not the one the card named,
+    so the marker waits."""
+    from engine import Game, PlayerState
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from engine.models import Permanent
+
+    basics = {card.name: card for card in load_cards(manifest_set_path("LEA"))}
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+
+    theirs = Permanent(card=basics["Island"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game.become_tapped(theirs)
+    theirs.metadata[RETURN_AT_NEXT_UNTAP_SEAT] = 0
+
+    game.turn = 3
+    game.resolve_untap_step(1)
+
+    assert [permanent.card.name for permanent in bob.battlefield] == ["Island"]
+    assert theirs.tapped is False
+    assert bob.hand == []

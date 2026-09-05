@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 69.1% | 61.2% | 34.5% | 80 |
+| VIS *(measured)* | 167 | 278 | 73.4% | 66.5% | 39.9% | 89 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,11 +45,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 331 | 152 | expected a subject |  |
-| 109 | 51 | unrecognized effect verb |  |
-| 91 | 46 | unconsumed text |  |
+| 330 | 151 | expected a subject |  |
+| 108 | 50 | unrecognized effect verb |  |
+| 83 | 38 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -69,7 +69,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 4 | the counter lands on a creature, optionally one in combat with the source |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | no handler for returning a non-targeted object |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 
 ## Cards executing through the grammar
 
@@ -641,6 +641,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked, it gets -2/+2 until end of turn.`
 - **Builder's Bane**
   - `Destroy X target artifacts. Builder's Bane deals damage to each player equal to the number of artifacts they controlled that were put into a graveyard this way.`
+- **Bull Elephant**
+  - `When this creature enters, sacrifice it unless you return two Forests you control to their owner's hand.`
 - **Burlfist Oak**
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
@@ -938,6 +940,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
 - **Coral Atoll**
+  - `When this land enters, sacrifice it unless you return an untapped Island you control to its owner's hand.`
   - `{T}: Add {C}{U}.`
 - **Coral Fighters**
   - `Whenever this creature attacks and isn't blocked, look at the top card of defending player's library. You may put that card on the bottom of that player's library.`
@@ -1235,6 +1238,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Divine Retribution**
   - `Divine Retribution deals damage to target attacking creature equal to the number of attacking creatures.`
 - **Dormant Volcano**
+  - `When this land enters, sacrifice it unless you return an untapped Mountain you control to its owner's hand.`
   - `{T}: Add {C}{R}.`
 - **Double Vision**
   - `Whenever you cast your first instant or sorcery spell each turn, copy that spell. You may choose new targets for the copy.`
@@ -1498,6 +1502,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Evaporate**
   - `Evaporate deals 1 damage to each white and/or blue creature.`
 - **Everglades**
+  - `When this land enters, sacrifice it unless you return an untapped Swamp you control to its owner's hand.`
   - `{T}: Add {C}{B}.`
 - **Exile**
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
@@ -1654,6 +1659,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}: Tap target creature without flying.`
 - **Flood Plain**
   - `{T}, Sacrifice this land: Search your library for a Plains or Island card, put it onto the battlefield, then shuffle.`
+- **Flooded Shoreline**
+  - `{U}{U}, Return two Islands you control to their owner's hand: Return target creature to its owner's hand.`
 - **Flooded Woodlands**
   - `Green creatures can't attack unless their controller sacrifices a land of their choice for each green creature they control that's attacking. (This cost is paid as attackers are declared.)`
 - **Floodgate**
@@ -2488,6 +2495,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gains flying until end of turn.`
   - `Target creature gains flying until end of turn.`
 - **Jungle Basin**
+  - `When this land enters, sacrifice it unless you return an untapped Forest you control to its owner's hand.`
   - `{T}: Add {C}{G}.`
 - **Jungle Hollow**
   - `When this land enters, you gain 1 life.`
@@ -2538,6 +2546,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
 - **Karoo**
+  - `When this land enters, sacrifice it unless you return an untapped Plains you control to its owner's hand.`
   - `{T}: Add {C}{W}.`
 - **Karplusan Forest**
   - `{T}: Add {C}.`
@@ -3335,6 +3344,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
   - `At the beginning of each end step, if a creature died this turn, put a carrion counter on this creature.`
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
+- **Ovinomancer**
+  - `When this creature enters, sacrifice it unless you return three basic lands you control to their owner's hand.`
+  - `{T}, Return this creature to its owner's hand: Destroy target creature. It can't be regenerated. That creature's controller creates a 0/1 green Sheep creature token.`
 - **Pack Leader**
   - `Other Dogs you control get +1/+1.`
   - `Whenever this creature attacks, prevent all combat damage that would be dealt this turn to Dogs you control.`
@@ -3622,6 +3634,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Quirion Elves**
   - `{T}: Add {G}.`
   - `{T}: Add one mana of the chosen color.`
+- **Quirion Ranger**
+  - `Return a Forest you control to its owner's hand: Untap target creature. Activate only once each turn.`
 - **Rabid Wombat**
   - `This creature gets +2/+2 for each Aura attached to it.`
   - `This creature gets +2/+2 for each Aura attached to it.`
@@ -4188,6 +4202,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Shock**
   - `Shock deals 2 damage to any target.`
+- **Shrieking Drake**
+  - `When this creature enters, return a creature you control to its owner's hand.`
 - **Shrink**
   - `Target creature gets -5/-0 until end of turn.`
   - `Target creature gets -5/-0 until end of turn.`
@@ -4401,6 +4417,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stampede**
   - `Attacking creatures get +1/+0 and gain trample until end of turn.`
   - `Attacking creatures get +1/+0 and gain trample until end of turn.`
+- **Stampeding Wildebeests**
+  - `At the beginning of your upkeep, return a green creature you control to its owner's hand.`
 - **Standing Stones**
   - `{1}, {T}, Pay 1 life: Add one mana of any color.`
 - **Stangg**
@@ -4491,6 +4509,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B} or {R}. This land deals 1 damage to you.`
   - `{T}: Add {C}.`
   - `{T}: Add {B} or {R}. This land deals 1 damage to you.`
+- **Sun Clasp**
+  - `{W}: Return enchanted creature to its owner's hand.`
 - **Sunastian Falconer**
   - `{T}: Add {C}{C}.`
 - **Sunken City**
@@ -4903,6 +4923,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent all combat damage that would be dealt this turn. If this spell's additional cost was paid, this effect doesn't affect combat damage that would be dealt by red creatures.`
 - **Underworld Dreams**
   - `Whenever an opponent draws a card, this enchantment deals 1 damage to that player.`
+- **Undiscovered Paradise**
+  - `{T}: Add one mana of any color. During your next untap step, as you untap your permanents, return this land to its owner's hand.`
 - **Undo**
   - `Return two target creatures to their owners' hands.`
 - **Unerring Sling**
@@ -5187,6 +5209,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Water Wurm**
   - `This creature gets +0/+1 as long as an opponent controls an Island.`
+- **Waterspout Djinn**
+  - `At the beginning of your upkeep, sacrifice this creature unless you return an untapped Island you control to its owner's hand.`
 - **Wave Elemental**
   - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
 - **Weakstone**
