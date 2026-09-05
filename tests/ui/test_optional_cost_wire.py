@@ -7,12 +7,14 @@ forward the announcement or the cast fell back to the mana cost silently. This
 pins the one forwarding hop that exists.
 
 Driven through ``_queue_spell_from_request`` rather than the HTTP client because
-no *shipped* card prints an optional additional cost: the three that do are in
-Alliances, which is `measured`, so ``CARD_CATALOG`` cannot offer them to a
-session and a request naming one would 404 before reaching this code. The set's
-promotion is when the end-to-end path becomes testable — and when a **picker**
-becomes necessary, which does not exist yet (see the field's own note in
-``web/schemas.py``).
+this is about the *forwarding hop* and nothing else: one field, from the request
+model to the cast path. Its docstring used to say the three cards printing an
+optional additional cost were unreachable — "in Alliances, which is `measured`"
+— which stopped being true at that set's promotion and was never revisited, so
+a wire test went on explaining that it could not be an end-to-end one long after
+it could. It can: Primitive Justice, Taste of Paradise and Undergrowth are in
+``CARD_CATALOG``, and ``tests/ui/test_cast_cost_offers_ui_api.py`` drives the
+picker that finally sends this field over the HTTP client.
 """
 
 from __future__ import annotations

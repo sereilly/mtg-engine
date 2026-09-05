@@ -320,6 +320,32 @@ ceiling per offer computed from pool and board, a several-target collection
 whose maximum is recomputed from the answer through
 `oracle_types.cost_target_count`, and sending the map on the cast action.
 
+**Drained 2026-09-05, at VIS wave 4, and the deferral was costing more than it
+looked.** All four parts landed: `legality.cast_cost_offers` describes each
+offer with a ceiling computed through `mana_payment.plan_payment` over the pool
+*and* the untapped lands; `cast_target_spec` takes the answer so far and
+recomputes both that ceiling and CR 601.2c's count; `startCastOfferPrompt` in
+`web/static/app.js` is the prompt, re-asking the spec after every click; and the
+answer rides `pendingCastCost` onto whatever body the cast finally posts.
+
+The reason to record it is the premise the deferral rested on. Each wave wrote
+that the affected cards were unreachable because their set was `measured` — and
+that was true when W1G4 wrote it and false by the time W3G1 repeated it. **Nine
+of the ten cards are shipped**: Force of Will, Pyrokinesis, Contagion, Bounty of
+the Hunt and Scars of the Veteran (CR 118.9, all ALL), Primitive Justice, Taste
+of Paradise and Undergrowth (CR 601.2b, all ALL), and Fire Covenant (ICE). Only
+Infernal Harvest is in Visions. A gap whose entry says "nothing is broken while
+the set is measured" needs its **role** re-read, not just its cards: a promotion
+drains the premise without touching the entry, and nobody looks again.
+
+A fifth part came with it, from the same premise. `web/static/app.js` decided
+"does this card need an X?" by substring-probing the printed **mana cost**,
+which is one of the four places CR 107.3a names — so Fire Covenant ({1}{B}{R},
+"pay X life") and Infernal Harvest ({1}{B}, "return X Swamps you control to
+their owner's hand") were offered no X box and cast at CR 107.3b's default of 0.
+`cast_costs.cast_announces_x` is now the one reader, and `announces_x` /
+`max_x` on the cast spec are what the browser asks.
+
 **Added at MIR's wave 1, and half-drained at wave 2: the chosen-source shield.**
 Three prevention handlers had byte-identical bodies differing only in which
 `shields.make_*` builder they called. W2G3 removed the duplication itself

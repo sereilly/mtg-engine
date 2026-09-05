@@ -438,11 +438,15 @@ class GameActionRequest(BaseModel):
     # pay {1}{R} and/or {1}{G} any number of times", Primitive Justice).
     #
     # Absent declines every offer, which is what "may" means and the only
-    # default that cannot charge a player for a price they did not accept. No
-    # picker emits it yet: `_cost_picker_spec` models a *mandatory* cost, and an
-    # optional one needs an offer shape ("cast for {3}{G}, or for {3}{G} plus
-    # {1}{G}?") that does not exist — the same Phase 4 item W1G4 recorded for
-    # the alternative cost above.
+    # default that cannot charge a player for a price they did not accept.
+    #
+    # The picker that fills it is `legality.cast_cost_offers` and the prompt
+    # that reads it is `startCastOfferPrompt` in `web/static/app.js`.
+    # `_cost_picker_spec` still models only a *mandatory* cost — the one the
+    # caster will certainly pay — which is why an offer needed a shape of its
+    # own rather than a flag on that one: what an offer needs is a per-offer
+    # counter and a payability ceiling, and neither is a thing a picker for a
+    # fixed price has anywhere to put.
     optional_cost_payments: dict[str, int] | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so

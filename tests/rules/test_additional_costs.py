@@ -551,3 +551,131 @@ def test_107_3a_an_x_in_an_additional_cost_is_announced_as_the_spell_is_cast():
     assert paid.supported, paid.details
     assert len(caster.battlefield) == 1
     assert [c.name for c in caster.hand] == ["Swamp", "Swamp"]
+
+
+# --- W4G2 (Visions): CR 107.3a's X does not live only in the mana cost --------
+
+from engine.card_loader import manifest_set_paths as _w4g2_paths
+from engine.cast_costs import costs_charged_from as _w4g2_all_costs
+
+#: Both manifest roles, because the census this section pins is about the pool
+#: rather than about what a player may deck today — and one of the two cards it
+#: names is shipped while the other is not.
+_W4G2_POOL = {
+    card.name: card
+    for path in _w4g2_paths(include_measured=True)
+    for card in load_cards(path)
+}
+
+
+def _w4g2_costs(card):
+    return _w4g2_all_costs(card, "hand")
+
+
+
+@pytest.mark.cr("107.3a")
+def test_107_3a_an_x_is_announced_for_a_cost_outside_the_mana_cost():
+    """CR 107.3a: the caster announces X for "a mana cost, alternative cost,
+    additional cost, and/or activation cost with an {X} … in it".
+
+    Four places, and every reader of the question outside the engine asked the
+    first one alone — as a substring probe of the printed mana-cost string.
+    Fire Covenant's is ``{1}{B}{R}`` and Infernal Harvest's is ``{1}{B}``: both
+    spell their X only in an additional cost, so both were offered no X and cast
+    at CR 107.3b's default of 0, which is legal and does nothing at all.
+    """
+    from engine.cast_costs import cast_announces_x
+
+    for name in ("Fire Covenant", "Infernal Harvest"):
+        card = _W4G2_POOL[name]
+        assert "{X}" not in card.mana_cost.upper(), (
+            f"{name}'s X is not in its mana cost — that is the whole point"
+        )
+        assert cast_announces_x(card), name
+
+    # The mana-cost half of the same rule still answers yes, and a spell with no
+    # X anywhere still answers no.
+    assert cast_announces_x(_CATALOG["Fireball"])
+    assert not cast_announces_x(_LEA["Lightning Bolt"])
+
+
+@pytest.mark.cr("107.3a")
+def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
+    """The census behind the fix, as a test rather than as a claim.
+
+    Two cards in both manifest roles announce an X that is nowhere in their mana
+    cost, and one of them (Fire Covenant, Ice Age) is in the **shipped** pool —
+    so this was a live defect in a set players can already deck, not a Visions
+    pre-ship item. A third card arriving here without a picker that asks for its
+    X is the regression this pins.
+    """
+    from engine.cast_costs import cast_announces_x
+
+    outside = sorted(
+        card.name
+        for card in _W4G2_POOL.values()
+        if cast_announces_x(card) and "{X}" not in (card.mana_cost or "").upper()
+    )
+    assert outside == ["Fire Covenant", "Infernal Harvest"], outside
+
+
+@pytest.mark.cr("107.3a", "119.4", "601.2h")
+def test_107_3a_the_announced_x_is_bounded_by_what_the_cost_can_pay():
+    """CR 601.2h refuses a cast whose announcement prices a cost the caster
+    cannot pay, so the announcement has a ceiling — and it is not the mana pool.
+
+    Fire Covenant's X is paid in life (CR 119.4 caps a life payment at the life
+    total) and Infernal Harvest's in Swamps. The picker reads the same numbers
+    ``_unpayable_additional_cost`` refuses by, so it can neither offer an X the
+    cast would reject nor hide one it would accept.
+    """
+    game, caster, _ = _duel([_W4G2_POOL["Fire Covenant"]])
+    caster.life = 7
+    assert game.cast_target_spec(0, _W4G2_POOL["Fire Covenant"])["max_x"] == 7
+    caster.life = 2
+    assert game.cast_target_spec(0, _W4G2_POOL["Fire Covenant"])["max_x"] == 2
+
+    harvest = _W4G2_POOL["Infernal Harvest"]
+    game, caster, _ = _duel([harvest])
+    assert game.cast_target_spec(0, harvest)["max_x"] == 0, (
+        "no Swamp to return is an X of zero, not an unbounded offer"
+    )
+    caster.battlefield = [Permanent(card=_LEA["Swamp"]) for _ in range(3)]
+    game._settle()
+    assert game.cast_target_spec(0, harvest)["max_x"] == 3
+
+
+@pytest.mark.cr("107.3a", "601.2h")
+def test_107_3a_the_ceiling_is_exactly_what_the_cast_gate_accepts():
+    """The picker and the gate, compared directly over the same board: every X
+    up to the ceiling is castable and the one above it is refused.
+
+    Written as a comparison rather than as two numbers, because a picker and a
+    gate with separate arithmetic between them is this engine's recurring
+    defect — and on a cost the failure is an announcement the player makes and
+    the game then throws away.
+    """
+    harvest = _W4G2_POOL["Infernal Harvest"]
+    for swamps in (0, 2):
+        game, caster, _ = _duel([harvest])
+        game.enforce_mana_costs = True
+        caster.mana_pool["B"] = 1
+        caster.mana_pool["C"] = 1
+        caster.battlefield = [Permanent(card=_LEA["Swamp"]) for _ in range(swamps)]
+        game._settle()
+        ceiling = game.cast_target_spec(0, harvest)["max_x"]
+        assert ceiling == swamps
+
+        refusal = game._unpayable_additional_cost(
+            0, harvest, tuple(_w4g2_costs(harvest)),
+            spell_hand_index=0, from_zone="hand", x_value=ceiling,
+        )
+        assert refusal is None, f"the picker offered {ceiling} and the gate refused it"
+        over = game._unpayable_additional_cost(
+            0, harvest, tuple(_w4g2_costs(harvest)),
+            spell_hand_index=0, from_zone="hand", x_value=ceiling + 1,
+        )
+        assert over is not None, (
+            f"the gate accepted {ceiling + 1} with {swamps} Swamps, so the "
+            f"ceiling is hiding a legal announcement"
+        )

@@ -466,6 +466,7 @@ def _serialize_card(
     caster_index: int | None = None,
     *,
     from_zone: str = "hand",
+    hand_index: int | None = None,
 ) -> dict:
     # Cost increasers (Gloom) are applied at payment time by the engine; reflect
     # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
@@ -495,8 +496,14 @@ def _serialize_card(
     # graveyard price, so the copy in hand and the copy in the graveyard are two
     # different prompts for one card.
     if game is not None and caster_index is not None:
+        # ``hand_index`` is which copy this is, and it matters to exactly one
+        # part of the spec: CR 601.2a puts the spell on the stack before its
+        # costs are paid, so it cannot be the card exiled to pay its own
+        # alternative cost — while a *second copy* in hand legitimately can.
+        # A deck repeats one immutable definition per copy, so the position is
+        # the only thing that tells them apart.
         serialized["target_spec"] = game.cast_target_spec(
-            caster_index, card, from_zone=from_zone
+            caster_index, card, from_zone=from_zone, spell_hand_index=hand_index,
         )
     return serialized
 
@@ -815,7 +822,10 @@ def _serialize_player(
     playable_command_indices: list[int] | None = None,
 ) -> dict:
     if viewer_seat == seat:
-        hand = [_serialize_card(card, game, seat) for card in player.hand]
+        hand = [
+            _serialize_card(card, game, seat, hand_index=index)
+            for index, card in enumerate(player.hand)
+        ]
     elif _hand_revealed_to_viewer(game, viewer_seat, seat):
         # An active reveal (Glasses of Urza's look, Word of Command's forced-play
         # choice) lets the viewer see this player's actual cards, so the opponent

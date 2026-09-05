@@ -36,6 +36,8 @@ was missing.
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass
 
 from engine import Game
@@ -44,6 +46,7 @@ from engine.cast_permissions import playable_from_zones
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.models import PlayerState
+from engine.oracle import compile_card_oracle
 
 from .prompts import PromptContext, render_prompts
 from .session_store import Session
@@ -53,6 +56,7 @@ from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
     _serialize_card_summary,
+    _serialize_modes,
     _serialize_player,
     _serialize_stack_item,
 )
@@ -249,6 +253,7 @@ def _card_castable_now(
     window: _CastingWindow,
     *,
     extra_generic: int = 0,
+    hand_index: int | None = None,
 ) -> bool:
     """Whether *card* could be cast or played right now — timing, targets and
     mana (the pool plus what untapped lands could add).
@@ -258,6 +263,10 @@ def _card_castable_now(
     zones the seat may cast from is the caller's question rather than this
     one's — the hand is CR 601.3 and the command zone is CR 903.8, two
     different rules whose cards then face the same gates.
+
+    ``hand_index`` is which copy, and it matters to one gate: CR 118.9's
+    alternative cost may be paid *rather than* the mana cost, and CR 601.2a
+    withholds the spell itself from the hand that pays it.
     """
     game = session.game
     player = game.players[player_index]
@@ -326,7 +335,18 @@ def _card_castable_now(
         # Use x_value=0 so X spells are shown as playable (castable at X=0)
         cost = game._parse_mana_cost(card.mana_cost, x_value=0, extra_generic=extra_tax)
         if not _can_afford_with_pool(window.potential_pool, cost, player):
-            return False
+            # CR 118.9: an alternative cost is paid *rather than* the mana cost,
+            # so a seat with no mana at all can still cast Force of Will off a
+            # blue card and a life. Asked only once the mana answer is no, and
+            # through the same enumeration the offer prompt reads — a highlight
+            # that said "no" here would call five shipped cards uncastable on
+            # exactly the boards they are famous for being cast from.
+            return any(
+                offer.get("kind") == "alternative" and offer.get("payable")
+                for offer in game.cast_cost_offers(
+                    player_index, card, spell_hand_index=hand_index,
+                )
+            )
 
     return True
 
@@ -345,7 +365,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     return [
         i
         for i, card in enumerate(session.game.players[player_index].hand)
-        if i not in locked and _card_castable_now(session, player_index, card, window)
+        if i not in locked
+        and _card_castable_now(session, player_index, card, window, hand_index=i)
     ]
 
 
@@ -374,6 +395,71 @@ def _compute_playable_command_indices(session: Session, player_index: int) -> li
             extra_generic=game.commander_tax(player_index, card),
         )
     ]
+
+
+def parse_optional_cost_payments(raw: str | None) -> dict[str, int] | None:
+    """CR 601.2b's part-answered offer map, as it arrives on a query string.
+
+    The picker re-asks for a spec after every click, because both numbers it
+    needs move with the answer: how many times each *remaining* offer is still
+    payable (raising one spends mana the others can no longer have), and how
+    many targets the announcement now names (Primitive Justice destroys one
+    artifact plus another per {1}{R} and per {1}{G} paid). Sending the answer so
+    far is what makes those recomputable server-side rather than re-derived in
+    the browser — which for the target count would be a fourth reader of
+    ``oracle_types.cost_target_count``'s two dict keys.
+
+    Junk is dropped rather than refused. This map is a **picker hint**: it sizes
+    what the browser offers, and the cast itself is gated by the engine against
+    the map the *action* carries, so the worst a malformed hint can do is offer
+    the wrong range and have the cast refused with nothing spent.
+    """
+    if not raw:
+        return None
+    try:
+        decoded = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    payments = {
+        str(key): int(value)
+        for key, value in decoded.items()
+        if isinstance(value, (int, float)) and int(value) > 0
+    }
+    return payments or None
+
+
+def build_card_target_spec(
+    session: Session,
+    card,
+    seat: int,
+    *,
+    from_zone: str = "hand",
+    hand_index: int | None = None,
+    optional_cost_payments: str | None = None,
+) -> dict:
+    """One card's cast-time announcement, for a client that is about to make it.
+
+    The same spec a hand card carries in the polled state, asked for a card the
+    state does not carry one for — the Debug Menu's free cast, whose card comes
+    from a session-less catalog search — and asked *again* mid-announcement,
+    once CR 601.2b's optional prices have been part-answered.
+    """
+    return {
+        "name": card.name,
+        "target_spec": session.game.cast_target_spec(
+            seat, card, from_zone=from_zone, spell_hand_index=hand_index,
+            optional_cost_payments=parse_optional_cost_payments(
+                optional_cost_payments
+            ),
+        ),
+        "modes": _serialize_modes(card, session.game, seat),
+        # Whether more than one of those modes may be chosen (CR 700.2d). The
+        # client fetches the spec before it opens the mode prompt, so this is
+        # where the prompt learns to be a multi-select.
+        "modes_at_least": compile_card_oracle(card).modes_at_least,
+    }
 
 
 def build_state(session: Session, viewer_seat: int | None) -> dict:

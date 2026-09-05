@@ -81,6 +81,13 @@ let pendingCastFromZone = null;
 // cost is announced before the target (CR 601.2c) and whichever target prompt
 // ends up sending the cast must carry the payment made one prompt earlier.
 let pendingCastCost = null;
+// CR 601.2b's *optional* prices, while the caster is still deciding them: the
+// offer prompt in progress. `taken` is the {symbols: times} map for an optional
+// additional mana cost (CR 601.2b) and `alternative` the CR 118.9 choice, both
+// in the vocabulary the wire already carried and nothing ever sent. The answer
+// is copied onto `pendingCastCost` when the prompt is confirmed, so from there
+// it rides sendAction like every other payment announced before the target.
+let pendingCastOffers = null;
 let debugSearchTimer = null;
 let debugAddManaMode = false;
 let symbolMap = {};
@@ -1666,7 +1673,31 @@ function manaPoolCanPayCost(manaPool, required) {
   return remaining >= required.generic;
 }
 
+// Whether the caster announces a value for X as this card is cast (CR 107.3a).
+// The backend's answer, not a reading of the printed mana cost: the rule names
+// "a mana cost, alternative cost, additional cost, and/or activation cost with
+// an {X} ... in it", and this used to ask only the first of the four as a
+// substring probe. Fire Covenant's cost is {1}{B}{R} and Infernal Harvest's is
+// {1}{B} — both spell their X in an *additional* cost ("pay X life", "return X
+// Swamps you control to their owner's hand"), so no X box was ever offered and
+// the cast took CR 107.3b's default of 0: legal, and useless, on two spells
+// that are nothing but X. `engine/cast_costs.cast_announces_x` is the one
+// reader; `announces_x` is what it puts on the spec.
 function hasXCost(card) {
+  if (!card || typeof card === "string") return false;
+  const spec = targetSpecOf(card);
+  if (typeof spec.announces_x === "boolean") return spec.announces_x;
+  // No spec reached this card (the fetch behind `attachCardTargetSpec` failed).
+  // The mana-cost half of the rule is the half this client can still answer
+  // alone, so it is the fallback rather than a silent "no X".
+  return xLivesInManaCost(card);
+}
+
+// The half of CR 107.3a the *mana pool* prices. Read only where the question is
+// "how much X can the pool pay for" — Infernal Harvest's X costs no mana at
+// all, so bounding it by leftover mana would clamp it to 0 on the exact board
+// that can pay it.
+function xLivesInManaCost(card) {
   return !!card && typeof card !== "string" && (card.mana_cost || "").toUpperCase().includes("{X}");
 }
 
@@ -3552,6 +3583,7 @@ function beginPendingHandCast(card, handIndex = null) {
   // A fresh cast is from the hand; a zone cast sets the zone right after.
   pendingCastFromZone = null;
   pendingCastCost = null;
+  pendingCastOffers = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -3570,6 +3602,7 @@ function clearPendingHandCast() {
   pendingCastModeIndex = null;
   pendingCastFromZone = null;
   pendingCastCost = null;
+  pendingCastOffers = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -9129,6 +9162,103 @@ function renderActivationPrompt() {
     return;
   }
 
+  // CR 601.2b's optional prices, before CR 601.2c's targets and before the X
+  // box below — the order the rule puts them in, and the order the numbers
+  // need: how many artifacts Primitive Justice destroys is decided by what was
+  // paid for it.
+  if (pendingCastOffers) {
+    const pending = pendingCastOffers;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Pay for ${pending.cardName}?`;
+    body.textContent = pending.refreshing
+      ? "Recomputing what is still payable…"
+      : "These prices are optional. Choose what you are paying, then confirm.";
+    const rows = [];
+    for (const offer of pending.offers) {
+      if (offer.kind === "alternative") {
+        // CR 118.9: paid *rather than* the mana cost, so the two are the two
+        // arms of one choice rather than a box to tick beside the cost.
+        const declined = pending.alternative === null;
+        const buttons = [
+          `<button type="button" class="prompt-choice-btn${declined ? " selected" : ""}"`
+          + ` data-alt-choice="decline">Pay ${escapeHtml(pending.card.mana_cost || "its mana cost")}</button>`,
+        ];
+        if (!offer.payable) {
+          rows.push(
+            `<div>Alternative cost: ${escapeHtml(offer.label)} — you can't pay it right now.</div>`,
+          );
+        } else if (Array.isArray(offer.hand_choices)) {
+          for (const choice of offer.hand_choices) {
+            const on = pending.alternative === choice.index;
+            buttons.push(
+              `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+              + ` data-alt-choice="${choice.index}">Exile ${escapeHtml(choice.name)}</button>`,
+            );
+          }
+        } else {
+          const on = pending.alternative === true;
+          buttons.push(
+            `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+            + ` data-alt-choice="take">${escapeHtml(offer.label)}</button>`,
+          );
+        }
+        rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}</div>`);
+        rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
+        continue;
+      }
+      // An optional additional mana cost: how many times, 0 to the ceiling the
+      // backend computed from this seat's pool and board.
+      const max = Number(offer.max_times || 0);
+      const chosen = Number(pending.taken[offer.symbols] || 0);
+      const counters = [];
+      for (let times = 0; times <= max; times += 1) {
+        counters.push(
+          `<button type="button" class="prompt-choice-btn${times === chosen ? " selected" : ""}"`
+          + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="${times}">${times}</button>`,
+        );
+      }
+      rows.push(
+        `<div>Pay ${renderSymbolsInline(offer.symbols)}`
+        + (offer.repeatable ? " any number of times" : "")
+        + ` — chosen ${chosen}${max ? ` of up to ${max}` : " (none payable)"}.</div>`,
+      );
+      if (counters.length > 1) rows.push(`<div class="prompt-choice-row">${counters.join("")}</div>`);
+    }
+    // What the announcement will now name, when a payment decides it
+    // (CR 601.2c). Shown because it is the surprising half: paying twice for
+    // Primitive Justice means clicking three artifacts, not one.
+    const willTarget = targetSpecOf(pending.card)?.max_targets;
+    if (Number.isInteger(willTarget) && willTarget > 1) {
+      rows.push(`<div>This will name ${willTarget} targets.</div>`);
+    }
+    rows.push(
+      '<div class="prompt-choice-row">'
+      + `<button type="button" class="prompt-choice-btn" id="castOffersConfirmBtn"${pending.refreshing ? " disabled" : ""}>Confirm</button>`
+      + "</div>",
+    );
+    steps.innerHTML = rows.join("");
+    steps.querySelectorAll("[data-offer-times]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setCastOfferTimes(btn.dataset.offerSymbols, Number(btn.dataset.offerTimes));
+      });
+    });
+    steps.querySelectorAll("[data-alt-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const raw = btn.dataset.altChoice;
+        setCastAlternativeCost(
+          raw === "decline" ? null : raw === "take" ? true : Number(raw),
+        );
+      });
+    });
+    document.getElementById("castOffersConfirmBtn")?.addEventListener("click", confirmCastOffers);
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
@@ -9454,7 +9584,14 @@ function renderActivationPrompt() {
       }
       const xColor = xSpendColorForCard(pendingCastX.card);
       const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
-      body.textContent = xColorName
+      body.textContent = !xLivesInManaCost(pendingCastX.card)
+        // CR 107.3a: the X is in an *additional* cost (Fire Covenant pays X
+        // life, Infernal Harvest returns X Swamps), so no amount of tapping
+        // raises it and the ceiling came off a life total or a board. Saying
+        // "tap more mana sources" here would send the caster looking for the
+        // one thing that cannot help.
+        ? `X is part of this spell's additional cost rather than its mana cost, so tapping lands won't raise it. You may announce up to ${pendingCastX.maxX}.`
+        : xColorName
         ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X). Tap more mana sources to raise the limit.`
         : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost. Tap more mana sources to raise the limit.`;
     }
@@ -10894,6 +11031,139 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// CR 601.2b: the *optional* half of the announcement
+//
+// A cost the caster will certainly pay has a picker (`startCastCostPrompt`
+// below). A cost they may *decline* needs an offer instead — "cast Force of
+// Will for {3}{U}{U}, or exile a blue card and pay 1 life?", "pay {1}{R} and/or
+// {1}{G} how many times?" — with a counter per offer, because one printed
+// sentence can offer two independently (Primitive Justice). The engine has
+// taken both announcements since Alliances shipped and the wire has carried
+// them (`alternative_cost`, `alternative_cost_hand_index`,
+// `optional_cost_payments`); nothing ever sent one, so nine cards in the
+// shipped pool were castable at their printed default price and at no other.
+//
+// The ceilings and the target count both move as the offers are answered, and
+// both are the backend's numbers: raising one offer spends mana the others can
+// no longer have, and Primitive Justice destroys one more artifact per payment
+// (`oracle_types.cost_target_count`). So each click re-asks for the spec with
+// the answer so far rather than doing that arithmetic here.
+// ---------------------------------------------------------------------------
+
+function castCostOffers(card) {
+  const offers = targetSpecOf(card)?.cost_offers;
+  return Array.isArray(offers) && offers.length ? offers : null;
+}
+
+// Whether any offer on this card is one the caster could actually take. An
+// alternative cost with nothing in hand to exile, or an offer the pool cannot
+// pay once, is shown but not clickable — and a prompt whose every button is
+// dead is a prompt worth skipping.
+function castOffersAreLive(offers) {
+  return (offers || []).some((offer) => (
+    offer.kind === "alternative" ? offer.payable : Number(offer.max_times || 0) > 0
+  ));
+}
+
+function startCastOfferPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const offers = castCostOffers(card);
+  if (!offers || !castOffersAreLive(offers)) return false;
+  pendingCastOffers = {
+    card,
+    cardName,
+    castAction,
+    offers,
+    // {symbols: times} — exactly what `optional_cost_payments` carries, and the
+    // key is `mana_payment.mana_cost_label`'s canonical spelling on both sides.
+    taken: {},
+    // The CR 118.9 choice: null when the mana cost is being paid, otherwise the
+    // hand position of the card being exiled (or `true` for an alternative cost
+    // with no exile half).
+    alternative: null,
+    handIndex: pendingCastHandCard?.handIndex ?? null,
+    refreshing: false,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what you are paying for ${cardName}.`);
+  return true;
+}
+
+// Re-ask the backend for this cast's spec with the offers answered so far, so
+// the remaining ceilings and the target count are computed against the answer
+// rather than against an empty one.
+async function refreshCastOffers() {
+  const pending = pendingCastOffers;
+  if (!pending || !sessionId || seat === null) return;
+  pending.refreshing = true;
+  renderActivationPrompt();
+  try {
+    const params = new URLSearchParams({
+      card_name: pending.cardName,
+      seat: String(seat),
+      optional_cost_payments: JSON.stringify(pending.taken),
+    });
+    if (pendingCastFromZone) params.set("from_zone", pendingCastFromZone);
+    if (Number.isInteger(pending.handIndex)) params.set("hand_index", String(pending.handIndex));
+    const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+    if (resp.ok) {
+      const payload = await resp.json();
+      if (pendingCastOffers === pending && payload?.target_spec) {
+        // The whole spec, not just the offers: `max_targets` moved too, and the
+        // picker that reads it reads it off the card.
+        pending.card.target_spec = payload.target_spec;
+        pending.offers = castCostOffers(pending.card) || pending.offers;
+      }
+    }
+  } catch {
+    /* keep the last good spec; the cast is still gated by the engine */
+  } finally {
+    if (pendingCastOffers === pending) pending.refreshing = false;
+    renderActivationPrompt();
+  }
+}
+
+function setCastOfferTimes(symbols, times) {
+  const pending = pendingCastOffers;
+  if (!pending) return;
+  if (times > 0) pending.taken[symbols] = times;
+  else delete pending.taken[symbols];
+  refreshCastOffers();
+}
+
+// CR 118.9a: one alternative cost, so this is a choice between paying the mana
+// cost and paying that one — never a toggle that could leave both announced.
+function setCastAlternativeCost(choice) {
+  const pending = pendingCastOffers;
+  if (!pending) return;
+  pending.alternative = choice;
+  renderActivationPrompt();
+}
+
+// The announcement is made: copy it onto `pendingCastCost` (which every cast
+// path already merges into whatever body it sends) and continue into the rest
+// of the cast — the mandatory-cost picker, then the targets, then the cast.
+function confirmCastOffers() {
+  const pending = pendingCastOffers;
+  if (!pending) return;
+  const { card, cardName, castAction } = pending;
+  const announced = {};
+  if (Object.keys(pending.taken).length) announced.optional_cost_payments = { ...pending.taken };
+  if (pending.alternative !== null) {
+    announced.alternative_cost = true;
+    if (Number.isInteger(pending.alternative)) {
+      announced.alternative_cost_hand_index = pending.alternative;
+    }
+  }
+  pendingCastOffers = null;
+  pendingCastCost = { ...(pendingCastCost || {}), ...announced };
+  renderActivationPrompt();
+  if (startCastCostPrompt(card, castAction)) return;
+  continueCastAfterCost(card, castAction);
+}
+
 // CR 601.2b: a printed additional cost the caster *chooses* is announced before
 // the target. Opens the picker that cost needs and returns true when it did.
 // What the pick then does is settled by whether the spell also targets: for
@@ -11447,7 +11717,13 @@ function confirmDividedTargets() {
   // A printed amount, or an X the *card* defines (CR 107.3c) — either way the
   // total is known already and the caster is never asked for X.
   const definedX = targetSpecOf(card)?.defined_x;
-  const fixedTotal = (card.mana_cost || "").includes("{X}") && !Number.isInteger(definedX)
+  // `hasXCost`, not a second probe of the mana-cost string: Fire Covenant
+  // ({1}{B}{R}, "pay X life") and Infernal Harvest ({1}{B}, "return X Swamps")
+  // announce an X that is nowhere in their mana cost, so this branch called
+  // their total *known* and `dividedDivisionTotal(card, null)` answered 0 — a
+  // division prompt offering nought damage to split, which is the one number
+  // neither card can ever be worth casting for.
+  const fixedTotal = hasXCost(card) && !Number.isInteger(definedX)
     ? null
     : dividedDivisionTotal(card, null);
   pendingCastTarget = null;
@@ -11618,7 +11894,11 @@ function startCastDividedXPrompt(
     costString: card.mana_cost || "",
     costCard: card,
     // Each target beyond the first eats {1} of generic mana that could go to X.
-    maxX: Math.max(0, baseMax - Math.max(0, extraTargetTax)),
+    // Through `castXCeiling`, written exactly as the re-render above writes it,
+    // so the opening value and every value after it come from one rule: an X
+    // paid in life or in permanents (Fire Covenant, Infernal Harvest) has no
+    // mana price, and the pool's number — tax and all — is not its bound.
+    maxX: castXCeiling(card, Math.max(0, baseMax - Math.max(0, extraTargetTax))),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
@@ -11742,9 +12022,21 @@ function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abil
 // — and the number is the *engine's*, reported on the target spec, because
 // counting a board is not something this browser can do. Returns the affordable
 // ceiling unchanged for every card that prints no bound.
+// The largest X this cast may announce: the smallest of the bounds that apply.
+// `max_x` is the backend's — a printed cap (Winter's Chill), a life total
+// (Fire Covenant, CR 119.4) or a board of Swamps (Infernal Harvest, CR 601.2h).
+// `affordable` is what the mana pool can buy, and it applies **only** when the
+// {X} is in the mana cost: an X paid in life or permanents is not priced in
+// mana, and folding the pool in would have offered 0 to a caster who could
+// announce five.
 function castXCeiling(card, affordable) {
+  const bounds = [];
+  if (xLivesInManaCost(card)) bounds.push(affordable);
   const bound = targetSpecOf(card)?.max_x;
-  return Number.isInteger(bound) ? Math.min(affordable, bound) : affordable;
+  if (Number.isInteger(bound)) bounds.push(bound);
+  // Neither bound is knowable only when the spec never arrived and the mana
+  // cost has no {X}; the pool's number is the honest fallback there.
+  return bounds.length ? Math.min(...bounds) : affordable;
 }
 
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
@@ -13248,7 +13540,14 @@ function createCardElement(card, options = {}) {
 
         // A printed additional cost the caster chooses is announced before any
         // target (CR 601.2b precedes 601.2c), so it comes first — and a spell
-        // that has both runs the cascade below once its payment is named.
+        // that has both runs the cascade below once its payment is named. The
+        // *optional* prices are announced in that same step and are asked
+        // first, because what is paid can decide how many targets there then
+        // are to choose (CR 601.2c, Primitive Justice).
+        if (startCastOfferPrompt(card)) {
+          return;
+        }
+
         if (startCastCostPrompt(card)) {
           return;
         }
@@ -13658,6 +13957,7 @@ async function beginZoneCast(card, zone) {
   pendingCastFromZone = zone;
   try {
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
+    if (startCastOfferPrompt(card)) return;
     if (startCastCostPrompt(card)) return;
     if (startCastTargetCascade(card)) return;
     const castTargetSeat = getDefaultTargetSeat(cardName);
@@ -16237,6 +16537,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
+      if (card && startCastOfferPrompt(card)) { return; }
       if (card && startCastCostPrompt(card)) { return; }
       if (card && startCastTargetCascade(card)) { return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
@@ -17562,8 +17863,9 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingCastOffers);
   pendingActivation = null;
+  pendingCastOffers = null;
   pendingCastTarget = null;
   pendingCastX = null;
   pendingCastDivision = null;

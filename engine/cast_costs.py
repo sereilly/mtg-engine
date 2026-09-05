@@ -134,17 +134,16 @@ class AdditionalCost:
     #: ``pay_life_x`` is separate from ``pay_life``: every reader of that field
     #: is arithmetic, and a string in it would be charged as garbage.
     #:
-    #: **The engine takes the announcement; today's client cannot make it.**
-    #: ``x_value`` reaches the cast path from the action, and the gate and the
-    #: payment both read it here -- but ``web/static/app.js``'s "does this card
-    #: need an X?" test is a substring probe of the printed *mana cost*, which
-    #: for Infernal Harvest is ``{1}{B}``. So a human seat is offered no X box
-    #: and the cast defaults to X=0, which is legal (CR 107.3a lets the
-    #: controller choose, and 0 is a choice) and useless. That is a fifth part
-    #: of SET_PLAYBOOK.md's "an optional cost has no picker" gap, found here
-    #: and not listed there: the client's X question has to be asked of the
-    #: costs a card prints, not of the mana cost string alone. Nothing is broken
-    #: while Visions is ``measured``; it must be closed before the set ships.
+    #: **The client could not make that announcement, and the reason was one
+    #: string.** ``web/static/app.js``'s "does this card need an X?" test was a
+    #: substring probe of the printed *mana cost*, which for Infernal Harvest is
+    #: ``{1}{B}`` -- so a human seat was offered no X box and the cast took
+    #: CR 107.3b's default of 0: legal (0 is a choice) and useless. The probe
+    #: was one place short of CR 107.3a, which names four ("a mana cost,
+    #: alternative cost, additional cost, and/or activation cost"), and Fire
+    #: Covenant ({1}{B}{R}, "pay X life") lost the same way in the **shipped**
+    #: pool. :func:`cast_announces_x` is now the one reader of that question and
+    #: ``legality.cast_target_spec`` puts its answer on the picker's spec.
     return_count_x: bool = False
     #: "As an additional cost to cast this spell, **exile a creature you
     #: control**." (Soul Exchange.) The same noun-phrase vocabulary one field
@@ -734,6 +733,58 @@ def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
     return tuple(found)
 
 
+def costs_charged_from(
+    card: CardDefinition, from_zone: str
+) -> tuple[AdditionalCost, ...]:
+    """The additional costs *card* is charged for a cast leaving *from_zone*.
+
+    The zone test ``queue_from_hand`` and ``targeting._cast_cost_picker`` both
+    make, written once: a cost naming a zone is a price for casting from *that*
+    zone (Demonic Embrace's graveyard price), so a reader that took the card
+    alone would describe a cast nobody is being charged for.
+    """
+    return tuple(
+        cost
+        for cost in additional_costs(card)
+        if cost.from_zone is None or cost.from_zone == from_zone
+    )
+
+
+def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
+    """Whether casting *card* from *from_zone* makes its controller announce a
+    value for X (CR 107.3a).
+
+    **The whole of CR 107.3a's list, which is the point.** The rule reads "a
+    mana cost, alternative cost, additional cost, and/or activation cost with an
+    {X}, [-X], or X in it" -- four places, of which ``web/static/app.js`` asked
+    only the first, as a substring probe of the printed mana-cost string. Fire
+    Covenant's is ``{1}{B}{R}`` and Infernal Harvest's is ``{1}{B}``: neither
+    prints an {X} anywhere, because both spell their X in an *additional* cost
+    ("pay X life", "return X Swamps you control to their owner's hand"). So the
+    browser offered no X box, the cast announced the CR 107.3b default of 0, and
+    two spells that are entirely about X resolved doing nothing at all -- legal,
+    since 0 is a choice, and useless.
+
+    Here rather than beside either reader for the reason
+    ``oracle_types.cost_target_count`` gives one module over: the picker is a
+    *third* reader of a question the gate and the payment already ask
+    (``AdditionalCost.life_charged`` / ``returned_count`` are the other two), and
+    the direction a third copy drifts in is a price the player is never asked
+    for. A cost field that later spells X is added to this one function and every
+    reader gains it.
+
+    The alternative-cost arm of the rule (CR 118.9) has no card behind it in this
+    pool -- no ``AlternativeCost`` field carries an X -- so it is named here and
+    not written: a dead arm is a claim nothing tests.
+    """
+    if "{X}" in (card.mana_cost or "").upper():
+        return True
+    return any(
+        cost.pay_life_x or cost.return_count_x
+        for cost in costs_charged_from(card, from_zone)
+    )
+
+
 def unread_cost_sentence(line: str) -> str | None:
     """*line* if it announces a cost of this table's kind that it cannot
     charge, else None.
@@ -779,6 +830,8 @@ __all__ = [
     "read_sacrifice_clause",
     "additional_cost_for_line",
     "additional_costs",
+    "cast_announces_x",
     "cast_cost_claims_line",
+    "costs_charged_from",
     "unread_cost_sentence",
 ]
