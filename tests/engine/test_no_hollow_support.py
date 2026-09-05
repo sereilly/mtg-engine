@@ -88,24 +88,42 @@ def test_no_supported_spell_resolves_without_an_effect():
     )
 
 
-@pytest.mark.parametrize("bare_pattern", ["loses", "deals", "gain"])
-def test_broad_whitelist_patterns_never_carry_a_card_alone(bare_pattern):
-    """The spell-pattern whitelist holds bare substrings like "loses" that
-    match far more text than they describe. None of them may be the only thing
-    making a spell supported — that is how a card ends up claiming support for
-    text nothing implements."""
+def test_the_whitelist_holds_no_bare_word():
+    """The three bare substrings are gone, and nothing may put one back.
+
+    ``"loses"``, ``"deals"`` and ``"gain"`` matched any sentence containing the
+    word, and six of Mirage's thirteen unimplemented sentences were admitted
+    into the support gate on exactly those three. The old guard here asserted
+    they were *present* and merely carried nobody alone — a containment fence
+    around a hazard rather than the removal of it, and it could not see a card
+    admitted by one alongside a real instruction.
+
+    They were deleted at Mirage's cleanup, with a deletion probe proving no card
+    depended on them. What is left is five Aura enchant lines, each a phrase
+    that names a whole printed line rather than a word inside one. A single word
+    here would be a card admitted because its text happened to contain it.
+    """
     from engine.oracle import SUPPORTED_SPELL_PATTERNS
 
-    assert bare_pattern in SUPPORTED_SPELL_PATTERNS, (
-        f"{bare_pattern!r} left the whitelist; drop it from this test too"
+    bare = sorted(p for p in SUPPORTED_SPELL_PATTERNS if " " not in p.strip())
+    assert not bare, (
+        f"bare single-word entries are back in the whitelist: {bare}. A word "
+        "matches every sentence containing it; write the printed phrase."
     )
+
+
+def test_no_spell_is_supported_by_a_whitelist_marker_alone():
+    """The property the three per-word guards were reaching for, asked once and
+    of every entry rather than of three named ones."""
     carried = [
         name
         for name, instrs in _hollow_spells()
-        if instrs == [f"spell_pattern:{bare_pattern}"]
+        if instrs and all(i.startswith("spell_pattern:") for i in instrs)
     ]
 
-    assert not carried, f"spells supported only by the bare {bare_pattern!r} pattern: {carried}"
+    assert not carried, (
+        f"spells supported only by a whitelist substring: {carried}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +202,8 @@ def _probe(text: str, type_line: str = "Artifact"):
         # cannot charge — the property under test is the shape, not the card.
         "{T}, Put a page counter on target artifact: Draw a card.",
         # Same with a trigger rather than an activated ability: the condition is
-        # read, the effect clause is not, and "gain" matched the whitelist.
+        # read and the effect clause is not. "gain" matched the whitelist when
+        # this was written, which is why the shape needed a test at all.
         "When this artifact enters the battlefield, you gain 4 life for each "
         "Shrine you control.",
     ],
@@ -192,10 +211,28 @@ def _probe(text: str, type_line: str = "Artifact"):
 def test_a_permanent_whose_only_ability_is_unreadable_is_unsupported(text):
     """Verified by injection rather than by the pool alone: the shipped pool is
     clean, so the property test above passes against a compiler that never
-    learned this. These are the shapes it must refuse."""
+    learned this. These are the shapes it must refuse.
+
+    **The reason must name the shape, and which name is right depends on the
+    ability.** Both of these used to answer "no ability of this permanent is
+    implemented", because a whitelist substring manufactured a card-level
+    instruction and that branch needed one. With the whitelist down to five
+    Aura entries the trigger case reaches an earlier and *better* branch —
+    "unsupported triggered ability" says which half of the card failed. So this
+    asserts the property that matters (the card is refused, and the refusal
+    names something) rather than one exact string, which was only ever a
+    description of the route.
+    """
     program = _probe(text)
     assert not program.supported
-    assert "no ability of this permanent is implemented" in program.reason
+    assert program.reason and program.reason != "effect not in basic pattern set", (
+        f"the refusal must name what could not be read, not fall back to the "
+        f"generic message: {program.reason!r}"
+    )
+    assert (
+        "no ability of this permanent is implemented" in program.reason
+        or "unsupported triggered ability" in program.reason
+    ), program.reason
 
 
 def test_a_permanent_whose_work_is_done_by_a_rule_table_keeps_its_support():

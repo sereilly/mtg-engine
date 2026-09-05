@@ -137,83 +137,37 @@ UNSUPPORTED_PATTERNS: tuple[str, ...] = ()
 
 
 SUPPORTED_SPELL_PATTERNS = (
-    "target player draws",
-    "draws x cards",
-    "deals",
-    "deals x damage",
-    "destroy target",
-    "destroy all",
-    "counter target",
-    "gets +",
-    "creatures get +",
-    "target player discards",
-    "loses",
-    "target player loses the game",
-    "you win the game",
-    "the game is a draw",
-    "regenerate target",
-    "tap target",
-    "untap target",
-    "target creature with power 2 or less can't be blocked this turn",
-    "prevent the next",
-    "would deal damage to you this turn, prevent that damage",
-    "from your graveyard to your hand",
-    "from your graveyard to the battlefield",
-    "from a graveyard onto the battlefield",
-    "return target creature to its owner's hand",
-    "each player discards their hand, then draws seven cards",
-    "each player shuffles their hand and graveyard into their library, then draws seven cards",
-    "search your library for a card, put that card into your hand, then shuffle",
-    "take an extra turn after this one",
-    # "as an additional cost to cast this spell, sacrifice a creature" was here.
-    # A marker instruction with no handler is the wrong shape for a *cost*: it
-    # made Village Rites report supported and cast for free. It is now read by
-    # engine/cast_costs.py and paid by queue_from_hand.
-    "becomes red",
-    "becomes black",
-    "becomes blue",
-    "becomes green",
-    "becomes white",
-    "prevent all combat damage that would be dealt this turn",
-    "look at target player's hand",
-    "draw a card",
-    "add three mana of any one color",
-    "at the beginning of your upkeep, sacrifice this enchantment unless you pay",
-    "this artifact becomes a 3/6 golem artifact creature until end of combat",
-    "create a 1/1 colorless insect artifact creature token with flying named wasp",
-    "enchant wall",
-    "whenever a land enters",
-    "at the beginning of the chosen player's upkeep",
+    # An Aura's ``Enchant <noun>`` line, and the ``gets +N/+N`` its effect line
+    # opens with. Five entries, and they are what is left of a table that had
+    # **seventy-three**.
+    #
+    # The other sixty-eight were whole printed sentences — Timetwister's, Wheel
+    # of Fortune's, the five landwalk grants, the ante cards, "take an extra
+    # turn after this one" — admitted before the grammar could read them. Every
+    # one was deleted at Mirage's cleanup after a deletion probe showed what
+    # each was worth: remove the entry, recompile the pool, count who loses
+    # support. Sixty-eight lost nobody. The grammar had grown past them years of
+    # sets ago and the table had not noticed, which is the failure mode of a
+    # whitelist — it never reports that it has stopped being needed.
+    #
+    # The three that mattered most were bare words. ``"deals"``, ``"loses"`` and
+    # ``"gain"`` matched any sentence containing them, and six of Mirage's
+    # thirteen unimplemented sentences were admitted into the support gate on
+    # exactly those three. They carry nobody now and they are gone.
+    #
+    # **These five remain because an Aura is gated differently**: ``Enchant
+    # creature`` is a keyword ability declaring what the Aura may be attached to
+    # (CR 702.5), so it produces no instruction, and ``engine/auras.py`` is what
+    # decides whether the Aura's *effect* is implemented. Until the gate asks
+    # that module directly, these substrings are what let the enchant line past.
+    # Twenty-five, five, four and one card depend on them; ``gets +`` depends on
+    # one. Adding to this table is adding a card admitted on a substring — the
+    # thing the other sixty-eight entries turned out to be.
     "enchant creature",
     "enchant land",
-    "target creature gains flying until end of turn",
     "enchant artifact",
-    "has swampwalk",
-    "has forestwalk",
-    "has islandwalk",
-    "has mountainwalk",
-    "has plainswalk",
-    "add one mana",
-    "add {",
-    "gain",
-    "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest",
-    "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage",
-    "look at the top three cards of target player's library, then put them back in any order",
-    "you may have that player shuffle",
-    "change the text of target spell or permanent by replacing all instances of one basic land type with another",
-    "change the text of target spell or permanent by replacing all instances of one color word with another",
-    "look at target opponent's hand and choose a card from it",
-    "target creature defending player controls can block any number of creatures this turn",
-    "this turn, instead of declaring blockers",
-    "put a mire counter on target non-swamp land",
-    "remove target creature defending player controls from combat",
-    "whenever one or more creatures you control attack, each defending player divides all creatures without flying",
-    "target creature gains banding until end of turn",
-    "copy target instant or sorcery spell",
-    "remove this card from your deck before playing if you're not playing for ante",
-    "discard your hand, ante the top card of your library, then draw seven cards",
-    "you own target card in the ante. exchange that card with the top card of your library",
-    "each player antes the top card of their library",
+    "enchant wall",
+    "gets +",
 )
 
 
@@ -5282,10 +5236,20 @@ def _compile_card_oracle(
         # Equipment whose equip ability *failed* to compile from the very check
         # that catches a permanent doing nothing.
         attachment = any(line.startswith("enchant ") for line in aura_lines)
+        # ``and instructions`` used to stand here, and it was standing in for
+        # "the card produced *something*, but nothing that carries behaviour".
+        # A ``spell_pattern`` marker was what usually produced that something —
+        # so when the substring whitelist shrank from 73 entries to 5, a
+        # permanent that produced nothing at all stopped reaching this branch
+        # and fell through to the generic "effect not in basic pattern set"
+        # below, losing the clause name. That is the wrong direction: the whole
+        # value of refusing is naming what could not be read. The condition is
+        # now the honest one — nothing here carries behaviour, vacuously true
+        # for the empty case — and a card with no readable line is named rather
+        # than dismissed. Everything the branch already caught is unaffected.
         if (
             primary_type in ("artifact", "enchantment")
             and not attachment
-            and instructions
             and all(_carries_no_behaviour(instruction) for instruction in instructions)
             and not modes
             and not any(
