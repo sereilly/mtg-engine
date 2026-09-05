@@ -895,7 +895,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Visions (VIS) — measured, 139/167 after wave 1
+## Visions (VIS) — measured, 158/167 after wave 2
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
 pool.** Registered under `measured` on 2026-09-04 at release date 1997-02-03,
@@ -1252,6 +1252,76 @@ strips the parenthetical and a keyword grant with no printed duration already
 means indefinite. And the brief cited **CR 602.5f, which does not exist**. The
 rule for the next brief-writer: before assigning a mechanism, give an invented
 card the same printed text and see whether it already works.
+
+### Wave 2 closed: 139 -> 158, and the shipped pool paid for it again
+
+Five groups, thirty-two cards briefed, nineteen landing, and — as in wave 1 —
+the findings that matter most are in cards this repo already calls done.
+
+**Three Visions cards cast for free.** Infernal Harvest, Kaervek's Spite and
+Fireblast each print a cost sentence nothing claimed while being supported on
+another line, so the engine charged the printed mana cost and skipped the extra
+price entirely. **No instrument in this repo could see it**: the census counts
+cards, `--hollow-lines` sees only a line that produced an ability *part*, and
+the compiled-program differential cannot see a cost at all, because a cost is
+not an instruction. `compile_card_oracle` now refuses any card printing a cost
+sentence its own table cannot charge, ahead of every classification — the class
+is closed structurally rather than card by card. The measurement that made that
+safe (zero shipped cards carry an unread cost line) is now a test.
+
+**Creature Bond has dealt no damage since Alpha.** Its damage was announced from
+four `on_destroy` callbacks rather than from the graveyard seam, so an ordinary
+destroy did nothing at all; the same dispatcher also fired on the Debug Menu's
+bounce path, where CR 700.4 makes "dies" false. **Decomposition** (Mirage, in a
+set called 100% supported) lowered "its controller loses 2 life" to a scratchpad
+key only a destroy *step* writes — nobody ever lost a point of life.
+
+**Feline Sovereign was mis-played twice, independently, by two different
+groups.** Its trigger never asked the player for a target, because the picker's
+narrowing table had no entry for "that player controls" and the handler's
+fallback destroyed the first match (Chandra's Incinerator is the same shape one
+instruction over). And its "Other Cats **you control** … have protection from
+Dogs" answered the seat question in the size refresh but not in the protection
+lookup, so an opponent's Cats were shielded while staying the size the card left
+them. One card, two sentences, two different silent failures.
+
+**The extra-phase machinery is dead code with a test asserting it works.**
+`add_extra_phase` records a phase, returns `True`, and nothing ever enters it;
+`next_unskipped_phase_after` has zero callers; the turn is a hard-coded call
+chain in three separate drivers. `tests/rules/test_turn_phases.py` asserts that
+`True`. An API that records and returns success while nothing consumes it is
+worse than an absence, because it reads as a feature.
+
+**The brief error rate held at roughly two-thirds, and produced a new species.**
+Of the seven refusal sites quoted into one brief, **one** survived probing; the
+same ratio held in three of the five groups. Two new shapes appeared:
+
+- **An engine refusal message that was itself false.** `engine/lord_buffs.py
+  grants no 'protection from black' at layer 6` was quoted straight into a brief
+  and had been wrong for two sets — the buff was granted correctly the whole
+  time, and the real fault was that a lowering error does not fall through to
+  the derivation table on the noncreature path. A refusal site has been
+  imprecise before; this is the first time one actively pointed the wrong way.
+- **A brief specifying a subsystem that already existed in full.** "A triggered
+  ability announces no targets in this engine" — `_choose_trigger_targets` has
+  done it under CR 603.3d all along. And a *reported bug* propagated from wave
+  1's report into wave 2's brief unchallenged: Shimmering Efreet is not
+  mis-played, it was a headless run where taking `targets[0]` is the engine's
+  stated policy for every picker.
+
+**Two groups split `lowering/stack.py` into `lowering/delayed.py`
+independently, in the same round, and the seven functions they moved were
+byte-identical** — only the docstrings differed. Each was pushed over the guard
+by its own card and each read the same section divider. That is the strongest
+evidence this repo has produced that these family boundaries are found rather
+than invented, and the merge kept the code untouched and recorded the
+coincidence.
+
+**Five CR citations have now been caught wrong in three waves**: 602.5f does not
+exist, 701.12 is Exchange (fight is 701.14), 701.19 is Regenerate (search is
+701.23), 701.5 is Casting (countering is 701.6a), and 701.15c is Goad. Every one
+came from a brief or a comment rather than from `MagicCompRules.txt`. Cite from
+the file.
 
 ### Phase 0 took a split before anyone branched, and that was the point
 
