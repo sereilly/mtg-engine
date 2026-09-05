@@ -971,6 +971,63 @@ one fact (Ice Age, twice in one wave):
   Vanishing, Mortal Wound). Unavoidable, so it is briefed instead: at the merge,
   **union both sides**, never resolve by picking one.
 
+### Wave 1, group 1 — return to hand: 99 -> 108, and a mana ability twelve shipped lands were not
+
+Fourteen cards, all landing, and the round's largest finding is not in Visions
+at all. **Twelve shipped cards are mana abilities that the engine did not treat
+as one** (CR 605.1a): the five Ice Age painlands, the five depletion lands,
+Barbed Sextant and Astrolabe all lower to a `sequence`, and `is_mana_ability`
+asked only the *outer* instruction. So they used the stack, which CR 605.3a
+forbids; a "nothing but mana abilities" shut-off caught them; and an
+Imprison-style "{T} ability that isn't a mana ability" trigger would have fired
+on them. The same predicate additionally answered False for **every AI caller**,
+because `getattr(ability, "instruction", None)` is `None` for an
+`OracleInstruction` and the four sites in `ai_policy`/`ai_valuation` pass one —
+so the AI had never recognised a mana ability at all. Seeded simulation output
+is unchanged, which is the evidence that the fix is a fix rather than a
+behaviour change.
+
+**Five of the brief's leads were wrong, and the shape of the error is worth
+keeping.** Four were the same mistake: I wrote down a *mechanism* where the repo
+already had one.
+
+- "Activate only once each turn is yours, build it once" — it was built and
+  **enforced**, since Legends' Dream Coat, and Quirion Ranger's second
+  activation in a turn already refused with nothing spent. Kyscu Drake was never
+  a live bug. What Chronatog and Knight of Valor refuse on is their *effect*
+  halves, not the cap.
+- Ovinomancer's `{T}, Return this creature to its owner's hand:` was already
+  read (`return_self_to_hand`, since Cycle of Life). What it actually lacked was
+  its third sentence's possessive — a different family entirely.
+- The `engine/auras.py` collision briefed to three groups **never happened** for
+  this one: `aura_activated_ability_claim` already asks
+  `_parse_activated_ability`, so Sun Clasp needed a lowering and zero lines of
+  `auras.py`.
+- And the brief cited **CR 602.5f, which does not exist** — the rule stops at
+  602.5e.
+
+The fifth is the useful one: of the refusal sites quoted into the brief, exactly
+**one** survived probing. Bull Elephant, Flooded Shoreline and the whole Karoo
+cycle failed in the **parse** (no reader for a bare count in front of a plural),
+not where the census pointed. That is the seventh set at which "a refusal site
+is a work-list entry, not a diagnosis" has paid, and the first at which the
+brief's author was the one who got it wrong.
+
+**Two cards cast free, and the census cannot see either.** Infernal Harvest and
+Kaervek's Spite print "As an additional cost to cast this spell, …" — claimed by
+nothing, and each card is supported on its *other* line, so Infernal Harvest
+deals X damage for `{2}{B}{B}` with no Swamps returned. Measured before
+proposing a gate: **zero shipped cards** carry an unread `as an additional cost`
+line, so refusing one is safe today. Assigned to wave 2's cost group, with the
+gate and the four implementation pieces named together.
+
+Exit numbers: 99 -> **108/167** supported; hollow lines 9 parts -> **4**, none
+of them this group's; unclaimed sentences 21 -> **16**, none of them this
+group's; differential **861 raw, 14 filtered** — and the fourteen are exactly
+this group's cards, which is what "the change is local" looks like when a
+dataclass gains two defaulted fields. `run_ai_simulation` with all fourteen
+pinned: 8/8 games across three seeds, 331-370 interactions, **0 refused casts**.
+
 ### Phase 0 took a split before anyone branched, and that was the point
 
 `check_all.py --caps` read **14 grammar modules within 30 lines** of the
