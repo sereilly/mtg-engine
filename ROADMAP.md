@@ -895,7 +895,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Visions (VIS) — measured, wave 1 in flight
+## Visions (VIS) — measured, 139/167 after wave 1
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
 pool.** Registered under `measured` on 2026-09-04 at release date 1997-02-03,
@@ -1172,6 +1172,86 @@ blind to a nested phrase in exactly the same way. They were left alone
 deliberately: they sit in eleven modules four other wave branches are editing,
 and a sweep across them is a merge hazard with no card behind it. Named here so
 the next reader has a number rather than an impression.
+
+### Wave 1 closed: 99 -> 139, and the integration cost more than the rounds
+
+Five groups, sixty cards briefed, forty landing. The three sentence-level
+instruments all reached their floor in one wave — **hollow lines 9 -> 0,
+picker findings 4 -> 0, unclaimed sentences 21 -> 4** — which is the first time
+a set has cleared all three before its second wave, and it is the direct result
+of reading them at Phase 1 instead of at the promotion gate. Mirage paid a
+fourth wave for reading them late.
+
+**What the wave found in *shipped* cards is the part no census could have
+predicted**, and there were five separate instances:
+
+- **Twelve cards were mana abilities the engine did not treat as one**
+  (CR 605.1a): the five Ice Age painlands, the five depletion lands, Barbed
+  Sextant and Astrolabe all lower to a `sequence` and `is_mana_ability` asked
+  only the outer instruction, so they used the stack — which CR 605.3a forbids.
+  The same predicate answered False for **every AI caller**, so the AI had never
+  recognised a mana ability at all.
+- **Two Mirage Auras destroyed themselves every turn.** Cloak of Invisibility
+  and Teferi's Curse are nothing but a phasing grant; the host phased out,
+  `remove_from_battlefield` detached the Aura — right for every *other* way a
+  permanent leaves — and it phased back in enchanting nothing, into CR 704.5m.
+  A phase-out is not a zone change (CR 702.26d).
+- **Simoon burned the wrong boards.** `controller: "target_opponent"` fell
+  through to a "not you" test, i.e. **any** opponent — correct in a duel by
+  coincidence, and at three seats a spell hitting two boards where the card
+  names one.
+- **Five cards' printed bounds were enforced by nobody.**
+  `grant_target_flying_until_eot` read no filter at all, so Chariot of the Sun
+  and Krovikan Elementalist reached across the table and Goblin Kites,
+  Phantasmal Mount and Whalebone Glider ignored their power and toughness
+  bounds. Its sibling `grant_target_keyword_until_eot` asked.
+- **Library of Leng's "no maximum hand size" never ended** — an entry effect
+  stamping a flag with nothing to clear it (CR 611.3a).
+
+**Three integration failures, and all three merged cleanly.** This is the wave's
+transferable finding: every one would have shipped green under a
+merge-at-the-end policy.
+
+1. G1 added a caller importing `nested_instructions` through
+   `lowering/categories.py`'s re-export; G2's cap split moved `categories_of`
+   out and took the re-export with it. Twenty tests failed at runtime with every
+   file merged clean. **Neither side of the conflict was the fix** — the caller
+   now names the module where the function has always lived.
+2. G3 narrowed `target_opponent` to the announced seat (right, and Simoon's fix);
+   G4's Corrosion reaches the same key from a **triggered** ability, which
+   announces no targets in this engine, so the key narrowed to nothing and the
+   card silently stopped working. Again neither side: the seat is resolved where
+   the resolution's context is, and the one case needing no announcement — a
+   single opponent, so one legal candidate and a forced choice — is computed
+   rather than guessed. Writing it exposed its own trap:
+   `_THAT_PLAYER_CONTEXT_KEYS` reads the seat an *event* picked, which for an
+   upkeep trigger is the ability's own controller, the exact opposite of "target
+   opponent".
+3. G4 deleted a refusal inside `_lower_counter_sweep` so rust counters could
+   sweep; G5 moved and renamed that same function into `_sweeps.py`. Taking G5's
+   deletion re-breaks Corrosion; taking G4's leaves a stale second copy. Both.
+
+**And two size caps crossed at integration, on nobody's branch, by summation** —
+`lowering/categories.py` at 1,012 and `conditions.py` at 1,006. Phase 0 had
+split `lowering/_common.py` for exactly this reason and it was the right call;
+the lesson the wave adds is that **one pre-split was not enough**, because the
+guard fires on the sum and the sum is invisible until the last merge. Both were
+splittable along lines the repo had already drawn in prose — the zone-change
+half of the category table belongs beside the family that produces it, and the
+counter-state questions belong with the record conditions — which is the
+argument for taking the split at the cap rather than raising the number.
+
+**The briefs themselves were wrong about a third of the time, as predicted, and
+the errors had one shape.** Four of group 1's five corrections were the same
+mistake: the brief specified a *mechanism the repo already had*. "Activate only
+once each turn" had been built and enforced since Legends; the `engine/auras.py`
+collision warned to three groups happened to **none** of them, because
+`aura_activated_ability_claim` already asks `_parse_activated_ability`;
+"(This effect lasts indefinitely.)" needed nothing at all, since the lexer
+strips the parenthetical and a keyword grant with no printed duration already
+means indefinite. And the brief cited **CR 602.5f, which does not exist**. The
+rule for the next brief-writer: before assigning a mechanism, give an invented
+card the same printed text and see whether it already works.
 
 ### Phase 0 took a split before anyone branched, and that was the point
 
