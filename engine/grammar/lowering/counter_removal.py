@@ -25,7 +25,9 @@ from ..phrases import is_pt_counter
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import _amount_payload, _describe_targets, _is_source
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ._common import (_amount_payload, _describe_targets, _filter_payload,
+                      _is_source)
 from ._events import _BOUND_OBJECT_DELAYED_EVENTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
@@ -189,6 +191,35 @@ def _lower_remove_counter(
             OracleInstruction(
                 "remove_counters_from_bound", "",
                 {"counter": node.counter, "amount": amount},
+            ),
+        )
+    # "When this enchantment leaves the battlefield, remove all rust counters
+    # from **all permanents**." (Corrosion.) A sweep over a described set, so
+    # nothing is chosen and nothing is targeted: the handler reads the board as
+    # the effect resolves (CR 611.2c) and empties every permanent the phrase
+    # names. Its own kind beside the self and bound removals above for their
+    # reason — those two each read one permanent the instruction already names,
+    # and there is no permanent here until the board is scanned.
+    #
+    # Only the emptying spelling. "Remove **a** rust counter from all
+    # permanents" would be a decrement over a set and no card prints it; a count
+    # lowered onto this handler would empty every permanent the card says to
+    # decrement by one, which is the mistake the "all"/counted pair above
+    # already records.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "all"
+        and isinstance(node.count, ast.AllOf)
+    ):
+        described = _filter_payload(node.subject.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "a counter-removal sweep cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "remove_all_counters_from_matching", "",
+                {"counter": node.counter, "filter": described},
             ),
         )
     if not _is_source(node.subject):

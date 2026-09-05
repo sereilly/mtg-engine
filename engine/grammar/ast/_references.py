@@ -131,6 +131,18 @@ class ObjectFilter:
     power: Comparison | None = None
     toughness: Comparison | None = None
     mana_value: Comparison | None = None
+    #: "…each artifact **with mana value less than or equal to the number of
+    #: rust counters on it**" (Corrosion). A comparison between two
+    #: characteristics of the *same* object, which no ``Comparison`` can carry:
+    #: its bound is an :class:`Amount`, and an amount is read off the effect's
+    #: own context rather than off whichever permanent the matcher is testing.
+    #:
+    #: The counter's name is payload, so a card printing "vitality counters"
+    #: needs no code. The **operator** is in the field's name rather than beside
+    #: the kind, deliberately: this is the only direction any card prints, and a
+    #: general `op` here would be a comparison the matcher has to be trusted to
+    #: implement in five ways nothing exercises.
+    mana_value_at_most_counters: str | None = None
     named: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
@@ -748,6 +760,12 @@ class ObjectFilter:
                 "op": self.mana_value.op,
                 "value": self.mana_value.value.value,
             }
+        # "…with mana value less than or equal to the number of rust counters on
+        # it" (Corrosion). Always emitted when set, for `characteristic_vs_source`'s
+        # reason below: there is no literal half to fall back to, and a set field
+        # with no key is exactly what `dropped_narrowings` refuses.
+        if self.mana_value_at_most_counters is not None:
+            payload["mana_value_at_most_counters"] = self.mana_value_at_most_counters
         # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
         # as mana_value: a literal bound rides the payload and the matcher
         # tests it against the layer-computed stat; a variable bound stays

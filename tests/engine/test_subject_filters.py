@@ -73,6 +73,17 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
     ("tapped_only", {"tapped_only": True}, "Grizzly Bears"),
     ("mana_value", {"mana_value": {"op": "le", "value": 1}}, "Grizzly Bears"),
+    # "…each artifact **with mana value less than or equal to the number of rust
+    # counters on it**" (Corrosion). Grizzly Bears costs {1}{G} and carries no
+    # rust counters, so a matcher that ignored the key would sweep it up — and a
+    # sweep is the one place a dropped narrowing reaches *more* permanents than
+    # the card names. The positive half is demonstrated below, on a permanent
+    # holding enough counters.
+    (
+        "mana_value_at_most_counters",
+        {"mana_value_at_most_counters": "rust"},
+        "Grizzly Bears",
+    ),
     ("power", {"power": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
@@ -117,6 +128,28 @@ def test_every_promised_key_actually_narrows(pool, key, payload, card_name):
         "proves nothing about the key"
     )
     assert not subject_matches(game, perm, {"type_filter": "creature", **payload})
+
+
+def test_a_counter_bound_matches_once_there_are_enough_counters(pool):
+    """The positive half of ``mana_value_at_most_counters``: Corrosion destroys
+    an artifact once its rust counters have reached the artifact's mana value.
+
+    The rejection row above is passed by a matcher that always answers False, so
+    the direction that makes the key useful has to be demonstrated separately —
+    and it is the direction the card is *for*.
+    """
+    from engine.named_counters import add_counters
+
+    perm = Permanent(card=pool["Grizzly Bears"])   # mana value 2
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "mana_value_at_most_counters": "rust"}
+
+    add_counters(perm, "rust", 1)
+    assert not subject_matches(game, perm, described)
+    add_counters(perm, "rust", 1)
+    assert subject_matches(game, perm, described)
 
 
 def test_a_class_union_matches_on_either_axis(pool):

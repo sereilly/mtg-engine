@@ -84,3 +84,94 @@ def test_aku_djinn_grows_every_opponents_creatures_and_none_of_yours(set_pool):
     assert _w1g4_counters_on(theirs, "+1/+1") == 1
     assert _w1g4_counters_on(mine, "+1/+1") == 0
     assert _w1g4_counters_on(djinn, "+1/+1") == 0
+
+
+def test_brood_of_cockroaches_returns_itself_at_the_next_end_step(set_pool):
+    """"When this creature is put into your graveyard from the battlefield, at
+    the beginning of the next end step, you lose 1 life and return this card to
+    your hand."
+
+    CR 700.4 makes the long spelling of the trigger *dies* — the whole of what
+    was missing, since the delayed ability behind it already compiled. Two copies
+    of the card sit in the graveyard so the return has to take exactly one: a
+    hand and a graveyard both hold the same immutable definition per copy, which
+    is the identity bug `engine/phases/upkeep_step.py` records about a graveyard.
+    """
+    brood = set_pool("VIS")["Brood of Cockroaches"]
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="P0", graveyard=[brood]),
+        _W1G4PlayerState(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    perm = _W1G4Permanent(card=brood)
+    game.players[0].battlefield.append(perm)
+    game.begin_turn_bookkeeping(0)
+    game.active_player_index = 0
+
+    game._destroy_swept_permanents(game.players[0], lambda c: c is perm)
+    for _ in range(10):
+        if not game.stack:
+            break
+        game.resolve_top_of_stack()
+
+    assert len(game.players[0].graveyard) == 2
+    assert len(game.delayed_triggers) == 1
+    assert game.players[0].life == 20, "the delayed half waits for the end step"
+
+    game.resolve_end_step(0)
+    for _ in range(10):
+        if not game.stack:
+            break
+        game.resolve_top_of_stack()
+
+    assert game.players[0].life == 19
+    assert [c.name for c in game.players[0].hand] == ["Brood of Cockroaches"]
+    assert len(game.players[0].graveyard) == 1, "exactly one copy left the yard"
+
+
+def test_kookus_only_bites_while_its_keeper_is_absent(set_pool):
+    """"At the beginning of your upkeep, if you don't control a creature named
+    Keeper of Kookus, this creature deals 3 damage to you and attacks this turn
+    if able."
+
+    Three things at once, and the printed name is the interesting one: it is a
+    noun phrase parsed as data (`named`), not a name the engine branches on.
+    CR 603.4's intervening-if is checked before the ability is put on the stack,
+    so with the Keeper out nothing triggers at all.
+    """
+    pool = set_pool("VIS")
+    keeper = _W1G4CardDefinition(
+        name="Keeper of Kookus", mana_cost="", cmc=0.0,
+        type_line="Creature - Human Nomad", oracle_text="", colors=(),
+        color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Keeper of Kookus"}, power="2", toughness="2",
+    )
+
+    def _upkeep(with_keeper: bool):
+        game = _W1G4Game(players=[
+            _W1G4PlayerState(name="P0"), _W1G4PlayerState(name="P1"),
+        ])
+        game.enforce_mana_costs = False
+        kookus = _W1G4Permanent(card=pool["Kookus"])
+        game.players[0].battlefield.append(kookus)
+        if with_keeper:
+            game.players[0].battlefield.append(_W1G4Permanent(card=keeper))
+        game.begin_turn_bookkeeping(0)
+        game.active_player_index = 0
+        game.resolve_upkeep(0, defer_priority=True)
+        triggered = bool(game.stack)
+        for _ in range(10):
+            if not game.stack:
+                break
+            game.resolve_top_of_stack()
+        return game, kookus, triggered
+
+    game, kookus, triggered = _upkeep(with_keeper=False)
+    assert triggered
+    assert game.players[0].life == 17
+    assert kookus.metadata.get("must_attack_until_eot") is True
+
+    game, kookus, triggered = _upkeep(with_keeper=True)
+    assert not triggered, "CR 603.4: a gated trigger whose condition is false does not trigger"
+    assert game.players[0].life == 20
+    assert kookus.metadata.get("must_attack_until_eot") is None

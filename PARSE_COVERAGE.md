@@ -25,15 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**21 unclaimed sentence(s) across 17 supported card(s).**
+**17 unclaimed sentence(s) across 14 supported card(s).**
 
-- **Anvil of Bogardan**
-  - `players have no maximum hand size`
 - **Coral Atoll**
   - `when this land enters, sacrifice it unless you return an untapped island you control to its owner's hand`
-- **Corrosion**
-  - `at the beginning of your upkeep, put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated`
-  - `when this enchantment leaves the battlefield, remove all rust counters from all permanents`
 - **Dormant Volcano**
   - `when this land enters, sacrifice it unless you return an untapped mountain you control to its owner's hand`
 - **Elephant Grass**
@@ -63,8 +58,6 @@ anything anyone did, and every ingest would arrive red.
   - `when this land enters, sacrifice it unless you return an untapped plains you control to its owner's hand`
 - **Solfatara**
   - `target player can't play lands this turn`
-- **Suleiman's Legacy**
-  - `whenever a djinn or efreet enters, destroy it. it can't be regenerated`
 
 ## Acknowledged simplifications
 

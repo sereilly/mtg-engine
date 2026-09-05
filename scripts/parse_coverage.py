@@ -109,6 +109,7 @@ from engine.untap_restrictions import (  # noqa: E402
     self_untap_line,
     untap_restriction_for,
 )
+from engine.draw_reveals import reveals_first_draw_line  # noqa: E402
 from engine.hand_size import hand_size_line  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_board_counted_penalty_sentences,
@@ -343,6 +344,9 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # "The chosen player's maximum hand size is four." (Cursed Rack.) Asked of
     # the module the cleanup step enforces CR 402.2 with.
     ("hand_size.py", hand_size_line),
+    # "Reveal the first card you draw each turn." (Rowen.) Asked of the module
+    # the draw seam enforces CR 701.16 with.
+    ("draw_reveals.py", reveals_first_draw_line),
     # Extra land plays (Fastbond). This was a literal in _MIXIN_TEXT_SCANS
     # pointing at a name-keyed count, so the sentence read as claimed for every
     # card printing it while the code behind the claim fired for one name. The

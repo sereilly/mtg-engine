@@ -1305,8 +1305,23 @@ def add_counter_to_each_matching(game: Game, instruction: OracleInstruction, con
     # Placed after the scan, not during it: `place_pt_counters` runs the CR 614
     # replacements for a +1/+1 counter, and a replacement that moved a creature
     # would renumber a battlefield this loop was still walking.
+    #
+    # A **named** counter (Corrosion's rust) goes through the named-counter
+    # module instead, which is the whole difference between the two: CR 122.1a's
+    # P/T counters change a creature's characteristics and run replacements,
+    # where a rust counter is a marker nothing derives anything from until
+    # another sentence counts it. One handler for both, because the sweep — what
+    # the noun phrase names, and the board being read as the effect resolves —
+    # is identical, and a second kind beside this one would be one effect with
+    # two spellings.
+    from ..named_counters import add_counters
+    from ..pt import pt_counter_deltas
+
     for perm in touched:
-        game.place_pt_counters(perm, kind, count)
+        if pt_counter_deltas(kind) is not None:
+            game.place_pt_counters(perm, kind, count)
+        else:
+            add_counters(perm, kind, count)
     if touched:
         game.log.append(
             f"{card.name}: {', '.join(p.card.name for p in touched)} "
@@ -1314,6 +1329,53 @@ def add_counter_to_each_matching(game: Game, instruction: OracleInstruction, con
         )
     else:
         game.log.append(f"{card.name}: nothing matched, no counters placed")
+    return True, "resolved"
+
+
+@effect_handler("remove_all_counters_from_matching")
+def remove_all_counters_from_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this enchantment leaves the battlefield, remove all rust counters
+    from **all permanents**." (Corrosion.)
+
+    The sweep twin of ``add_counter_to_each_matching`` above and written against
+    it: the set is a *description*, nothing is targeted and nothing is chosen,
+    and the board is read as the effect resolves (CR 611.2c). Which is why the
+    printed noun phrase travels as a filter the shared matcher tests rather than
+    being baked into the kind's name.
+
+    Empties rather than decrements: "all" is a number nobody knows until each
+    permanent is looked at, which is the whole reason this is not the counted
+    removal one function over.
+
+    The source has usually left the battlefield by the time this resolves - the
+    trigger is a leaves-the-battlefield one - so nothing here reads it.
+    """
+    from ..named_counters import counters_on, remove_counters
+    from ..subject_filters import subject_matches
+
+    kind = str(instruction.payload.get("counter", ""))
+    filters = dict(instruction.payload.get("filter") or {})
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    cleared: list[str] = []
+    for perm in game.all_permanents():
+        if not subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        ):
+            continue
+        held = counters_on(perm, kind)
+        if held <= 0:
+            continue
+        remove_counters(perm, kind, held)
+        cleared.append(perm.card.name)
+    if cleared:
+        game.log.append(
+            f"{context.card.name} removed every {kind} counter from "
+            + ", ".join(cleared)
+        )
+    else:
+        game.log.append(f"{context.card.name}: no {kind} counters to remove")
     return True, "resolved"
 
 

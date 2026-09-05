@@ -180,6 +180,7 @@ from .stack import (
 )
 from .combat import (
     AssignsNoCombatDamage,
+    AttacksThisTurnIfAble,
     AttackingDoesntTap,
     BlockCountGrant,
     CantBe,
@@ -265,6 +266,7 @@ Effect = Union[
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
     AssignsNoCombatDamage,
+    AttacksThisTurnIfAble,
     RemoveFromCombat, BecomeBlocked, ChooseBlocksForDefenders,
     ReassignBlockersBetweenAttackers,
     ChangeText, GainControl, BidLifeForControl, RawEffect,

@@ -223,6 +223,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "move_counter_from_self": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
+    # Corrosion: the sweep spelling of the row above, over a described set
+    # rather than one permanent. Same category, so GRAMMAR_CATEGORIES is
+    # unchanged.
+    "remove_all_counters_from_matching": "counters",
     # Giant Oyster's release. The bound-object twin of the row above — same
     # effect, and the object is the one the creating ability bound rather
     # than the ability's own source.
@@ -282,10 +286,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…destroy **that creature**" inside a delayed ability (War Barge):
     # the object the creating ability bound, by id, rather than a pick.
     "destroy_bound_permanent": "destruction",
-    # "Whenever a Djinn or Efreet enters, destroy it." (Suleiman's Legacy.) The
-    # object the trigger's own event was about, which the fire site froze — no
-    # pick, so it is not the targeted destroy. Same category, so
-    # GRAMMAR_CATEGORIES is unchanged.
+    # Suleiman's Legacy: the object the trigger's own event was about, which the
+    # fire site froze — no pick, so it is not the targeted destroy. Same
+    # category, so GRAMMAR_CATEGORIES is unchanged.
     "destroy_event_subject": "destruction",
     # "…destroy **that non-Wall creature**" (Acidic Dagger): the same
     # destroy at the other end of the event, on the creature the entry was
@@ -349,11 +352,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # choice: the set is what an earlier step of the same effect recorded.
     "tap_recorded_permanents": "tapping",
     "untap_all_matching": "tapping",
-    # "…simultaneously untaps each tapped <phrase> they control and taps each
-    # untapped <phrase> they control" (Sands of Time). One instruction for both
-    # sweeps, because "simultaneously" is what the card says and two in order
-    # would tap the whole board. Same category, so GRAMMAR_CATEGORIES is
-    # unchanged.
+    # Sands of Time's one-instruction inversion: "simultaneously untaps … and
+    # taps …", where two sweeps in order would tap the whole board. Same
+    # category, so GRAMMAR_CATEGORIES is unchanged.
     "untap_and_tap_matching": "tapping",
     "grant_prevention_shield": "prevention",
     # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8
@@ -766,6 +767,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # `remove_from_combat` is here: the family whose steps dispatch it.
     "reassign_blockers_between_attackers": "combat_restrictions",
     "mark_non_wall_target_to_attack": "combat_restrictions",
+    # Kookus: CR 508.1a's requirement for one turn, which is not the printed
+    # static `combat_restrictions.py` reads for "attacks **each combat** if
+    # able". Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "force_self_to_attack_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

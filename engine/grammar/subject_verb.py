@@ -26,7 +26,8 @@ from . import ast
 from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import _parse_name_then_reveal_top
-from .conjuncts import _with_damage_conjunct, _with_untap_conjunct
+from .conjuncts import (_with_attack_conjunct, _with_damage_conjunct,
+                        _with_untap_conjunct)
 from .imperatives import parse_imperative
 from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
@@ -203,8 +204,17 @@ def parse_subject_verb(
             # third verb that prints it: one noun phrase printed once, two
             # things said about it. Left unread the clause is unconsumed text
             # and takes the whole line down, which is what it did.
-            return _with_untap_conjunct(
-                stream, _parse_damage(stream, source_target), source_target
+            # "…this creature deals 3 damage to you **and attacks this turn if
+            # able**." (Kookus.) The third tail this verb carries, read outside
+            # the untap one rather than nested inside it: a sentence prints one
+            # of them, and nesting would make the order they are tried a fact
+            # about which card was written first.
+            return _with_attack_conjunct(
+                stream,
+                _with_untap_conjunct(
+                    stream, _parse_damage(stream, source_target), source_target
+                ),
+                source_target,
             )
         if token.text in ("fights", "fight"):
             return _parse_fight(stream, source_spec)

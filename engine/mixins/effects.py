@@ -824,9 +824,47 @@ class EffectsMixin:
         # count. Reading the local instead is why a *modifying* draw
         # replacement could not be written at all — the interceptor would run,
         # the number would change, and the draw would take the old one.
+        before = len(player.cards_drawn_this_turn)
         drawn = player.draw(max(0, int(payload.get("count", count))))
         self._divert_drawn_commanders(player)
+        self._reveal_first_draw_of_turn(player, before)
         return drawn
+
+    def _reveal_first_draw_of_turn(self, player, drawn_before: int) -> None:
+        """"Reveal the first card you draw each turn." (Rowen.) CR 701.16.
+
+        Here rather than at a fire site per card-drawing effect, for the reason
+        this whole seam exists: a draw is a draw whether the draw step, a
+        cantrip, an upkeep trigger or a replacement made it, and a list of the
+        places one happens goes stale the way every fire-site list in this
+        engine has.
+
+        *drawn_before* is how many cards this seat had already drawn this turn,
+        read before the draw so the "first" is settled by the record rather than
+        by which call site got here — CR 121.2 makes a multi-card draw that many
+        individual draws, so a two-card draw on an empty turn reveals exactly the
+        first of them.
+
+        The reveal is *announced* as well as recorded: "Whenever you reveal a
+        basic land card this way, draw a card" is the sentence behind it, and it
+        is an ordinary triggered ability over this event. Announced after the
+        card is in hand, which is where CR 701.16a says a revealed card is.
+        """
+        if drawn_before != 0 or not player.cards_drawn_this_turn:
+            return
+        from ..draw_reveals import reveals_first_draw
+        from ..events import emit
+
+        seat = self.players.index(player)
+        if not reveals_first_draw(self, seat):
+            return
+        card = player.cards_drawn_this_turn[0]
+        self.record_reveal(seat, [card.name])
+        self.log.append(f"{player.name} revealed {card.name} (first draw this turn)")
+        emit(
+            self, "revealed_drawn_card", subject=card,
+            players=[player], event_subject_player=seat,
+        )
 
     def _divert_drawn_commanders(self, player) -> None:
         """CR 903.9b over a draw: drawing a commander puts it into its owner's

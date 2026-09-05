@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 69.1% | 61.2% | 34.5% | 80 |
+| VIS *(measured)* | 167 | 278 | 71.6% | 64.4% | 37.4% | 85 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 331 | 152 | expected a subject |  |
-| 109 | 51 | unrecognized effect verb |  |
-| 91 | 46 | unconsumed text |  |
+| 329 | 150 | expected a subject |  |
+| 107 | 49 | unrecognized effect verb |  |
+| 90 | 45 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
@@ -125,6 +125,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the end step of enchanted creature's controller, destroy that creature if it didn't attack this turn.`
 - **Aisling Leprechaun**
   - `Whenever this creature blocks or becomes blocked by a creature, that creature becomes green. (This effect lasts indefinitely.)`
+- **Aku Djinn**
+  - `At the beginning of your upkeep, put a +1/+1 counter on each creature each opponent controls.`
 - **Al-abara's Carpet**
   - `{5}, {T}: Prevent all damage that would be dealt to you this turn by attacking creatures without flying.`
 - **Alabaster Potion**
@@ -624,6 +626,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bronze Tablet**
   - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
   - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
+- **Brood of Cockroaches**
+  - `When this creature is put into your graveyard from the battlefield, at the beginning of the next end step, you lose 1 life and return this card to your hand.`
 - **Brothers of Fire**
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
@@ -948,6 +952,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Coral Reef**
   - `Sacrifice an Island: Put two polyp counters on this enchantment.`
   - `{U}, Tap an untapped blue creature you control, Remove a polyp counter from this enchantment: Put a +0/+1 counter on target creature.`
+- **Corrosion**
+  - `At the beginning of your upkeep, put a rust counter on each artifact target opponent controls. Then destroy each artifact with mana value less than or equal to the number of rust counters on it. Artifacts destroyed this way can't be regenerated.`
+  - `When this enchantment leaves the battlefield, remove all rust counters from all permanents.`
 - **Cosmic Horror**
   - `At the beginning of your upkeep, destroy this creature unless you pay {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to you.`
   - `At the beginning of your upkeep, destroy this creature unless you pay {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to you.`
@@ -2620,6 +2627,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kobold Taskmaster**
   - `Other Kobold creatures you control get +1/+0.`
 - **Kookus**
+  - `At the beginning of your upkeep, if you don't control a creature named Keeper of Kookus, this creature deals 3 damage to you and attacks this turn if able.`
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Kormus Bell**
   - `All Swamps are 1/1 black creatures that are still lands.`
@@ -3966,6 +3974,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of storage counters from this land: Add {U} for each storage counter removed this way.`
 - **Sandals of Abdallah**
   - `{2}, {T}: Target creature gains islandwalk until end of turn. When that creature dies this turn, destroy this artifact. (A creature with islandwalk can't be blocked as long as defending player controls an Island.)`
+- **Sands of Time**
+  - `At the beginning of each player's upkeep, that player simultaneously untaps each tapped artifact, creature, and land they control and taps each untapped artifact, creature, and land they control.`
 - **Sandstorm**
   - `Sandstorm deals 1 damage to each attacking creature.`
   - `Sandstorm deals 1 damage to each attacking creature.`
@@ -4486,6 +4496,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Suleiman's Legacy**
   - `When this enchantment enters, destroy all Djinns and Efreets. They can't be regenerated.`
+  - `Whenever a Djinn or Efreet enters, destroy it. It can't be regenerated.`
 - **Sulfurous Springs**
   - `{T}: Add {C}.`
   - `{T}: Add {B} or {R}. This land deals 1 damage to you.`
@@ -4583,6 +4594,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U}{U}.`
 - **Teferi's Protege**
   - `{1}{U}, {T}: Draw a card, then discard a card.`
+- **Teferi's Puzzle Box**
+  - `At the beginning of each player's draw step, that player puts the cards in their hand on the bottom of their library in any order, then draws that many cards.`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
   - `Whenever you draw a card, target opponent mills two cards. (They put the top two cards of their library into their graveyard.)`

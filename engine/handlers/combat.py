@@ -687,6 +687,33 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+@effect_handler("force_self_to_attack_until_eot")
+def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…this creature deals 3 damage to you **and attacks this turn if able**."
+    (Kookus.)
+
+    CR 508.1a's requirement for one turn, on the ability's own source. The mark
+    is the one ``declare_attackers`` already reads, so nothing new decides what
+    "if able" means: a creature that cannot legally attack simply does not, and
+    the requirement is met as far as the rules allow.
+
+    Not the printed static ``engine/combat_restrictions.py`` reads for "attacks
+    **each combat** if able" — that one lasts as long as the permanent is on the
+    battlefield, and this ends with the turn (CR 611.2a), which is why the mark
+    is the until-end-of-turn one and not a text claim.
+
+    A source that has left the battlefield marks nothing: there is no permanent
+    to require anything of, and CR 608.2 does as much as it can.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: nothing left to make attack")
+        return True, "resolved"
+    source.metadata["must_attack_until_eot"] = True
+    game.log.append(f"{source.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
 @effect_handler("force_active_player_creatures_to_attack")
 def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     marked: list[str] = []

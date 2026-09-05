@@ -1319,6 +1319,19 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if not _comparison_holds(payload.get("mana_value"),
                              int(getattr(perm.effective_card, "cmc", 0) or 0)):
         return False
+    # "…each artifact **with mana value less than or equal to the number of rust
+    # counters on it**" (Corrosion). Both halves come off the permanent in hand,
+    # which is what makes this a filter key rather than an amount: an amount is
+    # answered from the resolving effect's context, and the number here is
+    # different for every object the sweep looks at.
+    at_most_counters = payload.get("mana_value_at_most_counters")
+    if at_most_counters is not None:
+        from ..named_counters import counters_on
+
+        if int(getattr(perm.effective_card, "cmc", 0) or 0) > counters_on(
+            perm, str(at_most_counters)
+        ):
+            return False
     # "with power 4 or greater" (Turret Ogre's intervening-if): the
     # layer-computed stats, so a pumped 2/2 qualifies while it is pumped.
     if not _comparison_holds(payload.get("power"), perm.effective_power):

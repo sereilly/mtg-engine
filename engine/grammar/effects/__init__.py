@@ -178,6 +178,7 @@ from .stack import (
 from .combat import (
     parse_block_count_grant,
     _parse_assigns_no_combat_damage,
+    _parse_attacks_this_turn_if_able,
     _parse_force_chosen_creature_to_attack,
     _parse_attacking_doesnt_tap,
     _parse_cant_attack_or_block,
@@ -321,6 +322,7 @@ __all__ = [
     "_parse_cant_attack_or_block",
     "parse_block_count_grant",
     "_parse_assigns_no_combat_damage",
+    "_parse_attacks_this_turn_if_able",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_becomes_blocked",
