@@ -315,8 +315,17 @@ class DeclareBlockersStepMixin:
                 # saying yes to a block the defender chooses to pay for.
                 if self._block_mana_costs_of(blocker, attacker):
                     continue
+                # The **attacker's** controller is the observer, because the
+                # sentence is printed on the attacker: CR 109.5's "you" is the
+                # seat whose ability it is, not the seat being asked to block.
+                # No card in the pool prints a relative narrowing here yet —
+                # which is exactly why it was the defender's seat and nothing
+                # noticed — and the phrase is a whole noun phrase now, so one
+                # that does would have been tested against the wrong side.
                 if compelled and not subject_matches(
-                    self, blocker, compelled, observer=controller_index, source=attacker
+                    self, blocker, compelled,
+                    observer=self.controller_index_of(attacker),
+                    source=attacker,
                 ):
                     continue
                 if blocker_idx not in assignments:
