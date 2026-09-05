@@ -454,3 +454,203 @@ def test_wand_of_denial_bins_only_a_nonland_and_only_if_paid_for(set_pool):
     assert land.players[0].life == 20
     assert land.players[1].graveyard == []
     assert land.players[1].library[0].name == "Mountain"
+
+
+# --- VIS w2g4: Triangle of War ----------------------------------------------
+#
+# Imports at the top of this block, per the file header.
+
+import pytest as _w2g4a_pytest
+from engine import Game as _W2G4aGame, PlayerState as _W2G4aPlayerState
+from engine.grammar import parse_line as _w2g4a_parse_line
+from engine.grammar.errors import LoweringError as _W2G4aLoweringError
+from engine.grammar.lower import lower_ability as _w2g4a_lower
+from engine.models import (CardDefinition as _W2G4aCardDefinition,
+                           Permanent as _W2G4aPermanent)
+from engine.oracle import compile_card_oracle as _w2g4a_compile
+from engine.game_types import OracleExecutionContext as _W2G4aContext
+from engine.targeting import derive_activation_spec as _w2g4a_spec
+
+
+def _w2g4a_creature(name, power, toughness):
+    return _W2G4aPermanent(card=_W2G4aCardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name},
+        power=str(power), toughness=str(toughness),
+    ))
+
+
+def _w2g4a_board(pool, mine, theirs):
+    p0 = _W2G4aPlayerState(name="P0", life=20, battlefield=list(mine))
+    p1 = _W2G4aPlayerState(name="P1", life=20, battlefield=list(theirs))
+    game = _W2G4aGame(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    for perm in list(p0.battlefield) + list(p1.battlefield):
+        perm.metadata["summoning_sickness_turn"] = -99
+    return game, p0, p1
+
+
+def _w2g4a_settle(game):
+    for _ in range(len(game.stack) + 8):
+        if not game.stack or not game.resolve_top_of_stack():
+            break
+    game._settle()
+
+
+def test_w2g4_triangle_of_war_exchanges_damage_between_two_chosen_creatures(set_pool):
+    """"{2}, Sacrifice this artifact: Target creature you control fights target
+    creature an opponent controls." (CR 701.14 -- Fight, not CR 701.12, which
+    is Exchange.)
+
+    Neither fighter is the ability's own source, which is the whole difference
+    from ``source_fights_target``: that handler reads one fighter off the
+    context and offers one prompt, so this is a second announcement (CR 601.2c)
+    and its own instruction rather than a payload key.
+
+    CR 701.14a: both powers are read before either is dealt, so a fighter that
+    dies to the first half still deals its own damage. A 3/2 and a 4/1 trade.
+    """
+    pool = set_pool("VIS")
+    triangle = _W2G4aPermanent(card=pool["Triangle of War"])
+    mine = _w2g4a_creature("My Fighter", 3, 2)
+    theirs = _w2g4a_creature("Their Fighter", 4, 1)
+    game, p0, p1 = _w2g4a_board(pool, [triangle, mine], [theirs])
+
+    result = game.activate_permanent_ability(
+        0, "Triangle of War",
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    )
+    assert result.supported, result.details
+    _w2g4a_settle(game)
+
+    assert not game.is_on_battlefield(mine), game.log
+    assert not game.is_on_battlefield(theirs), game.log
+    assert [c.name for c in p0.graveyard] == ["Triangle of War", "My Fighter"], game.log
+    assert [c.name for c in p1.graveyard] == ["Their Fighter"], game.log
+
+
+def test_w2g4_triangle_of_war_will_not_fight_two_of_the_same_seats_creatures(set_pool):
+    """The printed controllers are a restriction, and a restriction the
+    resolution does not re-check is one the card works more often than.
+
+    ``permanent_matches_filter`` -- the pure half every handler shares -- does
+    not test ``controller`` at all, so a slot check written with it would drop
+    "an opponent controls" silently and let the artifact fight two of its own
+    controller's creatures against each other. This handler asks
+    ``subject_matches`` with the activating seat as the observer instead.
+    """
+    pool = set_pool("VIS")
+    triangle = _W2G4aPermanent(card=pool["Triangle of War"])
+    one = _w2g4a_creature("Mine One", 3, 3)
+    two = _w2g4a_creature("Mine Two", 3, 3)
+    game, p0, _p1 = _w2g4a_board(pool, [triangle, one, two], [])
+
+    result = game.activate_permanent_ability(
+        0, "Triangle of War",
+        target_permanent_ids=[one.permanent_id, two.permanent_id],
+    )
+    if result.supported:
+        _w2g4a_settle(game)
+    # Whether it was refused at announcement (CR 601.2c) or declined at
+    # resolution (CR 608.2b), no damage may be exchanged between two creatures
+    # the same player controls.
+    assert one.damage_marked == 0, game.log
+    assert two.damage_marked == 0, game.log
+    assert game.is_on_battlefield(one) and game.is_on_battlefield(two), game.log
+
+
+def test_w2g4_triangle_of_war_refuses_at_announcement_if_a_fighter_is_gone(set_pool):
+    """CR 601.2c: a named target that is not one the picker offers refuses the
+    activation with **nothing paid** — the Triangle is not sacrificed, which is
+    what makes the refusal a refusal rather than a fizzle."""
+    pool = set_pool("VIS")
+    triangle = _W2G4aPermanent(card=pool["Triangle of War"])
+    mine = _w2g4a_creature("My Fighter", 3, 3)
+    theirs = _w2g4a_creature("Their Fighter", 3, 3)
+    game, _p0, _p1 = _w2g4a_board(pool, [triangle, mine], [theirs])
+    gone = theirs.permanent_id
+    game.remove_from_battlefield(theirs)
+
+    result = game.activate_permanent_ability(
+        0, "Triangle of War", target_permanent_ids=[mine.permanent_id, gone],
+    )
+
+    assert not result.supported, result.details
+    assert mine.damage_marked == 0
+    assert game.is_on_battlefield(triangle), "a refused activation pays nothing"
+
+
+def test_w2g4_triangle_of_war_deals_nothing_when_one_fighter_has_gone(set_pool):
+    """CR 701.14b at **resolution**, which is the half the announcement gate
+    cannot cover: a creature that leaves after the ability is announced makes
+    *neither* fighter deal damage. That is why this is one instruction and not
+    two damage steps — written as two, the first would resolve and the second
+    would not.
+
+    Driven through the instruction directly, because a creature cannot be
+    removed between announcement and resolution through the activation API:
+    ``activate_permanent_ability`` resolves the ability it queues. The stale id
+    is exactly the state the handler sees at resolution.
+    """
+    pool = set_pool("VIS")
+    triangle = _W2G4aPermanent(card=pool["Triangle of War"])
+    mine = _w2g4a_creature("My Fighter", 3, 3)
+    theirs = _w2g4a_creature("Their Fighter", 3, 3)
+    game, p0, _p1 = _w2g4a_board(pool, [triangle, mine], [theirs])
+    gone = theirs.permanent_id
+    game.remove_from_battlefield(theirs)
+
+    ability = _w2g4a_compile(triangle.card).activated_abilities[0]
+    context = _W2G4aContext(
+        card=triangle.card, caster=p0, target=p0,
+        source_permanent=triangle,
+        target_permanent_id=[mine.permanent_id, gone],
+    )
+    game._execute_oracle_instruction(ability.instruction, context)
+
+    assert mine.damage_marked == 0, (
+        "701.14b is all-or-nothing: the survivor deals and takes nothing"
+    )
+    assert game.is_on_battlefield(mine), game.log
+
+
+def test_w2g4_triangle_of_war_asks_for_two_targets(set_pool):
+    """The picker's side of CR 601.2c. A spec of ``max_targets`` 2 is what the
+    client tests to decide how many prompts to run -- the Roots class is a
+    supported card whose spec is None and which therefore cannot be played at
+    all, and a two-slot ability that reported one is the same failure halved.
+    """
+    program = _w2g4a_compile(set_pool("VIS")["Triangle of War"])
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "target_fights_target"
+    spec = _w2g4a_spec(ability)
+    assert spec is not None and spec.get("max_targets") == 2, spec
+
+
+def test_w2g4_a_two_target_fight_needs_both_slots_announced():
+    """"Target creature you control fights **another creature**" is a different
+    card: CR 601.2c announces nothing for the second phrase, so the choice
+    would be made at resolution. This kind builds a two-slot picker, so
+    admitting the untargeted phrase would raise a prompt the card never prints
+    -- it falls back to the source-shaped refusal instead."""
+    with _w2g4a_pytest.raises(_W2G4aLoweringError) as raised:
+        _w2g4a_lower(_w2g4a_parse_line(
+            "Target creature you control fights another creature."
+        ))
+    assert "source" in raised.value.reason
+
+
+def test_w2g4_a_two_target_fight_refuses_a_keyword_with_no_behaviour():
+    """The same guard the sweep one file over carries, and for the same reason
+    one step earlier: the picker enumerates from these filters, so a keyword no
+    behaviour is registered under widens what may be *chosen*, not merely what
+    resolves."""
+    with _w2g4a_pytest.raises(_W2G4aLoweringError) as raised:
+        _w2g4a_lower(_w2g4a_parse_line(
+            "Target creature with shadow you control fights target creature "
+            "an opponent controls."
+        ))
+    assert "shadow" in raised.value.reason

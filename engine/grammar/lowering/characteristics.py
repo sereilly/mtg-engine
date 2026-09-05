@@ -14,6 +14,8 @@ what is missing instead of producing an effect that never ends.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import (unimplemented_filter_keywords,
+                                untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (
@@ -87,6 +89,21 @@ def _resolve_per_each_pronoun(node: ast.Pump) -> ast.Pump:
             filt, blocking_bound_target=False, blocking_source=True
         ),
     )
+
+
+#: The ``buff_creatures_global`` payload keys the sweep below writes one at a
+#: time, each for one printed narrowing. A description key outside this set has
+#: no hand-written test behind it, so it travels as the whole filter and is
+#: answered by ``subject_matches`` — see the emit site.
+#:
+#: A *set of description keys*, not of payload keys: the two spellings differ
+#: (``card_types`` reaches the payload as ``type_filter``), and it is the
+#: description this is subtracted from.
+_GLOBAL_BUFF_PAYLOAD_KEYS = frozenset({
+    "type_filter", "color_filter", "exclude_colors", "subtype_filter",
+    "exclude_types", "with_keywords", "attacking_only", "blocking_only",
+    "controller", "exclude_self",
+})
 
 
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
@@ -370,7 +387,17 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 
     # "White creatures get +1/+1", "Attacking creatures get +2/+0 until end of turn"
-    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier == "all":
+    #
+    # ``each`` beside ``all``: "**Each** creature blocking this creature gets
+    # -1/-1 until end of turn" (Knight of Valor) is the same sentence with the
+    # same quantifier reading — CR 611.2c fixes the set at resolution either
+    # way — and it is the pair every other sweep in this package already
+    # accepts (`destruction`, `keywords`, `tapping`, `board`, `counters`, …).
+    # Read as `all` alone, the printed word cost the card its support while an
+    # identically-meaning sentence one word over compiled.
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in (
+        "all", "each"
+    ):
         filt = node.subject.filter
         if filt.card_types != ("creature",):
             raise LoweringError("global buff on a non-creature scope", node=node)
@@ -388,6 +415,19 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                 # the printed keyword list and has to reach the handler as
                 # payload.
                 "with_keywords",
+                # "Each creature **without flanking** …" (Knight of Valor). The
+                # negative twin of the key above and the same layer-6 question
+                # (CR 613.1f) read the other way: a creature *granted* the word
+                # is out of the set and one that lost it is in, so it cannot be
+                # answered off the printed keyword list either.
+                "without_keywords",
+                # "…**blocking this creature**" (Knight of Valor). A relation to
+                # the ability's own source rather than a characteristic, which
+                # is why it reaches the handler as payload and is tested through
+                # ``subject_matches`` with the source in hand — the same key
+                # ``tap_creatures_blocking_target``'s sibling above already
+                # reads, here on a sweep instead of a target.
+                "blocking_source",
             }),
         )
         if leftover:
@@ -440,8 +480,11 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # under makes ``_has_keyword`` answer no for everything, which turns
         # the buff into a no-op the card reports as supported.
         if filt.with_keywords:
-            from ...subject_filters import unimplemented_filter_keywords
-
+            # Imported at module scope beside ``untestable_filter_keys``. It
+            # used to be a function-level import here, which made the name
+            # *local to this whole function* — so the same validation added
+            # for the negative form below raised UnboundLocalError on every
+            # card that narrows by a keyword it does not also print positively.
             unknown = unimplemented_filter_keywords(
                 {"with_keywords": list(filt.with_keywords)}
             )
@@ -480,6 +523,37 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             payload["attacking_only"] = True
         if filt.blocking:
             payload["blocking_only"] = True
+        # Everything above names one payload key per printed narrowing, which is
+        # what keeps every payload this branch has ever written byte-identical.
+        # A narrowing with no key of its own rides the *description* instead and
+        # the handler tests it with ``subject_matches`` — the pattern
+        # ``_team_removal_payload`` one family over already uses, and emitted
+        # only when there is something to carry, so no existing card's program
+        # moves.
+        described = _filter_payload(filt)
+        if set(described) - _GLOBAL_BUFF_PAYLOAD_KEYS:
+            if untestable_filter_keys(described):
+                raise LoweringError(
+                    "the global buff cannot test: "
+                    + ", ".join(sorted(untestable_filter_keys(described))),
+                    node=node,
+                )
+            # The same validation the ``with_keywords`` branch above performs,
+            # and the **negative** form is the urgent half: ``_has_keyword``
+            # answers "no" for a word no behaviour is registered under, so
+            # "creatures with shadow" would shrink to nothing (a card doing
+            # less than it says) while "creatures **without** shadow" widens to
+            # the entire board. A sweep that reaches strictly more permanents
+            # than the card prints is the one thing this package must never
+            # emit, so it refuses the line instead.
+            unknown = unimplemented_filter_keywords(described)
+            if unknown:
+                raise LoweringError(
+                    "the global buff cannot test the keyword(s): "
+                    + ", ".join(sorted(unknown)),
+                    node=node,
+                )
+            payload["filter"] = described
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)

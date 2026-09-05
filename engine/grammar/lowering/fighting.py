@@ -29,6 +29,8 @@ from ._common import (
     _is_source,
     _is_target,
 )
+from ...subject_filters import (unimplemented_filter_keywords,
+                                untestable_filter_keys)
 
 
 def _fused_prepare_then_interact(
@@ -124,6 +126,77 @@ def _fused_prepare_then_interact(
     )
 
 
+def _two_target_fight(node: ast.Fight) -> tuple[OracleInstruction, ...] | None:
+    """"Target creature you control fights target creature an opponent
+    controls." (Triangle of War.) Or None when the sentence is not that shape.
+
+    CR 701.14's exchange with **neither** fighter being the ability's source:
+    two announcements (CR 601.2c), made independently and answered by a
+    two-slot picker, exactly as ``target_bites_target`` answers the one-way
+    version of the same sentence. That is why it is its own kind rather than a
+    payload key on ``source_fights_target`` — that handler reads one fighter
+    off the context and offers one prompt, and a second slot is not something a
+    key can add to it.
+
+    Both slots must be *targeted*. "Target creature you control fights another
+    creature" would be a different card — CR 601.2c announces nothing for the
+    second phrase, so the choice would be made at resolution — and this kind
+    builds a cast/activation-time picker for both, so admitting the untargeted
+    phrase would raise a prompt for a choice the card never announces.
+
+    The two slots are *differently* restricted, which is the whole point of the
+    per-slot ``filters`` list ``target_bites_target`` already carries: one
+    filter for both would offer the caster's own board for the second pick and
+    let the artifact fight two of its controller's creatures together.
+    """
+    first, second = node.subject, node.opponent
+    if not _is_target(first) or not _is_target(second):
+        return None
+    assert isinstance(first, ast.TargetSpec) and isinstance(second, ast.TargetSpec)
+    if not (first.targeted and second.targeted):
+        return None
+    described = [_filter_payload(first.filter), _filter_payload(second.filter)]
+    for slot in described:
+        # Every key has to be one ``subject_matches`` can test, for this
+        # package's standing reason: a narrowing the resolution cannot re-check
+        # is one the handler would silently drop, and here dropping "an
+        # opponent controls" is an artifact that fights its own controller's
+        # two creatures against each other.
+        if untestable_filter_keys(slot):
+            raise LoweringError(
+                "the two-target fight cannot test: "
+                + ", ".join(sorted(untestable_filter_keys(slot))),
+                node=node,
+            )
+        # And whether it can answer the **value**, not just know the key: a
+        # keyword no behaviour is registered under makes ``_has_keyword`` say
+        # no for everything, so "target creature **without** flying you
+        # control" would offer the whole board. The picker enumerates from the
+        # same filter, so an inert word widens what may be *chosen* and not
+        # merely what resolves.
+        unknown = unimplemented_filter_keywords(slot)
+        if unknown:
+            raise LoweringError(
+                "the two-target fight cannot test the keyword(s): "
+                + ", ".join(sorted(unknown)),
+                node=node,
+            )
+    return (
+        OracleInstruction(
+            "target_fights_target", "",
+            {
+                "targets": {
+                    "quantifier": "target",
+                    "kind": "object",
+                    "filter": described[0],
+                    "filters": described,
+                    "count": 2,
+                },
+            },
+        ),
+    )
+
+
 def _lower_fight(
     node: ast.Fight, whole_effect: bool = True
 ) -> tuple[OracleInstruction, ...]:
@@ -151,6 +224,9 @@ def _lower_fight(
             node=node,
         )
     if not _is_source(node.subject):
+        two = _two_target_fight(node)
+        if two is not None:
+            return two
         raise LoweringError(
             "only a fight with the ability's own source has a handler", node=node
         )

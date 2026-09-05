@@ -344,6 +344,8 @@ def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: 
 # recalculated dynamically (unlike static abilities which use static_buff_*).
 @effect_handler("buff_creatures_global")
 def buff_creatures_global(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    from ..subject_filters import subject_matches
+
     caster = context.caster
     card = context.card
     color_sym = instruction.payload.get("color")
@@ -372,6 +374,17 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
         context.source_permanent
         if instruction.payload.get("exclude_self") else None
     )
+    # "Each creature **without flanking blocking this creature** gets -1/-1
+    # until end of turn." (Knight of Valor.) A narrowing with no hand-written
+    # test of its own below travels as the whole noun-phrase description and is
+    # answered by the one matcher — which is also the only thing that can
+    # answer these two: "without flanking" is a layer-6 question (CR 613.1f)
+    # and "blocking this creature" is a relation to the ability's own source,
+    # and neither is readable off the permanent alone.
+    #
+    # Emitted by the lowering only when there is something to carry, so every
+    # card compiled before this key existed takes the same path it always did.
+    described = instruction.payload.get("filter")
     if instruction.payload.get("opponents_only"):
         # "Creatures your opponents control get -2/-2 until end of turn"
         # (Massacre Wurm): every opponent's board and none of the caster's.
@@ -426,6 +439,16 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # the line.
             if with_keywords and not all(
                 game._has_keyword(perm, word) for word in with_keywords
+            ):
+                continue
+            # Last, because it is the general answer and the keys above are the
+            # specific ones: a description that reaches here has already been
+            # checked for anything a hand-written test covers, and what is left
+            # is exactly what only ``subject_matches`` can read.
+            if described is not None and not subject_matches(
+                game, perm, described,
+                observer=game.players.index(caster),
+                source=context.source_permanent,
             ):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
@@ -1956,6 +1979,41 @@ def remove_self_keyword(game: Game, instruction: OracleInstruction, context: Ora
     game.log.append(
         f"{source_permanent.card.name} loses {' and '.join(keywords)}"
         + (" until end of turn" if duration == "end_of_turn" else "")
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_keyword_from_block_pair")
+def remove_keyword_from_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever this creature blocks or becomes blocked by a creature, **that
+    creature** loses first strike until end of turn." (Talruum Champion.)
+
+    The exact mirror of ``grant_keyword_to_block_pair`` above, and it reads the
+    pair through the same ``block_pair_permanents`` — the one function that
+    knows the two fire sites bind "that creature" differently. Reaching for the
+    stack item's target instead would name the *Champion* on the blocks half of
+    the event, which is a card that strips its own first strike and leaves the
+    creature it blocked with theirs.
+
+    The removal goes through the same layer-6 seam the grant does
+    (``_remove_one_keyword``), so it composes with grants by timestamp
+    (CR 613.1f) rather than fighting a flag — which is what makes the interaction
+    with the Champion's own printed first strike a rules question the layer
+    system answers rather than an ordering this handler has to get right.
+    """
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    lifetime = grant_lifetime(game, instruction, context)
+    removed = 0
+    for perm in block_pair_permanents(game, context):
+        for keyword in keywords:
+            _remove_one_keyword(perm, keyword, **lifetime)
+        removed += 1
+    game._recompute_continuous_effects()
+    if not removed:
+        game.log.append(f"{context.card.name}: no creature in the block pair")
+        return True, "no target"
+    game.log.append(
+        f"{context.card.name}: {removed} creature(s) lose {', '.join(keywords)}"
     )
     return True, "resolved"
 

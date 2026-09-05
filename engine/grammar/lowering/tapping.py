@@ -323,6 +323,19 @@ def _lower_tap(
                 # (CR 105.2c), which falls out of testing membership rather
                 # than absence.
                 "excluded_colors",
+                # "Untap all creatures **that attacked this turn**."
+                # (Relentless Assault.) A record of the turn rather than a
+                # present state — the mark `_fire_attack_triggers` stamps and
+                # the cleanup step sweeps — so it reaches the payload as
+                # `attacked_this_turn` and `subject_matches` tests it off that
+                # mark, exactly as `blocked_source_this_turn` above is tested
+                # off the block record. Its twin `attacking` stays absent for
+                # the reason given there: a field is listed once the pool
+                # prints it, and an attacker that is *still* attacking is a
+                # narrower set than this sentence names — a creature removed
+                # from combat after attacking is untapped by the card and
+                # would not be by that key.
+                "attacked_this_turn",
             }),
         )
         if leftovers:

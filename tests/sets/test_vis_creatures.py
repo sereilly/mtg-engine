@@ -919,3 +919,265 @@ def test_guiding_spirit_moves_only_a_creature_card(set_pool):
     game.resolve_stack()
     assert game.players[1].library[0].name == "Island"
     assert [c.name for c in game.players[1].graveyard] == ["Black Lotus", "Mountain"]
+
+
+# --- VIS w2g4: combat and turn structure ------------------------------------
+#
+# Imports at the top of this block, per the file header: a merge that appends
+# the block cannot then lose them.
+
+import pytest as _w2g4_pytest
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from engine.grammar import parse_line as _w2g4_parse_line
+from engine.grammar.errors import LoweringError as _W2G4LoweringError
+from engine.grammar.lower import lower_ability as _w2g4_lower
+from engine.models import (CardDefinition as _W2G4CardDefinition,
+                           Permanent as _W2G4Permanent)
+from engine.oracle import compile_card_oracle as _w2g4_compile
+
+
+def _w2g4_creature(name, *, power="2", toughness="2", keywords=()):
+    """A vanilla body, optionally carrying printed keywords.
+
+    Built rather than drawn from the pool because the point of every test below
+    is *which* creature an effect reaches, and a made-up body has exactly the
+    words the test names and no others.
+    """
+    return _W2G4Permanent(card=_W2G4CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text=" ".join(k.capitalize() for k in keywords),
+        colors=(), color_identity=(), keywords=tuple(keywords),
+        produced_mana=(), raw={"name": name},
+        power=power, toughness=toughness,
+    ))
+
+
+def _w2g4_board(mine, theirs):
+    """Two seats, combat walkable, mana unenforced, nothing summoning-sick."""
+    p0 = _W2G4PlayerState(name="P0", life=20, battlefield=list(mine))
+    p1 = _W2G4PlayerState(name="P1", life=20, battlefield=list(theirs))
+    game = _W2G4Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    for perm in list(p0.battlefield) + list(p1.battlefield):
+        perm.metadata["summoning_sickness_turn"] = -99
+    return game, p0, p1
+
+
+def _w2g4_settle_stack(game):
+    for _ in range(len(game.stack) + 8):
+        if not game.stack or not game.resolve_top_of_stack():
+            break
+    game._settle()
+
+
+def _w2g4_to_blocks(game, *, attackers, blocks):
+    """Walk seat 0's combat to a declared set of blocks and settle the stack."""
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    _w2g4_settle_stack(game)
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, attackers)[0], game.log
+    game._settle()
+    game.advance_combat_phase()   # declare blockers
+    assert game.declare_blockers(1, blocks)[0], game.log
+    game._settle()
+    _w2g4_settle_stack(game)
+
+
+# -- Chronatog: CR 500.11's turn counter -------------------------------------
+
+def test_w2g4_chronatog_activation_really_costs_its_controller_the_next_turn(set_pool):
+    """"{0}: This creature gets +3/+3 until end of turn. **You skip your next
+    turn.**"
+
+    The refusal this replaced was ``no skippable step named 'turn'``, which
+    reads as a missing word in a table. It was not: ``Game.skip_next_turn`` and
+    the counter ``_compute_next_active_player`` spends were both already here
+    and already live (Time Vault's untap uses them). What was missing was a way
+    to *say* it -- CR 500.11 counts turns in a different bucket from CR 500.7's
+    steps, so filing this as a step skip would have been a record nothing ever
+    consumes and a card that reported supported while taking no turn away.
+
+    So the assertion is the turn order itself, not the counter: after seat 0
+    activates, the seat that takes the turn after seat 1's is seat 1 again.
+    """
+    atog = _W2G4Permanent(card=set_pool("VIS")["Chronatog"])
+    game, _p0, _p1 = _w2g4_board([atog], [])
+
+    assert game.activate_permanent_ability(0, "Chronatog").supported, game.log
+    _w2g4_settle_stack(game)
+
+    assert game.active_player_index == 0
+    assert game.start_next_turn() == 1, game.log
+    # Seat 0's next turn is the one that never happens.
+    assert game.start_next_turn() == 1, game.log
+    assert game.start_next_turn() == 0, game.log
+
+
+def test_w2g4_chronatog_pumps_as_well_as_skipping(set_pool):
+    """Both halves of the sequence, because a lowering that dropped either
+    would still report the card supported. The +3/+3 is what the skip buys."""
+    atog = _W2G4Permanent(card=set_pool("VIS")["Chronatog"])
+    game, _p0, _p1 = _w2g4_board([atog], [])
+
+    assert game.activate_permanent_ability(0, "Chronatog").supported, game.log
+    _w2g4_settle_stack(game)
+
+    assert (atog.effective_power, atog.effective_toughness) == (4, 5), game.log
+    assert game.skip_turn_counts.get(0) == 1, game.log
+
+
+def test_w2g4_skipping_a_turn_refuses_for_a_seat_the_lowering_cannot_name():
+    """"Target player skips their next turn" is not this instruction.
+
+    The seat is decided at lowering, so a sentence naming anyone but "you"
+    would silently skip the controller's own turn instead of the one printed.
+    It refuses by name, exactly as the step skip beside it does.
+    """
+    with _w2g4_pytest.raises(_W2G4LoweringError) as raised:
+        _w2g4_lower(_w2g4_parse_line("Target player skips their next turn."))
+    assert "skips a turn" in raised.value.reason
+
+
+# -- Knight of Valor: a sweep narrowed by a keyword and by a block -----------
+
+def test_w2g4_knight_of_valor_shrinks_only_its_own_blockers_without_flanking(set_pool):
+    """"{1}{W}: Each creature without flanking blocking this creature gets
+    -1/-1 until end of turn."
+
+    Three creatures and only one of them is in the printed set, which is the
+    whole test: a blocker with flanking is excluded by the keyword, and a
+    creature that is not blocking the Knight is excluded by the relation. Both
+    narrowings reach the handler as payload and are answered by
+    ``subject_matches`` -- the keyword because it is a layer-6 question
+    (CR 613.1f) and the relation because it is about the ability's own source.
+
+    Dropping either would have been a strictly wider sweep than the card
+    prints, which is the direction this package must never fail in.
+    """
+    pool = set_pool("VIS")
+    knight = _W2G4Permanent(card=pool["Knight of Valor"])
+    mate = _w2g4_creature("Squire", power="3", toughness="3")
+    plain = _w2g4_creature("Plain Blocker")
+    flanker = _w2g4_creature("Flanking Blocker", keywords=("flanking",))
+    game, _p0, _p1 = _w2g4_board([knight, mate], [plain, flanker])
+
+    # Both of seat 0's creatures attack; the plain blocker and the flanker both
+    # block the Knight (attacker 0), and nobody blocks the Squire. The map is
+    # keyed blocker -> attacker, which is the direction CR 509.1a declares in.
+    _w2g4_to_blocks(game, attackers=[0, 1], blocks={0: [0], 1: [0]})
+    before = {
+        p.card.name: (p.effective_power, p.effective_toughness)
+        for p in (plain, flanker)
+    }
+
+    assert game.activate_permanent_ability(0, "Knight of Valor").supported, game.log
+    _w2g4_settle_stack(game)
+
+    assert (plain.effective_power, plain.effective_toughness) == (
+        before["Plain Blocker"][0] - 1, before["Plain Blocker"][1] - 1
+    ), game.log
+    assert (flanker.effective_power, flanker.effective_toughness) == (
+        before["Flanking Blocker"]
+    ), "a blocker with flanking is outside the printed set"
+    assert (mate.effective_power, mate.effective_toughness) == (3, 3), (
+        "the sweep reaches creatures blocking the Knight, not the whole board"
+    )
+
+
+def test_w2g4_knight_of_valors_sweep_refuses_a_keyword_with_no_behaviour():
+    """The refusal that matters more than the grant.
+
+    ``Game._has_keyword`` answers "no" for a word no behaviour is registered
+    under, so the **negative** form of a keyword filter matches *everything* --
+    "each creature without shadow" would shrink the entire board rather than
+    the printed subset. The positive form only ever does less than the card
+    says; this one does more, which is why an unimplemented word has to refuse
+    the line instead of riding along inert.
+    """
+    with _w2g4_pytest.raises(_W2G4LoweringError) as raised:
+        _w2g4_lower(_w2g4_parse_line(
+            "{1}{W}: Each creature without shadow blocking this creature "
+            "gets -1/-1 until end of turn."
+        ))
+    assert "shadow" in raised.value.reason
+    # And the implemented word still compiles, so the guard is a filter rather
+    # than a wall.
+    assert _w2g4_lower(_w2g4_parse_line(
+        "{1}{W}: Each creature without flanking blocking this creature "
+        "gets -1/-1 until end of turn."
+    ))
+
+
+# -- Talruum Champion: a keyword removal on the other half of a block --------
+
+def test_w2g4_talruum_champion_strips_first_strike_from_what_it_blocked(set_pool):
+    """"Whenever this creature blocks or becomes blocked by a creature, **that
+    creature** loses first strike until end of turn."
+
+    The removal names the *other* half of the pair, and on the blocks half of
+    the event the stack item's target is the blocking creature itself -- the
+    fire site puts it there so a self-affecting trigger can find itself. So a
+    lowering that fell through to the ordinary target reading would strip the
+    Champion's own printed first strike and leave the attacker's intact: the
+    card playing as its own opposite while reporting supported.
+
+    Both assertions are that inversion, one each way round.
+    """
+    champion = _W2G4Permanent(card=set_pool("VIS")["Talruum Champion"])
+    striker = _w2g4_creature("Quick Attacker", keywords=("first strike",))
+    game, _p0, _p1 = _w2g4_board([striker], [champion])
+
+    _w2g4_to_blocks(game, attackers=[0], blocks={0: [0]})
+
+    assert not game._has_keyword(striker, "first strike"), game.log
+    assert game._has_keyword(champion, "first strike"), (
+        "the trigger names the other half of the pair, never its own source"
+    )
+
+
+def test_w2g4_talruum_champion_strips_from_its_blocker_too(set_pool):
+    """The other half of "blocks **or becomes blocked by**".
+
+    One printed condition covers both, and the two fire sites bind "that
+    creature" differently -- which is exactly what ``block_pair_permanents``
+    exists to hide from the effect. With the Champion attacking, the creature
+    the words name is the blocker.
+    """
+    champion = _W2G4Permanent(card=set_pool("VIS")["Talruum Champion"])
+    blocker = _w2g4_creature("Quick Blocker", keywords=("first strike",))
+    game, _p0, _p1 = _w2g4_board([champion], [blocker])
+
+    _w2g4_to_blocks(game, attackers=[0], blocks={0: [0]})
+
+    assert not game._has_keyword(blocker, "first strike"), game.log
+    assert game._has_keyword(champion, "first strike"), game.log
+
+
+def test_w2g4_a_block_pair_removal_refuses_a_restated_narrowing():
+    """"That creature" is the object the trigger already named, so it carries
+    no narrowing to honour -- and a restated *subtype* refuses rather than
+    being dropped, exactly as the grant's twin does.
+
+    A subtype rather than a colour or a state because those do not reach the
+    lowering at all: the parse side declines "that white creature" and "that
+    tapped creature" outright, so the refusal under test is the one a bound
+    pronoun can actually arrive carrying.
+    """
+    with _w2g4_pytest.raises(_W2G4LoweringError) as raised:
+        _w2g4_lower(_w2g4_parse_line(
+            "Whenever this creature blocks or becomes blocked by a creature, "
+            "that Wall loses first strike until end of turn."
+        ))
+    assert "nothing narrower" in raised.value.reason
+
+
+def test_w2g4_talruum_champions_removal_is_read_off_the_pair_not_chosen(set_pool):
+    """The compiled program is the assertion: the trigger lowered to the
+    block-pair kind rather than to a target-shaped one, which is what says the
+    creature is read off the pair the fire site recorded and never picked."""
+    program = _w2g4_compile(set_pool("VIS")["Talruum Champion"])
+    kinds = [t.instruction.kind for t in program.triggered_abilities if t.instruction]
+    assert kinds == ["remove_keyword_from_block_pair"], kinds

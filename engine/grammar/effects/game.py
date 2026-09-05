@@ -512,18 +512,35 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     first, which on an opponent's turn is the wrong player's — so the seat rides
     the node and the lowering carries it into the payload.
 
-    Only "your next" today. "Skip your next turn" is a different rule (CR
-    500.11's turn counter) with its own handler, and an unbounded "skip your
-    draw steps" is a continuous effect rather than a one-shot; both refuse here
-    rather than borrowing this one's arithmetic.
+    Only "your next" today. An unbounded "skip your draw steps" is a continuous
+    effect rather than a one-shot and refuses here rather than borrowing this
+    one's arithmetic.
+
+    **"Skip your next turn" is read here and lowers elsewhere.** It shares every
+    word of this production's opening — one printed shape, so one production
+    reads it — but CR 500.11 counts turns in a different bucket from steps
+    (``Game.skip_next_turn`` against ``Game.skip_next_step``), so it returns
+    :class:`~engine.grammar.ast.game.SkipTurn` and the two never share a
+    handler. It also takes no trailing "step", which is what keeps the two
+    apart in the token stream.
     """
     stream.expect_word("skips", "skip")
     if not (stream.accept_phrase("your", "next") or stream.accept_phrase("their", "next")):
         raise stream.error("expected 'your next' after 'skip'")
     word = stream.peek_word()
+    if word == "turn":
+        # "You skip your next turn." (Chronatog.) No "step" follows, and the
+        # production still has to consume its whole line — so the advance is
+        # here rather than after the shared trailing-word check below, which
+        # would demand a word this sentence does not print.
+        stream.advance()
+        return ast.SkipTurn(subject)
     step = _SKIPPABLE_STEPS.get(word or "")
     if step is None:
-        raise stream.error(f"no skippable step named {word!r}")
+        raise stream.error(
+            f"no skippable step named {word!r} (and only a turn may be "
+            "skipped without the word 'step')"
+        )
     stream.advance()
     if not stream.accept_word("step"):
         raise stream.error("expected 'step' after the step's name")

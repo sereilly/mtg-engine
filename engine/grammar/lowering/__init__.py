@@ -334,6 +334,7 @@ from .game import (
     _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
     _lower_skip_step,
+    _lower_skip_turn,
     _lower_extra_land_plays,
     _lower_cant_play_lands,
 )
@@ -393,6 +394,7 @@ __all__ = [
     "_lower_damage",
     "_lower_damage_reduced_by_paid_mana",
     "_lower_skip_step",
+    "_lower_skip_turn",
     "_lower_extra_land_plays",
     "_lower_cant_play_lands",
     "_lower_upkeep_counter_toll",

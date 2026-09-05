@@ -767,6 +767,28 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+@effect_handler("skip_next_turn")
+def skip_next_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You skip your next turn." (Chronatog.)
+
+    CR 500.11: to skip a turn is to proceed past it as though it did not exist,
+    and CR 614.10 makes that a replacement effect. The record goes in
+    ``Game.skip_turn_counts`` — spent by ``_compute_next_active_player``, which
+    is the one place a turn's active player is decided, so the skip is honoured
+    by the headless flow and the web layer alike without either knowing about
+    it.
+
+    A different bucket from the step skip above, deliberately: a turn is not one
+    of the steps ``_phase_steps`` walks, so filing this there would be a record
+    nothing consumes. The seat is the ability's controller, which is what "you"
+    means (CR 109.5).
+    """
+    seat = game.seat_index(context.caster)
+    game.skip_next_turn(seat, int(instruction.payload.get("count", 1) or 1))
+    game.log.append(f"{game.players[seat].name} will skip their next turn")
+    return True, "resolved"
+
+
 @effect_handler("grant_extra_land_plays_this_turn")
 def grant_extra_land_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"You may play up to three additional lands this turn." (Summer Bloom,
