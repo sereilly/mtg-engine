@@ -471,6 +471,22 @@ def _split_protection(text: str) -> tuple[str, tuple[str, ...]]:
     return " and ".join(kept), tuple(qualities)
 
 
+def grantable_protection_quality(word: str) -> bool:
+    """Whether a lord may grant "protection from *word*" at layer 6.
+
+    :func:`grantable_keywords`' opposite number for the channel that word does
+    *not* travel on, and gated for that function's reason read one channel
+    over: ``_protection_qualities`` turns each printed word into a quality and
+    **drops** the ones it cannot read, so an unreadable quality is an anthem
+    that compiles, reports supported and protects nobody. Asked by both front
+    ends — this file's own text table and ``grammar/statics.py``'s lowering —
+    because the two must admit the same sentences.
+    """
+    from .keywords import protection_quality
+
+    return protection_quality(word) is not None
+
+
 def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     """The noun phrase naming the buffed creatures, or None if unrecognized.
 
@@ -700,6 +716,13 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
             return None
         keywords = found
     else:
+        return None
+
+    # A quality the shield reader cannot answer refuses the whole line. See
+    # :func:`grantable_protection_quality` — dropping it would leave a card
+    # that reports supported and grants nothing, which is exactly what the
+    # keyword gate two branches up already refuses in the other channel.
+    if any(not grantable_protection_quality(word) for word in protection_from):
         return None
 
     if per_counter is not None and (

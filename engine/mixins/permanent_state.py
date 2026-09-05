@@ -2250,30 +2250,16 @@ class PermanentStateMixin:
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
         """The canonical quality one word of a protection clause names, or None.
 
-        Four families (CR 702.16, the qualities this engine models): a colour
-        ("white"), "multicolored" (Basri's Lieutenant), a card type
-        ("planeswalkers", Sparkhunter Masticore), and a creature subtype
-        ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Subtypes
-        print pluralized, the catalog stores singulars.
+        ``engine/keywords.py``'s reader, reached through this name because five
+        call sites in this file already ask it. It moved there when Righteous
+        War's board-wide grant needed the *same* vocabulary at the gate: a word
+        the shield reader cannot answer has to refuse the anthem rather than
+        admit it and protect nobody, and a second copy of the four families is
+        how those two answers come to differ.
         """
-        word = word.strip().lower()
-        if not word:
-            return None
-        symbol = _COLOR_WORD_TO_SYMBOL.get(word)
-        if symbol:
-            return ("color", symbol)
-        if word == "multicolored":
-            return ("multicolored", "")
-        if word in ("planeswalker", "planeswalkers"):
-            return ("card_type", "planeswalker")
-        from ..grammar.vocabulary import CREATURE_TYPES
+        from ..keywords import protection_quality
 
-        singular = word[:-1] if word.endswith("s") else word
-        if word in CREATURE_TYPES:
-            return ("subtype", word)
-        if singular in CREATURE_TYPES:
-            return ("subtype", singular)
-        return None
+        return protection_quality(word)
 
     def _lord_buff_matches(self, target_perm, source_perm, buff) -> bool:
         """Whether *buff*, contributed by *source_perm*, reaches *target_perm*.
@@ -2306,6 +2292,30 @@ class PermanentStateMixin:
             return False
         if filt.other_than_source and target_perm is source_perm:
             return False
+        # "Creatures **you control**" / "creatures your opponents control".
+        # CR 109.5: "you" is the seat controlling the permanent whose static
+        # ability this is, which is *source_perm*'s — not the reader's and not
+        # the buffed permanent's.
+        #
+        # This was the layer-7c caller's alone, applied by narrowing the set of
+        # battlefields it walked. Then a second reader arrived
+        # (:meth:`_protection_qualities`, for a lord that grants protection
+        # from a quality) and asked this predicate without the narrowing, so
+        # Feline Sovereign's "Other Cats **you control** … have protection from
+        # Dogs" shielded an opponent's Cats too: the P/T half of one sentence
+        # was scoped and the keyword half was not. The seat is part of "does
+        # this lord reach this permanent?", so it is answered here, once —
+        # which is this method's whole reason for being a method.
+        if filt.controller in ("you", "opponent"):
+            source_seat = self.controller_index_of(source_perm)
+            target_seat = self.controller_index_of(target_perm)
+            if source_seat is None or target_seat is None:
+                return False
+            same_seat = source_seat == target_seat
+            if filt.controller == "you" and not same_seat:
+                return False
+            if filt.controller == "opponent" and same_seat:
+                return False
         if filt.colors and not (set(filt.colors) & self._effective_colors(target_perm)):
             return False
         if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
@@ -2786,7 +2796,6 @@ class PermanentStateMixin:
         # it stood when the recompute began, which is timestamp order.
         gathered: list[tuple] = []
         for ctrl_seat, source_perm in self.permanents_with_controller():
-            ctrl_player = self.players[ctrl_seat]
             program = compile_card_oracle(_eff_card(source_perm))
             for instr in program.instructions:
                 if instr.kind != LORD_BUFF_KIND:
@@ -2813,36 +2822,31 @@ class PermanentStateMixin:
                     buff = replace(
                         buff, power=buff.power * scale, toughness=buff.toughness * scale
                     )
-                if buff.filter.controller == "you":
-                    scope = [ctrl_player]
-                elif buff.filter.controller == "opponent":
-                    # "Creatures your opponents control get -1/-0" (Waker of
-                    # Waves). Spelled out rather than folded into the
-                    # everyone-else default: read as "every player" the source
-                    # would shrink its own side too.
-                    scope = [p for p in self.players if p is not ctrl_player]
-                else:
-                    scope = self.players
                 flag = (
                     GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
                     if buff.granted_ability
                     else None
                 )
-                gathered.append((source_perm, buff, flag, scope))
+                gathered.append((source_perm, buff, flag))
 
-        def _reached_by(source_perm, buff, scope):
-            for player in scope:
-                for target_perm in self.controlled_by(player):
-                    if _matches(target_perm, source_perm, buff):
-                        yield target_perm
+        def _reached_by(source_perm, buff):
+            # Every permanent on every battlefield, because "creatures you
+            # control" is a question the matcher answers (CR 109.5, see
+            # ``_lord_buff_matches``). This loop used to pre-narrow the
+            # battlefields it walked, which made the seat the *caller's*
+            # answer — and the second caller of that predicate did not have
+            # it, so a protection grant scoped to one seat reached both.
+            for target_perm in self.all_permanents():
+                if _matches(target_perm, source_perm, buff):
+                    yield target_perm
 
         # Pass 2a — layer 6 (CR 613.3): every ability this board's lords grant
         # or take away ("Other Goblins … have mountainwalk", Gravity Sphere's
         # "All creatures lose flying").
-        for source_perm, buff, _flag, scope in gathered:
+        for source_perm, buff, _flag in gathered:
             if not (buff.keywords or buff.lost_keywords):
                 continue
-            for target_perm in _reached_by(source_perm, buff, scope):
+            for target_perm in _reached_by(source_perm, buff):
                 for keyword in buff.keywords:
                     add_derived_grant(target_perm, keyword)
                 for keyword in buff.lost_keywords:
@@ -2850,8 +2854,8 @@ class PermanentStateMixin:
 
         # Pass 2b — layer 7c (CR 613.4c) and the granted activated ability,
         # over a board whose layer 6 is complete.
-        for source_perm, buff, flag, scope in gathered:
-            for target_perm in _reached_by(source_perm, buff, scope):
+        for source_perm, buff, flag in gathered:
+            for target_perm in _reached_by(source_perm, buff):
                 _add_static_buff(target_perm, buff)
                 if flag is not None:
                     _grant_ability(target_perm, flag)

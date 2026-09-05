@@ -47,7 +47,8 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       parse_create_token_with_stated_pt,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
-                      parse_graveyard_top_to_library)
+                      parse_graveyard_top_to_library,
+                      _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
 from .effects.game import parse_extra_land_plays
@@ -525,6 +526,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         if permission is not None:
             return permission
 
+    # "Players and permanents can't be the targets of spells or activated
+    # abilities." (Peace Talks.) Read here rather than by the subject-verb
+    # table below, whose one subject cannot be both a player and an object —
+    # see the production. Gated on the opening word and refusing without
+    # consuming, so every other sentence about players keeps its reading.
+    if stream.at_word("players"):
+        targeting_ban = _parse_targeting_ban(stream)
+        if targeting_ban is not None:
+            return targeting_ban
+
     # "Until end of turn, <sentence>" — a duration in the *leading* printed
     # position (Rookie Mistake). Read **after** the cast permission above, which
     # prints the same prefix and reads it itself: taking it first turns both
@@ -532,7 +543,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # readings continue, so this production can only add a reading, never remove
     # one — a line it cannot finish keeps the refusal it has today rather than
     # gaining a new and more confident one.
-    if stream.at_word("until"):
+    # "**This turn and next turn**, creatures can't attack, and …" (Peace
+    # Talks) prints the same leading position with a different word, so the
+    # gate names both openings. Every sentence beginning "This creature …"
+    # reaches the probe and leaves it untouched: ``_parse_duration`` answers
+    # ``kind=None`` for a phrase that is not a duration, and the mark is
+    # restored.
+    if stream.at_word("until", "this"):
         mark = stream.mark()
         try:
             duration = _parse_duration(stream)

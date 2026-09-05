@@ -616,3 +616,33 @@ def parse_cant_play_lands(
         stream.reset(mark)
         return None
     return ast.CantPlayLands(subject, duration)
+
+
+def _parse_targeting_ban(stream: TokenStream) -> "ast.TargetingBan | None":
+    """``players and permanents can't be the targets of spells or activated
+    abilities [<duration>]`` (Peace Talks).
+
+    CR 115.1 denied outright for a stated window. Read here rather than by the
+    subject-verb table because the sentence's subject is *two* populations at
+    once — a player and an object — and that reader carries one subject; a
+    production per half would be two rules for one printed clause, and the half
+    that arrived second would be free to disagree about the window.
+
+    Refuses without consuming, so every other sentence opening with "players"
+    keeps the reading it has. The clause is spelled out whole: this is one
+    printed sentence with nothing in it that is payload, and a looser match
+    would claim a narrowed printing ("players can't be the targets of **red**
+    spells") and then ban more than the card does.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "players", "and", "permanents", "can't", "be", "the", "targets", "of",
+        "spells", "or", "activated", "abilities",
+    ):
+        stream.reset(mark)
+        return None
+    # The trailing spelling of the window; Peace Talks prints the leading one,
+    # which `sentence_clauses._distribute_duration` attaches to this node's
+    # field afterwards. Both, because which end a card prints it on is not a
+    # difference in the rule.
+    return ast.TargetingBan(_parse_duration(stream))

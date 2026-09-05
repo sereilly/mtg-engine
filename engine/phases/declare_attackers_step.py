@@ -20,6 +20,7 @@ from ..subject_filters import subject_matches
 from ..events import emit
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..pt import pt_counter_key
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
 from ..turn_state import record_attacked_seat, attacked_during_seats_last_turn, record_attack
@@ -529,6 +530,29 @@ class DeclareAttackersStepMixin:
                 symbol: int(amount)
                 for symbol, amount in (payload.get("mana") or {}).items()
             }
+            # "…unless you pay {1} **for each +1/+1 counter on it**."
+            # (Phyrexian Marauder.) The price is a reading of the attacker's
+            # own counters rather than a number, so it is multiplied here —
+            # at the one reader both the gate and the charge go through, which
+            # is what keeps a declaration from being approved at one price and
+            # billed at another. Counted through ``pt_counter_key`` so the
+            # three P/T kinds and every invented counter word are read from the
+            # pile the placement filled.
+            #
+            # Zero counters means zero owed, and the falsy entries are dropped
+            # so the cost disappears entirely: a Marauder cast for X=0 is a 0/0
+            # that dies to the state-based sweep, and one whose counters were
+            # all removed attacks for free, which is what "for each" says.
+            per_counter = payload.get("per_counter")
+            if per_counter:
+                held = int(
+                    attacker.metadata.get(pt_counter_key(str(per_counter)), 0)
+                )
+                cost = {
+                    symbol: amount * held
+                    for symbol, amount in cost.items()
+                    if amount * held
+                }
             if cost:
                 costs.append(cost)
         return costs

@@ -22,18 +22,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 87.9% | 85.6% | 49.9% | 174 |
-| LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
+| LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
 | 4ED | 368 | 520 | 91.5% | 90.8% | 54.4% | 247 |
-| ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
+| ICE | 373 | 601 | 89.5% | 89.0% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
-| 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
-| M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 82.4% | 79.9% | 52.5% | 117 |
-| **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
+| 5ED | 434 | 631 | 93.5% | 93.2% | 60.5% | 317 |
+| M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
+| VIS *(measured)* | 167 | 278 | 83.1% | 81.7% | 54.0% | 120 |
+| **All (shipped)** | **3918** | **5812** | **89.9%** | **89.0%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -45,13 +45,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 321 | 142 | expected a subject |  |
+| 319 | 140 | expected a subject |  |
 | 105 | 47 | unrecognized effect verb |  |
 | 82 | 37 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 13 | 12 | expected 'unless defending player controls' |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
+| 9 | 9 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 1 | no handler for this battlefield entry |  |
@@ -73,7 +73,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-2813 cards, 3398 lines.
+2813 cards, 3399 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -1573,6 +1573,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Exile this artifact: Shuffle your graveyard into your library.`
   - `{T}, Exile this artifact: Shuffle your graveyard into your library.`
 - **Feline Sovereign**
+  - `Other Cats you control get +1/+1 and have protection from Dogs.`
   - `Whenever one or more Cats you control deal combat damage to a player, destroy up to one target artifact or enchantment that player controls.`
 - **Fellwar Stone**
   - `{T}: Add one mana of any color that a land an opponent controls could produce.`
@@ -3232,6 +3233,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pay 1 life: Exile the top card of your library face down. Put that card into your hand at the beginning of your next end step.`
 - **Necrosavant**
   - `{3}{B}{B}, Sacrifice a creature: Return this card from your graveyard to the battlefield. Activate only during your upkeep.`
+- **Nekrataal**
+  - `When this creature enters, destroy target nonartifact, nonblack creature. That creature can't be regenerated.`
 - **Nether Void**
   - `Whenever a player casts a spell, counter it unless that player pays {3}.`
 - **Nettletooth Djinn**
@@ -3416,6 +3419,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each opponent's upkeep, if that player has two or fewer cards in hand, this artifact deals 2 damage to that player.`
 - **Pavel Maliki**
   - `{B}{R}: Pavel Maliki gets +1/+0 until end of turn.`
+- **Peace Talks**
+  - `This turn and next turn, creatures can't attack, and players and permanents can't be the targets of spells or activated abilities.`
 - **Pearl Dragon**
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
 - **Peer into the Abyss**
@@ -3863,6 +3868,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{U}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Righteous Aura**
   - `{W}, Pay 2 life: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
+- **Righteous War**
+  - `White creatures you control have protection from black.`
+  - `Black creatures you control have protection from white.`
 - **Righteousness**
   - `Target blocking creature gets +7/+7 until end of turn.`
   - `Target blocking creature gets +7/+7 until end of turn.`

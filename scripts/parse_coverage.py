@@ -68,7 +68,8 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_damage_source_line,
                                       cast_opponent_cast_line,
                                       chosen_name_ban_line,
-                                      global_cast_ban_line)
+                                      global_cast_ban_line,
+                                      global_play_timing_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed)
 from engine.replacements import replacement_claims_line  # noqa: E402
@@ -310,6 +311,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # that channel's reason: the reader that answers the line is the one asked.
     ("activation_restrictions.py (board-wide ban)",
      lambda s: global_activation_ban_line(s) is not None),
+    # The **timing** half of both rules at once — "Players can cast spells and
+    # activate abilities only during their own turns." (City of Solitude.) One
+    # printed sentence read by `cast_restrictions.global_play_timing` from both
+    # `mixins/stack/casting.py` and `mixins/stack/activation.py`, so it gets one
+    # channel asking that one reader: a claim split over two would be free to
+    # survive the removal of either gate.
+    ("cast_restrictions.py (board-wide own-turn window)",
+     lambda s: global_play_timing_line(s)),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

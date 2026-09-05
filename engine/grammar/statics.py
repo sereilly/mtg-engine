@@ -17,7 +17,8 @@ from __future__ import annotations
 import dataclasses
 
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter,
-                          QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
+                          QUALIFIER_FIELDS, grantable_keywords,
+                          grantable_protection_quality, lord_buff_payload)
 from ..oracle_types import OracleInstruction
 from ..search_filters import SEARCH_COMPARISONS
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
@@ -119,6 +120,7 @@ def _lower_lord_effects(
 
     power = toughness = 0
     keywords: list[str] = []
+    protection_from: list[str] = []
     lost_keywords: list[str] = []
     for effect in effects:
         if isinstance(effect, ast.Pump):
@@ -135,6 +137,27 @@ def _lower_lord_effects(
                 raise LoweringError("a variable continuous buff has no channel", node=node)
         elif isinstance(effect, ast.GainKeyword):
             for keyword in effect.keywords:
+                # "White creatures you control have **protection from black**."
+                # (Righteous War.) Protection is not a keyword this channel can
+                # carry — ``grantable_keywords`` excludes the word on purpose,
+                # because the quality is read from ``LordBuff.protection_from``
+                # and answered by ``_protection_qualities`` — so it is lifted
+                # into that field here rather than refused. The refusal it
+                # replaces was real behaviour lost: ``lord_buff_for`` has read
+                # this sentence since Feline Sovereign, and a *lowering* error
+                # does not fall through to the derivation table, so the
+                # enchantment printings of the anthem (whose path consults the
+                # grammar alone) reported unsupported while the creature
+                # printings worked.
+                if keyword.startswith("protection from "):
+                    quality = keyword[len("protection from "):].strip()
+                    if not grantable_protection_quality(quality):
+                        raise LoweringError(
+                            f"no shield answers to protection from {quality!r}",
+                            node=node,
+                        )
+                    protection_from.append(quality)
+                    continue
                 if keyword not in grantable_keywords():
                     raise LoweringError(
                         f"engine/lord_buffs.py grants no {keyword!r} at layer 6", node=node
@@ -193,6 +216,7 @@ def _lower_lord_effects(
         power,
         toughness,
         tuple(keywords),
+        protection_from=tuple(protection_from),
         lost_keywords=tuple(lost_keywords),
     )
 

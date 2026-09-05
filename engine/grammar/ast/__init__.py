@@ -356,6 +356,7 @@ from .game import (
     LoseGame,
     DrawGame,
     SkipStep,
+    TargetingBan,
 )
 from .statements import (
     Effect,
@@ -576,6 +577,7 @@ __all__ = [
     "PutOnLibraryTop",
     "PutOntoBattlefield",
     "SkipStep",
+    "TargetingBan",
     "DestroyUnlessPay",
     "DestroyEachUnlessPaid",
     "SacrificeUnlessPay",

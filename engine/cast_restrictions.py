@@ -792,6 +792,69 @@ def chosen_name_ban(game: "Game", card) -> str | None:
     return None
 
 
+#: "Players can cast spells and activate abilities only during their own
+#: turns." (City of Solitude.) The **timing** half of CR 601.3a and CR 602.5,
+#: read off the board rather than off the object being played: nothing about
+#: the spell or the ability decides it, only whose turn it is.
+#:
+#: One row, two gates. Both halves of the printed sentence are one rule for
+#: ``_CHOSEN_NAME_BAN``'s reason one screen up — claiming the casting half
+#: alone would ship an enchantment that stops an opponent's Counterspell and
+#: lets their Icy Manipulator through, which is not the card — and the two
+#: enforcement sites (``mixins/stack/casting.py``, ``mixins/stack/activation.py``)
+#: both ask :func:`global_play_timing`.
+#:
+#: "Their own turns" is the seat's, so the question is whether the player
+#: acting is the active player. No exception for mana abilities: the sentence
+#: names none, and CR 605.1a's exception is a thing *other* cards print
+#: (Faith's Fetters) rather than a rule about restrictions in general.
+_GLOBAL_PLAY_TIMING = re.compile(
+    r"^players can cast spells and activate abilities only during their own "
+    r"turns$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, not ``"cast_restrictions"``: that claim says *when
+#: this card* may be cast, and this sentence is the whole of what the permanent
+#: does and is about everybody else's turns — the same distinction
+#: ``global_activation_ban`` records one file over.
+GLOBAL_PLAY_TIMING_CLAIM = "global_play_timing"
+
+
+@lru_cache(maxsize=None)
+def global_play_timing_line(line: str) -> bool:
+    """Whether *line* is the board-wide own-turn-only restriction.
+
+    One reader, three callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and the casting and activation gates ask it so the line is *enforced*. A
+    restriction that is claimed and not enforced is an enchantment that reports
+    supported while every player keeps playing on every turn.
+    """
+    return _GLOBAL_PLAY_TIMING.match(line.strip().lower().rstrip(".")) is not None
+
+
+def global_play_timing(game: "Game", actor_index: int) -> str | None:
+    """The name of a permanent forbidding *actor_index* from acting now, or None.
+
+    Every battlefield and no seat comparison against the permanent's own
+    controller: the sentence names nobody, so it binds its controller too — on
+    an opponent's turn the enchantment stops its own player as thoroughly as
+    anybody (CR 601.3a).
+
+    ``effective_card`` rather than the printed face, for
+    :func:`global_cast_ban`'s reason: what a permanent says is what layer 1 and
+    layer 3 have made of it (CR 707.2, CR 612.1).
+    """
+    if actor_index == game.active_player_index:
+        return None
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            if global_play_timing_line(raw_line):
+                return permanent.card.name
+    return None
+
+
 def global_cast_ban(game: "Game", card) -> str | None:
     """The name of a permanent forbidding *card* from being cast, or None.
 

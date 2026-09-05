@@ -403,6 +403,24 @@ def _distribute_duration(
         if statement.duration not in (None, "end_of_turn"):
             raise stream.error("this sentence prints two different durations")
         return dataclasses.replace(statement, duration="end_of_turn")
+    # A combat restriction keeps its duration in ``payload`` rather than in a
+    # field — the kind and its parameters are what that node carries — so it
+    # takes the prefix by translation, exactly as the delayed trigger above
+    # does and for the same reason: the ``replace`` below would find no
+    # ``duration`` field and refuse a sentence the grammar can read.
+    #
+    # "This turn and next turn, **creatures can't attack**, and …" (Peace
+    # Talks). The production leaves the duration off when the sentence prints
+    # it in front, and the lowering refuses a restriction that ends up with
+    # none — so a prefix that failed to arrive here is a loud refusal rather
+    # than a permanent effect the card never printed.
+    if isinstance(statement, ast.CombatRestriction):
+        payload = dict(statement.payload)
+        printed = payload.get("duration")
+        if printed is not None and printed != duration.kind:
+            raise stream.error("this sentence prints two different durations")
+        payload["duration"] = duration.kind
+        return dataclasses.replace(statement, payload=tuple(payload.items()))
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(

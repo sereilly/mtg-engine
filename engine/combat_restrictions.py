@@ -52,6 +52,17 @@ class CombatRestriction:
 
     kind: str
     payload: dict[str, object] = field(default_factory=dict)
+    #: The **other** kinds this one printed sentence arms, over the same
+    #: payload. Katabatic Winds prints three prohibitions in one sentence over
+    #: one noun phrase — can't attack, can't block, and can't activate a
+    #: {T} ability — and each is answered at a different step, so each needs
+    #: its own kind. One row rather than three is what the sentence is: the
+    #: subject is read once and the three enforcement sites cannot come to
+    #: disagree about which creatures it names.
+    #:
+    #: The default is empty, so every row written before this field existed
+    #: produces exactly the one instruction it always did.
+    also_kinds: tuple[str, ...] = ()
 
 
 # (pattern, kind) — enforced by:
@@ -92,7 +103,7 @@ class CombatRestriction:
 #   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
 #   cant_attack_unless_others_attack  phases/declare_attackers_step.declare_attackers
 #   cant_block_unless_others_block  phases/declare_blockers_step.declare_blockers
-_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+_PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     (
         # "No more than two creatures can attack each combat." (Caverns of
         # Despair.) The only entry here that restricts the **declaration** as a
@@ -141,9 +152,25 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # creature printing it about itself — `auras.aura_combat_restriction`
     # rewrites the subject and asks this same table (idiom 14).
     (
+        # "…unless you pay {1} **for each +1/+1 counter on it**." (Phyrexian
+        # Marauder.) The toll above with a multiplier, and the multiplier is
+        # payload for the reason the symbol run is: a card printing "{2} for
+        # each charge counter" is the same restriction. The counter word is
+        # resolved to its store by ``pt.pt_counter_key`` at the charge, so the
+        # three P/T kinds and every invented one are counted from the pile the
+        # placement actually filled.
+        #
+        # Optional, so this row still reads Brainwash's unmultiplied printing —
+        # a second row would be one sentence with two readers, and the tail is
+        # what makes the price a *reading of the board* rather than a number.
+        # A creature holding none of the named counter owes nothing, which is
+        # what "for each" means at zero and what Phyrexian Marauder cast for
+        # X=0 is.
         re.compile(
             r"^this creature can't attack unless (?:you pay|its controller pays) "
-            r"(?P<attack_mana>(?:\{[^}]+\})+)$"
+            r"(?P<attack_mana>(?:\{[^}]+\})+)"
+            r"(?: for each (?P<attack_per_counter>[+-]\d+/[+-]\d+|[a-z][a-z-]*) "
+            r"counter on it)?$"
         ),
         "cant_attack_unless_pay",
     ),
@@ -254,6 +281,37 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"creatures you control can't attack$"
         ),
         "controlled_creatures_cant_attack",
+    ),
+    (
+        # "Creatures with flying can't attack or block, and their activated
+        # abilities with {T} in their costs can't be activated." (Katabatic
+        # Winds.) **One sentence, three prohibitions, one subject** — see
+        # ``CombatRestriction.also_kinds``. The noun phrase is read by
+        # `_printed_noun` like every other on this page, so a card printing
+        # "Red creatures can't attack or block, and…" is this rule with nothing
+        # added.
+        #
+        # The third kind is not a combat restriction and is enforced in
+        # ``mixins/stack/activation.py``, beside the Aura ban that reads Faith's
+        # Fetters' identically-shaped clause. It is derived **here** anyway,
+        # because it is a clause of *this* sentence: a second table matching the
+        # same printed line would be free to read a different subject out of it,
+        # and the one that dropped its half would leave an enchantment that
+        # grounds every flier and lets their tap abilities keep working — which
+        # is the silent direction this whole file exists to refuse.
+        #
+        # "With {T} in their costs" is the printed narrowing and it is part of
+        # the kind rather than payload: what an ability's cost contains is not a
+        # noun phrase `subject_matches` can answer, and the only other printing
+        # in the pool ("its activated abilities can't be activated unless
+        # they're mana abilities", Faith's Fetters) narrows along a different
+        # axis and already has its own name.
+        re.compile(
+            r"^(?P<cant_act_subject>.+) can't attack or block, and their "
+            r"activated abilities with \{t\} in their costs can't be activated$"
+        ),
+        ("creatures_cant_attack", "creatures_cant_block",
+         "tap_abilities_cant_be_activated"),
     ),
     (
         # "Creatures without flying can't attack." (Moat.) A restriction over a
@@ -481,21 +539,22 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # back, which is a legal declaration.
     (re.compile(r"^this creature must be blocked if able$"), "must_be_blocked"),
     (
-        # "All Walls able to block this creature do so." (Marble Priest.) Lure's
-        # requirement (CR 509.1c) narrowed to a printed noun, and printed on the
-        # creature itself rather than on an Aura — so it is a template here
-        # beside the others rather than a second copy of the Aura reader. The
-        # noun is payload for the reason every noun in this file is: a card
-        # printed "All Zombies able to block…" is the same requirement.
-        re.compile(
-            rf"^all (?P<blocker_subtype>{'|'.join(sorted(CREATURE_TYPES))})s able to "
-            r"block this creature do so$"
-        ),
-        "must_be_blocked_by_all_able",
-    ),
-    (
-        # The unnarrowed form on a creature's own text, for the same reason.
-        re.compile(r"^all creatures able to block this creature do so$"),
+        # "All Walls able to block this creature do so." (Marble Priest) /
+        # "All creatures able to block…" (Elvish Bard) / "All creatures **with
+        # flying** able to block…" (Talruum Piper). Lure's requirement
+        # (CR 509.1c) narrowed to a printed noun, and printed on the creature
+        # itself rather than on an Aura — so it is a template here beside the
+        # others rather than a second copy of the Aura reader.
+        #
+        # **One row reading a whole noun phrase**, where this was two rows: one
+        # alternating every creature type and one spelling out the bare
+        # "creatures". Talruum Piper stacks a keyword onto the noun and would
+        # have been the third, because the subtype alternation cannot express
+        # "creatures with flying" and the bare row is anchored. The phrase is
+        # read by `_printed_noun` and tested by `subject_matches` at the
+        # declaration, exactly as `cant_be_blocked_by` beside it — so a card
+        # printed "All red creatures able to block…" needs nothing here.
+        re.compile(r"^all (?P<compelled_blockers>.+) able to block this creature do so$"),
         "must_be_blocked_by_all_able",
     ),
     (
@@ -781,7 +840,9 @@ def combat_restriction_for(
         match = pattern.match(normalized_line)
         if match is None:
             continue
-        if condition is not None and kind not in CONDITIONAL_RESTRICTION_KINDS:
+        if condition is not None and (
+            isinstance(kind, tuple) or kind not in CONDITIONAL_RESTRICTION_KINDS
+        ):
             return None
         # Numeric captures reach handlers as ints: a payload whose type depends
         # on which regex matched is how a comparison silently becomes a string
@@ -821,6 +882,13 @@ def combat_restriction_for(
         # about blocking, and one key is what lets the two enforcement sites
         # share `mana_cost_label` and `plan_payment` without either knowing the
         # other's regex.
+        # "…{1} for each +1/+1 counter on it." The multiplier travels beside the
+        # cost under the name ``lord_buffs.LordBuff`` already gives a printed
+        # "for each … counter on this <noun>" tail, so the two tables spell one
+        # clause one way.
+        per_counter = payload.pop("attack_per_counter", None)
+        if per_counter is not None:
+            payload["per_counter"] = per_counter
         printed_cost = payload.pop("attack_mana", None) or payload.pop("block_mana", None)
         if printed_cost is not None:
             cost = mana_cost_from_symbols(printed_cost)
@@ -839,9 +907,17 @@ def combat_restriction_for(
         if defender_land is not None:
             payload["subject"] = {"subtype_filter": defender_land}
             payload["required"] = True
-        subtype = payload.get("blocker_subtype")
-        if subtype is not None and subtype not in CREATURE_TYPES:
-            return None
+        # "All <noun phrase> able to block this creature do so." The regex ends
+        # in `.+`, so a phrase admitted unread would be a *requirement* over a
+        # set nobody described — and the blockers step, handed an empty filter,
+        # compels the whole board, which is Lure rather than Talruum Piper.
+        # Refusing is the direction that leaves the card unsupported and named.
+        compelled = payload.pop("compelled_blockers", None)
+        if compelled is not None:
+            described = _printed_noun(compelled)
+            if described is None:
+                return None
+            payload["blocker_filter"] = described
         # A captured colour reaches the payload as its **symbol**, converted
         # here for the reason a captured number is converted to an int here: a
         # payload whose shape depends on which regex matched is how a filter
@@ -964,6 +1040,18 @@ def combat_restriction_for(
                 if described is None:
                     return None
                 payload["subject"] = described
+        # "**Creatures with flying** can't attack or block, and…" (Katabatic
+        # Winds.) The one noun phrase all three of that sentence's prohibitions
+        # are about, read here through the one noun reader on this page: the
+        # regex ends the subject in `.+`, and a phrase admitted unread would
+        # ground *every* creature on the board and shut off every tap ability
+        # there is.
+        cant_act_subject = payload.pop("cant_act_subject", None)
+        if cant_act_subject is not None:
+            described = _printed_noun(cant_act_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
         attack_controller = payload.pop("attack_controller", None)
         if attack_controller is not None:
             payload["subject"] = {
@@ -981,6 +1069,12 @@ def combat_restriction_for(
             }
         if condition is not None:
             payload["condition"] = condition
+        # A row may name several kinds (see ``CombatRestriction.also_kinds``).
+        # The first is the one every existing caller reads off ``.kind``; the
+        # rest ride beside it, and a caller that cannot honour them refuses
+        # rather than dropping them silently.
+        if isinstance(kind, tuple):
+            return CombatRestriction(kind[0], payload, also_kinds=tuple(kind[1:]))
         return CombatRestriction(kind, payload)
     return None
 

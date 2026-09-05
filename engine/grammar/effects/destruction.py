@@ -227,6 +227,30 @@ def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
     ):
         return True
     stream.reset(mark)
+    # "**That creature** can't be regenerated." (Nekrataal.) The fifth printed
+    # spelling, and a *back-reference* rather than a pronoun: the sentence
+    # before it destroyed one creature and this one names it again by its noun.
+    # Read here rather than left to ``_parse_cant_be`` because that production
+    # produces a standalone ``CantBe`` with no duration, which lowers to
+    # nothing — the destroy has already happened by then and the restriction has
+    # no permanent to attach to. It is the same rule as "It can't be
+    # regenerated" with the pronoun spelled out, so it belongs in the one reader
+    # of that rule.
+    #
+    # The sentence must **end** here, which the four spellings above do not have
+    # to check: "that creature can't be regenerated **this turn**" is
+    # ``_parse_cant_be``'s durationed sentence (Lim-Dûl's Cohort), a restriction
+    # armed on a creature the trigger bound rather than a rider on a destroy.
+    # Consuming the words and leaving the duration unread would take that
+    # production's line away and mis-read the card.
+    if (
+        stream.accept_word("that")
+        and stream.accept_word(*_DESTROYED_THIS_WAY_NOUNS)
+        and stream.accept_phrase("can't", "be", "regenerated")
+        and (stream.exhausted or stream.at_punct("."))
+    ):
+        return True
+    stream.reset(mark)
     # "**Artifacts** destroyed this way can't be regenerated." (Corrosion.) The
     # plural of the noun form above and the fourth printed spelling of one rule:
     # a sweep destroys a set, so its rider names a set, where War Barge's delayed

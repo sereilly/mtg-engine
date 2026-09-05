@@ -289,15 +289,17 @@ class DeclareBlockersStepMixin:
                 attacker, "must_be_blocked_by_all_able"
             ):
                 continue
-            # The printed noun, translated into the subject-filter vocabulary
-            # the same way `_can_block_attacker` translates `cant_be_blocked_by`
-            # a few screens down — one payload key means one filter key, and a
-            # narrowing this loop failed to translate would silently compel the
-            # whole board, which is Lure rather than Marble Priest.
-            compelled: dict[str, object] = {}
-            subtype = (printed.payload if printed is not None else {}).get("blocker_subtype")
-            if subtype:
-                compelled["subtype_filter"] = subtype
+            # The printed noun, already a subject-filter payload: the table
+            # reads the whole phrase through `_printed_noun` and refuses one it
+            # cannot express, so there is nothing to translate here. It used to
+            # be a `blocker_subtype` word this loop turned into one filter key,
+            # which is a second, smaller vocabulary — a narrowing it failed to
+            # translate would silently compel the whole board, which is Lure
+            # rather than Marble Priest, and "creatures with flying" (Talruum
+            # Piper) had no word for it to carry at all.
+            compelled: dict[str, object] = dict(
+                (printed.payload if printed is not None else {}).get("blocker_filter") or {}
+            )
             for blocker_idx, blocker in enumerate(defender.battlefield):
                 if not blocker.is_creature or blocker.tapped:
                     continue
@@ -729,6 +731,25 @@ class DeclareBlockersStepMixin:
         if blocker.metadata.get(CANT_BLOCK_UNTIL_EOT):
             return False
 
+        # And the board-wide half: "Creatures with flying can't attack **or
+        # block**…" (Katabatic Winds). A restriction printed on a permanent
+        # that reaches every creature on every battlefield, so it is found by
+        # scanning the board rather than read off the blocker's own program —
+        # the block twin of `creatures_cant_attack` in
+        # `declare_attackers_step.can_attack`, over the same `subject` payload
+        # and asked through the same one filter reader. "You control" inside
+        # that phrase is relative to the permanent carrying the restriction
+        # (CR 109.5), which is what the observer seat says.
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(source_perm.effective_card).instructions:
+                if instr.kind != "creatures_cant_block":
+                    continue
+                if subject_matches(
+                    self, blocker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    return False
+
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
@@ -786,7 +807,13 @@ class DeclareBlockersStepMixin:
         # to (Artifact Ward), so the two channels are unioned here rather than
         # asked in two places: the restriction is the same sentence and the
         # difference is only whose text it is printed on.
-        from ..subject_filters import subject_matches
+        #
+        # ``subject_matches`` is the module-level import at the top of this
+        # file. It was re-imported here, which made the name *local to this
+        # whole function* — so the board scan added above, several screens
+        # earlier in the same body, raised ``UnboundLocalError`` on the first
+        # blocker it was asked about. A function-level re-import of a name the
+        # module already has is not a no-op.
 
         # "Target creature can't be blocked by Walls **this turn**" (Tower of
         # Coireall): the same restriction granted for a turn rather than printed
