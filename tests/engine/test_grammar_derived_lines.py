@@ -243,8 +243,24 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # above: the condition is read at the declaration rather than being a
         # standing obligation. W1G1's tests drive both branches in a game.
         "must_attack_if_partner_attacks",
+        # "Nonblue creatures can't block creatures you control unless their
+        # controller pays 1 life for each blocking creature they control."
+        # (Heat Wave.) Built as a table row at Visions' first wave — the first
+        # combat toll in this engine paid in **life** rather than mana — and the
+        # grammar refuses the whole line (`parsed` is False), which is what
+        # keeps the table's line its own. Listed here rather than left to the
+        # equality below, because that branch is for a shape the grammar has
+        # claimed and this one it deliberately has not.
+        "subject_cant_block_subject_unless_pay_life",
     }
 
+    # Asked per **line**, not per kind. A kind-keyed split cannot express the
+    # pool: `creatures_cant_attack` has a line the grammar claims (Moat) and one
+    # it refuses (Katabatic Winds), because what a production reads is a
+    # sentence. `unclaimed_kinds` above is kept as the *documentation* of which
+    # shapes the grammar has not taken and why — every entry is prose worth
+    # having — but it is no longer what decides the assertion.
+    refused = 0
     compared = 0
     for card in load_catalog():
         for raw_line in card.oracle_text.split("\n"):
@@ -255,17 +271,28 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
             if derived is None:
                 continue
             result = compile_line(line, card_name=card.name)
-            if derived.kind in unclaimed_kinds:
-                assert not result.parsed, (
-                    f"{card.name}: {line!r} is not claimed by the grammar yet, so "
-                    "it must fail the parser rather than parse to nothing"
-                )
+            if not result.parsed:
+                # The grammar refused the whole line, so the table owns it —
+                # which is the arrangement `engine/grammar/derived.py` describes.
+                refused += 1
                 continue
+            # The grammar claimed it, so the two readers must agree exactly. A
+            # line that parsed and lowered to *nothing* fails here, and that is
+            # the case this guard exists for: parsed-but-unlowered is still
+            # parsed, and it takes the line away from the table.
             got = [(i.kind, i.payload) for i in result.instructions]
-            assert got == [(derived.kind, derived.payload)], f"{card.name}: {line!r}"
+            assert got == [(derived.kind, derived.payload)], (
+                f"{card.name}: {line!r} — the grammar parsed this line, so it "
+                "must produce the derivation table's instruction exactly; it "
+                f"produced {got!r} against the table's "
+                f"{[(derived.kind, derived.payload)]!r}"
+            )
             compared += 1
 
-    assert compared, "no combat-restriction lines were compared"
+    # Both halves have to be populated, or one side of the comparison is empty
+    # and the guard passes by having nothing to check.
+    assert compared, "no combat-restriction line was claimed by the grammar"
+    assert refused, "no combat-restriction line was left to the table"
 
 
 def test_a_derived_line_is_a_whole_line_or_nothing():

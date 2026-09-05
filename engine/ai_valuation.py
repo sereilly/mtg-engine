@@ -166,7 +166,17 @@ def counters_a_spell(card: CardDefinition) -> CounterProfile | None:
 #: named. "opponent" for removal/damage, "you" for the buffs a player puts on
 #: their own creatures; None means no side preference (the picker/handler owns it).
 _OPPONENT_CATEGORIES = frozenset({"damage", "destruction", "tapping", "counterspells"})
-_OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "attachments", "characteristics"})
+_OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "attachments", "characteristics",
+                             # CR 615: a shield is a gift. It joined at
+                             # Visions' promotion gate, where Remedy —
+                             # the pool's only *divided* prevention
+                             # spell — was the card that had no side to
+                             # divide between. Aiming a prevention
+                             # effect at an opponent's permanent is
+                             # never what the card is for, so the
+                             # category answers where it used to be
+                             # silent, for all 57 cards that print one.
+                             "prevention"})
 
 
 #: Kinds whose category is right about the family and wrong about the side.

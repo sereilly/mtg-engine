@@ -32,7 +32,9 @@
     "Mons's Goblin Raiders",
     "Moss Monster",
     "Onakke Ogre",
+    "Panther Warriors",
     "Pearled Unicorn",
+    "Python",
     "Raging Bull",
     "Savannah Lions",
     "Scaled Wurm",
@@ -65,6 +67,15 @@
     "Willow Faerie"
   ],
   [
+    "Abbey Gargoyles",
+    "Cerulean Wyvern",
+    "Freewind Falcon",
+    "Hazerider Drake",
+    "Melesse Spirit",
+    "Sea Sprite",
+    "Windreaper Falcon"
+  ],
+  [
     "Blistering Barrier",
     "Glacial Wall",
     "Wall of Earth",
@@ -74,20 +85,20 @@
     "Wall of Wood"
   ],
   [
-    "Abbey Gargoyles",
-    "Cerulean Wyvern",
-    "Hazerider Drake",
-    "Melesse Spirit",
-    "Sea Sprite",
-    "Windreaper Falcon"
-  ],
-  [
     "Benalish Hero",
     "Icatian Phalanx",
     "Kjeldoran Escort",
     "Kjeldoran Warrior",
     "Shield Bearer",
     "Timber Wolves"
+  ],
+  [
+    "Bog Wraith",
+    "Lost Soul",
+    "Marsh Goblins",
+    "Moor Fiend",
+    "Pygmy Allosaurus",
+    "Warthog"
   ],
   [
     "Elvish Archers",
@@ -126,13 +137,6 @@
     "White Ward"
   ],
   [
-    "Bog Wraith",
-    "Lost Soul",
-    "Marsh Goblins",
-    "Moor Fiend",
-    "Pygmy Allosaurus"
-  ],
-  [
     "Circle of Protection: Black",
     "Circle of Protection: Blue",
     "Circle of Protection: Green",
@@ -152,6 +156,13 @@
     "Ivory Cup",
     "Throne of Bone",
     "Wooden Sphere"
+  ],
+  [
+    "Death Speakers",
+    "Ihsan's Shade",
+    "Karoo Meerkat",
+    "Repentant Blacksmith",
+    "Scalebane's Elite"
   ],
   [
     "Divine Transformation",
@@ -175,10 +186,10 @@
     "Onyx Talisman"
   ],
   [
-    "Death Speakers",
-    "Ihsan's Shade",
-    "Karoo Meerkat",
-    "Repentant Blacksmith"
+    "Archangel",
+    "Bay Falcon",
+    "Tempest Drake",
+    "Zephyr Falcon"
   ],
   [
     "Deathlace",
@@ -190,6 +201,11 @@
     "Bog Imp",
     "Mahamoti Djinn",
     "Storm Crow"
+  ],
+  [
+    "Burn Bright",
+    "Shield Wall",
+    "Warrior's Honor"
   ],
   [
     "Darkness",
@@ -255,10 +271,6 @@
     "Crusade"
   ],
   [
-    "Bay Falcon",
-    "Zephyr Falcon"
-  ],
-  [
     "Black Knight",
     "White Knight"
   ],
@@ -271,8 +283,8 @@
     "Ironclaw Orcs"
   ],
   [
-    "Burn Bright",
-    "Shield Wall"
+    "Breezekeeper",
+    "Teferi's Drake"
   ],
   [
     "Cancel",
@@ -315,12 +327,24 @@
     "Zebra Unicorn"
   ],
   [
+    "Elven Cache",
+    "Regrowth"
+  ],
+  [
     "Essence Flare",
     "Unstable Mutation"
   ],
   [
     "Femeref Healer",
     "Samite Healer"
+  ],
+  [
+    "Feral Instinct",
+    "Fevered Strength"
+  ],
+  [
+    "Fire Drake",
+    "Spitting Drake"
   ],
   [
     "Flame Spirit",
@@ -415,6 +439,10 @@
     "War Elephant"
   ],
   [
+    "Obsianus Golem",
+    "Phyrexian Walker"
+  ],
+  [
     "Orcish Artillery",
     "Orcish Cannoneers"
   ],
@@ -445,6 +473,10 @@
   [
     "Rock Basilisk",
     "Thicket Basilisk"
+  ],
+  [
+    "Sisay's Ring",
+    "Sol Ring"
   ],
   [
     "Snow-Covered Swamp",

@@ -21,6 +21,13 @@
   ]
  },
  {
+  "card": "Aku Djinn",
+  "clause": "put a +1/+1 counter on each creature each opponent controls",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "All Hallow's Eve",
   "clause": "if this card is exiled with a scream counter on it, remove a scream counter from it. if there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield",
   "ignored": [
@@ -62,6 +69,13 @@
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Anvil of Bogardan",
+  "clause": "that player draws an additional card, then discards a card",
+  "ignored": [
+   "additional"
   ]
  },
  {
@@ -221,6 +235,28 @@
   ]
  },
  {
+  "card": "Corrosion",
+  "clause": "put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated",
+  "ignored": [
+   "each",
+   "each"
+  ]
+ },
+ {
+  "card": "Corrosion",
+  "clause": "remove all rust counters from all permanents",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Creeping Mold",
+  "clause": "destroy target artifact, enchantment, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Curse of Marit Lage",
   "clause": "tap all islands",
   "ignored": [
@@ -239,6 +275,13 @@
   "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" put enchanted creature card onto the battlefield tapped under your control and attach this aura to it. when this aura leaves the battlefield, that creature's controller sacrifices it",
   "ignored": [
    "tapped"
+  ]
+ },
+ {
+  "card": "Desertion",
+  "clause": "counter target spell. if an artifact or creature spell is countered this way, put that card onto the battlefield under your control instead of into its owner's graveyard",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -310,6 +353,13 @@
   "clause": "target dwarf creature gains mountainwalk until end of turn",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Dwarven Vigilantes",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -396,6 +446,20 @@
   "ignored": [
    "cards",
    "or"
+  ]
+ },
+ {
+  "card": "Eye of Singularity",
+  "clause": "destroy all other permanents with that name. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Eye of Singularity",
+  "clause": "destroy each permanent with the same name as another permanent, except for basic lands. they can't be regenerated",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -557,6 +621,13 @@
   ]
  },
  {
+  "card": "Guiding Spirit",
+  "clause": "if the top card of target player's graveyard is a creature card, put that card on top of that player's library",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
   "card": "Hail Storm",
   "clause": "hail storm deals 2 damage to each attacking creature and 1 damage to you and each creature you control",
   "ignored": [
@@ -655,6 +726,13 @@
   ]
  },
  {
+  "card": "Infernal Harvest",
+  "clause": "infernal harvest deals x damage divided as you choose among any number of target creatures",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Infuse",
   "clause": "untap target artifact, creature, or land",
   "ignored": [
@@ -718,6 +796,13 @@
   "clause": "if this creature attacked or blocked this combat, put a -0/-1 counter on this creature and create a 0/1 white deserter creature token",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Knight of Valor",
+  "clause": "each creature without flanking blocking this creature gets -1/-1 until end of turn",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -892,6 +977,13 @@
   ]
  },
  {
+  "card": "Pygmy Hippo",
+  "clause": "you may have defending player activate a mana ability of each land they control and lose all unspent mana. if you do, this creature assigns no combat damage this turn and at the beginning of your next main phase this turn, you add an amount of {c} equal to the amount of mana that player lost this way",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Pyroclasm",
   "clause": "pyroclasm deals 2 damage to each creature",
   "ignored": [
@@ -920,6 +1012,13 @@
   ]
  },
  {
+  "card": "Relentless Assault",
+  "clause": "untap all creatures that attacked this turn. after this main phase, there is an additional combat phase followed by an additional main phase",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Remove Enchantments",
   "clause": "return to your hand all enchantments you both own and control, all auras you own attached to permanents you control, and all auras you own attached to attacking creatures your opponents control. then destroy all other enchantments you control, all other auras attached to permanents you control, and all other auras attached to attacking creatures your opponents control",
   "ignored": [
@@ -939,6 +1038,13 @@
   ]
  },
  {
+  "card": "Retribution of the Meek",
+  "clause": "destroy all creatures with power 4 or greater. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Riddleform",
   "clause": "you may have this enchantment become a 3/3 sphinx creature with flying in addition to its other types until end of turn",
   "ignored": [
@@ -950,6 +1056,13 @@
   "clause": "tap all blue creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Rock Slide",
+  "clause": "rock slide deals x damage divided as you choose among any number of target attacking or blocking creatures without flying",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -1080,6 +1193,13 @@
   ]
  },
  {
+  "card": "Simoon",
+  "clause": "simoon deals 1 damage to each creature target opponent controls",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Snow Hound",
   "clause": "return this creature and target green or blue creature you control to their owner's hand",
   "ignored": [
@@ -1187,6 +1307,13 @@
   ]
  },
  {
+  "card": "Suleiman's Legacy",
+  "clause": "destroy all djinns and efreets. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Sworn Defender",
   "clause": "this creature's power becomes the toughness of target creature blocking or being blocked by this creature minus 1 until end of turn, and its toughness becomes 1 plus the power of that creature until end of turn",
   "ignored": [
@@ -1209,6 +1336,14 @@
   ]
  },
  {
+  "card": "Teferi's Realm",
+  "clause": "that player chooses artifact, creature, land, or non-aura enchantment. all nontoken permanents of that type phase out",
+  "ignored": [
+   "or",
+   "all"
+  ]
+ },
+ {
   "card": "Telim'Tor",
   "clause": "all attacking creatures with flanking get +1/+1 until end of turn",
   "ignored": [
@@ -1227,6 +1362,13 @@
   "clause": "counter target red or green spell",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Time and Tide",
+  "clause": "simultaneously, all phased-out creatures phase in and all creatures with phasing phase out",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1302,6 +1444,13 @@
   ]
  },
  {
+  "card": "Tremor",
+  "clause": "tremor deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Tropical Storm",
   "clause": "tropical storm deals x damage to each creature with flying and 1 additional damage to each blue creature",
   "ignored": [
@@ -1350,6 +1499,13 @@
   "clause": "you gain 7 life, draw seven cards, then put up to seven permanent cards from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Undiscovered Paradise",
+  "clause": "add one mana of any color. during your next untap step, as you untap your permanents, return this land to its owner's hand",
+  "ignored": [
+   "land"
   ]
  },
  {

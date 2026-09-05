@@ -70,6 +70,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     # imposes on another permanent, which is the `activated_combat` family's
     # question asked outside combat, so it takes the restriction word.
     "forbid_phase_out": "activated_restriction",
+    # "Target creature can't block this turn" (Jamuraan Lion, MIR), reached
+    # from an activated ability. A restriction like `forbid_phase_out` above:
+    # what the ability produces is a thing the target may no longer do. It
+    # surfaced at Visions' promotion rather than Mirage's because the printed
+    # clause only became a grammar production in this set's second wave; before
+    # that the kind existed and no activated ability reached it.
+    "target_cant_block_until_eot": "activated_restriction",
     # Subterranean Spirit damages a described set, beside
     # `deal_damage_each_creature_and_player`.
     "deal_damage_each_matching": "activated_damage",
@@ -393,6 +400,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "grant_self_ability_text": "activated_pump",
     "return_self_from_graveyard": "activated_return",
     "return_source_card_to_owners_hand": "activated_return",
+    # "{W}: Return enchanted creature to its owner's hand" (Sun Clasp). The
+    # same family as the source's own return above — a bounce is what the
+    # ability does — with the Aura's host as the subject rather than the source.
+    "return_attached_permanent_to_hand": "activated_return",
     "reorder_target_library_top": "activated_library",
     "look_top_exile_random": "activated_library",
     "reassign_blockers_between_attackers": "activated_combat",
@@ -469,6 +480,25 @@ TRIGGERED_LABELS: dict[str, str] = {
     # wrapper among them (Bazaar of Wonders' `if_then`) is in
     # TRIGGERED_LABELS_BY_CONDITION below, because a wrapper says nothing about
     # its contents and the condition is the only half of the pair that does.
+    # Nine kinds that reached a *triggered* ability for the first time at
+    # Visions' promotion. Eight are that set's; Viashino Sandstalker is Mirage's
+    # and shipped, which is the promotion gate doing its job — the kind existed,
+    # and no shipped trigger had produced it until this set widened the
+    # productions that emit it.
+    #
+    # Each takes the family of what the ability *does*, which is the whole
+    # contract of this table: the label feeds `SimulationResult`, the support
+    # report's buckets, and the `triggered_` prefix the web layer turns into a
+    # stack item's `is_triggered`.
+    "if_then": "triggered_label",
+    "remove_all_counters_from_matching": "triggered_counter",
+    "search_library": "triggered_library",
+    "pump_enchanted_creature": "triggered_pump",
+    "untap_and_tap_matching": "triggered_tap",
+    "phase_out_target": "triggered_phasing",
+    "destroy_event_subject": "triggered_destruction",
+    "remove_keyword_from_block_pair": "triggered_combat",
+    "return_source_card_to_owners_hand": "triggered_return",
     "exile_target_graveyard": "triggered_exile",
     "exile_graveyard_cards": "triggered_exile",
     "exile_bound_card": "triggered_exile",

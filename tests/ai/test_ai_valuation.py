@@ -368,6 +368,17 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         "Bounty of the Hunt", "Contagion", "Dwarven Catapult", "Fiery Justice",
         "Fire Covenant", "Fireball", "Meteor Shower", "Pyrokinesis",
         "Pyrotechnics", "Spoils of War",
+        # Reviewed at Visions' promotion, which is what this inventory is for.
+        # Infernal Harvest and Rock Slide divide damage and aim at "opponent"
+        # off the `damage` category, like every burn spell above them.
+        "Infernal Harvest", "Rock Slide",
+        # Remedy is the finding. It is the pool's only *divided* prevention
+        # spell, and `prevention` was in neither side list — so the one card
+        # that had to pick a board had no opinion about which. CR 615 settles
+        # it: a shield is a gift, and aiming one at an opponent's permanent is
+        # never what the card is for. The category now answers, for all 57
+        # cards in the pool that print a prevention effect.
+        "Remedy",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

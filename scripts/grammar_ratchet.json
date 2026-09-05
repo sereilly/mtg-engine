@@ -1,29 +1,29 @@
 {
   "floors": {
     "2ED": {
-      "executed_pct": 47.3,
-      "lowered_pct": 83.8,
-      "parsed_pct": 85.6
+      "executed_pct": 47.8,
+      "lowered_pct": 84.3,
+      "parsed_pct": 85.9
     },
     "3ED": {
-      "executed_pct": 49.9,
-      "lowered_pct": 85.6,
-      "parsed_pct": 87.9
+      "executed_pct": 50.4,
+      "lowered_pct": 86.1,
+      "parsed_pct": 88.2
     },
     "4ED": {
-      "executed_pct": 54.4,
-      "lowered_pct": 90.8,
-      "parsed_pct": 91.5
+      "executed_pct": 54.8,
+      "lowered_pct": 91.2,
+      "parsed_pct": 91.7
     },
     "5ED": {
-      "executed_pct": 60.5,
-      "lowered_pct": 93.0,
-      "parsed_pct": 93.3
+      "executed_pct": 60.7,
+      "lowered_pct": 93.3,
+      "parsed_pct": 93.7
     },
     "<pool>": {
-      "executed_pct": 58.5,
-      "lowered_pct": 88.9,
-      "parsed_pct": 89.8
+      "executed_pct": 58.8,
+      "lowered_pct": 89.2,
+      "parsed_pct": 90.0
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -57,33 +57,38 @@
     },
     "ICE": {
       "executed_pct": 63.4,
-      "lowered_pct": 88.9,
-      "parsed_pct": 89.4
+      "lowered_pct": 89.0,
+      "parsed_pct": 89.5
     },
     "LEA": {
-      "executed_pct": 47.2,
-      "lowered_pct": 83.8,
-      "parsed_pct": 85.6
+      "executed_pct": 47.7,
+      "lowered_pct": 84.3,
+      "parsed_pct": 85.8
     },
     "LEB": {
-      "executed_pct": 47.3,
-      "lowered_pct": 83.8,
-      "parsed_pct": 85.6
+      "executed_pct": 47.8,
+      "lowered_pct": 84.3,
+      "parsed_pct": 85.9
     },
     "LEG": {
       "executed_pct": 58.7,
-      "lowered_pct": 87.9,
-      "parsed_pct": 89.1
+      "lowered_pct": 88.4,
+      "parsed_pct": 89.6
     },
     "M21": {
-      "executed_pct": 60.8,
-      "lowered_pct": 86.9,
+      "executed_pct": 61.0,
+      "lowered_pct": 87.1,
       "parsed_pct": 87.3
     },
     "MIR": {
       "executed_pct": 63.9,
       "lowered_pct": 93.0,
       "parsed_pct": 93.2
+    },
+    "VIS": {
+      "executed_pct": 61.5,
+      "lowered_pct": 89.6,
+      "parsed_pct": 89.6
     }
   }
 }

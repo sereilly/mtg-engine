@@ -439,16 +439,22 @@ def test_whose_graveyard_a_reanimation_offers_is_the_programs_answer(supported_c
 
 
 def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_cards):
-    """A ratchet over an empty set passes forever. Hymn of Rebirth is the only
-    card in the pool whose printed phrase reads "from a graveyard" — verified
-    by the walk above rather than asserted — so it is also the only evidence
-    the test above is looking at anything."""
+    """A ratchet over an empty set passes forever, so this is the walk above's
+    evidence that it is looking at anything.
+
+    Hymn of Rebirth was the only card in the pool printing "from **a**
+    graveyard" until Visions' promotion; Necromancy is the second, and its whole
+    sentence is "Put target creature card from a graveyard onto the battlefield
+    under your control and attach this enchantment to it." Reviewed as an
+    inventory rather than loosened to a non-emptiness check: a third member
+    should be looked at by somebody, and equality is what makes that happen.
+    """
     widened = {
         card.name for card in supported_cards
         if any(_graveyard_reads(compile_card_oracle(card)))
     }
 
-    assert widened == {"Hymn of Rebirth"}
+    assert widened == {"Hymn of Rebirth", "Necromancy"}
 
 
 def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_cards):
