@@ -937,3 +937,42 @@ def names_attached_permanent(subject, event: str | None) -> bool:
         and not subject.targeted
         and event in ATTACHED_SUBJECT_EVENTS
     )
+
+
+def chooser_payload(statement, event: str | None, what: str) -> dict[str, object]:
+    """Who names the value a "choose a <thing>" sentence produces.
+
+    Here rather than in the dispatcher that calls it, and that is the point of
+    the move: the answer is a fact about the **event** — which seat, if any, the
+    firing froze — and this module is where that fact already lives
+    (``_EVENT_SUBJECT_PLAYERS``, ``EVENT_SUBJECT_PLAYER``). A dispatcher arm
+    re-deriving it was the dispatch layer holding a second copy of an events
+    fact, and the two would drift the first time a trigger kind joined that set.
+
+    Shared by the colour choice (Chromatic Armor, Hall of Gemstone) and the card
+    type (Teferi's Realm), because the question is the same one and the two arms
+    were the same twenty lines with a noun changed. *what* is that noun, for the
+    refusal message.
+
+    Empty is CR 601.2b's default — the ability's controller, which the handler
+    reads off the source — and is the payload every printing before Hall of
+    Gemstone produced, so nothing already compiled moves.
+
+    "That player" is the seat the firing event froze (CR 603.10), and it refuses
+    under an event that froze none: the prompt would otherwise go to whoever the
+    resolution happened to be holding, which is the refusal every other reading
+    of those two words in this package makes.
+    """
+    chooser = statement.chooser
+    if chooser is None:
+        return {}
+    if chooser.kind != "that_player":
+        raise LoweringError(
+            f"no {what} choice is made by {chooser.kind!r}", node=statement
+        )
+    if event not in _EVENT_SUBJECT_PLAYERS:
+        raise LoweringError(
+            f"no event named {event!r} freezes the seat \"that player\" names",
+            node=statement,
+        )
+    return {"chooser": EVENT_SUBJECT_PLAYER}

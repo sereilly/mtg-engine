@@ -78,10 +78,12 @@ from .text_changes import (
     _parse_change_text,
 )
 from .types import (
+    parse_land_type_swap,
     _parse_becomes,
     _parse_no_longer_supertype,
 )
 from .board import (
+    parse_simultaneous_phasing,
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
@@ -203,6 +205,9 @@ from .game import (
     _parse_end_the_turn,
     _parse_extra_turn,
     _parse_skip_step,
+    parse_cant_play_lands,
+    parse_choose_card_type,
+    parse_extra_land_plays,
 )
 
 __all__ = [
@@ -315,6 +320,11 @@ __all__ = [
     "_parse_cost_x_definition",
     "_parse_cant_attack_or_block",
     "parse_block_count_grant",
+    "parse_simultaneous_phasing",
+    "parse_cant_play_lands",
+    "parse_choose_card_type",
+    "parse_land_type_swap",
+    "parse_extra_land_plays",
     "_parse_assigns_no_combat_damage",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",

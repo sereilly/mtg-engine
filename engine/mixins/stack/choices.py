@@ -28,6 +28,7 @@ from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
+from ...continuous import next_timestamp
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
@@ -464,6 +465,14 @@ class PendingChoicesMixin:
     @property
     def pending_land_type_choice(self) -> dict | None:
         return self._choice_view("land_type_choice", "player_index")
+
+    @property
+    def pending_land_type_swap(self) -> dict | None:
+        return self._choice_view("land_type_swap", "player_index")
+
+    @property
+    def pending_card_type_choice(self) -> dict | None:
+        return self._choice_view("card_type_choice", "player_index")
 
     @property
     def pending_mana_payment(self) -> dict | None:
@@ -2213,6 +2222,108 @@ class PendingChoicesMixin:
                 )
                 + f" becomes a {land_type.title()}"
             )
+        self.discard_pending_choice(choice)
+        return True
+
+    # -- Vision Charm's ordered pair of land types ---------------------------
+
+    def confirm_land_type_swap(
+        self, player_index: int, from_type: str, to_type: str
+    ) -> bool:
+        """Answer "choose a land type and a basic land type" with the pair."""
+        return self.resolve_pending_choice(
+            "land_type_swap", player_index,
+            from_type=from_type, to_type=to_type,
+        )
+
+    def _resolve_land_type_swap(
+        self, choice: PendingChoice, from_type, to_type
+    ) -> bool:
+        """Make every land of *from_type* a *to_type* until end of turn.
+
+        The swap is performed **here**, by the resolver, rather than by the
+        handler that armed the prompt: CR 609.3 puts the choice inside the
+        resolution, and the set the sweep reaches is named by the answer. That
+        is Jinx's arrangement one land at a time, and it is why this kind does
+        not need to suspend anything — there is no later step to hold.
+
+        Each catalog is checked separately and against the one the *sentence*
+        named (idiom 9, the same list the prompt offered): "a land type" is all
+        of CR 205.3i's and "a basic land type" is the five, and an answer
+        outside either is refused rather than repaired.
+
+        CR 611.2c fixes the set now: a land played afterwards is not swapped.
+        The contribution is keyed on a fresh label rather than on a permanent,
+        because an instant leaves none — the same reason Jinx's does.
+        """
+        from ...grammar.vocabulary import LAND_TYPES
+
+        first = str(from_type or "").strip().lower()
+        second = str(to_type or "").strip().lower()
+        first_pool = (
+            self._BASIC_LAND_TYPES if choice.data.get("first_basic") else LAND_TYPES
+        )
+        second_pool = (
+            self._BASIC_LAND_TYPES if choice.data.get("second_basic") else LAND_TYPES
+        )
+        if first not in first_pool or second not in second_pool:
+            return False
+        source = f"{choice.data.get('duration', 'until_end_of_turn')}:{next_timestamp()}"
+        swapped = []
+        for land in self.permanents_matching(
+            lambda perm: perm.card.primary_type == "land" and perm.has_type(first)
+        ):
+            change_land_type(land, second, source=source, label=choice.data["card_name"])
+            swapped.append(land)
+        self.log.append(
+            f"{choice.data['card_name']}: {len(swapped)} {first}(s) became "
+            f"{second}s until end of turn"
+        )
+        self._recompute_continuous_effects()
+        self.discard_pending_choice(choice)
+        return True
+
+    # -- Teferi's Realm's card type ------------------------------------------
+
+    def confirm_card_type_choice(self, player_index: int, card_type: str) -> bool:
+        """Answer "chooses artifact, creature, land, or non-Aura enchantment"
+        with one of the options the card offered."""
+        return self.resolve_pending_choice(
+            "card_type_choice", player_index, card_type=card_type
+        )
+
+    def _resolve_card_type_choice(self, choice: PendingChoice, card_type) -> bool:
+        """Record the chosen card type on the ability's source (CR 609.3).
+
+        **Its own kind rather than a seventh shape of ``enter_choice``**, and
+        the difference is not cosmetic: this choice is made when a *triggered
+        ability resolves*, not as a permanent enters, and the sentence that
+        reads it back is a one-shot sweep in the same resolution. So it has to
+        ``suspend`` — an answer that arrived after the sweep had already run on
+        the default would change nothing at all, which is a prompt that lies.
+        ``enter_choice`` does not suspend and must not start: Hall of Gemstone's
+        second sentence is a *continuous* effect that re-reads the record on
+        every recompute, so a late answer there really does take effect.
+
+        The answer is bounded by the **printed options**, not by a catalog: the
+        card offered four, and a seat that could answer "instant" would name a
+        type no permanent has while one that could answer "enchantment" would
+        escape the Aura exclusion the card prints. Checked against the same list
+        the prompt offered (idiom 9), and refused rather than repaired.
+        """
+        from ...handlers._common import CHOSEN_CARD_TYPE
+
+        word = str(card_type or "").strip().lower()
+        offered = [
+            str(option).strip().lower()
+            for option in (choice.data.get("options") or ())
+        ]
+        if word not in offered:
+            return False
+        permanent = choice.data.get("permanent")
+        if permanent is not None and self.is_on_battlefield(permanent):
+            permanent.metadata[CHOSEN_CARD_TYPE] = word
+            self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
         self.discard_pending_choice(choice)
         return True
 
@@ -7417,6 +7528,47 @@ register_choice(
     # on the battlefield (not a spell held on the stack), so it is armed with
     # ``_stack_item=None``: holds priority, holds no finished object.
     blocked_detail="choose the land type before other actions",
+)
+
+register_choice(
+    "land_type_swap",
+    resolve=lambda game, choice, r: game._resolve_land_type_swap(
+        choice, r.get("from_type"), r.get("to_type")
+    ),
+    # The default pair is computed where the prompt is armed, against the board
+    # as it then stood, and applied here — the swap *is* the effect, so a
+    # default that merely discarded the prompt would resolve the spell having
+    # done nothing.
+    default=lambda game, choice: game._resolve_land_type_swap(
+        choice, choice.data.get("default_from"), choice.data.get("default_to")
+    ),
+    action="land_type_swap_confirm",
+    prompt_key="land_type_swap",
+    blocked_detail="choose the two land types before other actions",
+)
+
+register_choice(
+    "card_type_choice",
+    resolve=lambda game, choice, r: game._resolve_card_type_choice(
+        choice, r.get("card_type")
+    ),
+    # The handler stamps its deterministic default on the source before arming,
+    # so a non-interactive seat has nothing left to apply and the sweep behind
+    # this prompt runs at once with that answer.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="card_type_choice_confirm",
+    prompt_key="card_type_choice",
+    blocked_detail="choose a card type before other actions",
+    # A non-interactive seat takes the default *inline*, because the resolution
+    # this interrupts has to finish: the sweep is the next step of the same
+    # sequence.
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before that sweep runs —
+    # a one-shot that had already phased out the default's type would make the
+    # prompt a lie. See `_resolve_card_type_choice` for why `enter_choice`,
+    # whose readers are continuous effects, does not need this and must not
+    # gain it.
+    suspends=True,
 )
 
 register_choice(

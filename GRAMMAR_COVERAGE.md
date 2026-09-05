@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 73.4% | 66.5% | 39.9% | 89 |
+| VIS *(measured)* | 167 | 278 | 75.9% | 69.4% | 42.8% | 95 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,8 +45,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 330 | 151 | expected a subject |  |
-| 108 | 50 | unrecognized effect verb |  |
+| 328 | 149 | expected a subject |  |
+| 107 | 49 | unrecognized effect verb |  |
 | 83 | 38 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -54,19 +54,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
-| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 2 | expected a keyword ability |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected what this creature can't block, or a duration |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | the counter lands on a creature, optionally one in combat with the source |  |
+| 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
@@ -496,6 +496,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
+- **Blanket of Night**
+  - `Each land is a Swamp in addition to its other land types.`
 - **Blazing Effigy**
   - `When this creature dies, it deals X damage to target creature, where X is 3 plus the amount of damage dealt to this creature this turn by other sources named Blazing Effigy.`
 - **Blessed Wine**
@@ -3629,6 +3631,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Quicksand**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Target attacking creature without flying gets -1/-2 until end of turn.`
+- **Quirion Druid**
+  - `{G}, {T}: Target land becomes a 2/2 green creature that's still a land. (This effect lasts indefinitely.)`
 - **Quirion Dryad**
   - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
 - **Quirion Elves**
@@ -4315,6 +4319,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.`
   - `When this creature dies, you may draw a card.`
 - **Solfatara**
+  - `Target player can't play lands this turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Songs of the Damned**
   - `Add {B} for each creature card in your graveyard.`
@@ -4509,6 +4514,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B} or {R}. This land deals 1 damage to you.`
   - `{T}: Add {C}.`
   - `{T}: Add {B} or {R}. This land deals 1 damage to you.`
+- **Summer Bloom**
+  - `You may play up to three additional lands this turn.`
 - **Sun Clasp**
   - `{W}: Return enchanted creature to its owner's hand.`
 - **Sunastian Falconer**
@@ -4603,6 +4610,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U}{U}.`
 - **Teferi's Protege**
   - `{1}{U}, {T}: Draw a card, then discard a card.`
+- **Teferi's Realm**
+  - `At the beginning of each player's upkeep, that player chooses artifact, creature, land, or non-Aura enchantment. All nontoken permanents of that type phase out. (While they're phased out, they're treated as though they don't exist. Each one phases in before its controller untaps during their next untap step.)`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
   - `Whenever you draw a card, target opponent mills two cards. (They put the top two cards of their library into their graveyard.)`
@@ -4784,6 +4793,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
+- **Time and Tide**
+  - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
 - **Timmerian Fiends**
   - `{B}{B}{B}, Sacrifice this creature: The owner of target artifact may ante the top card of their library. If that player doesn't, exchange ownership of that artifact and Timmerian Fiends. Put the artifact card into your graveyard and Timmerian Fiends from anywhere into that player's graveyard. This change in ownership is permanent.`
 - **Tinder Wall**
@@ -5017,6 +5028,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vampirism**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `Other creatures you control get -1/-1.`
+- **Vanishing**
+  - `{U}{U}: Enchanted creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
 - **Vaporous Djinn**
   - `At the beginning of your upkeep, this creature phases out unless you pay {U}{U}. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Varchild's Crusader**
@@ -5071,6 +5084,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature and a snow Swamp: Destroy target creature. It can't be regenerated.`
 - **Vision Charm**
   - `• Target player mills four cards.`
+  - `• Choose a land type and a basic land type. Each land of the first chosen type becomes the second chosen type until end of turn.`
   - `• Target artifact phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
 - **Visions**
   - `Look at the top five cards of target player's library. You may then have that player shuffle that library.`

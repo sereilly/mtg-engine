@@ -512,6 +512,70 @@ def _resolve_chosen_subtype(filt: dict, source) -> dict:
     return filt
 
 
+#: "…**that player** chooses artifact, creature, land, or non-Aura enchantment.
+#: All nontoken permanents **of that type** phase out." (Teferi's Realm.) The
+#: record the first sentence writes and the second reads, on the ability's own
+#: source — the same place the CR 614.1c entry choices record theirs, so one
+#: reader answers both.
+#:
+#: A **card type** rather than a subtype, which is why it is its own key and its
+#: own resolver: CR 205.2's types and CR 205.3's subtypes are different halves of
+#: the type line and land in different payload keys.
+CHOSEN_CARD_TYPE = "chosen_card_type"
+
+#: The printed options that name a type **and** a subtype to exclude, mapped to
+#: the subtype. "Non-Aura enchantment" is Teferi's Realm's fourth option and the
+#: only one in the pool; a card offering "non-Equipment artifact" would add a
+#: row and nothing else.
+#:
+#: A table rather than a parse of the recorded string at read time, because the
+#: string is what a *player* answered with: a prompt that accepted any
+#: "non-<word> <type>" would let a seat invent an option the card never offered.
+_QUALIFIED_CARD_TYPE_OPTIONS: dict[str, tuple[str, str]] = {
+    "non-aura enchantment": ("enchantment", "aura"),
+}
+
+
+def chosen_card_type_filter(word: str) -> dict | None:
+    """The filter keys the printed option *word* means, or None if it is not one.
+
+    One function, read by the choice resolver (which validates an answer) and by
+    :func:`_resolve_chosen_card_type` below (which applies it) — so what a player
+    may choose and what the sweep then reaches cannot disagree.
+    """
+    from ..grammar.vocabulary import CARD_TYPES
+
+    word = str(word or "").strip().lower()
+    qualified = _QUALIFIED_CARD_TYPE_OPTIONS.get(word)
+    if qualified is not None:
+        card_type, excluded = qualified
+        return {"type_filter": card_type, "exclude_subtypes": [excluded]}
+    if word in CARD_TYPES:
+        return {"type_filter": word}
+    return None
+
+
+def _resolve_chosen_card_type(filt: dict, source) -> dict:
+    """*filt* with "of that type" turned into the ordinary type keys.
+
+    The sibling of :func:`_resolve_chosen_subtype` one half of the type line
+    over. Same contract in both directions: a caller with no source, or a source
+    that has not chosen, leaves the key in place and ``permanent_matches_filter``
+    refuses every permanent — which for a sweep that phases out the board is the
+    only safe direction.
+    """
+    if not filt.get(CHOSEN_CARD_TYPE):
+        return filt
+    word = getattr(source, "metadata", {}).get(CHOSEN_CARD_TYPE) if source else None
+    resolved_keys = chosen_card_type_filter(word) if word else None
+    if resolved_keys is None:
+        return filt
+    resolved = dict(filt)
+    resolved.pop(CHOSEN_CARD_TYPE, None)
+    resolved.update(resolved_keys)
+    return resolved
+
+
 def evaluate_count(
     game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
 ) -> int:
@@ -1122,6 +1186,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # lives on the *source*, this function is the pure half, and ignoring the
     # key would widen "creatures of the chosen type" to every creature.
     if payload.get("chosen_creature_type") or payload.get("chosen_land_type"):
+        return False
+    # "All nontoken permanents **of that type**" (Teferi's Realm) — the same
+    # recorded choice on the other half of the type line, refused here for the
+    # identical reason. Ignoring it would phase out *every* nontoken permanent
+    # on the board rather than one type's.
+    if payload.get(CHOSEN_CARD_TYPE):
         return False
     # "…creature **that attacked you this turn**" (Jabari's Influence). The
     # record names a *seat*, and this function has no observer — it is the pure

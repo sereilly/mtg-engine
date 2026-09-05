@@ -11,7 +11,7 @@ through when this module crossed a thousand lines, exactly as
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import _amount_payload, _filter_payload
+from ._common import _amount_payload, _describe_targets, _filter_payload
 from ._events import COUNTED_NUMBER
 from ._seats import _player_recipient
 
@@ -348,3 +348,44 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
             {"step": node.step, "seat": "you", "count": int(node.count)},
         ),
     )
+
+
+def _lower_extra_land_plays(node: ast.ExtraLandPlays) -> tuple[OracleInstruction, ...]:
+    """"You may play up to three additional lands this turn." (Summer Bloom,
+    CR 305.2.)
+
+    The count is payload and the seat is not: ``grant_extra_land_plays_this_turn``
+    records the grant for the effect's own controller (CR 109.5), and a card
+    handing extra land drops to somebody else would need the seat resolved at
+    resolution rather than here. So it refuses by name, the way the extra-turn
+    lowering above does, rather than being lowered onto a handler that would
+    grant them to the wrong player.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no handler grants land plays to {node.player.kind!r}", node=node
+        )
+    return (
+        OracleInstruction(
+            "grant_extra_land_plays_this_turn", "", {"amount": int(node.amount)}
+        ),
+    )
+
+
+def _lower_cant_play_lands(node: ast.CantPlayLands) -> tuple[OracleInstruction, ...]:
+    """"Target player can't play lands this turn." (Solfatara, CR 305.1.)
+
+    The seat *is* payload here, because the sentence names a chosen one — and
+    describing it is what gives the card a picker at all. Solfatara compiled
+    "supported" on its second line alone for a whole set: this sentence produced
+    no instruction, so ``derive_cast_spec`` had nothing to read, the client sent
+    a bare cast and the engine refused it. A supported card no player could
+    cast.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler stops {node.player.kind!r} playing lands", node=node
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.player)
+    return (OracleInstruction("forbid_land_plays_this_turn", "", payload),)

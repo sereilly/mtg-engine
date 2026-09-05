@@ -253,6 +253,25 @@ def _parse_become_creature(
     ):
         stream.reset(mark)
         return None
+    # "…becomes a 2/2 **green** creature that's still a land." (Quirion Druid.)
+    # CR 613 layer 5, printed inside the creature body between the P/T and the
+    # subtypes, which is where the templating puts it. Read here rather than
+    # dropped: a colourless land animated green is a permanent Circle of
+    # Protection: Green does not stop, and a word this production consumed and
+    # threw away is the dropped-rider bug the grammar refuses by construction.
+    colors: list[str] = []
+    while True:
+        colour = stream.peek_word()
+        if colour is None or colour not in COLOR_WORDS:
+            break
+        stream.advance()
+        colors.append(COLOR_WORDS[colour])
+        # "…a 2/2 black and green creature" — CR 105.2's multicoloured object,
+        # one object with two colours rather than two effects. Accepted because
+        # the conjunction is how the templating joins them; a run of one is the
+        # only spelling the pool prints today.
+        if not stream.accept_word("and"):
+            break
     subtypes: list[str] = []
     while True:
         matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
@@ -350,7 +369,59 @@ def _parse_become_creature(
         stream.advance()
     return ast.BecomeCreature(
         subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
-        tuple(card_types), until_eot,
+        tuple(card_types), tuple(colors), until_eot,
     )
 
 
+def parse_land_type_swap(stream: TokenStream) -> "ast.LandTypeSwap | None":
+    """``Choose a land type and a basic land type. Each land of the first
+    chosen type becomes the second chosen type until end of turn.``
+    (Vision Charm's third mode.)
+
+    Both sentences, because neither is one on its own — see the node. Read in
+    ``parse_imperative`` ahead of every other production that opens on "choose",
+    and refusing without consuming so each of them keeps the sentence it owns.
+
+    The ordinals are structure rather than payload: "the first chosen type" and
+    "the second chosen type" are the *only* way this sentence can name what the
+    sentence before it produced, so a production that let them vary would be
+    reading a sentence nobody prints.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+
+    def _a_land_type() -> bool | None:
+        """Consume "a [basic] land type", answering whether it said "basic"."""
+        if not stream.accept_word("a", "an"):
+            return None
+        basic = stream.accept_word("basic")
+        if not stream.accept_phrase("land", "type"):
+            return None
+        return bool(basic)
+
+    first = _a_land_type()
+    if first is None or not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    second = _a_land_type()
+    if second is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "each", "land", "of", "the", "first", "chosen", "type",
+        "becomes", "the", "second", "chosen", "type",
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "until_end_of_turn":
+        # Read rather than defaulted, and refused rather than widened: with no
+        # words the change would last as long as the game does (CR 611.2), which
+        # is a different card and one no sweep would ever end.
+        stream.reset(mark)
+        return None
+    return ast.LandTypeSwap(first, second, duration)

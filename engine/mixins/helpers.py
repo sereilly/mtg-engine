@@ -575,7 +575,14 @@ class GameHelpersMixin:
         # by its host did not phase out on its own account. Only the permanent
         # the caller named did.
         self._announce_phasing("phases_out", [permanent])
-        self.remove_all_from_battlefield(moving)
+        # CR 702.26d: not a zone change. The battlefield lists and the combat
+        # maps move exactly as they do for a removal — which is why this goes
+        # through the one transition — and none of leaving's *consequences*
+        # happen: no leaves-the-battlefield trigger, and the Auras in ``moving``
+        # stay attached so they phase back in still enchanting the host
+        # (CR 702.26g/702.26i). Detaching them, which the ordinary removal does,
+        # made Vanishing bin itself every time it was activated.
+        self.remove_all_from_battlefield(moving, zone_change=False)
         for perm in moving:
             perm.metadata["phased_out"] = True
             self.players[controller].phased_out.append(perm)
@@ -1497,7 +1504,9 @@ class GameHelpersMixin:
             seat = item.caster_index
         return seat
 
-    def remove_from_battlefield(self, permanent: Permanent) -> Permanent | None:
+    def remove_from_battlefield(
+        self, permanent: Permanent, *, zone_change: bool = True
+    ) -> Permanent | None:
         """Take *permanent* off the battlefield. The one transition out.
 
         Returns the permanent when it was there, None when it was not — so a
@@ -1524,11 +1533,18 @@ class GameHelpersMixin:
         so ``list.remove`` and ``in`` match an opponent's look-alike card. That
         bug class is why ``.battlefield.remove()`` is banned outright by
         ``tests/engine/test_control_reads.py``.
+
+        ``zone_change=False`` is CR 702.26b's phase-out; see
+        :meth:`remove_all_from_battlefield`.
         """
-        removed = self.remove_all_from_battlefield((permanent,))
+        removed = self.remove_all_from_battlefield(
+            (permanent,), zone_change=zone_change
+        )
         return removed[0] if removed else None
 
-    def remove_all_from_battlefield(self, permanents) -> list[Permanent]:
+    def remove_all_from_battlefield(
+        self, permanents, *, zone_change: bool = True
+    ) -> list[Permanent]:
         """Take several permanents off the battlefield at once.
 
         The shape a sweep needs — destruction, a mass bounce, a player leaving
@@ -1541,6 +1557,30 @@ class GameHelpersMixin:
         that rebuilds per victim is quadratic and, worse, renumbers between
         victims — which is the failure the callers were open-coding around when
         they built a ``survivors`` list themselves.
+
+        **``zone_change=False`` is phasing out, and only phasing out**
+        (CR 702.26d: "the phasing event doesn't actually cause a permanent to
+        change zones or control… zone-change triggers don't trigger when a
+        permanent phases in or out"). The list mechanics and the combat
+        renumbering are exactly the same — the permanent stops being on a
+        battlefield either way, and every combat map keyed by its slot must
+        follow — and every *consequence* of leaving is what CR 702.26d and
+        702.26g say must not happen: no leaves-the-battlefield ability triggers,
+        no delayed "until this leaves" ability fires, no linked exile comes
+        back, and the Auras and Equipment attached to it **stay attached** so
+        they can phase in with it.
+
+        The one consequence that still happens is CR 702.26f's: a "for as long
+        as" effect that tracks the permanent ends, because it can no longer see
+        it.
+
+        A flag on this transition rather than a second removal path, for the
+        reason this function exists at all: a phase-out that rebuilt the
+        battlefield itself would be the 42nd open-coded removal, and the combat
+        renumbering is the thing it would forget. And a flag rather than a
+        caller that undoes the consequences afterwards, because undoing an
+        announced trigger is not possible — Nine Lives would already have lost
+        the game.
         """
         targets = [perm for perm in permanents if perm is not None]
         if not targets:
@@ -1583,8 +1623,12 @@ class GameHelpersMixin:
         attachments = [
             perm for perm in self.all_permanents()
             if perm.metadata.get("attached_to") is not None
-        ]
-        for perm in targets:
+        ] if zone_change else []
+        # CR 702.26d: a phase-out triggers none of these, so none of them is
+        # gathered. Written as an empty scan rather than a branch around the
+        # loop, so the loop below stays the one reading of what leaving
+        # announces.
+        for perm in targets if zone_change else ():
             seat = self.controller_index_of(perm)
             if seat is None:
                 continue
@@ -1685,6 +1729,16 @@ class GameHelpersMixin:
         self._enqueue_triggered_batch(
             [event for watched, event in leaving if id(watched) in departed]
         )
+        if not zone_change:
+            # CR 702.26d: "zone-change triggers don't trigger when a permanent
+            # phases in or out", and CR 702.26g keeps the attachments attached.
+            # So none of the leaving consequences below happens — except one,
+            # which CR 702.26f says explicitly *does*: an effect with a "for as
+            # long as" duration that tracks this permanent ends when it phases
+            # out, "because they can no longer see it".
+            for perm in removed:
+                end_source_tapped_delayed_triggers(self, perm)
+            return removed
         # "…until this creature leaves the battlefield" (Kitesail Freebooter).
         # Here because this is the one transition out: a return wired into any
         # single caller would be a return the other forty forgot, which is the

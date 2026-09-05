@@ -1200,6 +1200,7 @@ class PermanentStateMixin:
                         str(payload.get("to_type", "")),
                         timestamp=stamp,
                         label=source.card.name,
+                        additive=bool(payload.get("additive")),
                     )
 
     def _refresh_mana_spending(self) -> None:

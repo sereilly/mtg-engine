@@ -391,7 +391,11 @@ def _every_nested_step(instruction) -> tuple:
     Known gaps. That the two tables exist at all is the real debt, and it
     belongs to whoever next needs a third reader.
     """
-    from .grammar.lowering.categories import nested_instructions
+    # `control_flow` rather than `categories`: this predicate was written
+    # against the latter's re-export, and the wave-1 split that moved
+    # `categories_of` out took the re-export with it. The name has one home
+    # and this is it.
+    from .grammar.lowering.control_flow import nested_instructions
 
     inner = nested_instructions(instruction)
     if not inner:

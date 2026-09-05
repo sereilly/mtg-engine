@@ -10,6 +10,14 @@ grammar, a category left off does not route its lines elsewhere — it costs
 those cards their support, which is why the equality is a test and not a
 convention.
 
+**And ``categories_of`` left the same way, one set later.** This module is a
+registry, which is what its first paragraph claims and what the split above
+established; a walk over a lowered sequence is not one, and it belongs beside
+the wrapper table it has to consult on every step
+(``lowering/control_flow.nested_instructions``). Its address is unchanged —
+``lowering/__init__`` and ``lower.py`` both re-export it — which is the same
+promise this file's own move made about ``INSTRUCTION_CATEGORIES``.
+
 **Which kinds are wrappers is `lowering/control_flow.py`'s**, not this module's.
 The table used to sit at the bottom of this file, and the split came at the
 thousand-line guard: the half that grows with the pool is the registry above,
@@ -24,9 +32,7 @@ from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
-from ...oracle_types import OracleInstruction
 from .control_changes import BID_LIFE_FOR_CONTROL_KIND
-from .control_flow import nested_instructions
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     # "If the creature deals damage to a creature this turn, the creature
@@ -81,6 +87,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same layer-4 question the two above ask about a card type and a
     # supertype — so the same category, with the land type as payload.
     "change_land_type_until": "characteristics",
+    # "Choose a land type and a basic land type. Each land of the first
+    # chosen type becomes the second chosen type until end of turn."
+    # (Vision Charm.) The same CR 305.7 replacement over a set the *answer*
+    # names rather than one the sentence does, so the same family.
+    "swap_land_types_until_eot": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
     # Its counter-conditioned sibling: "…doesn't untap during its controller's
     # untap step **for as long as it has a paralyzation counter on it**"
@@ -458,6 +469,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # is a change to the turn's structure rather than to the board — the family
     # `grant_extra_turn` is already in.
     "skip_next_step": "turns",
+    # "You may play up to three additional lands this turn." (Summer Bloom) /
+    # "Target player can't play lands this turn." (Solfatara.) CR 305.2's land
+    # drop is part of the turn's structure rather than of the board, which is
+    # the family the skip above and `grant_extra_turn` are already in — and both
+    # halves take the same one, because a permission and its withdrawal are the
+    # same question answered twice.
+    "grant_extra_land_plays_this_turn": "turns",
+    "forbid_land_plays_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the
@@ -667,6 +686,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lands you control phase out").
     "phase_out_self": "zones",
     "phase_out_matching": "zones",
+    # "Enchanted creature phases out" (Vanishing): the Aura's attachment, known
+    # from the source rather than chosen, so the same category and its own kind.
+    "phase_out_enchanted": "zones",
+    # "Simultaneously, all phased-out creatures phase in and all creatures
+    # with phasing phase out." (Time and Tide.) The same family: what the
+    # sentence does is move permanents in and out of play, and doing both at
+    # once is a property of the moment rather than of the effect.
+    "phase_in_and_out_matching": "zones",
+
     # "…and **that creature** phase out" (Dream Fighter): the creature the
     # block trigger bound, beside the sweep and the source above it.
     "phase_out_block_pair": "zones",
@@ -925,6 +953,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # different questions, and one switch must not be able to gate half of
     # either off.
     "choose_color": "chosen_colors",
+    # "That player chooses artifact, creature, land, or non-Aura enchantment."
+    # (Teferi's Realm.) Beside `choose_color` and in its family: a sentence that
+    # produces a value and no effect of its own, read back by the next sentence
+    # of the same ability. The value is a *card type* rather than a colour,
+    # which is what the key it records under says and not what the family does.
+    "choose_card_type": "chosen_colors",
     # "…put a +0/+1 counter on that creature for each 1 damage prevented
     # this way." (Sacred Boon.) A counter placement whose number is what an
     # earlier step's shield absorbed, so it sits in the counters family with
@@ -964,23 +998,3 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # who is offered the cost and which branch the effect sits on.
     "unless_player_pays": "optional",
 }
-
-
-def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
-    """Migration categories covered by a lowered instruction sequence."""
-    found: set[str] = set()
-    for instruction in instructions:
-        nested_keys = nested_instructions(instruction)
-        if nested_keys is not None:
-            if not nested_keys:
-                return frozenset({"__ungated__"})
-            inner = categories_of(nested_keys)
-            if "__ungated__" in inner:
-                return frozenset({"__ungated__"})
-            found |= inner
-            continue
-        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
-        if category is None:
-            return frozenset({"__ungated__"})
-        found.add(category)
-    return frozenset(found)

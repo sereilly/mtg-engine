@@ -103,6 +103,18 @@ class Game(
     current_step: str = "precombat_main"
     active_player_index: int = 0
     lands_played_this_turn: dict[int, int] = field(default_factory=dict)
+    # CR 305.2 for one turn: what a *resolved effect* said about a seat's land
+    # drops, where `land_play_allowance.py`'s derivation table says what a
+    # permanent on the battlefield says. Two records rather than one signed
+    # number, because they are opposite answers rather than two amounts:
+    # "you may play three more" adds to the count and "you can't play lands"
+    # withdraws CR 305.1's permission outright, which no count expresses (see
+    # that module's `_NO_LAND_PLAYS`). Read through
+    # `land_play_allowance.extra_land_plays_this_turn` /
+    # `land_plays_forbidden_this_turn`, which is where the one refusal gate
+    # asks; cleared together at the turn boundary.
+    extra_land_plays_this_turn: dict[int, int] = field(default_factory=dict)
+    land_plays_forbidden_this_turn: set[int] = field(default_factory=set)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     # CR 701.20: cards revealed to all players, as a structured record beside

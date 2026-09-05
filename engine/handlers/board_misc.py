@@ -832,6 +832,7 @@ def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: 
         "keywords": list(payload.get("keywords") or ()),
         "card_types": list(payload.get("card_types") or ()),
     }
+    _record_animation_colors(source, payload, until_eot=True)
     game.log.append(
         f"{context.card.name} becomes a "
         f"{payload.get('power', 0)}/{payload.get('toughness', 0)} creature until end of turn"
@@ -902,6 +903,32 @@ def animate_target_until_eot(game: Game, instruction: OracleInstruction, context
     )
 
 
+def _record_animation_colors(perm, payload: dict, *, until_eot: bool) -> None:
+    """"…becomes a 2/2 **green** creature" (Quirion Druid): CR 613 layer 5 of
+    an animation sentence.
+
+    A separate channel from the animation record because it is a separate
+    layer, and the *same* channel the laces write — "what colour is this
+    permanent?" has one answer (``layer_bridge.collect_color_effects``), and an
+    animation inventing a second would be two opinions about CR 105.3.
+
+    Which of the two colour channels is the animation's own duration, for the
+    reason the P/T write takes ``until_eot``: an indefinite animation whose
+    colour wore off at cleanup would leave a green creature that is no longer
+    green, and a turn-long one whose colour did not would leave the colour
+    behind on a land that had stopped being a creature.
+
+    Absent ``colors`` writes nothing at all. A sentence that named no colour
+    said nothing about colour, which is not CR 105.2c's colourless — and
+    writing an empty override would make every animated Assembly-Worker
+    forcibly colourless.
+    """
+    colors = list(payload.get("colors") or ())
+    if not colors:
+        return
+    perm.metadata["color_override_until_eot" if until_eot else "color_override"] = colors
+
+
 def _animate_target(
     game: Game,
     instruction: OracleInstruction,
@@ -943,6 +970,7 @@ def _animate_target(
         "keywords": list(payload.get("keywords") or ()),
         "card_types": list(payload.get("card_types") or ()),
     }
+    _record_animation_colors(target, payload, until_eot=until_eot)
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
         f"{duration} ({context.card.name})"
@@ -975,7 +1003,9 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
 
     described = {
         key: value for key, value in instruction.payload.items()
-        if key not in ("power", "toughness", "subtypes", "keywords", "card_types")
+        if key not in (
+            "power", "toughness", "subtypes", "keywords", "card_types", "colors",
+        )
     }
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
@@ -996,6 +1026,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
             continue
         set_base_pt(permanent, power, toughness, until_eot=True)
         permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
+        _record_animation_colors(permanent, payload, until_eot=True)
         animated.append(permanent)
     if not animated:
         game.log.append(f"{context.card.name}: nothing to animate")
@@ -2301,3 +2332,75 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
             )
         )
     return True, "pending_rebalance_lands"
+
+
+@effect_handler("swap_land_types_until_eot")
+def swap_land_types_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a land type and a basic land type. Each land of the first chosen
+    type becomes the second chosen type until end of turn." (Vision Charm's
+    third mode, CR 305.7 / CR 609.3.)
+
+    The handler arms the prompt and the **resolver** performs the swap, which is
+    Jinx's arrangement one land at a time: CR 609.3 puts the choice inside the
+    resolution, and the set the sweep reaches is named by the answer, so nothing
+    can be recorded until the seat has answered.
+
+    A deterministic default is computed here, against the board as it stands, so
+    a headless or AI seat is never blocked — and so the default is a real answer
+    rather than "the first word in the catalog": the pair that turns the most of
+    the caster's *opponents'* lands into a type they do not already have.
+    """
+    caster_seat = game.seat_index(context.caster)
+    first_basic = bool(instruction.payload.get("first_basic"))
+    second_basic = bool(instruction.payload.get("second_basic"))
+    default_from, default_to = _default_land_type_swap(
+        game, caster_seat, first_basic=first_basic, second_basic=second_basic
+    )
+    game.arm_pending_choice(
+        "land_type_swap", caster_seat,
+        card_name=context.card.name,
+        first_basic=first_basic, second_basic=second_basic,
+        duration=LAND_TYPE_UNTIL_EOT,
+        default_from=default_from, default_to=default_to,
+    )
+    return True, "resolved"
+
+
+def _default_land_type_swap(
+    game: Game, seat: int, *, first_basic: bool, second_basic: bool
+) -> tuple[str, str]:
+    """The pair a seat that is not asked gets.
+
+    Read off the board rather than taken from the head of a catalog, because a
+    catalog's first word is a choice no player would make and this engine's
+    AI-simulation regressions are seeded runs of exactly such answers. The
+    policy: swap **from** the land type the seat's opponents have most of,
+    **to** the basic type fewest of those lands already have — the pair that
+    changes the most colours of mana on the other side of the table.
+
+    Ties keep catalog order both times, which is what makes a seeded run
+    reproducible.
+    """
+    from ..grammar.vocabulary import LAND_TYPES
+
+    basics = ("plains", "island", "swamp", "mountain", "forest")
+    first_pool = sorted(basics if first_basic else LAND_TYPES)
+    second_pool = sorted(basics if second_basic else LAND_TYPES)
+    theirs = [
+        perm for other in range(len(game.players)) if other != seat
+        for perm in game.controlled_by(other)
+        if perm.card.primary_type == "land"
+    ]
+    counts = {word: sum(1 for land in theirs if land.has_type(word)) for word in first_pool}
+    chosen_from = max(first_pool, key=lambda word: (counts.get(word, 0), -first_pool.index(word)))
+    to_counts = {
+        word: sum(1 for land in theirs if land.has_type(word)) for word in second_pool
+    }
+    for word in second_pool:
+        # Never the type it already is: a swap onto itself is a resolution that
+        # did nothing, which is the one answer the card cannot mean.
+        if word != chosen_from and to_counts[word] == min(
+            count for other, count in to_counts.items() if other != chosen_from
+        ):
+            return chosen_from, word
+    return chosen_from, next(w for w in second_pool if w != chosen_from)

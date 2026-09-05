@@ -393,3 +393,35 @@ def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
     return object_only_filter(
         payload, carried_separately=frozenset({"controller", "tapped_only"})
     )
+
+
+def split_bound_card_type(filt: "ast.ObjectFilter") -> tuple["ast.ObjectFilter", dict]:
+    """*filt* without "of that type", plus the payload keys that phrase means.
+
+    "…that player chooses artifact, creature, land, or non-Aura enchantment.
+    All nontoken permanents **of that type** phase out." (Teferi's Realm.) The
+    two sentences are one printed ability, and the second's "that" points at the
+    first's choice — recorded on the ability's own source, exactly where every
+    CR 614.1c entry choice records one.
+
+    Split rather than rewritten in place because ``of_bound_type`` has no
+    ``to_payload`` form at all: it is one of the four relations the payload
+    table lists precisely so that a lowering with no answer for it refuses by
+    name. A lowering that *does* have an answer strips the field and carries the
+    relation as its own key, which is what ``lowering/attachments.py`` already
+    does for the same field's other reading.
+
+    The same arrangement Hall of Gemstone's two sentences have one
+    characteristic over: the reading sentence carries a flag and the handler
+    resolves it against the source at resolution. There is no cross-sentence
+    check that a choice was really made, and there need not be — a source with
+    no record resolves to nothing and the matcher then refuses every permanent,
+    which for a sweep is the only safe direction.
+    """
+    if not filt.of_bound_type:
+        return filt, {}
+    import dataclasses
+
+    from ...handlers._common import CHOSEN_CARD_TYPE
+
+    return dataclasses.replace(filt, of_bound_type=False), {CHOSEN_CARD_TYPE: True}

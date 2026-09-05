@@ -48,6 +48,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
+from .effects.game import parse_extra_land_plays
 from .effects.stack import _parse_conditional_retarget
 from .effects.cards import _parse_for_each_revealed_discard
 
@@ -714,6 +715,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     substituted_blocks = _parse_choose_blocks_for_defenders(stream)
     if substituted_blocks is not None:
         return substituted_blocks
+
+    # "You may play up to three additional lands this turn." (Summer Bloom.)
+    # Ahead of the "you may" branch below, which would read the "may" as
+    # CR 601.2's offer and wrap a permission in a prompt nobody is asked. It
+    # refuses without consuming, so every other "you may …" sentence keeps the
+    # reading it has today — including the two the land-play derivation table
+    # owns, which differ from this one only in their duration clause.
+    land_plays = parse_extra_land_plays(stream)
+    if land_plays is not None:
+        return land_plays
 
     # "you may <pay a cost | take an action>"
     if stream.at_word("you"):

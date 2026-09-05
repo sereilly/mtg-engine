@@ -6,6 +6,7 @@ import random
 from ..auras import aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
 from ..hand_locks import expire_hand_locks
+from ..land_play_allowance import clear_turn_land_play_effects
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -263,6 +264,11 @@ class TurnManagementMixin:
         self.seat_turn_counts[player_index] = self.seat_turn_counts.get(player_index, 0) + 1
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
+        # "…this turn" (Summer Bloom, Solfatara). Both records are about the
+        # turn that has just ended, so they go here beside the count they
+        # modify rather than in a sweep of their own — a prohibition that
+        # outlived its turn is a seat that quietly stops playing lands.
+        clear_turn_land_play_effects(self)
         # "Until that player's next turn" (Firestorm Phoenix) is an ordinal
         # against the counter just incremented, so this drops what has expired
         # rather than deciding anything — engine/hand_locks.py derives the

@@ -583,6 +583,32 @@ class PhaseOut:
 
 
 @dataclass(frozen=True)
+class SimultaneousPhasing:
+    """``Simultaneously, all phased-out creatures phase in and all creatures
+    with phasing phase out.`` (Time and Tide, CR 702.26.)
+
+    One node for both halves, and that is the whole point of it: "simultaneously"
+    means both sets are read off the board *before* either is applied, so a
+    creature with phasing that has just phased in does not immediately phase
+    back out. Two statements joined by "and" would apply in order and get that
+    wrong — which is the same simultaneity ``Game.resolve_phasing_for`` already
+    implements for CR 702.26a's untap-step event, one step away.
+
+    Both noun phrases are payload, so a card printing "all phased-out artifacts
+    phase in and all artifacts with phasing phase out" needs no code here.
+
+    ``returning`` is not a battlefield filter: a phased-out permanent is held in
+    its controller's ``phased_out`` list and CR 702.26b says it is treated as
+    though it does not exist, so the printed adjective is *structure* — it is
+    what says which collection the sentence is about — and the rest of the noun
+    phrase narrows within it.
+    """
+
+    returning: ObjectFilter
+    leaving: TargetSpec
+
+
+@dataclass(frozen=True)
 class CantPhaseOut:
     """"Until your next upkeep, target permanent **can't phase out**."
     (Spatial Binding, CR 702.26.)

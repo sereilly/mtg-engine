@@ -558,3 +558,53 @@ def test_305_7_each_static_alone_still_behaves_as_before(catalog):
     assert tundra.basic_land_types == ("plains", "island"), (
         "a land that is not a Mountain is untouched"
     )
+
+
+# ---------------------------------------------------------------------------
+# 305.7's last sentence — the additive form
+# ---------------------------------------------------------------------------
+#
+# "If a land gains one or more land types **in addition to** its own, it keeps
+# its land types and rules text, and it gains the new land types and mana
+# abilities." Every static in this file until now was the *replacement* half of
+# the same rule, and the two differ by one printed clause — so a reader that
+# dropped the clause would make Blanket of Night a strictly harsher card and
+# nothing would fail.
+
+
+@pytest.mark.cr("305.7", "613.7")
+def test_305_7_an_additive_static_leaves_the_land_s_own_types_in_place(set_pool):
+    """Blanket of Night: "Each land is a Swamp in addition to its other land
+    types."
+
+    The Island is still an Island, so it still has CR 305.6's blue mana ability
+    — which is the whole of what "in addition" buys and the whole of what the
+    replacement reading would have taken away.
+    """
+    island = Permanent(card=set_pool("LEA")["Island"])
+    game = _statics_game([Permanent(card=set_pool("VIS")["Blanket of Night"])], [island])
+
+    assert set(island.basic_land_types) == {"island", "swamp"}, game.log
+
+
+@pytest.mark.cr("305.7", "613.7")
+def test_305_7_a_replacing_static_still_replaces_beside_an_additive_one(set_pool, catalog):
+    """The two forms are one layer in one timestamp order, so a *later*
+    replacement wipes an earlier addition — CR 613.7 chains the effects rather
+    than picking one, and an additive contribution is simply an earlier effect
+    that added.
+
+    The published Urborg-plus-Blood-Moon ruling, with Blanket of Night in
+    Urborg's place: the Tundra ends the layer a Mountain and nothing else, its
+    added Swamp included.
+    """
+    tundra = Permanent(card=set_pool("LEA")["Tundra"])
+    blanket = Permanent(card=set_pool("VIS")["Blanket of Night"])
+    game = _statics_game([blanket], [tundra])
+    assert set(tundra.basic_land_types) == {"plains", "island", "swamp"}, game.log
+
+    # Blood Moon replaces every land type a nonbasic land has, Swamp included.
+    game.players[0].battlefield.append(Permanent(card=catalog["Blood Moon"]))
+    game._recompute_continuous_effects()
+
+    assert tundra.basic_land_types == ("mountain",), game.log

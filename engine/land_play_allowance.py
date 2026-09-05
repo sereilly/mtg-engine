@@ -206,9 +206,83 @@ def land_play_allowance_for(oracle_text: str) -> LandPlayAllowance | None:
     )
 
 
+# ---------------------------------------------------------------------------
+# The other half: what a *resolved effect* said about this turn
+# ---------------------------------------------------------------------------
+#
+# Everything above is a permanent's printed static ability, recomputed from the
+# board on every read. Summer Bloom ("You may play up to three additional lands
+# this turn") and Solfatara ("Target player can't play lands this turn") are the
+# same two answers with a duration instead of a source: nothing stays on the
+# battlefield saying them, so they are recorded on the game and cleared at the
+# turn boundary.
+#
+# They live here rather than beside their handlers because ``_land_play_refusal``
+# is the one gate that asks — cast validation, the AI's land policy and the web
+# layer's playable list all go through it — and a second module answering "may
+# this seat play a land?" is the gate/dispatch split this module's own docstring
+# was written to prevent.
+#
+# The two records are opposite answers rather than two amounts, exactly as
+# ``_NO_LAND_PLAYS`` is not a value of ``LandPlayAllowance.extra``: no number of
+# extra plays adds up to one a prohibited player may take.
+
+
+def grant_extra_land_plays(game, seat: int, amount: int) -> None:
+    """*seat* may play *amount* more lands this turn (CR 305.2).
+
+    Accumulates. Two Summer Blooms in a turn are six extra lands, which is what
+    two resolutions of the same effect say — the alternative, a ceiling that the
+    second resolution merely re-asserts, would make the second copy free.
+    """
+    if amount <= 0:
+        return
+    game.extra_land_plays_this_turn[seat] = (
+        game.extra_land_plays_this_turn.get(seat, 0) + int(amount)
+    )
+
+
+def extra_land_plays_this_turn(game, seat: int) -> int:
+    """How many extra land plays *seat* has been granted this turn."""
+    return int(game.extra_land_plays_this_turn.get(seat, 0))
+
+
+def forbid_land_plays_this_turn(game, seat: int) -> None:
+    """*seat* can't play lands for the rest of this turn (Solfatara).
+
+    CR 305.1's permission withdrawn for one seat, where Worms of the Earth
+    withdraws it from everybody for as long as it is out. The same asymmetry the
+    two halves of this module have throughout: the count and the prohibition are
+    different answers, and the gate asks the prohibition first.
+    """
+    game.land_plays_forbidden_this_turn.add(int(seat))
+
+
+def land_plays_forbidden_this_turn(game, seat: int) -> bool:
+    """Whether an effect has taken *seat*'s land drops away for this turn."""
+    return int(seat) in game.land_plays_forbidden_this_turn
+
+
+def clear_turn_land_play_effects(game) -> None:
+    """Drop both records at the turn boundary.
+
+    One function so the turn reset has one line and neither record can be
+    forgotten on its own — a prohibition that outlived its turn is a seat that
+    silently never plays another land, and no test would say which turn it came
+    from.
+    """
+    game.extra_land_plays_this_turn = {}
+    game.land_plays_forbidden_this_turn = set()
+
+
 __all__ = [
     "LandPlayAllowance",
+    "clear_turn_land_play_effects",
+    "extra_land_plays_this_turn",
+    "forbid_land_plays_this_turn",
+    "grant_extra_land_plays",
     "land_play_allowance_for",
     "land_play_line",
+    "land_plays_forbidden_this_turn",
     "lands_cannot_be_played",
 ]

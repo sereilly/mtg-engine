@@ -2249,3 +2249,73 @@ def test_w4g4_the_drew_this_way_count_names_bare_cards_and_nothing_narrower():
             "to that player equal to the number of creature cards they drew "
             "this way."
         )
+
+
+# --- VIS W1G2: the two Auras that grant phasing ---
+#
+# Found from the Visions side, and the reason a group is asked which
+# *already-supported* cards its family mis-plays: both of these compile, both
+# report supported, both have granted phasing correctly since Mirage — and the
+# creature they enchanted phased out every untap step and left them behind. The
+# engine has one transition off the battlefield and it detaches an Aura, which
+# is right for every way a permanent leaves and wrong for the one way it does
+# not (CR 702.26d: phasing is not a zone change).
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.models import CardDefinition, Permanent
+
+
+def _vis_w1g2_bear(name: str = "Bear") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _vis_w1g2_phasing_aura(set_pool, aura_name: str):
+    lea = set_pool("LEA")
+    host = Permanent(card=_vis_w1g2_bear())
+    aura = Permanent(card=set_pool("MIR")[aura_name])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, aura], library=[lea["Forest"]] * 5),
+        PlayerState(name="P2", library=[lea["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    game._recompute_continuous_effects()
+    return game, aura, host
+
+
+@pytest.mark.parametrize("aura_name", ["Cloak of Invisibility", "Teferi's Curse"])
+def test_a_phasing_grant_does_not_destroy_the_aura_that_granted_it(
+    set_pool, aura_name
+):
+    """"Enchanted creature has phasing." (CR 702.26a, 702.26g, 704.5m.)
+
+    The Aura grants the keyword, the host phases out at its controller's untap
+    step, and CR 702.26g takes the Aura with it — still attached. Detaching it
+    instead left an Aura enchanting nothing on the way back in, which CR 704.5m
+    puts into a graveyard: a shipped card that destroyed itself on the first
+    untap step after it resolved.
+    """
+    game, aura, host = _vis_w1g2_phasing_aura(set_pool, aura_name)
+    assert game._has_keyword(host, "phasing"), "the grant itself still works"
+
+    game.start_turn(0)
+    game._settle()
+
+    assert host in game.players[0].phased_out
+    assert aura in game.players[0].phased_out, "CR 702.26g: indirectly, with its host"
+    assert aura.card not in game.players[0].graveyard
+
+    game.start_turn(1)
+    game.start_turn(0)
+    game._settle()
+
+    assert game.is_on_battlefield(host) and game.is_on_battlefield(aura)
+    assert aura.metadata.get("attached_to") is host, "CR 702.26i: still attached"
+    assert aura.card not in game.players[0].graveyard
+    assert game._has_keyword(host, "phasing"), "and it still grants the keyword"

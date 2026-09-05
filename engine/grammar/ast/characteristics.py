@@ -292,6 +292,16 @@ class BecomeCreature:
     #: not also an artifact is a different permanent: Shatter reaches one and
     #: not the other.
     card_types: tuple[str, ...] = ()
+    #: The colours the animation *sets* — "…becomes a 2/2 **green** creature
+    #: that's still a land" (Quirion Druid). Mana symbols, the spelling every
+    #: other colour channel in the engine uses. A separate field from
+    #: :class:`BecomeColor` rather than a second node, because one printed
+    #: sentence says both things at once and CR 613 puts them in different
+    #: layers: the creature body is layer 4 plus layer 7b, the colour is
+    #: layer 5, and a card that named a colour and produced only the body
+    #: would animate a *colourless* land — which Circle of Protection: Green
+    #: does not stop and the card says it should.
+    colors: tuple[str, ...] = ()
     #: Whether the animation ends at cleanup. False is "the effect lasts
     #: indefinitely" (Mishra's Groundbreaker) — CR 611.2a's default duration,
     #: which a printed sentence states by saying nothing. Defaulted True because
@@ -438,4 +448,33 @@ class ChangeLandType:
     """
     subject: Recipient
     land_type: str
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class LandTypeSwap:
+    """``Choose a land type and a basic land type. Each land of the first
+    chosen type becomes the second chosen type until end of turn.``
+    (Vision Charm's third mode.)
+
+    **Two printed sentences, one node**, for the reason the upkeep paragraphs
+    are one each: neither half is a sentence on its own. The first produces no
+    effect at all and the second names its parameters by ordinal — "the first
+    chosen type" is a phrase with no referent outside the sentence in front of
+    it — so a production that read them separately would have to invent a
+    channel to join them and a reader to refuse the second one alone.
+
+    Both catalogs are payload. ``first_basic`` / ``second_basic`` say whether
+    each chosen type must be one of CR 205.3i's *basic* land types or may be any
+    of them, which is exactly what the printed adjective says — Vision Charm
+    asks for any type and then a basic one, and a card printing "two basic land
+    types" is this sentence with one word changed.
+
+    The duration is read rather than defaulted, for :class:`ChangeLandType`'s
+    reason: without the words the change would last as long as the game does
+    (CR 611.2), which is a different card.
+    """
+
+    first_basic: bool
+    second_basic: bool
     duration: Duration = field(default_factory=Duration)

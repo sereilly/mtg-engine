@@ -157,18 +157,28 @@ def clear_derived_land_types(perm: Permanent) -> None:
 
 
 def add_derived_land_type(
-    perm: Permanent, land_type: str, *, timestamp: int, label: str = ""
+    perm: Permanent, land_type: str, *, timestamp: int, label: str = "",
+    additive: bool = False,
 ) -> None:
-    """Layer 4: *perm* is *land_type* for as long as a static keeps saying so."""
+    """Layer 4: *perm* is *land_type* for as long as a static keeps saying so.
+
+    *additive* is Blanket of Night's printed "in addition to its other land
+    types": the contribution **adds** the type instead of replacing every type
+    the land had (CR 305.7). Carried on the record rather than decided at the
+    layer bridge, because the sentence is what says which and the bridge has
+    only the record — and defaulted False so every contribution written before
+    the rider existed still means CR 305.7's replacement.
+    """
     derived = perm.metadata.setdefault(DERIVED_LAND_TYPES, [])
-    derived.append(
-        {
-            "land_type": str(land_type).strip().lower(),
-            "source": label,
-            "timestamp": int(timestamp),
-            "label": label,
-        }
-    )
+    entry = {
+        "land_type": str(land_type).strip().lower(),
+        "source": label,
+        "timestamp": int(timestamp),
+        "label": label,
+    }
+    if additive:
+        entry["additive"] = True
+    derived.append(entry)
 
 
 def static_source_timestamp(source: Permanent) -> int:
@@ -304,6 +314,16 @@ class StaticLandTypeChange:
     #: module still owns the decision (see
     #: :func:`static_land_type_change_applies`).
     controller_only: bool = False
+    #: "Each land is a Swamp **in addition to its other land types**."
+    #: (Blanket of Night, Urborg.) The one printed rider that switches off
+    #: CR 305.7: the land keeps every type it had and gains one. So it is a
+    #: field on this dataclass rather than a table of its own — *which* lands a
+    #: source reaches is the same four questions above, and only the layer-4
+    #: contribution differs (added, not replacing). A card printing the rider
+    #: whose reader dropped it would be a Blanket of Night that turned every
+    #: Island into a Swamp and stopped it making blue mana, which is the
+    #: dropped-rider bug in its most expensive form.
+    additive: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -350,6 +370,19 @@ _STATIC_NONBASIC_RE = re.compile(r"^nonbasic lands are (?P<to>[a-z'-]+)$")
 #: one.
 _STATIC_CONTROLLED_RE = re.compile(
     r"^lands you control are (?P<to>[a-z'-]+)$"
+)
+
+#: "Each land is a Swamp **in addition to its other land types**." (Blanket of
+#: Night.) CR 305.7 switched off by the printed rider, which is why the rider is
+#: part of the pattern rather than optional: without it the sentence is the
+#: replacement above, and the two differ by every other type the land had.
+#:
+#: The subject is a word rather than a literal "land", so "Each Mountain is a
+#: Swamp in addition to its other land types" needs no code — the same
+#: parameterisation the replacement patterns already have.
+_STATIC_ADDITIVE_RE = re.compile(
+    r"^each (?P<from>[a-z'-]+) is a (?P<to>[a-z'-]+) "
+    r"in addition to its other land types$"
 )
 
 
@@ -399,6 +432,26 @@ def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | 
     or without its trailing period.
     """
     line = normalized_line.strip().lower().rstrip(".")
+    # Read first: its sentence ends in a rider none of the anchored patterns
+    # below accepts, so the two cannot claim each other's line — but reading it
+    # first is what makes that a property of the order rather than of the
+    # anchors staying anchored.
+    additive = _STATIC_ADDITIVE_RE.match(line)
+    if additive is not None:
+        to_type = _land_subtype(additive.group("to"))
+        if to_type is None:
+            return None
+        word = additive.group("from")
+        if word in ("land", "lands"):
+            return StaticLandTypeChange(
+                from_type=None, to_type=to_type, from_any=True, additive=True
+            )
+        from_type = _land_subtype(word)
+        if from_type is None:
+            return None
+        return StaticLandTypeChange(
+            from_type=from_type, to_type=to_type, additive=True
+        )
     if _STATIC_CHOSEN_RE.match(line) is not None:
         return StaticLandTypeChange(
             from_type=None, to_type="", basic_only=True, from_chosen=True
@@ -455,6 +508,8 @@ def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, o
         payload["from_any"] = True
     if change.controller_only:
         payload["controller_only"] = True
+    if change.additive:
+        payload["additive"] = True
     return payload
 
 

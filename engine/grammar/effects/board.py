@@ -30,7 +30,7 @@ from ..amounts import accept_fraction_head, accept_rounding, parse_amount
 from ..errors import GrammarError
 from ..names import accept_original_expansion
 from ..nouns import parse_object_filter
-from ..references import parse_recipient
+from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
@@ -335,3 +335,56 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.DelayedSelfAction(action, subject=subject)
+
+
+def parse_simultaneous_phasing(
+    stream: TokenStream,
+) -> "ast.SimultaneousPhasing | None":
+    """``Simultaneously, all phased-out creatures phase in and all creatures
+    with phasing phase out.`` (Time and Tide, CR 702.26.)
+
+    One production for both halves, because the printed adverb is what joins
+    them: both sets are read before either is applied, and two statements in a
+    sequence would apply in order — phasing a creature in and then straight back
+    out again, which is the opposite of what the word says.
+
+    Read as a whole sentence in ``parse_imperative``, ahead of the subject
+    readers: it opens on an adverb no other production claims, and it refuses
+    without consuming, so a sentence beginning "Simultaneously" that this cannot
+    finish keeps whatever refusal it already had.
+
+    "Phased-out" is consumed as *structure* rather than parsed as an adjective:
+    CR 702.26b says a phased-out permanent is treated as though it does not
+    exist, so it is not on any battlefield and no ``ObjectFilter`` over one can
+    name it. What the word says is which collection the sentence is about. The
+    noun phrase after it is read normally, so it still narrows.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("simultaneously"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_word("all"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("phased-out"):
+        stream.reset(mark)
+        return None
+    returning = parse_object_filter(stream)
+    if not stream.accept_phrase("phase", "in"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    leaving = parse_target_spec(stream)
+    if leaving is None:
+        stream.reset(mark)
+        return None
+    # The outgoing half is the ordinary sweep sentence ("all creatures with
+    # phasing phase out"), which the phase-out production already reads on its
+    # own — so it is the *subject* that is parsed here and the verb that is
+    # checked, and nothing about which permanents it names is decided twice.
+    if not stream.accept_phrase("phase", "out"):
+        stream.reset(mark)
+        return None
+    return ast.SimultaneousPhasing(returning, leaving)

@@ -225,3 +225,85 @@ def test_fastbond(cards):
     )
     assert _play_lands(game, player, 3) == [True, True, True]
     assert player.life == 18
+
+
+# ---------------------------------------------------------------------------
+# The same count with a duration instead of a source (CR 305.1/305.2)
+# ---------------------------------------------------------------------------
+#
+# Everything above is a permanent's static ability, recomputed from the board.
+# Summer Bloom and Solfatara say the same two things "this turn", with no
+# permanent left behind to say them — so they are recorded on the game and
+# cleared at the turn boundary, and read by the *same* gate. A second gate would
+# be a second answer to "may this seat play a land?", which is the split this
+# whole module exists to prevent.
+
+
+def _turn_effect_game() -> Game:
+    game = Game(players=[
+        PlayerState(name="P1", life=20), PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+@pytest.mark.cr("305.2", "305.2a")
+def test_a_this_turn_grant_and_a_permanent_s_allowance_add_up(set_pool):
+    """CR 305.2a compares one number against one number, so both sources of
+    "lands the player can play this turn" feed the same total."""
+    from engine.land_play_allowance import grant_extra_land_plays
+
+    game, player = _game([Permanent(card=PATHFINDER_LORE)], [])
+    grant_extra_land_plays(game, 0, 3)
+
+    # One by rule, one from the enchantment, three from the resolved effect.
+    for played in range(5):
+        game.lands_played_this_turn[0] = played
+        assert game._may_play_another_land(0), f"land {played + 1} of 5"
+    game.lands_played_this_turn[0] = 5
+    assert not game._may_play_another_land(0)
+    assert player is game.players[0]
+
+
+@pytest.mark.cr("305.1", "305.2b")
+def test_a_this_turn_prohibition_outranks_every_allowance():
+    """CR 305.1's permission withdrawn, which no count adds up to: "a player
+    can't play a land, for any reason, if…".
+
+    The same asymmetry the board-wide prohibition (Worms of the Earth) already
+    has, and it is asked in the same place and before the count.
+    """
+    from engine.land_play_allowance import (
+        forbid_land_plays_this_turn, grant_extra_land_plays,
+    )
+
+    game, _player = _game([Permanent(card=VERDANT_RUSH)], [])
+    grant_extra_land_plays(game, 0, 3)
+    assert game._may_play_another_land(0)
+
+    forbid_land_plays_this_turn(game, 0)
+
+    assert not game._may_play_another_land(0)
+    assert game._may_play_another_land(1), "one seat, not the table"
+
+
+@pytest.mark.cr("305.2")
+def test_both_this_turn_records_are_cleared_at_the_turn_boundary():
+    """"…this turn". A prohibition that outlived its turn is a seat that quietly
+    stops playing lands, and a grant that did is a free land drop every turn
+    after."""
+    from engine.land_play_allowance import (
+        forbid_land_plays_this_turn, grant_extra_land_plays,
+    )
+
+    game = _turn_effect_game()
+    grant_extra_land_plays(game, 0, 3)
+    forbid_land_plays_this_turn(game, 1)
+
+    game.start_turn(0)
+
+    assert game.extra_land_plays_this_turn == {}
+    assert game.land_plays_forbidden_this_turn == set()
+    game.lands_played_this_turn[0] = 1
+    assert not game._may_play_another_land(0)
+    assert game._may_play_another_land(1)

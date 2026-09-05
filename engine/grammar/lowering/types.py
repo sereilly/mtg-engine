@@ -139,14 +139,24 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     the same record. Balduvian Conjurer's "It's still a land" adds none, and the
     production has already consumed the words; the addition is what the record
     means either way, since nothing is taken away.
+
+    ``colors`` is "…a 2/2 **green** creature" (Quirion Druid), CR 613 layer 5 of
+    the same sentence. Emitted **only when the sentence named one**, so every
+    animation payload written before this key existed is byte-identical — the
+    absence means "the sentence said nothing about colour", which is not the
+    same claim as "no colours" (CR 105.2c's colourless), and a key that was
+    always present could not tell the two apart.
     """
-    return {
+    payload: dict[str, object] = {
         "power": node.power,
         "toughness": node.toughness,
         "subtypes": list(node.subtypes),
         "keywords": list(node.keywords),
         "card_types": list(node.card_types),
     }
+    if node.colors:
+        payload["colors"] = list(node.colors)
+    return payload
 
 
 #: Durations a gained type may carry. "Permanently" is the absent kind, which
@@ -418,3 +428,28 @@ def _lower_become_color(
     # stack from the picker, so the description is omitted and legality.py
     # keeps answering `spell_or_permanent` until the vocabulary grows.
     return (OracleInstruction("recolor_target_from_text", "", {"target_color": node.color}),)
+
+
+def _lower_land_type_swap(node: ast.LandTypeSwap) -> tuple[OracleInstruction, ...]:
+    """Vision Charm's third mode: two chosen land types and a sweep between
+    them (CR 305.7, CR 609.3).
+
+    One instruction, because the choice and the swap are one resolution: the
+    answer names the set the sweep reaches, so a pair of instructions would need
+    a scratchpad channel between them and a reader that refuses the second
+    without the first. The handler arms the prompt, and the *resolver* performs
+    the swap — the same arrangement Jinx's single-land version already has.
+
+    Which catalog each half draws from is payload, because that is what the
+    printed adjective says: "a land type" is all of CR 205.3i's, "a basic land
+    type" is the five.
+    """
+    return (
+        OracleInstruction(
+            "swap_land_types_until_eot", "",
+            {
+                "first_basic": bool(node.first_basic),
+                "second_basic": bool(node.second_basic),
+            },
+        ),
+    )

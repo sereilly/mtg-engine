@@ -856,3 +856,32 @@ def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstructi
     for key in nested_keys:
         nested += tuple(instruction.payload.get(key) or ())
     return nested
+
+
+def categories_of(instructions: tuple["OracleInstruction", ...]) -> frozenset[str]:
+    """Migration categories covered by a lowered instruction sequence.
+
+    Here rather than in ``categories.py`` because that module is a *registry*
+    and this is a walk: every step of it asks :func:`nested_instructions`, which
+    lives in this file, and a wrapper whose contents it could not see would
+    report the wrapper's own kind as the whole answer. The table is imported
+    rather than the walk exported, which is the direction the layering allows.
+    """
+    from .categories import INSTRUCTION_CATEGORIES
+
+    found: set[str] = set()
+    for instruction in instructions:
+        nested_keys = nested_instructions(instruction)
+        if nested_keys is not None:
+            if not nested_keys:
+                return frozenset({"__ungated__"})
+            inner = categories_of(nested_keys)
+            if "__ungated__" in inner:
+                return frozenset({"__ungated__"})
+            found |= inner
+            continue
+        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
+        if category is None:
+            return frozenset({"__ungated__"})
+        found.add(category)
+    return frozenset(found)
