@@ -46,6 +46,9 @@ def attach_source_to_target(
     """
     if instruction.payload.get("subject_from") == "target":
         return _attach_chosen_to_chosen(game, instruction, context)
+    host_key = instruction.payload.get("host_from")
+    if host_key is not None:
+        return _attach_source_to_recorded(game, instruction, context, str(host_key))
 
     # Function-level, as every handler that asks it does: subject_filters
     # imports handlers._common, so the package cannot import it at the top.
@@ -100,6 +103,47 @@ def attach_source_to_target(
         )
         return True, "resolved"
     attach_equipment(game, equipment, chosen)
+    return True, "resolved"
+
+
+def _attach_source_to_recorded(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    host_key: str,
+) -> tuple[bool, str]:
+    """"Put target creature card from a graveyard onto the battlefield under
+    your control **and attach this enchantment to it**." (Necromancy.)
+
+    The same keyword action (CR 701.3) with the host read out of the record an
+    earlier step of this same resolution wrote, rather than off the stack
+    object's targets: the ability's target is a *card* in a graveyard, and the
+    permanent it names did not exist until that step ran.
+
+    Through ``recorded_permanent_ids``' single-answer reader, never a bare
+    ``isinstance(value, int)``: the ``permanents_from`` channel is always a
+    sequence, and a reader that assumed the scalar shape would find nothing here
+    and attach nothing — silently, on a card that compiles clean.
+
+    Legality is ``attach_equipment``'s, which asks ``attachment_refusal`` and so
+    routes an Aura to its enchant clause (CR 303.4j). A step that recorded
+    nothing — the graveyard held no creature card — attaches nothing, which is
+    the effect doing as much as it can rather than a failure.
+    """
+    from ._common import one_recorded_permanent_id
+
+    card_name = getattr(context.card, "name", "")
+    attachment = context.source_permanent
+    if attachment is None or not game.is_on_battlefield(attachment):
+        game.log.append(
+            f"{card_name}: nothing to attach — it has left the battlefield"
+        )
+        return True, "resolved"
+    host = game.permanent_by_id(one_recorded_permanent_id(context, host_key))
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(
+            f"{card_name}: nothing was put onto the battlefield to attach it to"
+        )
+        return True, "resolved"
+    attach_equipment(game, attachment, host)
     return True, "resolved"
 
 

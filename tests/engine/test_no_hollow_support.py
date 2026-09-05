@@ -194,32 +194,40 @@ from engine.oracle import compile_card_oracle as _w3g5_compile
 
 
 def test_a_casting_permission_alone_does_not_make_a_card_supported():
-    """Necromancy is the Amulet of Quoz of the ``cast_timing`` claim.
+    """The ``cast_timing`` claim is evidence about *when* a spell may be cast
+    and never about what it does, so a card whose text is nothing else stays
+    unsupported.
 
-    Its first printed line — "You may cast this spell as though it had flash.
-    If you cast it any time a sorcery couldn't have been cast, …" — is fully
-    implemented and fully enforced (``engine/cast_timing.py``, the cast path's
-    ``CAST_AT_INSTANT_SPEED`` stamp, the cleanup step's sweep), and the gate
-    that credited it was Aura-only. Crediting it pool-wide is right; crediting
-    it as *behaviour* is not, because Necromancy's whole second line — a
-    self-transforming Aura that reanimates a creature — is unimplemented.
+    W3G5 wrote this against Necromancy, whose second line was unimplemented at
+    the time; W4G1 implemented that line, so the card is supported and can no
+    longer demonstrate the rule. Asserting the *mechanism* instead is the
+    stronger form and does not expire: an invented card printing the permission
+    and nothing else is exactly the population the claim would wrongly hold up,
+    and a printed card is not needed to ask the question.
 
-    Read as behaviour the card compiled **supported** while reanimating
-    nothing, with zero hollow lines and full parse coverage: the debt Mirage's
-    promotion rehearsal found on eleven cards, arriving from the gate instead
-    of from a whitelist word.
+    Read as behaviour, the gate credited Necromancy as **supported** while it
+    reanimated nothing, with zero hollow lines and full parse coverage: the debt
+    Mirage's promotion rehearsal found on eleven cards, arriving from the gate
+    instead of from a whitelist word.
     """
-    by_name = {c.name: c for c in _w3g5_load(_w3g5_paths(include_measured=True))}
-    program = _w3g5_compile(by_name["Necromancy"])
+    from engine.models import CardDefinition
+    from engine.oracle import _compile_card_oracle
 
-    assert [i.value for i in program.instructions] == [] or all(
+    permission = (
+        "You may cast this spell as though it had flash. If you cast it any "
+        "time a sorcery couldn't have been cast, the controller of the "
+        "permanent it becomes sacrifices it at the beginning of the next "
+        "cleanup step."
+    )
+    program = _compile_card_oracle(
+        "Timing Only", "enchantment", permission, (), "normal", False,
+    )
+
+    assert all(
         i.kind == "derived_static_rule" and i.value == "cast_timing"
         for i in program.instructions
     ), program.instructions
     assert not program.supported, program.reason
-    assert "becomes an Aura" in program.reason, (
-        "the refusal has to name the clause nobody implemented"
-    )
 
 
 def test_the_timing_claims_are_the_only_derived_rules_that_carry_no_behaviour():
@@ -251,5 +259,14 @@ def test_the_flash_cycle_is_still_supported_by_what_it_actually_does():
     unsupported = [
         card.name for card in printers if not _w3g5_compile(card).supported
     ]
-    assert unsupported == ["Necromancy"], unsupported
+    assert unsupported == [], unsupported
+    # …and Necromancy, the one card that used to be on that list, is held up by
+    # its effects rather than by the permission: W4G1 implemented the second
+    # line, so the claim it once stood on alone is now the smaller half of what
+    # supports it.
+    necromancy = _w3g5_compile(by_name["Necromancy"])
+    assert any(
+        instruction.kind != "derived_static_rule"
+        for instruction in necromancy.instructions
+    ), necromancy.instructions
 # --- end VIS W3G5 ---

@@ -310,6 +310,16 @@ PARSE_LAYERS = [
     # `OracleProgram.static_lines`' own, which is exactly what these
     # productions produce, rather than a new one.
     "static_lines",
+    # Whole printed lines whose **quotation marks** are what delimits them — an
+    # emblem's granted ability, the reanimation Aura's entry line, Necromancy's
+    # "becomes an Aura with" sentence. The lexer discards quotation marks, so
+    # these are matched against the raw text and `parse_line` tries them ahead
+    # of the sentence loop, which would refuse every one on punctuation it never
+    # sees. Split out of `parser` at the size guard; above nothing, and below
+    # `parser`, its only caller — the one production that has to re-enter the
+    # line layer takes that entry point as an argument rather than importing it
+    # back, which is the cycle this order forbids.
+    "quoted_lines",
     "costs", "parser",
 ]
 # `by_node` is the node-type registry `lower` dispatches through. It left

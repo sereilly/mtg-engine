@@ -36,7 +36,7 @@ Held at this rate, supporting the 26,113-card release line would need about **77
 | MIR | 335 | 335 (100.0%) | 1 (0.3%) | 546 | 0 (0.0%) | 1 | 0.3 |
 | 5ED | 434 | 434 (100.0%) | 10 (2.3%) | 631 | 9 (1.4%) | 11 | 2.5 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| VIS *(measured)* | 167 | 166 (99.4%) | 0 (0.0%) | 277 | 0 (0.0%) | 0 | 0.0 |
+| VIS *(measured)* | 167 | 167 (100.0%) | 0 (0.0%) | 279 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **2181** | **2181 (100.0%)** | **59 (2.7%)** | **3443** | **55 (1.6%)** | **65** | **3.0** |
 
 *(measured)* — VIS are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

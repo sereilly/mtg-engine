@@ -202,6 +202,7 @@ from .characteristics import (
     LandTypeSwap,
     ChangeSupertype,
     GainType,
+    BecomeAura,
     BecomeCreature,
 )
 from .board import (
@@ -558,6 +559,7 @@ __all__ = [
     "LandTypeSwap",
     "ChangeSupertype",
     "GainType",
+    "BecomeAura",
     "BecomeCreature",
     # board
     "Attach",

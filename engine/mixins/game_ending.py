@@ -800,9 +800,23 @@ class GameEndingMixin:
             if unattach_illegal_equipment(self):
                 changed = True
 
-            # 704.5p: non-Aura, non-Equipment, non-Role permanent in attached state → unattach
+            # 704.5p: non-Aura, non-Equipment, non-Role permanent in attached
+            # state → unattach.
+            #
+            # Asked of CR 613 layer 4, exactly as `_illegally_attached` above
+            # asks it and for the same reason: whether a permanent *is* an Aura
+            # is a computed characteristic, and the printed line is a second
+            # answer free to disagree with it. Necromancy is the disagreement —
+            # "it becomes an Aura with …" grants the subtype in layer 4 and
+            # attaches the permanent in the same resolution, and this loop,
+            # reading the printed line, unattached it on the next state-based
+            # pass and 704.5m then binned it as an unattached Aura. The
+            # `card.type_line` reading survives in neither direction: an Aura
+            # returned *as a non-Aura enchantment* (Takklemaggot) is returned
+            # attached to nothing, so it never reaches the state this loop acts
+            # on.
             for perm in self.all_permanents():
-                if "Aura" in perm.card.type_line or is_equipment(perm) or "Role" in perm.card.type_line:
+                if perm.has_type("aura") or is_equipment(perm) or perm.has_type("role"):
                     continue
                 if perm.metadata.get("attached_to") is not None:
                     perm.metadata["attached_to"] = None

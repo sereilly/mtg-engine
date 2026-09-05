@@ -165,6 +165,35 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
 _GAINED_TYPE_DURATIONS = frozenset({None, "until_end_of_turn", "until_your_next_upkeep"})
 
 
+def _lower_become_aura(node: ast.BecomeAura) -> tuple[OracleInstruction, ...]:
+    """Necromancy's ``it becomes an Aura with "enchant …."``
+
+    One instruction for both halves of the sentence, because the two are one
+    thing the permanent becomes: CR 613 layer 4 gives it the Aura subtype and
+    layer 6 gives it the enchant ability (CR 702.5) that says what it may be
+    attached to. Split in two the type change would land on a permanent whose
+    enchant clause nothing had recorded, and CR 704.5m would bin it on the next
+    state-based pass — an Aura attached to nothing — half a resolution before
+    the sentence behind it attaches it.
+
+    The enchant restriction is carried, never dropped: ``origin`` says the host
+    must be a permanent this one put onto the battlefield, which is what
+    ``auras.enchant_card_refusal`` tests and what stops the Aura being moved
+    onto a creature it never reanimated. The parse admits no other quality, so
+    there is no shape here that reaches the handler with a rider nothing reads.
+    """
+    if not node.origin_is_source:
+        raise LoweringError(
+            "no handler tests an enchant clause this Aura was given", node=node
+        )
+    return (
+        OracleInstruction(
+            "become_aura_with_enchant", "",
+            {"noun": node.noun, "origin": "source"},
+        ),
+    )
+
+
 def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
     """Ashnod's Transmogrant / Xenic Poltergeist.
 

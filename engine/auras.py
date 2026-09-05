@@ -1192,6 +1192,68 @@ def attached_subject_triggers(game, host, condition_kinds, payload_key):
     return found
 
 
+#: What a permanent that *became* an Aura was given (Necromancy). The record the
+#: sentence "it becomes an Aura with "enchant <quality>."" leaves behind: the
+#: subtype is CR 613 layer 4 and goes on ``layer_bridge.GAINED_TYPES`` like any
+#: other gained type, and this is the other half — the enchant ability (CR 702.5)
+#: that says what the permanent may legally be attached to.
+#:
+#: A record rather than a granted text line, because the readers of an enchant
+#: clause ask two different things of it: ``aura_enchant_noun`` reads a *card*
+#: and gates on the printed word "Aura" in its type line, which a permanent that
+#: became one does not have, and the quality this sentence grants is a relation
+#: between two permanents rather than a noun a card's text could state.
+#: :func:`enchant_card_refusal` — the one predicate every caller asks — reads it.
+BECAME_AURA_ENCHANT = "became_aura_enchant"
+
+#: The permanent whose ability put this one onto the battlefield, by id. What
+#: "enchant creature **put onto the battlefield with Necromancy**" is about, and
+#: the only thing that can say so: the creature was a card in a graveyard when
+#: the ability was activated, and CR 400.7 makes what arrived a new object, so
+#: nothing on the board or on the stack records where it came from.
+#:
+#: Stamped by ``handlers/zones.reanimate_creature``, read by
+#: :func:`enchant_card_refusal`. Beside the record above rather than in the
+#: handler that writes it, for ``tokens.CREATED_WITH_PERMANENT_ID``'s reason:
+#: the writer and the reader sit at opposite ends of the pipeline.
+PUT_ONTO_BATTLEFIELD_BY = "put_onto_battlefield_by"
+
+
+def _became_aura_refusal(game, aura, granted, host) -> str | None:
+    """Why a permanent that *became* an Aura may not enchant *host*.
+
+    (Necromancy: ``it becomes an Aura with "enchant creature put onto the
+    battlefield with Necromancy."``) The clause was granted rather than printed,
+    so it is read off the record :data:`BECAME_AURA_ENCHANT` holds instead of
+    off the card's text — but it is asked here, inside the one predicate the
+    cast gate, the pickers, the attach and the CR 704.5m sweep all share, so
+    what is offered and what is allowed cannot drift.
+
+    The origin rider is the whole of what the sentence adds, and it is tested
+    rather than dropped: the Aura may enchant the creature *its own ability* put
+    onto the battlefield and no other, so an effect that would move it
+    (Enchantment Alteration) finds no legal host and CR 303.4j leaves it where
+    it is. Left permissive — which is what an unread noun gets in
+    ``permanent_matches_enchant_noun`` — the printed restriction would be
+    enforced by nothing.
+    """
+    from .mixins.stack import permanent_matches_enchant_noun
+    from .target_immunity import cannot_be_enchanted
+
+    if host is None or not game.is_on_battlefield(host):
+        return "it is no longer on the battlefield"
+    noun = str(granted.get("noun") or "")
+    if not permanent_matches_enchant_noun(host, noun):
+        return f"it isn't a legal {noun}"
+    if granted.get("origin") == "source" and (
+        host.metadata.get(PUT_ONTO_BATTLEFIELD_BY) != aura.permanent_id
+    ):
+        return "it wasn't put onto the battlefield with this enchantment"
+    if cannot_be_enchanted(host, by_aura=aura):
+        return "it can't be enchanted"
+    return None
+
+
 def aura_attach_refusal(game, aura, host) -> str | None:
     """Why *aura* may not become attached to *host*, or None when it may.
 
@@ -1233,6 +1295,13 @@ def enchant_card_refusal(game, card, controller_seat, host, *, aura=None) -> str
                                permanent_matches_enchant_noun)
     from .target_immunity import cannot_be_enchanted
 
+    # An enchant ability the permanent was **given** rather than printed
+    # (Necromancy). Asked first, because the printed reading below would find no
+    # enchant line at all and refuse every host — the card has none, which is
+    # exactly why its own sentence grants one.
+    granted = aura.metadata.get(BECAME_AURA_ENCHANT) if aura is not None else None
+    if granted is not None:
+        return _became_aura_refusal(game, aura, granted, host)
     if host is None or not game.is_on_battlefield(host):
         return "it is no longer on the battlefield"
     noun = aura_enchant_noun(card)

@@ -720,6 +720,23 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     SEARCHED_PERMANENTS,
 })
 
+#: The subset of :data:`_RECORDED_PERMANENTS` whose producer *made* the
+#: permanent — it was a card in a graveyard (Necromancy), a hand (Flash) or a
+#: library (Zirilan of the Claw) when the ability was announced, so nothing on
+#: the stack or the board pointed at it and it did not exist until that step ran.
+#:
+#: Its own set beside the wider one because it answers a question the wider one
+#: cannot: a back-reference *behind such a step* cannot mean the ability's
+#: target, since the target was a card and the words name a permanent (CR 400.7
+#: makes them different objects). Every other member of `_RECORDED_PERMANENTS`
+#: records permanents the effect merely *acted on* — a tap, an unblockable
+#: grant, a counter — where the target and the record are the same object and a
+#: reader may take either.
+_PERMANENTS_MADE_BY_THIS_EFFECT: frozenset[str] = frozenset({
+    _REANIMATED_PERMANENTS, PUT_FROM_HAND_PERMANENTS, SEARCHED_PERMANENTS,
+})
+
+
 
 #: What the bare possessive "**its** <characteristic>" reads when the step in
 #: front of it acted on a *spell* rather than on a permanent.

@@ -126,6 +126,7 @@ from .types import (
     _lower_become_creature,
     _lower_change_land_type,
     _lower_change_supertype,
+    _lower_become_aura,
     _lower_gain_type,
 )
 from .keywords import (
@@ -443,6 +444,7 @@ __all__ = [
     "_lower_become_color",
     "_lower_change_land_type",
     "_lower_change_supertype",
+    "_lower_become_aura",
     "_lower_gain_type",
     "_lower_change_text",
     "_DESTROY_ALL_KINDS",

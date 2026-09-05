@@ -25,13 +25,53 @@ from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, PER_OBJECT_SEAT_RECORDS,
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _describe_targets, _filter_payload, _is_source, _is_target
+from ._common import (_describe_targets, _filter_payload, _is_source, _is_target,
+                      _restrictions_beyond)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS)
+                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
+                      _RECORDED_PERMANENTS)
 
 
-def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
+def _lower_attach_to_recorded(
+    node: ast.Attach, produced: frozenset[str]
+) -> "tuple[OracleInstruction, ...] | None":
+    """The attach whose host an earlier step of this sentence recorded, or None.
+
+    "…**and attach this enchantment to it**." (Necromancy.) The same kind rather
+    than a second one, because what the handler does is unchanged — what differs
+    is which object it reads, and that is payload: ``host_from`` names the
+    scratchpad key, exactly as it does for the chosen-host attach below.
+
+    Two conditions and no guessing. The host must be the bare pronoun — which
+    the noun parser reads as the ability's own source, because with nothing
+    printed after the word that is the only object a lone sentence could mean —
+    carrying no further narrowing this reading would drop; and exactly one
+    earlier step must have recorded a permanent, so "it" has one referent rather
+    than a pick between two. The same two questions ``counters.py`` asks of the
+    identical pronoun for Bogardan Phoenix, and the same answer: a step that put
+    a permanent onto the battlefield is what changes what the word means.
+    """
+    host = node.host
+    if not isinstance(host, ast.TargetSpec) or host.targeted:
+        return None
+    if host.quantifier not in ("it", "that"):
+        return None
+    if _restrictions_beyond(host.filter, frozenset({"card_types", "is_source"})):
+        return None
+    recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+    if len(recorded) != 1:
+        return None
+    return (
+        OracleInstruction(
+            "attach_source_to_target", "", {"host_from": recorded[0]}
+        ),
+    )
+
+
+def _lower_attach(
+    node: ast.Attach, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Attach this permanent to target creature you control." (CR 702.6a.)
 
     One handler, ``attach_source_to_target``, and one shape for it: the source
@@ -41,6 +81,16 @@ def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
     the picker from — so CR 702.6c's narrowed equip ("target legendary creature
     you control") costs nothing here. A chosen *subject* ("target Equipment you
     control", Brass Squire) has no handler yet and refuses naming that.
+
+    The host may also be a permanent an **earlier step of this same sentence**
+    put onto the battlefield — "Put target creature card from a graveyard onto
+    the battlefield under your control **and attach this enchantment to it**"
+    (Necromancy). Nothing was chosen: the ability's target is a *card* in a
+    graveyard, and the permanent did not exist until that step ran, so the
+    record it wrote is the only place the pronoun can be read from. That is why
+    this lowering takes ``produced`` at all, and why the branch is gated on one:
+    with no such step in front of it, "it" is a back-reference to nothing and
+    the line keeps its refusal.
     """
     if isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject):
         return _lower_attach_chosen(node)
@@ -48,6 +98,9 @@ def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             "no handler attaches anything but the source itself", node=node
         )
+    recorded = _lower_attach_to_recorded(node, produced)
+    if recorded is not None:
+        return recorded
     if not isinstance(node.host, ast.TargetSpec) or not _is_target(node.host):
         raise LoweringError("attach needs one chosen permanent to attach to", node=node)
     payload = _filter_payload(node.host.filter)

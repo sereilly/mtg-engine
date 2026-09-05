@@ -35,7 +35,6 @@ diffed before and after.
 """
 
 import dataclasses
-import re
 from dataclasses import replace
 
 from ..oracle_types import strip_ability_word
@@ -43,6 +42,9 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
+from .quoted_lines import (_ASSIGN_UNBLOCKED_LINE_RE,
+                           _parse_becomes_aura_line, _parse_emblem_line,
+                           _parse_reanimation_aura_line)
 from .costs import _parse_costs
 from .registries import registry_for_line
 from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
@@ -652,73 +654,6 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
 
 
 
-_EMBLEM_LINE_RE = re.compile(
-    r'^\s*you get an emblem with\s+["“](?P<text>.+)["”]\.?\s*$',
-    re.IGNORECASE | re.DOTALL,
-)
-
-# "Until end of turn, creatures you control gain "You may have this creature
-# assign its combat damage as though it weren't blocked."" (Garruk, Savage
-# Herald's −7.) The quoted grant is matched whole: the granted sentence IS the
-# effect, so a paraphrase is a different card and must keep refusing.
-_ASSIGN_UNBLOCKED_LINE_RE = re.compile(
-    r'^\s*until end of turn, creatures you control gain\s+'
-    r'["“]you may have this creature assign its combat damage as though it '
-    r'wasn.t blocked\.?["”]\.?\s*$'
-    .replace("wasn.t", r"(?:wasn|weren)['’]t"),
-    re.IGNORECASE,
-)
-
-
-#: The reanimation Aura's entry line, whole (Animate Dead, Dance of the Dead) —
-#: a whole-line pattern for the reason the emblem shape below is one: the
-#: quotation marks are part of what the sentence says, and the three sentences
-#: are one effect on one object rather than three statements. The two printings
-#: differ by one verb and one word of timing, which is what makes this a
-#: template rather than a card, and what retired the name-keyed hook that used
-#: to claim the first of them. Exact on purpose: a card printing one of the
-#: three sentences and not the others is a different card.
-_REANIMATION_AURA_LINE_RE = re.compile(
-    r'^\s*when this (?:aura|enchantment) enters, if it.s on the battlefield, '
-    r'it loses ["“]enchant creature card in a graveyard["”] and gains '
-    r'["“]enchant creature put onto the battlefield with this '
-    r'(?:aura|enchantment)\.?["”]\.?\s*'
-    r'(?:return|put) enchanted creature card (?:to|onto) the battlefield '
-    r'(?P<tapped>tapped )?under your control and attach this '
-    r'(?:aura|enchantment) to it\.\s*'
-    r'when this (?:aura|enchantment) leaves the battlefield, '
-    r'that creature.s controller sacrifices it\.?\s*$',
-    re.IGNORECASE,
-)
-
-
-def _parse_reanimation_aura_line(line: str) -> "ast.TriggeredAbilityNode | None":
-    """The reanimation Aura's entry line as one triggered ability, or None.
-
-    Off the raw text, as the emblem shape below is: what the pattern pins down
-    is the quoted rewrite and the sentence order, both of them punctuation the
-    token stream has already discarded.
-    """
-    match = _REANIMATION_AURA_LINE_RE.match(line.strip())
-    if match is None:
-        return None
-    return ast.TriggeredAbilityNode(
-        ast.TriggerEvent(kind="enters_battlefield", word="when"),
-        ast.ReanimateEnchantedCard(tapped=bool(match.group("tapped"))),
-    )
-
-
-def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
-    """The whole-line emblem shape, read off the raw text.
-
-    Raw rather than token-by-token because the payload IS the raw text: the
-    quoted ability keeps its printed casing and punctuation, which is what the
-    compiler will read when the emblem fires.
-    """
-    match = _EMBLEM_LINE_RE.match(line.strip())
-    if match is None:
-        return None
-    return ast.CreateEmblem(text=match.group("text").strip())
 
 
 def parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
@@ -785,6 +720,16 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         reanimation = _parse_reanimation_aura_line(lexed.source)
         if reanimation is not None:
             return reanimation
+        # "It becomes an Aura with "enchant …."" (Necromancy) — the quoted
+        # clause is one *sentence* of a longer trigger, so the production lifts
+        # it out and hands the rest back to the ordinary parser. After the
+        # reanimation shape above, which reads the same card family's other
+        # printing whole.
+        becomes_aura = _parse_becomes_aura_line(
+            lexed.source, card_name=card_name, parse=_parse_line
+        )
+        if becomes_aura is not None:
+            return becomes_aura
         if _ASSIGN_UNBLOCKED_LINE_RE.match(line.strip()):
             return ast.SpellEffectLine(
                 ast.RawEffect("grant_team_assign_unblocked_until_eot")

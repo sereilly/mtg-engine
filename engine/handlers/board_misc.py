@@ -6,6 +6,7 @@ from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
+from ..auras import BECAME_AURA_ENCHANT
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
@@ -2187,6 +2188,55 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             record=context.results,
         )
     context.results["sacrificed_this_way"] = could_pay
+    return True, "resolved"
+
+
+@effect_handler("become_aura_with_enchant")
+def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necromancy: "it becomes an Aura with "enchant creature put onto the
+    battlefield with Necromancy.""
+
+    Two layers in one sentence, and one instruction for both because the
+    permanent is not in a legal state between them. CR 613 layer 4 gives it the
+    Aura subtype, on the same ``GAINED_TYPES`` channel :func:`gain_type` above
+    writes — so every reader of "is this an Aura?" (``equipment.attachment_refusal``,
+    the CR 704.5m sweep, the P/T derivation) gets one answer from the layer
+    system rather than from a rewritten card. CR 613 layer 6 gives it the enchant
+    ability (CR 702.5), recorded under ``auras.BECAME_AURA_ENCHANT``.
+
+    Nothing here attaches it. That is the sentence behind this one, in the same
+    resolution — which is what makes the order safe: state-based actions are
+    checked when a player would receive priority (CR 704.3), and nobody does
+    inside a resolution, so the Aura is never seen attached to nothing.
+
+    A source that has already left does nothing rather than recording on a
+    permanent in a graveyard, which is CR 603.10's reading of the same trigger:
+    the intervening "if it's on the battlefield" is checked again on resolution,
+    and this is the same question one step later.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(
+            f"{context.card.name}: it is no longer on the battlefield"
+        )
+        return True, "resolved"
+    source.metadata.setdefault(GAINED_TYPES, []).append({
+        "card_types": [],
+        "subtypes": ["aura"],
+        "duration": "permanent",
+        "pt_from_mana_value": False,
+        "source": context.card.name if context.card else "effect",
+        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
+    })
+    source.metadata[BECAME_AURA_ENCHANT] = {
+        "noun": str(instruction.payload.get("noun") or "creature"),
+        "origin": str(instruction.payload.get("origin") or ""),
+    }
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{context.card.name} became an Aura with "
+        f"\"enchant {source.metadata[BECAME_AURA_ENCHANT]['noun']}\""
+    )
     return True, "resolved"
 
 

@@ -27,6 +27,9 @@ from .lowering import (_lower_discard, _lower_exile_entire_library,
                        _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
                        _lower_change_land_type, _lower_change_supertype,
+                       _lower_become_aura, _lower_untap_chosen_by_paying,
+                       _lower_reveal_hand_and_choose, _lower_look_top_pick,
+                       _lower_player_gets_counters,
                        _lower_gain_type, _lower_attack_as_though,
                        _lower_assigns_no_combat_damage, _lower_attacking_doesnt_tap,
                        _lower_attacks_this_turn_if_able,
@@ -154,7 +157,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
     ast.TapOrUntap: _lower_tap_or_untap,
     ast.SimultaneousUntapAndTap: _lower_simultaneous_untap_and_tap,
-    ast.Attach: _lower_attach,
     ast.CountObjects: _lower_count_objects,
     ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
@@ -185,6 +187,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.PutGraveyardTopOnLibraryBottom: _lower_put_graveyard_top_on_library_bottom,
     ast.RevealTopToHandOrBottom: _lower_reveal_top,
     ast.SacrificeExpansionPermanents: _lower_sacrifice_expansion_permanents,
+    ast.BecomeAura: _lower_become_aura,
     ast.GainType: _lower_gain_type,
     ast.ChangeSupertype: _lower_change_supertype,
     ast.ChangeLandType: _lower_change_land_type,
@@ -271,4 +274,34 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # "…**that player** puts the cards in their hand on the bottom of their
     # library in any order, then draws that many cards" (Teferi's Puzzle Box).
     ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
+    # "Look at **that player's** hand" (Leshrac's Sigil) and "**that player**
+    # may choose … and pay" (Mudslide): each acts on a seat the firing event
+    # may have frozen. Four more of the branches the note above names, brought
+    # across by the round that next touched the dispatcher — which is what that
+    # note asks for.
+    ast.UntapChosenByPaying: _lower_untap_chosen_by_paying,
+    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
+    ast.PlayerGetsCounters: _lower_player_gets_counters,
+    ast.LookTopPickToHand: _lower_look_top_pick,
+}
+
+
+#: The same registry one argument wider again: a node whose lowering needs the
+#: **records earlier steps of this same effect wrote** and nothing else. "…and
+#: attach this enchantment to **it**" (Necromancy) is a back-reference, and only
+#: ``produced`` can say whether a step in front of it recorded the permanent the
+#: pronoun names — so the node cannot answer on its own, and the lowering still
+#: decides nothing else, which is the line :data:`_BY_NODE_TYPE` is drawn on.
+#:
+#: ``ast.Attach`` left the name-only table above for exactly the reason
+#: ``ast.Draw`` left it for the chain: a pronoun is only a pronoun relative to
+#: what came before it, and with no record the same words mean something else.
+#: A table rather than a chain branch because ``lower_statement`` is dispatch
+#: and this is a registry — the move ``by_node`` was created by.
+#:
+#: Read after the two tables above and before the chain, and disjoint from both
+#: for their reason: a class in two tables would be dispatched by whichever was
+#: consulted first.
+_BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
+    ast.Attach: _lower_attach,
 }
