@@ -895,6 +895,116 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Visions (VIS) — measured, wave 1 in flight
+
+**Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
+pool.** Registered under `measured` on 2026-09-04 at release date 1997-02-03,
+which places it between Mirage (1996-10-08) and Fifth Edition (1997-03-24) —
+printing-order **index 14**, an insert rather than an append, and the fourth
+all-new set after FEM, HML and ALL.
+
+**Phase 2's first two sweeps are both empty, and that is worth writing down
+rather than assuming.** Every card is `layout: normal`; every printed type is
+one the engine already ships (the only supertype in the set is `World`, and 23
+world enchantments were already here, swept by CR 704.5k in
+`mixins/game_ending.py`). Every keyword the set prints is implemented —
+including the two Mirage-block mechanics, flanking and phasing, which Mirage
+paid for — and `oracle.UNSUPPORTED_KEYWORDS`, the third table that outranks the
+other two, is **empty**, so no keyword costs a card here. The whole of this
+set's machinery cost is text.
+
+**The censuses, all five, read at ingest rather than at the gate:**
+
+| Instrument | Reading |
+| --- | --- |
+| `support_report --set VIS` | 68 unsupported |
+| `--refusals` | 74 refused lines over 74 distinct sentences — **1.00** |
+| `--fragments` | "at the beginning of" 14 cards, "to its owner's hand" 8, "when this creature" 7, "you control to" 7, "sacrifice this creature" 6, "this effect lasts indefinitely" 5 |
+| `--hollow-lines` | 8 supported cards, 9 instruction-less parts |
+| `parse_coverage --set VIS` | 17 supported cards, 21 unclaimed sentences |
+| `picker_sweep --set VIS` | 4 findings (Foreshadow, Solfatara, Simoon, Griffin Canyon) |
+
+**1.00 for the seventh consecutive set, and for the seventh consecutive set it
+is the wrong number to plan from.** Seventy-four refused lines over seventy-four
+distinct sentences reads as "no production here buys two cards". The fragment
+census, one level below the sentence, disagrees in five places at once — and the
+largest of them, `to its owner's hand` at eight cards, is *understated* by the
+refusal census, because five more cards printing that same sentence are already
+reported **supported** and do nothing with it.
+
+**So the work list is 86 cards, not 68.** The three sentence-level instruments
+add eighteen the card census structurally cannot see, and they are not a
+long tail: the Karoo land cycle is five cards printing one sentence, and it
+appears nowhere in the refusal rollup because each of those lands has a mana
+ability that compiles. A card is supported when **any** of its lines is.
+
+### The round plan — five parallel groups, integrated serially
+
+Worktree isolation, one branch per group, merged one at a time with the full
+suite and every `--check` between merges. The split is by **code family**, not
+by census bucket, so that two groups cannot arrive at `lowering/categories.py`,
+`effect_labels.py` or one AST node from opposite directions:
+
+| Group | Family | Cards |
+| --- | --- | --: |
+| W1G1 | Return to hand — as a cost, as a non-targeted effect, as "sacrifice unless" | 14 |
+| W1G2 | Phasing as an effect, land types and animation, land-play allowance | 10 |
+| W1G3 | Prevention, damage replacement, redirection, attack/block taxes | 11 |
+| W1G4 | Upkeep, end-step and per-player step triggers | 12 |
+| W1G5 | Graveyard, library and counters — including the four-card Chimera cycle | 13 |
+
+Sixty cards in wave 1; the remaining twenty-six are wave 2, which is where
+Necromancy, Pygmy Hippo, Equipoise and the rest of the individually-large cards
+sit.
+
+**Three shared mechanisms are assigned to exactly one owner each**, because the
+failure this prevents is not a merge conflict — it is two branches building one
+printed clause as two mechanisms, which merges cleanly and is a second copy of
+one fact (Ice Age, twice in one wave):
+
+- **"Activate only once each turn" (CR 602.5f)** → W1G1. Four VIS cards print
+  it, spread across three groups and both waves.
+- **"(This effect lasts indefinitely.)"** → W1G5. Five cards, four of them the
+  Chimeras; W1G2's Quirion Druid is the fifth and is told to wait rather than
+  invent a parallel spelling.
+- **`engine/auras.py` effect templates** → three groups each add one (Sun Clasp,
+  Vanishing, Mortal Wound). Unavoidable, so it is briefed instead: at the merge,
+  **union both sides**, never resolve by picking one.
+
+### Phase 0 took a split before anyone branched, and that was the point
+
+`check_all.py --caps` read **14 grammar modules within 30 lines** of the
+thousand-line guard, with five branches about to open. Of those, one had no
+owner: `lowering/_common.py` at 997/1000, which every lowering family imports
+and which no single group would have crossed alone. Mirage crossed five caps
+exactly that way — at integration, on nobody's branch, with the seam to be found
+with none of the work in hand. It was split along the line its own docstring had
+already drawn: `lowering/_filters.py` is what a **filter** means, `_common` is
+what a **target description** looks like, and `_common` re-exports so the forty
+importers were untouched. The family-owned ones stay with their families:
+`lowering/prevention.py` (993) and `effects/prevention.py` (988) are briefed to
+W1G3 as part of its round, along with the standing Known gap that split is
+supposed to drain.
+
+### The ingest's own yield — two silent bugs, before a single round
+
+Phase 1 runs the suite over the new pool and treats what fires as yield. Two
+fired, and neither was a crash:
+
+- **Kyscu Drake** printed "Sacrifice this creature **and** a creature named
+  Spitting Drake" and was charged for the Drake alone. Two objects under one
+  verb joined by a bare "and": the Oxford-list reader needs a comma before its
+  "and", the single-object delimiter switches off the moment "sacrifice this ..."
+  sets `sacrifice_self`, and the "any number of" reader wants a set — so the
+  second half was read by nothing and a tutor cost half its printed price.
+- **Undo** was a *correct* new member of the exact-target half, and what failed
+  was a hand-written list of three card names inside a test whose own docstring
+  says "so the two halves stay named by their quantifier rather than by a list
+  here". The guard now asks the property over the whole pool. This is the
+  hand-maintained-list class for the fourth set running, and it is worth noting
+  it has now been found from inside a docstring (ALL), inside a comment (5ED)
+  and inside an assertion that describes itself as not being one (VIS).
+
 ## Mirage (MIR) — shipped (335/335, manifest index 13)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
