@@ -8,7 +8,8 @@ ability on a land being tapped (CR 605.1b) is resolved inline by
 never uses the stack.
 """
 
-from ...oracle_types import COUNTERS_REMOVED, OracleInstruction
+from ...oracle_types import (COUNTERS_REMOVED, MANA_LOST_COUNT,
+                            MANA_LOST_THIS_WAY, OracleInstruction)
 from ...subject_filters import (card_only_filter, object_only_filter,
                                 untestable_filter_keys)
 from .. import ast
@@ -19,7 +20,7 @@ from ._common import (
     _filter_payload,
     _targets_payload,
 )
-from ._events import _RECORDED_PERMANENTS
+from ._events import _DEFENDING_PLAYER_EVENTS, _RECORDED_PERMANENTS
 from ._records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
@@ -115,6 +116,50 @@ def _lower_add_mana(
                     "symbol": node.from_bound_creature,
                     "count_from_mana_value_of": recorded[0],
                 },
+            ),
+        )
+    # "…you add an amount of {C} equal to **the amount of mana that player lost
+    # this way**." (Pygmy Hippo.) The number is how much an earlier step of
+    # this same effect emptied out of a pool, and by the time this clause runs
+    # — a whole phase later, from a delayed ability — the pool is long since
+    # zero. So it is read out of the record that step wrote, on the same
+    # channel Mana Drain's countered-spell mana value travels: the delayed
+    # trigger freezes the creating effect's scratchpad (CR 608.2h) and hands it
+    # back as the trigger's context.
+    #
+    # Gated on the producer, exactly as the two branches above are. With no
+    # step that emptied a pool the words name a number nobody recorded, and the
+    # clause would add nothing while the card reported itself supported.
+    if node.from_mana_lost:
+        if MANA_LOST_THIS_WAY not in produced:
+            raise LoweringError(
+                '"the amount of mana that player lost this way" names a pool '
+                "nothing in this effect emptied", node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_mana_from_text", "",
+                {
+                    "symbol": node.from_mana_lost,
+                    "count_from_trigger": MANA_LOST_COUNT,
+                },
+            ),
+        )
+    # "…and you add **the mana lost this way**." (Drain Power.) The same
+    # record, read for its colours rather than for its size: what is added is
+    # symbol for symbol what was emptied, so there is no pip list and no count
+    # on the payload at all. Its own key rather than the one above, because the
+    # two say different things about colour and a flag would let a card asking
+    # for {C} add five colours.
+    if node.mana_lost_in_kind:
+        if MANA_LOST_THIS_WAY not in produced:
+            raise LoweringError(
+                '"the mana lost this way" names a pool nothing in this effect '
+                "emptied", node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_mana_from_text", "", {"from_mana_lost": MANA_LOST_THIS_WAY},
             ),
         )
     if node.from_sacrificed_cost:
@@ -539,3 +584,101 @@ def _lower_spend_mana_as_though(
             {"spells": node.count, "any_type": node.any_type},
         ),
     )
+
+
+#: Which printed player reference the two pool clauses below read, and what the
+#: handler resolves it through. Closed, and the miss raises for
+#: ``_seats._player_recipient``'s stated reason: a seat this cannot name is one
+#: the handler would guess at, and a guessed seat empties the wrong pool.
+#:
+#: "That player" is admitted only on a **spell**. Under a trigger the phrase
+#: names whichever seat the fire site froze, which is a different record from
+#: the resolution's target — the mapping `lowering/control_flow.py` makes for
+#: an offer's payer — and reading it as the target would drain whoever the
+#: resolution happened to be carrying.
+_POOL_CLAUSE_PLAYERS: frozenset[str] = frozenset({
+    "target_player", "that_player", "defending_player",
+})
+
+
+def _pool_clause_player(player: "ast.PlayerRef", node, event: str | None) -> str:
+    """The seat key a pool clause's printed subject becomes, or a refusal."""
+    kind = player.kind
+    if kind not in _POOL_CLAUSE_PLAYERS:
+        raise LoweringError(
+            f"no seat is named by {kind!r} for a mana pool", node=node
+        )
+    if kind == "defending_player" and event not in _DEFENDING_PLAYER_EVENTS:
+        # CR 506.2's seat is frozen by the combat fire sites and by nothing
+        # else. Outside those events the phrase names nobody, and a pool
+        # emptied on nobody is a clause that silently does not happen.
+        raise LoweringError(
+            '"defending player" names a seat this event did not record',
+            node=node,
+        )
+    if kind == "that_player" and event is not None:
+        raise LoweringError(
+            '"that player" under a trigger names the seat the fire site froze, '
+            "which no pool clause reads yet", node=node,
+        )
+    return kind
+
+
+def _pool_clause_payload(
+    player: "ast.PlayerRef", node, event: str | None
+) -> dict[str, object]:
+    """The payload both pool clauses carry: the seat, and its ``targets``
+    description when the printed word is a target.
+
+    "**Target player** activates a mana ability of each land they control"
+    (Drain Power) chooses a seat as the spell is cast (CR 601.2c), so the
+    instruction describes it the way every other targeted instruction does —
+    which is what ``engine/targeting.py`` raises the picker off. Left out, the
+    card would compile clean and the client would send a bare cast with nobody
+    named, which is the Roots class ``scripts/picker_sweep.py`` exists to find.
+    """
+    kind = _pool_clause_player(player, node, event)
+    payload: dict[str, object] = {"player": kind}
+    if kind == "target_player":
+        payload["targets"] = {"quantifier": "target", "kind": "player"}
+    return payload
+
+
+def _lower_activate_each_lands_mana_ability(
+    node: ast.ActivateEachLandsManaAbility, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"**Target player activates a mana ability of each land they control.**"
+    (Drain Power, Pygmy Hippo.)
+
+    CR 605: the mana lands in the *named seat's* pool and nowhere else. Nothing
+    is taken here — the taking is :func:`_lower_lose_unspent_mana` beside it,
+    which both cards print as a separate sentence and Pygmy Hippo prints under
+    a different wrapper. Two instructions rather than one fused kind, which is
+    what lets one card offer the pair and the other perform it outright.
+    """
+    return (
+        OracleInstruction(
+            "activate_each_lands_mana_ability", "",
+            _pool_clause_payload(node.player, node, event),
+        ),
+    )
+
+
+def _lower_lose_unspent_mana(
+    node: ast.LoseUnspentMana, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"…**that player loses all unspent mana**." (Drain Power, Mana Short,
+    Pygmy Hippo.)
+
+    CR 500.5's emptying, performed as an effect rather than as the turn-based
+    action at a step boundary. What was lost is recorded (see
+    :data:`oracle_types.MANA_LOST_THIS_WAY`) because both cards printing this
+    ask about it afterwards, and by then the pool is zero.
+    """
+    return (
+        OracleInstruction(
+            "lose_all_unspent_mana", "",
+            _pool_clause_payload(node.player, node, event),
+        ),
+    )
+

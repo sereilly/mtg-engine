@@ -245,8 +245,10 @@ from .board import (
 )
 from .mana import (
     ANY_OTHER_TYPE,
+    ActivateEachLandsManaAbility,
     AddMana,
     AddManaForTappedLand,
+    LoseUnspentMana,
     NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
@@ -594,7 +596,9 @@ __all__ = [
     "PutHandCardsOnLibrary",
     "Scry",
     "AddMana",
+    "ActivateEachLandsManaAbility",
     "AddManaForTappedLand",
+    "LoseUnspentMana",
     "NoteManaSpent",
     "ANY_OTHER_TYPE",
     "ProducesManaInstead",

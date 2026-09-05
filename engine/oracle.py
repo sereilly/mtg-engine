@@ -4772,6 +4772,7 @@ def _derived_static_claims(
     too.
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
+    from .cast_timing import cast_permission_line
     from .cost_modifiers import cost_modifier_claims_line
     from .cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
@@ -4924,6 +4925,33 @@ def _derived_static_claims(
     # green and printed three sentences.
     if spending_permission_line(oracle_text) is not None:
         claims.append("mana_spending")
+    # "You may cast this spell as though it had flash. If you cast it any time a
+    # sorcery couldn't have been cast, the controller of the permanent it
+    # becomes sacrifices it at the beginning of the next cleanup step."
+    # (Mirage's five-Aura cycle; Necromancy prints it on an enchantment that is
+    # not an Aura when it is cast.) CR 113.6b: the permission functions while
+    # the card is in a hand, and the rider is stamped by the cast path and swept
+    # by the cleanup step — so there is no instruction to produce, on any card
+    # type.
+    #
+    # **The gate that asked this table was Aura-only**, and that is the whole of
+    # what this row fixes. `mixins/stack/casting.py` stamps
+    # `CAST_AT_INSTANT_SPEED` off `sacrifices_at_cleanup_if_cast_at_instant_speed`
+    # with no type test at all, and `cast_timing.casts_at_instant_speed` reads
+    # the permission off any card's text — but the only reader crediting the
+    # sentence was `auras._aura_line_claimed`, which runs for a card printing an
+    # `Enchant <noun>` line. A card whose enchant clause is inside quotes, or
+    # that has none, was enforced correctly and credited with nothing: the
+    # false-negative half of the gate/dispatch split this whole function exists
+    # to close.
+    #
+    # Claimed line by line rather than over the whole text, and by the same
+    # all-or-nothing reader the Aura gate asks — the permission without the
+    # rider beside it is a strictly better card than the one printed.
+    if any(
+        cast_permission_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("cast_timing")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an
@@ -5086,6 +5114,27 @@ def _effect_handler_kinds() -> frozenset[str]:
 _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 
 
+#: The ``derived_static_rule`` claims that are **not** evidence a permanent does
+#: anything. Each says *when* something may be done with the card, so it is a
+#: clause of an ability or of a cast rather than something the permanent does —
+#: and when no line of the card is readable, a rule about when is a rule about
+#: nothing.
+#:
+#: * ``activation_restrictions`` — "Activate only during your upkeep."
+#:   Amulet of Quoz was reported supported on exactly that evidence, with the
+#:   whole of its card in one unreadable ability.
+#: * ``cast_timing`` — "You may cast this spell as though it had flash. If you
+#:   cast it any time a sorcery couldn't have been cast, …" Necromancy is the
+#:   Amulet of Quoz of this row: two printed lines, the first of them this
+#:   permission and the second an enters trigger the compiler refuses in full.
+#:   Credited as behaviour it read **supported** while reanimating nothing —
+#:   the debt Mirage's promotion rehearsal found on eleven cards, arriving from
+#:   the gate rather than from a whitelist word.
+_TIMING_ONLY_CLAIMS: frozenset[str] = frozenset({
+    "activation_restrictions", "cast_timing",
+})
+
+
 def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
     """Whether this card-level instruction is evidence the permanent does
     *nothing* on its own.
@@ -5095,19 +5144,14 @@ def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
 
     A ``derived_static_rule`` normally is behaviour — Howling Mine's draw-step
     modifier, Winter Orb's untap restriction, Gloom's cost tax — and thirty
-    shipped cards have nothing else. **One claim is the exception**, and it is
-    not a special case so much as the same rule read carefully: an
-    ``activation_restrictions`` claim says *when an ability may be activated*,
-    so it is a clause of that ability rather than something the permanent does.
-    When no ability of the card is readable, the restriction is a rule about
-    nothing. Amulet of Quoz was reported supported on exactly that evidence,
-    with its whole card in one unreadable ability.
+    shipped cards have nothing else. The exceptions are
+    :data:`_TIMING_ONLY_CLAIMS`, which says why each is one.
     """
     if instruction.kind == "spell_pattern":
         return True
     return (
         instruction.kind == "derived_static_rule"
-        and instruction.value == "activation_restrictions"
+        and instruction.value in _TIMING_ONLY_CLAIMS
     )
 
 
@@ -5579,7 +5623,20 @@ def _compile_card_oracle(
                 normalized_text,
             )
 
-        if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:
+        # **Timing evidence alone is not support.** A card whose only
+        # instruction says *when* it may be cast or activated
+        # (:data:`_TIMING_ONLY_CLAIMS`) has nothing anyone could point at as the
+        # card working — the branch above already refuses an artifact or
+        # enchantment on exactly that reading, and this is the same rule at the
+        # gate every other type reaches. Necromancy is the card that found it:
+        # its casting permission is implemented and enforced, its whole second
+        # line is not, and credited here it read supported while reanimating
+        # nothing.
+        if (
+            any(not _carries_no_behaviour(i) for i in instructions)
+            or any(a.supported for a in activated_abilities)
+            or triggered_abilities
+        ):
             return OracleProgram(
                 True,
                 "spell_pattern",

@@ -66,10 +66,12 @@ from .effects import (
     _parse_gets,
     _parse_has,
     _parse_loses,
+    _parse_loses_unspent_mana,
     _parse_mill,
     _parse_skip_step,
     parse_player_looks_at_own_library_top,
     parse_player_separates_your_library_top,
+    _parse_activates_each_lands_mana_ability,
     _parse_player_adds_mana,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
@@ -242,6 +244,17 @@ def parse_subject_verb(
                 stream, _parse_gains(stream, source_spec), source_target
             ), source_target)
         if token.text in ("loses", "lose"):
+            # "…**that player loses all unspent mana**" (Drain Power, Mana
+            # Short), "…**lose all unspent mana**" (Pygmy Hippo, under the
+            # causative above). Read in front of `_parse_loses`, which is about
+            # life and keywords and refused the clause with "expected a keyword
+            # ability" — a message about the wrong half of the verb table.
+            # Non-consuming on refusal, so every other "loses …" keeps its own
+            # reading.
+            if isinstance(source_spec, ast.PlayerRef):
+                drained = _parse_loses_unspent_mana(stream, source_spec)
+                if drained is not None:
+                    return drained
             return _parse_loses(stream, source_spec)
         if token.text in ("wins", "win"):
             return _parse_wins(stream, source_spec)
@@ -249,6 +262,22 @@ def parse_subject_verb(
             return _parse_has(stream, source_spec)
         if token.text in ("adds", "add") and isinstance(source_spec, ast.PlayerRef):
             return _parse_player_adds_mana(stream, source_spec)
+        # "**Target player activates a mana ability of each land they
+        # control.**" (Drain Power.) A seat made to tap out into its own pool,
+        # which is somebody else's board and somebody else's mana — so the
+        # subject is the whole of what the clause is about, and the production
+        # declines without consuming for `_parse_play_with_hand_revealed`'s
+        # reason below: "activate" opens sentences this has no business
+        # claiming.
+        if (
+            token.text in ("activates", "activate")
+            and isinstance(source_spec, ast.PlayerRef)
+        ):
+            tapped_out = _parse_activates_each_lands_mana_ability(
+                stream, source_spec
+            )
+            if tapped_out is not None:
+                return tapped_out
         if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
             return _parse_draw(stream, source_spec)
         if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):

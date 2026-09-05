@@ -54,7 +54,9 @@ from .lowering import (
     _fused_exile_then_controller_life,
     _lower_add_mana,
     _lower_put_exiled_card_into_zone,
+    _lower_activate_each_lands_mana_ability,
     _lower_add_mana_for_tapped_land,
+    _lower_lose_unspent_mana,
     _amount_payload,
     _lower_become_color,
     _lower_cant_be,
@@ -332,6 +334,15 @@ def lower_statement(
         # neither". That seam now walks a sequence's steps, so the nesting is
         # reachable and the filtered event was the wrong question.
         return _lower_add_mana_for_tapped_land(statement, event)
+    if isinstance(statement, ast.ActivateEachLandsManaAbility):
+        # The **unfiltered** event, for `_lower_play_with_hand_revealed`'s
+        # reason above: "defending player" is a fact about the trigger — which
+        # seat the fire site froze — rather than about where in the sentence
+        # the clause sits, and Pygmy Hippo prints it inside a "you may have …"
+        # offer, where `dispatch_event` is already None.
+        return _lower_activate_each_lands_mana_ability(statement, event)
+    if isinstance(statement, ast.LoseUnspentMana):
+        return _lower_lose_unspent_mana(statement, event)
     if isinstance(statement, ast.CreateToken):
         # ``event`` for the P/T back-reference: "its power is equal to that
         # creature's power" is read through the one place that decides where a

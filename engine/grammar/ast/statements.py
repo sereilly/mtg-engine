@@ -113,8 +113,10 @@ from .board import (
     UntapChosenByPaying,
 )
 from .mana import (
+    ActivateEachLandsManaAbility,
     AddMana,
     AddManaForTappedLand,
+    LoseUnspentMana,
     NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
@@ -254,6 +256,7 @@ Effect = Union[
     CantPhaseOut,
     PhaseOut,
     SimultaneousPhasing,
+    ActivateEachLandsManaAbility, LoseUnspentMana,
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageBecomesCounterRemoval,
     RedirectDamage, DoubleCombatDamage,

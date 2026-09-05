@@ -730,6 +730,20 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         for phrase, kind, kind_once, kind_duration, kind_binds in _DELAYED_OPENERS:
             if stream.accept_phrase(*phrase):
                 event, once, duration, binds = kind, kind_once, kind_duration, kind_binds
+                # "…at the beginning of your next main phase **this turn**"
+                # (Pygmy Hippo). CR 603.7b's stated duration printed at the
+                # *end* of the opener rather than in front of it — the window
+                # the leading reader at the top of this function takes from the
+                # other side. It narrows rather than widens: an opener whose
+                # own default waits for its step however many turns away
+                # (`until_it_triggers`) is held to this turn, so a next main
+                # phase that never comes leaves nothing armed.
+                #
+                # Read here rather than as a row of its own, because a row per
+                # opener per window is the table squared, and the words say the
+                # same thing after any of them.
+                if stream.accept_phrase("this", "turn"):
+                    duration = "end_of_turn"
                 break
 
     if event is None:

@@ -33,6 +33,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
+                             MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       _BASE_PT_SET_PERMANENTS,
@@ -163,6 +164,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
+    # "…**that player loses all unspent mana** and you add the mana lost this
+    # way." (Drain Power.) "…**lose all unspent mana**. If you do, … you add an
+    # amount of {C} equal to the amount of mana that player lost this way."
+    # (Pygmy Hippo.) Two records for one step, because the two cards printing
+    # it ask two different questions of the pool that is now empty: which mana
+    # it held, and how much. The dict is primary — it is what an "if you do"
+    # would test — and the count rides beside it so a reader wanting a number
+    # need not know the dict's shape.
+    "lose_all_unspent_mana": (MANA_LOST_THIS_WAY, MANA_LOST_COUNT),
     "flip_coin": "coin_flip",
     # "Target opponent puts the cards from their hand on top of their library.
     # Search that player's library for **that many** cards." (Jester's Mask.)

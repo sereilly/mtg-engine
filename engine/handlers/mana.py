@@ -11,34 +11,139 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
-@effect_handler("drain_target_lands_mana")
-def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    target = context.target
-    card = context.card
-    # Tap each of target's untapped lands and collect the mana they would produce
-    mana_gained: dict[str, int] = {}
-    for perm in game.controlled_by(target):
-        if perm.card.primary_type != "land" or perm.tapped:
-            continue
-        game.become_tapped(perm)
-        if perm.card.produced_mana:
-            sym = perm.card.produced_mana[0].upper()
-        else:
-            symbols = perm.basic_land_mana
-            sym = symbols[0] if symbols else "C"
-        mana_gained[sym] = mana_gained.get(sym, 0) + 1
-    # Drain any existing unspent mana from target's pool too
-    for sym in ("W", "U", "B", "R", "G", "C"):
-        pool_amount = target.mana_pool.get(sym, 0)
-        if pool_amount > 0:
-            mana_gained[sym] = mana_gained.get(sym, 0) + pool_amount
-            target.mana_pool[sym] = 0
-    # Add all drained mana to caster
-    for sym, amount_gained in mana_gained.items():
-        caster.mana_pool[sym] = caster.mana_pool.get(sym, 0) + amount_gained
-    total = sum(mana_gained.values())
-    game.log.append(f"{card.name} drained {total} mana from {target.name}")
+#: Which seats a pool clause's printed subject names, resolved through the one
+#: resolver that already answers every printed player word in this engine.
+#: ``_offered_seats`` is named for offers because that is where it started; the
+#: question it answers — "which seat does this word name, given what the fire
+#: site froze?" — is the same one here, and a private copy is how the two would
+#: come to disagree about "defending player" after a combat has moved on.
+def _pool_clause_seats(game: Game, context, actor: str) -> list[int]:
+    """The seats named by ``activate_each_lands_mana_ability`` /
+    ``lose_all_unspent_mana``'s ``player`` payload."""
+    from .control_flow import _offered_seats
+
+    if actor in ("target_player", "that_player"):
+        # A spell's own target. Checked rather than handed to the resolver's
+        # fallback, which indexes ``context.target`` unconditionally and raises
+        # on a resolution whose target is gone (CR 608.2b leaves the object on
+        # the stack, but a handler reached any other way would still be asked).
+        chosen = context.target
+        if chosen not in game.players or chosen.lost:
+            return []
+        return [game.players.index(chosen)]
+    return _offered_seats(game, actor, context)
+
+
+@effect_handler("activate_each_lands_mana_ability")
+def activate_each_lands_mana_ability(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"**Target player activates a mana ability of each land they control.**"
+    (Drain Power.) "…you may have **defending player activate a mana ability of
+    each land they control**…" (Pygmy Hippo.)
+
+    CR 605.1a, performed by the named seat: the mana goes into **their** pool
+    and this clause takes nothing. Every land goes through
+    ``Game.tap_land_for_mana``, the one seam that runs a land's *compiled* mana
+    ability — so Mishra's Workshop makes {C}{C}{C} and a dual makes what its
+    printed clause says, where reading Scryfall's ``produced_mana`` summary
+    (what the fused handler this replaced did) makes exactly one mana of
+    whichever symbol happens to be printed first.
+
+    **Addressed by id, not by slot.** The loop taps lands one at a time and a
+    tap announces CR 701.26a's event, so anything may be on the stack by the
+    next iteration; a name would find the first land of that name, which after
+    the first tap is a tapped one.
+
+    **Which mana a land that offers a choice makes is the seat's decision, and
+    this takes its first printed symbol.** A real prompt is one decision per
+    land, mid-resolution, before the "if you do" behind it may run — a round of
+    its own (ROADMAP, Known gaps). The mana is emptied by the clause beside
+    this one on both cards that print it, so the colour is visible only on
+    Drain Power, where it is exactly the choice the handler this replaced also
+    made.
+    """
+    seats = _pool_clause_seats(game, context, str(instruction.payload.get("player")))
+    if not seats:
+        game.log.append(f"{context.card.name} named no player to tap out")
+        return True, "resolved"
+    for seat in seats:
+        land_ids = [
+            game.permanent_id_of(perm)
+            for perm in game.controlled_by(seat)
+            if perm.card.primary_type == "land" and not perm.tapped
+        ]
+        tapped = 0
+        for land_id in land_ids:
+            land = game.permanent_by_id(land_id)
+            if land is None or land.tapped:
+                continue
+            produced = land.effective_produced_mana or land.basic_land_mana
+            if game.tap_land_for_mana(
+                seat, land.card.name,
+                produced[0].upper() if produced else "C",
+                permanent_id=land_id,
+            ):
+                tapped += 1
+        game.log.append(
+            f"{game.players[seat].name} activated a mana ability of "
+            f"{tapped} land(s)"
+        )
+    return True, "resolved"
+
+
+@effect_handler("lose_all_unspent_mana")
+def lose_all_unspent_mana(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"…**that player loses all unspent mana**." (Drain Power, Mana Short,
+    Pygmy Hippo.)
+
+    CR 500.5's emptying, performed as an effect rather than as the turn-based
+    action at a step boundary; CR 106.4 is what makes "lose" the word for it.
+    Both the pool and the restricted buckets go
+    (``engine/restricted_mana.py`` holds mana that may pay only for certain
+    things — still mana, and still unspent).
+
+    What was lost is recorded **by restriction**, because both cards printing
+    this ask about it afterwards and by then there is nothing to read: Drain
+    Power adds the same mana to its caster, and CR 106.13 — a rule written
+    about that card — keeps every restriction on it; Pygmy Hippo adds that many
+    {C} a whole phase later, out of the scratchpad the delayed ability froze
+    (CR 608.2h).
+    """
+    from ..oracle_types import MANA_LOST_COUNT, MANA_LOST_THIS_WAY
+
+    seats = _pool_clause_seats(game, context, str(instruction.payload.get("player")))
+    # {restriction key or "": {symbol: count}} — see MANA_LOST_THIS_WAY.
+    lost: dict[str, dict[str, int]] = {}
+
+    def _record(restriction: str, symbol: str, amount: int) -> None:
+        bucket = lost.setdefault(restriction, {})
+        bucket[symbol] = bucket.get(symbol, 0) + amount
+
+    for seat in seats:
+        player = game.players[seat]
+        for symbol, amount in list(player.mana_pool.items()):
+            if amount > 0:
+                _record("", symbol, amount)
+            player.mana_pool[symbol] = 0
+        for restriction, bucket in player.restricted_mana.items():
+            for symbol, amount in list(bucket.items()):
+                if amount > 0:
+                    _record(restriction, symbol, amount)
+            bucket.clear()
+        game.log.append(
+            f"{player.name} lost "
+            f"{sum(sum(b.values()) for b in lost.values())} unspent mana"
+        )
+    # Written even when nothing was lost: a record a later sentence reads has
+    # to exist for it to read zero, and a missing key is a sentence reporting
+    # itself resolved having read nothing at all.
+    context.results[MANA_LOST_THIS_WAY] = {k: dict(v) for k, v in lost.items()}
+    context.results[MANA_LOST_COUNT] = sum(
+        sum(bucket.values()) for bucket in lost.values()
+    )
     return True, "resolved"
 
 
@@ -271,6 +376,36 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
     # this delayed ability recorded, frozen into the trigger's context when the
     # ability was created (CR 608.2h). Read before the printed shapes below,
     # which all carry their own number.
+    # "…and you add **the mana lost this way**." (Drain Power.) Not a count and
+    # not a symbol: what is added is the pool an earlier step of this same
+    # effect emptied, colour for colour, out of the record that step wrote.
+    # Read first for `count_from_trigger`'s reason below — the clause carries
+    # no printed quantity for anything under it to find.
+    #
+    # **Restrictions travel with it**, which is CR 106.13 — a rule the CR
+    # writes about this one card: "as are any restrictions or additional
+    # effects associated with any of that mana". So a Mishra's Workshop's
+    # artifacts-only {C}{C}{C} arrives artifacts-only, and the record is keyed
+    # by restriction for exactly this read.
+    lost_key = instruction.payload.get("from_mana_lost")
+    if lost_key:
+        lost = (context.results or {}).get(str(lost_key)) or {}
+        total = 0
+        for restriction, symbols in lost.items():
+            bucket = (
+                caster.mana_pool if not restriction
+                else caster.restricted_mana.setdefault(restriction, {})
+            )
+            for symbol, amount in symbols.items():
+                if amount > 0:
+                    bucket[symbol] = bucket.get(symbol, 0) + amount
+                    total += amount
+        game.log.append(
+            f"{card.name} added {total} mana lost this way"
+            if total else f"{card.name} produced no mana"
+        )
+        return True, "resolved"
+
     count_key = instruction.payload.get("count_from_trigger")
     if count_key:
         symbol = str(instruction.payload.get("symbol", "C"))
@@ -278,7 +413,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         if count:
             caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + count
         game.log.append(
-            f"{card.name} produced {'{' + symbol + '}' * count}"
+            f"{card.name} produced {('{' + symbol + '}') * count}"
             if count else f"{card.name} produced no mana"
         )
         return True, "resolved"

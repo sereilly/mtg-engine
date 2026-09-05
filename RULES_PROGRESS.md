@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**353 / 612 tracked rules covered (57%)** — 2021 tests, 0 unannotated.
+**354 / 612 tracked rules covered (57%)** — 2026 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
 | [105. Colors](#105-colors) | 2/5 | 40% |
-| [106. Mana](#106-mana) | 5/13 | 38% |
+| [106. Mana](#106-mana) | 6/13 | 46% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 5/18 | 27% |
 | [108. Cards](#108-cards) | 2/6 | 33% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
@@ -157,7 +157,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(3 tests, subrules b)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
-- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(4 tests)*
+- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(6 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
 - [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(5 tests)*
 - [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
@@ -166,7 +166,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
 - [ ] **106.11** If an effect would add mana represented by one or more snow mana symbols to a player’s mana pool,...
 - [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(2 tests, subrules a)*
-- [ ] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t...
+- [x] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t... *(1 tests)*
 
 ### 107. Numbers and Symbols
 
@@ -559,7 +559,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa...
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
-- [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(1 tests)*
+- [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(5 tests)*
 - [ ] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci...
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(29 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(31 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(4 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(9 tests, subrules a)*
@@ -704,7 +704,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(5 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(7 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(5 tests, subrules a)*

@@ -464,3 +464,71 @@ def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_
         "kind": "graveyard_creature", "own_graveyard_only": True,
     }
 # --- end LeadA ---
+
+
+# --- VIS W3G5: a negated targeting clause names no cast target ---
+# `line_names_a_cast_target` / `cast_picker_expected` (engine/targeting.py),
+# probed here as behaviour. Imports for this block, kept local so the block is
+# self-contained.
+import pytest as _w3g5_pytest
+
+from engine.targeting import cast_picker_expected as _w3g5_cast_picker_expected
+from engine.targeting import (
+    line_names_a_cast_target as _w3g5_names_a_cast_target,
+)
+
+
+@_w3g5_pytest.mark.parametrize(
+    "line",
+    [
+        # Peace Talks (VIS). The plural is the shape the singular exclusion
+        # missed, and the only reason this card was a picker-sweep finding.
+        "this turn and next turn, creatures can't attack, and players and "
+        "permanents can't be the targets of spells or activated abilities.",
+        # Bartel Runeaxe (LEG) — the singular, which was already excluded.
+        "bartel runeaxe can't be the target of aura spells.",
+        # Anti-Magic Aura (LEA), where the prohibition is one of two clauses.
+        "enchanted creature can't be the target of spells and can't be "
+        "enchanted by other auras.",
+    ],
+)
+def test_a_prohibition_on_being_targeted_names_no_cast_target(line):
+    """CR 115.1a: a spell targets only where its own text says "target". A
+    line saying what *other* objects may not do names nothing its caster
+    picks — in either grammatical number."""
+    assert _w3g5_names_a_cast_target(line) is False
+
+
+def test_the_prohibition_is_erased_from_the_line_not_a_veto_over_it():
+    """The refusal test for the narrowing above.
+
+    Narrowing a probe risks it no longer seeing a card it should see, and the
+    sweep's whole value is the Roots class — a supported card no player could
+    cast. The other five exclusions in `line_names_a_cast_target` are shapes of
+    a *whole line*, so vetoing the line costs nothing; a prohibition is one
+    clause and can share its sentence with a real cast target. Erasing the
+    clause and re-asking is what keeps that line visible; a `search`-and-veto
+    would answer False here and hide the next Roots.
+    """
+    both = (
+        "destroy target creature. it can't be the target of spells this turn."
+    )
+
+    assert _w3g5_names_a_cast_target(both) is True
+    # And the halves, so the assertion above cannot pass for the wrong reason.
+    assert _w3g5_names_a_cast_target("destroy target creature.") is True
+    assert _w3g5_names_a_cast_target(
+        "it can't be the target of spells this turn."
+    ) is False
+
+
+def test_peace_talks_expects_no_cast_picker(set_pool):
+    """The finding itself, as the card rather than as a line: Peace Talks
+    derives no cast spec and no longer expects one, which is what takes
+    `picker_sweep.py --set VIS` to zero."""
+    card = set_pool("VIS")["Peace Talks"]
+    program = compile_card_oracle(card)
+
+    assert _w3g5_cast_picker_expected(card, program) is False
+    assert derive_cast_spec(card, program) is None
+# --- end VIS W3G5 ---

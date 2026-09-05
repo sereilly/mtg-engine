@@ -324,7 +324,6 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
     "sacrifice_creature_for_mana",
     "sacrifice_self_for_mana",
     "channel_life_for_mana",
-    "drain_target_lands_mana",
 })
 
 

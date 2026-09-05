@@ -1407,6 +1407,161 @@ and is the least informative of the five.
 
 Items 1 and 5 are each a round on their own; 2, 3 and 4 are one round together,
 because 3 is unanswerable until 4 records what it asks about.
+**Item 1 landed in wave 3 group 5** — see that round for why crediting it as
+*behaviour* rather than as a claim would have shipped the card doing nothing.
+
+### Wave 3, group 5 — Pygmy Hippo, and the two shipped cards that already had it: 158 -> 159
+
+Two cards briefed as "the two most intricate in the set", one landing. **Every
+one of Pygmy Hippo's five named gaps was a mechanism the repo already had**,
+and it had them in the worst possible shape: fused into two name-keyed handlers
+on cards printed in 1993.
+
+**Drain Power** — "Target player activates a mana ability of each land they
+control. Then that player loses all unspent mana and you add the mana lost this
+way" — was one `card_hooks` entry compiling to one `drain_target_lands_mana`
+handler. **Mana Short** is the same shape one clause smaller. Between them they
+already implemented three of the Hippo's five items; what none of them was, was
+a production. So the round is a decomposition rather than a build:
+
+| Piece | Where it went | Second card |
+| --- | --- | --- |
+| `<player> activates a mana ability of each land they control` | `effects/mana` → `activate_each_lands_mana_ability` | Drain Power |
+| `<player> loses all unspent mana` | `effects/mana` → `lose_all_unspent_mana`, recording what went | Drain Power, Mana Short |
+| `you add the mana lost this way` | `AddMana.mana_lost_in_kind` | Drain Power |
+| `an amount of {C} equal to the amount of mana that player lost this way` | `AddMana.from_mana_lost`, on `count_from_trigger`'s channel | — |
+| `…next main phase **this turn**` | a trailing window on any `_DELAYED_OPENERS` row | — |
+| `you add …` for the ability's own controller | `_parse_player_adds_mana` delegates to `_parse_add_mana` | Drain Power |
+
+**The "If you do" linkage across the delay cost nothing at all**, and that is
+the round's cheapest finding. `create_delayed_trigger` freezes the creating
+effect's whole scratchpad into `captured` (CR 608.2h) and hands it back as both
+the trigger's context and its `captured_results` — so "the amount of mana that
+player lost this way", read a phase later, is the same `count_from_trigger`
+channel Mana Drain has used since it was written. The brief listed it as item 5
+of five.
+
+**What the decomposition bought, beyond the Hippo:**
+
+- **Drain Power had been paying one mana per land.** The fused handler tapped
+  each land with `become_tapped` and credited `produced_mana[0]` — Scryfall's
+  summary of *which symbols* a land can make, which says nothing about how
+  many. Mishra's Workshop prints "{T}: Add {C}{C}{C}" and paid **one**; every
+  storage and filter land in the pool was wrong the same way. Routed through
+  `Game.tap_land_for_mana` the land's compiled ability runs, which is CR 605.1a's
+  own reading of "activates a mana ability".
+- **And it had been laundering restricted mana.** CR 106.13 is a rule the
+  Comprehensive Rules writes about this card by name, and it says the
+  restrictions travel: "as are any restrictions or additional effects associated
+  with any of that mana". The old handler read only `mana_pool` and ignored the
+  buckets entirely, so a Workshop's artifacts-only {C}{C}{C} was simply not
+  taken. The record is keyed by restriction for exactly this read.
+- **`tap_land_for_mana` can be addressed by id.** It took a name and an optional
+  *slot*, because the web layer addresses a permanent by its slot — and a caller
+  walking a whole battlefield has neither: two Forests are one name and
+  `_find_controlled_permanent` answers with the first, which after the first tap
+  is a tapped one. The keyword is additive and the name-and-slot pair is
+  untouched.
+- **One hook retired**, 60 → 59 hooked cards and 66 → 65 entries. Mana Short's
+  survives, for the reason in Known gaps below.
+
+**"You add {C}" was a lowering refusal on a sentence nobody could have written
+correctly.** `subject_verb` routes every `<player> adds …` to
+`_parse_player_adds_mana`, whose node is `AddManaForTappedLand` — and that
+node's recipient table holds "that player" and "its controller" and nothing
+else. So the printed pronoun "you", which means exactly what the bare imperative
+"Add {C}" means, refused at lowering with a message about a
+`land_tapped_for_mana` trigger the card does not print. Two cards in the pool
+print it and both are in this round.
+
+**Necromancy declined again, and item 1 of its bill is now done — carefully.**
+`cast_timing`'s claim was Aura-only (`auras._aura_line_claimed`), which is the
+false-negative half of the gate/dispatch split `_derived_static_claims` exists
+to close: the cast path stamps `CAST_AT_INSTANT_SPEED` with no type test at all.
+Widening it is right and it credits **nine** cards, not the five the Mirage
+cycle has — VIS prints four more (Mystic Veil, Parapet, Relic Ward, Spider
+Climb).
+
+But credited as *behaviour* it made Necromancy **supported**: two printed lines,
+the first this permission and the second an enters trigger the compiler refuses
+in full, and the card compiled green while reanimating nothing — with zero
+hollow lines and full parse coverage, because no instrument can see a line that
+produced no ability part on a card some other line holds up. That is exactly the
+debt Mirage's promotion rehearsal found on eleven cards, arriving from the gate
+instead of from a whitelist word. `_carries_no_behaviour` already had the answer
+for `activation_restrictions` — a clause about *when* is a rule about nothing
+when nothing else is readable — so the two are now `_TIMING_ONLY_CLAIMS`, and
+the final "anything at all" gate reads it as well as the artifact/enchantment
+branch that had it. No shipped card moved.
+
+**Necromancy's remaining bill, re-probed rather than copied.** Items 2–5 stand
+as wave 2 group 3 wrote them, each with the refusal observed again this round:
+
+2. `It becomes an Aura.` — `GrammarError: expected a colour or a creature body
+   after 'becomes'`. Plus the pool-wide `granted ability in quotes` bucket for
+   the quoted enchant clause.
+3. `enchant creature put onto the battlefield with Necromancy` — a *history*,
+   and the stamp it asks about is what item 4 would write.
+4. `Put target creature card from a graveyard onto the battlefield under your
+   control and attach this enchantment to it.` — the reanimation half lowers on
+   its own (`reanimate_creature`, `any_graveyard`, `under_your_control`); fusing
+   the attach is `LoweringError: attach needs one chosen permanent to attach to`.
+5. `When this enchantment leaves the battlefield, that creature's controller
+   sacrifices it.` — parses as a `TriggeredAbilityNode`, then
+   `LoweringError: no handler for another player sacrificing`.
+
+The card's refusal message improved as a side effect: it named "unsupported
+triggered ability" and now names the whole clause.
+
+**Known gaps this round opened, both named rather than hidden:**
+
+- **A forced tap-out does not ask which mana a land makes.** "Activates a mana
+  ability" on a land offering a choice is the *land controller's* decision
+  (CR 601.2b), and the handler takes the first printed symbol — which is what
+  the fused handler it replaces also did, so nothing regressed. A real prompt is
+  one decision per land, armed mid-resolution, with the "if you do" behind it
+  waiting on all of them: a round of its own. It is invisible on Pygmy Hippo,
+  whose mana is emptied before anything could spend it and whose payout is {C}
+  for the *amount*; it is visible on Drain Power.
+- **Mana Short keeps its hook.** Its line is "Tap all lands target player
+  controls and that player loses all unspent mana", and the second half is now a
+  production while the first refuses: `GrammarError: unconsumed text at 'target
+  player controls'`. "All lands **that** player controls" parses and lowers
+  (`tap_all_matching`); the same noun phrase with the quantifier printed does
+  not, and it is a general shape — "Tap all creatures target player controls",
+  "Destroy all lands target player controls" — rather than anything about this
+  card. One noun-phrase production retires the last fused mana handler.
+- **"That player" under a trigger has no pool clause.** `_pool_clause_player`
+  admits it on a spell only, where the target is the antecedent; under a trigger
+  the word names whichever seat the fire site froze, and mapping it is the
+  `lowering/control_flow.py` table an offer's payer already goes through. No
+  card in the pool prints the pair, so the lowering refuses by name.
+
+**A picker false positive, and the narrowing that fixes both readers.**
+`picker_sweep --set VIS` reported Peace Talks — "players and permanents **can't
+be the targets** of spells or activated abilities" — because
+`line_names_a_cast_target`'s shroud exclusion read `can't be the target of`, the
+singular. The plural is the same prohibition and there are two in the pool
+(Peace Talks, and Spectral Guardian's reminder text).
+
+The fix is not a wider veto. The other five exclusions in that probe are shapes
+of a **whole line**, so vetoing the line costs nothing; a prohibition is one
+*clause* and can share a sentence with a real cast target ("Destroy target
+creature. It can't be the target of spells this turn."), which a `search`-and-veto
+would then read as naming nothing — and the next Roots would be invisible. So
+the clause is **erased** and the line re-asked, which is the refusal test that
+went in beside it. The examined set is unchanged at 283 cards, well over the
+ratchet's floor of 200.
+
+**Exit numbers:** `support_report --set VIS` 159/167; `--hollow-lines` 0;
+`parse_coverage --set VIS` 0 unclaimed; `picker_sweep --set VIS` **0**, the
+first clean sweep the set has had.
+
+`oracle_diff`: **12 changed of 2348**, unfiltered — Pygmy Hippo (supported),
+Drain Power (decomposed), Necromancy (refusal text), and nine cards gaining the
+`cast_timing` claim beside what already held them up. No card lost an
+instruction and no shipped card changed what it does, except Drain Power, which
+started doing what it prints.
 
 ## Mirage (MIR) — shipped (335/335, manifest index 13)
 

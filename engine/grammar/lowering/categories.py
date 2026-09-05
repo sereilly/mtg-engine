@@ -711,7 +711,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # A triggered *mana* ability on a land being tapped (CR 605.1b): resolved
     # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
     # stack, because CR 605.4a says a triggered mana ability never uses it.
+    "activate_each_lands_mana_ability": "mana",
     "add_mana_for_tapped_land": "mana",
+    "lose_all_unspent_mana": "mana",
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on
     # one land rather than a production of mana — the same category because

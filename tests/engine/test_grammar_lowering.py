@@ -5245,3 +5245,119 @@ def test_that_name_refuses_where_no_event_named_an_object():
     # name in the first place.
     assert instruction.payload["other_than_event_subject"] is True
     assert "exclude_self" not in instruction.payload
+
+
+# --- VIS W3G5: the mana-pool clauses, and what they refuse ---
+# Three productions decomposed out of two fused card hooks (Drain Power, Mana
+# Short) so Pygmy Hippo could read them. Each refusal below is a way the
+# decomposition could have been wrong quietly.
+import pytest as _w3g5_pytest
+
+from engine.grammar import parse_line as _w3g5_parse
+from engine.grammar.errors import (GrammarError as _W3G5GrammarError,
+                                   LoweringError as _W3G5LoweringError)
+from engine.grammar.lower import lower_ability as _w3g5_lower
+
+
+def _w3g5_kinds(text: str):
+    return [i.kind for i in _w3g5_lower(_w3g5_parse(text))]
+
+
+def test_the_three_pool_clauses_lower_apart():
+    """One sentence each, so the two cards printing them in different orders
+    and under different wrappers compose the same three instructions."""
+    assert _w3g5_kinds(
+        "Target player activates a mana ability of each land they control."
+    ) == ["activate_each_lands_mana_ability"]
+    assert _w3g5_kinds("That player loses all unspent mana.") == [
+        "lose_all_unspent_mana"
+    ]
+
+
+def test_drain_powers_whole_line_is_one_sequence():
+    """The hook this retired covered the printed line; the grammar has to cover
+    the same line, or ``tests/engine/test_card_lines.py`` was the only thing
+    holding the card up."""
+    assert _w3g5_kinds(
+        "Target player activates a mana ability of each land they control. "
+        "Then that player loses all unspent mana and you add the mana lost "
+        "this way."
+    ) == [
+        "activate_each_lands_mana_ability",
+        "lose_all_unspent_mana",
+        "add_mana_from_text",
+    ]
+
+
+def test_the_mana_lost_back_reference_needs_a_step_that_emptied_a_pool():
+    """Both spellings, and the refusal is the same one every back-reference in
+    the lowering makes: with no earlier step recording the number, the clause
+    would add nothing while the card reported itself supported."""
+    with _w3g5_pytest.raises(_W3G5LoweringError):
+        _w3g5_lower(_w3g5_parse("You add the mana lost this way."))
+    with _w3g5_pytest.raises(_W3G5LoweringError):
+        _w3g5_lower(_w3g5_parse(
+            "You add an amount of {C} equal to the amount of mana that player "
+            "lost this way."
+        ))
+
+
+def test_defending_player_needs_an_event_that_froze_a_seat():
+    """CR 506.2's seat is frozen by the combat fire sites and by nothing else.
+    Outside those events the phrase names nobody, and a pool emptied on nobody
+    is a clause that silently does not happen."""
+    with _w3g5_pytest.raises(_W3G5LoweringError):
+        _w3g5_lower(_w3g5_parse(
+            "When this creature enters, defending player loses all unspent mana."
+        ))
+    # …and under the event that does freeze it, the same sentence lowers.
+    assert _w3g5_kinds(
+        "Whenever this creature attacks and isn't blocked, defending player "
+        "loses all unspent mana."
+    ) == ["lose_all_unspent_mana"]
+
+
+def test_the_activation_production_declines_without_eating_the_line():
+    """"Activate" opens sentences this has no business claiming, so the
+    production must refuse *without consuming* — a consuming refusal turns a
+    line another production could read into a parse error that says nothing
+    about what the sentence is."""
+    with _w3g5_pytest.raises(_W3G5GrammarError):
+        _w3g5_parse("Target player activates a mana ability of each creature.")
+    with _w3g5_pytest.raises(_W3G5GrammarError):
+        _w3g5_parse("Target player activates an ability of each land they control.")
+
+
+def test_loses_all_unspent_mana_does_not_shadow_the_other_loses():
+    """The production sits in front of ``_parse_loses``, which is about life and
+    keywords. Non-consuming on refusal, so both of those keep their readings."""
+    assert _w3g5_kinds("Target player loses 2 life.") == ["target_loses_life"]
+    assert _w3g5_kinds("Target creature loses flying until end of turn.") == [
+        "remove_target_keyword_until_eot"
+    ]
+
+
+def test_you_add_is_the_controllers_own_mana():
+    """"**You** add {C}{C}" is the bare imperative with its subject printed, so
+    it is the same production — the tapped-land node has no "you" recipient at
+    all (``_TAPPED_LAND_MANA_RECIPIENTS`` holds "that player" and "its
+    controller"), and every such sentence used to refuse at lowering with a
+    message about a trigger the card does not print."""
+    spelled, = _w3g5_lower(_w3g5_parse("You add {C}{C}."))
+    bare, = _w3g5_lower(_w3g5_parse("Add {C}{C}."))
+
+    assert spelled.kind == bare.kind == "add_mana_from_text"
+    assert spelled.payload["pips"] == bare.payload["pips"] == (("C", 2),)
+
+
+def test_a_delay_narrowed_to_this_turn_keeps_its_event():
+    """The trailing window narrows the *duration* and nothing else — read as a
+    new opener it would need a row per opener per window, and read as part of
+    the event name it would be an event no fire site announces."""
+    windowed, = _w3g5_lower(_w3g5_parse(
+        "At the beginning of your next main phase this turn, you gain 1 life."
+    ))
+
+    assert windowed.payload["event"] == "controllers_next_main_phase"
+    assert windowed.payload["duration"] == "end_of_turn"
+# --- end VIS W3G5 ---

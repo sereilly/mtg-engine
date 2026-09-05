@@ -183,3 +183,73 @@ def test_the_substring_whitelist_stays_empty():
         "the engine implements has an instruction, a claim or an ability to "
         "show for it."
     )
+
+
+# --- VIS W3G5: timing evidence is not support ---
+# `oracle._TIMING_ONLY_CLAIMS`, and the card that made the second entry
+# necessary.
+from engine.card_loader import (load_cards as _w3g5_load,
+                                manifest_set_paths as _w3g5_paths)
+from engine.oracle import compile_card_oracle as _w3g5_compile
+
+
+def test_a_casting_permission_alone_does_not_make_a_card_supported():
+    """Necromancy is the Amulet of Quoz of the ``cast_timing`` claim.
+
+    Its first printed line — "You may cast this spell as though it had flash.
+    If you cast it any time a sorcery couldn't have been cast, …" — is fully
+    implemented and fully enforced (``engine/cast_timing.py``, the cast path's
+    ``CAST_AT_INSTANT_SPEED`` stamp, the cleanup step's sweep), and the gate
+    that credited it was Aura-only. Crediting it pool-wide is right; crediting
+    it as *behaviour* is not, because Necromancy's whole second line — a
+    self-transforming Aura that reanimates a creature — is unimplemented.
+
+    Read as behaviour the card compiled **supported** while reanimating
+    nothing, with zero hollow lines and full parse coverage: the debt Mirage's
+    promotion rehearsal found on eleven cards, arriving from the gate instead
+    of from a whitelist word.
+    """
+    by_name = {c.name: c for c in _w3g5_load(_w3g5_paths(include_measured=True))}
+    program = _w3g5_compile(by_name["Necromancy"])
+
+    assert [i.value for i in program.instructions] == [] or all(
+        i.kind == "derived_static_rule" and i.value == "cast_timing"
+        for i in program.instructions
+    ), program.instructions
+    assert not program.supported, program.reason
+    assert "becomes an Aura" in program.reason, (
+        "the refusal has to name the clause nobody implemented"
+    )
+
+
+def test_the_timing_claims_are_the_only_derived_rules_that_carry_no_behaviour():
+    """The exception list is small on purpose, and each entry earned its place
+    by a card that was reported supported on it alone.
+
+    A claim added here is a claim that stops holding a card up, so the set is
+    asserted rather than left to grow by habit.
+    """
+    from engine.oracle import _TIMING_ONLY_CLAIMS
+
+    assert _TIMING_ONLY_CLAIMS == frozenset({
+        "activation_restrictions", "cast_timing",
+    })
+
+
+def test_the_flash_cycle_is_still_supported_by_what_it_actually_does():
+    """The other direction: withdrawing behaviour credit from the permission
+    must not unsupport the cards that print it beside a real ability. Nine
+    cards in the pool print the sentence and every one of them is held up by
+    its own effect lines."""
+    by_name = {c.name: c for c in _w3g5_load(_w3g5_paths(include_measured=True))}
+    printers = [
+        card for card in by_name.values()
+        if "as though it had flash" in (card.oracle_text or "")
+    ]
+
+    assert len(printers) >= 9, printers
+    unsupported = [
+        card.name for card in printers if not _w3g5_compile(card).supported
+    ]
+    assert unsupported == ["Necromancy"], unsupported
+# --- end VIS W3G5 ---
