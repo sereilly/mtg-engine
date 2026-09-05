@@ -1,9 +1,9 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **1,725** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/5ED/M21, all shipped and all supported) to the full
-release line — **137 sets, 33,594 printings, 26,113 unique cards** per
-`set_progress.json`. Fourteen sets, and the recent arrivals span the whole
+Target: grow the card pool from **2,348** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/M21, all shipped and all supported)
+to the full release line — **137 sets, 33,594 printings, 26,113 unique cards**
+per `set_progress.json`. Seventeen sets, and the recent arrivals span the whole
 range: 4ED and 5ED are pure reprint sets that bought printings rather than
 cards, Ice
 Age brought 346 new ones (the largest addition since Alpha), Fallen Empires

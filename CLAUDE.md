@@ -11,20 +11,24 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
-Alliances (144), Mirage (335), Fifth Edition (434) and Core Set 2021 (285),
-2,181 unique cards, all classified as supported.
-**Sixteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Alliances (144), Mirage (335), Visions (167), Fifth Edition (434) and Core Set
+2021 (285), 2,348 unique cards, all classified as supported.
+**Seventeen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
 smallest work set yet, 102 cards of which every single one was new. Homelands
 is the second set after FEM to bring nothing but new cards — 115 of 115, with
-zero overlap with the 1,610 already here, and Alliances is the **third**: 144
-of 144 new, sharing not one oracle_id with 5ED or M21. **Mirage breaks that
-run** — 313 of its 335 are new and 22 were already here, which makes it the
+zero overlap with the 1,610 already here, Alliances is the **third**: 144
+of 144 new, sharing not one oracle_id with 5ED or M21, and **Visions is the
+fourth and cleanest** — 167 of 167 new, sharing not one oracle_id with *any*
+set in the pool. **Mirage breaks that run** — 313 of its 335 are new and 22 were
+already here, which makes it the
 first set since 4ED whose insert position can move a card's origin. Which is why
-the per-set totals sum to far more than 2,181 — they are printings. Alliances is also the
-first set to reach 100% with **zero name-keyed hooks**, across all 144. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+the per-set totals sum to far more than 2,348 — they are printings. Alliances was the
+first set to reach 100% with **zero name-keyed hooks**, across all 144, and
+**Visions is the second**, across all 167 — which is what took hook reliance
+down to 11.3% of supported cards while the grammar floors rose. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -38,9 +42,9 @@ load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
-67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1% and Mirage
-at 54.9%, and all eleven were promoted to `sets` once every card was, which is
-the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
+at 54.9% and Visions at 59.3%, and all twelve were promoted to `sets` once every
+card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -62,8 +66,9 @@ ingested set goes there first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
 went in at index 4, Legends at index 6, The Dark at index 7, Fallen Empires at
-index 8, Fourth Edition at index 9, Fifth Edition at index 12 and Mirage at
-index 13 — the last of those pushing 5ED along to 14 — each *between*
+index 8, Fourth Edition at index 9, Fifth Edition at index 12, Mirage at
+index 13 and Visions at index 14 — the last two each pushing 5ED along, to 14
+and then 15 — each *between*
 the sets it was printed between rather than being appended — `CardDefinition.original_printing` is the first entry in
 `printings`, so appending would have left the 19 cards Antiquities shares with
 Revised reading `3ed`, and Golgothian Sylex ("each nontoken permanent with a
