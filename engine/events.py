@@ -463,6 +463,34 @@ def _cast_narrowing_admits(
     return True
 
 
+@event_filter("revealed_drawn_card")
+def _revealed_drawn_card_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever you reveal **a basic land card** this way, draw a card." (Rowen.)
+
+    Two narrowings, and both are printed. "**You**" is the ability's controller,
+    so a Rowen on one battlefield does not fire on the other seat's reveal — the
+    announcement is already scoped to the drawing player, and this compares it
+    against the seat that controls the source (CR 109.5). And the noun phrase
+    describes the *card* that was revealed, which is a card in a hand rather
+    than a permanent, so it goes through the card matcher exactly as a cast
+    trigger's does.
+    """
+    card = event.subject
+    if card is None or not hasattr(card, "type_line"):
+        return False
+    drawer = event.payload.get("event_subject_player")
+    if drawer != game.players.index(_controller_of(game, permanent)):
+        return False
+    described = trig.condition.payload.get("revealed_filter")
+    if not described:
+        return True
+    from .handlers._common import _card_matches_filter
+
+    return _card_matches_filter(card, dict(described))
+
+
 @event_filter("you_cast_spell", "enchantment_cast", "you_cast_first_spell_each_turn")
 def _controller_cast_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

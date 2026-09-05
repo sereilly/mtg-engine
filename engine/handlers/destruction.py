@@ -1037,6 +1037,45 @@ def destroy_bound_permanent(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("destroy_event_subject")
+def destroy_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a Djinn or Efreet enters, **destroy it**. It can't be
+    regenerated." (Suleiman's Legacy.)
+
+    The victim is the object the *trigger's own event* was about, carried by id
+    in the trigger's context (CR 603.10 — the ability uses the information the
+    game had when it triggered, and by resolution an index is not an identity).
+    Nothing is chosen: the card printed no target, so this cannot ride the
+    targeted destroy, which would raise a picker for a choice CR 603.3d says was
+    never offered and then destroy whatever the resolution context held.
+
+    No re-check of the printed noun. The event's filter already decided that
+    this permanent is what the trigger was about; asking again at resolution
+    would let a Djinn that stopped being one between the two escape a destroy
+    the rules have already aimed at it.
+
+    Through ``_destroy_swept_permanents``, the seam every sibling here uses, so
+    "it can't be regenerated" is this handler's ``bypass_regeneration`` rather
+    than a second reading of CR 701.19c. A permanent already gone is destroyed
+    by nothing, which is CR 608.2b doing as much as it can.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    seat = game.controller_index_of(victim) if victim is not None else None
+    if victim is None or seat is None:
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    destroyed = game._destroy_swept_permanents(
+        game.players[seat],
+        lambda candidate: candidate is victim,
+        allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+    )
+    if destroyed:
+        game.log.append(f"{context.card.name} destroyed {victim.card.name}")
+    return True, "resolved"
+
+
 @effect_handler("exile_bound_permanent")
 def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…**Exile it** at the beginning of the next end step." (Zirilan of the

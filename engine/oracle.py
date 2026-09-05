@@ -911,6 +911,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # turn, announced by the draw sweep in check_state_based_actions off the
     # cards_drawn_this_turn record every draw path already feeds.
     ("draws_second_card",           r"whenever you draw your second card each turn"),
+    # "Whenever you reveal **a basic land card** this way, draw a card."
+    # (Rowen.) "This way" is the reveal the card's own first sentence asks for —
+    # "reveal the first card you draw each turn" — which is why the condition
+    # names the *draw* reveal and not reveals in general: a search that reveals
+    # its finds is a different event, and firing on one would be a card nobody
+    # printed. The noun phrase is payload (`engine/draw_reveals.py` holds the
+    # static half), so a card printing "a creature card" needs no code.
+    # The noun "card" is consumed literally rather than captured: a reveal is
+    # always of a card (CR 701.16a), and `subject_filter_payload` reads a
+    # *permanent's* noun phrase and refuses the word — so leaving it inside the
+    # group refused the whole condition and left the trigger unclassified.
+    ("revealed_drawn_card",
+     r"whenever you reveal (?P<revealed_subject>an? [^,]+) card this way"),
     # "**Whenever** there are four or more tide counters on this creature, …"
     # (Homarid, Tidal Influence); "**When** there are four or more page
     # counters on this artifact, …" (Mazemind Tome). CR 603.8's *state*
@@ -1045,6 +1058,14 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # so **every** event is readable under both printed words. The hand-copied
     # subset was why Time Elemental's "when this creature attacks or blocks" —
     # a condition already in the whenever table, already dispatched — refused.
+    # CR 700.4: "dies" means "is put into a graveyard from the battlefield",
+    # so Brood of Cockroaches' long spelling is this condition and not a second
+    # one. Above the bare row rather than beside it, because that row's `.+`
+    # would swallow the whole clause on any line that happened to end in
+    # "dies" — and both front ends carry the wording, since a condition only one
+    # of them reads leaves the other refusing the effect behind it.
+    ("dies",
+     r"when this creature is put into your graveyard from the battlefield"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is
@@ -3765,6 +3786,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if hand_size_line(normalized):
         return True
+    # "Reveal the first card you draw each turn." (Rowen.) Asked of the reader
+    # the draw seam carries it out with, so what is claimed and what is done are
+    # one table.
+    from .draw_reveals import reveals_first_draw_line
+
+    if reveals_first_draw_line(normalized):
+        return True
     # "Remove this card from your deck before playing if you're not playing for
     # ante." (Tempest Efreet.) Not an ability at all — CR 113.6a, an instruction
     # that functions outside the game — and its enforcement site is deck
@@ -4571,9 +4599,56 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
-    return expand_conjoined_trigger_lines(
+    return expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
         expand_equip_lines(expand_modal_activated_lines(oracle_text))
-    )
+    ))
+
+
+#: "Reveal the first card you draw each turn. **Whenever** you reveal a basic
+#: land card this way, draw a card." (Rowen.) A static ability and a triggered
+#: one printed in a single paragraph, which is CR 113.3's "a card's abilities"
+#: rather than one ability with two sentences.
+#:
+#: The gate is what makes the split safe, and it is deliberately not "a sentence
+#: that begins a trigger word": the pool holds two spells whose second sentence
+#: opens the same way and is a *delayed* ability the first sentence creates —
+#: Glyph of Life's "choose target Wall creature. Whenever that creature is dealt
+#: damage…" and Song of Blood's "mill four cards. Whenever a creature attacks
+#: this turn…". Splitting either would take the second half away from the
+#: resolution that has to create it. So the first sentence must be a **static
+#: ability the engine already implements in full**, asked of the same derivation
+#: tables the support gate asks — which no imperative answers.
+_STATIC_THEN_TRIGGER_LINE = re.compile(
+    r"^(?P<static>[^.]+\.) (?P<trigger>(?:Whenever|When|At) .+)$"
+)
+
+
+def expand_static_then_trigger_lines(oracle_text: str) -> str:
+    """*oracle_text* with a static-then-trigger paragraph rewritten as two lines.
+
+    The ``expand_conjoined_trigger_lines`` move one shape over: from here on the
+    grammar, the condition table, the parse-coverage census and the hook census
+    all read two ordinary lines that already work, and none of them learns a
+    second shape.
+
+    The safety is the gate above plus the full-consumption invariant: a split
+    that produced a sentence the grammar cannot read leaves the card unsupported
+    naming the line, which is the loud direction. What it must never do is
+    quietly rewrite a line that was not this shape.
+    """
+    if not oracle_text:
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        match = _STATIC_THEN_TRIGGER_LINE.match(line.strip())
+        static = match.group("static").strip() if match else ""
+        if not match or not _derived_static_claims(static, static.lower().rstrip("."), None):
+            out.append(line)
+            continue
+        out.append(static)
+        out.append(match.group("trigger"))
+    return "\n".join(out)
+
 
 def expand_card_lines(card) -> list[str]:
     """*card*'s printed lines after every rewrite :func:`expand_ability_lines`
@@ -4679,6 +4754,16 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(LETHAL_DAMAGE_CLAIM)
+    # "Reveal the first card you draw each turn." (Rowen.) The draw seam reads
+    # the permanent's own text on every draw, so there is no instruction to
+    # point at — and on a card whose static half is only this sentence, no
+    # instruction means it reports unsupported however well the reveal works.
+    from .draw_reveals import reveals_first_draw_line
+
+    if any(
+        reveals_first_draw_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("draw_reveals")
     # Extra land plays (Fastbond). The land-drop path derives the allowance from
     # the permanent's own text, so the gate has to ask the same table — a
     # wording the table cannot read must make the card unsupported rather than

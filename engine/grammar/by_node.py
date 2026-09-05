@@ -20,10 +20,12 @@ a floor.
 from __future__ import annotations
 
 from . import ast
-from .lowering import (_lower_produces_mana_instead, _lower_spend_mana_as_though,
+from .lowering import (_lower_discard, _lower_exile_entire_library, _lower_mill,
+                       _lower_produces_mana_instead, _lower_spend_mana_as_though,
                        _lower_change_land_type, _lower_change_supertype,
                        _lower_gain_type, _lower_attack_as_though,
                        _lower_assigns_no_combat_damage, _lower_attacking_doesnt_tap,
+                       _lower_attacks_this_turn_if_able,
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
                        _lower_waive_shroud, _lower_change_target, _lower_counter_spell,
                        _lower_create_emblem, _lower_create_copy_token,
@@ -47,6 +49,7 @@ from .lowering import (_lower_produces_mana_instead, _lower_spend_mana_as_though
                        _lower_pump, _lower_cant_phase_out,
                        _lower_land_type_swap,
                        _lower_simultaneous_phasing,
+                       _lower_simultaneous_untap_and_tap,
                        _lower_put_on_library_bottom,
                        _lower_put_graveyard_top_on_library_bottom,
                        _lower_put_on_library_top, _lower_regenerate, _lower_reveal_top,
@@ -121,11 +124,11 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.UpkeepDamageUnlessCost: _lower_upkeep_damage_unless_cost,
     ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
     ast.TapOrUntap: _lower_tap_or_untap,
+    ast.SimultaneousUntapAndTap: _lower_simultaneous_untap_and_tap,
     ast.Attach: _lower_attach,
     ast.CountObjects: _lower_count_objects,
     ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
-    ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
     ast.MillUntil: _lower_mill_until,
     ast.Scry: _lower_scry,
     ast.ProducesManaInstead: _lower_produces_mana_instead,
@@ -192,6 +195,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.WinGame: _lower_win_game,
     ast.AttackAsThough: _lower_attack_as_though,
     ast.AssignsNoCombatDamage: _lower_assigns_no_combat_damage,
+    ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
     ast.AttackingDoesntTap: _lower_attacking_doesnt_tap,
     ast.ChooseTarget: _lower_choose_target,
     ast.WaiveShroud: _lower_waive_shroud,
@@ -199,4 +203,38 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.PutSourceIntoZone: _lower_put_source_into_zone,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
+}
+
+
+#: The same registry one argument wider: a node whose lowering needs the
+#: **firing event** and nothing else. "That player puts the cards in their hand
+#: on the bottom of their library" (Teferi's Puzzle Box) names the seat the fire
+#: site froze, so the node cannot answer on its own — but the lowering still
+#: *decides* nothing, which is the line :data:`_BY_NODE_TYPE` above is drawn on.
+#: A row here rather than a branch in ``lower_statement``'s chain for that
+#: table's reason: a registry that grows every time a card lands is the half
+#: that moves out of the dispatcher.
+#:
+#: Nine branches of that chain are already exactly ``return _lower_x(statement,
+#: event)`` — Discard, Mill, ExileEntireLibrary, PlayWithHandRevealed,
+#: AddManaForTappedLand, PlayerGetsCounters, UntapChosenByPaying,
+#: RevealHandAndChoose, LookTopPick. Each is a row this table could hold; they
+#: are left where they are because moving a branch nobody is changing is churn,
+#: and the next round that touches one should bring it across.
+#:
+#: Read after :data:`_BY_NODE_TYPE` and before the chain, and disjoint from both
+#: for that table's reason: a class in two tables would be dispatched by
+#: whichever was consulted first, which is not a fact anyone should have to look
+#: up.
+_BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
+    # "…**that player** exiles all cards from their library" (Thought Lash),
+    # "…**that player** mills a card" (Reef Pirates), "…**that player**
+    # discards a card" (Anvil of Bogardan): each names the seat the fire site
+    # froze. All three were branches of the chain saying exactly this.
+    ast.Discard: _lower_discard,
+    ast.ExileEntireLibrary: _lower_exile_entire_library,
+    ast.Mill: _lower_mill,
+    # "…**that player** puts the cards in their hand on the bottom of their
+    # library in any order, then draws that many cards" (Teferi's Puzzle Box).
+    ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
 }

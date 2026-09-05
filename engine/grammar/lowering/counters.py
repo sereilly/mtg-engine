@@ -941,11 +941,12 @@ def _lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     announcement froze — the same split ``destroy_all_matching`` already makes
     of the same two words.
     """
-    if not is_pt_counter(node.counter):
-        raise LoweringError(
-            f"no handler sweeps a {node.counter} counter onto a described set",
-            node=node,
-        )
+    # A named counter ("put a **rust** counter on each artifact target opponent
+    # controls", Corrosion) is the same sweep one counter kind over: the handler
+    # places it through `engine/named_counters.py` where a P/T pair goes through
+    # `place_pt_counters`, and nothing else about the sentence changes. The
+    # refusal that used to stand here was about the *placer* rather than about
+    # the sentence, so it is gone rather than widened.
     if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
         raise LoweringError("a swept counter count is a printed number", node=node)
     described = _filter_payload(node.subject.filter)

@@ -6292,7 +6292,21 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
     much as it can.
     """
     recipient = instruction.payload.get("recipient")
-    player = context.caster if recipient == "caster" else context.target
+    if recipient == "caster":
+        player = context.caster
+    elif recipient == "event_subject_player":
+        # "At the beginning of each player's draw step, **that player** puts the
+        # cards in their hand on the bottom of their library." (Teferi's Puzzle
+        # Box.) The seat the fire site froze (CR 603.10), not the source's
+        # controller and not `context.target` — a trigger that chose nothing
+        # leaves whatever the resolution was already carrying there, which is
+        # the wrong hand on every draw step but one. Through the one reader
+        # every "that player" in this package goes through, so the phrase has
+        # one answer.
+        seat = frozen_that_player_seat(game, context)
+        player = None if seat is None else game.players[seat]
+    else:
+        player = context.target
     if player is None or player not in game.players:
         game.log.append(f"{context.card.name}: no player to put cards back")
         return True, "resolved"
@@ -6315,9 +6329,11 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
     game.arm_pending_choice(
         "hand_to_library", game.players.index(player), count=actual,
         # "…both on top of your library **or both on the bottom**" (Dream
-        # Cache). Carried onto the prompt so what the player is offered and
+        # Cache), "…on **the bottom** of their library in any order" (Teferi's
+        # Puzzle Box). Carried onto the prompt so what the player is offered and
         # what an answer is checked against are one rule: without the key the
-        # resolver refuses a bottoming answer outright.
+        # resolver refuses a bottoming answer outright, and with the wrong one
+        # it would let a Puzzle Box be answered onto the top.
         **({"destination": instruction.payload["destination"]}
            if instruction.payload.get("destination") else {}),
     )

@@ -65,6 +65,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
+    # "…each artifact **with mana value less than or equal to the number of
+    # rust counters on it**" (Corrosion). Two characteristics of the *same*
+    # object compared against each other, both read off the permanent being
+    # tested, so the pure matcher answers it exactly as it answers
+    # ``mana_value``. Here rather than merely tested, for ``any_classes``'
+    # reason: the key set is what a compiler admits a narrowed line on, and
+    # without the word the sweep would be refused outright.
+    "mana_value_at_most_counters",
     "nontoken", "named", "supertypes",
     # "…with **a name originally printed in the Homelands expansion**"
     # (Apocalypse Chime). A fact about the card, read off

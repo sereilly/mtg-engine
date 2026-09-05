@@ -2751,6 +2751,16 @@ class GameHelpersMixin:
         # entered is part of that (CR 611.3a).
         emit(
             self, "matching_permanent_enters", subject=permanent,
+            # "Whenever a Djinn or Efreet enters, **destroy it**." (Suleiman's
+            # Legacy.) The permanent the event was about, frozen by id for the
+            # reason the power beside it is frozen: the trigger resolves after
+            # the entry, and by then an index is not an identity (CR 400.7) and
+            # the permanent may have moved. Under the key every "that <noun>"
+            # reading in the engine already goes through, so a fire site taught
+            # to freeze its subject reaches all of them at once — and recorded
+            # on every entry for `entering_power`'s reason: one integer, against
+            # a fire site that would have to know which cards care.
+            event_subject_permanent_id=permanent.permanent_id,
             # "…deals damage equal to **that creature's** power" (Terror of the
             # Peaks). Frozen here rather than read at resolution: the trigger
             # resolves after the entry, and by then the creature may have been

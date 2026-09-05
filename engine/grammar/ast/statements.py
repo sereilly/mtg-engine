@@ -108,6 +108,7 @@ from .board import (
     Tap,
     TapOrUntap,
     DoesntUntapNextStep,
+    SimultaneousUntapAndTap,
     Untap,
     UntapChosenByPaying,
 )
@@ -182,6 +183,7 @@ from .stack import (
 )
 from .combat import (
     AssignsNoCombatDamage,
+    AttacksThisTurnIfAble,
     AttackingDoesntTap,
     BlockCountGrant,
     CantBe,
@@ -234,6 +236,7 @@ Effect = Union[
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, ReturnSelfInsteadOfUntapping,
     Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
+    SimultaneousUntapAndTap,
     DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, RebalanceLands, Attach, ExchangeControl,
     ExchangeGreatestManaValue,
@@ -271,6 +274,7 @@ Effect = Union[
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
     AssignsNoCombatDamage,
+    AttacksThisTurnIfAble,
     RemoveFromCombat, BecomeBlocked, ChooseBlocksForDefenders,
     ReassignBlockersBetweenAttackers,
     ChangeText, GainControl, BidLifeForControl, RawEffect,

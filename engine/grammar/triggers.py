@@ -714,6 +714,22 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # player" (Feline Sovereign). Counted rather than quantified, which is
         # what the plural subject reading is for — and read before the
         # subject-led table below, whose productions expect the phrase to lead.
+        # "Whenever **you reveal a basic land card this way**, draw a card."
+        # (Rowen.) The subject is the player and the noun phrase is the *card*
+        # revealed, so neither the phrase table (fixed words) nor the
+        # subject-led table (the phrase leads) can read it. "This way" is
+        # required and is the whole narrowing: it names the reveal the card's
+        # own first sentence asks for — see `engine/draw_reveals.py` — where a
+        # bare "whenever you reveal a card" would fire on a search, a scry and
+        # a hand reveal too.
+        reveal_mark = stream.mark()
+        if stream.accept_phrase("you", "reveal"):
+            revealed = parse_subject_filter_at(stream)
+            if revealed is not None and stream.accept_phrase("this", "way"):
+                return ast.TriggerEvent(
+                    "revealed_drawn_card", "whenever", subject=revealed
+                )
+        stream.reset(reveal_mark)
         batch_mark = stream.mark()
         if stream.accept_phrase("one", "or", "more"):
             batched = parse_subject_filter_at(stream, plural=True)
@@ -769,6 +785,22 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         return None
     if stream.accept_word("when"):
         if accept_event_phrase(stream, ("this", "creature", "dies")):
+            return ast.TriggerEvent("dies", "when")
+        # CR 700.4: "dies" *means* "is put into a graveyard from the
+        # battlefield", so Brood of Cockroaches' long spelling is the same
+        # event and not a second one. "Your" graveyard is not a narrowing
+        # either — CR 404.1 sends a permanent to its owner's graveyard, and the
+        # subject here is the ability's own source, so the possessive can only
+        # ever be its controller's on a card that is also its owner's.
+        #
+        # Read before the state-trigger reader below for the same reason every
+        # long phrase in this file is read before a short one: nothing else
+        # opens on these words, and a production that got there first would
+        # strand the tail.
+        if accept_event_phrase(stream, (
+            "this", "creature", "is", "put", "into", "your", "graveyard",
+            "from", "the", "battlefield",
+        )):
             return ast.TriggerEvent("dies", "when")
         state = _parse_state_trigger_event(stream, "when")
         if state is not None:

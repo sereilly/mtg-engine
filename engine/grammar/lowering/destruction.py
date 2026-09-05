@@ -27,6 +27,7 @@ from ._common import (describe_independent_target_roles, _describe_several_targe
                       _names_several_targets, _restrictions_beyond,
                       is_mana_value_x)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS,
+                      _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       _DELAYED_AGENT_EVENTS,
                       binds_block_pair, names_attached_permanent,
@@ -370,6 +371,32 @@ def _lower_destroy(
         if node.no_regen:
             self_payload["bypass_regeneration"] = True
         return (OracleInstruction("destroy_self", "", self_payload),)
+
+    # "Whenever a Djinn or Efreet enters, **destroy it**." (Suleiman's Legacy.)
+    # A bare pronoun that `rebinding.rebind_pronoun_to_event_subject` has already
+    # pointed at the trigger's own subject — which is what makes the filter
+    # non-source here, and so what tells this apart from the `_is_source` branch
+    # above: an "it" the rebinder left alone is still the ability's own source
+    # and is destroyed by `destroy_self`.
+    #
+    # Its own kind rather than the targeted destroy, for `destroy_self`'s and
+    # `destroy_bound_permanent`'s reason: the card offered no choice (CR 603.3d),
+    # so routing it through the picker would ask for one and then destroy
+    # whichever permanent the resolution context happened to carry.
+    #
+    # Admitted only under an event whose fire site freezes the object, because
+    # everywhere else the pronoun has no referent at all.
+    if spec.quantifier == "it" and not spec.filter.is_source:
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"it\" names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        subject_payload: dict[str, object] = {}
+        if node.no_regen:
+            subject_payload["bypass_regeneration"] = True
+        return (OracleInstruction("destroy_event_subject", "", subject_payload),)
 
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was

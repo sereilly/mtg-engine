@@ -202,6 +202,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever you activate a loyalty ability of a chandra planeswalker"
     ),
     "draws_second_card": "whenever you draw your second card each turn",
+    # Rowen. "This way" names the reveal the card's own static half asks for
+    # (engine/draw_reveals.py), which is what keeps this off a search's or a
+    # scry's reveal.
+    "revealed_drawn_card": "whenever you reveal a basic land card this way",
     "you_gain_life": "whenever you gain life",
     "you_lose_life": "whenever you lose life",
     "you_sacrifice_permanent": "whenever you sacrifice a permanent",

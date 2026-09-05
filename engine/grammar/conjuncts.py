@@ -23,7 +23,8 @@ statement its caller has already parsed, exactly as `delayed` is handed
 
 from . import ast
 from .stream import TokenStream
-from .effects import _parse_damage, _parse_doesnt_untap_next_step
+from .effects import (_parse_attacks_this_turn_if_able, _parse_damage,
+                      _parse_doesnt_untap_next_step)
 
 
 def _with_damage_conjunct(
@@ -110,3 +111,35 @@ def _with_untap_conjunct(
     return ast.Conjunction(
         (statement, _parse_doesnt_untap_next_step(stream, source))
     )
+
+
+def _with_attack_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and attacks this turn if able`` trailing a clause whose subject is a
+    permanent.
+
+    "At the beginning of your upkeep, …, this creature deals 3 damage to you
+    **and attacks this turn if able**." (Kookus.) The third tail this module
+    reads and the same shape as the two above: one noun phrase printed once,
+    two things said about it, joined across two effect families that may not
+    import each other — ``effects/damage.py`` and ``effects/combat.py``.
+
+    The verb alone is not enough to commit, exactly as the untap joiner's
+    auxiliary is not: "and attacks" opens a condition ("and attacks each combat
+    if able" is a printed static) as well as this clause, so the production is
+    asked and its refusal rewinds the "and" with it.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    joined = _parse_attacks_this_turn_if_able(stream, source)
+    if joined is None:
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((statement, joined))

@@ -4,9 +4,19 @@ Seven is the rule, not a constant anyone chose, so it lives here with the two
 sentences the pool prints against it rather than as a literal inside the cleanup
 step:
 
-* **"You have no maximum hand size."** (Library of Leng, Reflecting Mirror.) A
-  permission stamped on its controller as the permanent enters — read off
-  ``PlayerState.has_no_max_hand_size``, which ``engine/enter_effects.py`` sets.
+* **"You have no maximum hand size."** (Library of Leng, Reflecting Mirror.)
+  and **"Players have no maximum hand size."** (Anvil of Bogardan.) — one
+  sentence with its scope changed, so one pattern with the scope as payload.
+  Both are *continuous statics* derived here on every read, for the reason the
+  Rack's is: CR 611.3a ends a static ability with its source. The controller
+  form used to be an **entry** effect that stamped
+  ``PlayerState.has_no_max_hand_size`` and nothing ever cleared it, so a
+  destroyed Library of Leng left its controller with no maximum hand size for
+  the rest of the game — the identical bug the two mana-spending permissions
+  beside it were moved out of ``enter_effects`` to fix, and it was the last of
+  that family still stamped. The field survives for an effect that really does
+  set the permission on a player with no permanent behind it, and the
+  battlefield is consulted whether or not it is set.
 * **"The chosen player's maximum hand size is four."** (Cursed Rack.) A
   *continuous* static about a player the permanent chose as it entered, so it is
   derived here on every read rather than stamped: the limit ends when the Rack
@@ -41,6 +51,38 @@ _CHOSEN_PLAYER_LIMIT = re.compile(
 )
 
 
+#: "Players have no maximum hand size." (Anvil of Bogardan) / "You have no
+#: maximum hand size." (Library of Leng, Reflecting Mirror). One sentence whose
+#: scope is the printed subject, so the subject is payload and not a second
+#: pattern — a card printing either wording needs no code.
+_NO_LIMIT = re.compile(r"^(?:(?P<all>players)|you) have no maximum hand size$")
+
+#: What :func:`no_maximum_hand_size_scope` answers: the sentence removes the
+#: limit for everybody, or for the source's controller alone.
+ALL_PLAYERS = "all"
+CONTROLLER = "controller"
+
+
+def _normalized(line: str) -> str:
+    """One printed line as the tables here read it.
+
+    Lowercased, whitespace collapsed, the trailing stop dropped and the typographic
+    apostrophe folded — the same normalization every text-keyed reader in this
+    engine does, spelled once here because two readers in one module is already
+    one copy too many.
+    """
+    text = " ".join((line or "").strip().lower().rstrip(".").split())
+    return text.replace("’", "'")
+
+
+def no_maximum_hand_size_scope(line: str) -> str | None:
+    """Whose maximum hand size *line* removes — :data:`ALL_PLAYERS`, :data:`CONTROLLER`, or None."""
+    match = _NO_LIMIT.match(_normalized(line))
+    if match is None:
+        return None
+    return ALL_PLAYERS if match.group("all") else CONTROLLER
+
+
 def chosen_player_hand_size(line: str) -> int | None:
     """The limit *line* sets on the permanent's chosen player, or None.
 
@@ -48,9 +90,7 @@ def chosen_player_hand_size(line: str) -> int | None:
     text-keyed reader here strips them, so the printed line and the normalized
     one give the same answer.
     """
-    text = " ".join((line or "").strip().lower().rstrip(".").split())
-    text = text.replace("’", "'")
-    match = _CHOSEN_PLAYER_LIMIT.match(text)
+    match = _CHOSEN_PLAYER_LIMIT.match(_normalized(line))
     if match is None:
         return None
     size = match.group("size")
@@ -59,7 +99,10 @@ def chosen_player_hand_size(line: str) -> int | None:
 
 def hand_size_line(line: str) -> bool:
     """Whether one printed line is a hand-size rule this module carries out."""
-    return chosen_player_hand_size(line) is not None
+    return (
+        chosen_player_hand_size(line) is not None
+        or no_maximum_hand_size_scope(line) is not None
+    )
 
 
 def maximum_hand_size(game, player_index: int) -> int | None:
@@ -75,9 +118,21 @@ def maximum_hand_size(game, player_index: int) -> int | None:
         return None
     limit = DEFAULT_MAXIMUM_HAND_SIZE
     for permanent in game.all_permanents():
-        if permanent.metadata.get("chosen_player_index") != player_index:
-            continue
+        chosen = permanent.metadata.get("chosen_player_index") == player_index
+        controlled = None
         for line in (permanent.effective_card.oracle_text or "").splitlines():
+            scope = no_maximum_hand_size_scope(line)
+            if scope == ALL_PLAYERS:
+                return None
+            if scope == CONTROLLER:
+                # Read lazily: `controller_index_of` walks the control seam, and
+                # most permanents print neither sentence.
+                if controlled is None:
+                    controlled = game.controller_index_of(permanent) == player_index
+                if controlled:
+                    return None
+            if not chosen:
+                continue
             size = chosen_player_hand_size(line)
             if size is not None:
                 limit = min(limit, size)
@@ -85,8 +140,11 @@ def maximum_hand_size(game, player_index: int) -> int | None:
 
 
 __all__ = [
+    "ALL_PLAYERS",
+    "CONTROLLER",
     "DEFAULT_MAXIMUM_HAND_SIZE",
     "chosen_player_hand_size",
     "hand_size_line",
     "maximum_hand_size",
+    "no_maximum_hand_size_scope",
 ]

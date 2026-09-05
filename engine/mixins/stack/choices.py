@@ -2063,10 +2063,18 @@ class PendingChoicesMixin:
         # where the card offers it: a bottoming answer on Brainstorm is refused
         # rather than ignored, because ignoring it would put the cards on top
         # while the client believed it had bottomed them.
-        offers_either_end = choice.data.get("destination") == "either_end"
-        if to_bottom and not offers_either_end:
-            return False
-        position = "bottom" if to_bottom else "top"
+        destination = choice.data.get("destination")
+        # "…on **the bottom** of their library in any order." (Teferi's Puzzle
+        # Box.) The card names the end and the player only names the order, so
+        # the answer's ``to_bottom`` says nothing here — read as the offer it is
+        # on Dream Cache, a default-False answer would put the whole hand back
+        # on top, which is the opposite card.
+        if destination == "bottom":
+            position = "bottom"
+        else:
+            if to_bottom and destination != "either_end":
+                return False
+            position = "bottom" if to_bottom else "top"
         player = self.players[choice.player_index]
         cards = [hand[index] for index in chosen]
         # On the bottom the printed order is the order they are named, because

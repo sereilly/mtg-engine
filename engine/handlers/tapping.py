@@ -363,6 +363,64 @@ def _tap_or_untap_all_matching(
     return True, "resolved"
 
 
+@effect_handler("untap_and_tap_matching")
+def untap_and_tap_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sands of Time: "At the beginning of each player's upkeep, that player
+    **simultaneously** untaps each tapped artifact, creature, and land they
+    control and taps each untapped artifact, creature, and land they control."
+
+    Both sets are read off the board **before** either is turned, which is the
+    whole of what "simultaneously" buys (CR 611.2c fixes an effect's set when
+    the effect begins). Done in sequence the untap would run first and the tap
+    sweep would then find every one of those permanents untapped, leaving the
+    board wholly tapped instead of inverted — the card's own printed adverb
+    exists to rule that out, and reading it and then not honouring it is the
+    dropped-rider failure this grammar refuses by construction.
+
+    The seat is the one the fire site froze, exactly as the ordinary sweep
+    beside this reads it: "that player" is whoever's upkeep this is, which is
+    the wrong seat on every upkeep but the source's controller's.
+    """
+    from ..subject_filters import subject_matches
+
+    observer = game.players.index(context.caster) if context.caster in game.players else None
+    untap_filter = dict(instruction.payload.get("untap_filter") or {})
+    tap_filter = dict(instruction.payload.get("tap_filter") or {})
+    # "…each <phrase> **they** control" — the seat the trigger's event named,
+    # rewritten into the relative key the matcher answers, exactly as
+    # `_tap_or_untap_all_matching` rewrites Monsoon's.
+    if "that_player" in (untap_filter.get("controller"), tap_filter.get("controller")):
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
+            return False, "no seat was frozen for 'that player'"
+        observer = frozen
+        for described in (untap_filter, tap_filter):
+            if described.get("controller") == "that_player":
+                described["controller"] = "you"
+
+    def _matching(described: dict) -> list:
+        return [
+            perm for perm in game.all_permanents()
+            if subject_matches(
+                game, perm, described,
+                observer=observer, source=context.source_permanent,
+            )
+        ]
+
+    to_untap = _matching(untap_filter)
+    to_tap = _matching(tap_filter)
+    untapped = [perm for perm in to_untap if game.become_untapped(perm)]
+    tapped = []
+    for perm in to_tap:
+        if game.become_tapped(perm):
+            game._turn_face_up(perm)
+            tapped.append(perm)
+    game.log.append(
+        f"{context.card.name} untapped {len(untapped)} and tapped {len(tapped)} permanent(s)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("tap_all_matching")
 def tap_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     return _tap_or_untap_all_matching(game, instruction, context, make_tapped=True)

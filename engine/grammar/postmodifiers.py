@@ -113,6 +113,16 @@ def _parse_postmodifiers(
         if stream.accept_phrase("your", "opponents", "control"):
             d.controller = "opponent"
             continue
+        # "each creature **each opponent** controls" (Aku Djinn) — the
+        # distributive spelling of the two above. CR 109.5 reads "opponent"
+        # against the ability's controller, and "each opponent" names exactly
+        # the set "your opponents" does, so it is the same filter key rather
+        # than a third one: a quantifier over the seats is not a narrowing of
+        # the objects. Kept beside its siblings so the three spellings of one
+        # scope are read in one place.
+        if stream.accept_phrase("each", "opponent", "controls"):
+            d.controller = "opponent"
+            continue
         # "each creature target opponent controls" (Teferi, Timeless Voyager's
         # −8): the controller is a chosen player — the spell targets the
         # opponent, not the creatures.
@@ -539,6 +549,18 @@ def _parse_postmodifiers(
             # leaving the phrase unmatched would strand "value X" and fail the
             # whole line rather than restricting the noun phrase.
             if stream.accept_phrase("mana", "value"):
+                # "…**less than or equal to the number of rust counters on
+                # it**" (Corrosion). A bound that is a characteristic of the
+                # object being tested rather than a number, which is why it is
+                # its own field: `parse_comparison` reads an `Amount`, and an
+                # amount is answered from the effect's context and not from
+                # whichever permanent the matcher happens to be looking at.
+                # Read before the ordinary comparison, whose "less than" branch
+                # would otherwise consume the words and then fail on "the".
+                counters = _accept_counters_on_it_bound(stream)
+                if counters is not None:
+                    d.mana_value_at_most_counters = counters
+                    continue
                 d.mana_value = parse_comparison(stream)
                 continue
             try:
@@ -919,3 +941,31 @@ def _parse_postmodifiers(
             stream.reset(probe)
             break
         break
+
+
+def _accept_counters_on_it_bound(stream: TokenStream) -> str | None:
+    """``less than or equal to the number of <kind> counters on it`` (Corrosion).
+
+    The counter's name is what comes back; "on **it**" is required, because that
+    word is the whole difference between this bound and a count of counters on
+    the ability's *source* — a phrase the amount parser already reads and which
+    would name a different pile entirely.
+
+    Refuses without consuming, so "with mana value 3 or less" keeps its own
+    reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "less", "than", "or", "equal", "to", "the", "number", "of"
+    ):
+        stream.reset(mark)
+        return None
+    kind = stream.peek_word()
+    if kind is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("counters", "on", "it"):
+        stream.reset(mark)
+        return None
+    return kind

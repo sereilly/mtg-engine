@@ -345,6 +345,32 @@ class Untap:
 
 
 @dataclass(frozen=True)
+class SimultaneousUntapAndTap:
+    """``<player> simultaneously untaps each <phrase> and taps each <phrase>.``
+    (Sands of Time.)
+
+    One node rather than a :class:`Conjunction` of :class:`Untap` and
+    :class:`Tap`, and the printed word "simultaneously" is why: run in sequence
+    the untap goes first and the tap sweep then finds everything untapped, so
+    the board ends wholly tapped instead of inverted. CR 611.2c fixes the set an
+    effect acts on when the effect begins, and "simultaneously" says both sets
+    are fixed at that one moment.
+
+    Both noun phrases are carried, rather than one phrase and a flag, because
+    nothing makes them agree: a card printing "untaps each tapped creature they
+    control and taps each untapped land they control" is the same sentence, and
+    a single filter would quietly apply one card's noun to the other's sweep.
+
+    ``who`` is the printed subject — "that player" under a per-player trigger,
+    whose seat the fire site froze (CR 603.10).
+    """
+
+    who: PlayerRef
+    untap: "ObjectFilter"
+    tap: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class DoesntUntapNextStep:
     """``<subject> don't untap during their controller's next untap step.``
     (Frost Breath.)

@@ -53,6 +53,7 @@ from .redirection import (
 from .tapping import (
     _parse_doesnt_untap_next_step,
     _parse_linked_untap_restriction,
+    _parse_simultaneous_untap_and_tap,
     _parse_tap_untap,
     _parse_untap_chosen_by_paying,
 )
@@ -141,9 +142,14 @@ from .cards import (
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     parse_put_milled_card_onto_battlefield,
+    _parse_repeated_graveyard_pick,
+)
+# A hand emptying onto a library, split off `cards` at the size guard. The three
+# names it took keep their addresses: this package re-exports flat, so no caller
+# learns where the split fell.
+from .hand import (
     _parse_put_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
-    _parse_repeated_graveyard_pick,
     _parse_player_puts_hand_cards_on_library,
 )
 from .library import (
@@ -177,6 +183,7 @@ from .stack import (
 from .combat import (
     parse_block_count_grant,
     _parse_assigns_no_combat_damage,
+    _parse_attacks_this_turn_if_able,
     _parse_force_chosen_creature_to_attack,
     _parse_attacking_doesnt_tap,
     _parse_cant_attack_or_block,
@@ -257,6 +264,7 @@ __all__ = [
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
     "_parse_linked_untap_restriction",
+    "_parse_simultaneous_untap_and_tap",
     "_parse_tap_untap",
     "_parse_untap_chosen_by_paying",
     "_parse_attach",
@@ -328,6 +336,7 @@ __all__ = [
     "parse_land_type_swap",
     "parse_extra_land_plays",
     "_parse_assigns_no_combat_damage",
+    "_parse_attacks_this_turn_if_able",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_becomes_blocked",

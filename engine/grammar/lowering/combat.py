@@ -785,3 +785,16 @@ def _lower_reassign_blockers_between_attackers(
     return (
         OracleInstruction("reassign_blockers_between_attackers", "", payload),
     )
+
+
+def _lower_attacks_this_turn_if_able(
+    node: ast.AttacksThisTurnIfAble,
+) -> tuple[OracleInstruction, ...]:
+    """CR 508.1a's requirement for one turn (Kookus). Only the ability's own
+    source: a targeted spelling would need a picker, and admitting it here would
+    mark whatever the resolution happened to carry."""
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "no handler makes that subject attack this turn", node=node
+        )
+    return (OracleInstruction("force_self_to_attack_until_eot", "", {}),)

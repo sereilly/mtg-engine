@@ -316,3 +316,18 @@ class ReassignBlockersBetweenAttackers:
     """
 
     subject: Recipient
+
+
+@dataclass(frozen=True)
+class AttacksThisTurnIfAble:
+    """``<subject> attacks this turn if able.`` (Kookus.)
+
+    CR 508.1a's requirement, for one turn. Not the printed static
+    ``engine/combat_restrictions.py`` reads for "this creature attacks **each
+    combat** if able": that one is a continuous ability of the card and holds
+    for as long as the permanent is on the battlefield, and this is a one-shot
+    effect a trigger or a spell creates, which ends with the turn (CR 611.2a).
+    A card can print both, and folding them would make the pair unspellable.
+    """
+
+    subject: Recipient

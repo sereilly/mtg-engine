@@ -882,3 +882,42 @@ def test_113_6b_an_ability_saying_where_it_functions_functions_only_there():
         assert trig.instruction.payload["functions_from"] == "graveyard", name
         gate = trig.instruction.payload["intervening_if"]
         assert gate["kind"] == "self_in_graveyard_with_cards_above", name
+
+
+# ---------------------------------------------------------------------------
+# W1G4 (VIS): CR 402.2 with no maximum, for everybody
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("402.2", "611.3a")
+def test_402_2_an_effect_can_remove_every_players_maximum_hand_size():
+    """CR 402.2's seven is what an effect changes, and CR 611.3a says a static
+    ability lasts exactly as long as its source is on the battlefield.
+
+    A rules test rather than a card test: what is asserted is that the limit is
+    *derived* rather than remembered. The controller-scoped spelling used to be
+    stamped on the player as the permanent entered and nothing ever cleared it,
+    so a player who had once controlled such a permanent kept the permission for
+    the rest of the game.
+    """
+    from engine.hand_size import DEFAULT_MAXIMUM_HAND_SIZE, maximum_hand_size
+    from engine.models import CardDefinition, Permanent
+
+    anvil = CardDefinition(
+        name="No-Maximum Artifact", mana_cost="{2}", cmc=2.0, type_line="Artifact",
+        oracle_text="Players have no maximum hand size.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "No-Maximum Artifact"},
+    )
+    permanent = Permanent(card=anvil)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[permanent]), PlayerState(name="P2"),
+    ])
+
+    assert maximum_hand_size(game, 0) is None
+    assert maximum_hand_size(game, 1) is None, "'players' is everyone, not 'you'"
+
+    game.remove_from_battlefield(permanent)
+
+    assert maximum_hand_size(game, 0) == DEFAULT_MAXIMUM_HAND_SIZE
+    assert maximum_hand_size(game, 1) == DEFAULT_MAXIMUM_HAND_SIZE

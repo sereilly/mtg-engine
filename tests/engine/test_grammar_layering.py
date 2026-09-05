@@ -414,7 +414,7 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # where a second group's move would have summed past the guard) because it
 # reads `parse_recipient` and `parse_bound_subject`, both defined there; five
 # modules read it now, `phrases` re-exporting it under its old name.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones"]
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -430,6 +430,12 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # clause after the comma, so a module holding half of it would import the other
 # half — the coupling this file's family rule exists to prevent. There is no
 # import between the two modules in either direction.
+# `hand` arrived on the parse side at the same wave, when `effects/cards.py`
+# crossed 1,002 lines and `lowering/cards.py` was nine from the guard. The
+# line is CR 402's own word: what a sentence does to a *hand* — reveal it,
+# discard from it, take a card at random out of it — against what
+# `cards` does to a card wherever it is. Both halves split in the same round,
+# so the mirror formed rather than re-formed.
 # `zones` used to be one of the asymmetries below — the note read "a near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
 # for", because zone movement is one `return`/`exile`/`put` production each on
@@ -736,6 +742,13 @@ AST_FAMILIES = [
         # nodes out to match would put a node in one family with both of its
         # readers in another — exactly what `types` records.
         "exile",
+        # `hand` is the same shape once more, and the newest: the nodes the
+        # hand-to-library productions build are `PutHandCardsOnLibrary` and
+        # nothing else, and it lives in `ast/cards.py` beside every other card
+        # node because that is what it *is*. The guard fired on the readers
+        # (`effects/cards.py` at 1,002 with Teferi's Puzzle Box in it), not on
+        # the inventory.
+        "hand",
         # `destruction` is the third of that shape, and it arrived on the parse
         # side after the lowering side had carried it for a set. `Destroy`,
         # `DestroyUnlessPay` and `DestroyEachUnlessPaid` are things done to a

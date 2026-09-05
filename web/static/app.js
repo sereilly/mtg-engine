@@ -4152,12 +4152,17 @@ function applyHandToLibraryPrompt(info) {
   customOkBtn.disabled = true;
 
   const shuffles = Boolean(info.shuffle);
+  // Teferi's Puzzle Box names the *bottom*, so the whole prompt has to say so:
+  // "the first card you pick goes on top" is the opposite of what happens there,
+  // and the player picks the order on the strength of that sentence.
+  const bottoms = info.destination === "bottom";
+  const end = bottoms ? "bottom" : "top";
   title.textContent = shuffles
     ? (target === 1 ? "Shuffle a Card Away" : `Shuffle ${target} Cards Away`)
     : (target === 1 ? "Put a Card Back" : `Put ${target} Cards Back`);
   body.textContent = shuffles
     ? `Select ${target} card(s) from your hand to shuffle into your library.`
-    : `Select ${target} card(s) from your hand to put on top of your library.`;
+    : `Select ${target} card(s) from your hand to put on the ${end} of your library.`;
   // The order matters and the player is told so: the first click ends up on
   // top. It does not matter at all when the cards are shuffled in (CR 701.19),
   // and saying it would would be a promise the rules break a moment later.
@@ -4166,7 +4171,9 @@ function applyHandToLibraryPrompt(info) {
     "<div>Action: click cards in your hand to select; click a highlighted card again to unselect it.</div>",
     shuffles
       ? "<div>Your library is shuffled afterward, so the order you pick does not matter.</div>"
-      : "<div>The first card you pick goes on top.</div>",
+      : bottoms
+        ? "<div>The first card you pick goes down first, so it ends up deepest.</div>"
+        : "<div>The first card you pick goes on top.</div>",
   ].join("");
 }
 

@@ -25,13 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**11 unclaimed sentence(s) across 9 supported card(s).**
+**7 unclaimed sentence(s) across 6 supported card(s).**
 
-- **Anvil of Bogardan**
-  - `players have no maximum hand size`
-- **Corrosion**
-  - `at the beginning of your upkeep, put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated`
-  - `when this enchantment leaves the battlefield, remove all rust counters from all permanents`
 - **Fireblast**
   - `you may sacrifice two mountains rather than pay this spell's mana cost`
 - **Foreshadow**
@@ -45,8 +40,6 @@ anything anyone did, and every ingest would arrive red.
   - `when you play a card, sacrifice this artifact`
 - **Kaervek's Spite**
   - `as an additional cost to cast this spell, sacrifice all permanents you control and discard your hand`
-- **Suleiman's Legacy**
-  - `whenever a djinn or efreet enters, destroy it. it can't be regenerated`
 
 ## Acknowledged simplifications
 

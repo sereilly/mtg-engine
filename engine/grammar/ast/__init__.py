@@ -224,6 +224,7 @@ from .board import (
     Untap,
     TapOrUntap,
     DoesntUntapNextStep,
+    SimultaneousUntapAndTap,
     UntapChosenByPaying,
     Regenerate,
     ChoosePermanent,
@@ -312,6 +313,7 @@ from .stack import (
 )
 from .combat import (
     AssignsNoCombatDamage,
+    AttacksThisTurnIfAble,
     AttackingDoesntTap,
     BlockCountGrant,
     CantBe,
@@ -554,6 +556,7 @@ __all__ = [
     "Untap",
     "TapOrUntap",
     "DoesntUntapNextStep",
+    "SimultaneousUntapAndTap",
     "UntapChosenByPaying",
     "Regenerate",
     "ReanimateEnchantedCard",
@@ -643,6 +646,7 @@ __all__ = [
     "ReassignBlockersBetweenAttackers",
     "AttackAsThough",
     "AssignsNoCombatDamage",
+    "AttacksThisTurnIfAble",
     "AttackingDoesntTap",
     "BlockCountGrant",
     "CombatRestriction",

@@ -358,6 +358,13 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
 
     player = parse_player_ref(stream)
     if player is not None:
+        # "if **you don't control** a creature named Keeper of Kookus" (Kookus).
+        # The negation on the verb rather than on the noun, which is the same
+        # condition as "you control **no** creatures named …" below and produces
+        # the same `Comparison("eq", 0)` — one behaviour, two printed word
+        # orders, which is this file's standing arrangement. The lexer keeps
+        # "don't" as one word.
+        verb_negated = bool(stream.accept_word("don't", "doesn't"))
         if stream.accept_word("control", "controls"):
             # "if an opponent controls more creatures than you" (Garruk,
             # Unleashed). The comparison is against the asker's own count, so
@@ -367,7 +374,7 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 if not stream.accept_phrase("than", "you"):
                     raise stream.error("expected 'than you' after the count")
                 return ast.Controls(player, filt, ast.Comparison("more_than_you", ast.Fixed(0)))
-            negated = stream.accept_word("no")
+            negated = bool(stream.accept_word("no")) or verb_negated
             # "you control **a** Swamp". The article carries no meaning of its
             # own, but the noun parser refuses it as an unknown adjective, so
             # leaving it would refuse every singular condition in the pool.
@@ -454,7 +461,10 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         # is the only printed comparison on this clause, so the threshold is a
         # plain minimum rather than a Comparison: inventing "or less" here would
         # be a production no card exercises.
-        if stream.accept_word("gained"):
+        # Read only where the verb was not negated: "you don't gain 3 or more
+        # life this turn" is a sentence no card prints, and admitting it here
+        # would be a condition with no evaluator behind its negation.
+        if not verb_negated and stream.accept_word("gained"):
             amount = parse_amount(stream)
             if isinstance(amount, ast.Fixed) and stream.accept_phrase(
                 "or", "more", "life", "this", "turn"

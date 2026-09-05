@@ -700,6 +700,16 @@ def _hand_to_library(ctx: PromptContext, choices: list) -> dict:
         # Cache). Whether the client offers the second button at all, read off
         # the same key the resolver checks the answer against.
         "may_choose_end": choice.data.get("destination") == "either_end",
+        # "…on **the bottom** of their library in any order." (Teferi's Puzzle
+        # Box.) Which end the cards are headed for, so the client can say so
+        # rather than telling the player their first pick goes on top — which
+        # on this card is the exact opposite of what happens. A word rather
+        # than a second boolean beside `may_choose_end`: those two answer
+        # "which end" and "does the player pick it", and one key for both is
+        # how a prompt starts lying about one of them.
+        "destination": (
+            "bottom" if choice.data.get("destination") == "bottom" else "top"
+        ),
         "cards": [ctx.serialize_card(card) for card in player.hand],
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) The same decision — which cards leave the hand —
