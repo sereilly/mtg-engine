@@ -763,3 +763,135 @@ def test_the_cleanup_delay_is_unseated():
     game.resolve_cleanup_step(1)
 
     assert p1.life == 23
+
+# ---------------------------------------------------------------------------
+# CR 608.2h — a number the *creating* effect knew, spent when the ability fires
+# ---------------------------------------------------------------------------
+#
+# A delayed ability may refer to a quantity that no longer exists by the time it
+# triggers. Song of Blood's is the sharpest case in the pool: "for each creature
+# card put into your graveyard **this way**" counts what one step of the
+# creating spell milled, and by the first attack that spell is a card in a
+# graveyard which also holds everything else that has gone there.
+#
+# `create_delayed_trigger` freezes the whole resolution scratchpad onto the
+# entry and hands it back as the firing ability's own `results`, so the count is
+# taken off the record rather than re-derived from a board.
+
+from engine.card_loader import manifest_set_paths as _w3g2_paths
+from engine.oracle_types import OracleInstruction as _W3G2Instruction
+
+_W3G2_POOL = {
+    card.name: card
+    for path in _w3g2_paths(include_measured=True)
+    for card in load_cards([path])
+}
+
+
+def _w3g2_bear() -> Permanent:
+    perm = Permanent(card=_W3G2_POOL["Grizzly Bears"])
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+@pytest.mark.cr("603.7", "608.2h", "701.17a")
+def test_a_delayed_ability_spends_a_number_the_creating_effect_recorded():
+    """CR 608.2h: information the effect needs is taken when it is applied, and
+    for a delayed ability the creating resolution is what holds it (CR 603.7).
+
+    The graveyard is deliberately stocked with four *more* creature cards after
+    the spell resolves. A count re-derived from the pile would read eight; the
+    record says four, which is what the card printed."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    attacker = _w3g2_bear()
+    game.players[0].battlefield = [attacker]
+    game.players[0].hand = [_W3G2_POOL["Song of Blood"]]
+    game.players[0].library = (
+        [_W3G2_POOL["Grizzly Bears"]] * 4 + [_W3G2_POOL["Forest"]] * 3
+    )
+    game._sync_control()
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Song of Blood")
+    game.resolve_stack()
+    assert len(game.players[0].graveyard) == 5, game.log
+    game.players[0].graveyard.extend([_W3G2_POOL["Grizzly Bears"]] * 4)
+
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    accepted, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert accepted, game.log
+    game.resolve_stack()
+
+    assert attacker.effective_power == 6, game.log
+
+
+@pytest.mark.cr("603.7", "608.2h")
+def test_the_frozen_scratchpad_reaches_the_firing_ability_as_its_own_results():
+    """The channel the test above rides, asked directly: what a resolution
+    recorded is what the delayed ability reads back, under the same key."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    entry = DelayedTrigger(
+        controller_index=0,
+        event="creatures_attack",
+        instruction=OracleInstruction("noop", "", {}),
+        captured={"milled_this_way": [_W3G2_POOL["Grizzly Bears"]]},
+    )
+    fired = entry.trigger_event()
+    assert fired["captured_results"] == entry.captured
+    assert fired["trigger_context"]["milled_this_way"] == entry.captured[
+        "milled_this_way"
+    ]
+    # Two channels, one record: the effect-scoped readers ask `results` and the
+    # event-scoped ones ask the trigger context, and a number that reached only
+    # one of them would be right on half the cards that print it.
+    assert fired["captured_results"] is not entry.captured, "frozen, not shared"
+
+
+# ---------------------------------------------------------------------------
+# CR 106.12a — the one seam a "tapped for mana" record is written at
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("106.12a")
+def test_tapping_a_land_for_mana_records_the_seat_that_did_it():
+    """Desolation's "each player who tapped a land for mana this turn" is a fact
+    about the seat, not about the land.
+
+    Written where CR 106.12a's event is announced, so what a trigger fires on
+    and what the record remembers are the same moment — and read off the seat,
+    so a land that untapped, left, or was tapped again for something that is not
+    mana cannot change the answer."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    forest = Permanent(card=_W3G2_POOL["Forest"])
+    game.players[0].battlefield = [forest]
+    game._sync_control()
+    game.active_player_index = 0
+
+    assert not game.players[0].tapped_land_for_mana_this_turn
+    assert game.tap_land_for_mana(0, "Forest"), game.log
+    assert game.players[0].tapped_land_for_mana_this_turn
+    assert not game.players[1].tapped_land_for_mana_this_turn
+
+    # The land leaving does not un-tap-it-for-mana.
+    game.remove_from_battlefield(forest)
+    assert game.players[0].tapped_land_for_mana_this_turn
+
+    # The window is the turn, and the next one forgets it.
+    game.begin_turn_bookkeeping(1)
+    assert not game.players[0].tapped_land_for_mana_this_turn
+
+
+@pytest.mark.cr("106.12a")
+def test_a_land_with_no_mana_ability_records_nothing():
+    """Tapping is not tapping *for mana*: a land the tap seam refuses never
+    reaches the record, so a seat that tried is not one that did."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.players[0].battlefield = [Permanent(card=_W3G2_POOL["Bazaar of Baghdad"])]
+    game._sync_control()
+    game.active_player_index = 0
+
+    assert not game.tap_land_for_mana(0, "Bazaar of Baghdad")
+    assert not game.players[0].tapped_land_for_mana_this_turn

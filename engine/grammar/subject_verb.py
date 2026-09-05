@@ -29,6 +29,8 @@ from .paragraphs import _parse_name_then_reveal_top
 from .conjuncts import (_with_attack_conjunct, _with_damage_conjunct,
                         _with_untap_conjunct)
 from .imperatives import parse_imperative
+from .nouns import parse_object_filter
+from .records import accept_player_deed
 from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
 from .phrases import (
@@ -151,6 +153,26 @@ def parse_subject_verb(
         # and a bound-subject reader that got there first would eat the noun and
         # strand the possessive — which is exactly what it did to Gloom Sower.
         source_spec = parse_recipient(stream) or parse_bound_subject(stream)
+        # "…**each player who tapped a land for mana this turn** sacrifices a
+        # land of their choice." (Desolation.) A relative clause narrowing
+        # *which seats* the sentence is about, sitting between the subject and
+        # its verb — so it is read here, where the subject was, rather than by
+        # the production the verb dispatches into, which never sees these words.
+        #
+        # Gated on the verb that follows, for the reason `effects/damage.py`
+        # gives for reading "who attacked this turn" beside the one lowering
+        # that honours it: a seat narrowing nothing enforces is a sentence that
+        # acts on **every** player, silently and in the caster's favour. The
+        # sacrifice lowering is the reader; under any other verb the clause is
+        # put back and the line fails on it as unconsumed text, which is the
+        # loud direction.
+        if isinstance(source_spec, ast.PlayerRef):
+            deed_at = stream.mark()
+            deed = accept_player_deed(stream, parse_object_filter)
+            if deed is not None and stream.at_word("sacrifices", "sacrifice"):
+                source_spec = dataclasses.replace(source_spec, did=deed)
+            else:
+                stream.reset(deed_at)
         # "**Each attacking creature and each blocking creature** doesn't untap
         # during its controller's next untap step." (Spore Cloud.) One verb over
         # a union of *subject* noun phrases — the mirror of the union

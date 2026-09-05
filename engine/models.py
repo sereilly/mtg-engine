@@ -877,6 +877,14 @@ class PlayerState:
     # Fire and Brimstone is printed for. Reset with the rest of the turn
     # histories.
     attacked_this_turn: bool = False
+    # Whether this seat tapped a land for mana this turn (CR 106.11 /
+    # CR 701.26a's event, announced by the one tap seam in
+    # `mixins/turn_management.py`). Beside `attacked_this_turn` above and for
+    # exactly its reason: Desolation's "each player who tapped a land for mana
+    # this turn" is a fact about the *seat*, and reading it off the board would
+    # forget a land that has since untapped, left, or been tapped again for
+    # something that is not mana. Reset with the rest of the turn histories.
+    tapped_land_for_mana_this_turn: bool = False
     # Cards drawn this turn, in draw order — the last entry is "the last card you
     # drew this turn" (Jandor's Ring's discard cost). Every path that draws must
     # record here, so effects that replace a draw but still put a card in hand

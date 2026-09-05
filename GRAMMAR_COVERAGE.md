@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.5% | 93.2% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 87.1% | 87.1% | 59.0% | 131 |
+| VIS *(measured)* | 167 | 278 | 87.4% | 87.4% | 59.4% | 132 |
 | **All (shipped)** | **3918** | **5812** | **89.9%** | **89.1%** | **58.6%** | **2818** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,7 +46,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 313 | 134 | expected a subject |  |
-| 105 | 47 | unrecognized effect verb |  |
+| 104 | 46 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1178,6 +1178,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target permanent.`
 - **Desertion**
   - `Counter target spell. If an artifact or creature spell is countered this way, put that card onto the battlefield under your control instead of into its owner's graveyard.`
+- **Desolation**
+  - `At the beginning of each end step, each player who tapped a land for mana this turn sacrifices a land of their choice. This enchantment deals 2 damage to each player who sacrificed a Plains this way.`
 - **Despotic Scepter**
   - `{T}: Destroy target permanent you own. It can't be regenerated.`
 - **Destructive Tampering**

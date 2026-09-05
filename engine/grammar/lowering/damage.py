@@ -54,6 +54,7 @@ from ._common import (
     _is_source,
     _is_you,
     _targets_payload,
+    player_deed_payload,
 )
 from ._events import (
     _chosen_cast_amount,
@@ -138,6 +139,25 @@ def _lower_halved_damage(
 #: ``handlers/damage.deal_damage``, on the single creature it resolved.
 _RIDER_READING_KINDS = frozenset({"deal_damage"})
 
+
+
+def _stamp_recipient_deed(payload: dict, recipient, node) -> None:
+    """"…deals 2 damage to **each player who sacrificed a Plains this way**."
+    (Desolation.)
+
+    The seat narrowing the recipient printed, carried to the handler that loops
+    the seats. Its own two lines rather than a branch inside each arm because
+    both seat-set recipients take it identically — what the clause narrows is
+    *which of the loop's seats*, and the loop is the only difference between
+    the two arms.
+
+    ``player_deed_payload`` raises on a clause it cannot express, which is the
+    behaviour this call wants: an unenforced narrowing is a card that damages
+    every player, and a card that refuses to compile says so.
+    """
+    deed = player_deed_payload(recipient, node)
+    if deed is not None:
+        payload["recipient_did"] = deed
 
 def _lower_damage(
     node: ast.DealDamage,
@@ -572,11 +592,13 @@ def _lower_damage_shape(
         # happened to hold. No card in the pool printed it until this one, so
         # the hole had never been dealt through.
         payload["recipient"] = "each_player"
+        _stamp_recipient_deed(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_opponent":
         # "…deals 2 damage to each opponent" (Storm Caller). The handler loops
         # the caster's living opponents through the same player-damage path a
         # single face takes, so shields and replacements see each event.
         payload["recipient"] = "each_opponent"
+        _stamp_recipient_deed(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind in (
         # "target opponent" joins the chosen-player forms: the damage handler
         # takes the seat off the resolution context either way, and the

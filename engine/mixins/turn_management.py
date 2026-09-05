@@ -322,6 +322,9 @@ class TurnManagementMixin:
             player.creatures_put_into_your_graveyard_this_turn = 0
             player.spells_cast_this_turn = []
             player.attacked_this_turn = False
+            # Desolation's window is the turn, exactly as the attack record
+            # above is, so the two forget in the same breath.
+            player.tapped_land_for_mana_this_turn = False
         # A static ability whose condition is *whose turn it is* changes truth
         # value here and nowhere else (CR 611.3a: the effect is not locked in;
         # it applies at any given moment to whatever its text indicates).
@@ -436,6 +439,15 @@ class TurnManagementMixin:
         # Both are ordinary `permanent_becomes_tapped` triggers now, so they go
         # on the stack (CR 603.3) from wherever the tap happens.
         self.become_tapped(land)
+        # "…each player who **tapped a land for mana this turn**" (Desolation).
+        # The seat's own per-turn record, written at the one tap-for-mana seam
+        # — the same site that announces `land_tapped_for_mana` below, so what
+        # a trigger fires on and what the record remembers cannot disagree.
+        # A fact about the seat rather than about the land, for
+        # `attacked_this_turn`'s reason: the land may untap, leave, or be
+        # tapped again for something that is not mana, and the player still
+        # tapped one for mana this turn.
+        player.tapped_land_for_mana_this_turn = True
         # "Until end of turn, if you tap a land you control for mana, it
         # produces {U} instead of any other type." (Deep Water.) "If a land is
         # tapped for mana, it produces {B} instead…" (Infernal Darkness.)

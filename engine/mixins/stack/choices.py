@@ -43,11 +43,35 @@ from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
-from ...oracle_types import SEARCHED_PERMANENTS
+from ...oracle_types import SACRIFICED_CARDS_BY_SEAT, SEARCHED_PERMANENTS
 from ...search_filters import landing_seat, search_matches, searched_seat
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
+
+
+def _record_sacrificed_card(record, player_index: int, card) -> None:
+    """Write one given-up card into a resolution's scratchpad, twice over.
+
+    ``sacrificed_cards`` is the flat list Gargantuan Gorilla's "if you
+    sacrifice a snow Forest **this way**" has read since it landed — one payer,
+    asking about its own answer. :data:`SACRIFICED_CARDS_BY_SEAT` is the same
+    event keyed by who gave it up, which is the only thing that can answer
+    Desolation's "each player who sacrificed a Plains this way": the flat list
+    says a Plains went and not whose it was, so a sentence reading it would
+    damage every seat the moment any one of them lost one.
+
+    One function because the sacrifice has **two** write sites — the inline
+    resolution a non-interactive seat takes and the prompt an interactive one
+    answers — and a record written at one of them is a card that behaves
+    differently depending on who was playing it.
+    """
+    if record is None:
+        return
+    record.setdefault("sacrificed_cards", []).append(card)
+    record.setdefault(SACRIFICED_CARDS_BY_SEAT, {}).setdefault(
+        player_index, []
+    ).append(card)
 
 
 def _entry_choice_option_allowed(choice: PendingChoice, answer: str) -> bool:
@@ -7032,8 +7056,7 @@ class PendingChoicesMixin:
             perm = self.default_sacrifice_pick(
                 [self.permanent_at(player, i) for i in valid]
             )
-            if record is not None:
-                record.setdefault("sacrificed_cards", []).append(perm.card)
+            _record_sacrificed_card(record, player_index, perm.card)
             self.sacrifice_permanent(perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
@@ -7178,8 +7201,7 @@ class PendingChoicesMixin:
         removed: list[str] = []
         record = data.get("record")
         for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
-            if record is not None:
-                record.setdefault("sacrificed_cards", []).append(perm.card)
+            _record_sacrificed_card(record, player_index, perm.card)
             self.sacrifice_permanent(perm)
             removed.append(perm.card.name)
         for name in reversed(removed):

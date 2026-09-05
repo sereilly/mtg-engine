@@ -698,6 +698,27 @@ EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 #: sentence could ask the board — but which of them this effect tapped is not
 #: something the board records, and "all tapped creatures" is a different and
 #: larger set.
+#: What "**put into your graveyard this way**" names after a mill (Song of
+#: Blood, Foreshadow, Helm of Obedience). The *cards* the mill put there — not
+#: how many, because the sentences that read it ask which of them were creature
+#: cards or carried a chosen name, and a count cannot answer either.
+#:
+#: Declared here for ``EXILED_THIS_WAY``'s reason: the count spec
+#: ``lowering/characteristics`` writes and the producer gate
+#: ``oracle._records_the_delay_reads`` asks sit at opposite ends of the
+#: pipeline, and a second spelling between them is how a producer gate goes
+#: vacuous while the amount reads an empty record.
+#:
+#: **Five older sites still spell the string out** — the mill handlers in
+#: ``handlers/zones.py``, the two condition readers in
+#: ``handlers/control_flow.py`` and ``lowering/conditions.py``, the reanimation
+#: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES``. They are
+#: correct today and were deliberately not swept in the round that added this:
+#: three of those modules were open on other branches at the time, and a
+#: cross-module rename with no card behind it is a merge hazard bought for
+#: nothing. Whoever next edits one of them should point it here.
+MILLED_THIS_WAY = "milled_this_way"
+
 TAPPED_THIS_WAY = "tapped_this_way"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
@@ -740,6 +761,23 @@ BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 #: sentence reading one as the other would find an empty set on every card that
 #: prints the other.
 CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
+
+#: What "…**each player who sacrificed a Plains this way**" names (Desolation).
+#: The cards a forced sacrifice took, split by the **seat** that gave each one
+#: up — ``{seat: [card, …]}``.
+#:
+#: Beside ``sacrificed_cards``, the flat list the same two write sites have
+#: filled since Gargantuan Gorilla, rather than replacing it: that list answers
+#: "did *this* effect's payer give up a snow Forest", one seat's question asked
+#: by the seat that owed it, and this answers "which seats gave up a Plains",
+#: which no flat list can — a sentence reading the flat one would damage every
+#: player the moment any one of them sacrificed the named card.
+#:
+#: Here rather than beside either writer for ``CHOSEN_THIS_WAY_OBJECTS``'
+#: reason: ``mixins/stack/choices.py`` writes it at both of its sacrifice
+#: sites, ``handlers/damage.py`` reads it, and
+#: ``grammar/lowering/_records._PRODUCES`` declares it.
+SACRIFICED_CARDS_BY_SEAT = "sacrificed_cards_by_seat"
 
 
 #: How many cards a "puts the cards from their hand on top of their library"

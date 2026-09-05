@@ -31,6 +31,23 @@ from engine.card_loader import load_cards as _w2g2_load
 from engine.card_loader import manifest_set_paths as _w2g2_paths
 from engine.models import Permanent as _W2G2Permanent
 from engine.oracle import compile_card_oracle as _w2g2_compile
+# --- W3G4: Relentless Assault and CR 500.8's extra phases ---
+import pytest as _w3g4_pytest
+from engine import Game as _W3G4Game, PlayerState as _W3G4PlayerState
+from engine.grammar import parse_line as _w3g4_parse_line
+from engine.grammar.errors import GrammarError as _W3G4GrammarError
+from engine.models import CardDefinition as _W3G4CardDefinition, Permanent as _W3G4Permanent
+from engine.oracle import compile_card_oracle as _w3g4_compile
+import pytest as _w3g2_pytest
+from engine import Game as _W3G2sGame, PlayerState as _W3G2sPlayer
+from engine.card_loader import (load_cards as _w3g2s_load,
+                                manifest_set_paths as _w3g2s_paths)
+from engine.grammar import parse_line as _w3g2s_parse
+from engine.grammar.errors import (GrammarError as _W3G2sGrammarError,
+                                   LoweringError as _W3G2sLoweringError)
+from engine.grammar.lower import lower_ability as _w3g2s_lower
+from engine.models import Permanent as _W3G2sPermanent
+from engine.oracle import compile_card_oracle as _w3g2s_compile
 
 def _w1g2_game():
     game = Game(players=[
@@ -155,7 +172,6 @@ def test_the_return_cost_reads_the_printed_destination():
         "As an additional cost to cast this spell, return X permanents you "
         "control to their owner's hand."
     ) is None
-
 def _w2g2_catalog():
     return {card.name: card for card in _w2g2_load(_w2g2_paths(include_measured=True))}
 def _w2g2_slot(player, permanent):
@@ -299,17 +315,6 @@ def test_peace_talks_stops_an_activated_ability_aimed_at_a_face(set_pool):
     assert game.activate_permanent_ability(
         0, "Birds of Paradise", mana_color="G"
     ).supported, game.log
-
-
-# --- W3G4: Relentless Assault and CR 500.8's extra phases ---
-import pytest as _w3g4_pytest
-from engine import Game as _W3G4Game, PlayerState as _W3G4PlayerState
-from engine.grammar import parse_line as _w3g4_parse_line
-from engine.grammar.errors import GrammarError as _W3G4GrammarError
-from engine.models import CardDefinition as _W3G4CardDefinition, Permanent as _W3G4Permanent
-from engine.oracle import compile_card_oracle as _w3g4_compile
-
-
 def _w3g4_bear(name="Grizzly"):
     return _W3G4CardDefinition(
         name=name,
@@ -323,8 +328,6 @@ def _w3g4_bear(name="Grizzly"):
         produced_mana=(),
         raw={"name": name, "type_line": "Creature - Bear", "power": "2", "toughness": "2"},
     )
-
-
 def _w3g4_board(set_pool, card_name="Relentless Assault"):
     """A board with one untapped attacker and the named spell in hand."""
     attacker = _W3G4Permanent(card=_w3g4_bear())
@@ -335,8 +338,6 @@ def _w3g4_board(set_pool, card_name="Relentless Assault"):
     game = _W3G4Game(players=[p1, p2])
     game.enforce_mana_costs = False
     return game, attacker
-
-
 def _w3g4_phase_sequence(game, seat=0, limit=60, stop_at=None):
     """Drive the turn through the real steps, recording the phases it takes.
 
@@ -384,8 +385,6 @@ def _w3g4_phase_sequence(game, seat=0, limit=60, stop_at=None):
         if (game.current_turn_phase, game.current_step) == (phase, step):
             break
     return seen
-
-
 def test_relentless_assault_is_supported(set_pool):
     card = set_pool("VIS")["Relentless Assault"]
     program = _w3g4_compile(card)
@@ -396,8 +395,6 @@ def test_relentless_assault_is_supported(set_pool):
     assert steps[1].payload == {
         "after": "main", "phases": ("combat", "postcombat_main"),
     }
-
-
 def test_relentless_assault_gives_a_second_combat_phase(set_pool):
     """Cast in the postcombat main phase: the attacker untaps and swings again."""
     game, attacker = _w3g4_board(set_pool)
@@ -424,8 +421,6 @@ def test_relentless_assault_gives_a_second_combat_phase(set_pool):
     assert "combat" in sequence, sequence
     # Two attacks for two, out of forty.
     assert game.players[1].life == 36, game.log
-
-
 def test_relentless_assault_cast_precombat_keeps_the_turns_own_combat(set_pool):
     """CR 500.8: the extra phases go *directly after* this main phase.
 
@@ -446,8 +441,6 @@ def test_relentless_assault_cast_precombat_keeps_the_turns_own_combat(set_pool):
     assert phases.count("combat") == 2, phases
     assert phases.count("postcombat_main") == 2, phases
     assert phases[-1] == "ending"
-
-
 def test_relentless_assault_refuses_a_sentence_it_cannot_read():
     """The production commits once "after this" matches, so a tail it does not
     know fails the line rather than creating half the printed run."""
@@ -461,8 +454,6 @@ def test_relentless_assault_refuses_a_sentence_it_cannot_read():
     ):
         with _w3g4_pytest.raises(_W3G4GrammarError):
             _w3g4_parse_line(line)
-
-
 def test_the_extra_phase_production_reads_the_shapes_the_template_prints():
     """One production, not one card: "after this combat phase" and a single
     additional phase are the same sentence with different words."""
@@ -472,3 +463,153 @@ def test_the_extra_phase_production_reads_the_shapes_the_template_prints():
     assert _w3g4_parse_line(
         "After this phase, there is an additional main phase."
     )
+
+_W3G2S_POOL: dict = {}
+for _w3g2s_path in _w3g2s_paths(include_measured=True):
+    for _w3g2s_card in _w3g2s_load(_w3g2s_path):
+        _W3G2S_POOL.setdefault(_w3g2s_card.name, _w3g2s_card)
+def _w3g2s_creature(name: str = "Grizzly Bears") -> "_W3G2sPermanent":
+    perm = _W3G2sPermanent(card=_W3G2S_POOL[name])
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+def _w3g2s_cast(library: list[str], creatures: int = 2):
+    """Song of Blood cast and resolved, with *creatures* attackers available."""
+    game = _W3G2sGame(players=[_W3G2sPlayer(name="P0"), _W3G2sPlayer(name="P1")])
+    game.enforce_mana_costs = False
+    board = [_w3g2s_creature() for _ in range(creatures)]
+    game.players[0].battlefield = list(board)
+    game.players[0].hand = [_W3G2S_POOL["Song of Blood"]]
+    game.players[0].library = [_W3G2S_POOL[n] for n in library]
+    game._sync_control()
+    game.active_player_index = 0
+    game.cast_from_hand(0, "Song of Blood")
+    game.resolve_stack()
+    return game, board
+def _w3g2s_attack(game, indices):
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    accepted, _ = game.declare_attackers(0, indices, defending_player_index=1)
+    assert accepted, game.log
+    game.resolve_stack()
+def test_w3g2_song_of_blood_compiles_the_second_sentence_as_a_delayed_ability():
+    program = _w3g2s_compile(_W3G2S_POOL["Song of Blood"])
+    assert program.supported, program.reason
+    (sequence,) = program.instructions
+    mill, delay = sequence.payload["steps"]
+    # One resolution, in printed order — never two card lines. Split apart, the
+    # trigger would be an ability of the sorcery rather than something its
+    # resolution creates, and the mill whose record it reads would not have
+    # happened yet.
+    assert mill.kind == "mill_target_player"
+    assert mill.payload["amount"] == 4
+    assert delay.kind == "create_delayed_trigger"
+    assert delay.payload["event"] == "creatures_attack"
+    # CR 603.7b: "this turn" is a stated duration, so it fires every time.
+    assert delay.payload["once"] is False
+    assert delay.payload["duration"] == "end_of_turn"
+    assert delay.payload["instruction"].payload["x_from_count"] == {
+        "recorded_cards": "milled_this_way",
+        "filter": {"type_filter": "creature"},
+    }
+@_w3g2_pytest.mark.parametrize(
+    "library, expected_power",
+    [
+        (["Grizzly Bears"] * 4 + ["Forest"] * 3, 6),
+        (["Grizzly Bears", "Forest", "Grizzly Bears", "Forest", "Forest"], 4),
+        (["Forest"] * 6, 2),
+    ],
+)
+def test_w3g2_song_of_blood_sizes_the_pump_by_the_creature_cards_milled(
+    library, expected_power
+):
+    game, board = _w3g2s_cast(library)
+    attacker, stayed_home = board
+    _w3g2s_attack(game, [0])
+    assert attacker.effective_power == expected_power, game.log
+    # The boost is the attacker's alone — the trigger fires once per attacking
+    # creature, with that creature as its source.
+    assert stayed_home.effective_power == 2, game.log
+    # A pump, not a counter: toughness is untouched.
+    assert attacker.effective_toughness == 2, game.log
+def test_w3g2_song_of_blood_pumps_every_attacker_that_turn():
+    game, board = _w3g2s_cast(["Grizzly Bears"] * 4 + ["Forest"] * 3, creatures=2)
+    _w3g2s_attack(game, [0, 1])
+    assert [perm.effective_power for perm in board] == [6, 6], game.log
+def test_w3g2_song_of_blood_counts_the_record_and_not_the_graveyard():
+    """The pile holds whatever else has gone there; the words say this way."""
+    game, board = _w3g2s_cast(["Forest"] * 6)
+    # Four creature cards in the graveyard that this spell never milled.
+    game.players[0].graveyard.extend([_W3G2S_POOL["Grizzly Bears"]] * 4)
+    _w3g2s_attack(game, [0])
+    assert board[0].effective_power == 2, game.log
+def test_w3g2_song_of_blood_expires_with_the_turn():
+    """CR 603.7b's stated duration is "this turn", so the cleanup step is what
+    takes the ability away — an attack on a later turn is pumped by nothing."""
+    game, board = _w3g2s_cast(["Grizzly Bears"] * 4 + ["Forest"] * 3)
+    assert game.delayed_triggers, game.log
+    game.resolve_cleanup_step(0)
+    assert game.delayed_triggers == [], game.log
+    game.begin_turn_bookkeeping(0)
+    _w3g2s_attack(game, [0])
+    assert board[0].effective_power == 2, game.log
+def test_w3g2_a_trailing_delayed_trigger_needs_the_record_it_reads():
+    """The two halves meet only at the splitter, so the producer gate lives
+    there: a back-reference with no mill in front of it would read an empty
+    record and pump nothing while the card reported supported."""
+    from engine.oracle import _split_trailing_delayed_trigger
+
+    assert _split_trailing_delayed_trigger(
+        "Mill four cards. Whenever a creature attacks this turn, it gets +1/+0 "
+        "until end of turn for each creature card put into your graveyard "
+        "this way.",
+        "Song of Blood",
+    ) is not None
+    assert _split_trailing_delayed_trigger(
+        "Draw a card. Whenever a creature attacks this turn, it gets +1/+0 "
+        "until end of turn for each creature card put into your graveyard "
+        "this way.",
+        None,
+    ) is None
+    # A head the grammar cannot read is no split either.
+    assert _split_trailing_delayed_trigger(
+        "Blorp the frobnicator. Whenever a creature attacks this turn, it gets "
+        "+1/+0 until end of turn.",
+        None,
+    ) is None
+def test_w3g2_the_milled_count_refuses_what_a_card_record_cannot_answer():
+    # "Creature" without the printed word "card" is a phrase about permanents,
+    # and a mill puts cards into a graveyard.
+    with _w3g2_pytest.raises(_W3G2sLoweringError):
+        _w3g2s_lower(_w3g2s_parse(
+            "It gets +1/+0 until end of turn for each creature put into your "
+            "graveyard this way."
+        ))
+    # No duration would be a continuous bonus sized by a frozen record.
+    with _w3g2_pytest.raises((_W3G2sLoweringError, _W3G2sGrammarError)):
+        _w3g2s_lower(_w3g2s_parse(
+            "It gets +1/+0 for each creature card put into your graveyard "
+            "this way."
+        ))
+    # A subject that is not the ability's own source has nothing to boost.
+    with _w3g2_pytest.raises(_W3G2sLoweringError):
+        _w3g2s_lower(_w3g2s_parse(
+            "Target creature gets +1/+0 until end of turn for each creature "
+            "card put into your graveyard this way."
+        ))
+def test_w3g2_the_milled_clause_must_consume_its_whole_line():
+    for line in (
+        "It gets +1/+0 until end of turn for each creature card put into your "
+        "graveyard.",
+        "It gets +1/+0 until end of turn for each creature card put into a "
+        "graveyard this way.",
+        "It gets +1/+0 until end of turn for each creature card put into your "
+        "graveyard this way and then some.",
+    ):
+        with _w3g2_pytest.raises(_W3G2sGrammarError):
+            _w3g2s_parse(line)
+def test_w3g2_battle_cry_still_reads_its_delayed_trigger_whole_line():
+    """The splitter is tried *after* the whole-line table, so a card whose
+    entire line is the delayed clause keeps the reading it had."""
+    program = _w3g2s_compile(_W3G2S_POOL["Battle Cry"])
+    assert program.supported, program.reason
+    kinds = [instruction.kind for instruction in program.instructions]
+    assert kinds == ["untap_all_matching", "create_delayed_trigger"], kinds

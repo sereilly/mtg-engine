@@ -842,6 +842,44 @@ class ObjectFilter:
 
 
 @dataclass(frozen=True)
+class PlayerDeed:
+    """A relative clause naming **what a seat did**, not what it is.
+
+    "…each player **who tapped a land for mana this turn** sacrifices a land of
+    their choice. … deals 2 damage to each player **who sacrificed a Plains
+    this way**." (Desolation.)
+
+    Both halves narrow *which seats* a sentence is about by something they did
+    earlier — one within the turn, one within this very resolution — which is
+    the same shape :class:`PlayerRef`'s ``attacked_this_turn`` flag already
+    carries for "target player who attacked this turn" (Fire and Brimstone).
+    A node rather than a third flag because these two have a *parameter*: the
+    "this way" reading names the printed noun phrase whose sacrifice counts,
+    and a flag has nowhere to put it.
+
+    ``kind`` names the record, never the card:
+
+    - ``tapped_land_for_mana_this_turn`` — ``PlayerState``'s own per-turn
+      record, written at the one tap-for-mana seam.
+    - ``sacrificed_this_way`` — the seat-keyed sacrifice record an earlier step
+      of the *same resolution* wrote, which is why ``filter`` is required for
+      it and meaningless for the other: "this way" without a producer names
+      nothing at all.
+
+    Read only where a reader enforces it. A narrowing parsed somewhere nothing
+    applies it is a sentence that acts on **every** seat — wrong in the
+    caster's favour and silent — which is the reason the attack clause above is
+    read beside the one lowering that honours it rather than by the shared
+    recipient parser.
+    """
+    kind: str
+    #: "…who sacrificed **a Plains** this way". The printed noun phrase the
+    #: record's cards are tested against. None for a deed that names no object;
+    #: a lowering that gets neither what it needs refuses rather than widening.
+    filter: "ObjectFilter | None" = None
+
+
+@dataclass(frozen=True)
 class PlayerRef:
     """A player or set of players."""
     kind: str  # you | each_player | each_opponent | target_player | target_opponent
@@ -878,6 +916,17 @@ class PlayerRef:
     # and the lowering refuses it rather than defaulting to "any source", which
     # would be 4 damage to whoever last pinged you with anything.
     last_damager: "ObjectFilter | None" = None
+    # "each player **who tapped a land for mana this turn**" (Desolation). The
+    # relative-clause narrowing above generalised: `attacked_this_turn` is one
+    # printed clause spelled as a flag, and this is the clause family with its
+    # record and its noun phrase as data. Set only by the productions that read
+    # one, so a `PlayerRef` that never met the words carries None and every
+    # existing lowering is untouched.
+    #
+    # A lowering handed one it cannot carry must **refuse**: an unenforced seat
+    # narrowing is a sentence that acts on every player, which is the failure
+    # direction this whole family exists to avoid.
+    did: "PlayerDeed | None" = None
 
 
 @dataclass(frozen=True)

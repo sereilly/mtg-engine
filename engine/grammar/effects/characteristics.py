@@ -13,7 +13,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_counters_on_source, accept_fraction_head, accept_life_gain_cap, accept_rounding, expect_pt, parse_amount, parse_equal_to
-from ..records import _parse_for_each_this_way, accept_plus_per_cost_paid
+from ..records import (_parse_for_each_this_way, accept_plus_per_cost_paid,
+                      parse_for_each_milled_this_way)
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
@@ -74,8 +75,16 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # "gets +2/+2 **for each Aura attached to it**" (Rabid Wombat). Read after
     # the back-reference above, which shares its first two words and is not a
     # count of anything on the board.
+    # "…for each creature card **put into your graveyard this way**" (Song of
+    # Blood). Read before the board count below, which shares its first two
+    # words and would claim "creature card" and strand the participle.
+    per_each_milled = (
+        parse_for_each_milled_this_way(stream, parse_object_filter)
+        if not per_each_tapped else None
+    )
     per_each, per_each_beyond_first = (
-        _parse_per_each_objects(stream) if not per_each_tapped else (None, False)
+        _parse_per_each_objects(stream)
+        if not per_each_tapped and per_each_milled is None else (None, False)
     )
 
     # The same clause the statement level reads, through the same parser
@@ -89,6 +98,7 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         subject, power, toughness, duration, power_negative, toughness_negative,
         x_definition=x_definition, per_each_tapped_this_way=per_each_tapped,
         per_each=per_each, per_each_beyond_first=per_each_beyond_first,
+        per_each_milled=per_each_milled,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have
