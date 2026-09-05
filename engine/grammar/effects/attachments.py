@@ -23,8 +23,12 @@ one.
 
 from __future__ import annotations
 
+import dataclasses
+
 from .. import ast
-from ..references import parse_recipient, parse_target_spec
+from ..errors import GrammarError
+from ..nouns import parse_object_filter
+from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 
 
@@ -50,6 +54,111 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     if host is None:
         raise stream.error("expected what to attach to")
     return ast.Attach(subject, host)
+
+
+#: The seats an "in excess of" head clause may count the larger side on. Held to
+#: what ``lowering/attachments`` can turn into a scope the counter answers:
+#: "that player" is the seat this sentence's own target clause named, and
+#: nothing else in the pool prints the phrase. A reference this could not scope
+#: would count the *whole* board, which is a strictly bigger number than the
+#: card names.
+_EXCESS_COUNT_SEATS = frozenset({"target_player", "target_opponent", "that_player"})
+
+
+def parse_excess_choice_paragraph(stream: TokenStream) -> "ast.Statement | None":
+    """``For each <noun> <player> controls in excess of the number you control,
+    choose a <noun> that player controls, then the chosen permanents phase
+    out.`` (Equipoise.)
+
+    Two printed sentences and one process, read as one production because the
+    second names nothing on its own: "the chosen permanents" is whatever the
+    first chose, and a reader that took the sentences apart would have to admit
+    those words everywhere and then find no record behind them. The same reason
+    ``paragraphs`` reads Demonic Consultation's three sentences together.
+
+    What it produces is two ordinary nodes, not one fused one: a plural
+    :class:`ast.ChoosePermanent` whose count is the head clause, and an
+    ordinary :class:`ast.PhaseOut` over the bound set. So the phase-out is the
+    CR 702.26 the rest of the pool already goes through, and the choice is the
+    prompt Raiding Party already arms.
+
+    **The head clause is a count, not a loop.** "For each X, choose a Y" says
+    how many Ys, and the sentence behind it speaks about all of them at once —
+    lowered as a repetition it would arm one prompt per excess land and leave
+    the plural back-reference naming one of them.
+
+    Refuses without consuming for anything that is not this shape, so every
+    other "For each …" keeps the reading it had. Every half is checked: the two
+    nouns must match (a card counting lands and choosing creatures is a
+    different card), the possessive must name the same seat the count did, and
+    the trailing sentence must be present — a choose with nothing behind it
+    would phase out nothing while reporting supported.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        counted = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if counted is None:
+        stream.reset(mark)
+        return None
+    whose = parse_player_ref(stream)
+    if whose is None or whose.kind not in _EXCESS_COUNT_SEATS:
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_word("controls")
+        and stream.accept_phrase("in", "excess", "of", "the", "number", "you", "control")
+        and stream.accept_punct(",")
+        and stream.accept_word("choose")
+    ):
+        stream.reset(mark)
+        return None
+    spec = parse_target_spec(stream)
+    if (
+        spec is None
+        or spec.targeted
+        or spec.quantifier != "a"
+        or spec.count != 1
+        or spec.filter.card_types != counted.card_types
+    ):
+        # The printed article is singular because the head clause is what says
+        # how many. A different noun on the two halves is a card this reading
+        # would count one set and choose from another.
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(",")
+        and stream.accept_phrase("then", "the", "chosen", "permanents", "phase", "out")
+    ):
+        stream.reset(mark)
+        return None
+    # The sentence's own full stop is left where it is: the loop above reads it
+    # as the boundary between this paragraph and whatever follows, and eating it
+    # here made "Repeat this process for artifacts and creatures." unconsumed
+    # text on the one card that prints both.
+    # The excess itself, built out of the two halves the clause printed: what
+    # that seat controls, less what you do. ``ast.Minus`` clamps at zero, which
+    # is what "in excess of" means (CR 107.1b) — a player with fewer lands than
+    # you exceeds you by nothing.
+    excess = ast.Minus(
+        ast.CountOf(dataclasses.replace(counted, controller=whose.kind)),
+        ast.CountOf(dataclasses.replace(counted, controller="you")),
+    )
+    choose = ast.ChoosePermanent(
+        ast.PlayerRef("you"),
+        dataclasses.replace(spec, quantifier="up_to", count_amount=excess),
+    )
+    # "the chosen permanents" — the set the step in front of this one recorded,
+    # which is the bound plural the tap family reads as "those creatures"; the
+    # quantifier is the printed word, so a lowering written for one spelling
+    # cannot silently answer the other.
+    phase_out = ast.PhaseOut(ast.TargetSpec("chosen", ast.ObjectFilter()))
+    return ast.Sequence((choose, phase_out))
+
 
 def parse_player_chooses_permanent(
     stream: TokenStream, chooser: "ast.PlayerRef"

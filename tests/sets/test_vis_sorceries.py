@@ -299,3 +299,174 @@ def test_peace_talks_stops_an_activated_ability_aimed_at_a_face(set_pool):
     assert game.activate_permanent_ability(
         0, "Birds of Paradise", mana_color="G"
     ).supported, game.log
+
+
+# --- W3G3: Forbidden Ritual, a process its controller may run again ---
+from engine import Game as _W3G3Game, PlayerState as _W3G3Player
+from engine.models import Permanent as _W3G3Permanent
+from engine.oracle import compile_card_oracle as _w3g3_compile
+from engine.targeting import derive_cast_spec as _w3g3_cast_spec
+
+
+def _w3g3_game(interactive=()):
+    game = _W3G3Game(players=[
+        _W3G3Player(name="P1", battlefield=[]),
+        _W3G3Player(name="P2", battlefield=[]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w3g3_put(game, seat, card):
+    perm = _W3G3Permanent(card=card)
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+
+
+def _w3g3_kinds(instruction):
+    """Every instruction kind inside *instruction*, outermost first."""
+    found = [instruction.kind]
+    for value in (instruction.payload or {}).values():
+        for entry in (value if isinstance(value, (list, tuple)) else ()):
+            inner = entry.get("instruction") if isinstance(entry, dict) else entry
+            if getattr(inner, "kind", None) is not None:
+                found.extend(_w3g3_kinds(inner))
+    return found
+
+
+def test_forbidden_ritual_compiles_the_whole_printed_process(set_pool):
+    """"Sacrifice a nontoken permanent. If you do, target opponent loses 2 life
+    unless that player sacrifices a permanent of their choice or discards a
+    card. You may repeat this process any number of times."
+
+    Three sentences and one instruction, because the repetition is a property
+    of the process rather than a step after it — whatever asks "again?" has to
+    be holding the round it would run.
+    """
+    program = _w3g3_compile(set_pool("VIS")["Forbidden Ritual"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "repeat_optional_process"
+    kinds = _w3g3_kinds(instruction)
+    # The price is a *choice* between two prices, which is the same node
+    # "sacrifice a creature or discard a creature card" already produces.
+    assert "choose_one" in kinds
+    assert kinds.count("sacrifice_matching_permanent") == 2, kinds
+
+
+def test_forbidden_ritual_offers_the_price_to_the_targeted_opponent(set_pool):
+    """CR 601.2b: the seat taking the offer picks which price it pays, and the
+    permanent it gives up comes off *its* battlefield (CR 701.21a)."""
+    game = _w3g3_game()
+    game.players[0].hand = [set_pool("VIS")["Forbidden Ritual"]]
+    _w3g3_put(game, 0, set_pool("VIS")["Panther Warriors"])
+    theirs = _w3g3_put(game, 1, set_pool("VIS")["Panther Warriors"])
+
+    assert game.cast_from_hand(
+        0, "Forbidden Ritual", target_player_index=1
+    ).supported, game.log
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    # The caster gave up their own nontoken permanent; the opponent covered the
+    # toll out of theirs, so no life was lost.
+    assert game.players[0].battlefield == []
+    assert theirs not in game.players[1].battlefield
+    assert game.players[1].life == 20, game.log
+
+
+def test_forbidden_ritual_charges_the_life_when_the_price_cannot_be_paid(set_pool):
+    """An opponent with an empty board and an empty hand can take neither
+    alternative, so the printed penalty stands (CR 601.2h asks what a player is
+    *able* to do). The chosen discard was the half nobody gated: an empty hand
+    discarded nothing and the offer counted as taken."""
+    game = _w3g3_game()
+    game.players[0].hand = [set_pool("VIS")["Forbidden Ritual"]]
+    _w3g3_put(game, 0, set_pool("VIS")["Panther Warriors"])
+
+    game.cast_from_hand(0, "Forbidden Ritual", target_player_index=1)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert game.players[1].life == 18, game.log
+
+
+def test_forbidden_ritual_asks_the_opponent_which_price_they_pay(set_pool):
+    """The offer, the mode choice and the sacrifice all belong to the seat the
+    spell targeted. ``_offer_to_seat`` deliberately leaves ``context.caster``
+    where it is, so without a chooser on the ``choose_one`` the *caster* would
+    pick which price their opponent paid, out of the opponent's own board."""
+    game = _w3g3_game(interactive={1})
+    game.players[0].hand = [set_pool("VIS")["Forbidden Ritual"]]
+    _w3g3_put(game, 0, set_pool("VIS")["Panther Warriors"])
+    _w3g3_put(game, 1, set_pool("VIS")["Panther Warriors"])
+
+    game.cast_from_hand(0, "Forbidden Ritual", target_player_index=1)
+    game.resolve_stack()
+
+    owed = game.pending_choice_of("optional_pay")
+    assert owed is not None and owed.player_index == 1, game.pending_choices
+
+
+def test_forbidden_ritual_repeats_the_whole_process_when_its_caster_says_so(set_pool):
+    """"You may repeat this process **any number of times**." One decision per
+    round, taken by the spell's controller, with no bound but the answer — so
+    two accepted rounds cost two of the caster's permanents and two of the
+    opponent's."""
+    game = _w3g3_game(interactive={0})
+    game.players[0].hand = [set_pool("VIS")["Forbidden Ritual"]]
+    for _ in range(3):
+        _w3g3_put(game, 0, set_pool("VIS")["Panther Warriors"])
+        _w3g3_put(game, 1, set_pool("VIS")["Panther Warriors"])
+
+    game.cast_from_hand(0, "Forbidden Ritual", target_player_index=1)
+    game.resolve_stack()
+
+    rounds = 0
+    while True:
+        owed = game.pending_choice_of("sacrifice")
+        if owed is not None and owed.player_index == 0:
+            assert game.confirm_sacrifice(0, [0]), game.log
+            game.auto_resolve_pending_choices(only_player_index=1)
+            continue
+        again = game.pending_choice_of("repeat_process")
+        if again is None:
+            break
+        assert again.player_index == 0, "the controller decides whether to repeat"
+        rounds += 1
+        assert game.confirm_repeat_process(0, rounds < 2), game.log
+        game.auto_resolve_pending_choices(only_player_index=1)
+
+    assert rounds == 2, game.log
+    assert len(game.players[0].battlefield) == 1, game.log
+    assert len(game.players[1].battlefield) == 1, game.log
+    assert game.players[1].life == 20, game.log
+    assert game.stack == [] and game.resume_stack == []
+
+
+def test_forbidden_ritual_stops_after_one_round_for_a_seat_nobody_asks(set_pool):
+    """The stated default is to stop. "Any number of times" has no bound but
+    the answer, so a default of "yes" is not a default — it is a game that never
+    ends."""
+    game = _w3g3_game()
+    game.players[0].hand = [set_pool("VIS")["Forbidden Ritual"]]
+    for _ in range(3):
+        _w3g3_put(game, 0, set_pool("VIS")["Panther Warriors"])
+
+    game.cast_from_hand(0, "Forbidden Ritual", target_player_index=1)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert len(game.players[0].battlefield) == 2, game.log
+
+
+def test_forbidden_ritual_asks_the_client_for_its_opponent(set_pool):
+    """The Roots class: the spell's only "target" sits on the offer's *declined*
+    branch, three wrappers down. A cast spec of None is the exact value the
+    client tests to decide whether to ask for a target, so it would send a bare
+    cast and the engine would refuse it."""
+    card = set_pool("VIS")["Forbidden Ritual"]
+    spec = _w3g3_cast_spec(card, _w3g3_compile(card))
+    assert spec is not None and spec.get("kind") == "player", spec

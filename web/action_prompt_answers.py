@@ -606,6 +606,21 @@ def _action_flip_again_confirm(session, req, seat_type):
     if not session.game.confirm_flip_again(req.seat, req.accept is not False):
         raise HTTPException(status_code=400, detail="invalid coin-flip answer")
 
+@action_handler("repeat_process_confirm")
+def _action_repeat_process_confirm(session, req, seat_type):
+    # Forbidden Ritual: the spell's controller says whether the printed process
+    # runs again. Only that seat may answer — the offer is made to one player,
+    # and it is the player who has to pay for the next round.
+    pending = next(
+        (c for c in session.game.pending_choices_of("repeat_process")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no repeated process pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_repeat_process(req.seat, req.accept is not False):
+        raise HTTPException(status_code=400, detail="invalid repeat answer")
+
 @action_handler("exile_from_hand_confirm")
 def _action_exile_from_hand_confirm(session, req, seat_type):
     # Ice Cauldron: the seat picks a card in its hand to exile under the

@@ -256,6 +256,43 @@ def _offered(step: OracleInstruction) -> OracleInstruction:
     return OracleInstruction(step.kind, step.value, {**step.payload, "optional": True})
 
 
+#: Instruction kinds that ask the player *performing* them to choose something,
+#: and so have to be told which seat that is when an offer is made to somebody
+#: other than the effect's controller. Exactly one today: an offer whose action
+#: is printed as "A **or** B" (Forbidden Ritual's "unless that player sacrifices
+#: a permanent of their choice or discards a card") lowers onto ``choose_one``,
+#: and CR 601.2b leaves the pick to the seat taking the offer.
+#:
+#: A set beside :data:`OFFERED_PROMPT_KINDS` and marked the same way, for that
+#: table's stated reason: the wrapper is the only node that knows who was
+#: offered, so the wrapper is where the mark belongs. The seat-set actors are
+#: excluded by :func:`_performed_by`, not listed here — ``_offer_to_seat``
+#: already moves ``context.caster`` onto the offered seat for those, so a second
+#: answer would be a second chance to disagree.
+PERFORMER_CHOICE_KINDS = frozenset({"choose_one"})
+
+
+def _performed_by(step: OracleInstruction, actor: str) -> OracleInstruction:
+    """*step* told which seat is performing it — see
+    :data:`PERFORMER_CHOICE_KINDS`.
+
+    Only where the offered seat is one the handler cannot already infer.
+    ``you`` is the resolution's own controller, which is what every such
+    instruction reads by default; the seat-set actors already have
+    ``context.caster`` rebound onto the offered seat by
+    ``handlers/control_flow._offer_to_seat``. What is left is the reference
+    naming a *single other* seat — "that player", "its controller", "target
+    opponent" — where the caster is deliberately not moved (a known limit that
+    function's docstring records), so the pick would go to the ability's
+    controller: the one seat the card has just said is not choosing.
+    """
+    if step.kind not in PERFORMER_CHOICE_KINDS:
+        return step
+    if actor == "you" or actor in _SEAT_SET_ACTORS:
+        return step
+    return OracleInstruction(step.kind, step.value, {**step.payload, "chooser": actor})
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -501,7 +538,11 @@ def _lower_may(
             )
         payload["life_alternative"] = int(node.life_alternative)
     if action:
-        payload["action"] = action
+        # Stamped with the **resolved** actor rather than the printed one, and
+        # here rather than where the action was lowered, because the branches
+        # above are what turn "that player" into the record the fire site froze
+        # — a step told the printed word would ask a seat nobody wrote down.
+        payload["action"] = tuple(_performed_by(step, actor) for step in action)
     if then:
         payload["then"] = then
     if otherwise:
@@ -818,6 +859,9 @@ WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     # the same reason ``for_each`` is: what the round *does* is the act it
     # carries, and the repetition is not an effect of its own.
     "repeat_offer_round": ("action",),
+    # A whole printed process its controller may run again (Forbidden Ritual).
+    # The same reason again: what the process *does* is the steps it carries.
+    "repeat_optional_process": ("steps",),
 }
 
 

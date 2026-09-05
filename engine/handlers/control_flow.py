@@ -1484,6 +1484,25 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # makes. A computed count answers True for the same reason: this predicate
     # has no ``x_value``, and a wrongly-False answer is the one that costs a
     # card its ability.
+    # "…unless that player **discards a card**." (Forbidden Ritual.) The
+    # chosen half of the same question the random one below answers, and it was
+    # missing for the same reason it was missing there: the handler discards as
+    # many as it can (CR 608.2), so an empty hand discarded **nothing**, the
+    # price counted as paid and the 2 life the card prints for not paying it was
+    # never lost. CR 601.2h asks what a player is *able* to do.
+    #
+    # Only the ``target`` spelling — the one whose discarding seat is the
+    # resolution's chosen player, which is the seat an offer to "that player" or
+    # to "target opponent" is made to. ``who: "defending_player"`` names a seat
+    # the combat froze and is somebody else's hand, so it answers True, exactly
+    # as ``put_hand_cards_on_library`` above and ``discard_x_target_cards``
+    # below decline the spellings that are not the offered seat's: a
+    # wrongly-False answer withdraws an offer the card makes.
+    if instruction.kind == "discard_target_cards":
+        amount = instruction.payload.get("amount", 1)
+        if instruction.payload.get("who") is not None or not isinstance(amount, int):
+            return True
+        return len(player.hand) >= amount
     if instruction.kind == "discard_x_target_cards":
         amount = instruction.payload.get("amount", 1)
         if instruction.payload.get("who") != "caster" or not isinstance(amount, int):
@@ -2166,6 +2185,57 @@ def repeat_offer_round(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+#: The last item :func:`repeat_optional_process` walks: the end of one round,
+#: where the seat is asked whether there is another. A sentinel and not a step,
+#: because the question is not an effect — and it has to be *inside* the loop,
+#: for ``engine/resumption.py``'s standing rule: a round that stopped to ask
+#: something would never reach a line written after the loop.
+_ASK_TO_REPEAT = object()
+
+
+@effect_handler("repeat_optional_process")
+def repeat_optional_process(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Sacrifice a nontoken permanent. If you do, target opponent loses 2 life
+    unless that player sacrifices a permanent of their choice or discards a
+    card. **You may repeat this process any number of times.**" (Forbidden
+    Ritual.)
+
+    One round is every step of the printed process, and the round happens again
+    whenever this effect's controller says so. That is the whole difference
+    from ``repeat_offer_round`` beside it, which reads a *record* to decide: an
+    unbounded "any number of times" has no record and no bound, so the decision
+    is a prompt and the loop ends on the answer.
+
+    The next round is run by the prompt's own resolver, holding this same
+    instruction — the shape ``coin_flip_stakes_loop`` already uses for Game of
+    Chaos's "flip again?", and for that shape's reason: what runs next is a
+    whole instruction rather than a branch, so nothing here has to know how many
+    rounds there will be.
+
+    Both loops are ``run_resumable``. A step of the round suspends whenever an
+    interactive seat is asked something (the sacrifice prompt is the first
+    thing this card does), and the steps behind it — and the question about the
+    next round — are the work still owed. The loop is the last thing this
+    handler does, which is the other half of that rule.
+    """
+    steps = _steps(instruction, "steps")
+    seat = game.players.index(context.caster)
+
+    def step(item) -> None:
+        if item is _ASK_TO_REPEAT:
+            game.arm_pending_choice(
+                "repeat_process", seat,
+                card_name=getattr(context.card, "name", "Effect"),
+                _again=instruction,
+                _context=context,
+            )
+            return
+        game._execute_oracle_instruction(item, context)
+
+    run_resumable(game, [*steps, _ASK_TO_REPEAT], step)
+    return True, "resolved"
+
+
 @effect_handler("choose_one")
 def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A ``choose_one`` reached at *resolution*: alternatives that are a step of
@@ -2187,6 +2257,32 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     modes = tuple(instruction.payload.get("modes") or ())
     if not modes:
         return True, "resolved"
+    # **Whoever is performing the alternatives picks between them** (CR 601.2b).
+    # Absent, that is the effect's own controller, which is every printed
+    # "gains flying or first strike" in the pool. ``chooser`` names the other
+    # case: an offer made to a seat that is not the controller — "unless **that
+    # player** sacrifices a permanent of their choice or discards a card"
+    # (Forbidden Ritual) — where ``_offer_to_seat`` deliberately leaves
+    # ``context.caster`` alone, so without this the caster would choose which
+    # price the opponent pays out of the opponent's own board.
+    #
+    # Read through ``_offered_seats``, the same function that decided who was
+    # being offered the price: two readers of one printed word, so the seat
+    # asked to choose and the seat the price is charged to cannot differ.
+    chooser = instruction.payload.get("chooser")
+    if chooser is None:
+        performer = context.caster
+    else:
+        seats = _offered_seats(game, str(chooser), context)
+        if not seats:
+            # Nobody to ask. The honest outcome, and the one every branch of
+            # ``_offered_seats`` already gives for a seat that has left or that
+            # nothing recorded: the offer around this step was never made.
+            game.log.append(
+                f"{context.card.name}: there is nobody to choose an alternative"
+            )
+            return True, "resolved"
+        performer = game.players[seats[0]]
     # CR 601.2b/119.4: a player chooses among the alternatives they are *able*
     # to take. The same predicate ``may``'s offer narrows through, asked here
     # too — a bare ``choose_one`` reached mid-resolution had no narrowing at
@@ -2199,7 +2295,7 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     takeable = tuple(
         mode for mode in modes
         if _action_is_takeable(
-            game, context.caster, mode["instruction"], context.source_permanent
+            game, performer, mode["instruction"], context.source_permanent
         )
     )
     if not takeable:
@@ -2208,7 +2304,7 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
         )
         return True, "resolved"
     modes = takeable
-    player_index = game.players.index(context.caster)
+    player_index = game.players.index(performer)
     game.arm_pending_choice(
         "mode_choice", player_index,
         card_name=context.card.name,

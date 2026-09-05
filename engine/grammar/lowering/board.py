@@ -24,7 +24,7 @@ owner.
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
+from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
                              X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
@@ -446,6 +446,23 @@ def _lower_sacrifice(
                 payload["who"] = EVENT_SUBJECT_PLAYER
             elif event in _EVENT_SUBJECT_CONTROLLERS:
                 payload["who"] = EVENT_SUBJECT_CONTROLLER
+            elif event is None:
+                # "Target opponent loses 2 life unless **that player**
+                # sacrifices a permanent of their choice." (Forbidden Ritual.)
+                # A line with no firing event has no frozen seat to read and
+                # needs none: the words are a back-reference to a player *this
+                # sentence* named, which at resolution is the seat the spell
+                # chose. That is the reading `discard_target_cards` has always
+                # given the identical printed pronoun one family over — it
+                # admits `that_player` with no event gate at all and lets the
+                # handler read `context.target` — so the two spellings of one
+                # printed price name one seat rather than two.
+                #
+                # The two branches above stay ahead of it and keep their gate:
+                # under a *trigger* "that player" is the seat the fire site
+                # froze, and reading `context.target` there would sacrifice the
+                # source controller's land on every upkeep.
+                payload["who"] = "that_player"
             else:
                 raise LoweringError(
                     f"no event named {event!r} freezes the seat 'that player' names",
@@ -480,11 +497,34 @@ def _lower_phase_out(
     node: ast.PhaseOut,
     event: str | None = None,
     event_subject: object | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """CR 702.26's two printed shapes: one chosen creature (Teferi, Master of
     Time's −3) and a swept set belonging to a targeted opponent with the
     can't-phase-in rider (Teferi, Timeless Voyager's −8)."""
     subject = node.subject
+    # "…then **the chosen permanents** phase out." (Equipoise.) The set the step
+    # in front of this one recorded, which is neither a target nor a sweep —
+    # the tap family's "those creatures" one printed spelling over, and read the
+    # same way: through the record, gated on a step of this effect having
+    # written one. Without the gate the words name nothing and the sentence
+    # would report supported and phase out an empty set.
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier == "chosen":
+        if CHOSEN_THIS_WAY_OBJECTS not in produced:
+            raise LoweringError(
+                "\"the chosen permanents\" names objects no step of this "
+                "effect chose", node=node,
+            )
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        return (
+            OracleInstruction(
+                "phase_out_recorded_permanents", "",
+                {"permanents_from": CHOSEN_THIS_WAY_OBJECTS},
+            ),
+        )
     if _is_target(subject):
         assert isinstance(subject, ast.TargetSpec)
         if node.cant_phase_in_until_your_next_turn:

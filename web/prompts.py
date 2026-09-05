@@ -1061,6 +1061,21 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("repeat_process")
+def _repeat_process(ctx: PromptContext, choices: list) -> dict:
+    """Forbidden Ritual: whether the controller runs the printed process again.
+
+    Nothing but the card name and the seat, deliberately: "any number of times"
+    names no stake and no count, so there is no number to show that would not be
+    a number this renderer invented.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+    }
+
+
 @prompt_renderer("exile_from_hand_choice")
 def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Ice Cauldron: which card in this seat's hand is exiled under the artifact.

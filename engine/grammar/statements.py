@@ -54,6 +54,7 @@ from .effects.exile import _parse_bin_unplayed_exiled_card
 from .effects.game import parse_extra_land_plays
 from .effects.stack import _parse_conditional_retarget
 from .effects.cards import _parse_for_each_revealed_discard
+from .effects.attachments import parse_excess_choice_paragraph
 
 
 from .sentence_clauses import (
@@ -431,6 +432,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 parse_optional_action=_parse_optional_action,
             ),
         )
+    # "**For each land target player controls in excess of the number you
+    # control,** choose a land that player controls, then the chosen permanents
+    # phase out." (Equipoise.) A head clause that is a *count* rather than a
+    # set, so it is not the loop below and cannot be read as one: lowered as a
+    # repetition it would arm one prompt per excess land and leave the plural
+    # sentence behind it naming one of them. Read first because both open on
+    # the same two words, and it refuses without consuming.
+    excess_choice = parse_excess_choice_paragraph(stream)
+    if excess_choice is not None:
+        return excess_choice
     per_death = _parse_leading_for_each(_parse_statement_body, stream)
     if per_death is not None:
         # The repeated act may be printed as a choice of two ("pay 4 life **or**

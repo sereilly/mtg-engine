@@ -104,6 +104,7 @@ from .destruction import (
 )
 from .attachments import (
     _parse_attach,
+    parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
 )
 from .control_changes import (
@@ -261,6 +262,7 @@ __all__ = [
     "_parse_no_longer_supertype",
     "_parse_bid_life_for_control",
     "_parse_gain_control",
+    "parse_excess_choice_paragraph",
     "parse_player_chooses_permanent",
     "_parse_return",
     "_parse_put_source_into_zone",

@@ -3650,6 +3650,40 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+@effect_handler("phase_out_recorded_permanents")
+def phase_out_recorded_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…choose a land that player controls, then **the chosen permanents phase
+    out**." (Equipoise, CR 702.26.)
+
+    The set an earlier step of this same resolution recorded, read through
+    ``recorded_permanent_ids`` — the one reader of the ``permanents_from``
+    channel, so this cannot disagree with the twenty other steps that write it
+    about whether a record is one id or a list.
+
+    **Anything no longer on the battlefield is skipped**, and that is the
+    printed reading rather than a guard against the impossible. Equipoise runs
+    its process three times into one record, so the third round's sentence names
+    the first two rounds' picks as well — and a phased-out permanent is treated
+    as though it does not exist (CR 702.26b), which is exactly a permanent this
+    step cannot phase out. Reading the record without the check would push the
+    same permanent onto its controller's phased-out pile twice and phase it back
+    in as two objects.
+    """
+    from ._common import recorded_permanent_ids
+
+    left = 0
+    for permanent_id in recorded_permanent_ids(
+        context, instruction.payload.get("permanents_from")
+    ):
+        perm = game.permanent_by_id(permanent_id)
+        if perm is None or not game.is_on_battlefield(perm):
+            continue
+        game.phase_out_permanent(perm)
+        left += 1
+    game.log.append(f"{context.card.name}: {left} permanent(s) phased out")
+    return True, "resolved"
+
+
 @effect_handler("forbid_phase_out")
 def forbid_phase_out(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Until your next upkeep, target permanent **can't phase out**."

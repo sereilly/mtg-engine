@@ -1151,7 +1151,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2880,6 +2880,15 @@ function getFlipAgainInfo(state = currentState) {
   return info;
 }
 
+// Forbidden Ritual: whether the spell's controller runs the printed process
+// again. No stake and no count — "any number of times" names neither.
+function getRepeatProcessInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.repeat_process;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Ice Cauldron: the seat picks a card in its hand to exile under the artifact.
 // Always declinable — the sentence says "you may" — so unlike the pick below it
 // there is no `optional` flag to read.
@@ -3600,6 +3609,7 @@ function isAnyPromptActive(state = currentState) {
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
   if (getFlipAgainInfo(state)) return true;
+  if (getRepeatProcessInfo(state)) return true;
   if (getExileFromHandInfo(state)) return true;
   if (getLibraryPileSplitInfo(state)) return true;
   if (getPileExileInfo(state)) return true;
@@ -3625,7 +3635,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -6531,6 +6541,40 @@ function applyFlipAgainPrompt(info) {
   });
 }
 
+function applyRepeatProcessPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  okBtn.disabled = true;
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} \u2014 repeat?`;
+  body.textContent = "You may repeat this process any number of times.";
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    '<button type="button" class="prompt-choice-btn" data-repeat-again="1">Repeat</button>' +
+    '<button type="button" class="prompt-choice-btn" data-repeat-stop="1">Stop</button>' +
+    "</div>";
+
+  steps.querySelector("[data-repeat-again]")?.addEventListener("click", async () => {
+    await sendAction({ seat, action: "repeat_process_confirm", accept: true });
+  });
+  steps.querySelector("[data-repeat-stop]")?.addEventListener("click", async () => {
+    await sendAction({ seat, action: "repeat_process_confirm", accept: false });
+  });
+}
+
 function applyExileFromHandPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -8901,6 +8945,12 @@ function renderActivationPrompt() {
   const flipAgainInfo = getFlipAgainInfo();
   if (flipAgainInfo) {
     applyFlipAgainPrompt(flipAgainInfo);
+    return;
+  }
+
+  const repeatProcessInfo = getRepeatProcessInfo();
+  if (repeatProcessInfo) {
+    applyRepeatProcessPrompt(repeatProcessInfo);
     return;
   }
 

@@ -2084,6 +2084,23 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         ]
     elif who in ("target_opponent", "target_player"):
         payers = [game.players.index(context.target)]
+    elif who == "that_player":
+        # "Target opponent loses 2 life unless **that player** sacrifices a
+        # permanent of their choice." (Forbidden Ritual.) A back-reference to a
+        # player the same *sentence* named, on a line no event fired — so the
+        # seat is the resolution's own chosen player, which is the read
+        # ``discard_target_cards`` gives the identical pronoun and the read
+        # ``control_flow._offered_seats`` gives it when it decides who is being
+        # offered this very price. Three readers, one seat.
+        #
+        # Verified rather than trusted: a resolution that chose nobody leaves
+        # ``context.target`` empty or holding a permanent, and indexing it would
+        # raise. Nobody chosen is nobody asked, which is the honest outcome the
+        # frozen-seat branches below already give.
+        chosen = context.target
+        if chosen not in game.players:
+            return False, "no player was chosen for 'that player'"
+        payers = [game.players.index(chosen)]
     elif who == "event_subject_player":
         # "At the beginning of each player's upkeep, **that player** sacrifices
         # a land of their choice." (Mana Vortex.) The seat the trigger's own

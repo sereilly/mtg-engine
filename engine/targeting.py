@@ -1767,7 +1767,15 @@ def _from_instructions(instructions) -> dict | None:
     with no prompt.
     """
     for instruction in instructions:
-        if instruction.kind == "sequence":
+        # "…**target opponent** loses 2 life unless… You may repeat this
+        # process any number of times." (Forbidden Ritual.) A repeated process
+        # is a sequence with a decision wrapped round it, and the target is
+        # announced once as the spell is cast (CR 601.2c) — every round uses
+        # the seat the announcement chose — so the steps are read exactly as a
+        # plain sequence's are. Left out, the spell derived no spec at all,
+        # which is the value the client tests to decide whether to ask for a
+        # target: the Roots class, through the door this round opened.
+        if instruction.kind in ("sequence", "repeat_optional_process"):
             nested = _from_instructions(instruction.payload.get("steps") or ())
             if nested is not None:
                 return nested

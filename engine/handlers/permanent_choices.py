@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._common import count_from_payload
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -323,12 +324,32 @@ def choose_permanents(
         game.log.append(f"{card_name}: there is nobody to make the choice")
         return True, "resolved"
     candidates = permanent_choice_candidates(game, payload, context)
-    # "Return **two** Forests you control to their owner's hand" (Bull
-    # Elephant) states a floor as well as a ceiling, and a board that cannot
-    # reach it is not asked: the count is indivisible, so a seat with one
-    # Forest returns neither. Zero is every prompt printed as "up to", where
-    # one candidate is enough and none is a legal answer.
+    # "**For each land target player controls in excess of the number you
+    # control**, choose a land that player controls." (Equipoise.) How many is
+    # a quantity the resolution computes, through the one evaluator every other
+    # computed count in this engine goes through — so "the number of lands you
+    # control" means here what it means in a pump or a where-clause, and the
+    # difference is clamped at zero by the same arithmetic (CR 107.1b).
+    #
+    # ``exact_count`` is the printed sentence, not a convenience: "for each X,
+    # choose a Y" says how many *are* chosen, so the number is a floor as well
+    # as a ceiling. A ceiling alone would let a seat answer none and the card
+    # would do nothing.
+    up_to = int(payload.get("up_to", 1))
     at_least = int(payload.get("at_least", 0) or 0)
+    counted = payload.get("count_from")
+    if counted is not None:
+        up_to = count_from_payload(
+            game, context, dict(counted), instruction,
+            source=context.source_permanent,
+        )
+        if payload.get("exact_count"):
+            at_least = up_to
+        if up_to <= 0:
+            # CR 608.2's "as much as possible": a count of nothing is not a
+            # prompt with no answer, it is a step that asked for nothing.
+            game.log.append(f"{card_name}: nothing to choose")
+            return True, "resolved"
     if len(candidates) < max(at_least, 1):
         game.log.append(f"{card_name}: there is no permanent it could choose")
         return True, "resolved"
@@ -340,7 +361,7 @@ def choose_permanents(
         payload=payload,
         context=context,
         candidates=candidates,
-        up_to=int(payload.get("up_to", 1)),
+        up_to=up_to,
         at_least=at_least,
     )
     return True, "resolved"
