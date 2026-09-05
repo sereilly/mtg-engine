@@ -1720,3 +1720,132 @@ def test_equipoise_phases_each_permanent_out_once(set_pool):
 
     names = [perm.card.name for perm in game.players[1].phased_out]
     assert sorted(names) == ["Island", "Plains"], names
+
+
+# --- W4G3: the "target opponent"/"target player" a VIS upkeep trigger names ---
+#
+# Both of these print a target and neither announced one: the resolution read
+# `_default_opposing_seat`, so at three seats the card acted on the first living
+# opponent whatever its controller wanted. Corrosion did not even get that far -
+# `announced_opponent_seat` refused to guess with two opponents in the game, and
+# the rust counters simply did not happen.
+
+import pytest as _w4g3e_pytest
+
+from engine import Game as _W4G3EGame, PlayerState as _W4G3EPlayer, load_cards as _w4g3e_load
+from engine.card_loader import manifest_set_path as _w4g3e_path
+from engine.models import CardDefinition as _W4G3ECard, Permanent as _W4G3EPermanent
+
+_W4G3E_LEA = {c.name: c for c in _w4g3e_load(_w4g3e_path("LEA"))}
+
+
+def _w4g3e_table(seats: int, *, interactive: bool):
+    game = _W4G3EGame(players=[_W4G3EPlayer(name=f"P{i + 1}") for i in range(seats)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    return game
+
+
+def _w4g3e_put(game, seat, card):
+    perm = _W4G3EPermanent(card=card)
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+
+
+def _w4g3e_artifact(name: str, cmc: int) -> _W4G3ECard:
+    return _W4G3ECard(
+        name=name, mana_cost="{%d}" % cmc, cmc=float(cmc), type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name},
+    )
+
+
+def _w4g3e_upkeep(game):
+    game.begin_turn_bookkeeping(0)
+    game.active_player_index = 0
+    game.resolve_upkeep(0, defer_priority=True)
+
+
+@_w4g3e_pytest.mark.usefixtures("set_pool")
+def test_corrosion_rusts_the_opponent_it_names_at_a_three_seat_table(set_pool):
+    """"At the beginning of your upkeep, put a rust counter on each artifact
+    **target opponent** controls."
+
+    The seat is a choice (CR 601.2c) and the trigger announces it now
+    (CR 603.3d). Before it did, the handler asked
+    ``handlers/_common.announced_opponent_seat``, which could answer only where
+    there was exactly one opponent - so at three seats the effect ended with
+    "no announced opponent" in the log and no counter anywhere. That helper is
+    gone: the seat is on the stack object, and the handler reads it the way
+    Simoon's already did.
+    """
+    from engine.named_counters import counters_on
+
+    game = _w4g3e_table(3, interactive=True)
+    _w4g3e_put(game, 0, set_pool("VIS")["Corrosion"])
+    _w4g3e_put(game, 0, _W4G3E_LEA["Swamp"])
+    theirs = _w4g3e_put(game, 1, _w4g3e_artifact("Their Engine", 4))
+    third = _w4g3e_put(game, 2, _w4g3e_artifact("Third Engine", 4))
+
+    _w4g3e_upkeep(game)
+
+    offer = next(c for c in game.pending_choices if c.kind == "trigger_target")
+    assert [t["seat"] for t in offer.data["targets"]] == [1, 2]
+    assert game.confirm_trigger_target(0, seat=2)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert counters_on(third, "rust") == 1, game.log
+    assert counters_on(theirs, "rust") == 0, "the opponent the card did not name"
+
+
+def test_corrosion_unasked_still_rusts_the_seat_it_always_did(set_pool):
+    """A duel is the table where the two readings agree, and it has to keep
+    agreeing: one opponent means one legal target, so the choice is forced
+    (CR 601.2c) and the counter lands exactly where it landed before."""
+    from engine.named_counters import counters_on
+
+    game = _w4g3e_table(2, interactive=False)
+    _w4g3e_put(game, 0, set_pool("VIS")["Corrosion"])
+    _w4g3e_put(game, 0, _W4G3E_LEA["Swamp"])
+    theirs = _w4g3e_put(game, 1, _w4g3e_artifact("Their Engine", 4))
+
+    _w4g3e_upkeep(game)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert counters_on(theirs, "rust") == 1, game.log
+
+
+def test_equipoise_phases_out_the_player_it_was_pointed_at(set_pool):
+    """"For each land **target player** controls in excess of the number you
+    control, choose a land that player controls."
+
+    The announcement is one clause and the choosing is another: whose board is
+    read is chosen as the ability goes on the stack (CR 603.3d), and which
+    permanents come off it as the ability resolves. The first of those was not
+    being made at all - "target player" resolved to the first living opponent,
+    so P3 could never be the one squeezed.
+    """
+    game = _w4g3e_table(3, interactive=True)
+    _w4g3e_put(game, 0, set_pool("VIS")["Equipoise"])
+    for name in ("Plains", "Island"):
+        _w4g3e_put(game, 1, _W4G3E_LEA[name])
+    for name in ("Swamp", "Mountain"):
+        _w4g3e_put(game, 2, _W4G3E_LEA[name])
+
+    _w4g3e_upkeep(game)
+
+    offer = next(c for c in game.pending_choices if c.kind == "trigger_target")
+    assert [t["seat"] for t in offer.data["targets"]] == [0, 1, 2], (
+        "the card prints 'target player', so its own controller is legal"
+    )
+    assert game.confirm_trigger_target(0, seat=2)
+    game.resolve_stack(pause_for_choices=True)
+    game.auto_resolve_pending_choices()
+
+    assert sorted(p.card.name for p in game.players[2].phased_out) == [
+        "Mountain", "Swamp",
+    ], game.log
+    assert game.players[1].phased_out == [], "the opponent it did not name"

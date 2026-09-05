@@ -79,10 +79,93 @@ def _target_filter_controller(payload) -> str | None:
     return None if inner is None else _target_filter_controller(inner)
 
 
+#: The quantifiers a lowered ``targets`` description uses for a printed
+#: "target"/"any target". Read as evidence rather than as a spec: what is
+#: wanted is only "did the printed line say *target*?", because the spec itself
+#: comes from a kind table that fills in a default where the line said nothing.
+_ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target"})
+
+#: ...and the words a lowering writes when it keeps the announcement as a plain
+#: payload value instead: ``recipient``/``who``/``actor`` naming the seat this
+#: instruction targets, ``controller`` inside a sweep's noun phrase ("each
+#: artifact **target opponent** controls", Corrosion), ``controlled_by`` and
+#: ``count_from.owner`` naming whose board a choice is made off ("choose a land
+#: **that player** controls", Equipoise, where "that player" is the target
+#: named one clause earlier).
+#:
+#: A set of *values* rather than a list of keys, because the keys are one per
+#: effect family and the words are three for the whole pool — and because a
+#: key list is the thing that goes stale when the next family picks a fourth
+#: name for the same slot.
+_ANNOUNCED_PLAYER_WORDS = frozenset({"target", "target_player", "target_opponent"})
+
+
+def _prints_a_target(payload) -> bool:
+    """Whether the printed line this payload was lowered from named a target.
+
+    ``derive_instruction_spec`` answers a different question — "what would a
+    picker offer for an instruction of this kind" — and for a **spell** that is
+    the right one everywhere: a kind that targets a player targets a player,
+    and the kind table may say so on its own. A *trigger* needs the narrower
+    question, because the same instruction kinds are also reached with the seat
+    already decided by the firing event, and announcing those would put a
+    picker in front of a phrase that names nobody:
+
+    * "…deals damage to a player, **that player** discards a card" (Abyssal
+      Specter) — the seat is the one that was damaged;
+    * "At the beginning of each player's draw step, **that player** draws…"
+      (Anvil of Bogardan) — the seat is whose step it is;
+    * "…**defending player** discards three cards" (Mindstab Thrull).
+
+    Worse than a redundant prompt, the kind table's default is *wider* than the
+    card: ``target_loses_life`` answers ``{"kind": "player"}`` with no
+    narrowing, so Vito's "target **opponent**" would have been offered its own
+    controller's face.
+
+    So the evidence is the lowering's own record of the phrase — the ``targets``
+    description, or one of the bare words a family that keeps no such
+    description writes instead (:data:`_ANNOUNCED_PLAYER_WORDS`). Walked rather
+    than read off one key for :func:`_target_filter_controller`'s reason: the
+    description sits at the payload's top level for one kind and under a
+    wrapper for the next.
+
+    Evidence, never the answer on its own: this is asked only of an instruction
+    whose *spec* already says a player is chosen, so a per-player loop that
+    spells its iterated seat "target_player" (Lim-Dûl's Hex) never reaches
+    here — ``derive_instruction_spec`` answers None for a ``for_each``.
+    """
+    if isinstance(payload, dict):
+        targets = payload.get("targets")
+        if (
+            isinstance(targets, dict)
+            and targets.get("quantifier") in _ANNOUNCED_QUANTIFIERS
+        ):
+            return True
+        for value in payload.values():
+            if isinstance(value, str) and value in _ANNOUNCED_PLAYER_WORDS:
+                return True
+            if _prints_a_target(value):
+                return True
+        return False
+    if isinstance(payload, (list, tuple)):
+        return any(_prints_a_target(entry) for entry in payload)
+    inner = getattr(payload, "payload", None)
+    return False if inner is None else _prints_a_target(inner)
+
+
 def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
     """Whether *spec* carries the controller narrowing *instruction* prints."""
     controller = _target_filter_controller(getattr(instruction, "payload", None))
     if controller is None:
+        return True
+    # "...put a rust counter on each artifact **target opponent** controls."
+    # (Corrosion.) Here the controller word *is* the announcement rather than a
+    # narrowing of a list of objects: the spec picks a seat, the enumerator
+    # offers seats, and the sweep over that seat's permanents is the
+    # resolution's own work (CR 611.2c fixes the set as the ability resolves).
+    # Read as a narrowing it looked for a spec flag no seat picker carries, and
+    # so declined the one card the pronoun is printed on.
+    if controller in _ANNOUNCED_PLAYER_WORDS and spec.get("kind") == "player":
         return True
     flag = _CONTROLLER_SPEC_FLAGS.get(controller)
     return bool(flag and spec.get(flag))
@@ -107,13 +190,22 @@ class StackResolutionMixin:
     def _default_opposing_seat(self, caster_index: int) -> int:
         """The seat a triggered ability affects when nothing chose one.
 
-        This engine picks a trigger's target at its fire site or not at all — a
-        standing approximation of CR 603.3d, which chooses it as the ability
-        goes on the stack. Where nothing chose, the ability still has to resolve
-        against *someone*, and that someone was ``1 - caster_index``: right for
+        A trigger that prints "target player" now chooses one where CR 603.3d
+        puts the choice — :meth:`_choose_trigger_targets`, as the ability goes
+        on the stack — and this is what is left underneath: an ability whose
+        seat the *firing event* named rather than its controller, and one whose
+        printed line names no player at all but whose effect still has to reach
+        somebody ("target opponent loses that much life" on Vito, whose lowering
+        records no target description for the picker to narrow).
+
+        Where nothing chose, that someone was ``1 - caster_index``: right for
         two players, and at seat 2 of a three-handed game ``players[-1]``, which
         is the caster itself. A player is never their own opponent (CR 102.3),
         so Vito would have drained himself.
+
+        It is also the **answer a non-interactive seat gives the new picker**
+        (``_default_trigger_target``), which is what makes announcing a target a
+        change to what a player is asked and to nothing else.
 
         The first living opponent in seat order instead. The old answer is kept
         as the fallback for a table with no living opponent left, so nothing
@@ -265,16 +357,31 @@ class StackResolutionMixin:
             _keep_targets=targets_already_chosen,
         )
 
-    #: Target kinds :meth:`_choose_trigger_targets` picks for. Objects on the
-    #: battlefield only, and deliberately: those are the kinds whose printed
-    #: noun phrase can *narrow* ("target artifact defending player controls"),
-    #: so a fire site that names one by position rather than by choice is
-    #: naming something the card may not permit. A player, a spell on the
-    #: stack and a card in a zone reach the resolution through their own paths
-    #: and are left exactly as they were.
+    #: Object target kinds :meth:`_choose_trigger_targets` picks for.
+    #: Permanents on the battlefield: the kinds whose printed noun phrase can
+    #: *narrow* ("target artifact defending player controls"), so a fire site
+    #: that names one by position rather than by choice is naming something the
+    #: card may not permit. A spell on the stack and a card in a zone reach the
+    #: resolution through their own paths and are left exactly as they were.
     _CHOOSABLE_TRIGGER_TARGET_KINDS = frozenset({
         "permanent", "creature", "artifact", "enchantment", "land",
         "planeswalker",
+    })
+
+    #: ...and the kinds whose candidates include a **player's face**. The note
+    #: above used to say a player "is left exactly as it was", and that was the
+    #: whole gap: a trigger printing "target opponent" announced nothing, so the
+    #: resolution fell through to ``_default_opposing_seat`` — the first living
+    #: opponent. Right in a two-player game by coincidence, because there is
+    #: only one of those; unchosen at three seats, where CR 601.2c says the
+    #: ability's controller picks and the engine picked for them.
+    #:
+    #: ``divided`` is deliberately not here. "Divided as you choose among any
+    #: number of targets" announces a *set* with an assignment attached
+    #: (CR 601.2d), which is the pile-division prompt rather than this one, and
+    #: no trigger in the pool prints it.
+    _CHOOSABLE_TRIGGER_PLAYER_KINDS = frozenset({
+        "player", "player_or_planeswalker", "any",
     })
 
     def _choose_trigger_targets(self, item: StackItem) -> None:
@@ -296,15 +403,22 @@ class StackResolutionMixin:
 
         Three ways out, all of them the safe direction:
 
-        * the ability names no object target — nothing to choose;
-        * the fire site already bound one (``target_permanent_id``) — the event
-          made the choice and CR 603.3d has none left to make;
+        * the ability names no target — nothing to choose;
+        * the fire site already bound one (``target_permanent_id`` for an
+          object, ``target_player_index`` for a seat) — the event made
+          the choice and CR 603.3d has none left to make;
         * no legal target exists — CR 603.3c removes the ability from the
           stack rather than resolving it into a no-op, which is the same rule
           :meth:`_choose_trigger_mode` applies to a mode that cannot be chosen.
 
         The candidates come from ``_enumerate_targets``, the one list the web
         picker is handed and the one list the answer is checked against.
+
+        A **player** is chosen here on the same rule and through the same list,
+        and it is the half this method did not have. What gates it is
+        :func:`_prints_a_target` rather than the spec alone: the spec comes from
+        a kind table that answers "player" for a whole family of instructions,
+        including the ones whose seat the firing event already fixed.
         """
         from ...targeting import derive_instruction_spec
 
@@ -314,8 +428,29 @@ class StackResolutionMixin:
         if item.target_permanent_id is not None or item.target_stack_item is not None:
             return
         spec = derive_instruction_spec([instruction])
-        if spec is None or spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS:
+        if spec is None:
             return
+        picks_a_player = spec.get("kind") in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
+        if (
+            not picks_a_player
+            and spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
+        ):
+            return
+        if picks_a_player:
+            # The printed line has to have said "target". See
+            # :func:`_prints_a_target`: the spec's "player" may be a kind
+            # table's default over a sentence whose seat the event already
+            # named, and offering that is a prompt whose answer nothing reads
+            # — or, for a phrase the default does not narrow, a prompt
+            # offering a seat the card excludes.
+            if not _prints_a_target(instruction):
+                return
+            # ...and the fire site must not have bound the seat already, which
+            # is the player half of the ``target_permanent_id`` early-out above:
+            # a fire site that stamps the seat its event was about has made the
+            # choice, and asking again would replace it with one nobody made.
+            if item.target_player_index is not None:
+                return
         # **Only pick what the enumerator can narrow.** A printed noun phrase's
         # controller reaches the spec as a flag ("you control" → `own_only`,
         # "an opponent controls" → `opponent_only`, "defending player controls"
@@ -359,15 +494,30 @@ class StackResolutionMixin:
             ability_instruction=instruction,
             source_permanent=item.source_permanent,
             ability_source=item.source_permanent,
+            triggered=True,
         )
         offered = []
         for candidate in candidates:
+            if candidate.get("kind") == "player":
+                seat = candidate.get("seat")
+                if not isinstance(seat, int) or not 0 <= seat < len(self.players):
+                    continue
+                offered.append({
+                    "kind": "player",
+                    "seat": seat,
+                    "name": self.players[seat].name,
+                })
+                continue
             if candidate.get("kind") != "permanent":
                 continue
             perm = self.permanent_at(candidate["seat"], candidate["index"])
             if perm is None:
                 continue
             offered.append({
+                # Stamped on every entry, not only the new ones: the prompt
+                # carries two shapes now, and a reader telling them apart by
+                # which keys happen to be missing would be guessing.
+                "kind": "permanent",
                 "seat": candidate["seat"],
                 "permanent_index": candidate["index"],
                 "permanent_id": perm.permanent_id,

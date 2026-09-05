@@ -194,11 +194,22 @@ def _action_trigger_target_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no trigger target pending")
     if req.seat != pending.player_index:
         raise HTTPException(status_code=400, detail="not your choice")
-    if req.target_permanent_id is None:
-        raise HTTPException(status_code=400, detail="target_permanent_id is required")
+    # A permanent by its stable id, a player by their seat — the two shapes the
+    # prompt offers, and exactly one of them per answer. An id wins where both
+    # arrive, because an answer carrying one is about a permanent whatever seat
+    # it happens to sit on.
+    if req.target_permanent_id is None and req.target_seat is None:
+        raise HTTPException(
+            status_code=400,
+            detail="target_permanent_id or target_seat is required",
+        )
     # Checked against the list the prompt offered, not against the board:
     # CR 603.3d chose the targets as the ability went on the stack.
-    ok = session.game.confirm_trigger_target(req.seat, req.target_permanent_id)
+    ok = session.game.confirm_trigger_target(
+        req.seat,
+        permanent_id=req.target_permanent_id,
+        seat=req.target_seat if req.target_permanent_id is None else None,
+    )
     if not ok:
         raise HTTPException(status_code=400, detail="invalid target")
 

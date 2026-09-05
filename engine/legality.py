@@ -1308,6 +1308,7 @@ class LegalityMixin:
     def _enumerate_targets(
         self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,
         ability_instruction=None, source_permanent=None, ability_source=None,
+        triggered: bool = False,
     ) -> list[dict]:
         kind = spec["kind"]
         if kind in ("none", "modal"):
@@ -1323,15 +1324,20 @@ class LegalityMixin:
         # Here rather than in ``_can_be_targeted``: that predicate is asked
         # about a **permanent** and would leave the player half unenforced, and
         # it cannot tell an activated ability from a triggered one, which this
-        # sentence separates. Everything reaching this function is a spell
-        # (``for_cast``) or an activated ability's picker; a trigger chooses its
-        # targets at its fire site and is untouched, which is what the card
-        # says.
+        # sentence separates. ``triggered`` is how it is told: a triggered
+        # ability is neither a spell nor an activated ability, so the ban does
+        # not reach it, and its announcement (CR 603.3d, through
+        # ``_choose_trigger_targets``) is the one caller that says so.
+        #
+        # Not a nicety while the ban is up: an empty candidate list is CR
+        # 603.3c's "no legal target", which takes the ability **off the stack**.
+        # Read as a spell's ban, Peace Talks would have deleted every announcing
+        # trigger in the game for two turns.
         #
         # A **cost** payment is not a target (CR 601.2b vs 601.2c), and the
         # spec says so — the same flag the seat loop below reads — so a
         # sacrifice cost keeps enumerating while the ban is up.
-        if self.targeting_bans and not spec.get("sacrifice_cost"):
+        if self.targeting_bans and not triggered and not spec.get("sacrifice_cost"):
             return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which
@@ -1379,7 +1385,7 @@ class LegalityMixin:
             perms = self._enumerate_targets(
                 caster_index, card, {**spec, "kind": spec.get("permanent_kind", "permanent")},
                 for_cast=for_cast, ability_instruction=ability_instruction,
-                ability_source=ability_source,
+                ability_source=ability_source, triggered=triggered,
             )
             return perms + self._enumerate_stack_targets(caster_index, card, spec)
 

@@ -944,9 +944,23 @@ def _w2g3_duel(p1_perms=(), p2_perms=(), *, interactive=None):
 
 
 def _w2g3_settle(game):
+    """Run the stack down, answering the announcement it now stops for.
+
+    A trigger that names a **player** chooses one as it goes on the stack
+    (CR 603.3d), and while that prompt is owed the game waits: the object stays
+    on the stack and nothing resolves. So an interactive seat turns a bare
+    ``while game.stack`` loop into a spin, and Phantasmal Sphere ("target
+    opponent creates an X/X Orb") is the card in this file that does it.
+
+    Drained with the registry's own default, which is the seat the resolution
+    used before the announcement existed — so every other test through this
+    helper answers exactly where it answered before.
+    """
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
     game._settle()
     while game.stack:
         game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices(kinds=("trigger_target",))
         game._settle()
 
 

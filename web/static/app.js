@@ -3317,21 +3317,33 @@ function getPromptBoardTargeting(state = currentState) {
   }
 
   // Floral Spuzzem: the triggered ability's own target, chosen as it went on
-  // the stack (CR 603.3d). By id, and only from the list the picker offered.
+  // the stack (CR 603.3d). A permanent by id and a player by seat, out of one
+  // list — "any target" (Pitchburn Devils) offers both at once, and
+  // "target opponent" (Teferi's Tutelage) offers nothing but faces.
   const triggerTargetInfo = getTriggerTargetInfo(state);
   if (triggerTargetInfo) {
-    const byKey = new Map(
-      (triggerTargetInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
-    );
+    const byKey = new Map();
+    const playerSeats = [];
+    for (const c of triggerTargetInfo.candidates || []) {
+      if (c.kind === "player") playerSeats.push(Number(c.seat));
+      else byKey.set(`${c.seat}-${c.index}`, c.id);
+    }
     return promptTargeting({
       permanentKeys: [...byKey.keys()],
+      playerSeats,
       onPermanent: (targetSeat, idx) =>
         submitPromptAction({
           seat,
           action: "trigger_target_confirm",
           target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
         }),
-      invalidHint: "Only a permanent the triggered ability could target can be chosen.",
+      onPlayer: (targetSeat) =>
+        submitPromptAction({
+          seat,
+          action: "trigger_target_confirm",
+          target_seat: targetSeat,
+        }),
+      invalidHint: "Only a target the triggered ability could name can be chosen.",
     });
   }
 

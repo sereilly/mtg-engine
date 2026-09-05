@@ -427,13 +427,19 @@ def _name_and_strip(ctx: PromptContext, choices: list) -> dict:
 @prompt_renderer("trigger_target")
 def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     """"…you may destroy target artifact defending player controls." (Floral
-    Spuzzem.)
+    Spuzzem.) "…target opponent mills two cards." (Teferi's Tutelage.)
 
     CR 603.3d: a triggered ability chooses its targets as it is put on the
     stack, so the candidates were enumerated *then* and are replayed here. The
     same shape as the reflexive prompt below and for the same reason — an
     answer naming something the picker never offered is refused rather than
     quietly performed.
+
+    A candidate is a permanent or a **player's face**, and it says which: an
+    "any target" trigger (Pitchburn Devils) offers both in one list, so the
+    client cannot tell them apart by which fields happen to be filled in. A
+    player carries a seat and no id; a permanent carries both, because the id is
+    the identity and the seat is where to draw the highlight.
     """
     choice = choices[0]
     return {
@@ -441,6 +447,7 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "candidates": [
             {
+                "kind": target.get("kind", "permanent"),
                 "seat": target.get("seat"),
                 "index": target.get("permanent_index"),
                 "id": target.get("permanent_id"),

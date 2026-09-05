@@ -547,3 +547,331 @@ def test_603_10_the_frozen_seat_is_read_through_one_key_list():
             target_permanent_index=None, x_value=None, trigger_context={},
         )
     ) is None
+
+
+# ---------------------------------------------------------------------------
+# W4G3 - CR 603.3d/601.2c: a triggered ability's *player* target
+#
+# `_choose_trigger_targets` announced object targets and nothing else, so a
+# trigger printing "target player" or "target opponent" announced nothing and
+# the resolution fell through to `_default_opposing_seat` - the first living
+# opponent. Right in a duel by coincidence, because there is only one of those;
+# at three seats the engine chose for the player, and CR 601.2c says the
+# ability's controller does.
+# ---------------------------------------------------------------------------
+
+import pytest as _w4g3_pytest
+
+from engine import Game as _W4G3Game, PlayerState as _W4G3Player, load_cards as _w4g3_load
+from engine.card_loader import manifest_set_path as _w4g3_path
+from engine.models import Permanent as _W4G3Permanent
+
+_W4G3_POOLS: dict = {}
+
+
+def _w4g3_card(code: str, name: str):
+    pool = _W4G3_POOLS.get(code)
+    if pool is None:
+        pool = {c.name: c for c in _w4g3_load(_w4g3_path(code, include_measured=True))}
+        _W4G3_POOLS[code] = pool
+    return pool[name]
+
+
+def _w4g3_table(seats: int, *, interactive: bool):
+    game = _W4G3Game(players=[_W4G3Player(name=f"P{i + 1}") for i in range(seats)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    return game
+
+
+def _w4g3_put(game, seat: int, card):
+    perm = _W4G3Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+
+
+def _w4g3_fire(game, perm, *, index: int = 0):
+    """Put one of *perm*'s triggered abilities on the stack, targets unbound.
+
+    Straight through ``_enqueue_triggered_ability`` rather than through a fire
+    site, because the subject is what happens *as the ability goes on the
+    stack* and every fire site funnels into the same ``_stack_push``.
+    """
+    from engine.oracle import compile_card_oracle
+
+    abilities = [
+        ability for ability in compile_card_oracle(perm.card).triggered_abilities
+        if ability.instruction is not None and ability.supported
+    ]
+    ability = abilities[index]
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=perm, card=perm.card,
+        instruction=ability.instruction, effect_kind=ability.effect_kind,
+    )
+    return ability
+
+
+def _w4g3_library(player, card, count: int) -> None:
+    player.library.extend([card] * count)
+
+
+@_w4g3_pytest.mark.cr("603.3d", "601.2c")
+def test_603_3d_a_trigger_naming_target_opponent_announces_a_seat():
+    """"Whenever you draw a card, **target opponent** mills two cards."
+    (Teferi's Tutelage, shipped.)
+
+    Three seats, because two cannot tell the two readings apart: with one
+    opponent the seat nobody chose and the seat the card names are the same
+    player. With two, the ability milled P2 every time and P3 never - a legal
+    target, chosen by the engine.
+    """
+    game = _w4g3_table(3, interactive=True)
+    tutelage = _w4g3_put(game, 0, _w4g3_card("M21", "Teferi's Tutelage"))
+    filler = _w4g3_card("LEA", "Mountain")
+    for seat in (1, 2):
+        _w4g3_library(game.players[seat], filler, 5)
+
+    _w4g3_fire(game, tutelage, index=1)
+
+    (offer,) = game.pending_choices
+    assert offer.kind == "trigger_target"
+    assert offer.player_index == 0
+    assert [(t["kind"], t["seat"]) for t in offer.data["targets"]] == [
+        ("player", 1), ("player", 2),
+    ]
+
+    assert game.confirm_trigger_target(0, seat=2)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert len(game.players[2].graveyard) == 2, game.log
+    assert game.players[1].graveyard == [], "the opponent the trigger did not name"
+
+
+@_w4g3_pytest.mark.cr("603.3d", "117.3b", "608.2")
+def test_603_3d_the_ability_waits_on_the_stack_while_the_seat_is_owed():
+    """The choice is part of putting the ability on the stack, so nothing of the
+    ability has happened while it is owed - and nobody receives priority."""
+    game = _w4g3_table(3, interactive=True)
+    tutelage = _w4g3_put(game, 0, _w4g3_card("M21", "Teferi's Tutelage"))
+    for seat in (1, 2):
+        _w4g3_library(game.players[seat], _w4g3_card("LEA", "Mountain"), 5)
+
+    _w4g3_fire(game, tutelage, index=1)
+
+    assert [item.card.name for item in game.stack] == ["Teferi's Tutelage"]
+    waiting = game.waiting_prompt()
+    assert waiting is not None and waiting.kind == "trigger_target"
+    assert game.players[1].graveyard == [] and game.players[2].graveyard == []
+
+
+@_w4g3_pytest.mark.cr("603.3d", "601.2c")
+def test_603_3d_a_seat_nobody_is_asked_lands_where_it_landed_before():
+    """The default a non-interactive seat takes is not a policy: it is the seat
+    ``_default_opposing_seat`` would have handed the resolution out of
+    ``target_player_index`` being None.
+
+    That equality is what makes announcing the target a change to what a
+    *player* is asked and to nothing else - headless play, AI play and every
+    duel resolve exactly where they resolved before.
+    """
+    for seats in (2, 3):
+        game = _w4g3_table(seats, interactive=False)
+        tutelage = _w4g3_put(game, 0, _w4g3_card("M21", "Teferi's Tutelage"))
+        for seat in range(1, seats):
+            _w4g3_library(game.players[seat], _w4g3_card("LEA", "Mountain"), 5)
+
+        _w4g3_fire(game, tutelage, index=1)
+
+        assert game.pending_choices == [], "nothing queues for a seat nobody asks"
+        (item,) = game.stack
+        assert item.target_player_index == game._default_opposing_seat(0)
+
+
+@_w4g3_pytest.mark.cr("603.3c", "603.3d")
+def test_603_3c_a_trigger_with_no_legal_seat_leaves_the_stack():
+    """"…deals X damage to **target opponent previously dealt damage by it**"
+    (Diseased Vermin).
+
+    The narrowing is a record on the source, and with nobody in it there is no
+    legal target - so the ability is taken back off the stack rather than
+    resolving into damage aimed at whichever opponent came first, which is what
+    it did while nothing announced.
+    """
+    game = _w4g3_table(3, interactive=True)
+    vermin = _w4g3_put(game, 0, _w4g3_card("ALL", "Diseased Vermin"))
+
+    _w4g3_fire(game, vermin, index=1)
+
+    assert game.stack == []
+    assert game.pending_choices == []
+    assert any("603.3c" in line for line in game.log), game.log
+    assert [player.life for player in game.players] == [20, 20, 20]
+
+
+@_w4g3_pytest.mark.cr("603.3d", "603.10")
+def test_603_3d_a_seat_the_firing_event_named_is_not_asked_for():
+    """"Whenever this creature deals damage to a player, **that player**
+    discards a card." (Abyssal Specter.)
+
+    The compiler's kind table answers ``{"kind": "player"}`` for the discard
+    whatever the printed line said, so the spec alone cannot tell this from
+    "target player discards a card". The printed phrase can, and does: the seat
+    here is the one the *event* picked (CR 603.10), and a prompt in front of it
+    would be a question whose answer nothing reads.
+    """
+    game = _w4g3_table(3, interactive=True)
+    specter = _w4g3_put(game, 0, _w4g3_card("ICE", "Abyssal Specter"))
+
+    _w4g3_fire(game, specter, index=0)
+
+    assert game.pending_choices == []
+
+
+@_w4g3_pytest.mark.cr("601.2c", "115.4")
+def test_601_2c_a_kind_table_default_never_widens_the_printed_phrase():
+    """"Whenever you gain life, **target opponent** loses that much life."
+    (Vito, Thorn of the Dusk Rose.)
+
+    The same gate from the other side. Vito's lowering keeps no target
+    description, so the spec is the kind table's ``{"kind": "player"}`` - every
+    seat, the caster's own included. Announcing on that spec would have offered
+    Vito's controller as a legal target for a phrase that says "opponent", so
+    the printed evidence is required and Vito keeps the standing seat.
+    """
+    from engine.targeting import derive_instruction_spec
+
+    game = _w4g3_table(3, interactive=True)
+    vito = _w4g3_put(game, 0, _w4g3_card("M21", "Vito, Thorn of the Dusk Rose"))
+    ability = _w4g3_fire(game, vito, index=0)
+
+    spec = derive_instruction_spec([ability.instruction])
+    assert spec == {"kind": "player"}, "the widened spec this gate exists for"
+    assert game.pending_choices == []
+
+
+@_w4g3_pytest.mark.cr("115.4", "601.2c")
+def test_115_4_any_target_on_a_trigger_offers_faces_and_creatures_alike():
+    """"When this creature dies, it deals 3 damage to **any target**."
+    (Pitchburn Devils.)
+
+    CR 115.4's target is a creature, a player or a planeswalker, and the
+    trigger offered none of them: the resolution dealt to the first living
+    opponent's face and a creature could never be chosen at all.
+
+    The non-interactive answer is still that face, which is the equivalence
+    half - what changed is that a player is now asked.
+    """
+    game = _w4g3_table(3, interactive=True)
+    devils = _w4g3_put(game, 0, _w4g3_card("M21", "Pitchburn Devils"))
+    bear = _w4g3_put(game, 2, _w4g3_card("LEA", "Grizzly Bears"))
+
+    _w4g3_fire(game, devils, index=0)
+
+    (offer,) = game.pending_choices
+    kinds = {(t["kind"], t.get("seat")) for t in offer.data["targets"]}
+    assert ("player", 0) in kinds and ("player", 1) in kinds and ("player", 2) in kinds
+    assert ("permanent", 2) in kinds
+
+    chosen = next(
+        t["permanent_id"] for t in offer.data["targets"]
+        if t["kind"] == "permanent" and t["name"] == "Grizzly Bears"
+    )
+    assert game.confirm_trigger_target(0, chosen)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert bear.damage_marked == 3, game.log
+    assert [player.life for player in game.players] == [20, 20, 20], (
+        "the face it would have hit unasked is untouched"
+    )
+
+
+@_w4g3_pytest.mark.cr("115.4", "601.2c")
+def test_115_4_the_unasked_answer_for_any_target_is_the_face_it_always_hit():
+    """The same card with nobody to ask: the standing opponent's face, exactly
+    as before the announcement existed."""
+    game = _w4g3_table(3, interactive=False)
+    devils = _w4g3_put(game, 0, _w4g3_card("M21", "Pitchburn Devils"))
+    _w4g3_put(game, 2, _w4g3_card("LEA", "Grizzly Bears"))
+
+    _w4g3_fire(game, devils, index=0)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert [player.life for player in game.players] == [20, 17, 20], game.log
+
+
+@_w4g3_pytest.mark.cr("601.2c", "603.3d")
+def test_601_2c_a_seat_the_picker_never_offered_is_refused():
+    """Targets are chosen once, out of the list that was offered - so an answer
+    naming a seat that was not on it leaves the prompt owed rather than being
+    quietly performed."""
+    game = _w4g3_table(3, interactive=True)
+    tutelage = _w4g3_put(game, 0, _w4g3_card("M21", "Teferi's Tutelage"))
+    for seat in (1, 2):
+        _w4g3_library(game.players[seat], _w4g3_card("LEA", "Mountain"), 5)
+
+    _w4g3_fire(game, tutelage, index=1)
+
+    assert not game.confirm_trigger_target(0, seat=0), "its own controller"
+    assert not game.confirm_trigger_target(0, seat=7), "and no seat at all"
+    assert len(game.pending_choices) == 1
+
+
+@_w4g3_pytest.mark.cr("113.3c", "115.1a", "603.3d")
+def test_113_3c_a_ban_on_spells_and_activated_abilities_spares_a_trigger():
+    """"…players and permanents can't be the targets of spells or activated
+    abilities." (Peace Talks.)
+
+    A triggered ability is neither (CR 113.3c), so the ban does not reach its
+    announcement. Read as a spell's, the enumerator returned nothing and
+    CR 603.3d's "no legal choices" would have taken **every** announcing trigger
+    off the stack for two turns - a strictly larger card than the one printed.
+    """
+    game = _w4g3_table(3, interactive=True)
+    tutelage = _w4g3_put(game, 0, _w4g3_card("M21", "Teferi's Tutelage"))
+    for seat in (1, 2):
+        _w4g3_library(game.players[seat], _w4g3_card("LEA", "Mountain"), 5)
+    game.targeting_bans.append({"remaining_turns": 2, "source_name": "Peace Talks"})
+
+    _w4g3_fire(game, tutelage, index=1)
+
+    assert [item.card.name for item in game.stack] == ["Teferi's Tutelage"]
+    (offer,) = game.pending_choices
+    assert [t["seat"] for t in offer.data["targets"]] == [1, 2]
+
+
+@_w4g3_pytest.mark.cr("603.3d", "115.4")
+def test_603_3d_a_seat_the_fire_site_bound_stays_the_fire_site_s():
+    """"When a spell or ability an opponent controls causes you to discard this
+    card, it deals 4 damage to **any target**." (Guerrilla Tactics.)
+
+    The boundary of this round, written down rather than assumed. The discard
+    seam stamps the causing seat onto the trigger, so the ability arrives on the
+    stack with ``target_player_index`` already set - and the announcement steps
+    aside, exactly as it does for an object the fire site bound.
+
+    That is CR 601.2c's choice made by the engine rather than by the player, and
+    it is a *pre-existing* approximation this round leaves where it found it:
+    announcing here would move the damage off the discarder and onto
+    ``_default_opposing_seat``, which is a live behaviour change nothing in this
+    round pays for. A fire site that names a seat for a phrase that says
+    "any target" is its own question.
+    """
+    game = _w4g3_table(3, interactive=True)
+    tactics = _w4g3_card("ALL", "Guerrilla Tactics")
+    game.players[0].hand.append(tactics)
+    game.resolving_seats.append(2)
+    try:
+        game.take_card_from_hand(game.players[0], tactics)
+        game._announce_discard_triggers(game.players[0], tactics)
+    finally:
+        game.resolving_seats.pop()
+
+    assert game.pending_choices == [], "the fire site made the choice"
+    (item,) = game.stack
+    assert item.target_player_index == 2
+    game.resolve_stack(pause_for_choices=True)
+    assert [player.life for player in game.players] == [20, 20, 16], game.log
