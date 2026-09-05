@@ -224,3 +224,25 @@ def test_peace_talks_ends_after_the_second_cleanup(set_pool):
     assert game.players[1].life == 17
     _w2g2_to_declare_attackers(game)
     assert game.declare_attackers(0, [_w2g2_slot(game.players[0], bear)])[0]
+
+
+def test_peace_talks_stops_an_aura_spell_too(set_pool):
+    """An Aura spell is targeted (CR 115.1b) and its enchant line is the
+    target, so the ban reaches it — where a creature spell with an
+    enters-the-battlefield trigger is untouched, because that trigger's targets
+    are chosen when it goes on the stack (CR 603.3d) and not at the cast.
+
+    The two together are the line: gating a permanent spell on a spec it does
+    not own would refuse to cast the creature at all.
+    """
+    catalog = _w2g2_catalog()
+    game, _bear, _hill = _w2g2_peace_talks_board(set_pool)
+    game.players[0].hand.extend([catalog["Pacifism"], set_pool("VIS")["Nekrataal"]])
+    assert game.cast_from_hand(0, "Peace Talks").supported, game.log
+
+    aura = game.cast_from_hand(
+        0, "Pacifism", target_player_index=1, target_permanent_index=0
+    )
+    assert not aura.supported, game.log
+
+    assert game.cast_from_hand(0, "Nekrataal").supported, game.log

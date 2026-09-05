@@ -868,7 +868,18 @@ class SpellCastingMixin:
         # for that method's own reason: ``derive_cast_spec`` reads a permanent
         # spell's *trigger's* targets, which are chosen later (CR 603.3d), and
         # gating the cast on them refuses to cast the creature at all.
-        if self.targeting_bans and card.primary_type in ("instant", "sorcery"):
+        # Instants, sorceries **and Auras**. An Aura spell is targeted
+        # (CR 115.1b) and its enchant line is the target, so its derived spec is
+        # its own rather than a trigger's — which is the one thing that makes a
+        # permanent spell's spec unsafe to gate on here. Every other permanent
+        # spell is excluded for ``cast_target_refusal``'s reason:
+        # ``derive_cast_spec`` reads a creature's ETB trigger targets, chosen
+        # later (CR 603.3d), and gating the cast on them refuses to cast the
+        # creature at all.
+        if self.targeting_bans and (
+            card.primary_type in ("instant", "sorcery")
+            or "aura" in (card.type_line or "").lower()
+        ):
             ban_spec = derive_cast_spec(
                 card, compile_card_oracle(card), from_zone=from_zone
             )
