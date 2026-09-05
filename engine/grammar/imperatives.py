@@ -7,7 +7,7 @@ target creature", "Draw two cards") plus the whole printed paragraphs that begin
 with a noun phrase no subject reader may eat; `subject_verb` keeps the ones that
 name a subject and dispatch on the verb behind it.
 
-CR 101.1 is why they are one question asked in one order rather than two
+CR 608.2c is why they are one question asked in one order rather than two
 parsers: an effect with no printed subject is performed by the object's
 controller, so these sentences *have* a subject and simply do not spell it out.
 Every production here therefore declines without consuming when it is not the

@@ -841,7 +841,7 @@ class PlayerState:
     # damage happens, because the source may be gone by the time a spell
     # asks — the same reason combat triggers capture their victims.
     artifact_damage_taken_this_turn: int = 0
-    # Life actually gained this turn (CR 118.3), counted after replacements: a
+    # Life actually gained this turn (CR 119.3), counted after replacements: a
     # gain that a replacement consumed gained no life, so it must not answer
     # "if you gained 3 or more life this turn". Cleared in
     # begin_turn_bookkeeping — a "this turn" counter that never resets is a bug

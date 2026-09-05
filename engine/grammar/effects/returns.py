@@ -315,7 +315,7 @@ def _parse_return_instead_of_untapping(
     the moment the ability resolved, which is a strictly better card.
 
     The middle clause is the one that has to be consumed rather than skipped:
-    "as you untap your permanents" is CR 502.2's turn-based action, and it is
+    "as you untap your permanents" is CR 502.3's turn-based action, and it is
     what makes this a replacement of the untap instead of a delayed trigger.
     """
     mark = stream.mark()

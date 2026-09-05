@@ -858,7 +858,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         stream.reset(mark_removal)
         # "When the last ore counter **is removed** from this Aura" (Orcish
         # Mine). The passive voice of the branch above and the same event: a
-        # counter removal is one event whoever performed it (CR 121.3), and the
+        # counter removal is one event whoever performed it (CR 122.1), and the
         # sweep that announces it reads the record every removal path writes.
         # Read on this front end as well as in `engine/oracle.py`'s table, for
         # the reason the active voice is: a condition only one of them reads

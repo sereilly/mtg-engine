@@ -20,23 +20,15 @@ is what makes a card printing a counter nobody has named work for free.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
+from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import PAIR_ORDINALS, is_pt_counter
 from ._common import (
-    PRIMARY_TARGET_ROLE,
-    _amount_payload,
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    divided_target_description,
-    _is_enchanted,
-    _is_source,
-    _is_target,
-    _names_several_targets,
-    _restrictions_beyond,
-    describe_target_roles,
+    PRIMARY_TARGET_ROLE, _amount_payload, _describe_several_targets,
+    _describe_targets, _filter_payload, divided_target_description,
+    _is_enchanted, _is_source, _is_target, _names_several_targets,
+    _restrictions_beyond, describe_target_roles, refuse_untestable
 )
 from ._records import counts_prevented_damage, names_the_shielded_object
 from ._sweeps import lower_counter_sweep
@@ -274,11 +266,12 @@ def _lower_put_counter(
         }
         if describe_target_roles(roles_payload, node.subject):
             for role in roles_payload["targets"]["roles"]:
-                if set(role["filter"]) - TESTABLE_SUBJECT_FILTER_KEYS:
-                    raise LoweringError(
-                        "a named-counter target role cannot test this "
-                        "restriction", node=node,
-                    )
+                refuse_untestable(
+                    role["filter"],
+                    refusal="a named-counter target role cannot test this "
+                            "restriction",
+                    node=node,
+                )
                 if not role["filter"].get("type_filter"):
                     raise LoweringError(
                         "a named-counter target role with no card type would "
@@ -302,10 +295,11 @@ def _lower_put_counter(
         }
         _describe_targets(payload, node.subject)
         described = (payload.get("targets") or {}).get("filter") or {}
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the named-counter target cannot test this restriction", node=node
-            )
+        refuse_untestable(
+            described,
+            refusal="the named-counter target cannot test this restriction",
+            node=node,
+        )
         return (OracleInstruction("add_named_counter_to_target", "", payload),)
     # "Put up to X +1/+0 counters on this creature. This ability can't cause the
     # total number of +1/+0 counters on this creature to be greater than N."

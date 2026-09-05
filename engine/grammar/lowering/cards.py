@@ -6,7 +6,7 @@ families of their own: mana production in `mana.py`, the hidden-zone
 search/reveal/exile-linkage flows in `library.py`.
 """
 
-from ...oracle_types import (PER_OBJECT_SEAT_RECORDS,
+from ...oracle_types import (MILLED_THIS_WAY, PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
@@ -595,7 +595,7 @@ def _lower_draw(
 def _lower_mill(
     node: ast.Mill, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
-    """"Target player mills N cards." (CR 701.13a, Millstone.)
+    """"Target player mills N cards." (CR 701.17a, Millstone.)
 
     The miller travels on the payload under the same ``recipient`` key
     ``deal_damage`` and ``target_loses_life`` already read — one convention for
@@ -699,7 +699,7 @@ def _lower_put_milled_card_onto_battlefield(
     check it would compile against an empty list and put nothing onto the
     battlefield, which is a supported card that does nothing.
     """
-    if "milled_this_way" not in produced:
+    if MILLED_THIS_WAY not in produced:
         raise LoweringError(
             "'one of them' with no repeated mill in this effect to have named "
             "a set",
@@ -708,7 +708,7 @@ def _lower_put_milled_card_onto_battlefield(
     return (
         OracleInstruction(
             "put_milled_card_onto_battlefield", "",
-            {"cards_from": "milled_this_way", "under_your_control": True},
+            {"cards_from": MILLED_THIS_WAY, "under_your_control": True},
         ),
     )
 

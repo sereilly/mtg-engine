@@ -700,7 +700,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # Dream Coat: "Enchanted creature becomes the color or colors of your
     # choice." The *permanent* is not chosen — an Aura's ability acts on its
     # own host (CR 303.4) — so there is no target picker; what the activator
-    # chooses is a colour, which rides `mana_color` like every other CR 609.3
+    # chooses is a colour, which rides `mana_color` like every other CR 608.2d
     # choice. A positive "nothing to point at", not an absent derivation:
     # without the row the ability answered None and the guard could not tell
     # the two apart.
@@ -2773,7 +2773,7 @@ def single_player_target(game, item) -> int | None:
 #: on any choosing word at all. A card with none of these words that still
 #: derives a picker is asking a question its own text never poses.
 #:
-#: "of your choice" is CR 609.3's choice (Circle of Protection, Reverse
+#: "of your choice" is CR 608.2d's choice (Circle of Protection, Reverse
 #: Damage), and "card in a graveyard" / "card from your graveyard" is a card
 #: picked out of a zone (Animate Dead's CR 115.1b enchant line, Experimental
 #: Overload's return) — neither is the word "target" and both are real prompts.

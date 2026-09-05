@@ -711,7 +711,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
     def _destroy_least_power_creature(self, owner, victim, card_name: str, chosen: bool = False) -> None:
-        """Drop of Honey's kill (CR 701.7, "it can't be regenerated")."""
+        """Drop of Honey's kill (CR 701.8, "it can't be regenerated")."""
         self.remove_from_battlefield(victim)
         self._permanent_to_graveyard(owner, victim)
         how = "least power, controller's choice" if chosen else "least power"

@@ -150,7 +150,7 @@ def _stack_ability_kind(item) -> str | None:
 def counter_stack_ability(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Counter target activated or triggered ability." (Sublime Epiphany.)
 
-    CR 701.5a: the object is removed from the stack and does nothing. Nothing
+    CR 701.6a: the object is removed from the stack and does nothing. Nothing
     else happens — an ability has no card, so there is no graveyard move to
     make and no "exile it instead" rider to honour.
 
@@ -575,7 +575,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         destination = instruction.payload.get("countered_destination")
         # "**If an artifact or creature spell** is countered this way…"
         # (Desertion.) CR 614.1's replacement is conditional on the countered
-        # spell's class, so a spell outside it takes CR 701.5a's ordinary
+        # spell's class, so a spell outside it takes CR 701.6a's ordinary
         # graveyard — the destination is dropped rather than the counter.
         # Tested with ``_card_matches_filter``: what was countered is a *card*
         # with no battlefield object, so its characteristics are the printed
@@ -615,7 +615,7 @@ def _redirect_countered_card(
     """"…put it on top of its owner's library instead of into that player's
     graveyard." (Memory Lapse.)
 
-    CR 614.1 replacing the destination CR 701.5a would otherwise give the card,
+    CR 614.1 replacing the destination CR 701.6a would otherwise give the card,
     so it happens *instead of* ``_bin_spell_card`` rather than after it — a
     graveyard visit that is then undone is a zone change other replacements and
     triggers would have seen.

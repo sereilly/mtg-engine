@@ -112,7 +112,7 @@ class TurnManagementMixin:
         self.place_starting_ante(order)
         for i in order:
             player = self.players[i]
-            # CR 103.4's opening hand, and one of the three draws that stay off
+            # CR 103.5's opening hand, and one of the three draws that stay off
             # the replacement seam by rule rather than by oversight: the game has
             # not begun, so there is no permanent on any battlefield for a
             # CR 614 replacement to come from. `tests/engine/test_draw_seam.py`
@@ -194,7 +194,7 @@ class TurnManagementMixin:
     def keep_hand(self, player_index: int) -> None:
         """Rule 103.5: Player declares to keep their current hand.
 
-        The hand was drawn before the game's first turn (CR 103.4), and so were
+        The hand was drawn before the game's first turn (CR 103.5), and so were
         any mulligan redraws — none of them is a card drawn *this turn*, but
         every one of them went through ``PlayerState.draw`` and onto the
         per-turn record. The headless ``start_turn`` resets that record; the

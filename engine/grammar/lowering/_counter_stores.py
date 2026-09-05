@@ -36,10 +36,11 @@ it already has, and the lowering side carries families the parse side does not.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._common import _amount_payload, _is_source, _restrictions_beyond
+from ._common import (
+    _amount_payload, _is_source, _restrictions_beyond, refuse_untestable
+)
 from ._events import frozen_seat_record
 
 # The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
@@ -107,11 +108,11 @@ def lower_loyalty_counters(
         # ignore, which would offer *every* planeswalker where the card names
         # one subtype. Kept beside the first so widening the honoured set
         # above can never outrun the matcher.
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the loyalty-counter picker cannot test this restriction",
-                node=node,
-            )
+        refuse_untestable(
+            described,
+            refusal="the loyalty-counter picker cannot test this restriction",
+            node=node,
+        )
         return (
             OracleInstruction(
                 "add_loyalty_counters_to_chosen", "",

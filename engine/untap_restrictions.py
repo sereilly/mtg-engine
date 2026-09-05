@@ -126,7 +126,7 @@ def _subject_block(match: re.Match) -> "UntapRestriction | None":
 # Ordered: the first pattern whose regex matches the (qualifier-stripped) line
 # wins, so more specific wordings precede more general ones.
 UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRestriction]], ...] = (
-    # Two printed spellings of one rule (CR 502.1): the plural "Players skip
+    # Two printed spellings of one rule (CR 500.11): the plural "Players skip
     # their untap steps" (Stasis) and the distributive "Each player skips their
     # untap step" (Sands of Time). One row, because a quantifier over the seats
     # is not a different restriction — and a second row would be a second place

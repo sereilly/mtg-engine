@@ -3,7 +3,7 @@
 Split out of ``lowering/tapping.py`` at the thousand-line cap, along the
 boundary that module's own docstring already drew and then argued against: the
 restrictions lived with the tap that causes them because both are about a
-permanent's status (CR 110.5). They are not the same question. CR 701.20 is a
+permanent's status (CR 110.5). They are not the same question. CR 701.26a is a
 keyword action a resolving effect performs *now* — turn this permanent
 sideways — and everything left in ``tapping`` performs one. CR 502.3 is
 "effects can keep one or more of a player's permanents from untapping": a
@@ -31,15 +31,11 @@ and read by productions that share a subject reader.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _describe_targets,
-    _filter_payload,
-    _is_source,
-    _names_several_targets,
-    _restrictions_beyond,
+    _describe_targets, _is_source, _names_several_targets,
+    _restrictions_beyond, testable_filter_payload
 )
 from ._events import (_RECORDED_PERMANENTS, _TAPPED_PERMANENTS,
                       binds_block_pair)
@@ -238,15 +234,16 @@ def _lower_doesnt_untap_next_step(
             node=node,
         )
     if swept:
-        described = _filter_payload(subject.filter)
         # The handler asks ``subject_matches`` with the resolving seat as
         # observer, so a key outside what that answers would be carried and
         # ignored — the marker landing on permanents the printed phrase
         # excludes, which for a sweep is every permanent on the table.
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the untap marker cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            subject.filter,
+            refusal="the untap marker cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         return (
             OracleInstruction(
                 "skip_next_untap", "",
@@ -274,14 +271,15 @@ def _lower_doesnt_untap_next_step(
             ),
         )
     if chosen:
-        described = _filter_payload(subject.filter)
         # The handler tests the noun phrase with ``subject_matches``, so a key
         # outside what that answers would be carried and ignored — the marker
         # landing on permanents the printed phrase excludes.
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the untap marker cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            subject.filter,
+            refusal="the untap marker cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         payload: dict[str, object] = {
             **described, "untap_steps": node.count, **seated,
         }
@@ -409,16 +407,16 @@ def _lower_doesnt_untap_while_source_tapped(
             raise LoweringError(
                 "the linked untap restriction holds one permanent", node=node
             )
-        described = _filter_payload(subject.filter)
         # The handler tests the noun phrase with ``subject_matches``, so a key
         # outside what that answers would be carried and ignored — the lock
         # landing on a permanent the printed phrase excludes. The same refusal
         # the chosen ``skip_next_untap`` above makes, for the same reason.
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the linked untap restriction cannot test this narrowing",
-                node=node,
-            )
+        described = testable_filter_payload(
+            subject.filter,
+            refusal="the linked untap restriction cannot test this narrowing",
+            node=node,
+            require_narrowing=False,
+        )
         payload: dict[str, object] = dict(described)
         _describe_targets(payload, subject)
         if "targets" not in payload:

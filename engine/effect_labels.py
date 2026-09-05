@@ -182,7 +182,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     #
     # Damage, however it is spelled. A fight (Brash Taunter) and a bite
     # (Heartfire Immolator) differ in who deals back, not in what the ability is
-    # for; life loss is not damage by the rules (CR 118.2) but is the same
+    # for; life loss is not damage by the rules (CR 120.3) but is the same
     # bucket for a report about what an ability does to a player.
     "source_fights_target": "activated_damage",
     # Triangle of War's two-target exchange. The same bucket as the fight above
@@ -628,7 +628,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     "reveal_hand_and_choose": "triggered_look",
     "scry": "triggered_look",
     "mill_target_player": "triggered_mill",
-    # Life loss is not damage by the rules (CR 118.2), but for a report about
+    # Life loss is not damage by the rules (CR 120.3), but for a report about
     # what an ability does to a player it is the same bucket.
     "target_loses_life": "triggered_damage",
     "prevent_all_combat_damage_to_matching": "triggered_prevent",

@@ -22,12 +22,8 @@ from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS,
-    dropped_narrowings,
-    _describe_targets,
-    _filter_payload,
-    _is_target,
-    _restrictions_beyond,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_targets,
+    _filter_payload, _is_target, _restrictions_beyond, refuse_untestable
 )
 
 
@@ -79,14 +75,8 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     # Idiom 2 as always: a narrowing the matcher cannot test would be dropped,
     # and a dropped narrowing on a *target* is a spell that moves a permanent
     # its own text did not admit.
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     described = (payload.get("targets") or {}).get("filter") or {}
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if leftover:
-        raise LoweringError(
-            "the tuck cannot narrow by: " + ", ".join(sorted(leftover)), node=node
-        )
+    refuse_untestable(described, refusal="the tuck cannot narrow by", node=node)
     # "If that creature is red, **you may put it on the bottom** of its owner's
     # library instead." (Ether Well.) One move with two possible ends, so the
     # rider is payload on the same instruction — and it is carried or the line
@@ -470,7 +460,7 @@ def _lower_shuffle_hand_into_library(
                 # "…their hand **and graveyard** into their library."
                 # (Diminishing Returns.) A second pile in the same move, and a
                 # flag on the same instruction rather than a second one for the
-                # reason the node records: CR 701.19 shuffles the library once.
+                # reason the node records: CR 701.24a shuffles the library once.
                 "with_graveyard": node.with_graveyard,
             },
         ),
@@ -527,7 +517,7 @@ def _lower_reveal_top_of_library(
 
 
 def _lower_shuffle_library(node: ast.ShuffleLibrary) -> tuple[OracleInstruction, ...]:
-    """"Then that player shuffles." (Prophecy.) CR 701.16 with nothing moving.
+    """"Then that player shuffles." (Prophecy.) CR 701.24 with nothing moving.
 
     Whose library is payload, exactly as the two shuffles above carry whose
     pile moves. ``that_player`` is deliberately **not** described as a target:
@@ -611,7 +601,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "shuffle_graveyard_into_library": "zones",
     "shuffle_hand_into_library": "zones",
     "shuffle_hand_cards_into_library": "zones",
-    # CR 701.16 with nothing moving into the library (Prophecy's third
+    # CR 701.24 with nothing moving into the library (Prophecy's third
     # sentence). The same category as the two above: what it touches is a zone.
     "shuffle_library": "zones",
     "exile_any_number_of_own_tokens": "zones",
@@ -658,7 +648,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same zone becoming public, so the same category.
     "reveal_hand_while_source_present": "zones",
     "reveal_hand_and_choose": "zones",
-    # CR 701.16, the reveal on its own (Amnesia, Rag Man). The same category as
+    # CR 701.20, the reveal on its own (Amnesia, Rag Man). The same category as
     # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is
     # information about a hand either way.
     "reveal_hand": "zones",

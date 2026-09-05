@@ -304,7 +304,7 @@ class CleanupStepMixin:
         rather than surviving to the caster's own.
 
         Sacrificed rather than destroyed: a regeneration shield does not save it
-        and it is its controller's own action (CR 701.17a).
+        and it is its controller's own action (CR 701.21a).
         """
         marked = [
             perm for perm in self.all_permanents()

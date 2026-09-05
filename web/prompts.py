@@ -730,7 +730,7 @@ def _hand_to_library(ctx: PromptContext, choices: list) -> dict:
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) The same decision — which cards leave the hand —
         # with the order stripped out of the answer, because a shuffle destroys
-        # it (CR 701.19). The client says so rather than telling the player the
+        # it (CR 701.24a). The client says so rather than telling the player the
         # first card they pick goes on top, which on this card is a promise the
         # rules break a moment later.
         "shuffle": bool(choice.data.get("shuffle")),

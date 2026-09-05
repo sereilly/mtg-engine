@@ -574,7 +574,7 @@ class PendingChoicesMixin:
         )
 
     def decline_search_library(self, caster_index: int) -> bool:
-        """"Fail to find" (CR 701.19b) as an answer rather than an error.
+        """"Fail to find" (CR 701.23b) as an answer rather than an error.
 
         It is the *only* legal answer when nothing in the searched zones matches
         the restriction — "a card named Teferi, Timeless Voyager" usually finds
@@ -596,7 +596,7 @@ class PendingChoicesMixin:
         caster = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         if zone == "none":
-            # Fail-to-find ends the whole search, not one find of it: CR 701.19b
+            # Fail-to-find ends the whole search, not one find of it: CR 701.23b
             # is about the search, and "up to two" makes finding fewer a legal
             # answer the player states by declining the rest.
             if "library" in zones:
@@ -750,7 +750,7 @@ class PendingChoicesMixin:
         card is taken twice, and each printed name is consumed by the find
         that used it (Alpine Houndmaster) — because a half-applied answer
         would leave the library short with the prompt still owed. An empty
-        list is the fail-to-find (CR 701.19b): "up to" makes finding fewer a
+        list is the fail-to-find (CR 701.23b): "up to" makes finding fewer a
         legal answer, and the library was searched either way.
 
         Where the finds land is a separate question the search does not
@@ -822,7 +822,7 @@ class PendingChoicesMixin:
             f"{caster.name} searched " + " and ".join(zones) + " and found "
             + ", ".join(card.name for card in cards)
         )
-        # The search is over once the finds are named (CR 701.19d): shuffle
+        # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
         if "library" in zones:
             random.shuffle(caster.library)
@@ -1011,7 +1011,7 @@ class PendingChoicesMixin:
     def _default_search_library(self, choice: PendingChoice) -> None:
         """The AI's search policy, and a fail-to-find when it declines or when
         its choice turns out not to be legal — the library is searched either
-        way (CR 701.19b), which is what the decline path performs."""
+        way (CR 701.23b), which is what the decline path performs."""
         from ...ai_policy import choose_search_card, choose_search_cards
 
         slots = self._search_destination_slots(choice.data)
@@ -2128,7 +2128,7 @@ class PendingChoicesMixin:
             if self.take_card_from_hand(player, card):
                 self.put_card_into_library(player, card, position=position)
         # "**Shuffle** a card from your hand into your library."
-        # (Lat-Nam's Legacy.) CR 701.19 makes the shuffle part of the move
+        # (Lat-Nam's Legacy.) CR 701.24a makes the shuffle part of the move
         # rather than a rider on it, so it happens here rather than as a step
         # after — and where in the library the cards were put stops meaning
         # anything, which is why the two sentences can share one prompt.
@@ -2228,7 +2228,7 @@ class PendingChoicesMixin:
         return self.resolve_pending_choice("land_type_choice", player_index, land_type=land_type)
 
     def _resolve_land_type(self, choice: PendingChoice, land_type: str) -> bool:
-        """CR 609.3's choice, made: the land's type is recorded now.
+        """CR 608.2d's choice, made: the land's type is recorded now.
 
         Two armings reach here. Phantasmal Terrain's names the land by its
         owner's seat and its battlefield slot, and keys the contribution on the
@@ -2293,7 +2293,7 @@ class PendingChoicesMixin:
         """Make every land of *from_type* a *to_type* until end of turn.
 
         The swap is performed **here**, by the resolver, rather than by the
-        handler that armed the prompt: CR 609.3 puts the choice inside the
+        handler that armed the prompt: CR 608.2d puts the choice inside the
         resolution, and the set the sweep reaches is named by the answer. That
         is Jinx's arrangement one land at a time, and it is why this kind does
         not need to suspend anything — there is no later step to hold.
@@ -2344,7 +2344,7 @@ class PendingChoicesMixin:
         )
 
     def _resolve_card_type_choice(self, choice: PendingChoice, card_type) -> bool:
-        """Record the chosen card type on the ability's source (CR 609.3).
+        """Record the chosen card type on the ability's source (CR 608.2d).
 
         **Its own kind rather than a seventh shape of ``enter_choice``**, and
         the difference is not cosmetic: this choice is made when a *triggered
@@ -2801,7 +2801,7 @@ class PendingChoicesMixin:
         restriction, so no name is refused — including one no card in the game
         bears, which simply misses. The comparison is against the card's own
         printed name, not an effective one: nothing in a library is a permanent
-        and nothing there can be copying anything (CR 706.2).
+        and nothing there can be copying anything (CR 707.2).
         """
         data = choice.data
         player = self.players[choice.player_index]
@@ -2978,7 +2978,7 @@ class PendingChoicesMixin:
         CR 202.1 lets a player name any card at all and this spell prints no
         restriction, so no name is refused. The comparison is against the
         card's printed name: nothing in a library is a permanent, so nothing
-        there can be copying anything (CR 706.2).
+        there can be copying anything (CR 707.2).
         """
         player = self.players[choice.player_index]
         named = (card_name or "").strip()
@@ -3439,7 +3439,7 @@ class PendingChoicesMixin:
                 self.stack.remove(target)
                 if data.get("countered_object") == "ability":
                     # An ability on the stack has no card (CR 113.7a): removing
-                    # it from the stack is the whole of CR 701.5a for it, and
+                    # it from the stack is the whole of CR 701.6a for it, and
                     # binning `target.card` would put the *source permanent's*
                     # card in a graveyard it never left.
                     self.log.append(
@@ -5054,7 +5054,7 @@ class PendingChoicesMixin:
         needs a weight in ``engine/ai_valuation.py``, not a branch here.
 
         **The ability's own source is a candidate** unless the sentence printed
-        "another": nothing in CR 701.17a excludes it, and Phyrexian Dreadnought
+        "another": nothing in CR 701.21a excludes it, and Phyrexian Dreadnought
         really can be sacrificed to its own trigger. So the largest-first rule
         usually pays with the source — which is the *same board state* as
         declining, and therefore the "make no trades" answer rather than an
@@ -6710,7 +6710,7 @@ class PendingChoicesMixin:
         The colour a *triggered* ability sets has nowhere else to come from: an
         activated one carries it on the activation (``choices["new_color"]``),
         and nothing announces a trigger. So the question is put here, on the
-        standing queue, and CR 609.3 is why it is put at resolution rather than
+        standing queue, and CR 608.2d is why it is put at resolution rather than
         when the trigger goes on the stack.
 
         A deterministic default is stamped before the prompt, the discipline
@@ -7390,7 +7390,7 @@ register_choice(
     ),
     default=lambda game, choice: game._default_search_library(choice),
     action="search_library_confirm",
-    # "Fail to find" (CR 701.19b) is the second answer, not a way around the
+    # "Fail to find" (CR 701.23b) is the second answer, not a way around the
     # prompt — and the only one available when nothing matches the restriction.
     also_answers=("search_library_decline",),
     prompt_key="search_library",

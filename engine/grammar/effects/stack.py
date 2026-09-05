@@ -77,7 +77,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     subject = parse_target_spec(stream)
     if subject is not None and subject.filter.ability_kinds:
         # "counter target activated or triggered ability" (Sublime Epiphany).
-        # Its own node: CR 701.5a removes the object from the stack either way,
+        # Its own node: CR 701.6a removes the object from the stack either way,
         # but a spell's card goes to a graveyard and an ability has no card to
         # send anywhere, so one handler cannot do both without asking which it
         # has — and asking is the branch this avoids.
@@ -226,7 +226,7 @@ def _parse_countered_destination(
     """``If that spell is countered this way, put it <zone> instead of into
     that player's graveyard.`` (Memory Lapse; Remand's zone is the hand.)
 
-    CR 614.1's replacement of CR 701.5a's destination, and a *tail of the
+    CR 614.1's replacement of CR 701.6a's destination, and a *tail of the
     counter* rather than the next statement: "that spell" is the one the
     sentence before it countered, so parsed apart this sentence names an object
     no earlier step handed it. The interior full stop is consumed here for the
@@ -250,7 +250,7 @@ def _parse_countered_destination(
         # "**If an artifact or creature spell** is countered this way…"
         # (Desertion.) The same tail with a *class* in place of the pronoun:
         # the redirect applies only to a countered spell the noun phrase
-        # matches, and every other one takes CR 701.5a's graveyard. Read
+        # matches, and every other one takes CR 701.6a's graveyard. Read
         # through the ordinary object noun parser, so the class it may name is
         # whatever a printed noun phrase can say rather than a list kept here.
         narrowing = _parse_countered_narrowing(stream)
@@ -259,7 +259,7 @@ def _parse_countered_destination(
             return None, "", None
     stream.accept_punct(",")
     # "…**exile it** instead of putting it into its owner's graveyard."
-    # (Dissipate.) The same CR 614.1 replacement of CR 701.5a's destination
+    # (Dissipate.) The same CR 614.1 replacement of CR 701.6a's destination
     # written with the destination as a *verb* rather than as a zone — which is
     # how Magic prints exile and only exile, because "put it into exile" is not
     # a sentence the game uses. One branch rather than a second production: the

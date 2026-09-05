@@ -25,19 +25,13 @@ it.
 """
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
-                                TESTABLE_SUBJECT_FILTER_KEYS)
+from ...subject_filters import OBJECT_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _REST_OF_TURN,
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _is_source,
-    _is_target,
-    _names_several_targets,
-    _targets_only,
+    _REST_OF_TURN, _describe_several_targets, _describe_targets,
+    _filter_payload, _is_source, _is_target, _names_several_targets,
+    _targets_only, testable_filter_payload
 )
 from ._events import binds_block_pair
 
@@ -262,11 +256,12 @@ def _lower_cant_be(
         # resolution, so a narrowing is never merely *offered* correctly: CR
         # 608.2b's re-check is what stops a creature that has grown past the
         # bound between activation and resolution from being made unblockable.
-        described = _filter_payload(filt)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the unblockable grant cannot test this noun phrase", node=node
-            )
+        described = testable_filter_payload(
+            filt,
+            refusal="the unblockable grant cannot test this noun phrase",
+            node=node,
+            require_narrowing=False,
+        )
         payload = dict(described)
         if several:
             _describe_several_targets(payload, node.subject)

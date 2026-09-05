@@ -20,11 +20,12 @@ guard fired on the lowerings.
 """
 
 from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._common import (_describe_targets, _filter_payload, _is_enchanted,
-                      _is_source, _is_target)
+from ._common import (
+    _describe_targets, _filter_payload, _is_enchanted, _is_source, _is_target,
+    refuse_untestable
+)
 from ._events import binds_block_pair
 from ._filters import _restrictions_beyond, split_bound_card_type
 
@@ -141,8 +142,6 @@ def _lower_phase_out(
         and subject.quantifier in ("all", "each")
         and not subject.targeted
     ):
-        from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
         # "All nontoken permanents **of that type** phase out." (Teferi's
         # Realm.) The phrase has no payload form of its own, so it is split off
         # and carried as the recorded-choice key the matcher resolves against
@@ -153,12 +152,11 @@ def _lower_phase_out(
         # handler would drop, and a dropped narrowing on a *sweep* phases out
         # strictly more of the board than the card prints — here, everyone's
         # lands rather than the controller's.
-        leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-        if leftover:
-            raise LoweringError(
-                "the phase-out sweep cannot narrow by: " + ", ".join(sorted(leftover)),
-                node=node,
-            )
+        refuse_untestable(
+            described,
+            refusal="the phase-out sweep cannot narrow by",
+            node=node,
+        )
         if node.cant_phase_in_until_your_next_turn:
             raise LoweringError(
                 "the phase-in block rider only rides the opponent sweep", node=node
@@ -209,8 +207,6 @@ def _lower_simultaneous_phasing(
     actually test, for the reason every sweep in this file is: a dropped
     narrowing here does not phase out fewer permanents, it phases out more.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     returning = _filter_payload(node.returning)
     leaving = _filter_payload(node.leaving.filter)
     if node.leaving.quantifier not in ("all", "each") or node.leaving.targeted:
@@ -220,12 +216,9 @@ def _lower_simultaneous_phasing(
             node=node,
         )
     for described in (returning, leaving):
-        leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-        if leftover:
-            raise LoweringError(
-                "the phasing swap cannot narrow by: " + ", ".join(sorted(leftover)),
-                node=node,
-            )
+        refuse_untestable(
+            described, refusal="the phasing swap cannot narrow by", node=node
+        )
     return (
         OracleInstruction(
             "phase_in_and_out_matching", "",

@@ -1361,7 +1361,7 @@ def _spell_targets_recipient(game, source, recipient) -> bool:
     damage would be dealt there is nothing there to ask.
 
     "Spells", not abilities: an activated or triggered ability is not a spell
-    (CR 111.1), and its damage source is the permanent it is on -- which is what
+    (CR 113.7a), and its damage source is the permanent it is on -- which is what
     the first refusal below tests, because a permanent is not a spell however it
     is dealing the damage.
 
@@ -1833,7 +1833,7 @@ def _spell_class_blanket(game, event: dict) -> dict | None:
     source = event.get("source")
     if source is None or hasattr(source, "metadata"):
         # A permanent is not a spell however it is dealing the damage
-        # (CR 111.1). A spell's source is the card as printed (CR 109.5), which
+        # (CR 110.1). A spell's source is the card as printed (CR 109.5), which
         # is the shape with no ``metadata``.
         return None
     for permanent in game.all_permanents():

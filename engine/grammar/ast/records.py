@@ -584,8 +584,9 @@ class CouldNot:
     (Cocoon.) The mirror of :class:`ItHappened`: the action before it was not
     optional, so there is no decision to branch on — the branch runs exactly
     when that action *could not be performed*, which for a counter removal is
-    a counter not being there to remove (CR 701.44a: removing a counter that
-    is not on the object is impossible).
+    a counter not being there to remove (CR 609.3: removing a counter that
+    is not on the object is impossible, so the removal does as much as it
+    can, which is nothing).
 
     Carries no field for the reason ItHappened carries none: which step it
     refers to is always the one immediately before, and the lowering pairs

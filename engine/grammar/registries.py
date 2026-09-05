@@ -253,7 +253,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if cost_modifier_claims_line(line):
         return "cost_modifiers"
 
-    # engine/land_play_allowance.py — CR 305.2/505.5b extra land plays
+    # engine/land_play_allowance.py — CR 305.2/505.6b extra land plays
     # (Fastbond), derived from the permanent's own text by the land-drop path in
     # mixins/turn_management and by the support gate. Both halves of the
     # template are claimed: the permission clause and the self-damage rider that

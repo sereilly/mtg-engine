@@ -22,7 +22,7 @@ def _action_declare_attackers(session, req, seat_type):
     # Declaring attackers is the active player's turn-based action (CR 508.1),
     # taken before any player has priority — so no spells may be cast during
     # the assignment and a priority window is *not* required here. The engine
-    # grants the active player priority once attackers are declared (CR 508.4).
+    # grants the active player priority once attackers are declared (CR 508.2).
     # CR 508.1b: an attacker may be sent at a planeswalker rather than at
     # its controller. JSON object keys arrive as strings; the engine keys
     # its combat maps by int battlefield slot.
@@ -72,7 +72,7 @@ def _action_declare_blockers(session, req, seat_type):
     # Declaring blockers is the defending player's turn-based action (CR 509.1),
     # not a priority action: no spells may be cast during the assignment, and the
     # defender declares even while no priority window is open. The engine grants
-    # the active player priority once blockers are declared (CR 509.4), so the
+    # the active player priority once blockers are declared (CR 509.2), so the
     # AI's turn can resume / the attacker may respond.
     raw_pairs = req.blocker_pairs or {}
     # A value may be a single attacker index or a list (one creature blocking

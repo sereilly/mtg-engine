@@ -213,7 +213,7 @@ class MoveCounter:
     """``Move a +1/+1 counter from this enchantment onto target creature.``
     (Afiya Grove.)
 
-    **One effect, not a removal followed by a placement.** CR 121.6 makes a
+    **One effect, not a removal followed by a placement.** CR 122.5 makes a
     move a single action that does nothing at all when the first object has no
     such counter — so written as two steps in a sequence, an empty source would
     still put a counter on the destination, which is a card strictly better
@@ -317,7 +317,7 @@ class BecomeCreature:
     until_end_of_turn: bool = True
 
 
-#: The colour an effect does not name because CR 609.3 makes the choice part of
+#: The colour an effect does not name because CR 608.2d makes the choice part of
 #: resolving it — "becomes **the color of your choice**" (Alchor's Tomb). It
 #: rides :attr:`BecomeColor.color` rather than a second boolean field, for the
 #: reason ``PROTECTION_FROM_CHOSEN_COLOR`` rides the keyword string beside it: a
@@ -340,7 +340,7 @@ CHOSEN_COLORS = "chosen_colors"
 #: be a second thing every reader has to remember.
 COLORLESS = "colorless"
 
-#: The basic land type an effect does not name, for the same CR 609.3 reason —
+#: The basic land type an effect does not name, for the same CR 608.2d reason —
 #: "becomes **the basic land type of your choice** until end of turn" (Jinx).
 #: It rides :attr:`ChangeLandType.land_type` exactly as the two above ride
 #: ``BecomeColor.color``, and for the identical reason: a node carrying both a

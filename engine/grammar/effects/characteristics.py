@@ -509,7 +509,7 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # sentence does not contain.
     #
     # One printed idea, two verbs. A gain and a loss of the same amount are the
-    # same clause with the sign flipped (CR 118.2/118.3), and reading it for one
+    # same clause with the sign flipped (CR 119.3), and reading it for one
     # verb only is what made "you gain life equal to its toughness" legal and
     # "its controller loses life equal to its power" not — on the two halves of
     # a single printed sentence.

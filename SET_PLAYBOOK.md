@@ -337,12 +337,16 @@ ride on a round that was about cards — which is the general rule this entry is
 now here to record: a refactor whose blast radius is the whole pool does not
 travel with a wave.
 
-**Added at MIR's wave 1: `_per_recipient_count` means two things.** It is defined
-in `lowering/_amounts.py` (a per-seat count spec) and in `lowering/_sweeps.py` (a
-per-object multiplier). Both are module-private with local callers, so nothing is
-broken — but it is one name for two facts across two floor modules, and the
-duplicate-definition sweep cannot flag it because it was already true before the
-wave. A rename by whoever next touches either module.
+**Drained 2026-09-05, at VIS wave 4: `_per_recipient_count` meant two
+things** — a per-seat count spec in `lowering/_amounts.py` and a per-object
+multiplier in `lowering/_sweeps.py`, both module-private, neither broken, and
+invisible to the duplicate-definition sweep because it was already true before
+the wave that found it. **Neither kept the name.** Renaming only one would have
+left the other reading as the real `_per_recipient_count`, and the point of the
+entry was that there never was one: they are now `_recipient_seat_count` and
+`_per_recipient_multiplier`, each saying which fact it is. The payload key
+`per_recipient_count` is unchanged, because it is read by handlers and renaming
+it would move every affected card's compiled program for a naming fix.
 
 **Added at MIR's Phase 6: the testable-keys preamble is copied, and the copy is
 load-bearing.** Three places in `lowering/prevention.py` open with the same two
@@ -373,12 +377,90 @@ spellings had already drifted from the rule they were copies of. Its refusal
 also names the offending keys, which turns each one from a work-list entry into
 a diagnosis.
 
-**What is left is a number, not an impression: 39 flat spellings of the same
-check across eleven `lowering/` modules**, each blind to a nested phrase in
-exactly that way. They were deliberately not swept in the same round — they sit
-in modules four other wave branches were editing, and a cross-module sweep with
-no card behind it is a merge hazard bought for nothing. Whoever next splits one
-of those modules should fold its copies the same way.
+**Fully drained 2026-09-05, at VIS wave 4, and the count was wrong in both
+directions.** The entry said "39 flat spellings across eleven `lowering/`
+modules". The real number was **40 across twenty-one files**: 36 in *seventeen*
+`lowering/` modules, plus four the entry could not see because it had only ever
+looked at `lowering/` — `engine/oracle.py` twice (the trigger-subject gate,
+where a dropped narrowing is a trigger announcing on a wider set than the card
+prints), `engine/cost_modifiers.py` and `engine/enter_tapped_statics.py`. All
+forty now go through one of two helpers: `testable_filter_payload` where the
+site builds the payload from one noun phrase, `refuse_untestable` where it built
+the payload itself, and the three that return None rather than refusing call
+`untestable_filter_keys` directly.
+
+**Nothing moved, and that is the finding rather than the absence of one.** The
+differential was empty, and a direct measurement says why: the recursive answer
+and the flat one were compared on every call the whole pool makes — 1,431 calls
+over 4,085 printings, both manifest roles, the compiler and both text-keyed
+tables — and they **never disagree**. No card in the pool prints a nested noun
+phrase whose inner phrase is untestable. So forty copies stayed correct for as
+long as they did because no card had yet asked the question they answer
+differently, which is this repo's "safe by which cards exist" again and is
+exactly why the fix could not be a sweep.
+
+So it is not a sweep. `tests/engine/test_testable_filter_gate.py` holds
+`TESTABLE_SUBJECT_FILTER_KEYS` to being **named in code in two modules** — the
+one that defines it beside its matcher, and the one that reads it as the two
+helpers' default — and a forty-first flat spelling fails there. It tokenizes,
+so the dozen comments explaining why a lowering gates on the key set are
+untouched; what fails is *using* the name outside its two homes.
+
+**Added and drained together 2026-09-05, at VIS wave 4: CR citations rot by
+*subject*, not by number, and 185 of them had.** `scripts/rules_gaps.py` checks
+that a cited rule number exists and that a cited subrule letter exists under it.
+Neither question catches "the no-regeneration rider (CR 701.15c)", because
+701.15c is a real subrule of a real rule — **Goad**. Every citation in
+`engine/` and `web/` was read against `MagicCompRules.txt` and 185 were wrong.
+
+Almost none was a typo. The shipped CR is the **April 17, 2026** edition, which
+inserted `701.4 Behold` and `701.11 Triple` into the alphabetical keyword-action
+block; everything after them shifted, by one in places and by four in others,
+and the comments had been written against the older numbering. `701.7` (then
+Destroy, now Create) was cited nine times for destroying, `701.13a` (then Mill,
+now Exile) six times for milling, `701.19` (then Search, now Regenerate)
+seventeen times for searching and shuffling, `701.5a` (then Counter, now Cast)
+sixteen times for countering. Outside 701 the same shape: `609.3` ("does only as
+much as possible") cited 24 times for a choice made on resolution, which is
+`608.2d`; `706.2` (rolling a die) three times for copying, which is `707.2`;
+`121.x` (drawing) twelve times for counters, which is `122.x`; `118.x` (costs)
+nine times for life and damage, which are `119.x`/`120.x`.
+
+**A CR bump is a silent, repo-wide correctness event**, and that is the entry
+worth keeping. `tests/engine/test_cr_citation_subjects.py` makes it loud for the
+one block where it is mechanically askable: the 701 keyword actions, where every
+rule is headed by a single keyword word. It reads the heading map **out of
+`MagicCompRules.txt` at test time**, so replacing that file with a later edition
+fails every citation whose keyword moved underneath it. Ten sites whose comment
+is right but never prints the keyword ("finding fewer" for fail-to-find,
+"doesn't untap during your next untap step" for exert) are listed in `REVIEWED`,
+and a second test fails on a stale entry so the list cannot outlive them.
+
+What is **not** covered: the rest of the CR, where headings are prose and the
+same check would be noise. Those 60-odd fixes were made by reading. Whoever
+bumps `MagicCompRules.txt` should re-run that reading, not only the guard.
+
+**Added at VIS wave 4, deferred by the same round: `PlayerRef` carries two
+relative clauses as bools, and folding them is a design decision rather than a
+row.** W3 generalised "target player who <did X> this turn" into
+`ast.PlayerDeed` with a two-row `_PLAYER_DEEDS` table, and left
+`attacked_this_turn` as its own parse site and its own picker enforcement. It is
+not the only one left: `damaged_by_source` ("target opponent previously dealt
+damage by it", Diseased Vermin) is a **fourth** clause of the same family
+carried the same way, so folding one leaves the other and the entry's "one row
+plus a picker read" is not the whole job.
+
+The reason it is not mechanical: both bools are enforced by the **picker**
+(`legality.py`'s seat loop reads `attacked_this_turn` off the target spec), and
+neither of `_PLAYER_DEEDS`' existing kinds can be. `tapped_land_for_mana_this_turn`
+and `sacrificed_this_way` are resolution-time seat records with no cast-time
+answer. Fold the bools into `did` and the picker reads one generic key it can
+answer for one row and silently passes for the other two — an unenforced seat
+narrowing, which is a sentence acting on **every** player, which is the exact
+failure this family was built to prevent. So the fold owes a decision about
+which deeds are picker-answerable and a refusal for the rest, and it moves Fire
+and Brimstone's and Diseased Vermin's compiled programs, so it owes its own
+`oracle_diff` too.
 
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game

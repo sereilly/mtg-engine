@@ -901,7 +901,7 @@ def choose_search_card(
     game: Game, player_index: int, data: dict
 ) -> tuple[str, int] | None:
     """Pick the ``(zone, index)`` of the best card a search may find, or None to
-    fail to find (CR 701.19b).
+    fail to find (CR 701.23b).
 
     Both the zones and the restriction come from the armed choice rather than
     from a second reading of the card: the AI is then offered exactly the cards

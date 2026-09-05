@@ -1,4 +1,4 @@
-"""Lowering for tapping and untapping (CR 701.20, 701.21).
+"""Lowering for tapping and untapping (CR 701.26).
 
 Split out of ``board`` when that module reached the thousand-line guard. Tapping
 is a permanent's **status** (CR 110.5) — orthogonal to what `board` otherwise
@@ -22,20 +22,12 @@ import dataclasses
 from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
-                                untestable_filter_keys)
+from ...subject_filters import untestable_filter_keys
 from ._common import (
-    _describe_several_targets,
-    _describe_targets,
-    _full_mana_payload,
-    _is_enchanted,
-    _is_you,
-    _targets_only,
-    _filter_payload,
-    _is_source,
-    _is_target,
-    _names_several_targets,
-    _restrictions_beyond,
+    _describe_several_targets, _describe_targets, _full_mana_payload,
+    _is_enchanted, _is_you, _targets_only, _filter_payload, _is_source,
+    _is_target, _names_several_targets, _restrictions_beyond,
+    refuse_untestable, testable_filter_payload
 )
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
@@ -173,11 +165,12 @@ def _lower_tap(
                 "a bound object carries no narrowing the tap could honour",
                 node=node,
             )
-        described = _filter_payload(spec.filter)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "no tap handler honours this restriction", node=node
-            )
+        described = testable_filter_payload(
+            spec.filter,
+            refusal="no tap handler honours this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         return (OracleInstruction("tap_target_permanent", "", described),)
 
     # "Untap this artifact" (Basalt Monolith), "untap enchanted creature" and
@@ -259,18 +252,18 @@ def _lower_tap(
                 node=node,
             )
         blocked = spec.filter.blocking_target
-        blocked_payload = _filter_payload(blocked)
-        if set(blocked_payload) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the blocker sweep cannot test what it blocks", node=node
-            )
-        described = _filter_payload(
-            dataclasses.replace(spec.filter, blocking_target=None)
+        blocked_payload = testable_filter_payload(
+            blocked,
+            refusal="the blocker sweep cannot test what it blocks",
+            node=node,
+            require_narrowing=False,
         )
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the blocker sweep cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            dataclasses.replace(spec.filter, blocking_target=None),
+            refusal="the blocker sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         payload: dict[str, object] = dict(described)
         payload["targets"] = {
             "quantifier": "target",
@@ -343,11 +336,12 @@ def _lower_tap(
                 "the tap/untap sweep cannot narrow by: " + ", ".join(leftovers),
                 node=node,
             )
-        described = _filter_payload(spec.filter)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the tap/untap sweep cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            spec.filter,
+            refusal="the tap/untap sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
         # "**Target player** untaps all basic lands they control." (Early
         # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
@@ -430,13 +424,12 @@ def _lower_tap(
             and spec.count == 1
             and spec.filter.controller == "you"
         ):
-            described = _filter_payload(
-                dataclasses.replace(spec.filter, controller=None)
+            described = testable_filter_payload(
+                dataclasses.replace(spec.filter, controller=None),
+                refusal="the tap prompt cannot test this restriction",
+                node=node,
+                require_narrowing=False,
             )
-            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-                raise LoweringError(
-                    "the tap prompt cannot test this restriction", node=node
-                )
             return (
                 OracleInstruction(
                     "choose_permanent", "",
@@ -465,8 +458,9 @@ def _lower_tap(
         # outside what that answers would be carried and ignored — the tap
         # reaching more permanents than the card names. Same gate, same reason,
         # as the sweep above.
-        if set(payload) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError("the tap cannot test this restriction", node=node)
+        refuse_untestable(
+            payload, refusal="the tap cannot test this restriction", node=node
+        )
         tap_payload = dict(payload)
         _describe_targets(tap_payload, spec)
         return (OracleInstruction("tap_target_permanent", "", tap_payload),)
@@ -488,8 +482,9 @@ def _lower_tap(
     # reason. It used to be the object-only subset, which refused "untap target
     # attacking creature **you control**" (Ebony Horse): a seat comparison is
     # something the resolution can make and the pure matcher cannot.
-    if set(payload) - TESTABLE_SUBJECT_FILTER_KEYS:
-        raise LoweringError("no untap handler honors this restriction", node=node)
+    refuse_untestable(
+        payload, refusal="no untap handler honors this restriction", node=node
+    )
     untap_payload = dict(payload)
     _describe_targets(untap_payload, spec)
     return (OracleInstruction("untap_target_permanent", "", untap_payload),)
@@ -519,11 +514,12 @@ def _lower_untap_chosen_by_paying(
       that recorded nobody is a prompt armed on whichever seat the resolution
       happened to carry.
     """
-    described = _filter_payload(node.subject)
-    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-        raise LoweringError(
-            "the untap picker cannot test this restriction", node=node
-        )
+    described = testable_filter_payload(
+        node.subject,
+        refusal="the untap picker cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
     payload: dict[str, object] = {
         # "**Any number**", so the cap is however many the board holds — a
         # number only the resolution can know. The string says so; the handler
@@ -575,10 +571,11 @@ def _lower_simultaneous_untap_and_tap(
     untap = _filter_payload(node.untap)
     tap = _filter_payload(node.tap)
     for described in (untap, tap):
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the tap/untap inversion cannot test this restriction", node=node
-            )
+        refuse_untestable(
+            described,
+            refusal="the tap/untap inversion cannot test this restriction",
+            node=node,
+        )
     return (
         OracleInstruction(
             "untap_and_tap_matching", "",
@@ -609,9 +606,12 @@ def _lower_tap_or_untap(node: ast.TapOrUntap) -> tuple[OracleInstruction, ...]:
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted tap-or-untap", node=node)
-    described = _filter_payload(spec.filter)
-    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-        raise LoweringError("no tap-or-untap handler honours this restriction", node=node)
+    described = testable_filter_payload(
+        spec.filter,
+        refusal="no tap-or-untap handler honours this restriction",
+        node=node,
+        require_narrowing=False,
+    )
     payload = _targets_only(spec)
     payload.update(described)
     return (OracleInstruction("tap_or_untap_target", "", payload),)

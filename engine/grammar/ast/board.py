@@ -783,7 +783,7 @@ class DestroyUnlessPay:
 
     The destroy twin of :class:`SacrificeUnlessPay`, and a separate node rather
     than a flag on it because the two are different events: a sacrifice is not
-    a destruction (CR 701.16b), so regeneration and indestructible answer the
+    a destruction (CR 701.21a), so regeneration and indestructible answer the
     one and not the other — which is exactly what the printed rider is asking
     about.
 
@@ -854,7 +854,7 @@ class ShuffleGraveyardIntoLibrary:
 
     Its own node rather than a `ReturnToZone` with a zone pair: this moves a
     *whole zone* rather than any object a filter could name, and shuffling is
-    part of the move rather than a rider on it (CR 701.19).
+    part of the move rather than a rider on it (CR 701.24a).
     """
     whose: PlayerRef
 
@@ -866,7 +866,7 @@ class ShuffleHandIntoLibrary:
 
     Beside the graveyard shuffle above and for the same reason: a whole zone
     moves, and the shuffle is part of the move rather than a rider on it
-    (CR 701.19). ``then_draw`` is on the node instead of being a second
+    (CR 701.24a). ``then_draw`` is on the node instead of being a second
     statement because "that many" is the number the shuffle just moved — a
     count nothing else in the sentence knows, so a draw parsed apart from it
     would have no producer to read.
@@ -897,7 +897,7 @@ class ShuffleHandIntoLibrary:
 class ShuffleLibrary:
     """``Then that player shuffles.`` (Prophecy.) ``Shuffle your library.``
 
-    CR 701.16's shuffle with **nothing moving into the library first**, which
+    CR 701.24's shuffle with **nothing moving into the library first**, which
     is the whole of what separates it from the two nodes above: those are zone
     moves whose shuffle is part of the move, and this is a card having been
     looked at and the deck being randomised again so nobody knows where it went.
@@ -905,7 +905,7 @@ class ShuffleLibrary:
     sentence never names.
 
     Not a rider on the sentence before it, either. A search shuffles because
-    CR 701.19d ends every search with one, and that shuffle is spelled inside
+    CR 701.23h ends every search with one, and that shuffle is spelled inside
     the search production for exactly that reason; a *reveal* ends with no
     shuffle at all, so Prophecy prints one and it is a statement of its own.
     """

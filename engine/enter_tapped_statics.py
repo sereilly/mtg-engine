@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 
-from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from .subject_filters import untestable_filter_keys
 
 # One kind for the family: which permanents and whose are payload, so a card
 # printed "Lands your opponents control enter tapped" needs no dispatch.
@@ -60,7 +60,7 @@ def enter_tapped_static_for(normalized_line: str) -> dict | None:
     # shadow a phrase whose implementation lives somewhere else.
     if filt.is_source or not payload:
         return None
-    if set(payload) - TESTABLE_SUBJECT_FILTER_KEYS:
+    if untestable_filter_keys(payload):
         return None
     # A phrase naming no controller ("Creatures enter tapped") would be every
     # creature including the source's own, which is a card nobody has printed;

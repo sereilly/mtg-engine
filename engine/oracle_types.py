@@ -709,14 +709,20 @@ EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 #: pipeline, and a second spelling between them is how a producer gate goes
 #: vacuous while the amount reads an empty record.
 #:
-#: **Five older sites still spell the string out** — the mill handlers in
-#: ``handlers/zones.py``, the two condition readers in
+#: **Swept at VIS wave 4.** Five modules still spelled the string out — the
+#: mill handlers in ``handlers/zones.py``, the two condition readers in
 #: ``handlers/control_flow.py`` and ``lowering/conditions.py``, the reanimation
-#: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES``. They are
-#: correct today and were deliberately not swept in the round that added this:
-#: three of those modules were open on other branches at the time, and a
-#: cross-module rename with no card behind it is a merge hazard bought for
-#: nothing. Whoever next edits one of them should point it here.
+#: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES`` — twelve
+#: occurrences, deferred once because three of those modules were open on other
+#: branches. They all read this name now.
+#:
+#: One string that looks like a thirteenth is deliberately **not** this
+#: constant: ``lowering/conditions.py`` emits ``{"kind": "milled_this_way"}``
+#: and ``handlers/control_flow.py`` compares against it. That is a
+#: *trigger-condition kind* which happens to be spelled the same way, not the
+#: scratchpad key — one fact wearing another's spelling is what this entry is
+#: against, so folding it would have made the confusion permanent rather than
+#: removing it.
 MILLED_THIS_WAY = "milled_this_way"
 
 TAPPED_THIS_WAY = "tapped_this_way"
@@ -871,7 +877,7 @@ ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
 #:
 #: A *spell's* controller is deliberately not this record. See
 #: ``COUNTERED_SPELL_CONTROLLER`` below: a spell on the stack is not a
-#: permanent, it is gone by a different rule (CR 701.5a) and it is recorded by
+#: permanent, it is gone by a different rule (CR 701.6a) and it is recorded by
 #: a different handler.
 #:
 #: Here rather than beside the lowering that gates on it, for
@@ -893,7 +899,7 @@ LAST_DAMAGER_CONTROLLER = "last_damager_controller"
 #: it countered. "**Its controller** may draw up to two cards at the beginning
 #: of the next turn's upkeep" (Arcane Denial) is the sentence that needs it, and
 #: nothing else can answer: by the time the sentence runs, the spell is a card
-#: in a graveyard (CR 701.5a) and a graveyard card has no controller at all
+#: in a graveyard (CR 701.6a) and a graveyard card has no controller at all
 #: (CR 108.4) — a turn later, when the delayed ability finally fires, not even
 #: the stack remembers there was one.
 #:

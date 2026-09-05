@@ -1826,7 +1826,7 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     with a comment saying no card in the pool used it yet; Feat of Resistance is
     that card.
 
-    "The color of your choice" is resolved here because CR 609.3 makes the
+    "The color of your choice" is resolved here because CR 608.2d makes the
     choice part of the *resolution*. An unanswered choice grants nothing rather
     than defaulting to a colour: a protection the player did not pick is a
     protection from the wrong things, and doing nothing is the honest failure.

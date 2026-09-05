@@ -601,7 +601,7 @@ def _stack_tax(
                 continue
             # "…that target **it**": which *object* the spell chose, so the
             # comparison is by identity against the stack objects it named.
-            # Two copies of one card on the stack are two objects (CR 111.4),
+            # Two copies of one card on the stack are two objects (CR 109.1),
             # and a spell aimed at one of them is not taxed by the other.
             if modifier.targets_source and not any(
                 aimed is item for aimed in targeted_stack
@@ -873,7 +873,7 @@ class AbilitySelfReduction:
 def ability_self_reduction(line: str) -> "AbilitySelfReduction | None":
     """The per-object activation reduction *line* states, if it is one."""
     from .grammar import subject_filter_payload
-    from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+    from .subject_filters import untestable_filter_keys
 
     match = _ABILITY_SELF_REDUCTION.match(line.strip().lower())
     if match is None:
@@ -881,7 +881,7 @@ def ability_self_reduction(line: str) -> "AbilitySelfReduction | None":
     described = subject_filter_payload(match.group("subject"), plural=True)
     if described is None:
         return None
-    if set(described) - set(TESTABLE_SUBJECT_FILTER_KEYS):
+    if untestable_filter_keys(described):
         # A key the matcher cannot answer would be dropped, and the count would
         # then be taken over a wider set than the card names — a bigger discount
         # than the card gives.

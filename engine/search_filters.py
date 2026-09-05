@@ -1,6 +1,6 @@
 """What a library/graveyard search may *find* — one predicate, three callers.
 
-CR 701.19a: what a search may find is the *effect's* restriction, not the
+CR 701.23a: what a search may find is the *effect's* restriction, not the
 searching player's preference. The same test therefore has to run in the three
 places that would otherwise each guess: the engine when a seat answers the
 prompt, the AI when it answers for itself, and the web layer when it decides

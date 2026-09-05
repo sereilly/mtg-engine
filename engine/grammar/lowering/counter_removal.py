@@ -1,4 +1,4 @@
-"""Lowering counter **removal** (CR 121.3).
+"""Lowering counter **removal** (CR 122.1).
 
 Split out of ``lowering/counters.py`` when Fallen Empires took that module
 through the 1,000-line cap — and by three groups at once, none of which
@@ -25,9 +25,9 @@ from ..phrases import is_pt_counter
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ._common import (_amount_payload, _describe_targets, _filter_payload,
-                      _is_source)
+from ._common import (
+    _amount_payload, _describe_targets, _is_source, testable_filter_payload
+)
 from ._events import _BOUND_OBJECT_DELAYED_EVENTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
@@ -211,11 +211,12 @@ def _lower_remove_counter(
         and node.subject.quantifier == "all"
         and isinstance(node.count, ast.AllOf)
     ):
-        described = _filter_payload(node.subject.filter)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "a counter-removal sweep cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            node.subject.filter,
+            refusal="a counter-removal sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         return (
             OracleInstruction(
                 "remove_all_counters_from_matching", "",
@@ -261,7 +262,7 @@ def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...
     """``Move a +1/+1 counter from this enchantment onto target creature.``
     (Afiya Grove.)
 
-    Here rather than in ``lowering/counters.py`` because CR 121.6's move is a
+    Here rather than in ``lowering/counters.py`` because CR 122.5's move is a
     removal that happens to end somewhere: what decides whether anything at all
     happens is the *source's* counter store, which is this module's question,
     and the placement is the tail of it.

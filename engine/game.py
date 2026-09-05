@@ -476,7 +476,7 @@ class Game(
     #
     # The total itself rather than a per-turn tally, because life leaves a
     # player by more routes than anything else in this engine — damage, a cost,
-    # a "lose N life" effect, a life total set lower (CR 118.5 makes that a
+    # a "lose N life" effect, a life total set lower (CR 119.5 makes that a
     # loss of the difference) — and a tally would need every one of them to
     # remember. The one thing all of them write is ``player.life``, so the
     # sweep reads that and nothing can forget to feed it. Not per-turn: a life

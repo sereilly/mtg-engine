@@ -841,7 +841,7 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         for seat, perm in game.permanents_with_controller()
         if perm is not source_permanent
     ]
-    # The flip itself is a CR 104.1 physical action the engine cannot perform;
+    # The flip itself is a CR 100.7 physical action the engine cannot perform;
     # ``engine.dexterity`` is the one place that substitution is made and
     # explained. Only the count is this card's ("up to two permanents").
     chosen = flip_lands_on(candidates, maximum=2)
@@ -976,7 +976,7 @@ def destroy_self(game: Game, instruction: OracleInstruction, context: OracleExec
     The twin of ``sacrifice_self``: the sentence names the ability's own
     source, so nothing is chosen and nothing is looked up. Destruction rather
     than sacrifice because the two are different events — a destroy is a
-    CR 701.7 action a regeneration shield or indestructible can answer, and a
+    CR 701.8 action a regeneration shield or indestructible can answer, and a
     sacrifice (CR 701.21) is neither — and a card that prints one must not
     perform the other.
 
@@ -1017,7 +1017,7 @@ def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, con
     a second spelling of it is how seven of those were skipped before it
     existed.
 
-    CR 701.16b: only the permanent's controller may sacrifice it, and that is
+    CR 701.21a: only the permanent's controller may sacrifice it, and that is
     who the offer was made to — ``handlers/control_flow._action_is_takeable``
     withdraws the offer when the Aura has come unattached, so reaching here
     with nothing attached means the offer was never narrowed and the right
@@ -1122,7 +1122,7 @@ def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: O
 
     Its own kind beside ``destroy_bound_permanent`` and
     ``sacrifice_bound_permanent`` for their reason: exiling, destroying and
-    sacrificing are three different events (CR 701.7, 701.21, 406), and a
+    sacrificing are three different events (CR 701.8, 701.21, 406), and a
     permanent already gone is exiled by nothing — CR 608.2b doing as much as it
     can rather than a failure.
     """

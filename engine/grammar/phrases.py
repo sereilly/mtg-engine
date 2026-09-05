@@ -485,7 +485,7 @@ def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None
 
 
 #: "Protection from the color of your choice" — the keyword whose argument is
-#: not known until the effect resolves (CR 609.3). Named once here because the
+#: not known until the effect resolves (CR 608.2d). Named once here because the
 #: parser writes it, the grant gate reads it and the handler resolves it, and a
 #: third spelling of the same string is how those three come apart.
 

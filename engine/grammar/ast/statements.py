@@ -421,7 +421,7 @@ class May:
     #: "**Look at the top two cards of your library.** You may sacrifice this
     #: enchantment and pay {2}{G}{G}. …" (Preferred Selection.) How many cards
     #: of their own library the offered seat has already seen when the offer is
-    #: made (CR 701.16a).
+    #: made (CR 701.20e).
     #:
     #: A field on the offer rather than a step in front of it, because the look
     #: is not something that *happens* — it is information the decision is made

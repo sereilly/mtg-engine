@@ -58,9 +58,9 @@ class ChooseTarget:
 class CounterAbility:
     """``Counter target activated or triggered ability.`` (Sublime Epiphany.)
 
-    CR 701.5a removes the object from the stack and it does nothing. Separate
+    CR 701.6a removes the object from the stack and it does nothing. Separate
     from :class:`CounterSpell` because the object is different: a spell has a
-    card that goes to its owner's graveyard (CR 701.5a's second sentence), and
+    card that goes to its owner's graveyard (CR 701.6a's second sentence), and
     an ability on the stack has no card at all (CR 113.7a) — nothing to move
     and nothing to exile instead.
 
@@ -127,7 +127,7 @@ class CounterSpell:
     # "**If that spell is countered this way, put it on top of its owner's
     # library instead of into that player's graveyard.**" (Memory Lapse;
     # Remand's destination is the hand.) CR 614.1 — where the countered card
-    # goes replaces CR 701.5a's own destination, so it is a field of the counter
+    # goes replaces CR 701.6a's own destination, so it is a field of the counter
     # rather than a statement beside it: the condition its printed sentence
     # states ("countered **this way**") is the event the first sentence causes,
     # and parsed apart the second sentence would have no countered spell to
@@ -166,7 +166,7 @@ class CounterSpell:
     #
     # A filter on the *node* rather than a second destination key, because it
     # narrows **whether** CR 614.1's replacement applies at all: a countered
-    # spell outside the class takes CR 701.5a's ordinary graveyard, and folding
+    # spell outside the class takes CR 701.6a's ordinary graveyard, and folding
     # the two into one destination would send every countered spell to the
     # battlefield.
     #

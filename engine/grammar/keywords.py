@@ -167,7 +167,7 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # "…from **the chosen color**" (Prismatic Boon), the same question
             # asked by the sentence in front of it rather than by this clause:
             # "Choose a color. X target creatures gain protection from the
-            # chosen color until end of turn." CR 609.3 puts both choices in
+            # chosen color until end of turn." CR 608.2d puts both choices in
             # the same resolution, so they name one colour and read one channel
             # — a second keyword string would be a second answer to it, and the
             # grant handler would have to learn which sentence had asked.

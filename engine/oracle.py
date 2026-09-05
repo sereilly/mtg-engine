@@ -946,7 +946,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # printed. The noun phrase is payload (`engine/draw_reveals.py` holds the
     # static half), so a card printing "a creature card" needs no code.
     # The noun "card" is consumed literally rather than captured: a reveal is
-    # always of a card (CR 701.16a), and `subject_filter_payload` reads a
+    # always of a card (CR 701.20a), and `subject_filter_payload` reads a
     # *permanent's* noun phrase and refuses the word — so leaving it inside the
     # group refused the whole condition and left the trigger unclassified.
     ("revealed_drawn_card",
@@ -1120,7 +1120,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?:artifact|aura|creature|enchantment|permanent|land)"),
     # "When the last ore counter **is removed** from this Aura, …" (Orcish
     # Mine.) The same event in the passive voice, and it has to be the same
-    # kind: CR 121.3's removal is one event however it happened, and the
+    # kind: CR 122.1's removal is one event however it happened, and the
     # dispatcher behind it (`mixins/game_ending.py`) reads the record
     # `named_counters.remove_counters` writes rather than any call site — which
     # is exactly why the printed voice cannot matter. Orcish Mine's counters
@@ -2376,7 +2376,7 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
     an ignored filter would be.
     """
     from .grammar import subject_filter_payload
-    from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+    from .subject_filters import untestable_filter_keys
 
     resolved = dict(payload)
     for key, word in payload.items():
@@ -2398,7 +2398,7 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         pair_plural = key.endswith(_PLURAL_PAIR_SUBJECT_GROUP_SUFFIX)
         if pair_plural or key.endswith(_PAIR_SUBJECT_GROUP_SUFFIX):
             described = subject_filter_payload(str(phrase), plural=pair_plural)
-            if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            if described is None or untestable_filter_keys(described):
                 return None
             del resolved[key]
             for filter_key in _PAIR_SUBJECT_FILTER_KEYS:
@@ -2412,7 +2412,7 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         # The second gate is the load-bearing one: a filter the *dispatcher*
         # cannot test is refused here rather than ignored there, because an
         # ignored restriction is a trigger firing on more than the card says.
-        if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        if described is None or untestable_filter_keys(described):
             return None
         del resolved[key]
         # "Whenever **this creature or** another Rogue you control enters"

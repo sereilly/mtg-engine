@@ -78,7 +78,7 @@ class PutHandCardsOnLibrary:
 
     Both printings choose *which* cards and, with "in any order", what order
     they land in; the player who owns the hand is the player who chooses
-    (CR 103.4-style: a hand is a hidden zone its owner reads).
+    (CR 402.1-style: a hand is a hidden zone its owner reads).
     """
     player: PlayerRef
     count: Amount = field(default_factory=lambda: Fixed(1))
@@ -115,7 +115,7 @@ class PutHandCardsOnLibrary:
 
 @dataclass(frozen=True)
 class Mill:
-    """"Target player mills N cards." (CR 701.13a, Millstone.)
+    """"Target player mills N cards." (CR 701.17a, Millstone.)
 
     A zone change like :class:`Draw`, and kept separate from it for the same
     reason draw and discard are separate: the cards move library-to-graveyard
@@ -189,7 +189,7 @@ class Shuffle:
 
 @dataclass(frozen=True)
 class RevealHand:
-    """``<player> reveals their hand`` (CR 701.16).
+    """``<player> reveals their hand`` (CR 701.20).
 
     The reveal on its own — Inquisition, whose next sentence reads the hand's
     *size*, and the first half of "…**and** discards all nonland cards"
@@ -212,7 +212,7 @@ class RevealRandomFromHand:
 
     Not a :class:`RevealHand` with a count: that reveal makes the *whole* hand
     public and chooses nothing, while this one picks one card the player does
-    not choose (CR 701.16 over a random selection). The distinction matters
+    not choose (CR 701.20 over a random selection). The distinction matters
     downstream — the sentences behind this one ask what "it" is, and there is
     no "it" after a hand reveal.
 
@@ -301,7 +301,7 @@ class RevealHandAndChoose:
     #: is the default because that is what every printing before this one says.
     count: Amount = field(default_factory=lambda: Fixed(1))
     #: Whether the hand was **revealed** (Duress) or only **looked at** (Mind
-    #: Warp). CR 701.20 makes a reveal public and CR 701.16 makes a look
+    #: Warp). CR 701.20 makes a reveal public and CR 701.20e makes a look
     #: private, so the two sentences give different information to everyone who
     #: is not the chooser — the same choice, made from a zone the rest of the
     #: table can or cannot see.

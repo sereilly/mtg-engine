@@ -93,7 +93,7 @@ _REVEALED_HAND_FIELDS = frozenset({"excluded_types", "is_card"})
 
 
 def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
-    """"Target player **reveals their hand**" (CR 701.16), on its own.
+    """"Target player **reveals their hand**" (CR 701.20), on its own.
 
     The first half of Amnesia and Rag Man, lowered as its own step so the
     discard behind it is the ordinary discard instruction rather than a second

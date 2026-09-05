@@ -1,12 +1,12 @@
-"""Lowering destruction: CR 701.7, and the delayed and conditional forms of it.
+"""Lowering destruction: CR 701.8, and the delayed and conditional forms of it.
 
 Split out of ``board`` at the thousand-line guard — a cap neither parallel
 branch crossed alone, which is what made the boundary visible: one added an
 activated ability's delayed destroy and the other a per-payer sweep, and both
 are destruction rather than board changes generally.
 
-The line is the CR's own keyword action. Destroying a permanent (CR 701.7) is
-not sacrificing one (CR 701.17), regenerating one (CR 701.15), phasing one out
+The line is the CR's own keyword action. Destroying a permanent (CR 701.8) is
+not sacrificing one (CR 701.21), regenerating one (CR 701.19), phasing one out
 (CR 702.26) or exchanging control of one, and those are what ``board`` keeps.
 The two halves share no name in either direction — checked at the split rather
 than assumed — so this is a family boundary and not a size cut.
@@ -17,15 +17,15 @@ import dataclasses
 from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
                              OracleInstruction)
 from ...subject_filters import (
-    OBJECT_ONLY_FILTER_KEYS, TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter,
-    untestable_filter_keys,
+    OBJECT_ONLY_FILTER_KEYS, object_only_filter, untestable_filter_keys
 )
 from .. import ast
 from ..errors import LoweringError
-from ._common import (describe_independent_target_roles, _describe_several_targets,
-                      _describe_targets, _filter_payload, _is_source,
-                      _names_several_targets, _restrictions_beyond,
-                      is_mana_value_x)
+from ._common import (
+    describe_independent_target_roles, _describe_several_targets,
+    _describe_targets, _filter_payload, _is_source, _names_several_targets,
+    _restrictions_beyond, is_mana_value_x, testable_filter_payload
+)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS,
                       _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
@@ -540,11 +540,12 @@ def _lower_destroy(
                 "the several-target destroy cannot narrow by: " + ", ".join(leftovers),
                 node=node,
             )
-        several = _filter_payload(spec.filter)
-        if set(several) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the several-target destroy cannot test this restriction", node=node
-            )
+        several = testable_filter_payload(
+            spec.filter,
+            refusal="the several-target destroy cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         if node.no_regen:
             several["bypass_regeneration"] = True
         _describe_several_targets(several, spec)

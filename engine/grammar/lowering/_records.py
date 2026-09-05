@@ -27,6 +27,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
@@ -325,8 +326,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # graveyard, under the key the repeated mill beside it already writes: "put
     # into that graveyard **this way**" is one question, and a second key would
     # be a second reader of it.
-    "mill_target_player": "milled_this_way",
-    "mill_until_matching": "milled_this_way",
+    "mill_target_player": MILLED_THIS_WAY,
+    "mill_until_matching": MILLED_THIS_WAY,
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
     # back-reference asks is the same one: what did this effect just exile?
@@ -337,7 +338,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "remove_counter_from_self": "removed_counter",
     # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) The
     # sacrifice records whether every payer could actually pay the printed
-    # count — CR 701.17b, and CR 608.2's "as much as possible" is exactly why
+    # count — CR 701.21a, and CR 608.2's "as much as possible" is exactly why
     # it is the printed count rather than "at least one": a player with one
     # Swamp cannot sacrifice two, so nothing is sacrificed and the branch runs.
     # Written *before* the prompt is armed, because an interactive seat answers

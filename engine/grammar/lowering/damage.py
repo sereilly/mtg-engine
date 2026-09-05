@@ -21,9 +21,7 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import (
-    TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter, untestable_filter_keys,
-)
+from ...subject_filters import card_only_filter, untestable_filter_keys
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              LAST_DAMAGER_CONTROLLER,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
@@ -47,14 +45,9 @@ from ._sweeps import (
     refuse_unswept_multiplier,
 )
 from ._common import (
-    _describe_several_targets,
-    _names_several_targets,
-    _amount_payload,
-    _filter_payload,
-    _is_source,
-    _is_you,
-    _targets_payload,
-    player_deed_payload,
+    _describe_several_targets, _names_several_targets, _amount_payload,
+    _filter_payload, _is_source, _is_you, _targets_payload,
+    player_deed_payload, testable_filter_payload
 )
 from ._events import (
     _chosen_cast_amount,
@@ -537,12 +530,12 @@ def _lower_damage_shape(
             # disjoint by construction: a delayed ability's object was chosen by
             # its *opener*, and an ordinary trigger's is the event's own
             # subject. An event in neither still refuses, which is the point.
-            described = _filter_payload(recipient.filter)
-            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-                raise LoweringError(
-                    "the event-subject damage cannot test this restriction",
-                    node=node,
-                )
+            described = testable_filter_payload(
+                recipient.filter,
+                refusal="the event-subject damage cannot test this restriction",
+                node=node,
+                require_narrowing=False,
+            )
             payload["recipient"] = "event_subject"
             if described:
                 payload["filter"] = described
@@ -576,11 +569,12 @@ def _lower_damage_shape(
                 "records none",
                 node=node,
             )
-        described = _filter_payload(recipient.filter)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the event-subject damage cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            recipient.filter,
+            refusal="the event-subject damage cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         payload["recipient"] = "event_subject"
         if described:
             payload["filter"] = described
@@ -754,11 +748,12 @@ def _lower_damage_shape(
             raise LoweringError(
                 "a bound-set damage cannot carry a computed amount", node=node
             )
-        described = _filter_payload(recipient.filter)
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the bound-set damage cannot test this restriction", node=node
-            )
+        described = testable_filter_payload(
+            recipient.filter,
+            refusal="the bound-set damage cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
         return (
             OracleInstruction(
                 "deal_damage_to_recorded_permanents", "",

@@ -785,7 +785,7 @@ class EffectsMixin:
         return drawn
 
     def _reveal_first_draw_of_turn(self, player, drawn_before: int) -> None:
-        """"Reveal the first card you draw each turn." (Rowen.) CR 701.16.
+        """"Reveal the first card you draw each turn." (Rowen.) CR 701.20.
 
         Here rather than at a fire site per card-drawing effect, for the reason
         this whole seam exists: a draw is a draw whether the draw step, a
@@ -802,7 +802,7 @@ class EffectsMixin:
         The reveal is *announced* as well as recorded: "Whenever you reveal a
         basic land card this way, draw a card" is the sentence behind it, and it
         is an ordinary triggered ability over this event. Announced after the
-        card is in hand, which is where CR 701.16a says a revealed card is.
+        card is in hand, which is where CR 701.20a says a revealed card is.
         """
         if drawn_before != 0 or not player.cards_drawn_this_turn:
             return

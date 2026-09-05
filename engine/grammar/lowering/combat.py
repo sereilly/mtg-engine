@@ -8,21 +8,13 @@ lowering can check it rather than assume it.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
-                                TESTABLE_SUBJECT_FILTER_KEYS,
-                                untestable_filter_keys)
+from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _is_enchanted,
-    _is_source,
-    _REST_OF_TURN,
-    RESTRICTION_TURNS,
-    _names_several_targets,
-    _restrictions_beyond,
+    _describe_several_targets, _describe_targets, _filter_payload,
+    _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
+    _names_several_targets, _restrictions_beyond, refuse_untestable
 )
 from ._events import (
     _TAPPED_PERMANENTS,
@@ -615,12 +607,11 @@ def _lower_attacking_doesnt_tap(
     if subject.targeted:
         raise LoweringError("an attack-tap exemption does not target", node=node)
     described = subject.filter.to_payload()
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if leftover:
-        raise LoweringError(
-            "the attack-tap exemption cannot narrow by: " + ", ".join(sorted(leftover)),
-            node=node,
-        )
+    refuse_untestable(
+        described,
+        refusal="the attack-tap exemption cannot narrow by",
+        node=node,
+    )
     payload: dict[str, object] = {"filter": described}
     if node.gate_state is not None:
         payload["gate_filter"] = _attack_tap_gate_filter(node)
@@ -643,8 +634,7 @@ def _attack_tap_gate_filter(node: ast.AttackingDoesntTap) -> dict[str, object]:
             f"no permanent filter describes {node.gate_state!r}", node=node
         ) from None
     described = probe.to_payload()
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if not described or leftover:
+    if not described or untestable_filter_keys(described):
         raise LoweringError(
             f"no testable filter says {'not ' if node.gate_negated else ''}"
             f"{node.gate_state!r} of a permanent",
