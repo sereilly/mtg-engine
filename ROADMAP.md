@@ -895,6 +895,151 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Visions (VIS) — wave 1, group 3: prevention, replacement and the two tolls
+
+Eleven cards, and the round's shape is the brief's own warning working: *rank by
+the sentence shape, never by the shared word*. Three of the eleven turned out to
+be one printed clause the engine already implements in the other voice or under
+the other trigger word, and each cost one branch:
+
+- **Resistance Fighter** — "Prevent all combat damage **target creature would
+  deal** this turn" is `prevent_damage_by_target_until_eot`, which the engine
+  has had since Kry Shield, printed in the **active voice**. One branch in
+  `_parse_prevent_all`, and the instruction it emits is byte-identical to the
+  passive spelling's.
+- **Mortal Wound** — "**When** enchanted creature is dealt damage, destroy it".
+  `engine/oracle.py`'s table reads the condition under either printed word (its
+  "when" table falls back to the "whenever" one); the grammar read it under one,
+  because the `when` branch called `_parse_named_subject_tap_event` and not
+  `_parse_attached_event`. So the *condition* parsed, the effect clause did not,
+  and the card compiled with a trigger that had no instruction. One line, and
+  the dispatcher (`_fire_dealt_damage_triggers`' attached-Aura scan) was already
+  there. **`engine/auras.py` was not touched at all** — the brief predicted a
+  collision there and there was none.
+- **Rock Slide** — refused for `any_states`, the "attacking **or** blocking"
+  union, which `permanent_matches_filter` has tested since the Legends pinger
+  cycle and which was never in `TESTABLE_SUBJECT_FILTER_KEYS`. The mirror of the
+  failure that set exists to prevent: not an effect reaching further than the
+  card prints, but a card refused for a narrowing nothing was dropping.
+
+The other eight needed real machinery, and two of them needed it twice.
+
+**Honorable Passage** is CR 615.5's fourth rider and the first that *hurts
+somebody*: `PREVENT_AND_DAMAGE_SOURCE`, a shield kind of its own because `kind`
+names the interceptor and what the interceptor does after absorbing is the whole
+difference between this card and Pentagram of the Ages. The rider needs one
+thing none of its three siblings do — **whose** source it was — and
+`damage_events.damage_source_seat` had already derived it onto the event for
+Fiery Emancipation, so the interceptor reads `source_seat` rather than trying to
+answer from a `CardDefinition` no player controls.
+
+**Remedy** put CR 601.2d's announced division on a *shield*. Nothing new was
+needed to announce or validate it: `engine/divided_damage.py` finds a divided
+step by `targets["kind"] == "divided"` and sizes the announcement off
+`payload["amount"]`, neither of which is about damage — so the announcement
+gate, the picker and the AI covered a prevention spell without knowing it
+exists. One handler branch, one lowering branch, one parse rider.
+
+**Zhalfirin Crusader** is `redirect_next_damage_to_source_until_eot` with the
+two ends of the event exchanged. Its own instruction kind rather than a flag,
+because `targets` means *who is shielded* in one and *who is hit* in the other,
+and a handler reading one payload as the other arms a redirect pointing back at
+the creature it protects — a card that silently does nothing at all.
+
+**Lichenthrope** is a CR 614 substitution matched by shape rather than listed in
+`REPLACEMENT_LINES`, because the counter kind is payload: Phytohydra prints the
+identical sentence with +1/+1. **Ogre Enforcer** is a printed narrowing of a
+*state-based action* (CR 704.5g), so there is no instruction at all — a
+derivation table (`engine/lethal_damage.py`) the sweep and the support gate both
+read, and per-source totals out of `engine/damage_ledger.py`, which is the only
+place the split between one 5/5 and two 3/3s survives.
+
+### The two cards that reported supported and did nothing
+
+**Elephant Grass and Heat Wave** were `supported` on their cumulative-upkeep
+line with **four printed sentences** claimed by nothing — the population
+`parse_coverage` exists to find, and invisible to both other exit numbers. Three
+of the four were narrowings of rows the table already had (Koskun Falls' attack
+toll gained a subject noun phrase; Elephant Grass' flat "black creatures can't
+attack **you**" is that row with no toll and a *defender* scope). The fourth is
+new machinery: Heat Wave's block toll is the first cost in the combat tables
+paid in **life** rather than mana, so `_block_life_cost_of` and
+`_block_declaration_life` sit beside the mana pair — counted per *blocking
+creature* rather than per (blocker, attacker) pair, which is what that card
+prints and deliberately not what Hipparion's does.
+
+### What the round found in already-supported cards
+
+- **Simoon** was a picker finding, and reading it as *half* the card was right
+  again. The picker was missing (`deal_damage_each_matching` had no
+  kind→spec row, so the client sent a bare cast and the engine refused it) —
+  and behind it, `subject_matches` read `controller: "target_opponent"` through
+  its "not you" test, which is **any** opponent. Right in a duel by coincidence;
+  with three seats the spell burned two boards where the card names one. The key
+  was in `TESTABLE_SUBJECT_FILTER_KEYS`, so the lowering admitted the phrase and
+  the matcher then widened it — the admitted-then-ignored class, arriving
+  through a *value* the key set does not enumerate rather than through a key it
+  does not list.
+- **A divided spell's picker dropped everything past its head noun.**
+  `_from_targets_payload`'s divided branch carried `creatures_only` and
+  `max_targets` and nothing else, so Rock Slide's picker offered an idle
+  creature and a flyer — and CR 601.2c's cast check reads the same spec, so the
+  announcement was legal too. It now runs `_narrowing_flags`, the reader every
+  other kind already asks. `without_keywords` was not in that reader either, on
+  any kind.
+- **`declare_blockers_step.py` carried the `subject_can_block_only` board scan
+  twice**, byte for byte, with near-identical comments — two branches adding one
+  loop, which the duplicate-*definition* guard cannot see because neither
+  defines a name. Behaviourally idempotent, so nothing failed. Removed.
+- **Koskun Falls'** payload now carries `subject: {"type_filter": "creature"}`,
+  which is a filter matching every creature — the same card, said as data.
+
+### The splits
+
+Two grammar modules crossed the thousand-line guard in this round and both were
+split along a line something else had already drawn:
+
+- `effects/prevention.py` (1,103) → **`effects/redirection.py`**. The four
+  productions that left are exactly the four whose lowerings already lived in
+  `lowering/redirection.py` and whose lowerings never lived in
+  `lowering/prevention.py`. The mirror re-forms rather than forking.
+  `_parse_source_of_choice_effect` stays behind: it reads CR 615.8's seven
+  opening words and returns *either* node, so a module holding half of it would
+  import the other half.
+- `lowering/prevention.py` (1,080) → **`lowering/_blankets.py`**, a floor. The
+  line is one `engine/prevention.py` already draws in its order bands, and draws
+  because it decides behaviour: a blanket shield has no charges, so it runs ahead
+  of every consumable and CR 616.1e's default must not spend a pool on damage a
+  blanket would have stopped.
+- `lowering/combat.py` (1,025, and 981 before this round) → **`prohibitions`**,
+  a lowering-only family and `permissions`' mirror on the same list: that one
+  grants a player what the rules alone would not allow, this one withholds what
+  they would otherwise have. Everything left in `combat` lowers what a permanent
+  may or may not *do*; what left lowers what may not be done *to* one.
+
+The import-hygiene guard caught the stranded-import half of every one of the
+three moves, which is FEM's lesson holding: *sweep every module you moved code
+out of*.
+
+### The testable-keys Known gap, drained
+
+`SET_PLAYBOOK.md` asked for the copied preamble in `lowering/prevention.py` to
+be folded into `_common` at that module's next split. It was **four** copies,
+not the three the entry recorded, and they are now one call to
+`_filters.testable_filter_payload` (re-exported through `_common`). The fold
+buys two things beyond the line count: the helper uses `untestable_filter_keys`,
+which **recurses** where the flat `set(payload) - TESTABLE_SUBJECT_FILTER_KEYS`
+does not — so a nested phrase ("Auras attached to permanents you control") is
+now tested one level down where the copies answered "testable" whatever the
+inner phrase said — and the refusal it raises **names the untestable keys**,
+which turns a work-list entry into a diagnosis.
+
+**39 flat spellings of the same check remain elsewhere in `lowering/`**, each
+blind to a nested phrase in exactly the same way. They were left alone
+deliberately: they sit in eleven modules four other wave branches are editing,
+and a sweep across them is a merge hazard with no card behind it. Named here so
+the next reader has a number rather than an impression.
+
 ## Mirage (MIR) — shipped (335/335, manifest index 13)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
@@ -3477,7 +3622,22 @@ along a line the *lowering* side had drawn one set earlier, under the same name
 and for the same reason: a boundary found independently by two packages, a set
 apart. Reuse the other side's family name every time and the mirror re-forms
 instead of forking — `destruction`, `keywords`, `tapping`, `types`,
-`trigger_tables`, `sentence_clauses`, `upkeep`, `prevention`, `counters`.
+`trigger_tables`, `sentence_clauses`, `upkeep`, `prevention`, `counters`,
+`redirection`.
+
+**`redirection` is the reuse running the other way for the first time**: every
+name above went parse-side → lowering-side or arrived on both at once, and this
+one had lived on the *lowering* side alone for a set before `effects/prevention.py`
+crossed the guard at VIS and shed exactly the four productions whose lowerings
+were already there. The test for "is this the right cut?" was therefore free —
+the other package had already answered it.
+
+**And when no name is there to reuse, take the name of the family the new one is
+the mirror of.** `lowering/prohibitions.py` (VIS: `<subject> can't be
+<participle>`, out of `lowering/combat.py`) is `permissions`' opposite on the
+same list — one grants a player what the rules alone would not allow, the other
+withholds what they would otherwise have — and the pairing is what says the cut
+is along a line rather than at a convenient blank line.
 
 **And a module two families import is a floor, not a family.**
 `lowering/_amounts.py` and `lowering/_sacrifices.py` both arrived that way,

@@ -351,6 +351,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "upkeep_damage_unless_cost": "damage",
     "grant_half_prevention_shield": "prevention",
     "grant_whole_prevention_shield": "prevention",
+    # Honorable Passage: the same any-target shield with CR 615.5's
+    # sentence after it. The rider deals damage, and the category is
+    # still "prevention" — the category names what the *line* is, and
+    # this line is a shield whose interceptor answers back.
+    "grant_reflecting_prevention_shield": "prevention",
     # CR 615.5's additional effect: the same absorption with a sentence
     # after it. `grant_reverse_damage_shield` reached the engine through a
     # name-keyed hook until Mirage printed a second rider on the same
@@ -399,6 +404,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # whole event, and a chosen recipient rather than the controller — both
     # payload differences over one family, so the same category.
     "redirect_next_damage_to_source_until_eot": "damage",
+    # Zhalfirin Crusader: the same sentence with its two ends swapped.
+    "redirect_next_damage_from_source_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how
@@ -709,6 +716,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # back by `can_attack` for exactly one of that controller's turns.
     "cant_attack_during_controllers_next_turn": "combat_restrictions",
     "cant_block_subject": "combat_restrictions",
+    # Heat Wave: the same restriction printed about a described set of
+    # blockers rather than about the permanent carrying it, so the
+    # blocker gate finds it by scanning the board rather than by reading
+    # the blocker's own program.
+    "subject_cant_block_subject": "combat_restrictions",
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",

@@ -503,6 +503,14 @@ class DeclareAttackersStepMixin:
             # attacker's costs into one payment
             # (``_declaration_mana_plan``), so the multiplication is the sum
             # rather than a number in the payload.
+            # "**Nonblack** creatures can't attack you unless…" (Elephant
+            # Grass). Which attackers the toll reaches is a printed noun phrase
+            # on the payload, tested here through `subject_matches` — the one
+            # reader of a noun phrase — with the *defending* seat as the
+            # observer, because "you" in this sentence is whoever the toll's
+            # permanent belongs to (CR 109.5). Koskun Falls' unnarrowed
+            # printing reduces to "creatures" and so reaches every attacker,
+            # which is what it always did.
             sources += [
                 instruction.payload
                 for permanent in self.controlled_by(attacked_seat)
@@ -510,6 +518,11 @@ class DeclareAttackersStepMixin:
                     permanent.effective_card
                 ).instructions
                 if instruction.kind == "creatures_cant_attack_you_unless_pay"
+                and subject_matches(
+                    self, attacker,
+                    dict(instruction.payload.get("subject") or {}),
+                    observer=attacked_seat, source=permanent,
+                )
             ]
         for payload in sources:
             cost = {
@@ -798,6 +811,24 @@ class DeclareAttackersStepMixin:
                     # while Moat, with no controller key, reaches every seat's.
                     if subject_matches(
                         self, attacker, described,
+                        observer=source_seat, source=source_perm,
+                    ):
+                        return False
+                elif instr.kind == "creatures_cant_attack_you":
+                    # "Black creatures can't attack you." (Elephant Grass.) The
+                    # sibling of `creatures_cant_attack` above with one thing
+                    # more: a **defender**. "You" is the seat controlling the
+                    # permanent that prints it (CR 109.5), so the restriction
+                    # only speaks about an attack aimed at that seat — which is
+                    # the whole of what separates this enchantment from a Moat.
+                    # Read here rather than as a payload flag on that kind,
+                    # because the two ask different questions of the board and a
+                    # flag one branch ignored would ground every attack.
+                    if source_seat != defending_player_index:
+                        continue
+                    if subject_matches(
+                        self, attacker,
+                        dict(instr.payload.get("subject") or {}),
                         observer=source_seat, source=source_perm,
                     ):
                         return False

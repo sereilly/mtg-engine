@@ -414,7 +414,22 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
 # where a second group's move would have summed past the guard) because it
 # reads `parse_recipient` and `parse_bound_subject`, both defined there; five
 # modules read it now, `phrases` re-exporting it under its old name.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones"]
+EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones"]
+# `redirection` arrived on the parse side at Visions' first wave, a set after
+# the lowering side split it off `lowering/damage.py` — the mirror re-forming
+# rather than a new vocabulary, which is what this file asks a split to do.
+# `effects/prevention.py` crossed the guard below on Remedy's divided pool and
+# Honorable Passage's reflecting rider, and the four productions that came out
+# are exactly the four whose lowerings already lived in `lowering/redirection.py`
+# and whose lowerings never lived in `lowering/prevention.py`: two redirects
+# (Shimian Night Stalker, Blood of the Martyr), Soul Echo's counters-instead-of-
+# damage and Blind Fury's doubling. CR 615 removes the damage; all four of those
+# leave it happening and change one of its terms.
+# `_parse_source_of_choice_effect` deliberately stays in `prevention`: it reads
+# CR 615.8's seven opening words and returns *either* node depending on the
+# clause after the comma, so a module holding half of it would import the other
+# half — the coupling this file's family rule exists to prevent. There is no
+# import between the two modules in either direction.
 # `zones` used to be one of the asymmetries below — the note read "a near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
 # for", because zone movement is one `return`/`exile`/`put` production each on
@@ -548,7 +563,26 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # and cost the thing symmetry is for.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions"]
+# `prohibitions` split out of `lowering/combat.py` at Visions' first wave, when
+# Heat Wave's board-wide block restriction took that module past the guard --
+# it had been sitting nineteen lines under it. The line is the printed voice,
+# and it is a real one: everything left in `combat` lowers what a permanent may
+# or may not **do** (attack, block, be declared, be removed from combat), where
+# the one production that left lowers what may not be done **to** one. "Can't
+# be blocked" is a restriction on everybody else's blockers rather than on the
+# creature carrying it, and "can't be regenerated" is a restriction on a
+# replacement nobody has arranged yet.
+# The name is `permissions`' mirror on this same list: that family grants a
+# player what the rules alone would not allow (CR 601.3) and this one withholds
+# what they would otherwise have.
+# A family rather than a floor because `combat` does not read it --
+# `grammar/statement_dispatch.py` reaches `_lower_cant_be` directly, one layer
+# up -- so nothing is below anything and the two share only `_common` and
+# `_events`.
+# Asymmetric like `life`, `counters`, `base_pt` and `tokens`: the parse side
+# stays in `effects/combat.py`, where `_parse_cant_be` is one branch of the
+# "can't" verb table, and the guard fired on the lowering.
 # `base_pt` split out of `lowering/characteristics.py` at Mirage's third wave,
 # the second time that module crossed the guard below (`counters` left it the
 # first time). The line is one CR 613 already draws: what stays *modifies* a
@@ -666,6 +700,14 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "tapping", "attachments", "returns",
+        # `redirection` is the fourth of `types`' shape: `RedirectDamage`,
+        # `DoubleCombatDamage` and `DamageBecomesCounterRemoval` are all facts
+        # about a **damage event**, and they live in `ast/damage.py` beside
+        # every other damage node because that is what they are. The guard
+        # fired on the productions (`effects/prevention.py` at 1,103), not on
+        # the inventory, and splitting the nodes out to match would put a node
+        # in one family with both of its readers in another.
+        "redirection",
         # `tokens` is a parse family and a lowering family with no AST module
         # of its own, for `types`' reason below: `CreateToken`,
         # `CreateCopyToken` and `CreateEmblem` are things the *game* gains, and
@@ -785,7 +827,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1159,6 +1201,20 @@ FAMILY_SHARED = {
     # reads it, re-exports every name, and it reads nothing back, so no family
     # imports it directly.
     "_filters",
+    # `_blankets` split out of `lowering/prevention.py` at Visions' first wave,
+    # when Remedy's divided pool and Honorable Passage's reflecting rider took
+    # that module past the guard. The line is one `engine/prevention.py` already
+    # draws in its **order bands**, and draws for a reason that decides
+    # behaviour: a blanket shield has no charges, so applying it costs its
+    # recipient nothing and it runs ahead of every consumable — where a pool
+    # (CR 615.7) is spent by points and a CR 615.8 shield by instances, and
+    # spending one on damage a blanket would have stopped anyway is the outcome
+    # CR 616.1e's default must not pick. A floor for `_bound_returns`' reason
+    # exactly: `prevention` reads it — `_lower_prevent_damage` dispatches here
+    # the moment the printed quantity is `ast.AllOf` — and it reads nothing
+    # back. Al-abara's Carpet's source-scoped blanket came with it because it is
+    # a blanket too and is reached only from inside the one that moved.
+    "_blankets",
 }
 
 

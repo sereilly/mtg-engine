@@ -3671,6 +3671,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if colorless_source_line(normalized) is not None:
         return True
+    # "This creature can't be destroyed by lethal damage unless lethal damage
+    # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
+    # narrowed by the creature's own text, asked of the reader the state-based
+    # sweep enforces with — so the claim and the exception are one function
+    # rather than two tables held equal by hand.
+    from .lethal_damage import single_source_lethal_line
+
+    if single_source_lethal_line(normalized):
+        return True
     # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
     # reader both attachment predicates use, so the claim and the enforcement
     # are one rule.
@@ -4581,11 +4590,24 @@ def _derived_static_claims(
     from .revealed_hands import revealed_hands_line
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
     from .target_immunity import immunity_claims_line
+    from .lethal_damage import CLAIM as LETHAL_DAMAGE_CLAIM
+    from .lethal_damage import single_source_lethal_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
     if untap_restriction_for(oracle_text) is not None:
         claims.append("untap_restrictions")
+    # "This creature can't be destroyed by lethal damage unless lethal damage
+    # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
+    # narrowed by the permanent's own text: the state-based sweep reads the
+    # same table on every pass, so there is no instruction — and on a creature
+    # whose whole text is this line, no instruction means the card reports
+    # unsupported however well the exception works.
+    if any(
+        single_source_lethal_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(LETHAL_DAMAGE_CLAIM)
     # Extra land plays (Fastbond). The land-drop path derives the allowance from
     # the permanent's own text, so the gate has to ask the same table — a
     # wording the table cannot read must make the card unsupported rather than

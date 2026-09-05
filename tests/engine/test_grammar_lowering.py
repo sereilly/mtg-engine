@@ -685,16 +685,37 @@ def test_a_sacrifice_narrowing_the_prompt_cannot_test_still_refuses():
     ``OBJECT_ONLY_FILTER_KEYS``), never a hope that some matcher downstream
     happens to answer.
 
-    The example has moved twice, and both moves are the guard working rather
-    than rotting: it was "an attacking creature" until ``attacking_only`` joined
-    the set for Disharmony's untap, and "a blocking creature" until
+    The example has moved three times, and every move is the guard working
+    rather than rotting: it was "an attacking creature" until ``attacking_only``
+    joined the set for Disharmony's untap, "a blocking creature" until
     ``blocking_only`` joined it for Righteousness' picker and Sorrow's Path's
-    two blockers. What is left outside the promise is the *union* spelling —
-    ``any_states``, "attacking **or** blocking" — so that is what the guard
-    names now.
+    two blockers, and the *union* spelling — "attacking **or** blocking" —
+    until ``any_states`` joined it for Rock Slide.
+
+    The example it has moved **to** is a better one, because it exercises the
+    distinction the two key sets exist to draw rather than the presence of a
+    matcher at all. "A creature you cast this turn" is in
+    ``TESTABLE_SUBJECT_FILTER_KEYS``: ``subject_matches`` answers it perfectly
+    for a caller holding the observing seat. The forced-sacrifice prompt is not
+    such a caller — it lists one player's battlefield and has no observer — so
+    the key is outside ``OBJECT_ONLY_FILTER_KEYS`` and the line refuses here.
+    A guard whose example can only be retired by a *matcher* being written is
+    one that will keep moving; this one can only be retired by the prompt
+    growing an observer, which is a design change.
     """
-    result = compile_line("Sacrifice an attacking or blocking creature.", card_name="Test")
+    result = compile_line("Sacrifice a creature you cast this turn.", card_name="Test")
     assert result.parsed and not result.lowered
+
+    # The union the guard used to name, now that it has a promise behind it:
+    # the phrase lowers and the narrowing survives into the payload, rather
+    # than the line being refused for a restriction the matcher can answer.
+    union = compile_line(
+        "Sacrifice an attacking or blocking creature.", card_name="Test"
+    )
+    assert union.parsed and union.lowered
+    assert union.instructions[0].payload["filter"]["any_states"] == [
+        "attacking", "blocking",
+    ]
 
 
 # ---------------------------------------------------------------------------

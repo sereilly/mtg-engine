@@ -183,3 +183,124 @@ def test_damage_dealt_by_a_composed_sequence_still_kills():
     game.check_state_based_actions()
 
     assert owner.battlefield == []
+
+
+# --- VIS w1g3: a printed narrowing of 704.5g, and 616.1e's default order ----
+#
+# Imports live inside the block by the per-set convention.
+
+from engine.lethal_damage import lethal_damage_destroys
+from engine.pt import add_pt_counters
+from engine.shields import PREVENT_NEXT_N, Shield, add_shield, shields_of_kind
+from tests.helpers import _damage_dealt
+
+
+def _w1g3r_creature(name, power=2, toughness=2, oracle_text=""):
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={
+            "name": name, "type_line": "Creature - Test",
+            "power": str(power), "toughness": str(toughness),
+        },
+    )
+
+
+_SINGLE_SOURCE = (
+    "This creature can't be destroyed by lethal damage unless lethal damage "
+    "dealt by a single source is marked on it."
+)
+
+
+@pytest.mark.cr("704.5g")
+def test_704_5g_reads_the_permanent_s_own_text_before_burying_it():
+    """The rule is one sentence and a printed card may narrow it. The sweep
+    therefore asks the permanent rather than only its numbers - and asks it
+    through ``effective_card``, so a permanent that *copies* the clause is
+    covered and one whose text was changed is not (CR 707.2, CR 612.1).
+
+    The rule-level claim, separate from the card: nothing about this depends on
+    Ogre Enforcer existing, and a second card printing the sentence needs no
+    code.
+    """
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    narrowed = Permanent(
+        card=_w1g3r_creature("Stubborn", toughness=4, oracle_text=_SINGLE_SOURCE)
+    )
+    ordinary = Permanent(card=_w1g3r_creature("Plain", toughness=4))
+    game.players[0].battlefield.extend([narrowed, ordinary])
+    for perm in (narrowed, ordinary):
+        perm.damage_marked = 4
+
+    # No ledger entries at all: nobody has dealt this creature anything, so no
+    # single source dealt it lethal damage.
+    assert lethal_damage_destroys(game, narrowed) is False
+    assert lethal_damage_destroys(game, ordinary) is True
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_a_replacement_that_consumes_the_event_runs_before_a_shield():
+    """CR 616.1e gives the affected player the choice of which effect applies
+    first, and the registered ``order`` is the default a non-interactive seat
+    takes. A replacement that turns damage into counters *consumes* the event,
+    so applying it first leaves the shield unspent — and applying the shield
+    first would spend its points on damage that was never going to be marked.
+
+    The rule permits either; this pins which one the engine picks, because that
+    choice is worth points of shield to the affected player.
+    """
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    perm = Permanent(
+        card=_w1g3r_creature(
+            "Fungus", toughness=5,
+            oracle_text=(
+                "If damage would be dealt to this creature, put that many "
+                "-1/-1 counters on it instead."
+            ),
+        )
+    )
+    game.players[0].battlefield.append(perm)
+    add_shield(perm, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    assert _damage_dealt(game, perm, 2) == 0
+    assert perm.damage_marked == 0
+    assert shields_of_kind(perm, PREVENT_NEXT_N)[0].amount == 3, (
+        "the shield was not spent on an event the replacement consumed"
+    )
+    assert perm.effective_toughness == 3, "and the counters arrived instead"
+
+
+@pytest.mark.cr("122.1a")
+def test_122_1a_the_substituted_counters_are_real_counters():
+    """"Put that many -1/-1 counters on it instead" places CR 122.1a counters,
+    not a P/T bonus wearing their name: the 704.5q sweep cancels them against
+    +1/+1, the card face renders them, and the card's own upkeep trigger takes
+    one off. A version writing the bonus alone would look identical until any
+    of those three asked.
+    """
+    from engine.named_counters import counters_on
+
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    perm = Permanent(
+        card=_w1g3r_creature(
+            "Fungus", toughness=5,
+            oracle_text=(
+                "If damage would be dealt to this creature, put that many "
+                "-1/-1 counters on it instead."
+            ),
+        )
+    )
+    game.players[0].battlefield.append(perm)
+
+    _damage_dealt(game, perm, 2)
+
+    # Whichever store the kind lives in, the count is readable as counters.
+    recorded = counters_on(perm, "-1/-1") or perm.metadata.get("minus_counters", 0)
+    assert recorded == 2
+
+    # And CR 704.5q cancels them against their opposite.
+    add_pt_counters(perm, "+1/+1", 2)
+    game.check_state_based_actions()
+    assert perm.effective_toughness == 5
+# --- end VIS w1g3 ---

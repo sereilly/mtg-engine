@@ -97,6 +97,22 @@ PREVENT_AND_EXILE = "prevent_and_exile"
 #: `damage_redirects.class_redirects`, which the redirect side has had since
 #: Blood of the Martyr).
 PREVENT_TEAM = "prevent_team"
+#: "The next time a source of your choice would deal damage to any target this
+#: turn, prevent that damage. **If damage from a red source is prevented this
+#: way, ~ deals that much damage to the source's controller.**" (Honorable
+#: Passage.) CR 615.5's additional effect a third time, and the first whose
+#: rider is *damage* rather than a gain — so it needs one thing none of its
+#: siblings do: who the prevented source belonged to (``source_seat`` on the
+#: event, CR 109.5).
+#:
+#: Its own kind rather than a flag on ``PREVENT_WHOLE`` for the reason ``kind``
+#: exists: it names the interceptor that consumes the shield, and what the
+#: interceptor does after absorbing is the whole difference between this card
+#: and Pentagram of the Ages. ``rider_colors`` is the colour the rider tests —
+#: deliberately not ``colors``, because this shield prevents damage of *every*
+#: colour and answers back for only one, which is the same split Shadowbane
+#: already needed.
+PREVENT_AND_DAMAGE_SOURCE = "prevent_and_damage_source"
 #: "The next time a <colour> source of your choice would deal damage to you this
 #: turn, prevent that damage" (CR 615.9's rechecked property).
 PREVENT_FROM_COLOR = "prevent_from_color"
@@ -584,6 +600,32 @@ def make_exile_charge(source_name: str | None = None) -> Shield:
     """The same shield with no source recorded — the AI/headless activation,
     exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
     return make_chosen_source_shield(PREVENT_AND_EXILE, source_name=source_name)
+
+
+def make_reflect_source(
+    source, rider_colors: tuple[str, ...], source_name: str | None = None
+) -> Shield:
+    """Honorable Passage's shield against the source its caster chose.
+
+    Pentagram's shield with a sentence after it (CR 615.5), so it is built the
+    way Bone Mask's and Shadowbane's are — the difference is entirely in the
+    interceptor ``kind`` selects and in the colours its rider tests.
+    """
+    return make_chosen_source_shield(
+        PREVENT_AND_DAMAGE_SOURCE, source, source_name,
+        rider_colors=tuple(rider_colors),
+    )
+
+
+def make_reflect_charge(
+    rider_colors: tuple[str, ...], source_name: str | None = None
+) -> Shield:
+    """The same shield with no source recorded — the AI/headless cast, exactly
+    as Reverse Damage, Bone Mask and Dark Sphere each keep one."""
+    return make_chosen_source_shield(
+        PREVENT_AND_DAMAGE_SOURCE, source_name=source_name,
+        rider_colors=tuple(rider_colors),
+    )
 
 
 def make_whole_source(source, source_name: str | None = None) -> Shield:
