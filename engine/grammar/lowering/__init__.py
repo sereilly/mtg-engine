@@ -160,6 +160,7 @@ from .returns import (
     _lower_reanimate_enchanted_card,
     _lower_return_to_zone,
     _lower_put_source_into_zone,
+    _lower_return_self_instead_of_untapping,
 )
 from .exile import (
     _EXILED_CREATURE,
@@ -437,6 +438,7 @@ __all__ = [
     "_lower_reanimate_enchanted_card",
     "_lower_return_to_zone",
     "_lower_put_source_into_zone",
+    "_lower_return_self_instead_of_untapping",
     "_lower_reveal_top",
     "_lower_reveal_until",
     "_lower_tap_or_untap",

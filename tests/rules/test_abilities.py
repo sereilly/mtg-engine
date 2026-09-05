@@ -20,6 +20,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
+from engine.mana_payment import is_mana_ability
 from engine.oracle import compile_card_oracle, parse_activated_ability_cost
 
 
@@ -1333,3 +1334,59 @@ def test_603_5_a_declined_tolls_unless_part_is_dealt_with_at_resolution():
     assert game.is_on_battlefield(bear_perm), game.log
     assert engine_perm.tapped, game.log
 # --- end LeadC ---
+
+
+# ---------------------------------------------------------------------------
+# 605.1a — "could add mana when it resolves" is asked of the whole effect
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("605.1a")
+def test_605_1a_a_mana_ability_with_a_drawback_is_still_a_mana_ability():
+    """"{T}: Add {W} or {U}. This land deals 1 damage to you." (Adarkar Wastes
+    and the four other painlands; the five depletion lands print the same shape
+    with a counter instead of the damage.)
+
+    605.1a asks whether the ability *could* add mana when it resolves, which is
+    a question about the whole effect. A two-sentence effect lowers to a
+    ``sequence``, whose own kind produces no mana - so a predicate that read
+    only the outer instruction answered False for twelve shipped cards, every
+    one of them a land whose entire design is a mana ability with a price.
+
+    The direction it failed in is the quiet one: those abilities were treated as
+    non-mana abilities, which does *more*, not less. They would use the stack
+    (605.3a says they must not), an effect shutting off everything but mana
+    abilities would shut them off, and a trigger watching for "a {T} ability
+    that isn't a mana ability" would fire on them.
+    """
+    painland = _mk_card(
+        "Test Painland", "Land", "{T}: Add {W} or {U}. This land deals 1 damage to you."
+    )
+
+    program = compile_card_oracle(painland)
+    ability = program.activated_abilities[0]
+
+    assert ability.instruction.kind == "sequence"
+    assert is_mana_ability(ability) is True
+    # The same answer whichever of the two shapes the caller holds: the AI side
+    # passes the bare instruction and the activation path passes the ability,
+    # and a predicate that answered one of them False is one nobody notices.
+    assert is_mana_ability(ability.instruction) is True
+
+
+@pytest.mark.cr("605.1a")
+def test_605_1a_an_effect_that_targets_is_not_a_mana_ability_at_any_depth():
+    """The no-target clause is asked of every step for the reason the
+    mana-producing clause is: a sentence that adds mana and then targets
+    something is not a mana ability, and asking only the outer instruction
+    would admit it."""
+    from engine.oracle_types import OracleInstruction
+
+    adds = OracleInstruction("add_mana_from_text", "", {"pips": (("G", 1),)})
+    targets = OracleInstruction(
+        "bounce_target_creature", "", {"targets": {"quantifier": "target"}}
+    )
+    fused = OracleInstruction("sequence", "", {"steps": (adds, targets)})
+
+    assert is_mana_ability(adds) is True
+    assert is_mana_ability(fused) is False

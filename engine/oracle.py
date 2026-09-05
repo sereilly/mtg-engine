@@ -1519,6 +1519,71 @@ def _chargeable_tap_cost(cost_lower: str) -> tuple[int, dict] | None:
     return count, described
 
 
+#: "**Return a Forest you control to its owner's hand**" (Quirion Ranger),
+#: "**Return two Islands you control to their owner's hand**" (Flooded
+#: Shoreline). One comma-separated cost segment, delimiting only: the number is
+#: read by ``_NUMBER_WORDS`` and the noun phrase by the noun parser, which is
+#: the split :func:`_chargeable_tap_cost` makes above and for its reason — a
+#: regex approximating the noun parser is a second reader of one clause, and
+#: the direction the two drift in is a cost charged more widely than the card
+#: prints.
+#:
+#: The possessive is part of the pattern rather than trailing slack: "to its
+#: owner's hand" and "to their owner's hand" are English inflection over one
+#: destination, and any *other* destination is a different cost this cannot
+#: charge.
+_RETURN_TO_HAND_COST_RE = re.compile(
+    r"\breturn (\w+) (.+?) to (?:its|their) owner's hand\s*(?=,|$)"
+)
+
+
+def _chargeable_return_to_hand_cost(cost_lower: str) -> tuple[int, dict] | None:
+    """The ``(count, filter)`` a "Return N <noun phrase> to its owner's hand"
+    cost charges, or None.
+
+    Gated on what ``subject_filters.subject_matches`` can test, because that is
+    what the charger enumerates with: a phrase reaching past it would be
+    *dropped* by the matcher rather than refused, and the cost would then be
+    payable off a wider set of permanents than the card names.
+
+    The self-return ("Return **this creature** to its owner's hand",
+    Ovinomancer) is ``return_self_to_hand``'s and never reaches here: its noun
+    phrase is a self-reference, which the subject parser has no filter for, so
+    the two readers of this printed clause cannot both claim one segment.
+    """
+    from .grammar.lowering._common import chargeable_tap_filter
+    from .grammar.phrases import parse_subject_filter
+
+    match = _RETURN_TO_HAND_COST_RE.search(cost_lower)
+    if match is None:
+        return None
+    word = match.group(1)
+    count = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    if count <= 0:
+        return None
+    # ``plural=True`` whatever the printed count, exactly as the tap cost
+    # above: the counted position is the one the noun parser wants told
+    # about, and the number is read here rather than by it.
+    filt = parse_subject_filter(match.group(2), plural=True)
+    if filt is None:
+        return None
+    # The same gate the tap cost uses, which is what keeps the two chosen-cost
+    # readers agreeing about which noun phrases are chargeable at all: it
+    # answers None for anything ``subject_matches`` cannot test, and the
+    # charger enumerates with exactly that predicate.
+    described = chargeable_tap_filter(filt)
+    if described is None:
+        return None
+    # "**you control**" is the seat the charger draws from, and the charger
+    # draws from the activating player's own battlefield — so the clause is
+    # honoured there and must not also ride the filter, where a second reader
+    # would be free to disagree with it. A phrase naming *another* seat is a
+    # cost this cannot charge and refuses outright.
+    if filt.controller not in (None, "you"):
+        return None
+    return count, described
+
+
 #: "**Untap a tapped land an opponent controls**" (Benthic Explorers). One
 #: comma-separated cost segment, whole, and delimiting only — what the noun
 #: phrase names is read by the noun parser below, which is the split
@@ -2027,6 +2092,10 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # already consumed above as mana; this is the spelled-out form, which taps
     # *other* permanents.
     tap_cost = _chargeable_tap_cost(cost_lower)
+    # "Return a Forest you control to its owner's hand" (Quirion Ranger).
+    # The same shape one zone over, and read after the tap cost for no reason
+    # but that the two never share a segment.
+    return_cost = _chargeable_return_to_hand_cost(cost_lower)
     # "Discard your hand" (Subira). Matched here rather than folded into the
     # phrase above, because it is not a count: there is no card for the payer to
     # name and no filter to test, and it is payable with an empty hand.
@@ -2122,6 +2191,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         sacrifice_count=sacrifice_count,
         tap_filter=tap_cost[1] if tap_cost else None,
         tap_count=tap_cost[0] if tap_cost else 0,
+        return_to_hand_filter=return_cost[1] if return_cost else None,
+        return_to_hand_count=return_cost[0] if return_cost else 0,
         discard_cards=0 if discard_filters is None else 1,
         discard_filters=discard_filters or (),
         discard_at_random=discard_at_random and discard_filters is not None,

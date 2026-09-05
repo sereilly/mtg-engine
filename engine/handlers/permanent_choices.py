@@ -323,7 +323,13 @@ def choose_permanents(
         game.log.append(f"{card_name}: there is nobody to make the choice")
         return True, "resolved"
     candidates = permanent_choice_candidates(game, payload, context)
-    if not candidates:
+    # "Return **two** Forests you control to their owner's hand" (Bull
+    # Elephant) states a floor as well as a ceiling, and a board that cannot
+    # reach it is not asked: the count is indivisible, so a seat with one
+    # Forest returns neither. Zero is every prompt printed as "up to", where
+    # one candidate is enough and none is a legal answer.
+    at_least = int(payload.get("at_least", 0) or 0)
+    if len(candidates) < max(at_least, 1):
         game.log.append(f"{card_name}: there is no permanent it could choose")
         return True, "resolved"
     game.arm_permanent_set_choice(
@@ -335,6 +341,7 @@ def choose_permanents(
         context=context,
         candidates=candidates,
         up_to=int(payload.get("up_to", 1)),
+        at_least=at_least,
     )
     return True, "resolved"
 

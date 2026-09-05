@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**350 / 612 tracked rules covered (57%)** — 1946 tests, 0 unannotated.
+**350 / 612 tracked rules covered (57%)** — 1950 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -576,7 +576,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(22 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(23 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(1 tests)*
 
 ### 503. Upkeep Step
@@ -704,7 +704,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(3 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(5 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(5 tests, subrules a)*
@@ -786,7 +786,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(34 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(36 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*

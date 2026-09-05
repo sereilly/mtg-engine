@@ -10,6 +10,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
     _card_matches_filter,
+    return_permanent_to_owners_hand,
     _one_choice,
     evaluate_count,
     frozen_that_player_seat,
@@ -1875,21 +1876,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     if isinstance(targets_desc, dict) and isinstance(targets_desc.get("count"), int) and targets_desc["count"] > 1:
         chosen = resolve_target_permanents(game, context)
         for perm in chosen:
-            owner_idx = game.owner_index_of(perm)
-            owner = game.players[owner_idx] if owner_idx is not None else context.caster
-            arrived = game.put_card_into_hand(
-                owner, perm.card, from_battlefield=perm
-            )
-            # Only when it actually arrived. The seam answers False for a token
-            # ceasing to exist (CR 111.7), a commander diverted to the command
-            # zone (CR 903.9b) and a CR 614 replacement sending the card
-            # elsewhere — and "a permanent was put into your hand from the
-            # battlefield this turn" (Barrin) is false in every one of them.
-            if arrived and owner_idx is not None:
-                game.permanents_to_hand_this_turn[owner_idx] = (
-                    game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
-                )
-            game.remove_from_battlefield(perm)
+            owner = return_permanent_to_owners_hand(game, perm, context.caster)
             game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not chosen:
             game.log.append("No creatures to return")
@@ -1930,14 +1917,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         if perm is None:
             game.log.append(f"{context.card.name}: nothing was returned")
             return True, "resolved"
-        owner_idx = game.owner_index_of(perm)
-        owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        arrived = game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
-        if arrived and owner_idx is not None:
-            game.permanents_to_hand_this_turn[owner_idx] = (
-                game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
-            )
-        game.remove_from_battlefield(perm)
+        owner = return_permanent_to_owners_hand(game, perm, context.caster)
         # "…you gain life equal to that creature's mana value" (Niambi). Read
         # here, while the permanent is still in hand, because the next step of
         # this same resolution has no way back to it — CR 400.7 makes the card in
@@ -2052,14 +2032,7 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
             # It went with something else this same sweep removed — a token
             # ceasing to exist, an Aura falling off. Nothing left to return.
             continue
-        owner_idx = game.owner_index_of(perm)
-        owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        arrived = game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
-        if arrived and owner_idx is not None:
-            game.permanents_to_hand_this_turn[owner_idx] = (
-                game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
-            )
-        game.remove_from_battlefield(perm)
+        return_permanent_to_owners_hand(game, perm, context.caster)
         returned.append(perm.card.name)
     game.log.append(
         f"{context.card.name} returned {', '.join(returned)} to hand"
@@ -6266,3 +6239,123 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
         f"{player.name} must choose {actual} card(s) to put back on their library"
     )
     return True, "pending_hand_to_library"
+
+
+@effect_handler("return_recorded_permanents_to_hand")
+def return_recorded_permanents_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…return **a creature you control** to its owner's hand." (Shrieking
+    Drake, Stampeding Wildebeests, the Karoo land cycle's price, Bull Elephant,
+    Ovinomancer, Waterspout Djinn.)
+
+    The act half of a pick-then-act pair: the ``choose_permanents`` step in
+    front of this one asked the controller which of their own permanents the
+    sentence names, and this returns exactly those. Nothing is targeted, so
+    there is no index to read and no CR 608.2b re-check to make — only the
+    record.
+
+    A permanent that has **left** since the pick is simply not returned. It was
+    a different object the moment it left (CR 400.7) and the sentence never
+    named the one that came back; an empty record is a legal outcome, not an
+    error.
+
+    The record's shape is the producer's, and this reader takes all three the
+    engine writes under a ``permanents_from`` key — a bare id
+    (``choose_permanent``), a list of ids (the sweeps), a list of ``Permanent``
+    objects (``choose_permanents``, whose resolver records the objects because
+    Raiding Party's reader wants them). That the channel carries three shapes is
+    SET_PLAYBOOK's standing "``permanents_from`` carries two arities" gap, now
+    measurably three; normalising here is the local half of it, as
+    ``handlers/pump.py`` already says of itself.
+    """
+    recorded = (context.results or {}).get(
+        str(instruction.payload.get("permanents_from", ""))
+    ) or ()
+    if isinstance(recorded, int) or isinstance(recorded, Permanent):
+        recorded = (recorded,)
+    returned: list[str] = []
+    for entry in recorded:
+        perm = (
+            entry if isinstance(entry, Permanent)
+            else game.permanent_by_id(entry) if isinstance(entry, int)
+            else None
+        )
+        if perm is None or not game.is_on_battlefield(perm):
+            continue
+        name = perm.card.name
+        return_permanent_to_owners_hand(game, perm, context.caster)
+        returned.append(name)
+    game.log.append(
+        f"{context.card.name} returned {', '.join(returned)} to hand"
+        if returned else f"{context.card.name}: nothing was returned to hand"
+    )
+    return True, "resolved"
+
+
+@effect_handler("return_attached_permanent_to_hand")
+def return_attached_permanent_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)
+
+    The bounce twin of ``destroy_attached_permanent``, and read the same way:
+    CR 303.4b makes "enchanted" a name for the object this Aura is already
+    attached to, so nothing is chosen, nothing is targeted, and there is no
+    picker answer for the resolution context to carry.
+
+    An Aura that has come unattached bounces nothing — the window CR 303.4c's
+    state-based action has not closed yet — and the source going with it is
+    ``attached_host``'s CR 603.10 last-known fallback, not this handler's
+    problem.
+    """
+    from ._common import attached_host
+
+    host = attached_host(game, context.source_permanent)
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{context.card.name}: nothing attached to return")
+        return True, "resolved"
+    name = host.card.name
+    owner = return_permanent_to_owners_hand(game, host, context.caster)
+    game.log.append(f"{name} returned to {owner.name}'s hand")
+    return True, "resolved"
+
+
+#: Whose untap step a permanent is waiting to be returned to hand during
+#: ("**During your next untap step**, as you untap your permanents, return this
+#: land to its owner's hand" — Undiscovered Paradise). A seat index on the
+#: permanent, written by the ability that armed it and read by the CR 614
+#: ``would_untap`` replacement in `engine/replacements.py`.
+#:
+#: The seat is recorded rather than left implicit, unlike ``skip_next_untap``'s
+#: unseated default beside it: that clause says "its controller's next untap
+#: step", which the step finds by construction, and this one says **your** —
+#: the ability's controller. A land that changes hands in between waits for the
+#: step the card named, not for its new controller's.
+RETURN_AT_NEXT_UNTAP_SEAT = "return_to_hand_at_next_untap_seat"
+
+
+@effect_handler("return_self_instead_of_untapping")
+def return_self_instead_of_untapping(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"During your next untap step, as you untap your permanents, return this
+    land to its owner's hand." (Undiscovered Paradise.)
+
+    This step only **arms** the effect; the return happens a step later, inside
+    the untap step, through the ``would_untap`` replacement. Performing it here
+    would be an ordinary self-bounce and the land would never produce the mana
+    its own ability just added.
+
+    A marker on the permanent rather than a delayed trigger, because the untap
+    step gives nobody priority (CR 502.4): a delayed ability would untap the
+    land, wait for the upkeep, and hand its controller a free untapped land for
+    the turn — which is the one thing the card is printed to deny.
+
+    An ability whose source has already left the battlefield arms nothing;
+    CR 400.7 makes whatever comes back a different object, and this effect
+    named the one that is gone.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: nothing left to return at untap")
+        return True, "resolved"
+    source.metadata[RETURN_AT_NEXT_UNTAP_SEAT] = game.players.index(context.caster)
+    game.log.append(
+        f"{context.card.name} will return to its owner's hand instead of untapping"
+    )
+    return True, "resolved"

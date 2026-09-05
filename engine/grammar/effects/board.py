@@ -36,7 +36,8 @@ from ..phrases import (
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
     _parse_that_object, _parse_zone,
 )
-from ..sacrifices import _parse_counted_sacrifice, _parse_sacrificed_subject
+from ..sacrifices import (_parse_counted_sacrifice, _parse_sacrificed_subject,
+                         parse_counted_subject)
 
 
 
@@ -183,6 +184,39 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
             return ast.May(
                 actor=player,
                 action=ast.Tap(tapped),
+                otherwise=ast.Sacrifice(player, subject),
+            )
+    stream.reset(mark)
+    # "… unless you **return an untapped Island you control to its owner's
+    # hand**." (Coral Atoll, Dormant Volcano, Everglades, Jungle Basin, Karoo,
+    # Waterspout Djinn; "two Forests" on Bull Elephant, "three basic lands" on
+    # Ovinomancer.) The fourth printed alternative, decomposed for the reason
+    # the sacrifice and the tap above are: an "unless" is an offer with a
+    # penalty, which is what `May` already says — so the offer, the penalty and
+    # the "you have nothing to return" case all come from machinery that works.
+    #
+    # Read out of the two floors the other alternatives use rather than by
+    # calling the return family's own production, because families do not
+    # import each other. The count and the noun phrase are
+    # `sacrifices.parse_counted_subject`, which is the *same* reader "unless you
+    # sacrifice two Islands" uses — one reading of "two Forests", so the offer,
+    # the takeability gate and the prompt cannot disagree about what the card
+    # asks for. The destination is `phrases._parse_zone`, the engine's one
+    # reader of a printed zone. Every rider `_parse_return` reads past that
+    # phrase ("tapped", "under your control", entering counters) describes a
+    # permanent entering the battlefield, which is a destination this price
+    # cannot have.
+    if stream.accept_phrase("unless", "you", "return"):
+        counted = parse_counted_subject(stream)
+        if counted is not None and stream.accept_word("to"):
+            count, described = counted
+            return ast.May(
+                actor=player,
+                action=ast.ReturnToZone(
+                    ast.TargetSpec("a", described, count=count),
+                    _parse_zone(stream),
+                    None,
+                ),
                 otherwise=ast.Sacrifice(player, subject),
             )
     stream.reset(mark)

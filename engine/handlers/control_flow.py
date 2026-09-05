@@ -1248,6 +1248,30 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
             subject_matches(game, perm, described, observer=seat, source=source)
             for perm in game.controlled_by(seat)
         )
+    # "…**unless you return two Forests you control** to their owner's hand."
+    # (Bull Elephant; the Karoo land cycle, Ovinomancer and Waterspout Djinn
+    # print the same price with other nouns and counts.) The plural of the pick
+    # above, and the printed count is the whole point of asking: a player with
+    # one Forest cannot take a two-Forest offer, and accepting it would run the
+    # price half-paid and skip the sacrifice the card prints for not paying it —
+    # which is Mold Demon's rule one family over, stated for a bounce.
+    #
+    # Only the pick from the offered seat's *own* battlefield is answered, for
+    # the reason the singular states: a choice drawn from anywhere else is not a
+    # price this player pays, and a wrongly-False answer withdraws an offer the
+    # card makes.
+    if instruction.kind == "choose_permanents":
+        if instruction.payload.get("controlled_by") != "chooser":
+            return True
+        from ..subject_filters import subject_matches
+
+        seat = game.players.index(player)
+        described = dict(instruction.payload.get("filter") or {})
+        owed = max(int(instruction.payload.get("at_least", 0) or 0), 1)
+        return sum(
+            1 for perm in game.controlled_by(seat)
+            if subject_matches(game, perm, described, observer=seat, source=source)
+        ) >= owed
     if instruction.kind == "ante_top_card":
         # "…may **ante the top card of their library**" (Amulet of Quoz,
         # Rebirth, Timmerian Fiends). An empty library is a real and checkable

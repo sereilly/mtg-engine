@@ -90,6 +90,25 @@ def _record_optional_card_target(
         }
 
 
+def _lower_return_self_instead_of_untapping(
+    node,
+) -> tuple[OracleInstruction, ...]:
+    """``During your next untap step, as you untap your permanents, return this
+    land to its owner's hand.`` (Undiscovered Paradise.)
+
+    One instruction with no payload, because the node has no fields: the window,
+    the object and the destination are the sentence, and every one of them would
+    make it a different sentence if it varied.
+
+    What the handler does is *arm* the replacement rather than perform the
+    return — the return happens a step later, inside the untap step, through
+    ``engine/replacements.py``'s ``would_untap`` seam. That split is the card:
+    performed now it would be an ordinary self-bounce, and the land would never
+    have produced its mana at all.
+    """
+    return (OracleInstruction("return_self_instead_of_untapping", "", {}),)
+
+
 def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
     """``Put it into your graveyard.`` (All Hallow's Eve.)
 

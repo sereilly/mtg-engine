@@ -90,6 +90,7 @@ from .board import (
 from .returns import (
     _parse_return,
     _parse_put_source_into_zone,
+    _parse_return_instead_of_untapping,
 )
 from .destruction import (
     _accept_destroyed_this_way_no_regen,
@@ -243,6 +244,7 @@ __all__ = [
     "parse_player_chooses_permanent",
     "_parse_return",
     "_parse_put_source_into_zone",
+    "_parse_return_instead_of_untapping",
     "_accept_destroyed_this_way_no_regen",
     "_parse_destroy",
     "_parse_that_object",

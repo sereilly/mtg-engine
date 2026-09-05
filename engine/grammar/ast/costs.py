@@ -231,6 +231,25 @@ class ReturnSelfToHandCost:
 
 
 @dataclass(frozen=True)
+class ReturnPermanentsToHandCost:
+    """"**Return a Forest you control to its owner's hand**: Untap target
+    creature" (Quirion Ranger); "{U}{U}, **Return two Islands you control to
+    their owner's hand**: …" (Flooded Shoreline).
+
+    The chosen twin of :class:`ReturnSelfToHandCost`, and a separate node for
+    the reason :class:`TapPermanentsCost` is separate from the {T} symbol: this
+    one is paid out of a *set* the payer picks from, so it can be unpayable
+    (CR 601.2h) and the count is part of what the card asks for. The self-return
+    beside it names one object and can never fail.
+
+    The count is printed, so it is data rather than part of the cost's identity
+    — one node for "a Forest" and for "two Islands".
+    """
+    count: int
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class ExileCost:
     """"Exile **a creature you control**" (City of Shadows) / "Exile **a
     creature card from your graveyard**" (Necropolis) — a cost that exiles

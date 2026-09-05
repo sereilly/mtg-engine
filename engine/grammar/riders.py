@@ -63,21 +63,45 @@ def _parse_exile_instead_rider(
     return True
 
 
+def _accept_removed_permanents_controller(stream: TokenStream) -> bool:
+    """The possessive naming the controller of the permanent the sentence in
+    front of this one removed — ``that creature's controller`` or ``its
+    controller`` — consumed, or False with the cursor untouched.
+
+    **One reader, because it was two.** Transmogrify prints "that creature's
+    controller" and Polymorph prints "its controller" for the same seat, and the
+    reveal rider below reads both; the token rider above read only the second,
+    so Ovinomancer's "That creature's controller creates a 0/1 green Sheep
+    creature token" refused a phrase the module three functions down already
+    knew. A fork in a *fragment* is only ever found by whoever extends it, which
+    is what makes the extension the moment to collapse it.
+
+    Neither spelling is a difference in what the card does, so normalising at
+    one end would be the same card twice.
+    """
+    return bool(
+        stream.accept_phrase("that", "creature", "'s", "controller")
+        or stream.accept_phrase("its", "controller")
+    )
+
+
 def _parse_its_controller_creates_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> ast.Statement | None:
     """``Its controller creates a <token>.`` after a sentence that chose a
-    target (Angelic Ascension, Secure the Scene — both after an exile).
+    target (Angelic Ascension, Secure the Scene — both after an exile), and
+    ``That creature's controller creates a <token>.`` after a destroy
+    (Ovinomancer).
 
-    "Its" names the previous sentence's chosen permanent, which is gone by the
-    time the token arrives — so the token rides the controller the exile step
-    recorded, and the lowering demands that producer. Parsed as its own
-    sentence, "its controller" would name nobody at all.
+    Both possessives name the previous sentence's chosen permanent, which is
+    gone by the time the token arrives — so the token rides the controller that
+    step recorded, and the lowering demands that producer. Parsed as its own
+    sentence, either phrase would name nobody at all.
     """
     if not steps or _statement_bound_target(steps[-1]) is None:
         return None
     mark = stream.mark()
-    if not stream.accept_phrase("its", "controller"):
+    if not _accept_removed_permanents_controller(stream):
         return None
     if not stream.at_word("creates"):
         stream.reset(mark)
@@ -116,7 +140,8 @@ def _parse_that_controller_reveals_rider(
 
     **Three phrases have two printed spellings each**, and each pair is read
     rather than normalized at one end: the possessive that names the removed
-    permanent ("that creature's" / "its"), the article in front of the seat
+    permanent (``_accept_removed_permanents_controller``), the article in front
+    of the seat
     ("that player" / "the player") and the words for the cards the reveal
     turned over first ("the rest" / "all other cards revealed this way"). None
     of the three is a difference in what the card does — Polymorph and
@@ -126,10 +151,7 @@ def _parse_that_controller_reveals_rider(
     if not steps or _statement_bound_target(steps[-1]) is None:
         return None
     mark = stream.mark()
-    if not (
-        stream.accept_phrase("that", "creature", "'s", "controller")
-        or stream.accept_phrase("its", "controller")
-    ):
+    if not _accept_removed_permanents_controller(stream):
         return None
     if not stream.accept_phrase(
         "reveals", "cards", "from", "the", "top", "of", "their", "library",

@@ -991,6 +991,54 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
+        # "**Return a Forest you control to its owner's hand**: Untap target
+        # creature" (Quirion Ranger); "{U}{U}, **Return two Islands you control
+        # to their owner's hand**: …" (Flooded Shoreline). The same collection
+        # the tap cost above makes, one zone over (CR 118.3): chosen by the
+        # payer through `cost_permanent_ids`, defaulted deterministically for a
+        # seat that names none, and refused with nothing spent when the board
+        # cannot cover the printed count (CR 601.2h via 602.2b).
+        #
+        # The printed count is indivisible, which is why the shortfall refuses
+        # rather than returning what there is: returning one of Flooded
+        # Shoreline's two Islands is not paying its cost, and an ability
+        # activated for part of its price is the failure that neither crashes
+        # nor goes missing.
+        return_cost_permanents: list = []
+        if ability.cost.return_to_hand_count:
+            described = ability.cost.return_to_hand_filter or {}
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(self, perm, described)
+            ]
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            # Deduplicated by identity, for the tap cost's reason: two
+            # references to one permanent do not pay a two-permanent cost.
+            chosen = []
+            for perm in named:
+                if not any(perm is already for already in chosen):
+                    chosen.append(perm)
+            for perm in candidates:
+                if len(chosen) >= ability.cost.return_to_hand_count:
+                    break
+                if not any(perm is already for already in chosen):
+                    chosen.append(perm)
+            if len(chosen) < ability.cost.return_to_hand_count:
+                details = (
+                    f"{permanent.card.name}: not enough "
+                    f"{filter_head_noun(described)}s to return for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return_cost_permanents = chosen[:ability.cost.return_to_hand_count]
+
         # "{T}, **Untap a tapped land an opponent controls**: …" (Benthic
         # Explorers). CR 602.1a: a cost is any action, and this is the one this
         # engine charges that is performed on a permanent the payer does **not**
@@ -1653,6 +1701,25 @@ class AbilityActivationMixin:
                 "owner's hand to activate its ability"
             )
 
+        # …and the chosen return, paid at the same moment and through the same
+        # seam (CR 601.2h): the permanents the payer picked go to their owners'
+        # hands before the ability goes on the stack.
+        for returned_for_cost in return_cost_permanents:
+            owner_seat = self.owner_index_of(returned_for_cost)
+            name = returned_for_cost.card.name
+            self.remove_from_battlefield(returned_for_cost)
+            self.put_card_into_hand(
+                self.players[
+                    owner_seat if owner_seat is not None else controller_index
+                ],
+                returned_for_cost.card,
+                from_battlefield=returned_for_cost,
+            )
+            self.log.append(
+                f"{controller.name} returned {name} to its owner's hand "
+                f"to activate {permanent.card.name}"
+            )
+
         # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
         # a cost, paid now — the ability still resolves from the graveyard.
         if ability.cost.sacrifice_self:
@@ -2299,6 +2366,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
         ("tap_count", "a tap-other-permanents cost"),
+        ("return_to_hand_count", "a return-other-permanents-to-hand cost"),
         ("untap_filter", "an untap-another-permanent cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
