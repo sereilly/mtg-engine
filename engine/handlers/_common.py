@@ -1785,45 +1785,6 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
         return timing_fixed_seat(game, game.players.index(caster), context.card)
     return None
 
-def announced_opponent_seat(game: Game, context: OracleExecutionContext) -> int | None:
-    """The seat a printed "**target opponent**" names, or ``None``.
-
-    ``subject_matches`` answers ``controller: "target_opponent"`` from the seat
-    the announcement froze and refuses when the caller cannot supply one — a
-    caller that cannot say *which* opponent was named must narrow to nothing
-    rather than to everyone, which is the difference between Simoon burning the
-    board the card names and burning every board at a three-seat table.
-
-    A **spell** supplies it from its picker. A *triggered* ability does not:
-    announcing a trigger's targets is a round this engine has not taken
-    (ROADMAP, "a triggered ability's targets"), so Corrosion's upkeep trigger
-    reaches the same key with nothing frozen.
-
-    One case needs no announcement and is exact rather than permissive: with a
-    single opponent the target has exactly one legal candidate, so the choice is
-    **forced** (CR 601.2c still makes it; there is nothing to choose between).
-    With two or more there is a real choice and nothing has made it, so this
-    returns ``None`` and the caller ends the effect — the deferred round showing
-    through honestly, rather than a card quietly reaching a battlefield it does
-    not name.
-    """
-    # Deliberately *not* `_THAT_PLAYER_CONTEXT_KEYS`. Those name the seat an
-    # event picked — for an upkeep trigger, the player whose upkeep it is, which
-    # is the ability's own controller and the exact opposite of the seat this
-    # phrase names. Reusing them put Corrosion's rust counters on the caster's
-    # own board and matched nothing, which is how the reuse was found.
-    caster = context.caster
-    if caster not in game.players:
-        return None
-    observer = game.players.index(caster)
-    opponents = [
-        seat
-        for seat in range(len(game.players))
-        if seat != observer and not game.players[seat].lost
-    ]
-    return opponents[0] if len(opponents) == 1 else None
-
-
 
 def resolve_role_permanent(
     game: Game,

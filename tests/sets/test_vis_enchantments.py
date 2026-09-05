@@ -62,6 +62,22 @@ from engine import Game as _W3G3EGame, PlayerState as _W3G3EPlayer
 from engine.card_loader import load_cards as _w3g3e_load, manifest_set_path as _w3g3e_path
 from engine.models import Permanent as _W3G3EPermanent
 from engine.oracle import compile_card_oracle as _w3g3e_compile
+# --- W4G1: Necromancy, the enchantment that becomes an Aura ---
+from engine import Game as _W4G1Game, PlayerState as _W4G1Player  # noqa: E402
+from engine.auras import (  # noqa: E402
+    PUT_ONTO_BATTLEFIELD_BY as _W4G1_ORIGIN,
+    aura_attach_refusal as _w4g1_attach_refusal,
+)
+from engine.card_loader import (  # noqa: E402
+    load_cards as _w4g1_load, manifest_set_path as _w4g1_path,
+)
+from engine.grammar import compile_line as _w4g1_compile_line  # noqa: E402
+from engine.models import Permanent as _W4G1Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w4g1_compile  # noqa: E402
+import pytest as _w4g3e_pytest
+from engine import Game as _W4G3EGame, PlayerState as _W4G3EPlayer, load_cards as _w4g3e_load
+from engine.card_loader import manifest_set_path as _w4g3e_path
+from engine.models import CardDefinition as _W4G3ECard, Permanent as _W4G3EPermanent
 
 def _rig():
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
@@ -1625,7 +1641,6 @@ def test_a_permission_to_the_player_needs_an_event_that_names_one(set_pool):
             "Exile the top card of your library. The player may play that "
             "card this turn."
         ))
-
 _W3G3E_LEA = {c.name: c for c in _w3g3e_load(_w3g3e_path("LEA"))}
 def _w3g3e_game():
     game = _W3G3EGame(players=[
@@ -1720,24 +1735,7 @@ def test_equipoise_phases_each_permanent_out_once(set_pool):
 
     names = [perm.card.name for perm in game.players[1].phased_out]
     assert sorted(names) == ["Island", "Plains"], names
-
-
-# --- W4G1: Necromancy, the enchantment that becomes an Aura ---
-from engine import Game as _W4G1Game, PlayerState as _W4G1Player  # noqa: E402
-from engine.auras import (  # noqa: E402
-    PUT_ONTO_BATTLEFIELD_BY as _W4G1_ORIGIN,
-    aura_attach_refusal as _w4g1_attach_refusal,
-)
-from engine.card_loader import (  # noqa: E402
-    load_cards as _w4g1_load, manifest_set_path as _w4g1_path,
-)
-from engine.grammar import compile_line as _w4g1_compile_line  # noqa: E402
-from engine.models import Permanent as _W4G1Permanent  # noqa: E402
-from engine.oracle import compile_card_oracle as _w4g1_compile  # noqa: E402
-
 _W4G1_LEA = {card.name: card for card in _w4g1_load(_w4g1_path("LEA"))}
-
-
 def _w4g1_game():
     game = _W4G1Game(players=[
         _W4G1Player(name="P1"), _W4G1Player(name="P2"),
@@ -1745,8 +1743,6 @@ def _w4g1_game():
     game.enforce_mana_costs = False
     game.active_player_index = 0
     return game
-
-
 def _w4g1_necromancy(set_pool, graveyard_seat=1, creature="Grizzly Bears"):
     """Necromancy resolving its enters trigger with one creature card in a
     graveyard. Returns the game and the Necromancy permanent."""
@@ -1759,8 +1755,6 @@ def _w4g1_necromancy(set_pool, graveyard_seat=1, creature="Grizzly Bears"):
     game.auto_resolve_pending_choices()
     game.check_state_based_actions()
     return game, necromancy
-
-
 def test_necromancy_compiles_its_second_line_into_four_steps(set_pool):
     """The printed paragraph is one enters trigger whose effect is three
     sentences plus the delayed ability the last of them creates (CR 603.7).
@@ -1787,8 +1781,6 @@ def test_necromancy_compiles_its_second_line_into_four_steps(set_pool):
     assert delayed["binds_recorded"] == "reanimated_permanents"
     assert delayed["binds_target"] is False
     assert delayed["watches"] == "source"
-
-
 def test_necromancy_reanimates_the_creature_and_attaches_itself_to_it(set_pool):
     """CR 701.3a: the attach is to the permanent the step in front of it put
     onto the battlefield, and to nothing else — CR 400.7 makes that permanent a
@@ -1802,8 +1794,6 @@ def test_necromancy_reanimates_the_creature_and_attaches_itself_to_it(set_pool):
     assert necromancy.metadata.get("attached_to") is reanimated, game.log
     assert necromancy in game.players[0].battlefield, game.log
     assert game.players[1].graveyard == [], "the card left its owner's graveyard"
-
-
 def test_necromancy_becomes_an_aura_in_layer_4(set_pool):
     """CR 613.1d: the subtype is a type-changing effect, not a rewritten card —
     so every reader of "is this an Aura?" gets one answer, and the printed type
@@ -1812,8 +1802,6 @@ def test_necromancy_becomes_an_aura_in_layer_4(set_pool):
 
     assert necromancy.has_type("aura"), game.log
     assert "Aura" not in necromancy.card.type_line
-
-
 def test_necromancy_sacrifices_the_creature_when_it_leaves(set_pool):
     """CR 603.7c: the delayed ability is about the permanent the resolution
     that created it made, and it is still about that permanent once the
@@ -1830,8 +1818,6 @@ def test_necromancy_sacrifices_the_creature_when_it_leaves(set_pool):
 
     assert [perm.card.name for perm in game.players[0].battlefield] == [], game.log
     assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
-
-
 def test_necromancy_goes_to_the_graveyard_when_its_creature_leaves(set_pool):
     """CR 704.5m: an Aura attached to nothing is put into its owner's graveyard.
     It is the Aura subtype this permanent *gained* that makes the rule apply to
@@ -1851,8 +1837,6 @@ def test_necromancy_goes_to_the_graveyard_when_its_creature_leaves(set_pool):
 
     assert necromancy not in game.players[0].battlefield, game.log
     assert "704.5m" in " ".join(game.log)
-
-
 def test_necromancy_may_not_be_moved_onto_another_creature(set_pool):
     """"enchant creature **put onto the battlefield with Necromancy**" — the
     rider is the whole of what the granted clause adds, and CR 303.4j makes an
@@ -1872,8 +1856,6 @@ def test_necromancy_may_not_be_moved_onto_another_creature(set_pool):
     assert _w4g1_attach_refusal(game, necromancy, other) is not None
     assert reanimated.metadata.get(_W4G1_ORIGIN) == necromancy.permanent_id
     assert other.metadata.get(_W4G1_ORIGIN) is None
-
-
 def test_necromancy_with_no_creature_card_anywhere_reanimates_nothing(set_pool):
     """Every step declines rather than reaching for something else: the
     reanimation records nothing, the attach has no host to read, and the
@@ -1882,8 +1864,6 @@ def test_necromancy_with_no_creature_card_anywhere_reanimates_nothing(set_pool):
 
     assert necromancy.metadata.get("attached_to") is None, game.log
     assert not game.delayed_triggers, game.delayed_triggers
-
-
 def test_a_quoted_grant_this_engine_cannot_test_keeps_refusing():
     """The production reads exactly one enchant quality — a head noun plus
     CR 201.5's self-reference — because that is the one
@@ -1909,3 +1889,107 @@ def test_a_quoted_grant_this_engine_cannot_test_keeps_refusing():
         assert refused.parse_error == "granted ability in quotes", (
             line, refused.parse_error,
         )
+
+_W3G2_POOL: dict = {}
+for _w3g2_path in _w3g2_paths(include_measured=True):
+    for _w3g2_card in _w3g2_load(_w3g2_path):
+        _W3G2_POOL.setdefault(_w3g2_card.name, _w3g2_card)
+_W4G3E_LEA = {c.name: c for c in _w4g3e_load(_w4g3e_path("LEA"))}
+def _w4g3e_table(seats: int, *, interactive: bool):
+    game = _W4G3EGame(players=[_W4G3EPlayer(name=f"P{i + 1}") for i in range(seats)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    return game
+def _w4g3e_put(game, seat, card):
+    perm = _W4G3EPermanent(card=card)
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+def _w4g3e_artifact(name: str, cmc: int) -> _W4G3ECard:
+    return _W4G3ECard(
+        name=name, mana_cost="{%d}" % cmc, cmc=float(cmc), type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name},
+    )
+def _w4g3e_upkeep(game):
+    game.begin_turn_bookkeeping(0)
+    game.active_player_index = 0
+    game.resolve_upkeep(0, defer_priority=True)
+@_w4g3e_pytest.mark.usefixtures("set_pool")
+def test_corrosion_rusts_the_opponent_it_names_at_a_three_seat_table(set_pool):
+    """"At the beginning of your upkeep, put a rust counter on each artifact
+    **target opponent** controls."
+
+    The seat is a choice (CR 601.2c) and the trigger announces it now
+    (CR 603.3d). Before it did, the handler asked
+    ``handlers/_common.announced_opponent_seat``, which could answer only where
+    there was exactly one opponent - so at three seats the effect ended with
+    "no announced opponent" in the log and no counter anywhere. That helper is
+    gone: the seat is on the stack object, and the handler reads it the way
+    Simoon's already did.
+    """
+    from engine.named_counters import counters_on
+
+    game = _w4g3e_table(3, interactive=True)
+    _w4g3e_put(game, 0, set_pool("VIS")["Corrosion"])
+    _w4g3e_put(game, 0, _W4G3E_LEA["Swamp"])
+    theirs = _w4g3e_put(game, 1, _w4g3e_artifact("Their Engine", 4))
+    third = _w4g3e_put(game, 2, _w4g3e_artifact("Third Engine", 4))
+
+    _w4g3e_upkeep(game)
+
+    offer = next(c for c in game.pending_choices if c.kind == "trigger_target")
+    assert [t["seat"] for t in offer.data["targets"]] == [1, 2]
+    assert game.confirm_trigger_target(0, seat=2)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert counters_on(third, "rust") == 1, game.log
+    assert counters_on(theirs, "rust") == 0, "the opponent the card did not name"
+def test_corrosion_unasked_still_rusts_the_seat_it_always_did(set_pool):
+    """A duel is the table where the two readings agree, and it has to keep
+    agreeing: one opponent means one legal target, so the choice is forced
+    (CR 601.2c) and the counter lands exactly where it landed before."""
+    from engine.named_counters import counters_on
+
+    game = _w4g3e_table(2, interactive=False)
+    _w4g3e_put(game, 0, set_pool("VIS")["Corrosion"])
+    _w4g3e_put(game, 0, _W4G3E_LEA["Swamp"])
+    theirs = _w4g3e_put(game, 1, _w4g3e_artifact("Their Engine", 4))
+
+    _w4g3e_upkeep(game)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert counters_on(theirs, "rust") == 1, game.log
+def test_equipoise_phases_out_the_player_it_was_pointed_at(set_pool):
+    """"For each land **target player** controls in excess of the number you
+    control, choose a land that player controls."
+
+    The announcement is one clause and the choosing is another: whose board is
+    read is chosen as the ability goes on the stack (CR 603.3d), and which
+    permanents come off it as the ability resolves. The first of those was not
+    being made at all - "target player" resolved to the first living opponent,
+    so P3 could never be the one squeezed.
+    """
+    game = _w4g3e_table(3, interactive=True)
+    _w4g3e_put(game, 0, set_pool("VIS")["Equipoise"])
+    for name in ("Plains", "Island"):
+        _w4g3e_put(game, 1, _W4G3E_LEA[name])
+    for name in ("Swamp", "Mountain"):
+        _w4g3e_put(game, 2, _W4G3E_LEA[name])
+
+    _w4g3e_upkeep(game)
+
+    offer = next(c for c in game.pending_choices if c.kind == "trigger_target")
+    assert [t["seat"] for t in offer.data["targets"]] == [0, 1, 2], (
+        "the card prints 'target player', so its own controller is legal"
+    )
+    assert game.confirm_trigger_target(0, seat=2)
+    game.resolve_stack(pause_for_choices=True)
+    game.auto_resolve_pending_choices()
+
+    assert sorted(p.card.name for p in game.players[2].phased_out) == [
+        "Mountain", "Swamp",
+    ], game.log
+    assert game.players[1].phased_out == [], "the opponent it did not name"

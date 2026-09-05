@@ -9,7 +9,6 @@ from ._common import (recorded_permanent_ids,
     bound_permanent,
     block_pair_permanents,
     attached_host,
-    announced_opponent_seat,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
@@ -1311,13 +1310,23 @@ def add_counter_to_each_matching(game: Game, instruction: OracleInstruction, con
             return True, "resolved"
         del filters["controller"]
     # "…each artifact **target opponent** controls" (Corrosion). The same shape
-    # one branch up and for the same reason: `subject_matches` answers the key
-    # from the seat an announcement froze, and a *trigger* announces no targets
-    # in this engine yet — so the seat is asked here, where the resolution's
-    # context is, and an unresolvable one ends the effect rather than dropping
-    # the word. Dropping it would put rust counters on every opponent's board.
+    # one branch up, and now the same answer: the seat is the one the
+    # announcement chose, read off ``context.target`` exactly as
+    # ``deal_damage_each_matching`` reads Simoon's. The two sentences differ
+    # only in the verb, so a second way of finding the player would be one
+    # phrase with two readings.
+    #
+    # This used to call ``announced_opponent_seat``, which guessed the seat from
+    # there being exactly one opponent and refused at three — a placeholder for
+    # the announcement, because a *trigger* announced no targets. It does now
+    # (CR 603.3d, ``_choose_trigger_targets``), so the placeholder is gone and
+    # the card works at any number of seats.
     elif filters.get("controller") in ("target_opponent", "target_player"):
-        scoped_seat = announced_opponent_seat(game, context)
+        scoped_seat = (
+            game.players.index(context.target)
+            if context.target is not None and context.target in game.players
+            else None
+        )
         if scoped_seat is None:
             game.log.append(
                 f"{card.name}: no announced opponent for 'target opponent' to name"

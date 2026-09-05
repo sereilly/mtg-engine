@@ -6087,13 +6087,26 @@ class PendingChoicesMixin:
         self.log.append(f'{card_name}: chose "{label}"{chosen_for}')
         return True
 
-    def confirm_trigger_target(self, player_index: int, permanent_id: int) -> bool:
-        """Answer a triggered ability's target choice with a permanent's id."""
+    def confirm_trigger_target(
+        self, player_index: int, permanent_id: int | None = None,
+        seat: int | None = None,
+    ) -> bool:
+        """Answer a triggered ability's target choice.
+
+        An object is named by its stable id and a player by their seat index,
+        which is the shape every other mixed picker in this engine takes
+        (``_select_trigger_mode_target`` one method down reads exactly these two
+        keys). One of the two, never both: an answer carrying an id is about a
+        permanent whatever seat it sits on.
+        """
         return self.resolve_pending_choice(
-            "trigger_target", player_index, permanent_id=permanent_id
+            "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
         )
 
-    def _resolve_trigger_target(self, choice: PendingChoice, permanent_id: int) -> bool:
+    def _resolve_trigger_target(
+        self, choice: PendingChoice, permanent_id: int | None = None,
+        seat: int | None = None,
+    ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
         The ability stays on the stack and resolves later, with a target it now
@@ -6101,49 +6114,91 @@ class PendingChoicesMixin:
         ``_resolve_reflexive_target``, which runs its steps immediately because
         a reflexive ability was never on the stack at all.
 
-        The id is checked against the list that was offered rather than against
-        the board: targets are chosen once, at announcement, so a permanent
-        that became legal a moment later is not a legal answer.
+        The answer is checked against the list that was offered rather than
+        against the board: targets are chosen once, at announcement, so a
+        permanent or a seat that became legal a moment later is not a legal
+        answer. A **player** answer clears the permanent fields rather than
+        leaving whatever was there, because "target opponent" and "target
+        creature" write the same two slots on the stack object and a stale id
+        would resolve as an object target.
         """
+        item = choice.data.get("_trigger_item")
+        if item is None:
+            return False
+        targets = choice.data.get("targets") or ()
+        card_name = choice.data.get("card_name", "Ability")
+        if permanent_id is None:
+            offered_seats = {
+                target.get("seat")
+                for target in targets
+                if target.get("kind") == "player"
+            }
+            if seat not in offered_seats:
+                return False
+            self.discard_pending_choice(choice)
+            item.target_player_index = seat
+            item.target_permanent_index = None
+            item.target_permanent_id = None
+            self.log.append(f"{card_name}: targets {self.players[seat].name}")
+            return True
         offered = {
             target.get("permanent_id")
-            for target in (choice.data.get("targets") or ())
+            for target in targets
+            if target.get("kind", "permanent") == "permanent"
         }
         if permanent_id not in offered:
             return False
         perm = self.permanent_by_id(permanent_id)
         if perm is None:
             return False
-        seat = self.controller_index_of(perm)
-        if seat is None:
-            return False
-        item = choice.data.get("_trigger_item")
-        if item is None:
+        controller = self.controller_index_of(perm)
+        if controller is None:
             return False
         self.discard_pending_choice(choice)
-        item.target_player_index = seat
+        item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
-        self.log.append(
-            f"{choice.data.get('card_name', 'Ability')}: targets {perm.card.name}"
-        )
+        self.log.append(f"{card_name}: targets {perm.card.name}")
         return True
 
     def _default_trigger_target(self, choice: PendingChoice) -> bool:
-        """What a non-interactive seat answers with: the **first** target
-        offered.
+        """What a non-interactive seat answers with: the seat the resolution
+        would have used anyway, and otherwise the **first** target offered.
 
-        The stated policy every other picker in this engine takes when nothing
-        distinguishes the candidates, and stated here rather than valued —
-        ``_default_trigger_mode_target`` next door is the one that reads an
-        effect family, and it can only do so because a mode carries its own
-        instruction.
+        Two policies, and the split is the difference between a choice and a
+        consequence.
+
+        For an **object** it is the first candidate: the stated policy every
+        other picker in this engine takes when nothing distinguishes them, and
+        stated rather than valued — ``_default_trigger_mode_target`` next door
+        is the one that reads an effect family, and it can do so because a mode
+        carries its own instruction. (So does a trigger:
+        ``item.ability_instruction`` is right there, and that docstring's stated
+        reason is wrong. Valuing this one is play quality rather than
+        correctness, and it moves every seeded AI regression, so it stays a
+        separate decision.)
+
+        For a **player** it is not a policy at all. Before the announcement
+        existed the resolution read ``_default_opposing_seat`` — the first
+        living opponent — out of ``target_player_index`` being None. Answering
+        with that same seat is what makes announcing the target a change to what
+        a *player* is asked and to nothing else: headless play, AI play and
+        every two-player game resolve exactly where they resolved before.
         """
         targets = choice.data.get("targets") or ()
         if not targets:
             self.discard_pending_choice(choice)
             return True
-        return self._resolve_trigger_target(choice, targets[0]["permanent_id"])
+        item = choice.data.get("_trigger_item")
+        if item is not None:
+            standing = self._default_opposing_seat(item.caster_index)
+            for target in targets:
+                if target.get("kind") == "player" and target.get("seat") == standing:
+                    return self._resolve_trigger_target(choice, seat=standing)
+        first = targets[0]
+        if first.get("kind") == "player":
+            return self._resolve_trigger_target(choice, seat=first["seat"])
+        return self._resolve_trigger_target(choice, permanent_id=first["permanent_id"])
 
     def _select_trigger_mode_target(self, option: dict, target: dict) -> dict | None:
         """The offered candidate *target* names, or None if it names none.
@@ -7663,7 +7718,7 @@ register_choice(
 register_choice(
     "trigger_target",
     resolve=lambda game, choice, r: game._resolve_trigger_target(
-        choice, r["permanent_id"]
+        choice, r.get("permanent_id"), r.get("seat"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

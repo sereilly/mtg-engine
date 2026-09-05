@@ -1383,6 +1383,30 @@ def _graveyard_aura_spec(payload: dict) -> dict:
     return spec
 
 
+#: The two printed pronouns a lowering records when a line names a player as a
+#: **target**, and the picker each one means. One table, because the word says
+#: the same thing wherever the payload keeps it — under ``who`` for a forced
+#: sacrifice, ``controller`` inside a sweep's noun phrase, ``recipient`` for a
+#: damage or a life change — and a spec function that spelled the pair out for
+#: itself would be the place the two spellings drift apart.
+_PLAYER_PRONOUN_SPECS = {
+    "target_opponent": {"kind": "player", "opponents_only": True},
+    "target_player": {"kind": "player"},
+}
+
+
+def player_pronoun_spec(word) -> dict | None:
+    """The picker a printed "target player"/"target opponent" pronoun means.
+
+    None for every other word, which is what makes this safe to ask of a
+    payload key that usually holds something else: "each player" and
+    "defending player" name a set or a seat the rules already fix, and neither
+    announces anything (CR 115.4 is about a *chosen* player).
+    """
+    spec = _PLAYER_PRONOUN_SPECS.get(str(word or ""))
+    return dict(spec) if spec is not None else None
+
+
 def _forced_sacrifice_spec(payload: dict) -> dict | None:
     """Who a "sacrifices a creature" effect asks is what decides whether it
     targets at all.
@@ -1395,21 +1419,18 @@ def _forced_sacrifice_spec(payload: dict) -> dict | None:
     tell them apart; answering "player" for every one of them would put a
     picker in front of Goremand, whose answer nothing reads.
     """
-    who = payload.get("who")
-    if who == "target_opponent":
-        return {"kind": "player", "opponents_only": True}
-    if who == "target_player":
-        return {"kind": "player"}
-    return None
+    return player_pronoun_spec(payload.get("who"))
 
 
-def _each_matching_damage_spec(payload: dict) -> dict | None:
+def _sweep_controller_spec(payload: dict) -> dict | None:
     """"Simoon deals 1 damage to each creature **target opponent** controls."
+    "…put a rust counter on each artifact **target opponent** controls."
+    (Corrosion.)
 
     A sweep over a described set that nonetheless *targets*, and the two facts
     live in different halves of the payload: the noun phrase says which
-    permanents are hit, the ``controller`` key inside it says whose, and only
-    the second is a choice (CR 115.4).
+    permanents are touched, the ``controller`` key inside it says whose, and
+    only the second is a choice (CR 115.4).
 
     One instruction kind serves both readings, exactly as
     ``_forced_sacrifice_spec`` does one entry down, so only the payload can tell
@@ -1418,13 +1439,46 @@ def _each_matching_damage_spec(payload: dict) -> dict | None:
     and was refusing every cast for want of it. The client sent a bare cast, the
     engine refused it, and the card reported supported the whole time: the Roots
     class, found by ``scripts/picker_sweep.py`` and by nothing else.
+
+    The counter sweep is the same sentence one verb over, and it is read here
+    rather than left to the resolution for the reason the damage one is: the
+    seat is announced (CR 603.3d for the trigger that prints it), and a
+    resolution asked to guess it can only be right where there is exactly one
+    opponent.
     """
-    controller = (payload.get("filter") or {}).get("controller")
-    if controller == "target_opponent":
-        return {"kind": "player", "opponents_only": True}
-    if controller == "target_player":
-        return {"kind": "player"}
-    return None
+    return player_pronoun_spec((payload.get("filter") or {}).get("controller"))
+
+
+def _control_gift_spec(payload: dict) -> dict | None:
+    """"**Target opponent** gains control of this creature …" (Chaos Lord.)
+
+    The seat under the same ``who`` key ``_forced_sacrifice_spec`` reads, and a
+    separate entry rather than a shared one because the two ask different
+    questions of it: a sacrifice's ``who`` may name the effect's own controller
+    or every opponent at once, while a control gift's may also be ``chosen``
+    (Rainbow Vale) or the seat whose upkeep it is (Emberwilde Djinn). Only the
+    two printed *target* pronouns announce anything, which is what the shared
+    reader answers.
+    """
+    return player_pronoun_spec(payload.get("who"))
+
+
+def _chosen_from_target_player_spec(payload: dict) -> dict | None:
+    """"…**choose a land that player controls**" (Equipoise.)
+
+    The permanents are chosen as the ability *resolves* — that is
+    ``choose_permanents``' own prompt — but whose board they come off is the
+    "target player" the line announced one clause earlier, and that is a
+    CR 601.2c choice made when the ability goes on the stack. The payload keeps
+    it as ``controlled_by``/``count_from.owner``, both of which read ``target``,
+    so the announcement is derived from the first of them.
+
+    Every other spelling of ``controlled_by`` names a seat the sentence already
+    fixes ("chooser", Raiding Party) and announces nothing.
+    """
+    if payload.get("controlled_by") != "target":
+        return None
+    return {"kind": "player"}
 
 
 # One kind, several specs, decided by payload.
@@ -1508,7 +1562,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
-    "deal_damage_each_matching": _each_matching_damage_spec,
+    "deal_damage_each_matching": _sweep_controller_spec,
+    # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
+    # the same reader — what is being *chosen* is a seat, whatever the sweep
+    # then does to that seat's permanents.
+    "add_counter_to_each_matching": _sweep_controller_spec,
+    "give_control_of_source_to_player": _control_gift_spec,
+    "choose_permanents": _chosen_from_target_player_spec,
     "target_gains_life": _life_gain_spec,
     "target_loses_life": _player_recipient_spec,
     "mill_target_player": _player_recipient_spec,
