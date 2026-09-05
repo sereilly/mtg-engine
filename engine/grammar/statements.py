@@ -471,7 +471,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     hand_shuffle = _parse_shuffle_hand_into_library(stream)
     if hand_shuffle is not None:
         return hand_shuffle
-    # "Then that player shuffles." (Prophecy.) CR 701.16 with nothing moving
+    # "Then that player shuffles." (Prophecy.) CR 701.24 with nothing moving
     # into the library, so it names no zone the subject-verb reader could take
     # as an object and no verb it knows. Read *after* the two shuffles above,
     # which open with the same subject and the same verb and are the only ones

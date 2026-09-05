@@ -1,4 +1,4 @@
-"""Text-keyed extra land plays (CR 305.2, 505.5b).
+"""Text-keyed extra land plays (CR 305.2, 505.6b).
 
 "You may play any number of lands on each of your turns" (Fastbond), "You may
 play an additional land on each of your turns", "You may play two additional

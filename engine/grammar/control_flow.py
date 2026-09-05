@@ -160,7 +160,7 @@ def _mandatory_named_actor(statement) -> "ast.PlayerRef | None":
     "That creature's controller sacrifices it at end of combat" (Basalt Golem)
     names a seat without offering it anything, so "if the player does" has an
     antecedent even though there is no ``May`` in front of it. The rider still
-    asks a real question — CR 701.17a's sacrifice does not happen if the
+    asks a real question — CR 701.21a's sacrifice does not happen if the
     permanent has already left — which is exactly what ``ItHappened`` tests.
 
     Read off the statement's own ``player`` field rather than from a list of
@@ -551,7 +551,7 @@ def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool
 
     "At the beginning of your upkeep, sacrifice two Swamps. **If you can't**,
     tap this creature, and …" (Infernal Denizen.) The second producing step this
-    rider is printed after, and the same question of it: CR 701.17b makes
+    rider is printed after, and the same question of it: CR 701.21a makes
     sacrificing a permanent you do not control impossible, so "can't" is a board
     the printed count cannot be paid out of. The sacrifice records the answer
     the way the counter removal does (``_PRODUCES``), which is what keeps this

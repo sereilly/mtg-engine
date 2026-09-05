@@ -850,7 +850,7 @@ def _source_answers_class(game, source, source_class: str) -> bool:
 
 
 def _source_is_a_spell(game, source) -> bool:
-    """Whether the damage's source is a **spell** (CR 109.5, CR 111.1).
+    """Whether the damage's source is a **spell** (CR 609.7a).
 
     Asked of ``Game.resolving_items`` — the object whose instructions are
     running — for the reason ``damage_redirects.resolving_object_redirects``
@@ -2792,7 +2792,7 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
 
 
 def _mill_cards(game, player, count: int) -> int:
-    """CR 701.13a: put the top *count* cards of *player*'s library into their
+    """CR 701.17a: put the top *count* cards of *player*'s library into their
     graveyard, stopping at whatever is there.
 
     Milling is not a draw and never has been — CR 704.5b's loss is about

@@ -964,7 +964,7 @@ class GameEndingMixin:
         #
         # A *derived* event, and deliberately so. Life leaves a player by more
         # routes than anything else here — damage (CR 120.3c), a cost paid
-        # (CR 118.8), a "lose N life" effect, a life total set lower (CR 118.5
+        # (CR 118.3b), a "lose N life" effect, a life total set lower (CR 119.5
         # makes that a loss of the difference) — and a per-site announcement
         # would be as complete as the last card that touched it, which is the
         # argument the draw triggers above are written with. Comparing totals

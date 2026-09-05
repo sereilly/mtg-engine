@@ -386,9 +386,10 @@ def _every_nested_step(instruction) -> tuple:
     single level off a *third* copy of the step-key table
     (``targeting._WRAPPER_STEP_KEYS``), and this one walks all of them off the
     grammar's; sharing the name would be one word for two facts, which is the
-    shape ``_per_recipient_count`` is already recorded under in SET_PLAYBOOK's
-    Known gaps. That the two tables exist at all is the real debt, and it
-    belongs to whoever next needs a third reader.
+    shape ``_per_recipient_count`` was recorded under in SET_PLAYBOOK's Known
+    gaps until VIS wave 4 split it into ``_amounts._recipient_seat_count`` and
+    ``_sweeps._per_recipient_multiplier``. That the two tables exist at all is
+    the real debt, and it belongs to whoever next needs a third reader.
     """
     # `control_flow` rather than `categories`: this predicate was written
     # against the latter's re-export, and the wave-1 split that moved

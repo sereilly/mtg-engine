@@ -24,6 +24,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
+                            MILLED_THIS_WAY,
                            LAST_TARGET_CONTROLLER,
                             REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
@@ -506,7 +507,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
     if counted_from is not None:
         count = max(0, int(context.results.get(counted_from, 0) or 0))
     elif printed_count == "any":
-        # "…for **any number of** Goblin cards" (Goblin Recruiter). CR 701.19a:
+        # "…for **any number of** Goblin cards" (Goblin Recruiter). CR 701.23a:
         # a search looks at every card in the zone, so the only ceiling is how
         # many of them the phrase admits — counted here, where the zones and the
         # seat are known, rather than baked into a payload that would then be a
@@ -1501,7 +1502,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     idx = idx if isinstance(idx, int) else None
     # "Return **the top** creature card of your graveyard to the
     # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard ordered and
-    # CR 400.4 appends what arrives, so the *top* card is the last entry —
+    # CR 404.1 appends what arrives, so the *top* card is the last entry —
     # the most recently added — and "the top creature card" is the last one
     # of them. Nobody chooses, so any index the wire happened to carry is
     # not this effect's: it is overwritten rather than preferred.
@@ -2734,7 +2735,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
 
 @effect_handler("reveal_hand")
 def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Target player reveals their hand." (CR 701.16 — Inquisition on its
+    """"Target player reveals their hand." (CR 701.20 — Inquisition on its
     own, and the first half of Amnesia and Rag Man.)
 
     Its own step, so what happens to the revealed cards is the next
@@ -2839,7 +2840,7 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         for index, held in enumerate(victim.hand)
         if search_matches(held, {"exclude_types": exclude_types})
     ]
-    # CR 701.20 makes a reveal public where CR 701.16's look shows the chooser
+    # CR 701.20 makes a reveal public where CR 701.20e's look shows the chooser
     # alone, so the line says which happened rather than saying "revealed" for
     # both.
     looked_at = bool(instruction.payload.get("looked_at"))
@@ -3261,7 +3262,7 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
 
 @effect_handler("mill_target_player")
 def mill_target_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """CR 701.13a: put the top N cards of a player's library into their
+    """CR 701.17a: put the top N cards of a player's library into their
     graveyard.
 
     Milling fewer than N because the library ran out is not a loss — CR 704.5b
@@ -3394,7 +3395,7 @@ def look_top_cycle_and_stack(game: Game, instruction: OracleInstruction, context
 def mill_until_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target opponent mills a card, then repeats this process until a
     creature card or X cards have been put into their graveyard this way,
-    whichever comes first." (Helm of Obedience, CR 701.13a per card.)
+    whichever comes first." (Helm of Obedience, CR 701.17a per card.)
 
     A loop rather than a count, and the difference is the whole card: the
     library is asked one card at a time and *what came off the top* decides
@@ -4234,7 +4235,7 @@ def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: O
 
 @effect_handler("shuffle_library")
 def shuffle_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Then that player shuffles." (Prophecy.) CR 701.16.
+    """"Then that player shuffles." (Prophecy.) CR 701.24.
 
     The library is randomised and **nothing moves into it**, which is what
     separates this from the two shuffles below that empty a zone first: those
@@ -4824,7 +4825,7 @@ def restore_noted_counters(game, permanent, noted: dict) -> None:
 
     +1/+1 counters go through ``Game.place_plus1_counters``, the seam, not the
     library operation under it: a permanent that *enters with* counters has
-    those counters put on it (CR 121.6), so CR 614 may change how many arrive
+    those counters put on it (CR 122.6), so CR 614 may change how many arrive
     and CR 603 may fire on their arrival — the two things the seam is for.
 
     Every other kind is CR 122.1's inert marker whose whole existence is the
@@ -5192,7 +5193,7 @@ def look_top_exile_random(game: Game, instruction: OracleInstruction, context: O
     order the player chooses, asked through the ``reorder_library`` prompt this
     shares with ``look_top_pick_to_hand``'s top-destination tail.
 
-    A library shorter than the card's number is not an error: CR 701.19-style
+    A library shorter than the card's number is not an error: CR 609.3-style
     "as many as you can" is the general rule for a count over a zone, so what is
     there is what is looked at and the exile is capped to it.
     """
@@ -5487,7 +5488,7 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     """Feldon's Cane: "{T}, Exile this artifact: Shuffle your graveyard into
     your library."
 
-    CR 701.19: the cards move and the library is shuffled as one action, so
+    CR 701.24a: the cards move and the library is shuffled as one action, so
     there is nothing to schedule and nothing that can observe a half-moved
     zone. The graveyard is emptied rather than filtered — every card in it
     goes, which is what "your graveyard" means.
@@ -5531,7 +5532,7 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
         return True, "resolved"
     seat = game.players.index(target)
     if not target.library:
-        # CR 701.16a: there is nothing to reveal, so nothing is named either —
+        # CR 701.20a: there is nothing to reveal, so nothing is named either —
         # the choice would decide the destination of a card that does not
         # exist. An empty library is not a loss here; the draw step is.
         game.log.append(f"{context.card.name}: {target.name} has no library to reveal")
@@ -6379,7 +6380,7 @@ _DISCARDED_REVEALED_CARD = "discarded_revealed_card"
 def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target player reveals a card at random from their hand." (Wand of Ith.)
 
-    CR 701.16 over one card nobody chose. Recorded under the same
+    CR 701.20 over one card nobody chose. Recorded under the same
     ``revealed_card`` key the library reveal writes, so the sentences behind it
     — "if it's a land card", "discards **it**" — read the one referent this
     engine has for a revealed card rather than a second one.
@@ -6411,7 +6412,7 @@ def exile_random_card_from_hand(game: Game, instruction: OracleInstruction, cont
     """"At the beginning of each player's upkeep, **that player exiles a card at
     random from their hand**." (Elkin Lair.)
 
-    One card nobody chose, out of a hand nobody looked at — CR 701.10's exile
+    One card nobody chose, out of a hand nobody looked at — CR 701.13a's exile
     over a random pick, which is why the seat is not asked anything and no
     prompt is armed. Recorded under the one ``exiled_cards`` key every other
     exile writes, so the two sentences behind it ("the player may play that

@@ -514,7 +514,7 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
 
     A colour *replacement* like the lace kind beside it, and indefinite like
     Aisling Leprechaun's — the difference is only where the colour comes from.
-    CR 609.3 makes the choice part of the effect, so nothing in the text names
+    CR 608.2d makes the choice part of the effect, so nothing in the text names
     it and the answer arrives on ``context.choices["new_color"]``, the same
     channel Feat of Resistance's "protection from the color of your choice"
     reads. An unanswered choice recolours nothing rather than defaulting to a
@@ -610,7 +610,7 @@ def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, c
     is attached to (CR 303.4), which the activator does not choose. Read as a
     target the sentence refused and the ability compiled to nothing.
 
-    CR 609.3 puts the colour choice in the resolution, so the answer arrives on
+    CR 608.2d puts the colour choice in the resolution, so the answer arrives on
     ``context.choices["new_color"]`` — the same channel every other chosen
     colour in the engine reads. ``several`` says the card offered a *set*
     (CR 105.2, "the color **or colors**"): the write takes any number, so a
@@ -1088,7 +1088,7 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
     else:
         source = context.source_permanent
     if instruction.payload.get("choose_land_type"):
-        # "…becomes **the basic land type of your choice**" (Jinx). CR 609.3
+        # "…becomes **the basic land type of your choice**" (Jinx). CR 608.2d
         # puts the choice inside the resolution, so nothing is recorded until
         # the seat answers — the prompt holds priority, and the change is made
         # by the resolver rather than here. The land travels by
@@ -1725,7 +1725,7 @@ def move_counter_from_self(game: Game, instruction: OracleInstruction, context: 
     """"Move a +1/+1 counter from this enchantment onto target creature."
     (Afiya Grove.)
 
-    **CR 121.6 makes this one action**, and that is the whole reason it is one
+    **CR 122.5 makes this one action**, and that is the whole reason it is one
     handler rather than a ``sequence`` of the removal and the placement beside
     it: with no counter on the source the move does not happen at all, where
     two composed steps would put a counter on the target anyway — an Afiya
@@ -1749,7 +1749,7 @@ def move_counter_from_self(game: Game, instruction: OracleInstruction, context: 
     wanted = int(instruction.payload.get("count", 1) or 1)
     held = counters_on(source, counter)
     if held <= 0:
-        # CR 121.6: nothing to move means nothing happens — to *either* end.
+        # CR 122.5: nothing to move means nothing happens — to *either* end.
         game.log.append(
             f"{source.card.name} has no {counter} counter to move"
         )
@@ -2146,7 +2146,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # the prompt: an interactive seat answers a queued choice long after this
     # instruction has returned, so the only moment at which the answer exists
     # synchronously is before the prompt is armed. What it records is the
-    # question CR 701.17b asks — does the payer control the printed number of
+    # question CR 701.21a asks — does the payer control the printed number of
     # permanents the phrase describes — which is the same predicate
     # ``_action_is_takeable`` puts in front of an *optional* sacrifice, so an
     # offer and a mandatory action cannot disagree about what "can't" means.
@@ -2396,10 +2396,10 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
 def swap_land_types_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a land type and a basic land type. Each land of the first chosen
     type becomes the second chosen type until end of turn." (Vision Charm's
-    third mode, CR 305.7 / CR 609.3.)
+    third mode, CR 305.7 / CR 608.2d.)
 
     The handler arms the prompt and the **resolver** performs the swap, which is
-    Jinx's arrangement one land at a time: CR 609.3 puts the choice inside the
+    Jinx's arrangement one land at a time: CR 608.2d puts the choice inside the
     resolution, and the set the sweep reaches is named by the answer, so nothing
     can be recorded until the seat has answered.
 

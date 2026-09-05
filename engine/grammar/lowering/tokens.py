@@ -19,14 +19,15 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._events import _back_reference_payload
 from ._amounts import count_spec
-from ._common import (_amount_payload, _describe_targets, _filter_payload,
-                      _restrictions_beyond)
+from ._common import (
+    _amount_payload, _describe_targets, _restrictions_beyond,
+    testable_filter_payload
+)
 
 
 def _title(words: str) -> str:
@@ -49,13 +50,12 @@ def _lower_create_copy_token(
     if node.subject.quantifier != "target":
         raise LoweringError("the copy token copies a chosen permanent", node=node)
     payload: dict[str, object] = {"count": _amount_payload(node.count)}
-    described = _filter_payload(node.subject.filter)
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if leftover:
-        raise LoweringError(
-            "the copy token cannot test this restriction: " + ", ".join(sorted(leftover)),
-            node=node,
-        )
+    described = testable_filter_payload(
+        node.subject.filter,
+        refusal="the copy token cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
     if described:
         payload["filter"] = described
     _describe_targets(payload, node.subject)

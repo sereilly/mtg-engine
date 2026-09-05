@@ -12,7 +12,7 @@ place that split cut a production family in half rather than along it. All
 three are parsed in ``effects/board.py`` — "sacrifice this permanent unless you
 pay", "destroy this creature unless you pay", "for each land, destroy that land
 unless any player pays 1 life" — and they are one printed shape with three
-verbs: an *offer*, whose refusal is the effect. Two of them left with CR 701.7
+verbs: an *offer*, whose refusal is the effect. Two of them left with CR 701.8
 and one did not, so the mirror forked; they came back when the fused
 cost-repeated destroy pushed ``destruction`` past the thousand-line guard and
 the boundary the guard asked about turned out to be this one.
@@ -347,7 +347,7 @@ def _lower_sacrifice(
         )
     # "**That creature's controller sacrifices it** at end of combat." (Basalt
     # Golem.) The same sentence with the object named in the *possessive* and
-    # the subject left a pronoun — and the seat it names is the one CR 701.17a
+    # the subject left a pronoun — and the seat it names is the one CR 701.21a
     # would have picked anyway, because a permanent is sacrificed by whoever
     # controls it. So the possessive says out loud what the action already
     # implies, and the two printed spellings are one instruction rather than two

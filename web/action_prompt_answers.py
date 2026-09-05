@@ -50,7 +50,7 @@ def _action_search_library_decline(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no library search pending")
     if req.seat != pending["caster_index"]:
         raise HTTPException(status_code=400, detail="not your library search")
-    # Failing to find is legal (CR 701.19b) and is the only answer available
+    # Failing to find is legal (CR 701.23b) and is the only answer available
     # when nothing in the searched zones matches the restriction.
     session.game.decline_search_library(req.seat)
 

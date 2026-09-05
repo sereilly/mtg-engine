@@ -1,7 +1,7 @@
 """Where a card sits in a graveyard, and what "above it" means (CR 404.3).
 
 A graveyard is an **ordered** zone: CR 404.3 lets any player look through one in
-any order, and CR 400.4's "a card put into a zone goes on top" is what gives
+any order, and CR 404.1's "a card put into a zone goes on top" is what gives
 that order a meaning at all. Three cards in the pool print a sentence about it —
 Death Spark and Krovikan Horror ("with a creature card **directly** above it"),
 Nether Shadow ("with three or more creature cards above it") — and "above"

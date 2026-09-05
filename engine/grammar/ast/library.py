@@ -171,7 +171,7 @@ class SearchLibrary:
     extra_destinations: tuple[Zone, ...] = ()
     #: Whether each find enters tapped, aligned with the destinations above.
     tapped: tuple[bool, ...] = ()
-    #: "Up to" — finding fewer, none included, is a legal answer (CR 701.19b's
+    #: "Up to" — finding fewer, none included, is a legal answer (CR 701.23b's
     #: fail-to-find is always legal, but this says so on the card).
     up_to: bool = False
     #: "…for **any number of** Goblin cards" (Goblin Recruiter). An "up to"

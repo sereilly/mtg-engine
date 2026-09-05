@@ -294,6 +294,49 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
 }
 
 
+def refuse_untestable(
+    payload: dict[str, object],
+    *,
+    refusal: str,
+    node=None,
+    allowed: "frozenset[str] | None" = None,
+) -> dict[str, object]:
+    """*payload*, or a ``LoweringError`` naming the keys nothing can test.
+
+    The second half of :func:`testable_filter_payload`, for the callers that
+    built the payload themselves rather than out of one ``ObjectFilter`` — a
+    target role's filter, a phrase merged with a recorded entry choice, a
+    payload with one key deliberately lifted off, a probe filter built from a
+    state word. Same question, same direction, one definition.
+
+    The definition is the point, because the spelling it replaces is *wrong* in
+    a way that reads as right. ``set(payload) - TESTABLE_SUBJECT_FILTER_KEYS``
+    is a **flat** difference; ``untestable_filter_keys`` recurses exactly where
+    the matcher does. "Auras attached to permanents you control" carries its
+    seat inside ``attached_to_filter``, so the flat form sees one testable key,
+    drops the inner phrase, and the sweep takes every Aura on the table — an
+    effect reaching wider than the card prints, which is the one failure
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` exists to prevent.
+
+    Forty sites across twenty-one files spelled it flat, every one correct on
+    the day it was written and every one blind in that same way. They are now
+    this function and :func:`testable_filter_payload` above it, and
+    ``tests/engine/test_testable_filter_gate.py`` fails on the next flat
+    spelling rather than waiting for the next set to find it.
+    """
+    from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
+                                    untestable_filter_keys)
+
+    untestable = untestable_filter_keys(
+        payload, allowed=TESTABLE_SUBJECT_FILTER_KEYS if allowed is None else allowed
+    )
+    if untestable:
+        raise LoweringError(
+            f"{refusal}: {', '.join(sorted(untestable))}", node=node
+        )
+    return payload
+
+
 def testable_filter_payload(
     filt: "ast.ObjectFilter",
     *,
@@ -335,22 +378,12 @@ def testable_filter_payload(
     all, so those callers refuse it; a caller for which the unnarrowed phrase
     is a legitimate reading passes ``False``.
     """
-    from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
-                                    untestable_filter_keys)
-
     payload = _filter_payload(filt)
     if require_narrowing and not payload:
         raise LoweringError(
             f"{refusal}: the phrase narrows nothing at all", node=node
         )
-    untestable = untestable_filter_keys(
-        payload, allowed=TESTABLE_SUBJECT_FILTER_KEYS if allowed is None else allowed
-    )
-    if untestable:
-        raise LoweringError(
-            f"{refusal}: {', '.join(sorted(untestable))}", node=node
-        )
-    return payload
+    return refuse_untestable(payload, refusal=refusal, node=node, allowed=allowed)
 
 
 def is_mana_value_x(comparison: "ast.Comparison | None") -> bool:

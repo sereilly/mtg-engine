@@ -665,7 +665,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         #
         # Compared against each card's own printed name, because nothing in a
         # library is a permanent and nothing there can be copying anything
-        # (CR 706.2). An empty name matches nothing, which is the honest
+        # (CR 707.2). An empty name matches nothing, which is the honest
         # answer for a seat that named nothing.
         from ..search_filters import name_key
 
@@ -1220,7 +1220,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         # "Choose a color. X target creatures gain protection from the chosen
         # color until end of turn." (Prismatic Boon.) A **spell**'s choice has
         # no permanent to be recorded on, and needs none: the sentence that
-        # reads it back is the next step of this same resolution, and CR 609.3
+        # reads it back is the next step of this same resolution, and CR 608.2d
         # puts both of them in it. That channel is the resolution's own
         # ``choices["new_color"]`` — the one "protection from the color of your
         # choice" has always read — so the colour named on the cast *is* the
@@ -1511,7 +1511,7 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
         return len(player.hand) >= amount
     # "**You may sacrifice this enchantment** and pay {2}{G}{G}." (Preferred
     # Selection.) A source that has left the battlefield cannot be sacrificed
-    # (CR 701.17a), and the handler underneath treats "nothing to sacrifice" as
+    # (CR 701.21a), and the handler underneath treats "nothing to sacrifice" as
     # a no-op — so the offer would be takeable, the mana charged, and the card
     # taken into hand for a price half of which was never paid.
     if instruction.kind == "sacrifice_self":
@@ -2020,7 +2020,7 @@ def _offer_to_seat(
             mana_cost_label(option) for option in (cost, *alternatives)
         ]
     # "**Look at the top two cards of your library.** You may sacrifice this
-    # enchantment and pay {2}{G}{G}." (Preferred Selection.) CR 701.16a's look,
+    # enchantment and pay {2}{G}{G}." (Preferred Selection.) CR 701.20e's look,
     # carried out here rather than by a step in front of the offer: the seat
     # being shown the cards is the seat being asked, and the whole point of the
     # first sentence is that the decision is not made blind. The names ride the

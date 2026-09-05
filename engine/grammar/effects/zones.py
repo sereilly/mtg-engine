@@ -241,7 +241,7 @@ def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:
     """``That player shuffles.`` (Prophecy's third sentence.)
     ``Shuffle your library.``
 
-    CR 701.16 on its own — a library randomised with nothing moving into it.
+    CR 701.24 on its own — a library randomised with nothing moving into it.
     Read **after** the two zone-moving shuffles above, because both of those
     open with the same subject and the same verb and only they name the pile
     that moves: tried first, this one would take "Each player shuffles the
@@ -266,7 +266,7 @@ def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     # "that player shuffles **their library**" — the same zone the bare verb
-    # already means (CR 701.16a shuffles a library), so the words are optional
+    # already means (CR 701.24a shuffles a library), so the words are optional
     # rather than a second production. Any *other* possessive is a different
     # player's deck and refuses: consuming it unread is how a shuffle lands on
     # the wrong library.

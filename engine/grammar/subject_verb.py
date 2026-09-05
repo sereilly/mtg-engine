@@ -16,7 +16,7 @@ they already hold.
 
 And one call goes downward. The other half of "a sentence's opening" — the
 shapes that print **no** subject — left for `imperatives` at the same guard,
-and is asked first: a bare imperative has a subject by CR 101.1 and simply does
+and is asked first: a bare imperative has a subject by CR 608.2c and simply does
 not spell it out, so the two readers answer one question in one order rather
 than being two parsers.
 """
@@ -251,7 +251,7 @@ def parse_subject_verb(
             ), source_target)
         if token.text in ("gains", "gain"):
             # "**You** gain control of that land until end of turn."
-            # (Wellspring.) CR 101.1 gives an effect with no printed subject
+            # (Wellspring.) CR 608.2c gives an effect with no printed subject
             # to the object's controller, so the pronoun says nothing the
             # bare imperative did not — but the verb table reaches
             # `_parse_gains`, which expects a keyword and refuses with
@@ -366,7 +366,7 @@ def parse_subject_verb(
             if at_random is not None:
                 return at_random
         # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
-        # the rules — CR 701.20a turns a permanent sideways and says nothing
+        # the rules — CR 701.26a turns a permanent sideways and says nothing
         # about who does it — so the printed subject is read and then dropped
         # rather than carried: the same instruction results whoever the sentence
         # names. Read here because only the bare imperative had a production, so
@@ -491,7 +491,7 @@ def parse_subject_verb(
             if whole_hand is not None:
                 return whole_hand
             # "…and **you put** a cube counter on this artifact" (Delif's Cube).
-            # The imperative with its subject spelled out, which CR 101.1 makes
+            # The imperative with its subject spelled out, which CR 608.2c makes
             # the same sentence — so it is handed back to this function with the
             # cursor on the verb rather than to a second copy of the "put" chain
             # above, whose ordering is the whole of what that chain is.
@@ -795,7 +795,7 @@ def parse_subject_verb(
             )
 
     # "**You** exile the top ten cards of your library." (Diminishing Returns.)
-    # "**You** search your library for a card…" (Library of Lat-Nam.) CR 101.1
+    # "**You** search your library for a card…" (Library of Lat-Nam.) CR 608.2c
     # gives an effect with no printed subject to the object's controller, so
     # spelling the pronoun out says nothing the bare imperative did not — the
     # word is the same sentence's subject written down. Handed back to this

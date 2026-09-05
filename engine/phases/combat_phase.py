@@ -368,7 +368,7 @@ class CombatPhaseMixin:
         # so no spell or ability can be cast/activated during that assignment.
         # A priority window is opened only once the declaration is made — see
         # declare_attackers / declare_blockers, which grant the active player
-        # priority afterward (CR 508.4 / 509.4). Every other combat step opens a
+        # priority afterward (CR 508.2 / 509.2). Every other combat step opens a
         # priority window immediately on entry.
         if step in ("declare_attackers", "declare_blockers"):
             self.clear_priority_window()

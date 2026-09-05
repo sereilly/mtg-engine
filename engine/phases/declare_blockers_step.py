@@ -445,7 +445,7 @@ class DeclareBlockersStepMixin:
         # leave nothing spent - the same order the attack side takes at
         # CR 508.1g.
         if not _camouflage_resolution:
-            # CR 118.4 again, over the whole declaration: a per-pair predicate
+            # CR 119.4 again, over the whole declaration: a per-pair predicate
             # can say "you could afford this one" and not "and again for the
             # next", so a defender at 2 life would declare three Heat-Waved
             # blockers and pay for two. Checked before anything is spent, the
@@ -496,7 +496,7 @@ class DeclareBlockersStepMixin:
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._fire_delayed_block_pair_triggers(controller_index, assignments)
         self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
-        # CR 509.4/802.4: once every defending player has declared, the active
+        # CR 509.2/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:
             self.start_priority_window(self.active_player_index)
@@ -968,7 +968,7 @@ class DeclareBlockersStepMixin:
         # afford this one", and the declaration below adds up the creatures.
         if blocker_seat is not None:
             owed = self._block_life_cost_of(blocker, attacker)
-            # CR 118.4: a player may pay N life only with a life total of at
+            # CR 119.4: a player may pay N life only with a life total of at
             # least N. Asked here so an unpayable toll makes the block illegal
             # rather than being discovered at the charge, where CR 509 has
             # already locked the declaration in.

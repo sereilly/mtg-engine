@@ -18,7 +18,6 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._events import _back_reference_payload
@@ -26,14 +25,9 @@ from ._bound_returns import (_graveyard_to_hand_payload,
                              _reads_no_return_restriction,
                              lower_untargeted_return)
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS,
-    _describe_targets,
-    _filter_payload,
-    _is_target,
-    _restrictions_beyond,
-    _describe_several_card_targets,
-    _describe_several_targets,
-    _names_several_targets,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
+    _restrictions_beyond, _describe_several_card_targets,
+    _describe_several_targets, _names_several_targets, testable_filter_payload
 )
 
 
@@ -533,14 +527,12 @@ def _lower_return_to_zone(
                 "the bounce handler cannot read " + ", ".join(sorted(unread)),
                 node=node,
             )
-        bounce_filter = _filter_payload(filt)
-        untestable = set(bounce_filter) - TESTABLE_SUBJECT_FILTER_KEYS
-        if untestable:
-            raise LoweringError(
-                "the bounce handler cannot test "
-                + ", ".join(sorted(untestable)),
-                node=node,
-            )
+        bounce_filter = testable_filter_payload(
+            filt,
+            refusal="the bounce handler cannot test",
+            node=node,
+            require_narrowing=False,
+        )
         if bounce_filter == {"type_filter": "creature"}:
             # Unsummon's payload, byte-identical: the bare bounce carries no
             # filter because "creature" is what every reader of this kind

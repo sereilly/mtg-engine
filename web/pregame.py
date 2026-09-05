@@ -1,5 +1,5 @@
 """Everything before turn one: the coin flip and the mulligan rounds
-(CR 103.4, London mulligan).
+(CR 103.5, London mulligan).
 
 One function per transition, so the state machine reads as its own sequence
 rather than as branches buried in the action dispatch: offer, take or keep,

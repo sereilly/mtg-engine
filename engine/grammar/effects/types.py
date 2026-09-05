@@ -45,7 +45,7 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     # have" wrapper has taken its subject; English changes the inflection and
     # the card does not change what it does.
     stream.expect_word("becomes", "become")
-    # "…becomes **the color of your choice**" (Alchor's Tomb). CR 609.3 makes
+    # "…becomes **the color of your choice**" (Alchor's Tomb). CR 608.2d makes
     # the choice part of the resolution, so the sentence names no colour and the
     # node carries the sentinel instead. Read before the colour-word branch,
     # which would see "the" and refuse — and read here rather than as a separate
@@ -109,7 +109,7 @@ def _parse_becomes_land_type(
     """
     mark = stream.mark()
     # "…becomes **the basic land type of your choice** until end of turn."
-    # (Jinx.) CR 609.3 makes the choice part of resolving the spell, so the
+    # (Jinx.) CR 608.2d makes the choice part of resolving the spell, so the
     # sentence names no type and the node carries the sentinel — the same shape
     # "becomes the color of your choice" takes two branches up, and read before
     # the article branch below, which would see "the" and refuse.

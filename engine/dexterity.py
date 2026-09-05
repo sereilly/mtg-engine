@@ -1,9 +1,9 @@
-"""Physical-dexterity actions (CR 104.1), simulated.
+"""Physical-dexterity actions (CR 100.7), simulated.
 
 A handful of very early cards ask a player to *physically manipulate the
 cards*: Chaos Orb and Falling Star are both flipped onto the table from a
 height of at least one foot, and what they hit is decided by where they land.
-CR 104.1 puts that outside the game's own rules — there is no playing area
+CR 100.7 puts that outside the game's own rules — there is no playing area
 here, no geometry for "lands on", and no honest reading of "doesn't turn
 completely over".
 

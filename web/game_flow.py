@@ -486,7 +486,7 @@ def _advance_phase(session: Session) -> None:
                             x_value=instant_action.x_value,
                         )
                         return
-                    # CR 509.4: declaring blockers opened a priority window for the
+                    # CR 509.2: declaring blockers opened a priority window for the
                     # active player. When a human attacker flagged the declare-blockers
                     # stop on the phase rail, hold here so they can respond to the
                     # blocks (combat tricks, block triggers on the stack) instead of

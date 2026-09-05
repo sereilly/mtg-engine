@@ -19,11 +19,8 @@ from .. import ast
 from ..errors import LoweringError
 from .conditions import _lower_condition
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS,
-    _filter_payload,
-    _restrictions_beyond,
-    is_mana_value_x,
-    testable_filter_payload,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _restrictions_beyond, is_mana_value_x,
+    testable_filter_payload
 )
 
 
@@ -281,8 +278,6 @@ def _counter_targets_filter(
     every gate that has never seen one. Here it is a second question, asked
     beside the filter by whoever holds the ability's source.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     # "…that targets **this creature**" (Mistfolk). Lifted first, so the field
     # is not reported as a narrowing nothing reads by the gate below it.
     targets_source = bool(inner.is_source)
@@ -293,13 +288,12 @@ def _counter_targets_filter(
         raise LoweringError(
             "nothing tests what a spell targets by " + ", ".join(beyond), node=node
         )
-    payload = _filter_payload(inner)
-    untestable = set(payload) - TESTABLE_SUBJECT_FILTER_KEYS
-    if untestable:
-        raise LoweringError(
-            "nothing tests a targeted permanent by " + ", ".join(sorted(untestable)),
-            node=node,
-        )
+    payload = testable_filter_payload(
+        inner,
+        refusal="nothing tests a targeted permanent by",
+        node=node,
+        require_narrowing=False,
+    )
     return payload, targets_source
 
 
@@ -483,7 +477,7 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             )
     if node.countered_to is not None:
         # "…**put it on top of its owner's library instead of into that
-        # player's graveyard**" (Memory Lapse). CR 614.1 replacing CR 701.5a's
+        # player's graveyard**" (Memory Lapse). CR 614.1 replacing CR 701.6a's
         # own destination, carried as the one key the handler reads before it
         # bins the card. Emitted only when the card prints the tail, so every
         # counterspell written before this keeps a byte-identical payload.
@@ -499,7 +493,7 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
                 # The printed head noun is "spell", which the noun parser reads
                 # as ``zone="stack"``. For a *countered* object that restates
                 # what the sentence has already fixed — nothing but a spell on
-                # the stack can be countered (CR 701.5a) — so it is normalised
+                # the stack can be countered (CR 701.6a) — so it is normalised
                 # away here rather than refused, exactly as the forced-sacrifice
                 # filter drops the possessive CR 701.21a already guarantees.
                 # ``battlefield`` is ``_filter_payload``'s "no zone scoping"

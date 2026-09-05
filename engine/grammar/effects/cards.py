@@ -191,7 +191,7 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
 
 
 def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
-    """``<player> mills <n> cards`` (CR 701.13a).
+    """``<player> mills <n> cards`` (CR 701.17a).
 
     The count is an ordinary amount rather than a digit, because the printed
     template spells small numbers out ("mills two cards") and Magic reprints it
@@ -282,7 +282,7 @@ def _parse_scry(stream: TokenStream) -> ast.Statement:
 def _parse_reveal_hand(
     stream: TokenStream, player: ast.PlayerRef
 ) -> ast.Statement | None:
-    """``<player> reveals their hand [and <does something with it>]`` (CR 701.16).
+    """``<player> reveals their hand [and <does something with it>]`` (CR 701.20).
 
     Amnesia ("…and discards all nonland cards") and Rag Man ("…and discards a
     creature card at random"). Two steps rather than one fused node, because

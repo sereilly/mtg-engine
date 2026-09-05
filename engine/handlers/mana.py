@@ -695,7 +695,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                 game.log.append(f"{card.name}: {printed} produces no mana")
                 return True, "resolved"
             if symbol not in available:
-                # CR 609.3: the player chooses among the types the land could
+                # CR 608.2d: the player chooses among the types the land could
                 # make, and a choice outside that set is not one of them —
                 # re-checked here rather than trusted from the picker (idiom 9).
                 symbol = sorted(available)[0]

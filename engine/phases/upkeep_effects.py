@@ -942,7 +942,7 @@ class UpkeepEffectsMixin:
         The sacrifice twin above with two differences, both of them the card's:
 
         * it **destroys**, so regeneration and indestructible answer it
-          (CR 701.7c) — which is why it goes through
+          (CR 701.8c) — which is why it goes through
           ``_destroy_target_permanent`` rather than removing the permanent by
           hand, and why the rider can be answered at all;
         * "destroyed **this way**" is that call's own answer. A creature that

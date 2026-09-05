@@ -228,7 +228,7 @@ def stack_static_cost_sources(stack) -> list[tuple]:
 
     The stack object itself is the pair's first half, not its card: "spells
     that target **it**" is a fact about which *object* a spell chose, and two
-    copies of one card on the stack are two objects (CR 111.4 / CR 601.2c).
+    copies of one card on the stack are two objects (CR 109.1 / CR 601.2c).
     """
     found = []
     for item in stack or ():

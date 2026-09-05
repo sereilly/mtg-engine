@@ -1,4 +1,4 @@
-"""Lowering control changes: CR 613 layer 2, and CR 701.10's exchange.
+"""Lowering control changes: CR 613 layer 2, and CR 701.12's exchange.
 
 `_lower_gain_control` and `_lower_exchange_control`, split out of `board` when
 that module reached the thousand-line guard. The line is the one `engine/`

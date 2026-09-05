@@ -42,11 +42,11 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
-from ._common import _filter_payload
+from ._common import (_filter_payload, refuse_untestable,
+                      testable_filter_payload)
 
 
 def describes_a_swept_set(node: ast.DealDamage) -> bool:
@@ -82,7 +82,7 @@ def refuse_unswept_multiplier(node: ast.DealDamage) -> None:
         )
 
 
-def _per_recipient_count(node: ast.DealDamage) -> dict:
+def _per_recipient_multiplier(node: ast.DealDamage) -> dict:
     """"…for each **Aura attached to that creature**." (Baki's Curse.)
 
     A count taken once per member of the swept set, so it travels on its own
@@ -151,8 +151,6 @@ def lower_each_matching_damage(
     reading two different clauses, which is the shape this file exists to keep
     to one.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     if recipient.filter.card_types != ("creature",):
         raise LoweringError(
             "only a creature sweep is damaged by the printed noun phrase",
@@ -162,17 +160,18 @@ def lower_each_matching_damage(
         raise LoweringError(
             "a creature sweep cannot carry a computed damage amount", node=node
         )
-    described = _filter_payload(recipient.filter)
     # Idiom 2: a restriction the matcher cannot test is one the handler would
     # silently ignore, which widens the sweep rather than narrowing it — every
     # creature on the board instead of the printed set.
-    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-        raise LoweringError(
-            "the creature sweep cannot test this restriction", node=node
-        )
+    described = testable_filter_payload(
+        recipient.filter,
+        refusal="the creature sweep cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
     payload: dict[str, object] = {"amount": amount, "filter": described}
     if node.per_each is not None:
-        payload["per_recipient_count"] = _per_recipient_count(node)
+        payload["per_recipient_count"] = _per_recipient_multiplier(node)
     return (OracleInstruction("deal_damage_each_matching", "", payload),)
 
 
@@ -200,8 +199,6 @@ def lower_counted_sweep_damage(
     the printed noun phrase testable by ``subject_matches``, because a narrowing
     the matcher drops burns a strictly larger board than the card prints.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     assert isinstance(node.amount, ast.CountOf)
     if node.per_each is not None or node.riders != ast.DamageRiders():
         raise LoweringError(
@@ -212,13 +209,12 @@ def lower_counted_sweep_damage(
             "only a creature sweep is damaged by the printed noun phrase",
             node=node,
         )
-    described = _filter_payload(recipient.filter)
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if leftover:
-        raise LoweringError(
-            "the damage sweep cannot narrow by: " + ", ".join(sorted(leftover)),
-            node=node,
-        )
+    described = testable_filter_payload(
+        recipient.filter,
+        refusal="the damage sweep cannot narrow by",
+        node=node,
+        require_narrowing=False,
+    )
     from ...oracle_types import X_FROM_COUNT
 
     return (
@@ -248,8 +244,6 @@ def lower_described_set_damage(
     would be *dropped*, and a dropped narrowing on a sweep burns a strictly
     larger part of the board than the card prints.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     if recipient.quantifier not in ("all", "each") or recipient.targeted:
         raise LoweringError("unsupported damage target quantifier", node=node)
     if computed:
@@ -257,13 +251,12 @@ def lower_described_set_damage(
             "a described-set damage sweep cannot carry a computed amount",
             node=node,
         )
-    described = _filter_payload(recipient.filter)
-    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
-    if leftover:
-        raise LoweringError(
-            "the damage sweep cannot narrow by: " + ", ".join(sorted(leftover)),
-            node=node,
-        )
+    described = testable_filter_payload(
+        recipient.filter,
+        refusal="the damage sweep cannot narrow by",
+        node=node,
+        require_narrowing=False,
+    )
     return (
         OracleInstruction(
             "deal_damage_each_matching", "", {"amount": amount, "filter": described}
@@ -348,11 +341,9 @@ def lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     testable = dict(described)
     if seat_scoped:
         testable.pop("controller")
-    leftover = sorted(set(testable) - set(TESTABLE_SUBJECT_FILTER_KEYS))
-    if leftover:
-        raise LoweringError(
-            "a counter sweep cannot narrow by: " + ", ".join(leftover), node=node
-        )
+    refuse_untestable(
+        testable, refusal="a counter sweep cannot narrow by", node=node
+    )
     payload: dict[str, object] = {"counter": node.counter, "filter": described}
     if node.count.value != 1:
         payload["count"] = node.count.value

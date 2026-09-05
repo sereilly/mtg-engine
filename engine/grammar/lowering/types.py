@@ -432,7 +432,7 @@ def _lower_become_color(
 
 def _lower_land_type_swap(node: ast.LandTypeSwap) -> tuple[OracleInstruction, ...]:
     """Vision Charm's third mode: two chosen land types and a sweep between
-    them (CR 305.7, CR 609.3).
+    them (CR 305.7, CR 608.2d).
 
     One instruction, because the choice and the swap are one resolution: the
     answer names the set the sweep reaches, so a pair of instructions would need

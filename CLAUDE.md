@@ -165,6 +165,21 @@ that does. The second is the one that hides: `CR 603.8b` folds to `603.8`,
 which is real, so nine stale citations sat in `engine/` until the letter was
 checked. Advisory only; nothing fails on its output.
 
+**Neither question is whether the rule is *about* what the comment claims**, and
+that is the one that rotted: `CR 701.15c` is a real subrule of a real rule and it
+is **Goad**, not the no-regeneration rider. VIS wave 4 read every CR citation in
+`engine/` and `web/` against `MagicCompRules.txt` and rewrote **185** of them —
+almost none a typo. The shipped CR is the April 2026 edition, which inserted
+`701.4 Behold` and `701.11 Triple` and shifted the whole keyword-action block, so
+a citation written against the older numbering now names a different action:
+`701.7` (Create) for destroying, `701.13a` (Exile) for milling, `701.5a` (Cast)
+for countering. **A CR bump is a silent, repo-wide correctness event.**
+`tests/engine/test_cr_citation_subjects.py` makes it loud for the 701 block,
+where each rule is headed by one keyword word: it reads the heading map out of
+`MagicCompRules.txt` at test time, so a later edition fails every citation whose
+keyword moved. Outside 701 the headings are prose and nothing checks them —
+bumping the CR file means re-reading those by hand.
+
 ```powershell
 
 # Web server (browser game UI)

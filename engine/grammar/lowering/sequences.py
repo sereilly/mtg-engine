@@ -29,13 +29,13 @@ from __future__ import annotations
 
 from ...oracle_types import (COST_TARGET_BASE, COST_TARGET_PER,
                              OracleInstruction)
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
-from ._common import (_describe_several_targets, _filter_payload,
-                      _is_enchanted, _is_target, _names_several_targets,
-                      _restrictions_beyond)
+from ._common import (
+    _describe_several_targets, _filter_payload, _is_enchanted, _is_target,
+    _names_several_targets, _restrictions_beyond, testable_filter_payload
+)
 from ._records import optional_cost_key, primary_produced, produced_keys
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.
@@ -539,11 +539,12 @@ def _fused_cost_repeated_destroys(
             "the several-target destroy cannot narrow by: " + ", ".join(leftovers),
             node=first,
         )
-    described = _filter_payload(filt)
-    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-        raise LoweringError(
-            "the several-target destroy cannot test this restriction", node=first
-        )
+    described = testable_filter_payload(
+        filt,
+        refusal="the several-target destroy cannot test this restriction",
+        node=first,
+        require_narrowing=False,
+    )
     payload: dict[str, object] = dict(described)
     if first.no_regen:
         payload["bypass_regeneration"] = True

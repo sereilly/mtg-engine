@@ -241,7 +241,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_gets_poison_counters": "counters",
     # Afiya Grove. In the counter category and not in ``pump``, where the
     # placement half lives: what the sentence does is take a counter off one
-    # object and put it on another, and CR 121.6 makes that one action.
+    # object and put it on another, and CR 122.5 makes that one action.
     "move_counter_from_self": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
@@ -312,7 +312,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # destroy at the other end of the event, on the creature the entry was
     # bound to having damaged rather than on the entry's own object.
     "destroy_delayed_agent": "destruction",
-    # Its sacrifice twin (Phantasmal Mount). CR 701.21a, not CR 701.7 — a
+    # Its sacrifice twin (Phantasmal Mount). CR 701.21a, not CR 701.8 — a
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
@@ -445,7 +445,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Spirit.) The source-subject twin of the row above.
     "recolor_self_until_eot": "recolor",
     # "…becomes the color of your choice" — the colour arrives with the answer
-    # rather than with the text (CR 609.3), which is a payload difference and
+    # rather than with the text (CR 608.2d), which is a payload difference and
     # not a category one.
     "recolor_target_chosen_color": "recolor",
     # Dream Coat: the same effect on an Aura's own host rather than on a

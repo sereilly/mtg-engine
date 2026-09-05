@@ -447,7 +447,7 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 stream.accept_punct(".")
                 continue
             # "A creature destroyed this way can't be regenerated." (Soul Rend.)
-            # CR 701.15c's rider on a destroy the sentence layer has already
+            # CR 701.19c's rider on a destroy the sentence layer has already
             # wrapped in a conditional, which is why the destroy production's
             # own probe of the same words could not reach it.
             if _attach_no_regeneration(stream, steps):

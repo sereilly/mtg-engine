@@ -36,11 +36,8 @@ from ..errors import LoweringError
 from ._events import (_EVENT_SUBJECT_PLAYERS, CHOSEN_PLAYER,
                       CREATED_TOKEN)
 from ._common import (
-    _REST_OF_TURN,
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _names_several_targets,
+    _REST_OF_TURN, _describe_several_targets, _describe_targets,
+    _names_several_targets, testable_filter_payload
 )
 
 
@@ -54,19 +51,14 @@ def _delayed_filter_payload(filt: "ast.ObjectFilter | None", node) -> dict[str, 
     whole difference between Glyph of Life and a card that gains life off any
     ping.
     """
-    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-
     if filt is None:
         return {}
-    payload = _filter_payload(filt)
-    untestable = set(payload) - TESTABLE_SUBJECT_FILTER_KEYS
-    if untestable:
-        raise LoweringError(
-            "nothing tests a delayed trigger's subject by "
-            + ", ".join(sorted(untestable)),
-            node=node,
-        )
-    return payload
+    return testable_filter_payload(
+        filt,
+        refusal="nothing tests a delayed trigger's subject by",
+        node=node,
+        require_narrowing=False,
+    )
 
 
 def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...]:

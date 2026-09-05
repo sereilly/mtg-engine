@@ -329,7 +329,7 @@ def _attach_destroyed_this_way(stream: TokenStream, steps: list[ast.Statement]) 
     A rider rather than a step, and for the reason the whole family exists: on
     its own the sentence names nothing. "Destroyed **this way**" is a question
     about what the previous sentence did — a regenerated or indestructible
-    creature was not destroyed and takes no damage (CR 701.7c) — and the only
+    creature was not destroyed and takes no damage (CR 701.8c) — and the only
     thing that can answer it is whatever performed the destruction.
 
     Attaches only to a node that can carry it. A card printing this after
@@ -372,7 +372,7 @@ def _attach_no_regeneration(stream: TokenStream, steps: list[ast.Statement]) -> 
     """Fold "A creature destroyed this way can't be regenerated." into the
     destroy the sentence before it performed (Soul Rend).
 
-    CR 701.15c's rider, which ``_parse_destroy`` already reads when it trails
+    CR 701.19c's rider, which ``_parse_destroy`` already reads when it trails
     the verb directly ("Destroy target creature. It can't be regenerated.").
     Soul Rend prints a **condition** between them — "Destroy target creature
     **if it's white**" — and the sentence layer folds that into a

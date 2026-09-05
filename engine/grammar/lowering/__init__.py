@@ -13,7 +13,7 @@ template has one home on each side — prowess parses in
     types            CR 205 / layer 4: animation, a gained card type, a
                      supertype, a basic land type
     counters         putting and removing them, and the per-death repetition
-    tapping          CR 701.20/701.21, the keyword action itself
+    tapping          CR 701.26, the keyword action itself
     untap_restrictions
                      CR 502.3, what keeps a permanent from untapping
     board            destruction, bouncing, tapping, control, exile

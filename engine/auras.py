@@ -693,14 +693,14 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     if cond == "last_counter_removed" and kind in EFFECT_HANDLERS:
         # "When the last ore counter is removed from this Aura, destroy
         # enchanted land and this Aura deals 2 damage to that land's
-        # controller." (Orcish Mine.) CR 121.3's event, announced from the
+        # controller." (Orcish Mine.) CR 122.1's event, announced from the
         # state-based sweep in ``mixins/game_ending.py`` rather than from the
         # four call sites that take a counter off — which is what makes the
         # claim true for *any* permanent printing the condition, not only one
         # whose counters a particular path removes. Divine Intervention already
         # rode it; this is the same dispatcher asked by an Aura.
         return (
-            "the last-counter-removed trigger (CR 121.3) — "
+            "the last-counter-removed trigger (CR 122.1) — "
             "mixins/game_ending.py's counter sweep"
         )
     if cond == "attackers_declared" and kind in EFFECT_HANDLERS:

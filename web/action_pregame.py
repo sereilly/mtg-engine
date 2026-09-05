@@ -1,5 +1,5 @@
 """Handlers for the pregame flow: the coin flip and the mulligan loop
-(CR 103.4). The only specs registered with ``pregame=True`` - everything
+(CR 103.5). The only specs registered with ``pregame=True`` - everything
 else waits until the game proper has begun.
 """
 

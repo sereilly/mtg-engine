@@ -1,4 +1,4 @@
-"""Destroying a permanent — CR 701.7, and the riders printed around it.
+"""Destroying a permanent — CR 701.8, and the riders printed around it.
 
 Split out of ``effects/board.py`` at the thousand-line guard, under the name
 ``lowering/destruction.py`` has carried since it left the same family one
@@ -9,11 +9,11 @@ destroy is one production reading the same noun phrase as the rest"); it was a
 claim about a size, and the size changed.
 
 The line is the CR's own keyword action, and it is the same one the lowering
-side drew: **destroying** a permanent (CR 701.7) is not sacrificing one
-(CR 701.17), returning one to a hand, phasing one out (CR 702.26) or attaching
+side drew: **destroying** a permanent (CR 701.8) is not sacrificing one
+(CR 701.21), returning one to a hand, phasing one out (CR 702.26) or attaching
 one — which is what ``board`` keeps. What comes with the verb comes with it:
 the "unless its controller pays" offer and its life half, the
-"destroyed this way … can't be regenerated" rider (CR 701.15c) and the
+"destroyed this way … can't be regenerated" rider (CR 701.19c) and the
 per-payer sweep, none of which appears anywhere else in the family.
 
 The offer's three price fragments do **not** travel with them, and that is the

@@ -76,7 +76,7 @@ class ManaSpending:
         """Whether a unit of *symbol* mana may pay a coloured *pip*.
 
         **"Only as though it were colorless mana" takes away the unit's own
-        colour too**, which is the one line here worth reading twice. CR 106.6b
+        colour too**, which is the one line here worth reading twice. CR 106.6
         makes an "only" clause a restriction rather than a permission, so under
         Celestial Dawn a Swamp's ``{B}`` does not pay ``{B}`` — it is colorless
         mana now, good for generic and for ``{C}`` and for nothing else. Written

@@ -224,7 +224,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # controller pays 1 life for each blocking creature they control."
         # (Heat Wave.) The blocking twin of Elephant Grass' toll two rows up,
         # and the first cost in this file paid in **life** rather than mana
-        # (CR 118.4/509.1d) — which is why the capture is its own key: what a
+        # (CR 118.3b/509.1d) — which is why the capture is its own key: what a
         # printed symbol run means and what a printed number of life means are
         # two different payments, and one key would let the two enforcement
         # sites read a life total as a mana pool.

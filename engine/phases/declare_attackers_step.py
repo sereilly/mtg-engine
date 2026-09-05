@@ -4,7 +4,7 @@ from __future__ import annotations
 
 The active player declares attackers (and any attacking bands) as a turn-based
 action, taps the attackers CR 508.1f taps, puts any attack triggers on the stack
-(CR 508.2), then receives priority (CR 508.4) so the triggers resolve as players
+(CR 508.2), then receives priority (CR 508.2) so the triggers resolve as players
 pass. Also holds the attack-legality query (``can_attack``),
 "must attack if able" enforcement, and the banding-declaration validation.
 """
@@ -307,7 +307,7 @@ class DeclareAttackersStepMixin:
             self._fire_matching_creature_attacks_triggers(declared)
             self._announce_attack_declaration(controller_index, declared)
             self._fire_delayed_attack_triggers(controller_index, unique_indices)
-        # CR 508.4: once attackers have been declared (the turn-based action of the
+        # CR 508.2: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)
         return True, "declared attackers"
@@ -1127,7 +1127,7 @@ class DeclareAttackersStepMixin:
         """Put "whenever one or more creatures you control attack" triggers on the stack.
 
         Covers Raging River and similar enchantments whose ability triggers once
-        when the controller declares one or more attackers (CR 508.2/508.4, 603.3).
+        when the controller declares one or more attackers (CR 508.1, 603.3).
         Per CR 508.2 these abilities are placed on the stack as the declare attackers
         step's turn-based action completes — they don't resolve immediately; the
         active player then receives priority (the caller opens that window) and the

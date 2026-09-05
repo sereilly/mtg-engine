@@ -595,7 +595,7 @@ def _lower_draw(
 def _lower_mill(
     node: ast.Mill, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
-    """"Target player mills N cards." (CR 701.13a, Millstone.)
+    """"Target player mills N cards." (CR 701.17a, Millstone.)
 
     The miller travels on the payload under the same ``recipient`` key
     ``deal_damage`` and ``target_loses_life`` already read — one convention for

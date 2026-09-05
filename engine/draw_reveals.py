@@ -1,4 +1,4 @@
-"""Reveals a *draw* causes (CR 701.16), and the printed line that asks for one.
+"""Reveals a *draw* causes (CR 701.20), and the printed line that asks for one.
 
 One sentence today: **"Reveal the first card you draw each turn."** (Rowen.) It
 is a static ability of a permanent — nothing goes on the stack, nothing is

@@ -86,9 +86,13 @@ _BOARD_COUNTS_WITH_BASE = frozenset(
 _LOOPED_PLAYER_RECIPIENTS = frozenset({"each_player", "each_opponent"})
 
 
-def _per_recipient_count(node: ast.DealDamage) -> dict | None:
+def _recipient_seat_count(node: ast.DealDamage) -> dict | None:
     """The count spec for "…equal to the number of <filter> **that player**
     controls", or None when the clause does not narrow to the recipient.
+
+    Scoped to the recipient **seat**, which is what names it apart from
+    ``_sweeps._per_recipient_multiplier``, a number taken once per struck
+    *permanent*. Both were ``_per_recipient_count`` until VIS wave 4.
 
     The controller narrowing is stripped before :func:`count_spec` sees it, for
     the reason that function refuses it: nothing downstream tests a controller
@@ -319,7 +323,7 @@ def _lower_counted_damage(
     # player** controls" (Typhoon). One number per seat, so it travels on its
     # own key and only onto the two recipients whose handler branch loops.
     if isinstance(recipient, ast.PlayerRef):
-        per_recipient = _per_recipient_count(node)
+        per_recipient = _recipient_seat_count(node)
         if per_recipient is not None:
             # "At the beginning of **each player's** upkeep, this enchantment
             # deals damage to **that player** equal to the number of snow lands
@@ -422,7 +426,8 @@ def _lower_counted_damage(
 #: Named counts whose number is **one per seat** and comes out of this
 #: resolution's own scratchpad rather than off the board, mapped to the key the
 #: earlier step recorded it under. They lower onto the same looping recipients
-#: `_per_recipient_count` does and refuse everywhere else, for that function's
+#: `_recipient_seat_count` does and refuse everywhere else, for that
+#: function's
 #: reason: one number per seat cannot be folded into the single X.
 _PER_SEAT_RECORD_COUNTS: dict[str, str] = {
     "base_over_discarded_this_way": DISCARDED_BY_SEAT,

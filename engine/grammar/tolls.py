@@ -253,7 +253,7 @@ def _accept_price_action(
     # offer's *action*, so it reaches the same `May` and the same prompt.
     #
     # No takeability entry answers it, and that is the rule rather than an
-    # omission — CR 701.13b mills the whole library when it is shorter than the
+    # omission — CR 701.17b mills the whole library when it is shorter than the
     # number, so a player can always take this offer and a "can you?" check
     # would withdraw one the card makes.
     if stream.at_word("mills", "mill"):

@@ -402,7 +402,7 @@ def _parse_move_counter(stream: TokenStream) -> "ast.MoveCounter | None":
     """``Move [a|N] <kind> counter(s) from <subject> onto <subject>.``
     (Afiya Grove.)
 
-    CR 121.6 makes this **one** action rather than a removal and a placement:
+    CR 122.5 makes this **one** action rather than a removal and a placement:
     with no such counter on the first object nothing happens at all, where two
     steps in a sequence would put a counter on the destination anyway. That is
     the whole reason it is its own node.

@@ -1,4 +1,4 @@
-"""Tapping: the keyword action (CR 701.20) and the untap-step restrictions.
+"""Tapping: the keyword action (CR 701.26) and the untap-step restrictions.
 
 Split from ``board`` at the thousand-line guard, under the name
 ``lowering/tapping.py`` has carried since the lowering side crossed the same cap
