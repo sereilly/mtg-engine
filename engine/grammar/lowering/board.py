@@ -38,7 +38,7 @@ from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT,
                       PUT_FROM_HAND_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT,
-                      _BOUND_OBJECT_DELAYED_EVENTS)
+                      _BOUND_OBJECT_DELAYED_EVENTS, _RECORDED_PERMANENTS)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.
@@ -292,6 +292,32 @@ def _per_payer_count(node: ast.Sacrifice) -> dict:
     return spec
 
 
+def _bound_sacrifice_filter(
+    subject: "ast.TargetSpec", produced: frozenset[str]
+) -> dict:
+    """The filter payload for a sacrifice addressed by the delay's bound id.
+
+    "Put target creature **card from a graveyard** onto the battlefield under
+    your control … When this enchantment leaves the battlefield, that creature's
+    controller sacrifices it." (Necromancy.) The back-reference takes its noun
+    phrase from the sentence in front of it, so it still reads "card in a
+    graveyard" — and by the time the delay fires, what those words name is the
+    **permanent** that step put onto the battlefield, which CR 400.7 makes a
+    different object from the card. Dropping exactly the two card-in-a-zone
+    words is reading the phrase rather than losing part of it; every other
+    narrowing it carries goes into the payload and is tested.
+
+    Gated on a producer, for the reason ``counters.py``'s Bogardan Phoenix
+    branch is gated on the same set one family over: only a step that put a card
+    onto the battlefield changes what the pronoun is about, and without one "it"
+    still means the card phrase it was printed beside.
+    """
+    filt = subject.filter
+    if filt.is_card and filt.zone == "graveyard" and (produced & _RECORDED_PERMANENTS):
+        filt = dataclasses.replace(filt, is_card=False, zone="battlefield")
+    return _filter_payload(filt)
+
+
 def _lower_sacrifice(
     node: ast.Sacrifice,
     event: str | None = None,
@@ -342,7 +368,8 @@ def _lower_sacrifice(
     ):
         return (
             OracleInstruction(
-                "sacrifice_bound_permanent", "", _filter_payload(node.subject.filter)
+                "sacrifice_bound_permanent", "",
+                _bound_sacrifice_filter(node.subject, produced),
             ),
         )
     # "**That creature's controller sacrifices it** at end of combat." (Basalt
@@ -372,7 +399,8 @@ def _lower_sacrifice(
     ):
         return (
             OracleInstruction(
-                "sacrifice_bound_permanent", "", _filter_payload(node.subject.filter)
+                "sacrifice_bound_permanent", "",
+                _bound_sacrifice_filter(node.subject, produced),
             ),
         )
     if (

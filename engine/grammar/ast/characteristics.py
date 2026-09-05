@@ -393,6 +393,37 @@ class GainType:
 
 
 @dataclass(frozen=True)
+class BecomeAura:
+    """``It becomes an Aura with "enchant creature put onto the battlefield
+    with <this permanent>."`` (Necromancy.)
+
+    CR 613 layer 4 and layer 6 in one printed sentence: the permanent gains the
+    Aura subtype, and it gains the enchant ability (CR 702.5) that says which
+    permanent it may legally be attached to. Its own node rather than a
+    :class:`GainType` carrying a rider, because the enchant clause is not a
+    type — it is the restriction CR 704.5m re-checks on every state-based pass,
+    and a node that could not state it would be a type change with a dropped
+    sentence behind it.
+
+    ``noun`` is the enchant clause's head noun ("creature"), the same word
+    ``mixins/stack/casting.permanent_matches_enchant_noun`` matches a host
+    against everywhere else in this engine.
+
+    ``origin_is_source`` is the clause's rider — "put onto the battlefield
+    **with this permanent**", CR 201.5's self-reference, which the lexer has
+    already collapsed to one token by the time this is built. It is carried
+    rather than dropped because it is the whole point of the sentence: the Aura
+    may enchant *that* creature and no other, so an effect that moves it
+    (Enchantment Alteration) finds no legal host. A quality naming anything
+    else refuses in the parse — the engine has no way to test it, and an
+    untestable restriction admitted here is one the CR 704.5m sweep would
+    silently ignore.
+    """
+    noun: str
+    origin_is_source: bool = False
+
+
+@dataclass(frozen=True)
 class ChangeSupertype:
     """``<subject> becomes snow.`` / ``<subject> is no longer snow.``
     (Arcum's Weathervane, both of its abilities.)

@@ -1023,3 +1023,54 @@ def test_704_8_last_known_information_undying_example():
     # → wolf remains in graveyard, does not return to battlefield
     assert not any(perm.card.name == "Young Wolf" for perm in p1.battlefield)
     assert any(c.name == "Young Wolf" for c in p1.graveyard)
+
+
+# ---------------------------------------------------------------------------
+# 704.5p asked of CR 613 layer 4 — VIS W4G1
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("704.5p", "613.1d")
+def test_704_5p_reads_the_layer_4_answer_to_is_this_an_aura():
+    """704.5p's second sentence exempts an Aura, and CR 613.1d is what decides
+    whether a permanent *is* one: a type-changing effect can give a permanent
+    the Aura subtype it was not printed with (Necromancy's "it becomes an Aura
+    with …"). Read off the printed type line instead, this sweep unattached
+    that permanent, and 704.5m then put it into the graveyard as an unattached
+    Aura — half a resolution after the sentence that attached it.
+    """
+    from engine.layer_bridge import GAINED_TYPES
+
+    host = Permanent(card=_mk_creature("Host", 2, 2))
+    became = Permanent(card=_mk_card("Becomes An Aura", "Enchantment"))
+    became.metadata[GAINED_TYPES] = [
+        {"card_types": [], "subtypes": ["aura"], "duration": "permanent"}
+    ]
+    p1 = PlayerState(name="P1", battlefield=[host, became])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+    from engine.auras import attach_aura
+
+    attach_aura(became, host)
+
+    game.check_state_based_actions()
+
+    assert became.has_type("aura"), "layer 4 is what makes it an Aura"
+    assert became.metadata.get("attached_to") is host, game.log
+
+
+@pytest.mark.cr("704.5p")
+def test_704_5p_still_unattaches_a_permanent_that_is_no_kind_of_attachment():
+    """The other direction of the same read: a plain enchantment that no effect
+    has made an Aura is exactly what the rule names, and asking layer 4 must not
+    stop it being asked."""
+    host = Permanent(card=_mk_creature("Host", 2, 2))
+    plain = Permanent(card=_mk_card("Plain Enchantment", "Enchantment"))
+    plain.metadata["attached_to"] = host
+    p1 = PlayerState(name="P1", battlefield=[host, plain])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+
+    game.check_state_based_actions()
+
+    assert plain.metadata.get("attached_to") is None, game.log
+    assert plain in p1.battlefield, "704.5p leaves it on the battlefield"

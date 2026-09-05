@@ -203,7 +203,8 @@ def _lower_create_delayed_trigger(
     from ...delayed_triggers import (DELAYED_EVENTS,
                                      EVENTS_SEATED_BY_BOUND_PLAYER)
 
-    from ._events import EXTRA_TURN_GRANTED, _RECORDED_PERMANENTS
+    from ._events import (EXTRA_TURN_GRANTED, _RECORDED_PERMANENTS,
+                          _PERMANENTS_MADE_BY_THIS_EFFECT)
 
     if node.event not in DELAYED_EVENTS:
         raise LoweringError(
@@ -317,10 +318,37 @@ def _lower_create_delayed_trigger(
     # delay's object, and reading its answer here is that one decision rather
     # than a second one made differently. The same move
     # `_lower_activated_delayed_destroy` already makes for `destroy_bound_permanent`.
-    if not node.binds_target and any(
-        i.kind in _BOUND_TO_THE_DELAYS_OBJECT for i in effect
-    ):
-        payload["binds_target"] = True
+    if any(i.kind in _BOUND_TO_THE_DELAYS_OBJECT for i in effect):
+        # "Put target creature **card from a graveyard** onto the battlefield …
+        # When this enchantment leaves the battlefield, that creature's
+        # controller sacrifices **it**." (Necromancy.) A step of this same
+        # resolution *made* the permanent the words name, and the ability's own
+        # target is the **card** it was — so `binds_target` would resolve a
+        # graveyard slot as a permanent and bind nothing, arming an entry about
+        # no object while the card compiled clean. The record is the only place
+        # the permanent can be read from, which is `binds_recorded`'s own reason
+        # one branch up.
+        #
+        # Asked whichever way the noun phrase was spelled, and that is the point
+        # of `_PERMANENTS_MADE_BY_THIS_EFFECT` being a narrower set than the one
+        # above: behind a step that merely *acted on* a permanent the target and
+        # the record are the same object, so the reading must not change; behind
+        # a step that made one they are different objects and only the record is
+        # right.
+        made = tuple(sorted(produced & _PERMANENTS_MADE_BY_THIS_EFFECT))
+        if len(made) > 1:
+            raise LoweringError(
+                "a delayed ability about a permanent this effect made needs "
+                "exactly one earlier step that made one", node=node,
+            )
+        if made:
+            payload["binds_recorded"] = made[0]
+            # Stated rather than left standing beside it: the arming handler
+            # prefers the record, so a `binds_target` still reading True would
+            # be a second answer nothing consults.
+            payload["binds_target"] = False
+        elif not node.binds_target:
+            payload["binds_target"] = True
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

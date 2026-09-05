@@ -1720,3 +1720,192 @@ def test_equipoise_phases_each_permanent_out_once(set_pool):
 
     names = [perm.card.name for perm in game.players[1].phased_out]
     assert sorted(names) == ["Island", "Plains"], names
+
+
+# --- W4G1: Necromancy, the enchantment that becomes an Aura ---
+from engine import Game as _W4G1Game, PlayerState as _W4G1Player  # noqa: E402
+from engine.auras import (  # noqa: E402
+    PUT_ONTO_BATTLEFIELD_BY as _W4G1_ORIGIN,
+    aura_attach_refusal as _w4g1_attach_refusal,
+)
+from engine.card_loader import (  # noqa: E402
+    load_cards as _w4g1_load, manifest_set_path as _w4g1_path,
+)
+from engine.grammar import compile_line as _w4g1_compile_line  # noqa: E402
+from engine.models import Permanent as _W4G1Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _w4g1_compile  # noqa: E402
+
+_W4G1_LEA = {card.name: card for card in _w4g1_load(_w4g1_path("LEA"))}
+
+
+def _w4g1_game():
+    game = _W4G1Game(players=[
+        _W4G1Player(name="P1"), _W4G1Player(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game
+
+
+def _w4g1_necromancy(set_pool, graveyard_seat=1, creature="Grizzly Bears"):
+    """Necromancy resolving its enters trigger with one creature card in a
+    graveyard. Returns the game and the Necromancy permanent."""
+    game = _w4g1_game()
+    if creature is not None:
+        game.players[graveyard_seat].graveyard.append(_W4G1_LEA[creature])
+    necromancy = _W4G1Permanent(card=set_pool("VIS")["Necromancy"])
+    game._put_permanent_onto_battlefield(0, necromancy, None)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.check_state_based_actions()
+    return game, necromancy
+
+
+def test_necromancy_compiles_its_second_line_into_four_steps(set_pool):
+    """The printed paragraph is one enters trigger whose effect is three
+    sentences plus the delayed ability the last of them creates (CR 603.7).
+
+    Written as the steps rather than as one fused kind, because every one of
+    them is a step another card could print on its own: the type change, the
+    reanimation, the attach, and the delay.
+    """
+    program = _w4g1_compile(set_pool("VIS")["Necromancy"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "enters_battlefield"
+    steps = trigger.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "become_aura_with_enchant", "reanimate_creature",
+        "attach_source_to_target", "create_delayed_trigger",
+    ], [step.kind for step in steps]
+
+    # The attach reads the permanent the reanimation made rather than a target:
+    # the ability's target is a *card* in a graveyard.
+    assert steps[2].payload["host_from"] == "reanimated_permanents"
+    delayed = steps[3].payload
+    assert delayed["binds_recorded"] == "reanimated_permanents"
+    assert delayed["binds_target"] is False
+    assert delayed["watches"] == "source"
+
+
+def test_necromancy_reanimates_the_creature_and_attaches_itself_to_it(set_pool):
+    """CR 701.3a: the attach is to the permanent the step in front of it put
+    onto the battlefield, and to nothing else — CR 400.7 makes that permanent a
+    different object from the card the trigger targeted."""
+    game, necromancy = _w4g1_necromancy(set_pool)
+
+    reanimated = next(
+        perm for perm in game.players[0].battlefield
+        if perm.card.name == "Grizzly Bears"
+    )
+    assert necromancy.metadata.get("attached_to") is reanimated, game.log
+    assert necromancy in game.players[0].battlefield, game.log
+    assert game.players[1].graveyard == [], "the card left its owner's graveyard"
+
+
+def test_necromancy_becomes_an_aura_in_layer_4(set_pool):
+    """CR 613.1d: the subtype is a type-changing effect, not a rewritten card —
+    so every reader of "is this an Aura?" gets one answer, and the printed type
+    line still says what was printed."""
+    game, necromancy = _w4g1_necromancy(set_pool)
+
+    assert necromancy.has_type("aura"), game.log
+    assert "Aura" not in necromancy.card.type_line
+
+
+def test_necromancy_sacrifices_the_creature_when_it_leaves(set_pool):
+    """CR 603.7c: the delayed ability is about the permanent the resolution
+    that created it made, and it is still about that permanent once the
+    enchantment has gone. CR 701.21a: sacrificing is not destroying, and the
+    card goes to its **owner's** graveyard (CR 400.3) rather than the
+    controller's."""
+    game, necromancy = _w4g1_necromancy(set_pool)
+
+    game.remove_from_battlefield(necromancy)
+    game._permanent_to_graveyard(game.players[0], necromancy)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+    game.check_state_based_actions()
+
+    assert [perm.card.name for perm in game.players[0].battlefield] == [], game.log
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_necromancy_goes_to_the_graveyard_when_its_creature_leaves(set_pool):
+    """CR 704.5m: an Aura attached to nothing is put into its owner's graveyard.
+    It is the Aura subtype this permanent *gained* that makes the rule apply to
+    it, and the delayed sacrifice behind it then finds the creature already
+    gone — which is the ability doing as much as it can (CR 608.2b)."""
+    game, necromancy = _w4g1_necromancy(set_pool)
+    reanimated = next(
+        perm for perm in game.players[0].battlefield
+        if perm.card.name == "Grizzly Bears"
+    )
+
+    game.remove_from_battlefield(reanimated)
+    game._permanent_to_graveyard(game.players[1], reanimated)
+    game.check_state_based_actions()
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert necromancy not in game.players[0].battlefield, game.log
+    assert "704.5m" in " ".join(game.log)
+
+
+def test_necromancy_may_not_be_moved_onto_another_creature(set_pool):
+    """"enchant creature **put onto the battlefield with Necromancy**" — the
+    rider is the whole of what the granted clause adds, and CR 303.4j makes an
+    Aura that can't legally enchant a permanent simply not move there
+    (Enchantment Alteration). Left unread the clause would be enforced by
+    nothing, which is the permissive answer an unknown enchant noun otherwise
+    gets."""
+    game, necromancy = _w4g1_necromancy(set_pool)
+    reanimated = next(
+        perm for perm in game.players[0].battlefield
+        if perm.card.name == "Grizzly Bears"
+    )
+    other = _W4G1Permanent(card=_W4G1_LEA["Hill Giant"])
+    game._put_permanent_onto_battlefield(0, other, None)
+
+    assert _w4g1_attach_refusal(game, necromancy, reanimated) is None
+    assert _w4g1_attach_refusal(game, necromancy, other) is not None
+    assert reanimated.metadata.get(_W4G1_ORIGIN) == necromancy.permanent_id
+    assert other.metadata.get(_W4G1_ORIGIN) is None
+
+
+def test_necromancy_with_no_creature_card_anywhere_reanimates_nothing(set_pool):
+    """Every step declines rather than reaching for something else: the
+    reanimation records nothing, the attach has no host to read, and the
+    delayed ability is about no object so none is created."""
+    game, necromancy = _w4g1_necromancy(set_pool, creature=None)
+
+    assert necromancy.metadata.get("attached_to") is None, game.log
+    assert not game.delayed_triggers, game.delayed_triggers
+
+
+def test_a_quoted_grant_this_engine_cannot_test_keeps_refusing():
+    """The production reads exactly one enchant quality — a head noun plus
+    CR 201.5's self-reference — because that is the one
+    ``auras.enchant_card_refusal`` can test. Any other quoted clause keeps the
+    quote guard's refusal rather than being admitted with its restriction
+    dropped, which is the failure a permissive enchant matcher would make
+    silent.
+    """
+    admitted = _w4g1_compile_line(
+        'When this enchantment enters, it becomes an Aura with "enchant '
+        'creature put onto the battlefield with Necromancy." Draw a card.',
+        card_name="Necromancy",
+    )
+    assert admitted.parse_error is None, admitted.parse_error
+
+    for line in (
+        'When this enchantment enters, it becomes an Aura with "enchant '
+        'creature you control." Draw a card.',
+        'When this enchantment enters, it becomes an Aura with "enchant '
+        'creature put onto the battlefield with Animate Dead." Draw a card.',
+    ):
+        refused = _w4g1_compile_line(line, card_name="Necromancy")
+        assert refused.parse_error == "granted ability in quotes", (
+            line, refused.parse_error,
+        )

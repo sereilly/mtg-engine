@@ -99,11 +99,9 @@ from .lowering import (
     _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
     _lower_play_with_hand_revealed,
-    _lower_reveal_hand_and_choose,
     _lower_lose_life,
     _lower_bin_revealed_card,
     _lower_put_milled_card_onto_battlefield,
-    _lower_player_gets_counters,
     _lower_put_counter,
     _lower_put_onto_battlefield,
     _lower_reveal_until,
@@ -112,11 +110,9 @@ from .lowering import (
     _lower_sacrifice,
     _lower_destroy_unless_pay,
     _lower_cast_permission,
-    _lower_look_top_pick,
     _lower_search_player_library,
     _lower_graveyard_pick_onto_battlefield,
     _lower_untap_restriction,
-    _lower_untap_chosen_by_paying,
     _lower_condition,
     pronoun_target_referent,
     _lower_tap,
@@ -139,7 +135,8 @@ from .lowering import (
 #: inspection: no class in this table appears anywhere else in the chain and
 #: none of them inherits from another, so at most one branch could ever have
 #: matched a given node.
-from .by_node import _BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT
+from .by_node import (_BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT,
+                      _BY_NODE_TYPE_WITH_PRODUCED)
 
 
 # ---------------------------------------------------------------------------
@@ -212,13 +209,12 @@ def lower_statement(
     lowering = _BY_NODE_TYPE_WITH_EVENT.get(type(statement))
     if lowering is not None:
         return lowering(statement, event)
+    # …and the third: a node whose lowering reads what earlier steps of this
+    # same effect recorded (see `_BY_NODE_TYPE_WITH_PRODUCED`).
+    lowering = _BY_NODE_TYPE_WITH_PRODUCED.get(type(statement))
+    if lowering is not None:
+        return lowering(statement, produced)
 
-    # Both act on a seat that can be the one the *firing event* froze — "look
-    # at **that player's** hand" (Leshrac's Sigil), "**that player** may
-    # choose … and pay" (Mudslide) — so they are in the chain rather than in
-    # the name-only table above. The raw `event`, not `dispatch_event`: both
-    # are printed inside an offer's branch, which is not the ability's whole
-    # effect and would see no event at all.
     # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
     # In the chain rather than in the name-only table above because the pronoun
     # is only a pronoun *relative to what came before it*: with no record from
@@ -226,10 +222,6 @@ def lower_statement(
     # and the two readings lower to different machinery.
     if isinstance(statement, ast.SacrificeUnlessPay):
         return _lower_sacrifice_unless_pay(statement, produced)
-    if isinstance(statement, ast.UntapChosenByPaying):
-        return _lower_untap_chosen_by_paying(statement, event)
-    if isinstance(statement, ast.RevealHandAndChoose):
-        return _lower_reveal_hand_and_choose(statement, event)
     if isinstance(statement, ast.Draw):
         # "…then draws **as many cards as they discarded this way**" (Forget).
         # A back-reference names its producer or refuses, and only `produced`
@@ -270,8 +262,6 @@ def lower_statement(
         return _lower_put_counter(
             statement, dispatch_event, produced, event_subject, event
         )
-    if isinstance(statement, ast.PlayerGetsCounters):
-        return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
     if isinstance(statement, ast.GainLife):
@@ -463,8 +453,6 @@ def lower_statement(
         return _lower_discard_revealed_matching_unless_pay_life(
             statement, produced
         )
-    if isinstance(statement, ast.LookTopPickToHand):
-        return _lower_look_top_pick(statement, event)
 
     if isinstance(statement, ast.CastPermission):
         # *event* as well as *produced*: "**The player** may play that card this

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**358 / 612 tracked rules covered (58%)** — 2047 tests, 0 unannotated.
+**358 / 612 tracked rules covered (58%)** — 2049 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(83 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(84 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(15 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
@@ -908,7 +908,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(3 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(90 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(92 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

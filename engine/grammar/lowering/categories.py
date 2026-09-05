@@ -87,6 +87,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "pump_target_creature_until_eot": "pump",
     "pump_target_while_source_tapped": "pump",
     "sacrifice_expansion_permanents": "destruction",
+    "become_aura_with_enchant": "characteristics",
     "gain_type": "characteristics",
     "change_supertype": "characteristics",
     # "Target land becomes a Swamp until its controller's next untap step."

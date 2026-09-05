@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 89.2% | 89.2% | 61.2% | 137 |
+| VIS *(measured)* | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | **All (shipped)** | **3918** | **5812** | **90.0%** | **89.2%** | **58.7%** | **2824** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 309 | 130 | expected a subject |  |
 | 97 | 44 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
-| 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
+| 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 9 | 9 | expected 'unless defending player controls' |  |
@@ -3259,6 +3259,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Necrite**
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, destroy target creature defending player controls. It can't be regenerated.`
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, destroy target creature defending player controls. It can't be regenerated.`
+- **Necromancy**
+  - `When this enchantment enters, if it's on the battlefield, it becomes an Aura with "enchant creature put onto the battlefield with Necromancy." Put target creature card from a graveyard onto the battlefield under your control and attach this enchantment to it. When this enchantment leaves the battlefield, that creature's controller sacrifices it.`
 - **Necromentia**
   - `Choose a card name other than a basic land card name. Search target opponent's graveyard, hand, and library for any number of cards with that name and exile them. That player shuffles, then creates a 2/2 black Zombie creature token for each card exiled from their hand this way.`
 - **Necropolis**

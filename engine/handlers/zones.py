@@ -4,6 +4,7 @@ import dataclasses
 import random
 from typing import TYPE_CHECKING
 
+from ..auras import PUT_ONTO_BATTLEFIELD_BY
 from ..exiled_records import (record_exiled_card, records_for_cards,
                               source_object)
 from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
@@ -1563,6 +1564,18 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     reanimated = game._reanimate_creature_to_battlefield(
         caster, source_player, idx, card_filter=card_filter
     )
+    # "enchant creature **put onto the battlefield with Necromancy**" — the
+    # relation that clause is about, stamped by the step that performs it
+    # because nothing else can say so: the ability's target was a *card* in a
+    # graveyard, and CR 400.7 makes what arrived a new object with no history on
+    # the board. `auras.enchant_card_refusal` reads it back. Unconditional: a
+    # permanent nobody asks the question about carries a spare id, where a
+    # permanent the question *is* asked about and that was not stamped would be
+    # a legal host the card never allowed.
+    if reanimated is not None and context.source_permanent is not None:
+        reanimated.metadata[PUT_ONTO_BATTLEFIELD_BY] = (
+            context.source_permanent.permanent_id
+        )
     # "It gains haste." — folded into the reanimation because the permanent
     # does not exist until this step runs, and read off the arrival itself
     # rather than off "the newest permanent the caster controls", which an
