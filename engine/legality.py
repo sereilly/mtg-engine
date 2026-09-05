@@ -38,10 +38,14 @@ import re
 from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
                                state_holds)
 from .models import CardDefinition, Permanent
+from .alternative_costs import alternative_costs
+from .cast_costs import cast_announces_x, costs_charged_from
 from .cast_restrictions import timing_fixed_seat
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
 from .oracle import compile_card_oracle, expand_ability_lines
+from .mana_payment import (mana_cost_from_symbols, plan_payment, total_pips,
+                          untapped_mana_lands)
 from .oracle_types import cost_target_count
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
@@ -482,7 +486,13 @@ class LegalityMixin:
 
     # -- Targeting ---------------------------------------------------------
     def cast_target_spec(
-        self, caster_index: int, card: CardDefinition, *, from_zone: str = "hand",
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        *,
+        from_zone: str = "hand",
+        spell_hand_index: int | None = None,
+        optional_cost_payments: dict[str, int] | None = None,
     ) -> dict:
         """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
         the target kind plus every legal target, enumerated and gated through the
@@ -492,7 +502,16 @@ class LegalityMixin:
         ``from_zone`` is the zone the cast would leave, because a printed
         additional cost may name one (Demonic Embrace's graveyard price) and the
         picker has to charge what the payment path will charge — the same test
-        ``queue_from_hand`` makes."""
+        ``queue_from_hand`` makes.
+
+        ``optional_cost_payments`` is CR 601.2b's answer **so far** — the offers
+        the caster has already accepted. It is what makes this spec re-askable:
+        the offer ceilings below are computed against it, and so is CR 601.2c's
+        target count for the one shape whose count a payment decides (Primitive
+        Justice destroys one artifact, plus another for each {1}{R} and each
+        {1}{G} paid). ``spell_hand_index`` is which copy is being cast, needed
+        for the same reason CR 601.2a is: a spell cannot be exiled to pay for
+        itself, and a second copy in hand can."""
         # Modal "Choose one —" spells choose a mode first; each mode carries its
         # own target spec (filled in by the web layer per mode), so report "modal"
         # and let the UI run its mode-choice flow rather than enumerating here.
@@ -523,6 +542,48 @@ class LegalityMixin:
         if caps_cast_x(card.oracle_text):
             bound = cast_x_ceiling(self, caster_index, card.oracle_text)
             spec["max_x"] = 0 if bound is None else bound[0]
+        # CR 107.3a's *other three* places an X can live. The browser asked only
+        # the mana-cost string, so Fire Covenant ({1}{B}{R}, "pay X life") and
+        # Infernal Harvest ({1}{B}, "return X Swamps") were offered no X box at
+        # all and cast at CR 107.3b's 0 -- legal and useless. Reported as a flag
+        # rather than left to a substring probe for the reason `defined_x` is:
+        # what a card's costs say is the compiler's answer, not the client's.
+        if cast_announces_x(card, from_zone=from_zone):
+            spec["announces_x"] = True
+            # And the ceiling that goes with it, which the mana pool cannot
+            # supply because this X is not paid in mana: a life total (CR 119.4)
+            # or a board of Swamps (CR 601.2h). The same numbers
+            # `_unpayable_additional_cost` refuses above, so the picker offers
+            # exactly what the cast would accept.
+            bound = self._additional_cost_x_ceiling(
+                caster_index, card, from_zone=from_zone
+            )
+            if bound is not None:
+                spec["max_x"] = (
+                    bound if spec.get("max_x") is None
+                    else min(int(spec["max_x"]), bound)
+                )
+        # CR 601.2b's *optional* prices, and how many times each is payable
+        # against the answer so far. The picker had no shape for an offer at
+        # all — it modelled a cost the caster will certainly pay — so every card
+        # printing one was castable at its printed default and at no other
+        # price.
+        offers = self.cast_cost_offers(
+            caster_index, card, from_zone=from_zone,
+            spell_hand_index=spell_hand_index, taken=optional_cost_payments,
+        )
+        if offers:
+            spec["cost_offers"] = offers
+        # CR 601.2c's count, once CR 601.2b has been answered. The arithmetic
+        # lives in ``oracle_types.cost_target_count`` because the grammar writes
+        # the description, this turns it into a picker size and
+        # ``_validate_cast_targets`` gates the announcement against it — three
+        # readers of one pair of dict keys, which is why none of them owns the
+        # sum. Emitted as an ordinary ``max_targets`` so the several-target
+        # picker has to know nothing about costs.
+        sized = cost_target_count(spec.get("cost_targets"), optional_cost_payments)
+        if sized is not None and sized > 1:
+            spec["max_targets"] = sized
         if spec["kind"] == ROLES_TARGET_KIND:
             # A spell whose targets are of *different kinds*, chosen in
             # dependency order (CR 601.2c). ``valid_targets`` is role 0's list —
@@ -555,6 +616,168 @@ class LegalityMixin:
         if spec.pop("unbounded_targets", False):
             spec["max_targets"] = len(spec["valid_targets"])
         return spec
+
+    def cast_cost_offers(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        *,
+        from_zone: str = "hand",
+        spell_hand_index: int | None = None,
+        taken: dict[str, int] | None = None,
+    ) -> list[dict]:
+        """Every *optional* price CR 601.2b lets the caster announce for *card*,
+        with what each one costs and how many times it is payable.
+
+        The two optional cost kinds this engine has grown, described in one
+        vocabulary because the browser asks one question about them ("what are
+        you paying for this?"):
+
+        * **CR 118.9's alternative cost** -- "You may pay 1 life and exile a blue
+          card from your hand rather than pay this spell's mana cost." Taken or
+          not; the exile half names a card, so the cards that answer it are
+          enumerated here through ``_alternative_cost_payers``, the same list the
+          payment picks from.
+        * **CR 601.2b's optional additional mana** -- "you may pay {1}{R} and/or
+          {1}{G} any number of times." Taken any number of times, *independently*
+          per offer (Primitive Justice prints two), which is why ``times`` is a
+          map and not a count.
+
+        ``taken`` is the answer so far, and the ceilings are computed against it:
+        raising one offer spends mana the others can no longer have. A client
+        that re-asks after each click therefore gets a ceiling that is true
+        jointly, rather than three standalone maxima that cannot all be taken.
+
+        **The ceiling is computed from the pool and the board**, through
+        ``plan_payment`` -- the same matching the payment itself runs, so an
+        offer this shows as payable is one the cast will accept. It reads the
+        *printed* mana cost: a CR 601.2f increase in force would make the number
+        optimistic, and an optimistic offer is refused by the payment with
+        nothing spent, where a pessimistic one silently withholds a price the
+        player could afford.
+        """
+        caster = self.players[caster_index]
+        answered = {str(key): int(value) for key, value in (taken or {}).items()}
+        offers: list[dict] = []
+
+        for cost in alternative_costs(card):
+            entry: dict = {
+                "kind": "alternative",
+                "label": cost.describe(),
+                "payable": self._unpayable_alternative_cost(
+                    caster_index, card, cost, spell_hand_index=spell_hand_index,
+                ) is None,
+            }
+            if cost.exile_from_hand is not None:
+                payers = self._alternative_cost_payers(
+                    caster_index, cost, spell_hand_index=spell_hand_index,
+                )
+                # By hand *position*, because that is what the wire carries and
+                # what CR 601.2a's withholding is expressed in: a deck repeats
+                # one immutable definition per copy, so two copies of one card
+                # in hand are the same Python object and only the index tells
+                # the spell apart from the card paying for it.
+                entry["hand_choices"] = [
+                    {"index": position, "name": held.name}
+                    for position, held in enumerate(caster.hand)
+                    if position != spell_hand_index
+                    and any(held is payer for payer in payers)
+                ]
+            offers.append(entry)
+            # CR 118.9a: only one alternative cost may be applied, and
+            # ``_resolve_alternative_cost`` refuses a card printing two rather
+            # than choosing for the player. Offering both would be this picker
+            # describing an announcement the engine will not accept.
+            break
+
+        every_offer = [
+            offer
+            for cost in costs_charged_from(card, from_zone)
+            for offer in cost.optional_mana
+        ]
+        if not every_offer:
+            # Before reading the board at all: this runs for every card in every
+            # hand on every poll, and all but three cards in the pool print no
+            # optional mana cost.
+            return offers
+        pool = dict(caster.mana_pool)
+        lands = untapped_mana_lands(self.controlled_by(caster_index))
+        printed = mana_cost_from_symbols(card.mana_cost or "") or {}
+        for offer in every_offer:
+            one = offer.cost
+            # What the rest of the announcement has already claimed, so the
+            # ceilings cannot each promise the same mana.
+            floor = dict(printed)
+            for other in every_offer:
+                if other.symbols == offer.symbols:
+                    continue
+                for symbol, amount in other.cost.items():
+                    floor[symbol] = floor.get(symbol, 0) + amount * answered.get(
+                        other.symbols, 0
+                    )
+            reachable = sum(pool.values()) + len(lands)
+            ceiling = (
+                max(1, reachable // max(1, total_pips(one))) if offer.repeatable else 1
+            )
+            payable = 0
+            for times in range(ceiling, 0, -1):
+                required = dict(floor)
+                for symbol, amount in one.items():
+                    required[symbol] = required.get(symbol, 0) + amount * times
+                if plan_payment(pool, lands, required) is not None:
+                    payable = times
+                    break
+            offers.append({
+                "kind": "optional_mana",
+                # The canonical spelling ``mana_cost_label`` produces, which is
+                # the key ``optional_cost_payments`` is read back by -- so what
+                # the browser sends and what ``cost_target_count`` counts are the
+                # same string, however the card printed it.
+                "symbols": offer.symbols,
+                "label": offer.symbols,
+                "repeatable": offer.repeatable,
+                "max_times": payable,
+                "times": answered.get(offer.symbols, 0),
+            })
+        return offers
+
+    def _additional_cost_x_ceiling(
+        self, caster_index: int, card: CardDefinition, *, from_zone: str,
+    ) -> int | None:
+        """The largest X the printed additional costs of *card* leave payable,
+        or None when no printed cost names one.
+
+        CR 107.3a lets the caster announce any X; CR 601.2h then refuses the
+        cast when the announcement prices a cost they cannot pay. So the
+        announcement has a ceiling, and it is *not* the mana pool: Fire
+        Covenant's X is paid in life (CR 119.4 caps a life payment at the life
+        total) and Infernal Harvest's in Swamps (there is no fifth Swamp to
+        return off a board of four). The picker reads it so the browser offers
+        exactly the range ``_unpayable_additional_cost`` would accept -- the
+        picker-and-gate pairing this engine keeps having to re-establish, here on
+        the half where disagreement means a cast announced and then refused.
+
+        The minimum across every X-bearing cost, because one cast pays all of
+        them: a card printing "pay X life **and** return X Swamps" is priced by
+        whichever runs out first. No card prints two today; the minimum is what
+        makes that a fact about the pool rather than an assumption in the code.
+        """
+        caster = self.players[caster_index]
+        charged = costs_charged_from(card, from_zone)
+        # CR 601.2b's printed life prices are paid out of the same total, so
+        # they are claimed before the announced one is offered a ceiling --
+        # the arithmetic ``_unpayable_additional_cost``'s ``life_already_owed``
+        # does one step later, for the same reason.
+        fixed_life = sum(cost.pay_life for cost in charged)
+        bounds: list[int] = []
+        for cost in charged:
+            if cost.pay_life_x:
+                bounds.append(max(0, caster.life - max(0, fixed_life)))
+            if cost.return_count_x:
+                bounds.append(len(self._additional_cost_candidates(
+                    caster_index, cost, giving_up="return",
+                )))
+        return min(bounds) if bounds else None
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
     def role_target_options(

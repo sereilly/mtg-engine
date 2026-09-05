@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**358 / 612 tracked rules covered (58%)** — 2049 tests, 0 unannotated.
+**358 / 612 tracked rules covered (58%)** — 2053 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(1 tests, subrules a)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(10 tests, subrules ab)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(14 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -310,7 +310,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.1** Each player begins the game with a starting life total of 20. Some variant games have different s...
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
 - [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
-- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(12 tests, subrules b)*
+- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(13 tests, subrules b)*
 - [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(5 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
 - [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(199 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(201 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(15 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*

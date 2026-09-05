@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import re
 
-from .cast_costs import additional_costs
+from .cast_costs import additional_costs, costs_charged_from
 from .divided_damage import CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -1552,9 +1552,7 @@ def _cast_cost_picker(card, from_zone: str) -> dict | None:
     charged for — and then, being a cost picker, took the place of the Aura's
     enchant target and made the card uncastable from either zone.
     """
-    for cost in additional_costs(card):
-        if cost.from_zone is not None and cost.from_zone != from_zone:
-            continue
+    for cost in costs_charged_from(card, from_zone):
         cost_spec = _cost_picker_spec(cost)
         if cost_spec is not None:
             # The zone the cast leaves, carried so the enumerator can tell a

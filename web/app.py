@@ -65,8 +65,6 @@ from .presence import (
     seat_is_connected,
 )
 from .seats import _loser, _rematch_human_seats, _seat_type, _winner
-from engine.oracle import compile_card_oracle
-from .serialization import _serialize_modes
 from .catalog import (
     CATALOG_PAYLOAD,
     _deck_detail,
@@ -78,7 +76,7 @@ from .verification_report import _verification_listing, write_verification_markd
 from .pregame import _pregame_auto_advance
 from .turn_steps import _end_turn
 from .game_flow import _advance_phase, _ai_step
-from .state_view import build_state
+from .state_view import build_card_target_spec, build_state
 from .debug_actions import _apply_raw_state
 from .actions import do_action
 
@@ -546,26 +544,25 @@ def get_card_target_spec(
     card_name: str = Query(...),
     seat: int = Query(..., ge=0),
     from_zone: str = Query("hand"),
+    hand_index: int | None = Query(None, ge=0),
+    optional_cost_payments: str | None = Query(None),
 ):
     """The cast target spec (kind + enumerated legal targets) for a card cast by
     ``seat`` in this session. Hand cards already carry this in the serialized
     state; this lets the debug "cast for free" flow — whose card comes from a
-    session-less catalog search — drive the same backend-authoritative targeting."""
+    session-less catalog search — drive the same backend-authoritative targeting,
+    and lets any cast re-ask mid-announcement once CR 601.2b's optional prices
+    have been part-answered (``optional_cost_payments``, JSON)."""
     session = _require_session(session_id)
     if seat >= len(session.game.players):
         raise HTTPException(status_code=400, detail="seat out of range for this session")
     card = CARD_BY_NAME.get(card_name.strip().casefold())
     if card is None:
         raise HTTPException(status_code=404, detail="card not found")
-    return {
-        "name": card.name,
-        "target_spec": session.game.cast_target_spec(seat, card, from_zone=from_zone),
-        "modes": _serialize_modes(card, session.game, seat),
-        # Whether more than one of those modes may be chosen (CR 700.2d). The
-        # client fetches the spec before it opens the mode prompt, so this is
-        # where the prompt learns to be a multi-select.
-        "modes_at_least": compile_card_oracle(card).modes_at_least,
-    }
+    return build_card_target_spec(
+        session, card, seat, from_zone=from_zone, hand_index=hand_index,
+        optional_cost_payments=optional_cost_payments,
+    )
 
 
 @app.post("/api/sessions/{session_id}/raw-state")
