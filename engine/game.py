@@ -131,9 +131,20 @@ class Game(
     # turn rotation must continue from the last non-extra turn, not from the
     # player who happens to be taking an extra turn. Anchored here.
     normal_rotation_anchor: int = 0
-    extra_phases_after: dict[str, list[str]] = field(default_factory=dict)
-    extra_steps_after: dict[str, list[str]] = field(default_factory=dict)
-    custom_phase_steps: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # CR 500.1's five phases as *this* turn still has them left to take, in
+    # order — the turn's plan, and the one place the phase sequence is written
+    # down. ``None`` means "nobody has planned this turn yet"; the first read
+    # derives it from CR 500.1's order behind the phase in progress
+    # (``_remaining_turn_phases``), so a Game driven straight into the middle of
+    # a turn by a test behaves exactly as it did when every driver hard-coded
+    # its own successor.
+    #
+    # It replaced ``extra_phases_after``, a dict keyed by phase *name*, which
+    # could not tell an extra combat phase from the turn's own one: Relentless
+    # Assault cast in the precombat main phase filed "a main phase after
+    # combat", and the turn's natural combat phase then ate it. A list of what
+    # is left has no such ambiguity, because a repeated phase is two entries.
+    turn_phases_remaining: list[str] | None = None
     skip_turn_counts: dict[int, int] = field(default_factory=dict)
     skip_phase_counts: dict[str, int] = field(default_factory=dict)
     skip_step_counts: dict[str, int] = field(default_factory=dict)

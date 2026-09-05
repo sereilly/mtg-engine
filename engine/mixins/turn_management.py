@@ -11,6 +11,7 @@ from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..trigger_utils import iter_triggered_abilities
+from ._constants import phases_after
 
 
 #: Every instruction kind ``_resolve_tapped_land_trigger_step`` has an arm for.
@@ -257,6 +258,13 @@ class TurnManagementMixin:
                     self.players[prev_seat].spells_cast_this_turn
                 ) or self.nontoken_permanents_entered_this_turn.get(prev_seat, 0) > 0
         self.nontoken_permanents_entered_this_turn = {}
+        # The turn's phase plan (CR 500.1's five phases, in order), reset here
+        # because this is the one hook both drivers call as a turn begins - the
+        # headless ``start_turn`` and the web layer's ``_begin_turn``. The
+        # beginning phase is the one now starting, so what is left is everything
+        # behind it; CR 500.8's extras are inserted into this list as they are
+        # created and spent as each phase is entered.
+        self.turn_phases_remaining = phases_after("beginning")
         # The new turn's per-seat ordinal — what "your last turn" (Giant
         # Turtle) and "its controller's next turn" (Wall of Dust) compare
         # against. A skipped turn (Time Vault) still increments: the skip is
@@ -340,7 +348,10 @@ class TurnManagementMixin:
         self.resolve_untap_step(player_index)
         self.resolve_upkeep(player_index)
         self.resolve_draw_step(player_index)
-        self._enter_main_phase(precombat=True)
+        # The phase after the beginning phase, asked of the turn's plan rather
+        # than named here (CR 500.1). With nothing added that is the precombat
+        # main phase, exactly as this line used to say outright.
+        self.enter_next_turn_phase("beginning")
 
     def start_next_turn(self) -> int:
         self.turn += 1

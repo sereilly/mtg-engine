@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**353 / 612 tracked rules covered (57%)** — 2021 tests, 0 unannotated.
+**355 / 612 tracked rules covered (58%)** — 2030 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [406. Exile](#406-exile) | 2/8 | 25% |
 | [407. Ante](#407-ante) | 4/4 | 100% |
 | [408. Command](#408-command) | 3/3 | 100% |
-| [500. General](#500-general) | 7/12 | 58% |
+| [500. General](#500-general) | 9/12 | 75% |
 | [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
 | [502. Untap Step](#502-untap-step) | 3/4 | 75% |
 | [503. Upkeep Step](#503-upkeep-step) | 1/2 | 50% |
@@ -555,17 +555,17 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 500. General
 
-- [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(2 tests)*
-- [ ] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa...
+- [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(6 tests)*
+- [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(1 tests)*
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(1 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(5 tests)*
-- [ ] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci...
+- [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(5 tests)*
 - [ ] **500.9** Some effects can add steps to a phase. They do this by adding the steps directly after a specifie...
-- [x] **500.10** Some effects add a step after a particular phase. In that case, that effect first creates the pha... *(1 tests)*
-- [x] **500.11** Some effects can cause a step, phase, or turn to be skipped. To skip a step, phase, or turn is to... *(2 tests)*
+- [x] **500.10** Some effects add a step after a particular phase. In that case, that effect first creates the pha... *(1 tests, subrules a)*
+- [x] **500.11** Some effects can cause a step, phase, or turn to be skipped. To skip a step, phase, or turn is to... *(3 tests)*
 - [ ] **500.12** No game events can occur between steps, phases, or turns.
 
 ### 501. Beginning Phase
@@ -591,7 +591,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 505. Main Phase
 
-- [x] **505.1** There are two main phases in a turn. In each turn, the first main phase (also known as the precom... *(1 tests)*
+- [x] **505.1** There are two main phases in a turn. In each turn, the first main phase (also known as the precom... *(2 tests, subrules a)*
 - [x] **505.2** The main phase has no steps, so a main phase ends when all players pass in succession while the s... *(1 tests)*
 - [ ] **505.3** First, but only if the players are playing an Archenemy game (see rule 904), the active player is...
 - [ ] **505.4** Second, if the active player controls one or more Saga enchantments and it’s the active player’s ...

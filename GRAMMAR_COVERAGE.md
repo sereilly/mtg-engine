@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.5% | 93.2% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 86.7% | 86.7% | 58.6% | 130 |
+| VIS *(measured)* | 167 | 278 | 87.1% | 87.1% | 59.0% | 131 |
 | **All (shipped)** | **3918** | **5812** | **89.9%** | **89.1%** | **58.6%** | **2818** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 314 | 135 | expected a subject |  |
+| 313 | 134 | expected a subject |  |
 | 105 | 47 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3829,6 +3829,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
 - **Reinforcements**
   - `Put up to three target creature cards from your graveyard on top of your library.`
+- **Relentless Assault**
+  - `Untap all creatures that attacked this turn. After this main phase, there is an additional combat phase followed by an additional main phase.`
 - **Relic Barrier**
   - `{T}: Tap target artifact.`
 - **Relic Bind**

@@ -376,6 +376,25 @@ def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
     )
 
 
+def _lower_extra_phases(node: "ast.ExtraPhases") -> tuple[OracleInstruction, ...]:
+    """"After this main phase, there is an additional combat phase followed by
+    an additional main phase." (Relentless Assault, CR 500.8.)
+
+    Both halves of the sentence are payload - which phase the run is added
+    after, and the run itself - because a card printing "after this combat
+    phase" or naming one phase instead of two is the same effect with different
+    words. ``grant_extra_phases`` resolves the reference against the phase in
+    progress at resolution, which is the only moment "this main phase" has an
+    answer.
+    """
+    return (
+        OracleInstruction(
+            "grant_extra_phases", "",
+            {"after": node.after, "phases": tuple(node.phases)},
+        ),
+    )
+
+
 def _lower_extra_land_plays(node: ast.ExtraLandPlays) -> tuple[OracleInstruction, ...]:
     """"You may play up to three additional lands this turn." (Summer Bloom,
     CR 305.2.)

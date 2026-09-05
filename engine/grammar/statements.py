@@ -51,7 +51,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
-from .effects.game import parse_extra_land_plays
+from .effects.game import parse_extra_land_plays, parse_extra_phases
 from .effects.stack import _parse_conditional_retarget
 from .effects.cards import _parse_for_each_revealed_discard
 
@@ -331,6 +331,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed
+    # "**After this main phase,** there is an additional combat phase followed
+    # by an additional main phase." (Relentless Assault, CR 500.8.) Read here
+    # with the other sentences whose first word opens no effect: there is no
+    # subject and no verb the subject-verb reader could take, so left to it the
+    # line dies on "expected a subject" - which is where this card sat.
+    extra_phases = parse_extra_phases(stream)
+    if extra_phases is not None:
+        return extra_phases
     # "**The next time you would draw a card this turn, instead** <effect>."
     # (Mangara's Tome; Aladdin's Lamp and Ring of Ma'rûf print the same
     # opener with different effects behind it.) CR 614.1's one-shot

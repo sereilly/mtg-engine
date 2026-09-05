@@ -299,3 +299,176 @@ def test_peace_talks_stops_an_activated_ability_aimed_at_a_face(set_pool):
     assert game.activate_permanent_ability(
         0, "Birds of Paradise", mana_color="G"
     ).supported, game.log
+
+
+# --- W3G4: Relentless Assault and CR 500.8's extra phases ---
+import pytest as _w3g4_pytest
+from engine import Game as _W3G4Game, PlayerState as _W3G4PlayerState
+from engine.grammar import parse_line as _w3g4_parse_line
+from engine.grammar.errors import GrammarError as _W3G4GrammarError
+from engine.models import CardDefinition as _W3G4CardDefinition, Permanent as _W3G4Permanent
+from engine.oracle import compile_card_oracle as _w3g4_compile
+
+
+def _w3g4_bear(name="Grizzly"):
+    return _W3G4CardDefinition(
+        name=name,
+        mana_cost="{1}{G}",
+        cmc=2.0,
+        type_line="Creature - Bear",
+        oracle_text="",
+        colors=("G",),
+        color_identity=("G",),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear", "power": "2", "toughness": "2"},
+    )
+
+
+def _w3g4_board(set_pool, card_name="Relentless Assault"):
+    """A board with one untapped attacker and the named spell in hand."""
+    attacker = _W3G4Permanent(card=_w3g4_bear())
+    attacker.metadata["summoning_sickness_turn"] = -99
+    p1 = _W3G4PlayerState(name="P1", battlefield=[attacker],
+                          hand=[set_pool("VIS")[card_name]])
+    p2 = _W3G4PlayerState(name="P2", life=40)
+    game = _W3G4Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, attacker
+
+
+def _w3g4_phase_sequence(game, seat=0, limit=60, stop_at=None):
+    """Drive the turn through the real steps, recording the phases it takes.
+
+    The Rock Hydra test for a turn-structure change: a compiled program cannot
+    show that an extra phase is *taken*, only that it was recorded - which is
+    exactly the distinction the engine got wrong before this round. VIS is
+    measured, so no running app can put the card on a board; this drives a Game
+    directly and reads the sequence of phases out of it. Consecutive steps of
+    one phase collapse to one entry, so a repeated phase name in the result is a
+    second *phase*, never a second step.
+    """
+    seen = []
+
+    def note():
+        if not seen or seen[-1] != game.current_turn_phase:
+            seen.append(game.current_turn_phase)
+
+    note()
+    for _ in range(limit):
+        phase, step = game.current_turn_phase, game.current_step
+        if phase in ("precombat_main", "postcombat_main"):
+            game._close_current_priority_step()
+            game.enter_next_turn_phase(phase)
+        elif phase == "combat":
+            if step == "declare_attackers" and not game.combat_attackers_locked:
+                ready = [
+                    i for i, p in enumerate(game.players[seat].battlefield)
+                    if p.is_creature and not p.tapped
+                ]
+                if ready:
+                    game.declare_attackers(seat, ready, 1 - seat)
+                else:
+                    game.combat_attackers_locked = True
+            game.advance_combat_phase()
+        elif phase == "ending":
+            if step != "end":
+                break
+            game.close_end_step()
+            game.resolve_cleanup_step(seat)
+        else:
+            break
+        note()
+        if stop_at is not None and game.current_turn_phase == stop_at:
+            break
+        if (game.current_turn_phase, game.current_step) == (phase, step):
+            break
+    return seen
+
+
+def test_relentless_assault_is_supported(set_pool):
+    card = set_pool("VIS")["Relentless Assault"]
+    program = _w3g4_compile(card)
+
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [i.kind for i in steps] == ["untap_all_matching", "grant_extra_phases"]
+    assert steps[1].payload == {
+        "after": "main", "phases": ("combat", "postcombat_main"),
+    }
+
+
+def test_relentless_assault_gives_a_second_combat_phase(set_pool):
+    """Cast in the postcombat main phase: the attacker untaps and swings again."""
+    game, attacker = _w3g4_board(set_pool)
+    game.start_turn(0)
+
+    sequence = _w3g4_phase_sequence(game)
+
+    assert sequence.count("combat") == 1, sequence
+    assert game.players[1].life == 38
+
+    game, attacker = _w3g4_board(set_pool)
+    game.start_turn(0)
+    # Run the turn's own combat first, then cast in the postcombat main phase.
+    game._close_current_priority_step()
+    game.enter_next_turn_phase("precombat_main")
+    _w3g4_phase_sequence(game, stop_at="postcombat_main")
+    assert game.current_turn_phase == "postcombat_main"
+    assert attacker.tapped
+    assert game.cast_from_hand(0, "Relentless Assault").supported, game.log
+    game._resolve_priority_window()
+
+    assert not attacker.tapped
+    sequence = _w3g4_phase_sequence(game)
+    assert "combat" in sequence, sequence
+    # Two attacks for two, out of forty.
+    assert game.players[1].life == 36, game.log
+
+
+def test_relentless_assault_cast_precombat_keeps_the_turns_own_combat(set_pool):
+    """CR 500.8: the extra phases go *directly after* this main phase.
+
+    The rest of the turn still happens behind them, which is the case a
+    phase-name-keyed record could not express - it filed "a main phase after
+    combat" and the turn's own combat phase ate it, so the turn lost a combat
+    instead of gaining one.
+    """
+    game, attacker = _w3g4_board(set_pool)
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Relentless Assault").supported, game.log
+    game._resolve_priority_window()
+
+    assert game.turn_phases_remaining == [
+        "combat", "postcombat_main", "combat", "postcombat_main", "ending",
+    ]
+    phases = _w3g4_phase_sequence(game)
+    assert phases.count("combat") == 2, phases
+    assert phases.count("postcombat_main") == 2, phases
+    assert phases[-1] == "ending"
+
+
+def test_relentless_assault_refuses_a_sentence_it_cannot_read():
+    """The production commits once "after this" matches, so a tail it does not
+    know fails the line rather than creating half the printed run."""
+    for line in (
+        "After this main phase, there is an additional beginning phase.",
+        "After this main phase, there is a combat phase.",
+        "After this main phase there is an additional combat phase.",
+        "After this main phase, there is an additional combat phase followed by.",
+        "After this main phase, there is an additional combat phase "
+        "followed by an additional main phase and you draw a card.",
+    ):
+        with _w3g4_pytest.raises(_W3G4GrammarError):
+            _w3g4_parse_line(line)
+
+
+def test_the_extra_phase_production_reads_the_shapes_the_template_prints():
+    """One production, not one card: "after this combat phase" and a single
+    additional phase are the same sentence with different words."""
+    assert _w3g4_parse_line(
+        "After this combat phase, there is an additional combat phase."
+    )
+    assert _w3g4_parse_line(
+        "After this phase, there is an additional main phase."
+    )

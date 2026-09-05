@@ -182,7 +182,11 @@ class CombatPhaseMixin:
 
         if self.current_step == "end_of_combat":
             self.end_combat(step_already_started=True)
-            self._enter_main_phase(precombat=False)
+            # CR 500.1/500.8: whatever this turn has planned after the combat
+            # phase, which is the postcombat main phase unless something added
+            # one (Relentless Assault). Asked rather than named, so an extra
+            # phase is entered rather than recorded and skipped.
+            self.enter_next_turn_phase("combat")
             return
         if self.current_step == "declare_attackers" and not self.combat_attackers_locked:
             # CR 802.2: under attack-multiple-players there's no single pre-picked
@@ -289,7 +293,7 @@ class CombatPhaseMixin:
 
         next_idx = idx + 1
         if next_idx >= len(combat_steps):
-            self._enter_main_phase(precombat=False)
+            self.enter_next_turn_phase("combat")
             return
         if combat_steps[next_idx] == "combat_damage":
             self.combat_damage_resolved = False
@@ -318,7 +322,7 @@ class CombatPhaseMixin:
                 self._on_step_or_phase_end("combat", "combat_damage")
                 eoc_idx = next_idx + 1
                 if eoc_idx >= len(combat_steps):
-                    self._enter_main_phase(precombat=False)
+                    self.enter_next_turn_phase("combat")
                     return
                 self._enter_combat_step(combat_steps[eoc_idx])
 

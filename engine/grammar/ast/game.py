@@ -490,6 +490,28 @@ class SkipTurn:
 
 
 @dataclass(frozen=True)
+class ExtraPhases:
+    """``After this main phase, there is an additional combat phase followed by
+    an additional main phase.`` (Relentless Assault, CR 500.8.)
+
+    The turn's *structure*, not its board, which is why it is its own node
+    beside :class:`ExtraTurn` and :class:`SkipStep` rather than an effect on
+    anything: nothing is targeted, nothing changes characteristics, and the
+    whole sentence says only where in the turn the extra phases go.
+
+    ``after`` is the phase the sentence points at, in the words the card prints
+    ("main", "combat") - resolved against the phase actually in progress at
+    resolution, because "this main phase" names whichever main phase the spell
+    was cast in and a sorcery can be cast in either. ``phases`` is the ordered
+    run the sentence creates; a tuple rather than a single name because
+    "followed by" is the printed conjunction and the order is the effect.
+    """
+
+    after: str
+    phases: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ExtraLandPlays:
     """``You may play up to three additional lands this turn.`` (Summer Bloom.)
 

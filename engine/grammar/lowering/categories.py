@@ -528,6 +528,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rider does to it.
     "deny_regeneration_to_block_pair": "regeneration",
     "grant_extra_turn": "turns",
+    # "After this main phase, there is an additional combat phase followed by an
+    # additional main phase." (Relentless Assault.) CR 500.8's extra phases,
+    # which is the turn's structure exactly as the extra turn above it is - so
+    # the same family, and GRAMMAR_CATEGORIES is unchanged.
+    "grant_extra_phases": "turns",
     # CR 724.1: an expedited replacement for the rest of the turn, not an effect
     # on any object - the same family as granting one.
     "end_the_turn": "turns",

@@ -357,6 +357,7 @@ from .game import (
     DrawGame,
     SkipStep,
     SkipTurn,
+    ExtraPhases,
     TargetingBan,
 )
 from .statements import (
@@ -579,6 +580,7 @@ __all__ = [
     "PutOntoBattlefield",
     "SkipStep",
     "SkipTurn",
+    "ExtraPhases",
     "TargetingBan",
     "DestroyUnlessPay",
     "DestroyEachUnlessPaid",
