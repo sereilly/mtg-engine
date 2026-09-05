@@ -16,24 +16,24 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 85.6% | 83.8% | 47.2% | 166 |
-| LEB | 292 | 389 | 85.6% | 83.8% | 47.3% | 167 |
-| 2ED | 292 | 389 | 85.6% | 83.8% | 47.3% | 167 |
+| LEA | 290 | 388 | 85.6% | 84.0% | 47.4% | 167 |
+| LEB | 292 | 389 | 85.6% | 84.1% | 47.6% | 168 |
+| 2ED | 292 | 389 | 85.6% | 84.1% | 47.6% | 168 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 87.9% | 85.6% | 49.9% | 174 |
+| 3ED | 296 | 389 | 87.9% | 85.9% | 50.1% | 175 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 91.5% | 90.8% | 54.4% | 247 |
+| 4ED | 368 | 520 | 91.5% | 91.0% | 54.6% | 248 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 83.8% | 82.4% | 55.0% | 123 |
-| **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
+| VIS *(measured)* | 167 | 278 | 86.0% | 84.9% | 57.2% | 127 |
+| **All (shipped)** | **3918** | **5812** | **89.8%** | **89.0%** | **58.6%** | **2818** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 320 | 141 | expected a subject |  |
+| 316 | 137 | expected a subject |  |
 | 105 | 47 | unrecognized effect verb |  |
-| 81 | 36 | unconsumed text |  |
+| 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
@@ -56,8 +56,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 1 | expected 'card' |  |
-| 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
-| 5 | 2 | expected a keyword ability |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected what this creature can't block, or a duration |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -65,15 +63,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
+| 4 | 1 | expected a keyword ability |  |
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
-2813 cards, 3398 lines.
+2818 cards, 3403 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -980,6 +980,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Crash Through**
   - `Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Draw a card.`
+- **Creature Bond**
+  - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
+  - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
+  - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
+  - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
+  - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
 - **Creeping Mold**
   - `Destroy target artifact, enchantment, or land.`
 - **Crimson Hellkite**
@@ -1108,6 +1114,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Regenerate target creature.`
   - `Regenerate target creature.`
   - `Regenerate target creature.`
+- **Death Watch**
+  - `When enchanted creature dies, its controller loses life equal to its power and you gain life equal to its toughness.`
 - **Deathbloom Thallid**
   - `When this creature dies, create a 1/1 green Saproling creature token.`
 - **Deathgrip**
@@ -1168,6 +1176,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target permanent.`
   - `Destroy target permanent.`
   - `Destroy target permanent.`
+- **Desertion**
+  - `Counter target spell. If an artifact or creature spell is countered this way, put that card onto the battlefield under your control instead of into its owner's graveyard.`
 - **Despotic Scepter**
   - `{T}: Destroy target permanent you own. It can't be regenerated.`
 - **Destructive Tampering**
@@ -1525,6 +1535,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}, {T}: Destroy target black creature.`
 - **Experimental Overload**
   - `Create an X/X blue and red Weird creature token, where X is the number of instant and sorcery cards in your graveyard. Then you may return an instant or sorcery card from your graveyard to your hand. Exile Experimental Overload.`
+- **Eye of Singularity**
+  - `When this enchantment enters, destroy each permanent with the same name as another permanent, except for basic lands. They can't be regenerated.`
+  - `Whenever a permanent other than a basic land enters, destroy all other permanents with that name. They can't be regenerated.`
 - **Fabled Passage**
   - `{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.`
 - **Faerie Noble**
@@ -3138,6 +3151,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
+- **Mob Mentality**
+  - `Whenever all non-Wall creatures you control attack, enchanted creature gets +X/+0 until end of turn, where X is the number of attacking creatures.`
 - **Mold Demon**
   - `When this creature enters, sacrifice it unless you sacrifice two Swamps.`
 - **Mole Worms**
@@ -5085,6 +5100,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for a card, then shuffle and put that card on top. You lose 2 life.`
 - **Vampirism**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
+  - `Enchanted creature gets +1/+1 for each other creature you control.`
   - `Other creatures you control get -1/-1.`
 - **Vanishing**
   - `{U}{U}: Enchanted creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`

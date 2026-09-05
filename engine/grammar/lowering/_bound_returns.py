@@ -28,9 +28,9 @@ from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._events import (BOUND_CARD_EVENTS,
-                      CHOSEN_PERMANENT as _ATTACH_HOST_KEY, EVENT_SUBJECT_OWNER,
-                      _EVENT_SUBJECT_OWNERS)
+from ._deaths import BOUND_CARD_EVENTS
+from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
+                      EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     chargeable_card_filter,

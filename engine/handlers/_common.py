@@ -843,6 +843,17 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
             return False
         if any(word in held for word in excluded_supertypes):
             return False
+    # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
+    # Singularity prints both). The *pair* — CR 205.4a's Basic supertype and
+    # the land card type — rather than the supertype alone: an exclusion by
+    # supertype would be a different sentence, and the only reason it happens
+    # to name the same cards today is that no printed non-land carries Basic.
+    # Read off the printed line, which is what every other type read in this
+    # pure matcher does.
+    if filt.get("exclude_basic_lands"):
+        printed_line = (card.type_line or "").lower()
+        if "land" in printed_line and "basic" in printed_supertypes(card.type_line):
+            return False
     # "creature cards **with mana value 3 or less**" (Idol of Endurance). Mana
     # value is one of the few characteristics a card has *everywhere* — CR 202.3
     # computes it from the printed mana cost, so unlike power or a keyword it
@@ -1473,6 +1484,17 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         # "target **nonsnow** land" (Hallowed Ground). The negative of the key
         # above, off the same answer and for the same reason.
         if any(word in held for word in excluded_supertypes):
+            return False
+    # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
+    # Singularity prints both). The *pair* — CR 205.4a's Basic supertype and
+    # the land card type — rather than the supertype alone: excluding the
+    # supertype is a different sentence, and the only reason it names the same
+    # cards today is that no printed non-land carries Basic. Both halves are
+    # computed (layer 4) for the reason the block above computes its supertype:
+    # Kormus Bell's animated Swamp is still a basic land, and a land whose type
+    # an effect rewrote is whatever the layers say it is.
+    if payload.get("exclude_basic_lands"):
+        if perm.has_type("land") and "basic" in perm.effective_supertypes:
             return False
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
     # key rather than an ``exclude_types`` entry.

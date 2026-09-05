@@ -152,6 +152,43 @@ def accept_source_card_name(stream: TokenStream) -> str | None:
 __all__ = ["accept_source_card_name", "parse_card_name"]
 
 
+def accept_name_comparison(
+    stream: TokenStream, classes: tuple[str, ...]
+) -> str | None:
+    """A noun phrase's **name comparison**, or None with nothing consumed.
+
+    "…with the same name as another permanent" (Eye of Singularity) and
+    "…with that name" (its second line). CR 201.2 in its two printed forms:
+    against the rest of the board, and against the object the firing event was
+    about. Here rather than in ``postmodifiers`` for this module's own reason —
+    a name is a literal, not a description of a set, and neither of these reads
+    a type line, a subtype or a nested phrase. ``accept_original_expansion``
+    below is the same shape: a name-shaped narrowing the postmodifier scan
+    calls into rather than spells out.
+
+    *classes* is the card types the phrase has already named, and the first
+    reading requires its noun to be one of them ("permanent with the same name
+    as another **permanent**"). Consumed rather than ignored, so "creature with
+    the same name as another artifact" leaves its tokens on the stream and
+    fails the line loudly instead of being read as this one, which would sweep
+    a set the sentence never described.
+    """
+    from .vocabulary import singular
+
+    mark = stream.mark()
+    if stream.accept_phrase("the", "same", "name", "as", "another"):
+        noun = singular(stream.peek_word() or "")
+        same_class = noun in classes if classes else noun == "permanent"
+        if noun and same_class:
+            stream.advance()
+            return "another"
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("that", "name"):
+        return "event"
+    return None
+
+
 def accept_original_expansion(stream: TokenStream) -> str | None:
     """``a name originally printed in the <Set> expansion`` -- the *set code*
     the printed expansion name resolves to, or None with the cursor unmoved.

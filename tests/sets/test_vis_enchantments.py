@@ -22,6 +22,11 @@ from engine.oracle import compile_card_oracle as _w2g1e_compile
 from engine import Game as _W2G5EGame, PlayerState as _W2G5EPlayer
 from engine.models import Permanent as _W2G5EPermanent
 from engine.oracle import compile_card_oracle as _w2g5e_program
+from engine.auras import attach_aura as _w2g3_attach
+from engine.card_loader import load_cards as _w2g3_load, manifest_set_paths as _w2g3_paths
+from engine.models import Permanent as _W2G3Permanent
+from engine.pt import add_pt_modifier as _w2g3_pump
+from engine import Game as _W2G3Game, PlayerState as _W2G3Player
 
 def _rig():
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
@@ -784,7 +789,6 @@ def test_the_sacrificed_land_phrase_refuses_where_no_cost_sacrifices():
     # any cost is consulted: a production consumes its whole line or raises.
     with pytest.raises(_W2G1eGrammarError):
         _w2g1e_parse("Add one mana of any type the exiled land could produce.")
-
 def _w2g5e_table(set_pool, library, *, interactive=False, life=20):
     crypt = set_pool("VIS")["Breathstealer's Crypt"]
     p1 = _W2G5EPlayer(name="P1")
@@ -899,3 +903,248 @@ def test_the_discard_takes_one_copy_and_not_every_copy(set_pool, set_cards):
 
     assert [c.name for c in p2.hand] == ["Grizzly Bears", "Grizzly Bears"]
     assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+
+def _w2g3_rig():
+    alice, bob = _W2G3Player(name="Alice"), _W2G3Player(name="Bob")
+    game = _W2G3Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    return game, alice, bob
+def _w2g3_enters(game, seat, card):
+    """Put *card* onto the battlefield and let its entry triggers resolve.
+
+    Draining the stack is the point rather than a convenience: Eye of
+    Singularity's whole second line is a trigger on somebody else's entry, and a
+    helper that left it queued would assert about a board the sweep had not
+    reached yet.
+    """
+    permanent = _W2G3Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    while game.stack:
+        game.resolve_top_of_stack()
+    return permanent
+def _w2g3_board(game):
+    return {
+        seat: sorted(perm.card.name for perm in player.battlefield)
+        for seat, player in enumerate(game.players)
+    }
+def test_vampirism_counts_the_board_and_shrinks_everything_else(set_pool, catalog_by_name):
+    """"Enchanted creature gets +1/+1 for each other creature you control.
+    Other creatures you control get -1/-1."
+
+    Two layer-7c contributions from one Aura, and the first is what was missing:
+    the counted grant lowers to ``dynamic_pt_bonus`` carrying
+    ``subject: "attached"``, which the P/T refresh lands on the host.
+
+    The host's own arithmetic is what the two sentences agree on. "Other" is
+    relative to the object the ability is on (CR 109.5), and Vampirism is not a
+    creature -- so the count includes the host and the penalty reaches it too,
+    which nets to exactly the reading where both words exclude it. Three
+    creatures, one enchanted: 2 + 3 - 1 = 4.
+    """
+    game, alice, _bob = _w2g3_rig()
+    bears = [_w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"]) for _ in range(3)]
+    aura = _w2g3_enters(game, 0, set_pool("VIS")["Vampirism"])
+    _w2g3_attach(aura, bears[0])
+    game._recompute_continuous_effects()
+
+    assert (bears[0].effective_power, bears[0].effective_toughness) == (4, 4)
+    assert (bears[1].effective_power, bears[1].effective_toughness) == (1, 1)
+    assert (bears[2].effective_power, bears[2].effective_toughness) == (1, 1)
+
+    # A fourth creature moves the count on the next recompute -- the grant is
+    # derived, never remembered (CR 613.4b).
+    _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
+    game._recompute_continuous_effects()
+    assert (bears[0].effective_power, bears[0].effective_toughness) == (5, 5)
+def test_vampirism_on_an_opponents_creature_counts_the_auras_controller(
+    set_pool, catalog_by_name
+):
+    """CR 109.5: "you" is the controller of the *Aura*, whichever creature it is
+    stuck to. So the host grows by the enchanter's board and the enchanter's own
+    creatures take the -1/-1 -- the opponent's do not."""
+    game, _alice, _bob = _w2g3_rig()
+    mine = [_w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"]) for _ in range(2)]
+    host = _w2g3_enters(game, 1, catalog_by_name["Grizzly Bears"])
+    aura = _w2g3_enters(game, 0, set_pool("VIS")["Vampirism"])
+    _w2g3_attach(aura, host)
+    game._recompute_continuous_effects()
+
+    assert (host.effective_power, host.effective_toughness) == (4, 4)
+    assert all((p.effective_power, p.effective_toughness) == (1, 1) for p in mine)
+def test_vampirisms_counted_grant_is_not_also_read_as_a_flat_one(set_pool):
+    """The line says "+1/+1 **for each** other creature", and
+    ``aura_static_pt_grant``'s pattern matches its prefix.
+
+    Answering there would have added a flat +1/+1 on top of the count the
+    layer-7c refresh already contributes -- the enchanted creature one point too
+    big in each half, from a reader that never saw the multiplier. Asserted at
+    the reader rather than through a board, because that is where the two
+    answers would disagree.
+    """
+    from engine.auras import aura_static_pt_grant
+
+    assert aura_static_pt_grant(set_pool("VIS")["Vampirism"].oracle_text) is None
+def test_death_watch_reads_the_creature_as_it_last_existed(set_pool, catalog_by_name):
+    """"When enchanted creature dies, its controller loses life equal to its
+    power and you gain life equal to its toughness."
+
+    CR 603.10: both numbers are last known information. The creature is pumped
+    before it dies, so the printed 3/3 and the frozen 5/7 are different answers
+    and only one of them can be read off a graveyard card.
+
+    "Its controller" is the *dead creature's* (CR 109.5 does not reach it -- the
+    possessive names the object the event was about), which is the opponent
+    here, while "you" is the Aura's controller.
+    """
+    game, alice, bob = _w2g3_rig()
+    victim = _w2g3_enters(game, 1, catalog_by_name["Hill Giant"])
+    aura = _w2g3_enters(game, 0, set_pool("VIS")["Death Watch"])
+    _w2g3_attach(aura, victim)
+    game._recompute_continuous_effects()
+    _w2g3_pump(victim, 2, 4, until="end_of_turn")
+    game._recompute_continuous_effects()
+    assert (victim.effective_power, victim.effective_toughness) == (5, 7)
+
+    game._destroy_swept_permanents(bob, lambda perm: perm is victim)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bob.life == 20 - 5
+    assert alice.life == 20 + 7
+def test_death_watch_on_your_own_creature_charges_you(set_pool, catalog_by_name):
+    """The two seats are read separately, so an Aura on your own creature takes
+    the life from you and gives it back -- which is the case where a single
+    "caster" reading for both halves would have looked right."""
+    game, alice, _bob = _w2g3_rig()
+    victim = _w2g3_enters(game, 0, catalog_by_name["Hill Giant"])
+    aura = _w2g3_enters(game, 0, set_pool("VIS")["Death Watch"])
+    _w2g3_attach(aura, victim)
+    game._recompute_continuous_effects()
+
+    game._destroy_swept_permanents(alice, lambda perm: perm is victim)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert alice.life == 20 - 3 + 3
+def test_mob_mentality_fires_only_when_every_non_wall_attacks(set_pool, catalog_by_name):
+    """"Whenever all non-Wall creatures you control attack, enchanted creature
+    gets +X/+0 until end of turn, where X is the number of attacking creatures."
+
+    CR 508.1's declaration, asked as a comparison of two sets rather than as a
+    count: a Wall that stays home is not a creature the sentence describes, and
+    a Bear that stays home is.
+    """
+    def _attack(hold_back=False, with_wall=False):
+        game, alice, _bob = _w2g3_rig()
+        bears = []
+        for _ in range(2):
+            bear = _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
+            bear.metadata["summoning_sickness_turn"] = -99
+            bears.append(bear)
+        if with_wall:
+            wall = _w2g3_enters(game, 0, catalog_by_name["Wall of Stone"])
+            wall.metadata["summoning_sickness_turn"] = -99
+        aura = _w2g3_enters(game, 0, set_pool("VIS")["Mob Mentality"])
+        _w2g3_attach(aura, bears[0])
+        game._recompute_continuous_effects()
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game.advance_combat_phase()
+        game.advance_combat_phase()
+        assert game.current_step == "declare_attackers"
+        attacking = [i for i, perm in enumerate(alice.battlefield) if perm in bears]
+        game.declare_attackers(0, attacking[:1] if hold_back else attacking)
+        while game.stack:
+            game.resolve_top_of_stack()
+        game._recompute_continuous_effects()
+        return bears[0]
+
+    assert (_attack().effective_power, _attack().effective_toughness) == (4, 2)
+    # A Wall is exempt by name, so the sentence is satisfied without it.
+    assert _attack(with_wall=True).effective_power == 4
+    # A creature the phrase *does* describe staying home is what stops it.
+    assert _attack(hold_back=True).effective_power == 2
+def test_mob_mentality_grants_trample_while_attached(set_pool, catalog_by_name):
+    """The Aura's other line, and the one that says the whole card is read: a
+    keyword grant derived from the Aura's text while it is attached, which ends
+    by the Aura ceasing to be attached rather than by a remembered delta."""
+    from engine.auras import detach_aura
+
+    game, _alice, _bob = _w2g3_rig()
+    bear = _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
+    aura = _w2g3_enters(game, 0, set_pool("VIS")["Mob Mentality"])
+    _w2g3_attach(aura, bear)
+    game._recompute_continuous_effects()
+    assert bear.has_keyword("trample")
+
+    detach_aura(aura, bear)
+    game._recompute_continuous_effects()
+    assert not bear.has_keyword("trample")
+def test_eye_of_singularity_sweeps_the_duplicates_and_spares_basic_lands(
+    set_pool, catalog_by_name
+):
+    """"When this enchantment enters, destroy each permanent with the same name
+    as another permanent, except for basic lands."
+
+    Every copy goes, not all-but-one: the sentence describes each permanent that
+    has a twin. The exemption is asserted with *three* Forests across two
+    battlefields, which is the set a dropped "except for basic lands" would take.
+    """
+    game, _alice, _bob = _w2g3_rig()
+    _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
+    _w2g3_enters(game, 1, catalog_by_name["Grizzly Bears"])
+    _w2g3_enters(game, 0, catalog_by_name["Hill Giant"])
+    _w2g3_enters(game, 0, catalog_by_name["Forest"])
+    _w2g3_enters(game, 0, catalog_by_name["Forest"])
+    _w2g3_enters(game, 1, catalog_by_name["Forest"])
+    _w2g3_enters(game, 0, catalog_by_name["Mox Pearl"])
+
+    _w2g3_enters(game, 0, set_pool("VIS")["Eye of Singularity"])
+
+    assert _w2g3_board(game) == {
+        0: ["Eye of Singularity", "Forest", "Forest", "Hill Giant", "Mox Pearl"],
+        1: ["Forest"],
+    }
+def test_eye_of_singularity_keeps_the_permanent_that_just_entered(
+    set_pool, catalog_by_name
+):
+    """"Whenever a permanent other than a basic land enters, destroy all other
+    permanents with that name."
+
+    "Other" is relative to the permanent that entered, not to the Eye -- so the
+    newcomer survives and the incumbent dies. A basic land entering fires
+    nothing, which is the half the trigger's own noun phrase carries.
+    """
+    game, _alice, _bob = _w2g3_rig()
+    _w2g3_enters(game, 0, set_pool("VIS")["Eye of Singularity"])
+    incumbent = _w2g3_enters(game, 0, catalog_by_name["Hill Giant"])
+    _w2g3_enters(game, 0, catalog_by_name["Forest"])
+
+    newcomer = _w2g3_enters(game, 1, catalog_by_name["Hill Giant"])
+    assert _w2g3_board(game) == {0: ["Eye of Singularity", "Forest"], 1: ["Hill Giant"]}
+    assert newcomer in game.players[1].battlefield
+    assert incumbent not in game.players[0].battlefield
+
+    # A second Forest is a basic land: the trigger's noun phrase excludes it, so
+    # both Forests stay.
+    _w2g3_enters(game, 1, catalog_by_name["Forest"])
+    assert _w2g3_board(game) == {
+        0: ["Eye of Singularity", "Forest"], 1: ["Forest", "Hill Giant"],
+    }
+def test_eye_of_singularity_sweeps_past_a_regeneration_shield(set_pool, catalog_by_name):
+    """"They can't be regenerated." (CR 701.19c.) The rider is on both of the
+    card's sentences, and a sweep that dropped it would leave a shielded
+    duplicate standing -- which is the whole of what the card is for."""
+    game, _alice, _bob = _w2g3_rig()
+    first = _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
+    second = _w2g3_enters(game, 1, catalog_by_name["Grizzly Bears"])
+    for perm in (first, second):
+        perm.regeneration_shield = 1
+
+    _w2g3_enters(game, 0, set_pool("VIS")["Eye of Singularity"])
+
+    assert _w2g3_board(game) == {0: ["Eye of Singularity"], 1: []}
+    # The shields are still on them, unspent: a sweep that "worked" by burning
+    # a shield and then destroying the survivor on a second pass would pass the
+    # board check above and fail this one.
+    assert (first.regeneration_shield, second.regeneration_shield) == (1, 1)

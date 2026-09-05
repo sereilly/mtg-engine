@@ -762,11 +762,13 @@ def deal_damage_to_player(game: Game, instruction: OracleInstruction, context: O
     ``trigger_context`` so a synthetic instruction (no parsed payload) is
     enough.
 
-    Two fire sites build one: the Aura death-damage dispatcher in
-    ``mixins/effects.py`` (the amount is the dead creature's toughness, a
-    number no compiled payload carries) and the upkeep registry's
-    ``_enqueue_upkeep_damage``, whose pay-or-consequence handlers compute the
-    amount interactively. The land-enters and land-dies triggers used to be
+    One fire site builds one: the upkeep registry's ``_enqueue_upkeep_damage``,
+    whose pay-or-consequence handlers compute the amount interactively. The
+    Aura death-damage dispatcher in ``mixins/effects.py`` was the other, on the
+    grounds that the dead creature's toughness was a number no compiled payload
+    carried — which was true of its fire site rather than of the rule. The
+    death site freezes ``dead_toughness`` now, so that sentence compiles like
+    any other and the dispatcher is gone. The land-enters and land-dies triggers used to be
     routed here too, replacing Ankh of Mishra's and Dingus Egg's compiled
     instructions outright — they now execute those instructions against the
     seat their fire sites freeze (``event_subject_controller``)."""

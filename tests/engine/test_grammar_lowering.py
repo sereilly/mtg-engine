@@ -5151,3 +5151,97 @@ def test_a_board_wide_block_restriction_refuses_an_untestable_subject():
     result = compile_line("Creatures with frobnication can't block creatures you control.")
     assert not result.lowered
 # --- end VIS w1g3 ---
+
+
+# ---------------------------------------------------------------------------
+# W2G3: counted bonuses on an Aura's host, and the two name-relation sweeps
+# ---------------------------------------------------------------------------
+
+
+def test_a_counted_static_bonus_on_the_host_carries_the_attached_subject():
+    """"Enchanted creature gets +1/+1 for each other creature you control."
+    (Vampirism.)
+
+    The same ``dynamic_pt_bonus`` a creature's own counted static lowers to, with
+    one key saying where the delta lands. A second instruction kind would be the
+    same refresh reading the same count by a different road.
+    """
+    compiled = compile_line(
+        "enchanted creature gets +1/+1 for each other creature you control"
+    )
+    assert compiled.lowering_error is None
+    instruction, = compiled.instructions
+    assert instruction.kind == "dynamic_pt_bonus"
+    assert instruction.payload["subject"] == "attached"
+    assert instruction.payload["x_from_count"]["filter"] == {
+        "type_filter": "creature", "exclude_self": True,
+    }
+
+
+def test_a_counted_pump_on_the_host_keeps_its_duration_and_its_count():
+    """"Enchanted creature gets +X/+0 until end of turn, where X is the number
+    of attacking creatures." (Mob Mentality.)
+
+    A one-shot, not a continuous bonus: the duration is what tells the two
+    apart, and the size travels on the same ``x_from_count`` spec every other
+    computed amount in the engine carries.
+    """
+    compiled = compile_line(
+        "enchanted creature gets +x/+0 until end of turn, "
+        "where x is the number of attacking creatures"
+    )
+    assert compiled.lowering_error is None
+    instruction, = compiled.instructions
+    assert instruction.kind == "pump_enchanted_creature"
+    assert instruction.payload["power"] == "x"
+    assert instruction.payload["toughness"] == 0
+    assert instruction.payload["x_from_count"]["filter"]["attacking_only"] is True
+
+
+def test_the_same_name_sweep_carries_both_of_its_narrowings():
+    """"Destroy each permanent with the same name as another permanent, except
+    for basic lands. They can't be regenerated." (Eye of Singularity.)
+
+    Three things the sentence says and three payload keys — the relation, the
+    exemption and CR 701.19c's rider. A sweep is where a dropped narrowing does
+    not mean "a card that does less"; it means one that takes the board.
+    """
+    compiled = compile_line(
+        "destroy each permanent with the same name as another permanent, "
+        "except for basic lands. they can't be regenerated"
+    )
+    assert compiled.lowering_error is None
+    instruction, = compiled.instructions
+    assert instruction.kind == "destroy_all_matching"
+    assert instruction.payload == {
+        "shares_name_with_another": True,
+        "exclude_basic_lands": True,
+        "bypass_regeneration": True,
+    }
+
+
+def test_that_name_refuses_where_no_event_named_an_object():
+    """"…destroy all other permanents with **that name**." (Eye of Singularity.)
+
+    The pronoun names the object the firing event was about, so it means nothing
+    on a spell and nothing under a trigger whose fire site records no subject.
+    Refused rather than dropped: with the relation gone the sweep has no
+    narrowing at all.
+    """
+    as_a_spell = compile_line("destroy all other permanents with that name")
+    assert as_a_spell.parse_error is None
+    assert as_a_spell.lowering_error is not None
+    assert "that name" in as_a_spell.lowering_error
+
+    under_an_event = compile_line(
+        "whenever a permanent other than a basic land enters, "
+        "destroy all other permanents with that name"
+    )
+    assert under_an_event.lowering_error is None
+    instruction, = under_an_event.instructions
+    assert instruction.payload["name_from_event"] is True
+    # "Other" is resolved against the permanent that entered, never against the
+    # ability's own source — which on this card is not a permanent with that
+    # name in the first place.
+    assert instruction.payload["other_than_event_subject"] is True
+    assert "exclude_self" not in instruction.payload

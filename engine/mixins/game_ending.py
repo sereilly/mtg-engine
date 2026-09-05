@@ -520,7 +520,6 @@ class GameEndingMixin:
             for player in self.players:
                 def _on_destroy_5f(perm: Permanent, player=player) -> None:
                     self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
-                    self._trigger_aura_death_effects(perm, player)
 
                 if self._destroy_swept_permanents(
                     player, _zero_toughness,
@@ -571,7 +570,6 @@ class GameEndingMixin:
             for player in self.players:
                 def _on_destroy_5g(perm: Permanent, player=player) -> None:
                     self.log.append(f"{perm.card.name} died (704.5g: lethal damage)")
-                    self._trigger_aura_death_effects(perm, player)
 
                 if self._destroy_swept_permanents(
                     player, _lethally_damaged,

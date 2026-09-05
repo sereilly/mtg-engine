@@ -37,7 +37,7 @@ from . import ast
 from .amounts import accept_source_relative_comparison, parse_comparison
 from .errors import GrammarError
 from .lexer import PT, SELF
-from .names import accept_original_expansion, parse_card_name
+from .names import accept_name_comparison, accept_original_expansion, parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
                       _parse_keyword_list, accept_source_reference)
 from .stream import TokenStream
@@ -245,6 +245,13 @@ def _parse_postmodifiers(
         ):
             d.controlled_since_turn_start = True
             continue
+        # "…**except for basic lands**" (Eye of Singularity). The third
+        # printed exemption here and the first about a card's type rather than
+        # about what it did. One field with "other than a basic land" below:
+        # this card names one set in two word orders.
+        if stream.accept_phrase("except", "for", "basic", "lands"):
+            d.excluded_basic_lands = True
+            continue
         stream.reset(except_mark)
         # "…creatures **that player** controls" and "…the number of creatures
         # **that opponent or that planeswalker's controller** controls" (Goblin
@@ -417,6 +424,13 @@ def _parse_postmodifiers(
             # satisfied by every creature on the board including the one the
             # card names. Its own field, tested by ``subject_matches`` off the
             # attachment record.
+            # "a permanent **other than a basic land**" (Eye of Singularity).
+            # Not one permanent excluded by identity like the readings around
+            # it — a *class*, named by the pair (CR 205.4a's Basic supertype
+            # and the land card type).
+            elif stream.accept_phrase("than", "a", "basic", "land"):
+                d.excluded_basic_lands = True
+                continue
             elif stream.accept_phrase("than", "enchanted"):
                 noun = stream.peek_word()
                 if noun is not None:
@@ -485,6 +499,20 @@ def _parse_postmodifiers(
         if stream.at_word("with"):
             probe = stream.mark()
             stream.advance()
+            # "…**with the same name as another permanent**" (Eye of
+            # Singularity) and "…**with that name**" (its second line). Read
+            # by `names`, one layer down, for the reason
+            # `accept_original_expansion` below is: a name comparison is about
+            # a literal rather than about a type line. Tried first because both
+            # open on words the probes below would take apart, and each
+            # consumes its whole phrase or nothing.
+            comparison = accept_name_comparison(stream, tuple(d.card_types))
+            if comparison == "another":
+                d.shares_name_with_another = True
+                continue
+            if comparison == "event":
+                d.name_from_event = True
+                continue
             if stream.accept_word("power"):
                 # "…with power **equal to or greater than the enchanted
                 # creature's toughness**" (Ironclaw Curse). Tried before the

@@ -270,6 +270,11 @@ class _FilterDraft:
     # one convention too many, and only a declared field can be checked against
     # what `_build_object_filter` copies.
     not_ability_targeted_by_same_name: bool = False
+    # Three narrowings Eye of Singularity prints -- see the fields of the same
+    # names on ``ast.ObjectFilter``.
+    shares_name_with_another: bool = False
+    name_from_event: bool = False
+    excluded_basic_lands: bool = False
     created_with_source: bool = False
     in_combat_with_source: bool = False
     was_dealt_damage_this_turn: bool = False
@@ -843,6 +848,9 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_keywords=tuple(d.with_keywords),
         without_keywords=tuple(d.without_keywords),
         not_ability_targeted_by_same_name=d.not_ability_targeted_by_same_name,
+        shares_name_with_another=d.shares_name_with_another,
+        name_from_event=d.name_from_event,
+        excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,
         target_count=d.target_count,

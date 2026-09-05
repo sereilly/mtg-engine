@@ -1083,11 +1083,40 @@ def _attack_declaration_filter(
     if "any_attacking_seat" not in payload and seat != event.payload.get("seat"):
         return False
     attackers = event.payload.get("attackers") or ()
+    described = payload.get("attacker_filter")
+    if "all_attackers" in payload:
+        # "Whenever **all** non-Wall creatures you control attack." (Mob
+        # Mentality.) Not a count: the question is whether the set the noun
+        # phrase describes and the set that attacked are the same one, so it is
+        # asked of the board rather than of the declaration's length — a seat
+        # with three Walls and one Bear attacks with one creature and has
+        # attacked with all of them.
+        #
+        # The board is read at the announcement, which is where an attacking
+        # creature still is (CR 508.1 has not left combat): `controlled_by` is
+        # the control seam, and matching by *identity* against the declaration
+        # is what keeps a look-alike of an attacker from standing in for one
+        # that stayed home.
+        #
+        # An empty set does not fire. "All" over nothing is vacuously true and
+        # no creature attacked, which is not what the sentence describes; the
+        # non-empty check is what says so rather than a count nobody printed.
+        eligible = [
+            perm
+            for perm in game.controlled_by(seat)
+            if subject_matches(
+                game, perm, described, observer=seat, source=permanent
+            )
+        ]
+        if not eligible:
+            return False
+        return all(
+            any(attacker is perm for attacker in attackers) for perm in eligible
+        )
     if "others_count" in payload:
         if not any(attacker is permanent for attacker in attackers):
             return False
         return len(attackers) >= int(payload["others_count"]) + 1
-    described = payload.get("attacker_filter")
     matching = sum(
         1
         for attacker in attackers

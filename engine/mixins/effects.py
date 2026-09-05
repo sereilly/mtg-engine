@@ -8,7 +8,6 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
-from ..auras import aura_enchants
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import emit
 from ..life_prohibitions import life_gain_banned
@@ -21,56 +20,11 @@ from ..pt import add_plus1_counters, add_pt_counters
 from ..regeneration import regeneration_replaces_destruction
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
-from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
-from ..auras import aura_death_damage_line
+from ..oracle import compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 from ..damage_redirects import source_matches
 
 class EffectsMixin:
-    def _trigger_aura_death_effects(self, dead_permanent: Permanent, controller: PlayerState) -> None:
-        """Put an Aura's death-trigger effect onto the stack when the creature it
-        enchants leaves the battlefield (e.g. an Aura that deals damage equal to the
-        creature's toughness). The toughness is captured now (the creature is gone by
-        resolution); the trigger resolves off the stack (CR 603.3)."""
-        aura = dead_permanent.metadata.get("attached_aura")
-        if aura is None:
-            return
-        prog = compile_card_oracle(aura.card)
-        text = prog.normalized_text
-        if not aura_enchants(aura.effective_card.oracle_text, "creature"):
-            return
-        controller_index = self.players.index(controller)
-        for trig in prog.triggered_abilities:
-            # `attached_creature_dies` — the condition this always meant. It read
-            # the generic `dies` because that was the only kind the trigger
-            # table produced for the phrase, and "when enchanted creature dies"
-            # is not the Aura's own death.
-            #
-            # And the condition alone is **not** what this dispatcher
-            # implements. It implements one printed sentence — "…this Aura
-            # deals damage equal to that creature's toughness to the creature's
-            # controller" — and firing on the kind gave that damage to every
-            # other Aura printing the same trigger word: Puppet Master returned
-            # nothing to its owner's hand and dealt its controller damage
-            # instead, and Takklemaggot would have done the same. The line is
-            # asked through `auras.aura_death_damage_line`, the same reader the
-            # support gate uses, so what fires and what is claimed cannot
-            # disagree.
-            if (
-                trig.condition.kind == "attached_creature_dies"
-                and aura_death_damage_line(trig.source_line or "")
-            ):
-                toughness = dead_permanent.effective_toughness
-                self._enqueue_triggered_ability(
-                    controller_index=controller_index,
-                    card=aura.card,
-                    instruction=OracleInstruction("deal_damage_to_player", None, {}),
-                    effect_kind="triggered_damage",
-                    ability_text=trig.source_line,
-                    trigger_context={"victim_player_index": controller_index, "amount": toughness},
-                )
-                break
-
     def _fire_delayed_combat_damage_triggers(
         self, attacker: "Permanent", defending_player: "PlayerState", amount: int
     ) -> None:
@@ -352,7 +306,6 @@ class EffectsMixin:
             # destruction path, which is how Avalanche and Armageddon came to
             # destroy lands no Dingus Egg ever saw.
             self._permanent_to_graveyard(target, perm)
-            self._trigger_aura_death_effects(perm, target)
             # 611.3b: a destroyed permanent's static buffs / dynamic P/T (Castle,
             # Gauntlet of Might, Lord of Atlantis, Nightmare's swamp count) must be
             # recomputed now that it has left the battlefield.

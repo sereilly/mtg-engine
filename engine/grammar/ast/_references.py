@@ -343,6 +343,26 @@ class ObjectFilter:
     # collapsed to a SELF token — so the question is "another copy of me",
     # whatever the copy is called.
     not_ability_targeted_by_same_name: bool = False
+    # "…**with the same name as another permanent**" (Eye of Singularity).
+    # CR 201.2's comparison, over the board rather than against a printed
+    # literal — which is what makes it a different field from ``named``: that
+    # one holds a word the card printed, this one holds a relation nothing
+    # knows until the sweep runs. Answered by ``subject_matches``, which has
+    # the game the relation needs.
+    shares_name_with_another: bool = False
+    # "…**with that name**" (Eye of Singularity's second line). The same
+    # comparison against the object the *firing event* was about, which no
+    # matcher can answer: ``subject_matches`` is handed a permanent, a seat and
+    # a source, and never the trigger's context. So the key travels to the
+    # handler, which resolves the name and then matches on it — the same split
+    # ``attached_to`` and the blocked-pair relations already make.
+    name_from_event: bool = False
+    # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
+    # Singularity prints both, one on each line). One field for two spellings,
+    # because they name the same set: a permanent that is a land with the Basic
+    # supertype (CR 205.4a). Not ``excluded_supertypes`` — that excludes a
+    # supertype on any card type, and the printed exemption is about the pair.
+    excluded_basic_lands: bool = False
     # "…**that targets a permanent you control**" (Avoid Fate, Ring of
     # Immortals). A restriction on what the *spell* chose, not on what the spell
     # is — so it is a nested noun phrase rather than more adjectives, and it is
@@ -703,6 +723,12 @@ class ObjectFilter:
             payload["exclude_self"] = True
         if self.not_ability_targeted_by_same_name:
             payload["not_ability_targeted_by_same_name"] = True
+        if self.shares_name_with_another:
+            payload["shares_name_with_another"] = True
+        if self.name_from_event:
+            payload["name_from_event"] = True
+        if self.excluded_basic_lands:
+            payload["exclude_basic_lands"] = True
         if self.not_enchanted:
             payload["not_enchanted"] = True
         if self.enchanted_only:

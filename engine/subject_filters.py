@@ -251,6 +251,17 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # here and nowhere else — the same footing as ``blocked_by_source``.
     "tapped_to_pay_for_source_this_turn",
     "other_than_attached_host",
+    # "…**with the same name as another permanent**" (Eye of Singularity).
+    # CR 201.2's comparison, and the first narrowing here whose answer is about
+    # the *rest of the board* rather than about the object, the seat or the
+    # source — which is exactly why it needs the game and is testable here and
+    # nowhere else. ``OBJECT_ONLY_FILTER_KEYS`` drops it below for that reason.
+    "shares_name_with_another",
+    # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
+    # Singularity's two lines). A pair of printed characteristics and nothing
+    # relative at all, so the pure matcher answers it and it stays in the
+    # object-only set below.
+    "exclude_basic_lands",
     # "target creature **whose controller controls an Island**" (Seasinger).
     # A nested noun phrase about a *seat's board* rather than about the object,
     # so it needs the game — and only the game: no observer, because the seat
@@ -288,6 +299,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     "controller", "owner", "owner_or_controller", "exclude_self",
     "controller_controls",
+    # Out for ``controller_controls``' reason and one step further still: the
+    # relation is to every other permanent on the table, so a caller with no
+    # game has nothing to compare against.
+    "shares_name_with_another",
     # Out for ``controller``'s reason: "you cast this turn" is half a seat
     # test, and a caller with no observer would compare the stamp's seat
     # against nothing. Refusing the line is the direction that cannot widen
@@ -782,6 +797,24 @@ def subject_matches(
     # is on the blocker (``blocked_attacker_ids_this_turn``, written by
     # ``declare_blockers_step``), so it survives the attacker leaving — and
     # with no source there is no relation to test and the answer is no.
+    # "…**with the same name as another permanent**" (Eye of Singularity).
+    # CR 201.2: two objects share a name when they have one in common. Read off
+    # the **effective** card, so a Clone counts under the name it copied
+    # (CR 707.2) — which is also the name printed on the board a player is
+    # looking at, and the same reading `_controls_count_holds` already takes of
+    # "with the same name as one another".
+    #
+    # Whose board is not part of the question: the phrase says "another
+    # permanent", not "another permanent you control", so every battlefield is
+    # searched. By identity, because a permanent is not another permanent
+    # (CR 109.2) and comparing by value would make a lone copy match itself.
+    if described.get("shares_name_with_another"):
+        name = obj.effective_card.name
+        if not any(
+            other is not obj and other.effective_card.name == name
+            for other in game.all_permanents()
+        ):
+            return False
     if described.get("blocked_source_this_turn"):
         if source is None:
             return False

@@ -178,6 +178,34 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                         "pump_target_creature_until_eot", "", payload
                     ),
                 )
+            # "**Enchanted creature** gets +1/+1 for each other creature you
+            # control." (Vampirism.) The same CR 613 layer-7c contribution the
+            # source-subject branch below produces, landing on the permanent
+            # this one is attached to — which is what `subject: "attached"`
+            # says, exactly as a `conditional_static` says it. The count is
+            # still the *Aura's* (CR 109.5: "you" is the ability's controller),
+            # so nothing about the spec changes; only who the delta is added
+            # to.
+            #
+            # Durationless only. A "for each" pump on the host **with** a
+            # duration is a one-shot, and the persistent channel this kind
+            # writes to has no end-of-turn sweep — it would be a permanent
+            # bonus on a card that printed "until end of turn".
+            if _is_enchanted(node.subject) and node.duration.kind is None:
+                return (
+                    OracleInstruction("dynamic_pt_bonus", "", {
+                        "power": _per_each_amount(
+                            node.power, node.power_negative, node
+                        ),
+                        "toughness": _per_each_amount(
+                            node.toughness, node.toughness_negative, node
+                        ),
+                        "x_from_count": count_spec(
+                            node.per_each, node, offset=_per_each_offset(node)
+                        ),
+                        "subject": "attached",
+                    }),
+                )
             if not _is_source(node.subject):
                 raise LoweringError(
                     'a "for each" pump is only a continuous bonus on its own '
@@ -309,7 +337,14 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             and node.subject.quantifier == "that"
             and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
         )
-        if not on_source and not bound and not _is_target(node.subject):
+        # "**Enchanted creature** gets +X/+0 until end of turn, where X is the
+        # number of attacking creatures." (Mob Mentality.) A fourth subject and
+        # the one an Aura prints: the boost lands on the permanent this one is
+        # attached to, which ``pump_enchanted_creature`` already finds, and what
+        # was missing was only a way to say how big it is — the same
+        # ``x_from_count`` spec the three subjects below carry.
+        on_attached = _is_enchanted(node.subject)
+        if not on_source and not on_attached and not bound and not _is_target(node.subject):
             raise LoweringError("a where-clause pump needs a single target", node=node)
         # Whichever definition the clause carried — a count, a maximum, or a
         # characteristic of the object the sentence named. Through the one spec
@@ -341,6 +376,12 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             # kind would be the same handler with the number arriving by a
             # different road.
             return (OracleInstruction("pump_self", "", payload),)
+        if on_attached:
+            # The same argument one subject over: the handler already knows
+            # which permanent, and the spec is the one every computed amount
+            # shares — so the count is resolved by the same evaluator whether
+            # the sentence was printed about a source, a target or a host.
+            return (OracleInstruction("pump_enchanted_creature", "", payload),)
         assert isinstance(node.subject, ast.TargetSpec)
         if not bound:
             _describe_targets(payload, node.subject)

@@ -1489,8 +1489,26 @@ class PermanentStateMixin:
                     self, player, bonus.payload.get("x_from_count") or {},
                     source=permanent,
                 )
+                # "**Enchanted** creature gets +1/+1 for each other creature
+                # you control." (Vampirism.) The Aura's sentence about its
+                # host, on the same instruction and the same count as the one a
+                # creature prints about itself — only the permanent the delta
+                # lands on differs, and that is what `subject` says. The same
+                # split `conditional_static` makes a few lines down, spelled
+                # the same way so one key means one thing across both.
+                #
+                # The count keeps `source=permanent` — the Aura — because
+                # CR 109.5 makes "you" the ability's controller and CR 109's
+                # "other" is relative to the object the ability is on. The
+                # recipient is the **live** record (CR 611.3b: a continuous
+                # effect applies only while the Aura is attached).
+                recipient = permanent
+                if bonus.payload.get("subject") == "attached":
+                    recipient = attached_host(self, permanent, last_known=False)
+                    if recipient is None:
+                        continue
                 _add_static_pt(
-                    permanent,
+                    recipient,
                     resolve_amount(bonus.payload.get("power", 0), value),
                     resolve_amount(bonus.payload.get("toughness", 0), value),
                 )
