@@ -895,7 +895,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Visions (VIS) — measured, 166/167 after wave 3
+## Visions (VIS) — shipped (167/167, manifest index 14)
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
 pool.** Registered under `measured` on 2026-09-04 at release date 1997-02-03,
@@ -1172,6 +1172,101 @@ blind to a nested phrase in exactly the same way. They were left alone
 deliberately: they sit in eleven modules four other wave branches are editing,
 and a sweep across them is a merge hazard with no card behind it. Named here so
 the next reader has a number rather than an impression.
+
+### Shipped: 167/167, index 14, and what four waves cost
+
+**Final numbers.** 167 supported of 167, hollow lines **0**, unclaimed
+sentences **0**, picker findings **0**, and **zero name-keyed hooks** across the
+whole set — the second set after Alliances to reach 100% with none, which took
+hook reliance down from 11.6% to 11.3% of supported cards and the grammar floors
+up (parsed 85.6 -> 85.9, lowered 83.8 -> 84.3, executed 47.3 -> 47.8). The pool
+is now **17 sets, 2,348 cards, all supported**. VIS's own row: 89.6% of lines
+parsed and lowered, 61.5% executed.
+
+**Four waves, 20 groups, 86 work-list cards** — 68 unsupported plus 18 the card
+census structurally could not see. The three sentence-level instruments all
+reached zero *in wave 1*, the first time a set has cleared them before its
+second wave, and the direct result of reading them at Phase 1 rather than at the
+gate.
+
+**The set's real yield was in cards this repo already called done.** In rough
+order of how long each had been wrong:
+
+- **Creature Bond** (LEA/LEB/2ED/3ED/4ED) has dealt no damage since Alpha.
+- **Drain Power** (six sets) credited `produced_mana[0]` — which says *which*
+  symbols a land makes and nothing about how many — so **Mishra's Workshop,
+  printing `{T}: Add {C}{C}{C}`, paid one**; and it ignored restricted mana,
+  where CR 106.13 says the restrictions travel with it.
+- **Twelve cards were mana abilities the engine did not treat as one**
+  (CR 605.1a), so they used the stack, which CR 605.3a forbids — and the same
+  predicate answered False for every AI caller, so the AI had never recognised
+  one at all.
+- **Fire Covenant** (ICE) was uncastable as printed: its X lives in an
+  additional cost and the client probed the *mana* cost for `{X}`.
+- **Cloak of Invisibility** and **Teferi's Curse** (MIR) destroyed themselves
+  every turn, because a phase-out was read as a zone change.
+- **Decomposition** (MIR) never took a life.
+- **Feline Sovereign** was mis-played twice, independently, by two groups.
+- **Seventeen cards** announced no player target on a trigger and aimed at the
+  first living opponent.
+- **Five cards' printed bounds were enforced by nobody** (`grant_target_flying_
+  until_eot` read no filter at all).
+
+**Three ways a card can be "supported" and do nothing**, all three found here
+and worth naming as a taxonomy:
+
+1. **The hollow line** — an ability part with no instruction. Known before.
+2. **The channel mismatch** — Equipoise chose the right permanents and phased
+   out none of them, because wave 1 settled `permanents_from`'s *arity* and
+   nobody settled its **element type**. Settling an arity is only half of
+   settling a channel.
+3. **The runtime decline** — Three Wishes' opening sentence parsed, lowered,
+   compiled and did nothing, because `exile_top_of_library` refuses at *run
+   time* for a face-down exile with no source permanent, and Three Wishes is an
+   instant. **No instrument in this repo can see that one.** It is the runtime
+   twin of the hollow line, and every prior card in the family is a permanent,
+   so Three Wishes is the first of 2,348 to reach it.
+
+**The briefs were wrong about two-thirds of the time, stably, across four
+waves**, and always in one direction: they named a mechanism the repo already
+had. Two new species appeared. An **engine refusal message that was itself
+false** — `lord_buffs.py grants no 'protection from black' at layer 6` had been
+granting it for two sets, and the real fault was that a lowering error does not
+fall through to the derivation table on the noncreature path. And a **deferral
+whose premise expired**: wave 3 declined the cost picker because "no client can
+load a `measured` set", which stopped being true at *Alliances'* promotion, and
+nobody re-read the role because the cards had not changed. The playbook records
+"a refusal can expire without anything failing"; this is that, one level up.
+
+**CR citations: 185 wrong of 6,614**, with one root cause nobody had named — the
+shipped `MagicCompRules.txt` is the April 17 2026 edition, which inserted
+`701.4 Behold` and `701.11 Triple` and shifted every number after them. A whole
+block went stale at once without anyone editing a line. Both the 701 block and
+the testable-keys check are now **enforceable** rather than swept once, the
+former by reading headings out of the CR file at test time.
+
+**Every size cap crossed in this set was crossed at integration, on nobody's
+branch, by two groups' additions summing** — `lowering/categories.py`,
+`conditions.py`, `lowering/board.py`, plus `parser.py` and
+`statement_dispatch.py` inside a single wave-4 branch. The Phase 0 pre-split of
+`lowering/_common.py` was right and was **not enough**. Each split went along a
+line the repo had already drawn in prose, which is the argument for splitting at
+the cap rather than raising the number — and two wave-2 groups independently
+made the *same* split of `lowering/stack.py`, moving seven byte-identical
+functions, which is the strongest evidence yet that these boundaries are found
+rather than invented.
+
+**The promotion gate produced eight findings**, three of them baselines a
+promotion is supposed to move and five of them work — including a guard whose
+*shape* could not express the truth: the combat-restriction check split the pool
+by instruction kind, and `creatures_cant_attack` has both a line the grammar
+claims (Moat) and one it refuses (Katabatic Winds). It asks per line now, and
+was injection-tested afterwards.
+
+**Phase 5 found one more**, which only the simulation could: the AI proposed
+Auras into Peace Talks' two-turn targeting ban, 30 refused casts in eight games.
+The fix extracted the cast path's condition into one predicate both readers ask,
+rather than copying it. Refused casts 30 -> 0.
 
 ### Wave 1 closed: 99 -> 139, and the integration cost more than the rounds
 

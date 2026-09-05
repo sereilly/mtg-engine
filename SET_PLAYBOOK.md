@@ -530,6 +530,42 @@ while the true number was 299), and `SET_PROGRESS.md` now reports a
 `measured`-role set as "Measured (N/M supported, not shipped)" rather than a
 bare "Partial".
 
+**Added at VIS's Phase 6: a cast-side "target opponent" offers the caster's own
+face.** On the *cast* path a printed "target **opponent**" derives a bare
+`{"kind": "player"}`, so the picker offers every player including the caster —
+Vito, Ebony Charm, Forbidden Ritual, Game of Chaos and Liliana, Death Mage. It
+is a live two-player bug, not a multiplayer-only one, and it is the mirror of
+the *trigger*-side gap wave 4 closed (17 cards, `announced_opponent_seat`
+deleted). The trigger fix deliberately gated on the **printed line** rather than
+the spec, precisely because the spec answers a bare `player` for a whole family;
+the cast side needs the same treatment plus a spec that carries the narrowing.
+**Phase 3 of the next set that prints one clears it**, and it wants its own
+differential because it moves those cards' pickers.
+
+**Added at VIS's Phase 6: a bare stack-drain loop in a test is a latent hang.**
+`while game.stack: resolve_top_of_stack()` spins forever once an interactive
+seat is owed a prompt, because the game correctly waits (CR 608.2, CR 117.3b).
+One helper hung the whole suite the moment a card started announcing a trigger
+target. Drain the registry's default instead. Worth a sweep by whoever next
+writes one.
+
+**Added at VIS's Phase 6: `_PLAYER_DEEDS` has two rows and `PlayerRef` carries
+two more clauses as bools.** "Who attacked this turn" and `damaged_by_source`
+each have their own parse site and their own picker enforcement. Folding them in
+is one row plus a picker read — but the two existing `_PLAYER_DEEDS` kinds are
+*resolution-time* seat records that the picker cannot enforce, so a naive fold
+gives the picker one generic key it answers for one row and silently passes for
+the other two. That is an unenforced seat narrowing acting on every player,
+which is the exact failure the family exists to prevent. It needs a design
+decision, not a row.
+
+**Added at VIS's Phase 6: ~60 non-701 CR citations are corrected but not
+guarded.** The 701 keyword-action block is now checked against headings read out
+of `MagicCompRules.txt` at test time, so a CR edition bump fails every citation
+whose keyword moved. The rest of the corrections — 609.3 for 608.2d, 706.2 for
+707.2, the 121/122 and 118/119/120 confusions — are prose headings that no
+guard can match. **A CR edition bump owes a re-read, not just a green suite.**
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -555,6 +591,23 @@ instruments current.
    will breach on arrival: either split it now, while nothing is in flight and
    the family boundary is the only question, or brief the group that owns that
    area to expect the split as part of its round.
+
+   **Visions pre-split the tightest *unowned* module and still crossed five
+   caps, so read the headroom per module the wave will touch rather than for
+   the tightest one.** `lowering/_common.py` was split at Phase 0 for the right
+   reason — every lowering family imports it, so no single group would have
+   crossed it alone — and `lowering/categories.py`, `conditions.py` and
+   `lowering/board.py` then went over at integration anyway, each by two
+   groups' additions summing. The prediction that works is per-family: take the
+   census, note which modules each *group's* family lands in, and pre-split any
+   that two groups will both reach. A module one group owns can be briefed; a
+   module two groups share cannot, because neither will cross it.
+
+   The consolation is that the seam is findable late: every one of those splits
+   went along a line the repo had already written down in prose, and two wave-2
+   groups independently made the *same* split of `lowering/stack.py`, moving
+   seven byte-identical functions. Splitting at the cap beats raising the
+   number.
 4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
@@ -872,7 +925,27 @@ measured set so per-card tests can land as the cards do. **Exit:**
 
 4. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
-   reading the diff it blesses. **And the exit is three numbers, not one.**
+   reading the diff it blesses.
+
+   **There are three ways a card reports supported and does nothing, and only
+   one of them has an instrument.** Visions found all three:
+
+   * the **hollow line** — an ability part with no instruction, which
+     `--hollow-lines` sees;
+   * the **channel mismatch** — Equipoise chose the right permanents and phased
+     out none, because a reader filtered `permanents_from` on
+     `isinstance(entry, int)` while the producer writes live `Permanent`s.
+     Wave 1 had settled that channel's *arity* and nobody had settled its
+     element type. **Settling an arity is only half of settling a channel**;
+   * the **runtime decline** — Three Wishes' opening sentence parsed, lowered,
+     compiled and did nothing, because the handler refuses at run time (a
+     face-down exile with no source permanent, and Three Wishes is an instant).
+     **Nothing in this repo can see that one.** The sentence is claimed, it
+     produces a real instruction, and the refusal happens where no census
+     looks. Only driving a game finds it, which is what the Rock Hydra test is
+     for and why it is not optional.
+
+   **And the exit is three numbers, not one.**
    `--hollow-lines` must reach zero — **check it every round, not at the end**
    — and so must `parse_coverage.py --set <CODE>`'s unclaimed list, which is
    the one Mirage learned the hard way. It reached 335/335 supported with zero
@@ -1625,3 +1698,39 @@ form across 32 lowering modules — invisible to the merge scans because it is n
 a duplicate *definition*, and load-bearing because a drifted copy drops a
 narrowing the matcher cannot test. (`_per_recipient_count` was already logged at
 wave 1, not here.)
+
+### VIS — 2026-09-05
+
+*Phase 0's caps step now says "per module the wave will touch", not "the
+tightest one".* Visions pre-split `lowering/_common.py` for exactly the right
+reason — every family imports it, so no group would cross it alone — and then
+crossed five more caps anyway, three at integration by two groups' additions
+summing. The prediction that works is per-family: note which modules each
+*group's* family lands in and pre-split the ones two groups will both reach. A
+module one group owns can be briefed; a shared one cannot, because neither
+crosses it.
+
+*Phase 3 step 4 gains a taxonomy: there are three ways a card reports supported
+and does nothing, and only one has an instrument.* Beside the hollow line, this
+set found the **channel mismatch** (Equipoise chose the right permanents and
+phased out none, because wave 1 settled `permanents_from`'s arity and nobody
+settled its element type — settling an arity is only half of settling a channel)
+and the **runtime decline** (Three Wishes' sentence parsed, lowered, compiled and
+did nothing, because the handler refuses at run time). Nothing here can see the
+third. Only driving a game finds it, which is why the Rock Hydra test is not
+optional.
+
+*Two new species of brief error, both mine.* An **engine refusal message that was
+itself false** — quoted straight into a brief, wrong for two sets, pointing at a
+module that had been doing the job correctly all along. And a **deferral whose
+premise expired**: "no client can load a `measured` set" stopped being true at
+*Alliances'* promotion, and nobody re-read the role because the cards had not
+changed. That left Fire Covenant, a shipped Ice Age card, uncastable as printed.
+The playbook already says a refusal can expire; a deferral can too.
+
+*Four items added to Known gaps* (cast-side "target opponent" offering the
+caster's own face; bare stack-drain loops as latent hangs; `_PLAYER_DEEDS`
+needing a design decision rather than a row; ~60 non-701 CR citations corrected
+but unguardable). *Three drained*: the testable-keys preamble (40 copies across
+21 files, not 39 across 11 — and now enforceable rather than swept), the
+`permanents_from` arity, and the optional-cost picker's four parts.
