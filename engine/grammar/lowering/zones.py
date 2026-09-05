@@ -695,6 +695,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
     "exile_entire_library": "zones",
+    "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",

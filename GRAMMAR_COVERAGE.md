@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.5% | 93.2% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 87.4% | 87.4% | 59.4% | 132 |
+| VIS *(measured)* | 167 | 278 | 88.1% | 88.1% | 60.1% | 134 |
 | **All (shipped)** | **3918** | **5812** | **89.9%** | **89.1%** | **58.6%** | **2818** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,8 +45,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 313 | 134 | expected a subject |  |
-| 104 | 46 | unrecognized effect verb |  |
+| 312 | 133 | expected a subject |  |
+| 103 | 45 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1443,6 +1443,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Elkin Bottle**
   - `{3}, {T}: Exile the top card of your library. Until the beginning of your next upkeep, you may play that card.`
   - `{3}, {T}: Exile the top card of your library. Until the beginning of your next upkeep, you may play that card.`
+- **Elkin Lair**
+  - `At the beginning of each player's upkeep, that player exiles a card at random from their hand. The player may play that card this turn. At the beginning of the next end step, if the player hasn't played the card, they put it into their graveyard.`
 - **Elven Cache**
   - `Return target card from your graveyard to your hand.`
 - **Elven Fortress**
@@ -4817,6 +4819,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an Island an opponent controls becomes tapped, you may gain 1 life.`
 - **Thrashing Brontodon**
   - `{1}, Sacrifice this creature: Destroy target artifact or enchantment.`
+- **Three Wishes**
+  - `Exile the top three cards of your library face down. You may look at those cards for as long as they remain exiled. Until your next turn, you may play those cards. At the beginning of your next upkeep, put any of those cards you didn't play into your graveyard.`
 - **Thrill of Possibility**
   - `Draw two cards.`
 - **Throne of Bone**

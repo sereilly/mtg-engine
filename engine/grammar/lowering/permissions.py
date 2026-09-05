@@ -56,24 +56,61 @@ def _lower_cast_from_exiled_with(
 
 
 #: Which printed duration an "exiled this way" permission carries, keyed by the
-#: three flags the parser sets. A key with two of them set is deliberately
-#: absent: a sentence stating two durations is one this cannot honour, and
-#: picking either would be a permission that ends at a moment the card does not
-#: name.
-_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool, bool], str] = {
-    (True, False, False, False): "end_of_turn",
-    (False, True, False, False): "until_source_grants_again",
-    (False, False, True, False): "your_next_upkeep",
+#: flags the parser sets. A key with two of them set is deliberately absent: a
+#: sentence stating two durations is one this cannot honour, and picking either
+#: would be a permission that ends at a moment the card does not name.
+_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool, bool, bool], str] = {
+    (True, False, False, False, False): "end_of_turn",
+    (False, True, False, False, False): "until_source_grants_again",
+    (False, False, True, False, False): "your_next_upkeep",
     # "…for as long as it remains exiled" (Ice Cauldron). Nothing sweeps it:
     # ``cast_permissions._covers`` re-checks the card is still in the granted
     # zone on every read, which *is* the printed duration. Stated rather than
     # lowered as "no duration", which is what a card saying nothing means.
-    (False, False, False, True): "while_exiled",
+    (False, False, False, True, False): "while_exiled",
+    # "Until your next turn, you may play those cards." (Three Wishes.) Swept as
+    # that seat's next turn begins (CR 800.4m), which is one step earlier than
+    # the row two above — a distinction no *player* can observe, since CR 502.4
+    # gives nobody priority in the untap step between them, and one this table
+    # keeps anyway: the whole point of the key is that the permission ends where
+    # the card says it ends.
+    (False, False, False, False, True): "your_next_turn",
 }
 
 
+def _grantee_payload(node: ast.CastPermission, event: str | None) -> dict[str, object]:
+    """Who the permission is granted to, when the sentence prints a subject.
+
+    Empty for the printed "you may", which CR 601.3 gives to the ability's
+    controller and every reader already defaults to. "The player may play that
+    card this turn" (Elkin Lair) names the seat the *firing event* was about,
+    frozen into the trigger's context by the fire site (CR 603.10) — so it is
+    admitted only under an event that freezes one, exactly as
+    ``_lower_exile_entire_library`` admits the same phrase.
+
+    Refusing rather than defaulting is the direction that matters: read as the
+    controller, the sentence would let the ability's controller play a card out
+    of somebody else's hand, which is a strictly different card and a silent
+    one — the grant exists either way.
+    """
+    if node.grantee is None:
+        return {}
+    from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
+
+    if node.grantee.kind != "that_player":
+        raise LoweringError(
+            f"no permission is granted to {node.grantee.kind!r}", node=node
+        )
+    if event not in _EVENT_SUBJECT_PLAYERS:
+        raise LoweringError(
+            "no event named {!r} freezes the seat 'the player' names".format(event),
+            node=node,
+        )
+    return {"recipient": EVENT_SUBJECT_PLAYER}
+
+
 def _lower_cast_permission(
-    node: ast.CastPermission, produced: frozenset[str]
+    node: ast.CastPermission, produced: frozenset[str], event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
     """A cast-or-play permission sentence (CR 601.3), one instruction kind for
     all its printed forms — the differences are payload:
@@ -86,6 +123,14 @@ def _lower_cast_permission(
     * ``spells_from_hand`` is a cost waiver and must carry one, or it would
       state the rules default.
     """
+    if node.grantee is not None and node.mode == "look":
+        # No card prints "that player may look at those cards", and the handler
+        # writes the *caster* onto the record — so a grantee here would be read
+        # by nobody and the wrong seat would get the look. Refused rather than
+        # dropped, which is what an unread narrowing owes.
+        raise LoweringError(
+            "a look permission is granted to the ability's controller", node=node
+        )
     if node.mode == "look":
         # "You may look at it for as long as it remains exiled." (Gustha's
         # Scepter.) Its own kind rather than ``grant_cast_permission`` with a
@@ -140,6 +185,7 @@ def _lower_cast_permission(
                 node.until_source_grants_again,
                 node.until_your_next_upkeep,
                 node.while_exiled,
+                node.until_your_next_turn,
             )
         )
         if stated is None:
@@ -148,19 +194,22 @@ def _lower_cast_permission(
                 "or it would outlive the card that granted it",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "grant_cast_permission", "",
-                {
-                    "zone": "exile",
-                    "mode": node.mode,
-                    "cards_from": "exiled_cards",
-                    "duration": stated,
-                },
-            ),
-        )
+        payload: dict[str, object] = {
+            "zone": "exile",
+            "mode": node.mode,
+            "cards_from": "exiled_cards",
+            "duration": stated,
+        }
+        payload.update(_grantee_payload(node, event))
+        return (OracleInstruction("grant_cast_permission", "", payload),)
 
     if node.what == "target_card":
+        if node.grantee is not None:
+            raise LoweringError(
+                "a targeted graveyard permission reads the caster's own "
+                "graveyard, so it is granted to the caster",
+                node=node,
+            )
         spec = node.target
         filt = spec.filter if spec is not None else None
         if node.mode != "cast" or filt is None:
@@ -196,6 +245,11 @@ def _lower_cast_permission(
         )
 
     if node.what == "spells_from_hand":
+        if node.grantee is not None:
+            raise LoweringError(
+                "no card grants another player a cost waiver over their own "
+                "hand", node=node,
+            )
         if not node.free:
             raise LoweringError(
                 "a hand permission without a cost waiver states the rules "

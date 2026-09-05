@@ -454,7 +454,10 @@ def lower_statement(
         return _lower_look_top_pick(statement, event)
 
     if isinstance(statement, ast.CastPermission):
-        return _lower_cast_permission(statement, produced)
+        # *event* as well as *produced*: "**The player** may play that card this
+        # turn" (Elkin Lair) names the seat the firing trigger was about, and
+        # only an event that freezes one can answer.
+        return _lower_cast_permission(statement, produced, event)
 
     # "Search that player's library for **that many** cards" (Jester's Mask):
     # the count is a back-reference, so this lowering needs the record of what

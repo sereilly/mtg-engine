@@ -31,6 +31,7 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                    cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
+from ...exiled_records import forget_record, records_for_cards
 from ...divided_damage import (
     EVENLY, divided_description, divided_entry, division_refusal,
 )
@@ -1441,7 +1442,19 @@ class SpellCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
+        # Before the pop, because ``exiled_records`` derives liveness from the
+        # zone: a record read after the card has left answers nothing. A card
+        # played out of exile is being moved on deliberately (CR 400.7 makes it
+        # a new object wherever it lands), so the record that said it was face
+        # down stops speaking for it — otherwise the *next* effect to exile the
+        # same card would find that record alive and hide it from the table.
+        leaving_exile = (
+            records_for_cards(self, [source_zone[hand_index]])
+            if from_zone == "exile" else ()
+        )
         card = source_zone.pop(hand_index)
+        for record in leaving_exile:
+            forget_record(self, record)
         # Now, and not before: the spell is no longer in the hand, so it cannot
         # be discarded to pay for itself, and the creature it eats is gone from
         # the battlefield before the spell is on the stack.

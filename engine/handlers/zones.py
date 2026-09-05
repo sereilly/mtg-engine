@@ -4,7 +4,8 @@ import dataclasses
 import random
 from typing import TYPE_CHECKING
 
-from ..exiled_records import forget_record, record_exiled_card, source_object
+from ..exiled_records import (forget_record, record_exiled_card,
+                              records_for_cards, source_object)
 from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
 from ..keywords import grant_keyword
 from ..models import Permanent
@@ -4475,18 +4476,21 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
 
     ``face down`` (CR 406.3) needs that record to mean anything: two copies of
     one card in a deck are the same ``CardDefinition`` object, so the record of
-    the exiling is the only sound answer to "which exiled card is hidden". With
-    no permanent to hold it the rider cannot be carried out, and the exile does
-    not happen at all rather than happening face up — the same refusal the
-    other linked exiles make when they have nothing to be linked to.
+    the exiling is the only sound answer to "which exiled card is hidden".
+
+    **A spell has no permanent to hold that record**, and used to refuse the
+    whole exile for want of one — which made "Exile the top three cards of your
+    library face down" (Three Wishes) a sentence that compiled, lowered and did
+    nothing. The register that answers for an exiler which never becomes a
+    permanent is ``engine/exiled_records.py``, whose whole argument is this one:
+    the identity of the exiled object is the record. So the fact goes there when
+    there is no permanent and onto the permanent when there is, and
+    ``linked_exile.face_down_exiled_cards`` reads both.
     """
     caster = context.caster
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     face_down = bool(instruction.payload.get("face_down"))
     source = context.source_permanent
-    if face_down and source is None:
-        game.log.append("the face-down exile has no permanent to be linked to")
-        return True, "resolved"
     owner_index = game.players.index(caster)
     exiled = []
     for _ in range(min(amount, len(caster.library))):
@@ -4495,6 +4499,8 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
         exiled.append(card)
         if source is not None:
             link_exiled_card(source, card, owner_index, face_down=face_down)
+        elif face_down:
+            record_exiled_card(game, card, owner_index, face_down=True)
     context.results["exiled_cards"] = exiled
     if exiled:
         game.log.append(
@@ -4631,16 +4637,33 @@ def grant_look_at_exiled_cards(game: Game, instruction: OracleInstruction, conte
 
     The duration needs no sweep: the permission lives on the entry, and the
     entry is drained the moment the card leaves exile.
+
+    **A spell grants the same permission over the same cards and has no
+    permanent**, so its record is the game's exile register instead (Three
+    Wishes; see ``exile_top_of_library``). Both are written here rather than by
+    two instructions, because the sentence is one sentence — a second kind would
+    be a look permission whose reading depended on what exiled the card.
     """
     source = context.source_permanent
     exiled = list(context.results.get(instruction.payload.get("cards_from") or "exiled_cards") or ())
-    if source is None or not exiled:
-        # Nothing was exiled (the pick found no eligible card), or the ability
-        # has no permanent to hang the record on. Either way there is nothing
-        # to grant, which is not a failure — the sentence before this one
-        # already logged why.
+    if not exiled:
+        # Nothing was exiled (the pick found no eligible card), so there is
+        # nothing to grant — not a failure; the sentence before this one already
+        # logged why.
         return True, "resolved"
     seat = game.players.index(context.caster)
+    if source is None:
+        granted = []
+        for record in records_for_cards(game, exiled):
+            if record.looker_index is None:
+                record.looker_index = seat
+                granted.append(record.card.name)
+        if granted:
+            game.log.append(
+                f"{game.players[seat].name} may look at {', '.join(granted)} "
+                "for as long as it remains exiled"
+            )
+        return True, "resolved"
     remaining = list(exiled)
     granted: list[str] = []
     for entry in reversed(linked_entries(source)):
@@ -4855,6 +4878,7 @@ def exile_until_leaves_or_untaps(
 #: say. Absent means an unbounded grant, which reads as nothing at all.
 _PERMISSION_DURATION_WORDS = {
     "end_of_turn": " this turn",
+    "your_next_turn": " until their next turn",
     "your_next_upkeep": " until their next upkeep",
     "until_source_grants_again": " until it exiles another card",
     "while_exiled": " for as long as it remains exiled",
@@ -4866,7 +4890,18 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
     """A cast-or-play permission (CR 601.3) over cards in a named zone —
     engine/cast_permissions.py holds the state, the cast path asks it, and
     cleanup expires the turn-scoped grants. Three payload forms, matching the
-    printed sentences the lowering admits."""
+    printed sentences the lowering admits.
+
+    **Who is permitted is payload too.** "At the beginning of each player's
+    upkeep, that player exiles a card at random from their hand. **The player**
+    may play that card this turn." (Elkin Lair.) CR 601.3 grants the permission
+    to the player the sentence names, and on this card that is a different seat
+    every upkeep — never the ability's controller except on one turn in four.
+    ``recipient`` carries it — the same key the mill, the discard and Thought
+    Lash's library exile already spell "which seat is this instruction about" —
+    read through the one reader of the printed phrase
+    (``frozen_that_player_seat``), so the grant and the exile in front of it
+    cannot land on two different players."""
     from ..cast_permissions import grant_permission
 
     caster = context.caster
@@ -4874,6 +4909,20 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
     payload = instruction.payload
     duration = payload.get("duration")
     source_name = context.card.name if context.card is not None else ""
+    if payload.get("recipient") == "event_subject_player":
+        named = frozen_that_player_seat(game, context)
+        if named is None:
+            # A seat the trigger did not freeze is a permission handed to the
+            # wrong player, which is worse than none at all: it would let the
+            # ability's controller play a card out of somebody else's hand.
+            game.log.append(
+                f"{source_name}: no player was named to be given the permission"
+            )
+            return True, "resolved"
+        grantee_index = named
+    else:
+        grantee_index = caster_index
+    grantee = game.players[grantee_index]
 
     if payload.get("cards_from") == "exiled_cards":
         cards = list(context.results.get("exiled_cards") or [])
@@ -4895,19 +4944,19 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
                     index for index, player in enumerate(game.players)
                     if any(held is card for held in getattr(player, zone, ()))
                 ),
-                caster_index,
+                grantee_index,
             )
-            by_seat.setdefault(None if seat == caster_index else seat, []).append(card)
+            by_seat.setdefault(None if seat == grantee_index else seat, []).append(card)
         for zone_seat, held in by_seat.items():
             grant_permission(
-                game, player_index=caster_index, zone=zone,
+                game, player_index=grantee_index, zone=zone,
                 mode=payload.get("mode", "cast"), cards=held,
                 duration=duration, source_name=source_name,
                 source_permanent_id=game.permanent_id_of(context.source_permanent),
                 zone_player_index=zone_seat,
             )
         game.log.append(
-            f"{caster.name} may {payload.get('mode', 'cast')} "
+            f"{grantee.name} may {payload.get('mode', 'cast')} "
             f"{', '.join(card.name for card in cards)} from exile"
             + _PERMISSION_DURATION_WORDS.get(duration, "")
         )
@@ -5609,6 +5658,14 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     )
     caster = context.caster
     destination = str(instruction.payload.get("zone", "hand"))
+    # Read **before** anything moves: ``exiled_records`` derives liveness from
+    # the zone rather than maintaining it, so a record whose card has already
+    # left answers None here. The records are dropped after the loop for the
+    # cards that actually moved — a stale one is inert until the *same* card is
+    # exiled again by something else, when it would come back to life still
+    # saying "face down". This is the one site that takes a Three Wishes card
+    # out of exile deliberately, so it is the one that owes ``forget_record``.
+    records = records_for_cards(game, cards)
     moved: list = []
     # The caster's own pile first, then everybody else's. Identity alone is not
     # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
@@ -5640,6 +5697,9 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             elif game.put_card_into_hand(caster, card):
                 moved.append(card)
             break
+    for record in records:
+        if any(held is record.card for held in moved):
+            forget_record(game, record)
     if moved:
         names = ", ".join(card.name for card in moved)
         game.log.append(
@@ -6301,6 +6361,59 @@ def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, con
     if seat is not None:
         game.record_reveal(seat, [card.name])
     game.log.append(f"{victim.name} reveals {card.name} at random from their hand")
+    return True, "resolved"
+
+
+@effect_handler("exile_random_card_from_hand")
+def exile_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of each player's upkeep, **that player exiles a card at
+    random from their hand**." (Elkin Lair.)
+
+    One card nobody chose, out of a hand nobody looked at — CR 701.10's exile
+    over a random pick, which is why the seat is not asked anything and no
+    prompt is armed. Recorded under the one ``exiled_cards`` key every other
+    exile writes, so the two sentences behind it ("the player may play that
+    card", "if the player hasn't played the card…") read the referent this
+    engine already has rather than a second one.
+
+    **Whose hand is payload**, under the same ``recipient`` key the mill, the
+    discard and Thought Lash's library exile use, and the seat is the one the
+    firing event froze (``frozen_that_player_seat``). A seat that cannot be
+    resolved exiles
+    *nothing* rather than falling back to the ability's controller: on this card
+    the controller's own hand is the wrong hand three times in four, and taking
+    a card out of it at random is not a smaller effect, it is a different one.
+
+    The card is popped **by index**, not by value: a hand is the one zone where
+    two copies of a card are the same object (a deck repeats one immutable
+    ``CardDefinition``), so ``list.remove`` would take whichever came first.
+    ``random.randrange`` rather than a private RNG, for the reason every other
+    random pick in this file uses it — ``run_ai_simulation`` seeds the module
+    RNG and a seed has to replay a run exactly.
+    """
+    recipient = str(instruction.payload.get("recipient") or "caster")
+    if recipient == "event_subject_player":
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            game.log.append(
+                f"{context.card.name}: no player was named to exile a card"
+            )
+            return True, "resolved"
+        victim = game.players[seat]
+    else:
+        victim = context.caster
+    if not victim.hand:
+        game.log.append(f"{victim.name} has no cards in hand to exile")
+        context.results["exiled_cards"] = []
+        return True, "resolved"
+    index = random.randrange(len(victim.hand))
+    card = victim.hand[index]
+    victim.hand.pop(index)
+    victim.exile.append(card)
+    context.results["exiled_cards"] = [card]
+    game.log.append(
+        f"{victim.name} exiled {card.name} at random from their hand"
+    )
     return True, "resolved"
 
 

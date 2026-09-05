@@ -60,8 +60,9 @@ class CastPermission:
     card_types: tuple[str, ...] = ()
     free: bool = False
     exile_instead: bool = False
-    # "end_of_turn" is swept at cleanup; "your_next_upkeep" at the start of the
-    # granting seat's next upkeep step; "until_source_grants_again" is retired
+    # "end_of_turn" is swept at cleanup; "your_next_turn" as the granting seat's
+    # next turn begins and "your_next_upkeep" one step later, at the start of
+    # that seat's upkeep step; "until_source_grants_again" is retired
     # by the next grant from the same permanent; "while_exiled" is swept by
     # nothing, because ``_covers`` already re-checks that the named card is
     # still in the granted zone and that is exactly what the words say (Ice
@@ -242,6 +243,33 @@ def expire_end_of_turn(game) -> None:
         permission
         for permission in game.cast_permissions
         if permission.duration != "end_of_turn"
+    ]
+
+
+def expire_at_turn_start(game, player_index: int) -> None:
+    """"**Until your next turn**, you may play those cards." (Three Wishes.)
+
+    CR 800.4m states the duration this ends on: an effect lasting "until that
+    player's next turn" lasts until that turn *would have begun*. So the sweep
+    rides the turn boundary (``Game.begin_turn_bookkeeping``, which both the
+    headless flow and the web layer's step-by-step flow run) rather than the
+    untap step — a seat whose untap step is skipped still begins a turn, and the
+    permission has to end there.
+
+    Its own duration rather than a spelling of ``your_next_upkeep``, which is one
+    step later. The two are indistinguishable to a *player* (CR 502.4 gives
+    nobody priority in the untap step, so nothing can be played between them),
+    and they are not indistinguishable to the engine: ``playable_from_zones``
+    answers for whatever moment it is asked about, and a permission the card
+    ended is one this seam must not still be offering.
+    """
+    game.cast_permissions[:] = [
+        permission
+        for permission in game.cast_permissions
+        if not (
+            permission.duration == "your_next_turn"
+            and permission.player_index == player_index
+        )
     ]
 
 

@@ -67,6 +67,20 @@ class ExiledRecord:
     #: upkeep" needs the seat the ability belongs to rather than the seat that
     #: moved it.
     controller_index: int
+    #: CR 406.3 — exiled face down, hidden from every player including its
+    #: owner. The same fact ``linked_exile`` records on the exiling *permanent*,
+    #: recorded here for the exiler that never becomes one: "Exile the top three
+    #: cards of your library face down" (Three Wishes) is a **spell**, so there
+    #: is no permanent to hang the record on and the flag would otherwise have
+    #: nowhere to live. Which is this file's own opening argument, arriving from
+    #: the other side — the identity of the exiled object is the record.
+    face_down: bool = False
+    #: The one seat that may read it anyway: "You may look at those cards for as
+    #: long as they remain exiled" (Three Wishes, Gustha's Scepter). Beside
+    #: :attr:`face_down` rather than replacing it, exactly as the linked-exile
+    #: entry keeps both — the card is still face down to everyone else, which is
+    #: the whole point of the permission.
+    looker_index: int | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -81,6 +95,8 @@ def record_exiled_card(
     controller_index: int | None = None,
     *,
     counters: dict[str, int] | None = None,
+    face_down: bool = False,
+    looker_index: int | None = None,
 ) -> ExiledRecord:
     """Register *card* as exiled, and return its record.
 
@@ -99,6 +115,8 @@ def record_exiled_card(
         controller_index=int(
             owner_index if controller_index is None else controller_index
         ),
+        face_down=bool(face_down),
+        looker_index=None if looker_index is None else int(looker_index),
     )
     for kind, count in (counters or {}).items():
         add_counters(record, kind, int(count))
@@ -156,3 +174,28 @@ def source_object(context):
     if context.source_permanent is not None:
         return context.source_permanent
     return record_in_context(context)
+
+
+def records_for_cards(game, cards) -> list[ExiledRecord]:
+    """The live records speaking for *cards*, one record per card, newest first.
+
+    Matched by **identity**, one record consumed per card, because two copies of
+    one card in a deck are the same ``CardDefinition`` object: a value match
+    would hand the same record back twice and leave the second copy unrecorded.
+    Newest first because a card exiled twice has two records and the sentence
+    asking is always about the exile it just performed.
+
+    The one reader is a permission granted over what an earlier step of the same
+    resolution exiled ("you may look at those cards"), which is why this lives
+    beside the register rather than in the handler: the register's liveness rule
+    is the only thing that decides which of two equal-looking records is still
+    speaking for a card.
+    """
+    live = list(live_records(game))
+    matched: list[ExiledRecord] = []
+    for card in cards:
+        for record in reversed(live):
+            if record.card is card and not any(held is record for held in matched):
+                matched.append(record)
+                break
+    return matched

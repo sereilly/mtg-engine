@@ -63,6 +63,7 @@ from .effects import (
     _parse_doesnt_untap_next_step,
     _parse_draw,
     _parse_exile_entire_library,
+    parse_exile_random_card_from_hand,
     _parse_fight,
     _parse_gains,
     _parse_gets,
@@ -322,13 +323,19 @@ def parse_subject_verb(
         if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
             return _parse_skip_step(stream, source_spec)
         # "**That player** exiles all cards from their library." (Thought
-        # Lash.) The only player-subject sentence in the exile family;
-        # declines without consuming, so every other printed exile keeps the
-        # bare-imperative reading below.
+        # Lash.) "**That player** exiles a card at random from their hand."
+        # (Elkin Lair.) The player-subject sentences in the exile family; each
+        # declines without consuming, so the other keeps its own reading and
+        # every printed exile with no subject keeps the bare-imperative one
+        # below. Neither can claim the other: they differ from the verb's object
+        # on, which is the first word each of them reads.
         if token.text in ("exiles", "exile") and isinstance(source_spec, ast.PlayerRef):
             emptied = _parse_exile_entire_library(stream, source_spec)
             if emptied is not None:
                 return emptied
+            at_random = parse_exile_random_card_from_hand(stream, source_spec)
+            if at_random is not None:
+                return at_random
         # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
         # the rules — CR 701.20a turns a permanent sideways and says nothing
         # about who does it — so the printed subject is read and then dropped

@@ -93,6 +93,7 @@ from .effects import (
     _parse_life_total_becomes,
     _parse_look_at_hand,
     _parse_exile_bound_card,
+    _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
     _parse_put_exiled_pile_top_into_hand,
     _parse_exile_cost_sacrifices,
@@ -317,6 +318,13 @@ def parse_imperative(
         exiled_back = _parse_put_exiled_card_into_hand(stream)
         if exiled_back is not None:
             return exiled_back
+        # "Put any of those cards you didn't play into your graveyard." (Three
+        # Wishes, inside its delay.) Same treatment and same reason as the ones
+        # above: the counter production reads "any" as a count and refuses with
+        # a site naming counters.
+        unplayed = _parse_bin_unplayed_exiled_cards(stream)
+        if unplayed is not None:
+            return unplayed
         # "Put the top card of the exiled pile into its owner's hand."
         # (Mangara's Tome.) CR 610.3's linked pile rather than a back-reference
         # inside one resolution, and read here for the same reason as the three

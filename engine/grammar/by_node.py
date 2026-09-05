@@ -21,7 +21,8 @@ from __future__ import annotations
 
 from ..oracle_types import OracleInstruction
 from . import ast
-from .lowering import (_lower_discard, _lower_exile_entire_library, _lower_mill,
+from .lowering import (_lower_discard, _lower_exile_entire_library,
+                       _lower_exile_random_from_hand, _lower_mill,
                        _lower_move_counter, _lower_note_mana_spent,
                        _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
@@ -263,6 +264,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # froze. All three were branches of the chain saying exactly this.
     ast.Discard: _lower_discard,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
+    # "…**that player** exiles a card at random from their hand" (Elkin Lair):
+    # the same seat question one zone over, and the same answer.
+    ast.ExileRandomFromHand: _lower_exile_random_from_hand,
     ast.Mill: _lower_mill,
     # "…**that player** puts the cards in their hand on the bottom of their
     # library in any order, then draws that many cards" (Teferi's Puzzle Box).

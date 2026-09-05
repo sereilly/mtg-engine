@@ -529,7 +529,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     if idol is not None:
         return idol
     stream.reset(mark_idol)
-    if stream.at_word("until", "you"):
+    # …plus the one printed subject other than "you": "**The player** may play
+    # that card this turn" (Elkin Lair). The "may" lookahead keeps the gate as
+    # tight as it was — "the"/"that"/"they" open a great many sentences and
+    # almost none is a permission, and one tried on all of them would replace
+    # their refusal sites with its own.
+    if stream.at_word("until", "you") or (
+        stream.at_word("the", "that", "they") and stream.peek_word(1) == "may"
+        or stream.at_word("the", "that") and stream.peek_word(2) == "may"
+    ):
         permission = _parse_cast_permission(stream)
         if permission is not None:
             return permission

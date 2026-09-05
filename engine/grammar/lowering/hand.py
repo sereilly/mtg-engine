@@ -83,6 +83,49 @@ def _lower_choose_cards_in_hand(
     )
 
 
+def _lower_exile_random_from_hand(
+    node: "ast.ExileRandomFromHand", event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"At the beginning of each player's upkeep, **that player exiles a card at
+    random from their hand**." (Elkin Lair.)
+
+    Whose hand rides the ``recipient`` key the mill, the discard and Thought
+    Lash's library exile already use — one convention for "which seat is this
+    instruction about" rather than a second per family.
+
+    "That player" is admitted only under an event that *freezes* a seat
+    (CR 603.10), exactly as :func:`_lower_exile_entire_library` admits it. Read
+    as the resolving player instead, this card would take a card out of its own
+    controller's hand on every opponent's upkeep — wrong in the loud direction
+    on three turns in four, and silent, because both readings exile exactly one
+    card.
+
+    The record it leaves is ``exiled_cards``, which is what makes the two
+    sentences behind it lowerable at all: "the player may play that card" and
+    "if the player hasn't played the card" are back-references, and the registry
+    in ``_records.py`` is where the producer is declared.
+    """
+    kind = node.player.kind
+    if kind == "you":
+        recipient = "caster"
+    elif kind == "that_player":
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "no event named {!r} freezes the seat 'that player' names".format(event),
+                node=node,
+            )
+        recipient = EVENT_SUBJECT_PLAYER
+    else:
+        raise LoweringError(
+            f"no handler exiles a card at random from {kind!r}'s hand", node=node
+        )
+    return (
+        OracleInstruction(
+            "exile_random_card_from_hand", "", {"recipient": recipient}
+        ),
+    )
+
+
 def _lower_put_iterated_card_on_library(
     node: ast.PutIteratedCardOnLibrary,
 ) -> tuple[OracleInstruction, ...]:
