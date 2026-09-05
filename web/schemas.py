@@ -58,6 +58,7 @@ ActionKind = Literal[
     "look_top_pick_confirm",
     "name_and_strip_confirm",
     "name_and_random_reveal_confirm",
+    "choose_card_name_confirm",
     "name_then_reveal_top_confirm",
     "name_then_consult_confirm",
     "graveyard_pick_for_price_confirm",

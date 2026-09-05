@@ -25,7 +25,7 @@ from ..shields import (
     make_whole_source,
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
-from ._common import (attached_host, bound_permanent, resolve_amount,
+from ._common import (recorded_permanent_ids, attached_host, bound_permanent, resolve_amount,
                       resolve_target_permanent)
 from .registry import effect_handler
 
@@ -900,9 +900,7 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     # targets at all — not an error.
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
-        recorded = (context.results or {}).get(str(recorded_key)) or ()
-        if isinstance(recorded, int):
-            recorded = (recorded,)
+        recorded = recorded_permanent_ids(context, recorded_key)
         shielded = 0
         for permanent_id in recorded:
             permanent = game.permanent_by_id(permanent_id)

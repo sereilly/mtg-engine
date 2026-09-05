@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ._common import (
+from ._common import (recorded_permanent_ids, 
     attached_host,
     block_pair_permanents,
     flip_coin,
@@ -472,7 +472,7 @@ def remove_from_combat(game: Game, instruction: OracleInstruction, context: Orac
     # become unblocked" (Imprison) is what overrides it, so the card decides
     # rather than the removal.
     frees = bool(instruction.payload.get("frees_blocked_attackers"))
-    for permanent_id in context.results.get(key) or ():
+    for permanent_id in recorded_permanent_ids(context, key):
         perm = game.permanent_by_id(permanent_id)
         if perm is None:
             continue

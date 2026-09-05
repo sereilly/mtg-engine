@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
-from ._common import (
+from ._common import (recorded_permanent_ids, 
     block_pair_permanents,
     frozen_that_player_seat,
     permanent_matches_filter,
@@ -656,9 +656,9 @@ def tap_recorded_permanents(game: Game, instruction: OracleInstruction, context:
     new object (CR 400.7) and this effect never named it, so it is simply not
     tapped. An empty record is a legal outcome, not an error.
     """
-    recorded = (context.results or {}).get(
-        str(instruction.payload.get("permanents_from", ""))
-    ) or ()
+    recorded = recorded_permanent_ids(
+        context, instruction.payload.get("permanents_from")
+    )
     # A producer may record **one** id rather than a list: `choose_permanent`
     # writes a single pick ("unless you tap an untapped creature you control",
     # Koskun Falls) where the sweeps write a tuple. Both are ids of permanents
@@ -1211,9 +1211,9 @@ def restrict_untap_while_counter(game: Game, instruction: OracleInstruction, con
     neither the counter nor the restriction.
     """
     counter = str(instruction.payload.get("counter", ""))
-    recorded = (context.results or {}).get(
-        str(instruction.payload.get("permanents_from", ""))
-    ) or ()
+    recorded = recorded_permanent_ids(
+        context, instruction.payload.get("permanents_from")
+    )
     marked = []
     for permanent_id in recorded:
         permanent = game.permanent_by_id(permanent_id)

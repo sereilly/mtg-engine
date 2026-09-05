@@ -106,7 +106,24 @@ def _parse_pronoun_counter_rider(
     ):
         stream.reset(mark)
         return None
-    return replace(statement, subject=target)
+    # "Return target creature card from your graveyard to the battlefield. Put
+    # a +1/+1 counter on **it**." (Miraculous Recovery.) A move that *creates*
+    # the permanent the pronoun names hands over the bound marker instead of its
+    # own target spec — the sentence in front chose a card in a *graveyard*, and
+    # substituting that spec here gives the placement a graveyard-scoped noun
+    # phrase for a permanent that did not exist when the choice was made. The
+    # grant rider one function down has taken this branch since Dreams of the
+    # Dead; this one substituted unconditionally, so the same printed shape
+    # refused at "no handler reads a filter scoped to the graveyard" depending
+    # only on whether the second sentence said "gains" or "put".
+    #
+    # See :func:`_creates_the_permanent_it_names` — and note the referent is the
+    # *same* one Soul Exchange's "that creature" already names, so the lowering
+    # reads the reanimation's own record and nothing new is invented for it.
+    return replace(statement, subject=(
+        ast.TargetSpec("that", ast.ObjectFilter(card_types=("creature",)))
+        if _creates_the_permanent_it_names(steps[-1]) else target
+    ))
 
 
 def _creates_the_permanent_it_names(statement: ast.Statement) -> bool:

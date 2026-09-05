@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import (attached_host, permanent_matches_filter,
+from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host, permanent_matches_filter,
                       resolve_target_permanent,
                       resolve_target_slots)
 from .registry import effect_handler
@@ -116,7 +116,7 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     if bound_key:
         seat = game.players.index(context.caster)
         took = False
-        for permanent_id in context.results.get(bound_key) or ():
+        for permanent_id in recorded_permanent_ids(context, bound_key):
             bound = game.permanent_by_id(permanent_id)
             if bound is None:
                 continue
@@ -381,7 +381,7 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         # resolution ran, so it comes out of the scratchpad rather than off the
         # ability's own target — the same `permanents_from` reading every other
         # step that acts on an earlier one's pick uses.
-        permanent_id = context.results.get(recorded_key)
+        permanent_id = one_recorded_permanent_id(context, recorded_key)
         target_perm = (
             game.permanent_by_id(permanent_id) if permanent_id is not None else None
         )

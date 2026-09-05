@@ -281,13 +281,17 @@ from .library import (
     _lower_reveal_random_from_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
+    _lower_bin_revealed_card,
+    _lower_graveyard_top_to_library,
     _lower_look_at_library_top,
     _lower_look_top_cycle_for_life,
     _lower_separate_library_top_into_piles,
-    _lower_search_player_library,
-    _SEARCH_HONOURED_FILTER_FIELDS,
     _lower_graveyard_pick_onto_battlefield,
+)
+from .search import (
+    _SEARCH_HONOURED_FILTER_FIELDS,
     _lower_search_library,
+    _lower_search_player_library,
 )
 from .stack import (
     _COUNTER_HONOURED_FILTER_FIELDS,
@@ -520,6 +524,8 @@ __all__ = [
     "_lower_reveal_random_from_hand",
     "_lower_reveal_hand_and_choose",
     "_lower_look_at_hand",
+    "_lower_bin_revealed_card",
+    "_lower_graveyard_top_to_library",
     "_lower_look_at_library_top",
     "_lower_look_top_cycle_for_life",
     "_lower_separate_library_top_into_piles",

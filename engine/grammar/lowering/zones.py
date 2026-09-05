@@ -605,6 +605,9 @@ def _lower_random_reveal_ownership_exchange(
 #: still exactly one table and exactly one row per kind; the address every
 #: reader uses is unchanged.
 ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
+    "bin_revealed_card": "zones",
+    "choose_card_name": "zones",
+    "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",
     "shuffle_hand_into_library": "zones",
     "shuffle_hand_cards_into_library": "zones",

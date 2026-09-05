@@ -12,7 +12,6 @@ The narrow waist of the parser — below is a fragment, above is a *line*.
 import dataclasses
 
 from . import ast
-from .amounts import parse_equal_to
 from .errors import GrammarError
 from .paragraphs import (_parse_reassign_blockers_between_attackers,
                          _parse_cast_from_exiled_with)
@@ -29,33 +28,31 @@ from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_counter_pronoun_to_bound_target,
                         rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
-from .phrases import (_accept_conjoined_life_cost, _parse_duration,
-                      _parse_mana_payment)
+from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
+                      _parse_duration, _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_untap_chosen_by_paying,
                       _parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage, _parse_cast_permission,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
                       _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
-                      _parse_create_token, _parse_reveal_hand_and_choose,
+                      _parse_reveal_hand_and_choose,
                       _parse_return_instead_of_untapping,
+                      _parse_reveal_hand_and_choose,
                       _parse_count_objects, _parse_produces_instead,
                       _parse_tapped_lands_produce_chosen,
                       _parse_tapper_produces_instead, _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders, _parse_sacrifice,
                       _parse_sacrifice_expansion_permanents,
+                      parse_create_token_with_stated_pt,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
-                      _parse_shuffle_hand_into_library, _parse_shuffle_library)
+                      _parse_shuffle_hand_into_library, _parse_shuffle_library,
+                      parse_graveyard_top_to_library)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
 from .effects.game import parse_extra_land_plays
 from .effects.stack import _parse_conditional_retarget
 from .effects.cards import _parse_for_each_revealed_discard
-
-
-# ---------------------------------------------------------------------------
-# Statement productions
-# ---------------------------------------------------------------------------
 
 
 from .sentence_clauses import (
@@ -71,6 +68,11 @@ from .sentence_clauses import (
     _parse_leading_linked_duration,
     _round_every_half,
 )
+
+
+# ---------------------------------------------------------------------------
+# Statement productions
+# ---------------------------------------------------------------------------
 
 
 def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.Statement:
@@ -359,7 +361,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # no card at all (CR 208.2) — and the second is a sentence about a token
     # nothing names. Gated on the opening word and refusing without consuming,
     # so every ordinary token line keeps its own reading.
-    token_with_stated_pt = _parse_create_token_with_stated_pt(stream)
+    token_with_stated_pt = parse_create_token_with_stated_pt(stream)
     if token_with_stated_pt is not None:
         return token_with_stated_pt
     # "Each nontoken permanent with a name originally printed in the <Set>
@@ -610,6 +612,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         retarget = _parse_conditional_retarget(stream)
         if retarget is not None:
             return retarget
+        # "If the top card of target player's graveyard is a creature card, put
+        # that card on top of that player's library." (Guiding Spirit.) Read
+        # here for the two above's reason: the printed "if" is part of the
+        # effect rather than a condition over it — both halves name the top card
+        # of one graveyard, and split into a condition and an arm neither half
+        # can say which card it means. Refuses without consuming, so every other
+        # "If …" keeps its reading.
+        graveyard_top = parse_graveyard_top_to_library(stream)
+        if graveyard_top is not None:
+            return graveyard_top
         produces = _parse_produces_instead(stream)
         if produces is not None:
             return produces
@@ -732,6 +744,20 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         stream.advance()
         if stream.accept_word("may"):
             if stream.at_word("pay"):
+                # "You may pay **2 life**." (Wand of Denial.) A price with no
+                # mana in it at all, which the mana reader below refuses at
+                # "expected a mana cost to pay" — so the sentence failed on a
+                # payment the ``May`` node has carried a field for since
+                # Purgatory printed it as the *second* half of a price. One
+                # offer, one prompt, and the same ``life_cost`` payload: what
+                # differs from Purgatory is only that the mana half is absent.
+                #
+                # Read before the mana half rather than as a fallback after it,
+                # because that reader raises rather than rewinding, and a
+                # production that has already raised has taken the line with it.
+                life_only = _accept_life_only_offer(stream)
+                if life_only is not None:
+                    return life_only
                 stream.advance()
                 # "You may pay **{X}**, where X is the number of +1/+1 counters
                 # on it." (Primordial Ooze.) Admitted here and refused at
@@ -928,61 +954,3 @@ def _parse_optional_action(stream: TokenStream) -> ast.Statement:
             tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
         )
     )
-
-
-def _parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken | None":
-    """``Create a <colours> <subtypes> creature token. Its power is equal to
-    <A> and its toughness is equal to <B>.`` (Broken Visage.)
-
-    Two printed sentences and one effect, for :func:`_parse_choose_then_gain`'s
-    reason: the first states a creature token with **no P/T at all**, and
-    CR 208.2 makes that no card — the second sentence is where the numbers come
-    from. Parsed apart, the first would be a 0/0 nothing printed and the second
-    would be a sentence about a token no reader could name.
-
-    Every refusal below leaves the cursor where it found it, so a token line
-    that is not this shape keeps the refusal it already had:
-
-    * the token must be a **creature**. A Treasure has no P/T because CR 208.1
-      gives none to a noncreature permanent, and that is a finished sentence
-      rather than half of this one;
-    * both halves must be stated. "Its power is equal to X" alone leaves a
-      toughness nobody printed, and defaulting it would invent a number;
-    * the amounts are ordinary back-references, so the lowering refuses one
-      with no producer in the same effect (idiom 7) rather than reading a zero.
-    """
-    if not stream.at_word("create"):
-        return None
-    mark = stream.mark()
-    try:
-        token = _parse_create_token(stream, pt_optional=True)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if (
-        not isinstance(token, ast.CreateToken)
-        or token.power is not None
-        or token.toughness is not None
-        or token.counted_pt is not None
-        or "creature" not in token.types
-    ):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("its", "power", "is"):
-        stream.reset(mark)
-        return None
-    power = parse_equal_to(stream)
-    if power is None or not stream.accept_word("and"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("its", "toughness", "is"):
-        stream.reset(mark)
-        return None
-    toughness = parse_equal_to(stream)
-    if toughness is None:
-        stream.reset(mark)
-        return None
-    return dataclasses.replace(token, pt_from=(power, toughness))

@@ -111,6 +111,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         if not isinstance(count, ast.Fixed) or count.value < 1:
             raise stream.error("expected how many cards the search may find")
         return _parse_counted_search(stream, graveyard, count.value)
+    # "Search your library for **any number of** Goblin cards, reveal them,
+    # then shuffle and put those cards on top in any order." (Goblin
+    # Recruiter.) The same counted tail with no printed ceiling — the plural
+    # clauses are identical, and what differs is only that the number of finds
+    # is the library's answer rather than the card's. So it reaches the counted
+    # production with ``None`` for the count rather than a second reader of
+    # "reveal those cards, put them …".
+    if stream.accept_phrase("any", "number", "of"):
+        return _parse_counted_search(stream, graveyard, None)
     # "Search your library for **three cards, exile them, then shuffle**."
     # (Foresight.) A counted search whose finds are exiled rather than placed,
     # which is `SearchAndExile`'s shape with a printed ceiling — the two-zone
@@ -424,7 +433,7 @@ def _accept_counted_exile_search(
 
 
 def _parse_counted_search(
-    stream: TokenStream, graveyard: bool, count: int
+    stream: TokenStream, graveyard: bool, count: int | None
 ) -> ast.Statement:
     """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
     <where they go>, then shuffle.`` (Cultivate, Land Tax.)
@@ -454,6 +463,35 @@ def _parse_counted_search(
         if not stream.accept_phrase("those", "cards") and not stream.accept_word("them"):
             raise stream.error("expected 'those cards' after the plural reveal")
         stream.accept_punct(",")
+    # "…, **then shuffle and put those cards on top in any order**." (Goblin
+    # Recruiter.) The plural of the tail the singular production reads for the
+    # three Mirage tutors, and the order is the effect for the same reason: the
+    # library is shuffled first and the finds placed after, so they are on top
+    # rather than back in the deck. Read here, before the ordinary destination
+    # clause below, because "then shuffle" is where the two spellings part.
+    #
+    # "in any order" is consumed and not recorded: the finder names the cards
+    # in the order they want them, and that pick order *is* the answer — a
+    # field saying "the player chooses" would be a second spelling of what the
+    # answer already carries.
+    top_mark = stream.mark()
+    if stream.accept_word("then") and stream.accept_word("shuffle"):
+        if stream.accept_word("and") and stream.accept_word("put"):
+            if stream.accept_phrase("those", "cards") or stream.accept_word("them"):
+                stream.expect_word("on")
+                stream.expect_word("top")
+                if stream.accept_word("of"):
+                    stream.expect_word("your")
+                    stream.expect_word("library")
+                stream.accept_phrase("in", "any", "order")
+                zone = ast.Zone("library_top")
+                return ast.SearchLibrary(
+                    ast.PlayerRef("you"), filt, zone, graveyard,
+                    extra_destinations=() if count is None else (zone,) * (count - 1),
+                    tapped=(False,) * (0 if count is None else count),
+                    up_to=True, unbounded=count is None, reveal=reveal,
+                )
+    stream.reset(top_mark)
     stream.expect_word("put")
     if stream.accept_word("them"):
         stream.expect_word("into", "onto")
@@ -464,9 +502,12 @@ def _parse_counted_search(
         stream.expect_word("shuffle")
         return ast.SearchLibrary(
             ast.PlayerRef("you"), filt, destination, graveyard,
-            extra_destinations=(destination,) * (count - 1),
-            tapped=(tapped,) * count,
+            extra_destinations=(
+                () if count is None else (destination,) * (count - 1)
+            ),
+            tapped=(tapped,) * (0 if count is None else count),
             up_to=True,
+            unbounded=count is None,
             reveal=reveal,
         )
     if count != 2:

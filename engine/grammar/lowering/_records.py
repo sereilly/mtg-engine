@@ -293,6 +293,23 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # way" asks whether the set is empty, and "put one of them onto the
     # battlefield" takes from it. Nothing else can answer either, because a
     # graveyard holds cards this effect never touched.
+    # "Look at the top card of target player's library. **If it's a nonland
+    # card**, …" (Wand of Denial.) The card the look turned up, under the key
+    # every "is it a …?" clause reads. A look and a reveal differ in who sees
+    # the card, not in which object the pronoun behind them names.
+    # "**Choose a card name**, then target opponent mills a card. If a card
+    # with the chosen name was milled this way, …" (Foreshadow.) The name is the
+    # whole of what the first sentence does, and the only place the third can
+    # read it from — CR 202.1 lets a player name any card, so nothing on a board
+    # records the choice.
+    "choose_card_name": "chosen_card_name",
+    "look_at_target_library_top": "revealed_card",
+    # "…**target opponent mills a card**. If a card with the chosen name was
+    # milled this way, …" (Foreshadow.) What the mill actually put into a
+    # graveyard, under the key the repeated mill beside it already writes: "put
+    # into that graveyard **this way**" is one question, and a second key would
+    # be a second reader of it.
+    "mill_target_player": "milled_this_way",
     "mill_until_matching": "milled_this_way",
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
@@ -368,6 +385,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the ability's target is a *card* in a graveyard — so the reanimation is
     # the only step that can say which permanent the sentences behind it name.
     "reanimate_creature": _REANIMATED_PERMANENTS,
+    # "…**return it to the battlefield** under your control and put a death
+    # counter on **it**." (Bogardan Phoenix.) The reanimation asked of the
+    # ability's own source, and it records under the same key for the same
+    # reason: CR 400.7 makes what comes back a *new object*, so the pronoun
+    # behind this step cannot mean the permanent that died — and every reader
+    # in the resolution is still holding that one.
+    "return_source_card_to_battlefield": _REANIMATED_PERMANENTS,
     # "…put that card onto the battlefield, then shuffle. **That Dragon** gains
     # haste until end of turn. Exile **it** at the beginning of the next end
     # step." (Zirilan of the Claw.) The reanimation's twin one zone over: the

@@ -2717,6 +2717,14 @@ function getNameAndStripInfo(state = currentState) {
   return info;
 }
 
+// Foreshadow: the caster names a card before an opponent mills one.
+function getChooseCardNameInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.choose_card_name;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Petra Sphinx: the targeted player guesses at the top of their own library.
 function getNameThenRevealTopInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5845,6 +5853,56 @@ function applyNameThenRevealTopPrompt(info) {
   steps.querySelector("[data-name-then-reveal-confirm]")?.addEventListener("click", submit);
 }
 
+// Foreshadow's naming step. No suggestion list, for the reason Petra Sphinx's
+// above has none: CR 202.1 lets the chooser name any card at all, and here the
+// answer is the top of an opponent's library, which nobody may look at.
+let chooseCardNameDraft = null;
+function applyChooseCardNamePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (chooseCardNameDraft === null) chooseCardNameDraft = "";
+  title.textContent = "Name a card";
+  body.textContent = `${info.card_name || "This spell"}: choose a card name.`;
+  steps.innerHTML =
+    `<div class="name-strip-row"><input id="chooseCardNameInput" type="text" placeholder="Card name" value="${escapeHtml(chooseCardNameDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-choose-card-name-confirm="1">Name It</button></div>`;
+
+  const input = steps.querySelector("#chooseCardNameInput");
+  const submit = async () => {
+    const name = (input?.value || "").trim();
+    if (!name) {
+      updateActionHint("Type a card name first.", true);
+      return;
+    }
+    try {
+      await sendAction({ seat, action: "choose_card_name_confirm", card_name: name });
+      chooseCardNameDraft = null;
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("input", () => {
+    chooseCardNameDraft = input.value;
+  });
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  steps.querySelector("[data-choose-card-name-confirm]")?.addEventListener("click", submit);
+}
+
 // Forgotten Lore's pick. A graveyard is a public zone (CR 400.2), so every
 // option can be shown by name — and the list is already the printed exclusion,
 // because the engine drops the cards earlier rounds chose.
@@ -8716,6 +8774,12 @@ function renderActivationPrompt() {
   const nameAndStripInfo = getNameAndStripInfo();
   if (nameAndStripInfo) {
     applyNameAndStripPrompt(nameAndStripInfo);
+    return;
+  }
+
+  const chooseCardNameInfo = getChooseCardNameInfo();
+  if (chooseCardNameInfo) {
+    applyChooseCardNamePrompt(chooseCardNameInfo);
     return;
   }
 

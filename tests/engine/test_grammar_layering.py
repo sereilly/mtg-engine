@@ -567,9 +567,21 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # with, and the guard that made it a parse family fired on the *productions*
 # alone. A near-empty `lowering/text_changes.py` would buy back the symmetry
 # and cost the thing symmetry is for.
+# `search` left that exclusion at Visions' first wave: `lowering/library.py`
+# crossed the guard below and the search lowerings went into
+# `lowering/search.py`, reusing the name the parse side has carried since
+# Mirage — the mirror re-forming rather than forking, which is what every note
+# below asks for. The line is CR 701.23's own and is the one `effects/` already
+# drew: `library` is a pile a flow *shows* somebody, and a search is a pile
+# nobody may see, so what it has to carry is which cards the phrase admits and
+# where each find lands.
 LOWERING_FAMILIES = [
-    f for f in EFFECT_FAMILIES if f not in ("search", "text_changes")
+    f for f in EFFECT_FAMILIES if f not in ("text_changes",)
 ] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions"]
+# `search` is on both sides of the mirror as of Visions' first wave:
+# `lowering/search.py` split off `lowering/library.py` in the same round
+# `effects/search.py` had already split off `effects/library.py`, so the
+# exclusion that used to sit above is gone rather than carried.
 # `prohibitions` split out of `lowering/combat.py` at Visions' first wave, when
 # Heat Wave's board-wide block restriction took that module past the guard --
 # it had been sitting nineteen lines under it. The line is the printed voice,

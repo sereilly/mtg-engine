@@ -156,6 +156,8 @@ from .library import (
     _parse_look_at_hand,
     _parse_reveal_top,
     parse_player_looks_at_own_library_top,
+    parse_bin_revealed_card,
+    parse_graveyard_top_to_library,
     parse_player_separates_your_library_top,
 )
 from .zones import (
@@ -196,6 +198,7 @@ from .combat import (
 from .tokens import (
     _parse_token_keywords,
     _parse_create_token,
+    parse_create_token_with_stated_pt,
     _parse_create_token_for_recipient,
 )
 from .game import (
@@ -204,6 +207,7 @@ from .game import (
     _parse_life_total_becomes,
     _parse_wins,
     _parse_choose_color,
+    parse_choose_card_name,
     _parse_choose_number,
     _parse_count_objects,
     _parse_choose_player_who_cast,
@@ -278,6 +282,8 @@ __all__ = [
     "_parse_shuffle_graveyard_into_library",
     "_parse_shuffle_hand_into_library",
     "_parse_shuffle_library",
+    "parse_bin_revealed_card",
+    "parse_graveyard_top_to_library",
     "_parse_discard",
     "_parse_discard_revealed_unless_pay_life",
     "_parse_for_each_revealed_discard",
@@ -349,6 +355,7 @@ __all__ = [
     "_parse_life_total_becomes",
     "_parse_wins",
     "_parse_choose_color",
+    "parse_choose_card_name",
     "_parse_choose_number",
     "_parse_count_objects",
     "_parse_choose_player_who_cast",
@@ -357,6 +364,7 @@ __all__ = [
     "_parse_game_is_a_draw",
     "_parse_token_keywords",
     "_parse_create_token",
+    "parse_create_token_with_stated_pt",
     "_parse_create_token_for_recipient",
     "_parse_enchant",
     "_parse_end_the_turn",

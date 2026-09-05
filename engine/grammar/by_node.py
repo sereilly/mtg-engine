@@ -19,8 +19,11 @@ a floor.
 
 from __future__ import annotations
 
+from ..oracle_types import OracleInstruction
 from . import ast
 from .lowering import (_lower_discard, _lower_exile_entire_library, _lower_mill,
+                       _lower_move_counter, _lower_note_mana_spent,
+                       _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
                        _lower_change_land_type, _lower_change_supertype,
                        _lower_gain_type, _lower_attack_as_though,
@@ -38,6 +41,7 @@ from .lowering import (_lower_discard, _lower_exile_entire_library, _lower_mill,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
+                       _lower_graveyard_top_to_library,
                        _lower_look_at_hand, _lower_look_at_library_top,
                        _lower_look_top_cycle_for_life,
                        _lower_separate_library_top_into_piles,
@@ -101,6 +105,25 @@ from .lowering import (_lower_discard, _lower_exile_entire_library, _lower_mill,
 #: none of them inherits from another, so at most one branch could ever have
 #: matched a given node.
 _BY_NODE_TYPE: dict[type, object] = {
+    # Five arms that had stayed in `statement_dispatch`'s chain while asking
+    # nothing of it — no `produced`, no `event`, no recursion — which is the
+    # definition of an entry in this table. They moved at Visions' first wave,
+    # when that module crossed the thousand-line guard and the seam it needed
+    # was the one this file already is: a registry inside a dispatcher is the
+    # half that grows, so it is the half that leaves.
+    ast.MoveCounter: _lower_move_counter,
+    ast.NoteManaSpent: _lower_note_mana_spent,
+    # Illicit Auction. Beside the control change above rather than inside
+    # it: what the two share is where the permanent ends up, and what
+    # differs is that this one has to run an auction first to find out
+    # whose it becomes.
+    ast.BidLifeForControl: _lower_bid_life_for_control,
+    ast.BecomeBlocked: _lower_become_blocked,
+    # "Choose a card name." (Foreshadow.) The name is chosen as the spell
+    # resolves (CR 608.2) and CR 202.1 lets a player name any card at all, so
+    # nothing about it can be decided at lowering — the whole of the lowering
+    # is the instruction.
+    ast.ChooseCardName: lambda node: (OracleInstruction("choose_card_name", "", {}),),
     ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,
     ast.DamageThoseDamagedThisGame: _lower_damage_this_game_history,
     ast.CoinFlipDamageLoop: _lower_coin_flip_damage_loop,
@@ -172,6 +195,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
     ast.LookAtHand: _lower_look_at_hand,
+    ast.GraveyardTopToLibrary: _lower_graveyard_top_to_library,
     ast.LookAtLibraryTop: _lower_look_at_library_top,
     ast.LookTopCycleForLife: _lower_look_top_cycle_for_life,
     ast.SeparateLibraryTopIntoPiles: _lower_separate_library_top_into_piles,

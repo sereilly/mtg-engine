@@ -835,7 +835,16 @@ class PendingChoicesMixin:
         # the searcher's. Defaulted to the chooser, which is every other card.
         landing = landing_seat(data, seat)
         if len(set(slots)) <= 1:
-            for card in cards:
+            # "…put those cards on top **in any order**" (Goblin Recruiter):
+            # the finder named them in the order they want, and each placement
+            # goes *on top* of the last — so the list is walked backwards and
+            # the first card named ends up first from the top. Every other
+            # destination is order-blind, which is why this is one `reversed`
+            # rather than a branch.
+            ordered = (
+                list(reversed(cards)) if slots[0][0] == "library_top" else cards
+            )
+            for card in ordered:
                 destination, tapped = slots[0]
                 self._place_found_card(landing, card, destination, tapped, data)
             return
@@ -905,12 +914,22 @@ class PendingChoicesMixin:
             caster.exile.append(card)
             if data is not None:
                 self._record_search_exile(data, card)
+        elif destination == "library_top":
+            # "…then shuffle and put those cards on top in any order."
+            # (Goblin Recruiter.) The counted twin of the single-find branch in
+            # `_resolve_search_library`, and it had no branch here at all — a
+            # counted search sent to the top of a library fell through to the
+            # `else` and put every find in the finder's **hand**, which is a
+            # different card. The shuffle already happened, up in the picks
+            # resolver, so a card placed here stays on top.
+            self.put_card_into_library(caster, card, "top")
         else:
             self.put_card_into_hand(caster, card)
         where = (
             "onto the battlefield tapped" if destination == "battlefield" and tapped
             else "onto the battlefield" if destination == "battlefield"
             else "into exile" if destination == "exile"
+            else "on top of their library" if destination == "library_top"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")
@@ -2798,6 +2817,35 @@ class PendingChoicesMixin:
                 ),
             )
         return True
+
+    def confirm_choose_card_name(self, player_index: int, card_name: str) -> bool:
+        """Answer Foreshadow's "choose a card name"."""
+        return self.resolve_pending_choice(
+            "choose_card_name", player_index, card_name=card_name
+        )
+
+    def _resolve_choose_card_name(
+        self, choice: PendingChoice, card_name: str
+    ) -> bool:
+        """Record the name for the sentences behind this step.
+
+        CR 202.1 lets a player name any card, and this card prints no
+        restriction, so no name is refused — including one no card in the game
+        bears, which simply never matches. An empty name is the honest answer
+        for a seat with nothing to go on and matches nothing either.
+        """
+        record = choice.data.get("record")
+        if record is not None:
+            record["chosen_card_name"] = (card_name or "").strip()
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} named "
+            + ((card_name or "").strip() or "nothing")
+        )
+        return True
+
+    def _default_choose_card_name(self, choice: PendingChoice) -> None:
+        self._resolve_choose_card_name(choice, choice.data.get("default_name", ""))
 
     def _default_name_then_reveal_top(self, choice: PendingChoice) -> None:
         if not self._resolve_name_then_reveal_top(
@@ -8022,6 +8070,21 @@ register_choice(
     action="name_and_strip_confirm",
     prompt_key="name_and_strip",
     blocked_detail="name a card for the search before other actions",
+)
+
+register_choice(
+    "choose_card_name",
+    resolve=lambda game, choice, r: game._resolve_choose_card_name(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_choose_card_name(choice),
+    action="choose_card_name_confirm",
+    prompt_key="choose_card_name",
+    blocked_detail="name a card before other actions",
+    # The sentences behind this read the name, and one of them mills: a seat
+    # that saw the milled card before naming would be choosing with information
+    # the card does not give them (CR 608.2, CR 117.3b).
+    suspends=True,
 )
 
 register_choice(

@@ -22,7 +22,8 @@ import dataclasses
 from ...tokens import PREDEFINED_TOKENS
 from ...oracle_types import LAST_TARGET_CONTROLLER
 from .. import ast
-from ..amounts import expect_pt, parse_amount
+from ..amounts import expect_pt, parse_amount, parse_equal_to
+from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, WORD
 from ..phrases import _parse_for_each, _parse_per_each_objects
 from ..references import parse_target_spec
@@ -603,3 +604,61 @@ def _parse_token_trigger_sentences(stream: TokenStream) -> tuple[str, ...]:
             break
         lines.append(f"{trigger.capitalize()} this creature {rest}.")
     return tuple(lines)
+
+
+def parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken | None":
+    """``Create a <colours> <subtypes> creature token. Its power is equal to
+    <A> and its toughness is equal to <B>.`` (Broken Visage.)
+
+    Two printed sentences and one effect, for :func:`_parse_choose_then_gain`'s
+    reason: the first states a creature token with **no P/T at all**, and
+    CR 208.2 makes that no card — the second sentence is where the numbers come
+    from. Parsed apart, the first would be a 0/0 nothing printed and the second
+    would be a sentence about a token no reader could name.
+
+    Every refusal below leaves the cursor where it found it, so a token line
+    that is not this shape keeps the refusal it already had:
+
+    * the token must be a **creature**. A Treasure has no P/T because CR 208.1
+      gives none to a noncreature permanent, and that is a finished sentence
+      rather than half of this one;
+    * both halves must be stated. "Its power is equal to X" alone leaves a
+      toughness nobody printed, and defaulting it would invent a number;
+    * the amounts are ordinary back-references, so the lowering refuses one
+      with no producer in the same effect (idiom 7) rather than reading a zero.
+    """
+    if not stream.at_word("create"):
+        return None
+    mark = stream.mark()
+    try:
+        token = _parse_create_token(stream, pt_optional=True)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        not isinstance(token, ast.CreateToken)
+        or token.power is not None
+        or token.toughness is not None
+        or token.counted_pt is not None
+        or "creature" not in token.types
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("its", "power", "is"):
+        stream.reset(mark)
+        return None
+    power = parse_equal_to(stream)
+    if power is None or not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("its", "toughness", "is"):
+        stream.reset(mark)
+        return None
+    toughness = parse_equal_to(stream)
+    if toughness is None:
+        stream.reset(mark)
+        return None
+    return dataclasses.replace(token, pt_from=(power, toughness))

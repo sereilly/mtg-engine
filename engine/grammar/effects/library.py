@@ -777,3 +777,77 @@ def _accept_look_and_choose(
         player, ast.ObjectFilter(is_card=True), fate="discard",
         count=count, revealed=False,
     )
+
+
+def parse_graveyard_top_to_library(stream: TokenStream) -> "ast.Statement | None":
+    """``If the top card of <player>'s graveyard is a <filter>, put that card on
+    top of that player's library.`` (Guiding Spirit.)
+
+    The whole printed sentence, read as one production for the reason
+    :class:`ast.GraveyardTopToLibrary` records: both halves name the top card of
+    one graveyard, and neither half can name it alone. Read among the other
+    whole-sentence "If …" productions in ``statements.py`` and, like them,
+    **refusing without consuming**, so every other conditional keeps its reading.
+
+    The possessive is read through the shared player parser rather than matched
+    as words, so "target player's", "that player's" and "each opponent's" all
+    reach the lowering, which is what decides which of them has a flow — the
+    same split every other whose-zone clause in this package makes.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "the", "top", "card", "of"):
+        stream.reset(mark)
+        return None
+    owner = parse_player_ref(stream)
+    if owner is None or not stream.accept_phrase("'s", "graveyard", "is"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        found = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    # The move half. Every word is required: a sentence that named a different
+    # destination, or a different card, is a different effect and must fail the
+    # line rather than reach this node.
+    if not stream.accept_phrase("put", "that", "card", "on", "top", "of"):
+        stream.reset(mark)
+        return None
+    destination = parse_player_ref(stream)
+    if destination is None or not stream.accept_phrase("'s", "library"):
+        stream.reset(mark)
+        return None
+    # "…of **that player's** library" — the same seat the graveyard belonged to.
+    # Consumed and compared rather than dropped: a card sending the top of one
+    # player's graveyard to *another* player's library is a different sentence,
+    # and reading the second possessive as decoration is how it would silently
+    # become this one.
+    if destination.kind not in ("that_player", owner.kind):
+        stream.reset(mark)
+        return None
+    return ast.GraveyardTopToLibrary(owner, found)
+
+
+def parse_bin_revealed_card(stream: TokenStream) -> "ast.Statement | None":
+    """``Put it into <player>'s graveyard.`` (Wand of Denial.)
+
+    Read among the "put" back-references in ``imperatives`` and, like all of
+    them, refusing without consuming — the counter production behind them reads
+    "it" as a counter kind and refuses with a site naming counters, which is a
+    refusal that blames the wrong clause.
+
+    Only a graveyard, because that is the only destination the record can be
+    moved to without a second question: the card is still in the library the
+    look turned it up in, and every other zone would want to know where in it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "it", "into"):
+        stream.reset(mark)
+        return None
+    owner = parse_player_ref(stream)
+    if owner is None or not stream.accept_phrase("'s", "graveyard"):
+        stream.reset(mark)
+        return None
+    return ast.BinRevealedCard(owner)

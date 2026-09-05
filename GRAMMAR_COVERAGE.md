@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.3% | 93.0% | 60.5% | 317 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| VIS *(measured)* | 167 | 278 | 80.2% | 75.5% | 48.2% | 107 |
+| VIS *(measured)* | 167 | 278 | 82.4% | 79.9% | 52.5% | 117 |
 | **All (shipped)** | **3918** | **5812** | **89.8%** | **88.9%** | **58.5%** | **2813** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,9 +45,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 323 | 144 | expected a subject |  |
+| 321 | 142 | expected a subject |  |
 | 105 | 47 | unrecognized effect verb |  |
-| 81 | 36 | unconsumed text |  |
+| 82 | 37 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
@@ -65,11 +65,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | the counter lands on a creature, optionally one in combat with the source |  |
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -559,6 +559,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of charge counters from this artifact: Add {U}, then add an additional {U} for each charge counter removed this way.`
 - **Blue Scarab**
   - `Enchanted creature gets +2/+2 as long as an opponent controls a blue permanent.`
+- **Bogardan Phoenix**
+  - `When this creature dies, exile it if it had a death counter on it. Otherwise, return it to the battlefield under your control and put a death counter on it.`
 - **Bolt Hound**
   - `Whenever this creature attacks, other creatures you control get +1/+0 until end of turn.`
 - **Bone Flute**
@@ -607,6 +609,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
+- **Brass-Talon Chimera**
+  - `Sacrifice this creature: Put a +2/+2 counter on target Chimera creature. It gains first strike. (This effect lasts indefinitely.)`
 - **Brassclaw Orcs**
   - `This creature can't block creatures with power 2 or greater.`
   - `This creature can't block creatures with power 2 or greater.`
@@ -1714,6 +1718,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Force of Will**
   - `Counter target spell.`
 - **Foreshadow**
+  - `Choose a card name, then target opponent mills a card. If a card with the chosen name was milled this way, you draw a card.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Foresight**
   - `Search your library for three cards, exile them, then shuffle.`
@@ -1944,6 +1949,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Goblin Mutant**
   - `This creature can't attack if defending player controls an untapped creature with power 3 or greater.`
   - `This creature can't block creatures with power 3 or greater.`
+- **Goblin Recruiter**
+  - `When this creature enters, search your library for any number of Goblin cards, reveal them, then shuffle and put those cards on top in any order.`
 - **Goblin Rock Sled**
   - `This creature can't attack unless defending player controls a Mountain.`
   - `This creature can't attack unless defending player controls a Mountain.`
@@ -2042,6 +2049,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Griffin Canyon**
   - `{T}: Add {C}.`
+  - `{T}: Untap target Griffin. If it's a creature, it gets +1/+1 until end of turn.`
 - **Grim Feast**
   - `At the beginning of your upkeep, this enchantment deals 1 damage to you.`
   - `Whenever a creature is put into an opponent's graveyard from the battlefield, you gain life equal to its toughness.`
@@ -2054,6 +2062,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Guerrilla Tactics**
   - `Guerrilla Tactics deals 2 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
+- **Guiding Spirit**
+  - `{T}: If the top card of target player's graveyard is a creature card, put that card on top of that player's library.`
 - **Gustha's Scepter**
   - `{T}: Exile a card from your hand face down. You may look at it for as long as it remains exiled.`
   - `{T}: Return a card you own exiled with this artifact to your hand.`
@@ -2401,6 +2411,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
+- **Iron-Heart Chimera**
+  - `Sacrifice this creature: Put a +2/+2 counter on target Chimera creature. It gains vigilance. (This effect lasts indefinitely.)`
 - **Ironclaw Orcs**
   - `This creature can't block creatures with power 2 or greater.`
   - `This creature can't block creatures with power 2 or greater.`
@@ -2715,6 +2727,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B} or {R}. Put a depletion counter on this land.`
 - **Lead Golem**
   - `Whenever this creature attacks, it doesn't untap during its controller's next untap step.`
+- **Lead-Belly Chimera**
+  - `Sacrifice this creature: Put a +2/+2 counter on target Chimera creature. It gains trample. (This effect lasts indefinitely.)`
 - **Leafkin Avenger**
   - `{T}: Add {G} for each creature with power 4 or greater you control.`
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
@@ -3083,6 +3097,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gets +3/-2 until end of turn.`
 - **Miracle Worker**
   - `{T}: Destroy target Aura attached to a creature you control.`
+- **Miraculous Recovery**
+  - `Return target creature card from your graveyard to the battlefield. Put a +1/+1 counter on it.`
 - **Mire Shade**
   - `{B}, Sacrifice a Swamp: Put a +1/+1 counter on this creature. Activate only as a sorcery.`
 - **Mirror Universe**
@@ -4822,11 +4838,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
 - **Timmerian Fiends**
   - `{B}{B}{B}, Sacrifice this creature: The owner of target artifact may ante the top card of their library. If that player doesn't, exchange ownership of that artifact and Timmerian Fiends. Put the artifact card into your graveyard and Timmerian Fiends from anywhere into that player's graveyard. This change in ownership is permanent.`
+- **Tin-Wing Chimera**
+  - `Sacrifice this creature: Put a +2/+2 counter on target Chimera creature. It gains flying. (This effect lasts indefinitely.)`
 - **Tinder Wall**
   - `Sacrifice this creature: Add {R}{R}.`
   - `{R}, Sacrifice this creature: It deals 2 damage to target creature it's blocking.`
 - **Titanic Growth**
   - `Target creature gets +4/+4 until end of turn.`
+- **Tithe**
+  - `Search your library for a Plains card. If target opponent controls more lands than you, you may search your library for an additional Plains card. Reveal those cards, put them into your hand, then shuffle.`
 - **Tivadar's Crusade**
   - `Destroy all Goblins.`
 - **Tolaria**
@@ -5209,6 +5229,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gets +1/+0 until end of turn.`
 - **Wall of Wonder**
   - `{2}{U}{U}: This creature gets +4/-4 until end of turn and can attack this turn as though it didn't have defender.`
+- **Wand of Denial**
+  - `{T}: Look at the top card of target player's library. If it's a nonland card, you may pay 2 life. If you do, put it into that player's graveyard.`
 - **Wand of Ith**
   - `{3}, {T}: Target player reveals a card at random from their hand. If it's a land card, that player discards it unless they pay 1 life. If it isn't a land card, the player discards it unless they pay life equal to its mana value. Activate only during your turn.`
 - **Wandering Mage**

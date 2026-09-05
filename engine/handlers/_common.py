@@ -1816,6 +1816,67 @@ def resolve_role_permanent(
     return None
 
 
+def recorded_permanent_ids(context, key) -> tuple[int, ...]:
+    """Every permanent id an earlier step of this resolution recorded under *key*.
+
+    **The ``permanents_from`` channel's arity, decided in one place.** That
+    payload key names a scratchpad record, and its twenty producers disagreed
+    about shape: a reanimation, a sweep and a tap write a *list* of ids, while a
+    choose-one prompt and a targeting steal write a bare id. Twenty reader sites
+    across eight ``handlers/`` files each made their own assumption, and two of
+    them — ``pump.add_counter_to_target`` and ``prevention``'s shield grant —
+    had grown a local normalisation whose own comment called itself "the local
+    half of a wider question". Nothing was broken, but only because no
+    list-producer happened to feed a scalar reader; three sets in a row added
+    producers and left the question open, and by Alliances the readers were no
+    longer a list anybody could hold in their head while adding one.
+
+    So the channel is **always a sequence**, read here and nowhere else. A
+    producer that writes a bare id is read as a sequence of one, which is what
+    every iterating reader already assumed and what the two local normalisations
+    already did — this is those two, promoted to the channel's definition rather
+    than added to as a third.
+
+    An absent record is an empty sequence: a step that recorded nothing is a
+    legal outcome (the seat had no creature, the reanimation found no card), not
+    an error.
+    """
+    if key is None:
+        return ()
+    recorded = (getattr(context, "results", None) or {}).get(str(key))
+    if recorded is None:
+        return ()
+    if isinstance(recorded, int):
+        return (recorded,)
+    return tuple(
+        entry for entry in recorded if isinstance(entry, int)
+    )
+
+
+def one_recorded_permanent_id(context, key) -> int | None:
+    """The single permanent id recorded under *key*, or None.
+
+    The half of :func:`recorded_permanent_ids` a sentence about **one** object
+    needs — "destroy that creature", "gain control of it", "sacrifice it". Those
+    readers used to take the record raw and index nothing, so a list-shaped
+    producer would have reached them as an unhashable id and raised; that was
+    the failure this channel had been carrying, latent, since Fallen Empires.
+
+    It asserts rather than picking: a reader written for one object that is
+    handed two has been fed by a producer it was never paired with, and choosing
+    the first would be the effect acting on whichever object happened to be
+    recorded first. That is the direction this repo refuses everywhere else.
+    """
+    recorded = recorded_permanent_ids(context, key)
+    if not recorded:
+        return None
+    assert len(recorded) == 1, (
+        f"'permanents_from' record {key!r} holds {len(recorded)} permanents "
+        "where this sentence names one"
+    )
+    return recorded[0]
+
+
 def resolve_target_permanent(
     game: Game,
     context: OracleExecutionContext,

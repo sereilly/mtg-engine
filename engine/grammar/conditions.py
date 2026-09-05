@@ -21,17 +21,17 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import PT, WORD
 from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec
 from .phrases import _parse_duration, _parse_keywords
-from .condition_clauses import (_accept_record_condition,
+from .condition_clauses import (_accept_counter_condition,
+                                _accept_record_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, NUMBER_WORDS
+from .vocabulary import NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -184,26 +184,6 @@ def _parse_same_named_object(stream: TokenStream) -> "ast.SameNamedObject | None
     return None
 
 
-def _accept_counter_kind(stream: TokenStream) -> str | None:
-    """The counter's written name, or None with the cursor untouched.
-
-    A **P/T token or a word**, because CR 122.1a spells one kind with symbols
-    and CR 122.1 lets the rest have any name — the same pair
-    ``phrases._expect_counter_kind`` admits one layer down, read here rather
-    than imported because a condition declines where that one raises.
-
-    Reading ``peek_word`` alone was why "three or more **+1/+0** counters"
-    (Consuming Ferocity) failed a clause whose "three or more **echo**
-    counters" twin has worked since Fasting: the lexer gives "+1/+0" its own
-    token kind, so the word table never saw it.
-    """
-    token = stream.peek()
-    if token is None or token.kind not in (PT, WORD):
-        return None
-    if token.is_word("counter", "counters"):
-        return None
-    stream.advance()
-    return token.text
 
 
 def _parse_single_condition(stream: TokenStream) -> ast.Condition:
@@ -624,190 +604,13 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if recorded is not None:
         return recorded
 
-
-    # "if **this card is exiled with a scream counter on it**" (All Hallow's
-    # Eve). CR 603.4's intervening-if over an object in exile — the one zone
-    # this engine had no way to ask about, because a card there is a bare
-    # ``CardDefinition`` with no object to carry state. The register in
-    # ``engine/exiled_records.py`` is what answers it.
-    #
-    # Read before the tapped/untapped state clause below, which shares the
-    # "<source> is" opening: both mark and reset, so the order decides only
-    # which refusal survives, and the more specific question asking first keeps
-    # "exiled" from being reported as an unrecognised state word.
-    exiled_mark = stream.mark()
-    if accept_source_reference(stream) and stream.accept_phrase("is", "exiled", "with"):
-        stream.accept_word("a", "an")
-        counter_word = stream.peek_word()
-        if counter_word is not None and counter_word not in ("counter", "counters"):
-            stream.advance()
-            if (
-                stream.accept_word("counter", "counters")
-                and stream.accept_phrase("on", "it")
-            ):
-                return ast.SourceExiledWithCounter(counter_word)
-    stream.reset(exiled_mark)
-
-    # "if **there are no more scream counters on it**" (All Hallow's Eve),
-    # "if **there are no time counters on this Aura**" (Tourach's Gate),
-    # "as long as **there is exactly one tide counter on this creature**"
-    # (Homarid, Tidal Influence). One production over the three axes the pool
-    # varies independently, for the reason the tapped/untapped clause below
-    # states about its own four spellings: written out as one phrase each, the
-    # spelling nobody listed reads as a parser gap rather than as the same
-    # question.
-    #
-    # The axes are the copula ("there is" for a singular counter, "there are"
-    # for a plural), the number ("no", "no more", "exactly one", "exactly
-    # three" — every one of them an *equality*), and how the card names the
-    # object holding them ("on it", "on this Aura", "on this creature"), which
-    # is `accept_source_reference`'s question everywhere else.
-    #
-    # "no more" and "no" are one phrase with an optional word: the difference
-    # is English, not a different question — both say the count is zero. So is
-    # "exactly": it is the comparison this node already defaults to, printed
-    # out loud because the card needs to distinguish one tide counter from
-    # three.
-    empty_mark = stream.mark()
-    if stream.accept_word("there") and stream.accept_word("is", "are"):
-        count: int | None = None
-        if stream.accept_word("no"):
-            stream.accept_word("more")
-            count = 0
-        elif stream.accept_word("exactly"):
-            word = stream.peek_word()
-            if word is not None and word in NUMBER_WORDS:
-                stream.advance()
-                count = NUMBER_WORDS[word]
-        if count is not None:
-            counter_word = stream.peek_word()
-            if counter_word is not None and counter_word not in ("counter", "counters"):
-                stream.advance()
-                if stream.accept_word("counters", "counter") and stream.accept_word("on"):
-                    if accept_source_reference(stream):
-                        return ast.SourceCounterCount(counter_word, count)
-    stream.reset(empty_mark)
-
-    # "if **it has five or more hunger counters on it**" (Fasting) — the same
-    # count of the same source's counters, with the comparison the card prints.
-    # A second spelling rather than a second node: `SourceCounterCount` already
-    # carries the number, and its docstring said the wider comparison should
-    # extend this production. "it has" and "there are" are the two printed
-    # subjects for one question, so both read a source reference here —
-    # `accept_source_reference` also takes the card naming itself, which is how
-    # a pre-modern printing ("if Fasting has …") reaches the same branch.
-    threshold_mark = stream.mark()
-    if accept_source_reference(stream) and stream.accept_word("has"):
-        # "if this artifact has **a** charge counter on it" (Ventifact
-        # Bottle). The article is English's way of printing "one or more":
-        # the clause is a *presence* test, and a card that had exactly one
-        # counter and a card that had five both satisfy it. Read here rather
-        # than as a number word, because "a" as a count would mean exactly
-        # one — the tighter reading, and the one that would stop the Bottle
-        # emptying after its second activation.
-        article = stream.mark()
-        if stream.accept_word("a", "an"):
-            counter_word = stream.peek_word()
-            if counter_word is not None and counter_word not in (
-                "counter", "counters"
-            ):
-                stream.advance()
-                if (
-                    stream.accept_word("counter", "counters")
-                    and stream.accept_phrase("on", "it")
-                ):
-                    return ast.SourceCounterCount(
-                        counter_word, 1, comparison="at_least"
-                    )
-            stream.reset(article)
-        word = stream.peek_word()
-        if word is not None and word in NUMBER_WORDS:
-            stream.advance()
-            if stream.accept_phrase("or", "more"):
-                counter_word = _accept_counter_kind(stream)
-                if counter_word is not None and (
-                    stream.accept_word("counters", "counter")
-                    and stream.accept_phrase("on", "it")
-                ):
-                    return ast.SourceCounterCount(
-                        counter_word, NUMBER_WORDS[word], comparison="at_least"
-                    )
-    stream.reset(threshold_mark)
-
-    # "if **that creature has three or more +1/+0 counters on it**" (Consuming
-    # Ferocity). The same count over the permanent an Aura is attached to
-    # rather than over the Aura itself — a different object, so a different
-    # node: read as :class:`ast.SourceCounterCount` the clause would ask the
-    # enchantment how many +1/+0 counters *it* had, which is always none, and
-    # the card would never reach its own payoff.
-    #
-    # Both printed subjects reach it. "Enchanted creature" names the host
-    # outright; "that creature" is the host only because the sentence in front
-    # of it named one, which is a fact about the *effect* — so it rides the
-    # node and the lowering is what checks a step really named it.
-    attached_mark = stream.mark()
-    bound = None
-    if stream.accept_word("enchanted"):
-        bound = False
-    elif stream.accept_word("that"):
-        bound = True
-    if bound is not None:
-        noun = stream.peek_word()
-        if noun is not None and noun in CARD_TYPES:
-            stream.advance()
-            if stream.accept_word("has"):
-                word = stream.peek_word()
-                if word is not None and word in NUMBER_WORDS:
-                    stream.advance()
-                    if stream.accept_phrase("or", "more"):
-                        counter_word = _accept_counter_kind(stream)
-                        if counter_word is not None and (
-                            stream.accept_word("counters", "counter")
-                            and stream.accept_phrase("on", "it")
-                        ):
-                            return ast.AttachedCounterCount(
-                                counter_word, NUMBER_WORDS[word], bound=bound,
-                            )
-    stream.reset(attached_mark)
-
-    # "if **this ability has been activated four or more times this turn**"
-    # (Farrelite Priest, Initiates of the Ebon Hand). The one condition here
-    # that asks about the ability rather than about a board: how often the very
-    # line carrying it has been used since the turn began.
-    #
-    # Every word is required, and two of them carry the whole meaning. The
-    # number and its comparison are read rather than skipped — a threshold read
-    # as "at least once" arms the drawback on the first activation, which is a
-    # strictly harsher card. "**This turn**" is the window, and without it the
-    # clause would be the lifetime count the same ledger also keeps
-    # (``activations_ever``), which is a different question.
-    tally_mark = stream.mark()
-    if stream.accept_phrase("this", "ability", "has", "been", "activated"):
-        word = stream.peek_word()
-        if word is not None and word in NUMBER_WORDS:
-            stream.advance()
-            if (
-                stream.accept_phrase("or", "more")
-                and stream.accept_word("times")
-                and stream.accept_phrase("this", "turn")
-            ):
-                return ast.SourceAbilityActivations(NUMBER_WORDS[word])
-    stream.reset(tally_mark)
-
-    # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
-    # that is the whole point: "it" is the creature that just died, so the
-    # answer is last-known information (CR 603.10) recorded as the trigger
-    # fires rather than a board state anything could read afterwards.
-    # "+1/+1" lexes as a PT token, so the phrase is matched in two halves
-    # around it rather than as a word run.
-    counter_mark = stream.mark()
-    if stream.accept_phrase("it", "had", "a"):
-        token = stream.peek()
-        if token is not None and token.kind == PT and token.text == "+1/+1":
-            stream.advance()
-            if stream.accept_phrase("counter", "on", "it"):
-                return ast.HadPlus1Counter()
-    stream.reset(counter_mark)
+    # The counter-state questions (CR 122), in `condition_clauses` for the
+    # reason the record conditions above are: this module crossed the
+    # thousand-line guard at a wave's integration, on nobody's branch, and
+    # the family boundary was already drawn two packages over.
+    counters = _accept_counter_condition(stream)
+    if counters is not None:
+        return counters
 
     # "if this artifact is tapped" (Mana Vault), "if it's untapped" (Aladdin's
     # Ring), "if this is untapped" — one production over the two axes the pool

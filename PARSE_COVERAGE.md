@@ -25,15 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**7 unclaimed sentence(s) across 6 supported card(s).**
+**4 unclaimed sentence(s) across 4 supported card(s).**
 
 - **Fireblast**
   - `you may sacrifice two mountains rather than pay this spell's mana cost`
-- **Foreshadow**
-  - `choose a card name, then target opponent mills a card`
-  - `if a card with the chosen name was milled this way, you draw a card`
-- **Griffin Canyon**
-  - `{t}: untap target griffin. if it's a creature, it gets +1/+1 until end of turn`
 - **Infernal Harvest**
   - `as an additional cost to cast this spell, return x swamps you control to their owner's hand`
 - **Juju Bubble**
