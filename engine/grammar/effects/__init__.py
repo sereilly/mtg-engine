@@ -217,6 +217,7 @@ from .game import (
     _parse_enchant,
     _parse_end_the_turn,
     _parse_extra_turn,
+    parse_extra_phases,
     _parse_skip_step,
     _parse_targeting_ban,
     parse_cant_play_lands,
@@ -371,4 +372,5 @@ __all__ = [
     "_parse_enchant",
     "_parse_end_the_turn",
     "_parse_extra_turn",
+    "parse_extra_phases",
 ]

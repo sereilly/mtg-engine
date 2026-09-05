@@ -376,6 +376,90 @@ def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
     return ast.ExtraTurn(ast.PlayerRef("you"), count)
 
 
+#: The phases a printed "additional <x> phase" can name, and the engine phase
+#: each one is. Held to the phases ``Game.enter_turn_phase`` can actually begin
+#: by ``tests/rules/test_turn_phases.py``: a word admitted here that no driver
+#: can enter would be a sentence parsed, lowered, recorded and then silently
+#: not taken, which is what CR 500.8's machinery did for its whole life before
+#: a card needed it. "beginning" is deliberately absent - CR 500.10's Obeka
+#: adds one and nothing in this engine can run an upkeep step outside the start
+#: of a turn, so the line refuses rather than pretending.
+_ADDITIONAL_PHASE_WORDS = {"combat": "combat", "main": "postcombat_main"}
+
+
+def parse_extra_phases(stream: TokenStream) -> ast.Statement | None:
+    """``After this main phase, there is an additional combat phase followed by
+    an additional main phase.`` (Relentless Assault, CR 500.8.)
+
+    Returns None without consuming when the sentence does not open "after
+    this", so every other sentence keeps its own reading; once that opener has
+    matched the production is committed and every remaining token has to be one
+    it knows, because a tail dropped here would be an extra phase created with
+    half its printed order.
+
+    An extra *main* phase is a postcombat one whatever it follows, and the rule
+    says so about this exact card: CR 505.1a, "only the first main phase of the
+    turn is a precombat main phase ... It is also true of a turn in which an
+    effect has caused an additional combat phase and an additional main phase to
+    be created." So the created phase must not fire "at the beginning of your
+    first main phase".
+    """
+    if not stream.at_word("after"):
+        return None
+    mark = stream.mark()
+    stream.advance()
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    after = _accept_phase_word(stream)
+    if after is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        raise stream.error("expected ',' after the phase this sentence names")
+    stream.expect_word("there")
+    stream.expect_word("is")
+    phases = [_expect_additional_phase(stream)]
+    # "followed by an additional main phase" - the printed conjunction, and the
+    # only one: "and" would leave the order unstated, and CR 500.8 makes the
+    # order of a created run the whole of what it says.
+    while stream.accept_phrase("followed", "by"):
+        phases.append(_expect_additional_phase(stream))
+    return ast.ExtraPhases(after, tuple(phases))
+
+
+def _accept_phase_word(stream: TokenStream) -> str | None:
+    """The phase a "this <x> phase" reference names, or None."""
+    for word in _ADDITIONAL_PHASE_WORDS:
+        if stream.at_word(word):
+            mark = stream.mark()
+            stream.advance()
+            if stream.accept_word("phase"):
+                return word
+            stream.reset(mark)
+            return None
+    # "After this phase, ..." - the phase in progress, whichever it is.
+    if stream.accept_word("phase"):
+        return "this"
+    return None
+
+
+def _expect_additional_phase(stream: TokenStream) -> str:
+    """``an additional <x> phase`` as the *engine* phase it creates.
+
+    The printed word is translated here rather than at lowering because this is
+    where the vocabulary is: a word with no phase behind it must fail the line,
+    and the table that answers "which phase is that" is the same table that
+    answers "is that a phase at all".
+    """
+    stream.expect_word("an")
+    stream.expect_word("additional")
+    word = _accept_phase_word(stream)
+    if word is None or word not in _ADDITIONAL_PHASE_WORDS:
+        raise stream.error("expected 'an additional <combat|main> phase'")
+    return _ADDITIONAL_PHASE_WORDS[word]
+
+
 def _parse_end_the_turn(stream: TokenStream) -> ast.Statement:
     """``End the turn.`` (Discontinuity.)
 

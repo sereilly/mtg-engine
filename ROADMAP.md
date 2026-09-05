@@ -1478,6 +1478,99 @@ and is the least informative of the five.
 Items 1 and 5 are each a round on their own; 2, 3 and 4 are one round together,
 because 3 is unanswerable until 4 records what it asks about.
 
+### Wave 3, group 4 — the turn learns to have more phases than five: 158 -> 159
+
+One card, Relentless Assault, and the subsystem under it. **"After this main
+phase, there is an additional combat phase followed by an additional main
+phase" (CR 500.8) was refused at the *parse* layer** — `expected a subject`, the
+subject-verb reader's generic failure on a sentence that has no subject to
+find — so the brief's inherited note that the machinery existed and only the
+sentence was missing was, for once, right about the layer.
+
+**What it was wrong about is the machinery.** `add_extra_phase` did not merely
+lack a consumer; the shape it recorded into could not express the effect.
+`extra_phases_after` was a dict keyed by phase **name**, and Relentless Assault
+creates two phases in sequence, so the only way to chain them was to file "a
+main phase after combat" — which the turn's **own** combat phase then eats. Cast
+in the precombat main phase the card would have produced *one* combat phase
+where the turn already had one and dropped the rest of the turn, which is a
+combat lost rather than gained. A name-keyed record cannot tell an extra combat
+phase from the turn's own one, because they have the same name. The fix is not a
+consumer for that dict; it is a different shape.
+
+**So the turn now has a plan: `Game.turn_phases_remaining`, the phases still to
+come, in order.** CR 500.1's five at the start of every turn, CR 500.8's extras
+*inserted* into it, and each entry spent as its phase is entered — in
+`_set_phase_and_step`, the one line every way into a phase already passes
+through, for the reason `remove_from_battlefield` gives one package over. A
+repeated phase is two entries, so the ambiguity is gone by construction.
+`next_unskipped_phase_after` is the peek and `enter_next_turn_phase` the
+entry, and both are now called: `turn_management.start_turn`,
+`combat_phase.advance_combat_phase` (three sites), `web/game_flow._advance_phase`
+(three) and the web layer's three beginning-phase-to-main-phase entries. Before
+this round the successor was hard-coded at every one of those and
+`next_unskipped_phase_after` had no caller outside a test.
+
+**The equivalence is proved, not asserted.** With no extra phase the plan *is*
+CR 500.1's order, so every peek returns the successor the hard-coded chain
+named — and that is checked four ways. A recorded before/after phase-and-step
+trace of a whole turn is byte-identical (`test_an_ordinary_turn_takes_the_same_steps_in_the_same_order` holds the sequence captured from the pre-change
+engine). A six-turn headless game with real combat produces an identical log
+and identical life totals on both trees. `run_ai_simulation` over five sets ×
+two seeds is byte-identical, so determinism holds. And the differential moved
+exactly **1 card of 2,348** — Relentless Assault — because a turn-structure
+change moves no compiled program, which is why the trace and the suite are the
+real evidence here and the differential only bounds the collateral.
+
+**What happened to the dead API**, since an API that records and returns True
+with nothing consuming it reads as a feature:
+
+- `add_extra_phase` — **live**, called by the new `grant_extra_phases` handler.
+- `next_unskipped_phase_after` / `_next_phase_after` — **live**, called by every
+  driver.
+- `extra_phases_after` — **deleted**, replaced by the plan (see above).
+- `add_additional_step_after_phase` (CR 500.10) — **deleted**, and this is the
+  one decline. It manufactures a phase named `extra_phase_for_upkeep_0`, and
+  nothing in this engine can *enter* one: a phase's entry point is
+  `_enter_main_phase` / `advance_combat_phase` / `resolve_end_step`, and running
+  an upkeep step outside the start of a turn is a fourth. Obeka is the card that
+  needs it and it is not in this pool. Keeping a recorder for a phase no driver
+  can begin is exactly the thing this round was sent to remove.
+- `custom_phase_steps` and `extra_steps_after` (CR 500.9) — **deleted** with it;
+  they had no writer at all, and `_phase_steps` reads `_PHASE_STEPS` alone now.
+- `skip_phase_counts` — **kept**, and the distinction is deliberate: it is a
+  *consumer* with no producer, sitting on the live path, so "skip your next
+  combat phase" needs only the producer. That is the opposite direction of
+  failure from a recorder nothing reads.
+- The test that asserted `add_additional_step_after_phase` returned `True` is
+  replaced by eight, including the two the plan needs as a hand-maintained list:
+  every phase in `_TURN_PHASES` has steps and an entry point, and the plan a
+  turn starts with is exactly `_TURN_PHASES`.
+
+**Three things the brief got wrong.** The AI simulator is not a third turn
+driver — its per-turn script is untap, upkeep, draw, one cast, one activation,
+and it never enters the combat or ending phase at all, so there is no phase
+sequence in it for a loop to express; it was left alone and its seeded output is
+unchanged. The web *phase rail* needed no change either: it is a set of step
+keys a player toggles to hold priority at, and a second combat phase reuses the
+same keys. And `_phase_steps` had six call sites, not one — five in tests — of
+which the single production one is `advance_combat_phase`'s, still with a
+hard-coded `"combat"` and correctly so: it asks which steps *the phase it is
+running* has.
+
+**One approximation named rather than taken.** The brief offered a counter
+consumed at turn-end as observationally identical today. It is not taken: it is
+identical only while every extra phase is appended at the end of the turn, and
+the precombat cast above is the case where that is wrong in the rules and wrong
+on the board.
+
+**Known gap this leaves.** `web/turn_steps._end_turn` — the app's "End Turn"
+button — still jumps straight to the ending phase from wherever it is, so a
+player holding an extra combat phase loses it by pressing it. That is
+pre-existing (it already skips the turn's own combat phase) and it is not a
+rules path, but it is now a *visible* skip rather than an invisible one, and
+whoever gives the client an extra-phase affordance should fix it there.
+
 ## Mirage (MIR) — shipped (335/335, manifest index 13)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**

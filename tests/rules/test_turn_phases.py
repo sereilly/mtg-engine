@@ -1,6 +1,7 @@
 import pytest
 
 from engine import Game
+from engine.mixins._constants import _PHASE_STEPS, _TURN_PHASES
 from engine.models import CardDefinition, Permanent, PlayerState
 
 
@@ -124,18 +125,246 @@ def test_skip_turn_is_applied():
     assert game.start_next_turn() == 0
 
 
-@pytest.mark.cr("500.10")
-def test_additional_step_after_phase_creates_single_step_phase():
-    p1 = PlayerState(name="P1")
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
+# ---------------------------------------------------------------------------
+# The turn's phase plan (CR 500.1's order, CR 500.8's extras)
+#
+# These replaced `test_additional_step_after_phase_creates_single_step_phase`,
+# which asserted that `add_extra_phase` returned True. It did, and nothing in
+# the engine ever entered the phase it recorded: `next_unskipped_phase_after`
+# had no caller outside that test, and all three turn drivers named their own
+# successor. A test of a recording API is blind to that by construction, so
+# what is asserted here is the *sequence a turn actually takes*.
+# ---------------------------------------------------------------------------
 
-    ok = game.add_additional_step_after_phase("combat", "upkeep", controller_index=0, only_on_controllers_turn=False)
 
-    assert ok
-    inserted_phase = game.next_unskipped_phase_after("combat")
-    assert inserted_phase is not None
-    assert game._phase_steps(inserted_phase) == ("upkeep",)
+def _phase_plan_game():
+    """A game standing where a real turn stands after its untap step begins."""
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.begin_turn_bookkeeping(0)
+    game._set_phase_and_step("beginning", "untap")
+    return game
+
+
+@pytest.mark.cr("500.1")
+def test_the_plan_a_turn_starts_with_is_exactly_the_five_phases():
+    """The loop's equivalence proof, stated as an invariant.
+
+    With nothing added, the plan is CR 500.1's five phases in order, so every
+    `next_unskipped_phase_after` answer is the successor the hard-coded chains
+    used to compute. A turn that departs from this list departs from the rules.
+    """
+    game = _phase_plan_game()
+
+    assert list(_TURN_PHASES) == [
+        "beginning", "precombat_main", "combat", "postcombat_main", "ending",
+    ]
+    assert game.turn_phases_remaining == [
+        "precombat_main", "combat", "postcombat_main", "ending",
+    ]
+    for phase, expected in zip(_TURN_PHASES, list(_TURN_PHASES[1:]) + [None]):
+        assert game.next_unskipped_phase_after(phase) == expected
+
+
+@pytest.mark.cr("500.1")
+def test_every_phase_a_plan_can_hold_has_an_entry_point():
+    """The completeness assertion the plan needs.
+
+    `turn_phases_remaining` is a hand-maintained list of phase names, and
+    `enter_turn_phase` is a hand-maintained dispatch over them. A phase in one
+    and not the other is a phase recorded, chosen, and then silently not
+    entered - which is precisely what the extra-phase machinery did before it
+    was wired up, so the guard has to name every entry rather than the ones
+    somebody remembered.
+    """
+    for phase in _TURN_PHASES:
+        assert phase in _PHASE_STEPS, f"{phase} has no steps"
+        game = _phase_plan_game()
+        game.begin_turn_bookkeeping(0)
+        if phase == "beginning":
+            # Deliberately not enterable: a turn opens with it, no phase hands
+            # over to it, and `enter_turn_phase` says so out loud rather than
+            # silently doing nothing.
+            with pytest.raises(ValueError):
+                game.enter_turn_phase(phase)
+            continue
+        game.enter_turn_phase(phase)
+        assert game.current_turn_phase == phase, phase
+        assert game.current_step in _PHASE_STEPS[phase], (phase, game.current_step)
+
+
+@pytest.mark.cr("500.8")
+def test_an_extra_phase_is_taken_directly_after_the_one_it_names():
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=True)
+
+    assert game.add_extra_phase(after_phase="precombat_main", phase_name="combat")
+
+    assert game.turn_phases_remaining == [
+        "combat", "combat", "postcombat_main", "ending",
+    ]
+    assert game.next_unskipped_phase_after("precombat_main") == "combat"
+
+
+@pytest.mark.cr("500.8")
+def test_the_most_recently_created_extra_phase_occurs_first():
+    """CR 500.8's last sentence, which is why `add_extra_phase` inserts."""
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=False)
+
+    game.add_extra_phase(after_phase="postcombat_main", phase_name="postcombat_main")
+    game.add_extra_phase(after_phase="postcombat_main", phase_name="combat")
+
+    assert game.turn_phases_remaining == ["combat", "postcombat_main", "ending"]
+
+
+@pytest.mark.cr("500.8")
+def test_an_extra_phase_naming_a_phase_this_turn_has_taken_adds_nothing():
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=False)
+
+    assert not game.add_extra_phase(after_phase="precombat_main", phase_name="combat")
+    assert game.turn_phases_remaining == ["ending"]
+
+
+@pytest.mark.cr("500.10a")
+def test_an_extra_phase_is_not_added_on_another_players_turn():
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=True)
+
+    assert not game.add_extra_phase(
+        after_phase="precombat_main", phase_name="combat",
+        controller_index=1, only_on_controllers_turn=True,
+    )
+    assert game.turn_phases_remaining == ["combat", "postcombat_main", "ending"]
+
+
+@pytest.mark.cr("500.1", "500.8")
+def test_an_out_of_band_phase_entry_re_derives_the_plan():
+    """A test (or CR 724.1) jumping straight into a phase gets CR 500.1's order.
+
+    The plan is only ever ahead of the game by construction, so an entry it did
+    not predict means nobody planned this turn - and the honest answer is the
+    fixed order, which is exactly what the engine did before a plan existed.
+    """
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=True)
+    game.add_extra_phase(after_phase="precombat_main", phase_name="combat")
+
+    game._set_phase_and_step("ending", "end")
+
+    assert game.turn_phases_remaining == []
+    assert game.next_unskipped_phase_after("ending") is None
+
+
+@pytest.mark.cr("500.1", "500.2")
+def test_an_ordinary_turn_takes_the_same_steps_in_the_same_order():
+    """The equivalence evidence for the turn-advance loop, as a recorded run.
+
+    Every step of an ordinary turn, in order, driven through the real drivers -
+    ``start_turn`` for the beginning phase, ``advance_combat_phase`` for combat,
+    the end and cleanup steps for the ending phase. This sequence was captured
+    from the engine *before* the phase sequence moved into
+    ``turn_phases_remaining`` and is byte-identical after, which is the claim
+    that the loop went in behind the existing behaviour: with nothing added, the
+    plan is CR 500.1's order and the loop returns what each driver used to name.
+    """
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    attacker.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    seen = []
+
+    def note():
+        entry = (game.current_turn_phase, game.current_step)
+        if not seen or seen[-1] != entry:
+            seen.append(entry)
+
+    game.start_turn(0)
+    note()
+    for _ in range(40):
+        phase, step = game.current_turn_phase, game.current_step
+        if phase in ("precombat_main", "postcombat_main"):
+            game._close_current_priority_step()
+            game.enter_next_turn_phase(phase)
+        elif phase == "combat":
+            if step == "declare_attackers" and not game.combat_attackers_locked:
+                game.declare_attackers(0, [0], 1)
+            game.advance_combat_phase()
+        elif phase == "ending":
+            if step != "end":
+                break
+            game.close_end_step()
+            game.resolve_cleanup_step(0)
+        else:
+            break
+        note()
+        if (game.current_turn_phase, game.current_step) == (phase, step):
+            break
+
+    assert seen == [
+        ("precombat_main", "precombat_main"),
+        ("combat", "beginning_of_combat"),
+        ("combat", "declare_attackers"),
+        ("combat", "declare_blockers"),
+        ("combat", "end_of_combat"),
+        ("postcombat_main", "postcombat_main"),
+        ("ending", "end"),
+        ("ending", "cleanup"),
+    ]
+    assert game.turn_phases_remaining == []
+
+
+@pytest.mark.cr("505.1a", "500.8")
+def test_an_additional_main_phase_is_a_postcombat_one(set_pool):
+    """CR 505.1a names this exact card's shape: "only the first main phase of
+    the turn is a precombat main phase ... It is also true of a turn in which an
+    effect has caused an additional combat phase and an additional main phase to
+    be created."
+
+    So the phase Relentless Assault creates must not fire "at the beginning of
+    your first main phase" a second time. Observed rather than asserted about
+    the spelling: a Shrine drains once for the turn's own first main phase and
+    not again for the created one.
+    """
+    shrine = Permanent(card=set_pool("M21")["Sanctum of Stone Fangs"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[shrine],
+                    hand=[set_pool("VIS")["Relentless Assault"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.begin_turn_bookkeeping(0)
+    game._set_phase_and_step("beginning", "untap")
+
+    game.enter_next_turn_phase("beginning")
+    game._settle()
+    drained_once = (game.players[0].life, game.players[1].life)
+    assert drained_once != (20, 20), "the Shrine's first-main trigger did not fire"
+
+    assert game.cast_from_hand(0, "Relentless Assault").supported, game.log
+    game._resolve_priority_window()
+    assert game.turn_phases_remaining[:2] == ["combat", "postcombat_main"]
+
+    game.enter_turn_phase("postcombat_main")
+    game._settle()
+
+    assert game.current_turn_phase == "postcombat_main"
+    assert (game.players[0].life, game.players[1].life) == drained_once
+
+
+@pytest.mark.cr("500.11")
+def test_a_skipped_phase_is_proceeded_past():
+    game = _phase_plan_game()
+    game._enter_main_phase(precombat=True)
+    game.skip_phase_counts["combat"] = 1
+
+    assert game.next_unskipped_phase_after("precombat_main") == "postcombat_main"
+    assert game.turn_phases_remaining == ["postcombat_main", "ending"]
 
 
 @pytest.mark.cr("510.1", "510.2")

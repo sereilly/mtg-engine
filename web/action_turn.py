@@ -346,7 +346,7 @@ def _action_island_sanctuary_skip(session, req, seat_type):
         sanctuary_choice=skip,
         pay_life_loss=_consume_draw_step_life_loss(session),
     )
-    session.game._enter_main_phase(precombat=True)
+    session.game.enter_next_turn_phase("beginning")
 
 @action_handler("ai_step")
 def _action_ai_step(session, req, seat_type):

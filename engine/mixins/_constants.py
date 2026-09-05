@@ -153,6 +153,23 @@ _TURN_PHASES: tuple[str, ...] = (
     "ending",
 )
 
+def phases_after(phase: str) -> list[str]:
+    """CR 500.1's fixed order: the phases that follow *phase* in a turn.
+
+    The turn's *plan* (``Game.turn_phases_remaining``) starts as exactly this
+    and is only ever inserted into, by CR 500.8's extra phases — so with no
+    extra phase recorded every read of the plan returns what the hard-coded
+    successor chains used to return, phase for phase.
+
+    An unknown phase has no successor rather than raising: a custom phase name
+    is not in CR 500.1's order, and the caller's fall-back is "the turn is
+    over", never "crash mid-turn".
+    """
+    if phase not in _TURN_PHASES:
+        return []
+    return list(_TURN_PHASES[_TURN_PHASES.index(phase) + 1:])
+
+
 _PHASE_STEPS: dict[str, tuple[str, ...]] = {
     "beginning": ("untap", "upkeep", "draw"),
     "precombat_main": ("precombat_main",),

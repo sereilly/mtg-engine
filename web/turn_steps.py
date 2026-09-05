@@ -209,7 +209,7 @@ def _resume_paused_beginning_phase(session: Session) -> None:
     if marker == "begin_turn":
         _finish_beginning_phase(session, player_index)
     elif marker == "main_phase":
-        session.game._enter_main_phase(precombat=True)
+        session.game.enter_next_turn_phase("beginning")
 
 
 def _advance_after_upkeep_choices(session: Session) -> None:
@@ -458,7 +458,7 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
     # phase begins, exactly as the upkeep's is before the draw step.
     if _pause_beginning_phase(session, "main_phase", player_index):
         return False
-    game._enter_main_phase(precombat=True)
+    game.enter_next_turn_phase("beginning")
     return True
 
 

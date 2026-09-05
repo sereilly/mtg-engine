@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ._constants import _TURN_PHASES, _PHASE_STEPS
+from ._constants import _PHASE_STEPS, phases_after
 
 class PhaseStepsMixin:
     def _resolve_priority_window(self) -> None:
@@ -152,39 +152,135 @@ class PhaseStepsMixin:
         self.extra_turn_queue.append(player_index)
         self.extra_turns[player_index] = self.extra_turns.get(player_index, 0) + 1
 
+    # ------------------------------------------------------------------
+    # The turn's phase plan (CR 500.1's order, CR 500.8's extras)
+    #
+    # One list, read by every driver that asks "what comes next": the headless
+    # ``start_turn`` / ``advance_combat_phase`` flow and the web layer's
+    # ``_advance_phase``. Before this the answer was hard-coded three times over
+    # and ``add_extra_phase`` recorded a phase nothing ever entered.
+    # ------------------------------------------------------------------
+
+    def _remaining_turn_phases(self) -> list[str]:
+        """The phases still to come this turn, in order - planning if needed.
+
+        ``None`` (a fresh ``Game``, or one a test drove straight into the middle
+        of a turn) means nobody has planned this turn, so the plan is derived
+        from CR 500.1's order behind whatever phase is in progress. That is
+        exactly the successor the hard-coded chains used to compute, which is
+        what makes the loop behaviour-preserving for every card in the pool.
+        """
+        if self.turn_phases_remaining is None:
+            self.turn_phases_remaining = phases_after(self.current_turn_phase)
+        return self.turn_phases_remaining
+
+    def _enter_planned_phase(self, phase: str) -> None:
+        """Spend *phase* out of the plan as it is entered.
+
+        Called from :meth:`_set_phase_and_step` whenever the phase changes, so
+        every way into a phase - a main phase, a combat step, the ending phase,
+        CR 724.1's jump - spends the plan without any of them knowing there is
+        one. Two cases and no third:
+
+        * the plan's next entry **is** this phase: spend it, and whatever the
+          plan still holds behind it (an extra phase, the turn's own remainder)
+          stays;
+        * anything else is an out-of-band jump - a test entering a phase
+          directly, ``end_the_turn`` skipping to the ending phase - and the plan
+          is re-derived from CR 500.1's order, which is what the engine did
+          before a plan existed.
+        """
+        remaining = self._remaining_turn_phases()
+        if remaining and remaining[0] == phase:
+            remaining.pop(0)
+            return
+        self.turn_phases_remaining = phases_after(phase)
+
     def add_extra_phase(
         self,
         after_phase: str,
         phase_name: str,
-        steps: tuple[str, ...] | None = None,
         controller_index: int | None = None,
         only_on_controllers_turn: bool = False,
     ) -> bool:
+        """CR 500.8: add *phase_name* directly after *after_phase* this turn.
+
+        Returns whether a phase was added - CR 500.10a's "no steps or phases are
+        added" is a real answer rather than an error, and so is naming a phase
+        this turn has already taken.
+
+        "Directly after the specified phase" is an insertion into the plan, and
+        the two positions are the only two a printed card can name: the phase in
+        progress ("After this main phase...", Relentless Assault) or one still
+        to come. Inserting *at* that position rather than appending is
+        CR 500.8's last sentence - "the most recently created phase will occur
+        first" - because each new insertion lands in front of the one before it.
+        """
         # 500.10a
         if only_on_controllers_turn and controller_index is not None and controller_index != self.active_player_index:
             return False
-        self.extra_phases_after.setdefault(after_phase, []).insert(0, phase_name)
-        if steps is not None:
-            self.custom_phase_steps[phase_name] = tuple(steps)
+        remaining = self._remaining_turn_phases()
+        if after_phase == self.current_turn_phase:
+            position = 0
+        elif after_phase in remaining:
+            position = remaining.index(after_phase) + 1
+        else:
+            # A phase this turn has already taken, or no phase at all. CR 500.8
+            # has nowhere to put it, so nothing is added and the caller is told.
+            return False
+        remaining.insert(position, phase_name)
         return True
 
-    def add_additional_step_after_phase(
-        self,
-        after_phase: str,
-        step_name: str,
-        *,
-        controller_index: int | None = None,
-        only_on_controllers_turn: bool = False,
-    ) -> bool:
-        # 500.10: create the containing phase with only the specified step.
-        phase_name = f"extra_phase_for_{step_name}_{len(self.custom_phase_steps)}"
-        return self.add_extra_phase(
-            after_phase=after_phase,
-            phase_name=phase_name,
-            steps=(step_name,),
-            controller_index=controller_index,
-            only_on_controllers_turn=only_on_controllers_turn,
+    def enter_turn_phase(self, phase: str) -> None:
+        """Begin *phase*, whichever of CR 500.1's phases it is.
+
+        The completeness assertion this needs is in
+        ``tests/rules/test_turn_phases.py``: every phase a plan can hold must be
+        enterable here, or an extra phase would be recorded, chosen, and then
+        silently not entered - which is the failure this block exists to end.
+        ``beginning`` is deliberately not enterable: it is the phase a *turn*
+        opens with (``start_turn``, the web layer's ``_begin_turn``), never one
+        another phase hands over to, and no effect in the pool adds one
+        (CR 500.10's Obeka does, and would need a driver able to run an upkeep
+        step outside the start of a turn).
+        """
+        if phase in ("precombat_main", "postcombat_main"):
+            self._enter_main_phase(precombat=(phase == "precombat_main"))
+            return
+        if phase == "combat":
+            if self.current_turn_phase == "combat":
+                # Back-to-back combat phases ("After this combat phase, there is
+                # an additional combat phase"): ``advance_combat_phase`` would
+                # read the step being left and try to leave it again, so the
+                # first step is entered directly. The plan entry is spent here
+                # because ``_set_phase_and_step`` only spends one when the phase
+                # *name* changes, and this one does not.
+                remaining = self._remaining_turn_phases()
+                if remaining and remaining[0] == "combat":
+                    remaining.pop(0)
+                self._enter_combat_step(self._phase_steps("combat")[0])
+                return
+            self.advance_combat_phase()
+            return
+        if phase == "ending":
+            self.resolve_end_step(self.active_player_index)
+            return
+        raise ValueError(f"no entry point for turn phase {phase!r}")
+
+    def enter_next_turn_phase(self, after: str | None = None) -> str | None:
+        """Enter whatever follows *after* (default: the phase in progress).
+
+        The single seam every driver goes through instead of naming its own
+        successor. Returns the phase entered, or None when the turn has none
+        left.
+        """
+        phase = self.next_unskipped_phase_after(
+            self.current_turn_phase if after is None else after
         )
+        if phase is None:
+            return None
+        self.enter_turn_phase(phase)
+        return phase
 
     def skip_next_turn(self, player_index: int, count: int = 1) -> None:
         # 500.11
@@ -228,33 +324,48 @@ class PhaseStepsMixin:
         return True
 
     def _phase_steps(self, phase: str) -> tuple[str, ...]:
-        base = list(self.custom_phase_steps.get(phase, _PHASE_STEPS.get(phase, (phase,))))
+        """The steps *phase* runs this turn, CR 500.11's step skips spent."""
         expanded: list[str] = []
-        for step in base:
-            expanded.extend(self.extra_steps_after.pop(f"before:{step}", []))
+        for step in _PHASE_STEPS.get(phase, (phase,)):
             if not self._consume_step_skip(step, self.active_player_index):
                 expanded.append(step)
-            expanded.extend(self.extra_steps_after.pop(step, []))
         return tuple(expanded)
 
     def _next_phase_after(self, phase: str) -> str | None:
-        extras = self.extra_phases_after.get(phase, [])
-        if extras:
-            candidate = extras.pop(0)
-            if not extras:
-                self.extra_phases_after.pop(phase, None)
-            return candidate
+        """The phase that follows *phase* this turn (CR 500.1, plus CR 500.8).
 
-        if phase not in _TURN_PHASES:
-            return None
-        idx = _TURN_PHASES.index(phase)
-        if idx + 1 >= len(_TURN_PHASES):
-            return None
-        return _TURN_PHASES[idx + 1]
+        A **peek**, not a pop: the plan is spent as a phase is *entered*
+        (:meth:`_enter_planned_phase`), so a driver that asks what comes next
+        and then declines to go there has changed nothing. Asked about a phase
+        other than the one in progress - or about one whose plan has run out -
+        it answers from CR 500.1's fixed order, which is what every caller of
+        this used to compute by hand.
+        """
+        if phase == self.current_turn_phase:
+            remaining = self._remaining_turn_phases()
+            if remaining:
+                return remaining[0]
+        order = phases_after(phase)
+        return order[0] if order else None
 
     def next_unskipped_phase_after(self, phase: str) -> str | None:
+        """:meth:`_next_phase_after`, with CR 500.11's phase skips spent.
+
+        Nothing in the pool writes ``skip_phase_counts`` yet - the engine's
+        skips are per *step* (Ivory Gargoyle) and per *turn* (Chronatog). This
+        is the consumer, and it sits on the live path, so the card that prints
+        "skip your next combat phase" needs only the producer. That is the
+        opposite of what the extra-phase machinery here used to be: a recorder
+        with no consumer, which reads as a feature and is not one.
+        """
         candidate = self._next_phase_after(phase)
         while candidate is not None and self._consume_skip(self.skip_phase_counts, candidate):
+            remaining = self._remaining_turn_phases()
+            if remaining and remaining[0] == candidate:
+                # CR 500.11: proceed past it as though it did not exist.
+                remaining.pop(0)
+                candidate = remaining[0] if remaining else None
+                continue
             candidate = self._next_phase_after(candidate)
         return candidate
 
@@ -351,6 +462,12 @@ class PhaseStepsMixin:
         )
 
     def _set_phase_and_step(self, phase: str, step: str) -> None:
+        # Entering a phase spends it out of the turn's plan (CR 500.8). Here
+        # rather than at each entry point for ``remove_from_battlefield``'s
+        # stated reason one package over: there are several ways into a phase
+        # and this is the line every one of them already passes through.
+        if phase != self.current_turn_phase:
+            self._enter_planned_phase(phase)
         self.current_turn_phase = phase
         self.current_step = step
         self.current_phase = self._public_phase_name(phase, step)

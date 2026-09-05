@@ -696,6 +696,56 @@ def grant_extra_turn(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+#: What a printed "this <x> phase" reference resolves to. "main" is either main
+#: phase, because a sorcery can be cast in both and "this main phase" names the
+#: one it was cast in; "this" is whichever phase is in progress.
+_PHASE_REFERENCES: dict[str, tuple[str, ...]] = {
+    "main": ("precombat_main", "postcombat_main"),
+    "combat": ("combat",),
+}
+
+
+@effect_handler("grant_extra_phases")
+def grant_extra_phases(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"After this main phase, there is an additional combat phase followed by
+    an additional main phase." (Relentless Assault, CR 500.8.)
+
+    The phases go into the turn's plan directly after the one the sentence
+    names, and the plan is what every driver reads to decide where the turn goes
+    next - so the extra phases are *taken*, which is the whole difference
+    between this and the recording API that stood here before it.
+
+    Added back to front, because ``add_extra_phase`` inserts each new phase
+    directly after the named one (CR 500.8: "the most recently created phase
+    will occur first"). Adding the printed run in reverse therefore lays it down
+    in printed order, and two copies of this spell resolving in one main phase
+    still interleave the way CR 500.8's last sentence says.
+
+    Refuses rather than guessing when the game is not in the phase the sentence
+    points at. A sorcery is always resolving in a main phase, so this cannot
+    happen from a printed card today; picking some other phase to add after
+    would be an effect nobody printed.
+    """
+    after = str(instruction.payload.get("after") or "")
+    phases = tuple(instruction.payload.get("phases") or ())
+    if not phases:
+        return False, "no phases named"
+    current = game.current_turn_phase
+    if after != "this" and current not in _PHASE_REFERENCES.get(after, ()):
+        return False, f"not in a {after} phase"
+    added = []
+    for phase in reversed(phases):
+        if not game.add_extra_phase(after_phase=current, phase_name=phase):
+            return False, f"no phase to add {phase} after"
+        added.append(phase)
+    game.log.append(
+        "Additional phases this turn, after the "
+        f"{current.replace('_', ' ')} phase: "
+        + ", ".join(p.replace("_", " ") for p in phases)
+    )
+    return True, "resolved"
+
+
 @effect_handler("gain_twice_artifact_damage_taken")
 def gain_twice_artifact_damage_taken(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Reverse Polarity. Zero artifact damage gains zero life, which is a real

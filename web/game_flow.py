@@ -374,12 +374,15 @@ def _advance_phase(session: Session) -> None:
             return
         if step == "upkeep":
             game.resolve_draw_step(session.current_turn)
-        game._enter_main_phase(precombat=True)
+        game.enter_next_turn_phase("beginning")
         return
 
     if phase == "precombat_main":
         game._close_current_priority_step()
-        game.advance_combat_phase()
+        # The turn's plan decides, not this line: normally the combat phase, but
+        # an effect resolved during this main phase may have added one after it
+        # (CR 500.8 - Relentless Assault).
+        game.enter_next_turn_phase("precombat_main")
         _clear_cleanup_selection(session)
         return
     if phase == "combat":
@@ -520,7 +523,9 @@ def _advance_phase(session: Session) -> None:
         return
     if phase == "postcombat_main":
         game._close_current_priority_step()
-        game.resolve_end_step(session.current_turn)
+        # Normally the ending phase; an extra combat phase added after this one
+        # (CR 500.8) is entered here instead of being recorded and lost.
+        game.enter_next_turn_phase("postcombat_main")
         _clear_cleanup_selection(session)
         return
     if step == "end":
