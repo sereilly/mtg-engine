@@ -1311,7 +1311,7 @@ def test_a_narrowing_that_emits_no_key_is_refused_rather_than_dropped():
     ``toughness`` emit under the identical condition and had none, so a variable
     bound was dropped and the effect reached every creature."""
     from engine.grammar import compile_line
-    from engine.grammar.lowering._common import CONDITIONALLY_EMITTED_FIELDS
+    from engine.grammar.lowering._filters import CONDITIONALLY_EMITTED_FIELDS
 
     for line in (
         "Destroy target creature with power X or greater.",

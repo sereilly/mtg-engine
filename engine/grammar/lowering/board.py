@@ -836,7 +836,7 @@ def _lower_destroy_each_unless_paid(
     set.** "When this creature dies, … for each creature that dealt damage to
     this creature this turn, destroy that creature unless its controller pays 2
     life." (Giant Albatross.) A relation to the ability's own source, which
-    ``to_payload`` has no key for (``_common.CONDITIONALLY_EMITTED_FIELDS``
+    ``to_payload`` has no key for (``_filters.CONDITIONALLY_EMITTED_FIELDS``
     names it so that every lowering but the one written for it refuses the
     phrase); it is lifted off the filter here and carried as its own payload
     key, exactly as Brine Hag's base-P/T rewrite carries the same relation. The

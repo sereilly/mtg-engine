@@ -523,7 +523,7 @@ class ObjectFilter:
     #: ``controller`` *is* emitted and every matcher reading it compares against
     #: "you" — a new value there would be answered by whichever branch happened
     #: to be the ``else``. Never emitted by ``to_payload`` for that reason, and
-    #: listed in ``lowering/_common.CONDITIONALLY_EMITTED_FIELDS`` so every
+    #: listed in ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS`` so every
     #: lowering except the count refuses the phrase by name rather than quietly
     #: narrowing it to one seat. ``postmodifiers`` keeps "battlefield" out of
     #: ``_ZONE_NOUNS`` on exactly this argument — "a production that needs it

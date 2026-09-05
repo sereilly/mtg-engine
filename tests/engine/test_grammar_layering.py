@@ -785,7 +785,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1147,6 +1147,18 @@ FAMILY_SHARED = {
     # `conditions` reads it — the `Condition` union is the roof over both
     # halves and has to name all of them — and it reads nothing back.
     "records",
+    # `_filters` split out of `lowering/_common.py` at Visions' Phase 0, the
+    # first time that module reached the guard below — taken while nothing was
+    # in flight, because `_common` is the one floor every wave branch adds to
+    # and a cap crossed at integration is a seam found with none of the work in
+    # hand. The line is the one `_common`'s own docstring had already drawn: a
+    # **filter** payload (which `ObjectFilter` fields survive to a handler,
+    # which narrowings a payload drops, and the two cost gates over the same
+    # question) against a **target description** and the small values several
+    # families share. A floor for `_primitives`' reason exactly — `_common`
+    # reads it, re-exports every name, and it reads nothing back, so no family
+    # imports it directly.
+    "_filters",
 }
 
 
