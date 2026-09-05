@@ -20,7 +20,24 @@ from ._common import (
     _targets_payload,
 )
 from ._events import _RECORDED_PERMANENTS
-from ._records import UNTAPPED_FOR_COST
+from ._records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
+
+#: Which cost payment each printed back-reference names, and how to say so when
+#: the ability makes no such payment: ``{node value: (scratchpad key, printed
+#: phrase, verb)}``.
+#:
+#: Each of these is refused on an ability whose cost does not make its payment
+#: -- the words would name no land, the handler would add nothing, and the card
+#: would report itself supported. The gate is the *cost*, which this lowering
+#: sees only as the keys the cost steps recorded, so the table is what ties a
+#: phrase to a key rather than a chain of ``if``s that can disagree with the
+#: handler reading the same phrase back.
+ANY_TYPE_FROM_RECORDS: dict[str, tuple[str, str, str]] = {
+    "cost_untapped_land": (UNTAPPED_FOR_COST, "that land", "untaps"),
+    "cost_sacrificed_land": (
+        SACRIFICED_FOR_COST, "the sacrificed land", "sacrifices",
+    ),
+}
 
 
 def _lower_add_mana(
@@ -276,10 +293,11 @@ def _lower_add_mana(
         "any_color_count": amount,
     }
     if node.any_type_from is not None:
-        if UNTAPPED_FOR_COST not in produced:
+        record, phrase, verb = ANY_TYPE_FROM_RECORDS[node.any_type_from]
+        if record not in produced:
             raise LoweringError(
-                "'that land' names the land this ability's cost untapped, and "
-                "this ability's cost untaps nothing",
+                f"'{phrase}' names the land this ability's cost {verb}, and "
+                f"this ability's cost {verb} nothing",
                 node=node,
             )
         # "…of any type **that land** could produce" (Benthic Explorers). A

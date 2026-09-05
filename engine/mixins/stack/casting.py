@@ -1565,6 +1565,17 @@ class SpellCastingMixin:
     # Printed additional costs (CR 601.2b)
     # ------------------------------------------------------------------
 
+    #: Which field of a printed cost each verb spends. A table rather than a
+    #: chain, because the two cost classes carry different subsets of it: an
+    #: alternative cost has a sacrifice and no exile, so the arm that is *not*
+    #: taken must not be evaluated.
+    _COST_CANDIDATE_FIELDS = {
+        "sacrifice": "sacrifice_filter",
+        "sacrifice_all": "sacrifice_all_filter",
+        "return": "return_filter",
+        "exile": "exile_filter",
+    }
+
     def _additional_cost_candidates(
         self, caster_index: int, cost: AdditionalCost, *, giving_up: str = "sacrifice",
     ) -> list[Permanent]:
@@ -1578,9 +1589,11 @@ class SpellCastingMixin:
         (CR 601.2b). What differs is where the object goes afterwards, which is
         the payment's business and not the candidate list's.
         """
-        described = (
-            cost.sacrifice_filter if giving_up == "sacrifice" else cost.exile_filter
-        )
+        # ``getattr``, and lazily: an :class:`AlternativeCost` carries the
+        # sacrifice fields and none of the others, so a table whose *default*
+        # arm reads ``cost.exile_filter`` raises on the very cost this is most
+        # often asked about. That is what the Fireblast tests caught.
+        described = getattr(cost, self._COST_CANDIDATE_FIELDS[giving_up], None)
         if described is None:
             return []
         return [
@@ -1678,6 +1691,25 @@ class SpellCastingMixin:
                     return (
                         f"{card.name} can't be cast: {shortfall} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
+                    )
+            # "…, **return X Swamps you control to their owner's hand**."
+            # (Infernal Harvest.) Gated on the *announced* count (CR 107.3a),
+            # which is the whole of what makes this unpayable: three Swamps is
+            # no payment for an X of four, and a gate that asked only whether
+            # one existed would admit the cast and then return whatever the
+            # board had — a spell cast for less than the caster announced, with
+            # its damage still sized by the announcement.
+            if cost.return_filter is not None:
+                wanted = cost.returned_count(x_value)
+                available = self._additional_cost_candidates(
+                    caster_index, cost, giving_up="return"
+                )
+                if len(available) < wanted:
+                    noun = filter_head_noun(cost.return_filter)
+                    return (
+                        f"{card.name} can't be cast: {caster.name} controls "
+                        f"{len(available)} {noun}(s) and its additional cost "
+                        f"returns {wanted} (CR 601.2h)"
                     )
             # "…, **exile a creature you control**." (Soul Exchange.) Gated
             # beside the sacrifice and for the same rule: CR 601.2h makes an
@@ -1960,6 +1992,24 @@ class SpellCastingMixin:
                 f"{card.name} can't be cast: no card in hand answers its "
                 f"alternative cost, {cost.describe()} (CR 601.2h)"
             )
+        # "You may **sacrifice two Mountains** rather than pay this spell's
+        # mana cost." (Fireblast.) The *count* is what makes this unpayable:
+        # one Mountain is no more a payment than none, and a gate that asked
+        # only whether one existed would admit the announcement and then charge
+        # one — a spell cast for nothing, because the mana payment has already
+        # been skipped. The same question ``_unpayable_additional_cost`` asks
+        # of the identically printed additional cost, through the same
+        # candidate enumeration.
+        if cost.sacrifice_filter is not None:
+            available = self._additional_cost_candidates(caster_index, cost)
+            wanted = max(1, cost.sacrifice_count)
+            if len(available) < wanted:
+                noun = filter_head_noun(cost.sacrifice_filter)
+                shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
+                return (
+                    f"{card.name} can't be cast: {shortfall} to sacrifice for "
+                    f"its alternative cost (CR 601.2h)"
+                )
         return None
 
     def _pay_alternative_cost(
@@ -1989,6 +2039,27 @@ class SpellCastingMixin:
             self.log.append(
                 f"{caster.name} paid {cost.pay_life} life to cast {card.name}"
             )
+        if cost.sacrifice_filter is not None:
+            # Re-enumerated per victim, never sliced off one list: each
+            # sacrifice removes a permanent, and a list held across that holds
+            # an object the board no longer has. The same loop the additional
+            # cost's counted sacrifice runs, and the same deterministic pick,
+            # because CR 601.2b and CR 118.9 make one announcement.
+            #
+            # ``victim``, never ``chosen``: that name is this method's
+            # *parameter*, the card in hand the announcement picked to pay an
+            # exile half, and rebinding it here would hand a ``Permanent`` to
+            # the exile below on any card that ever prints both.
+            for _ in range(max(1, cost.sacrifice_count)):
+                candidates = self._additional_cost_candidates(caster_index, cost)
+                if not candidates:
+                    break  # gated above; a board that changed since is a no-op
+                victim = self.default_sacrifice_pick(candidates)
+                name = victim.card.name
+                if self.sacrifice_permanent(victim) is not None:
+                    self.log.append(
+                        f"{caster.name} sacrificed {name} to cast {card.name}"
+                    )
         if cost.exile_from_hand is None:
             return
         paying = chosen
@@ -2122,11 +2193,86 @@ class SpellCastingMixin:
                         self.log.append(
                             f"{caster.name} sacrificed {name} to cast {card.name}"
                         )
+            if cost.return_filter is not None:
+                # "…return **X** Swamps you control to their owner's hand."
+                # (Infernal Harvest.) Re-enumerated per victim, never sliced
+                # off one list: each return takes a permanent off the
+                # battlefield, and a list held across that holds an object the
+                # board no longer has. Through the same
+                # ``return_permanent_to_owners_hand`` every bounce effect uses,
+                # so CR 903.9b and the leaves-the-battlefield replacements see
+                # a cost payment exactly as they see a spell's bounce.
+                from ...handlers._common import return_permanent_to_owners_hand
+
+                for _ in range(cost.returned_count(x_value)):
+                    candidates = self._additional_cost_candidates(
+                        caster_index, cost, giving_up="return"
+                    )
+                    if not candidates:
+                        break  # gated above; a board that changed since is a no-op
+                    chosen = next(
+                        (
+                            claimed for claimed in (
+                                self.permanent_by_id(permanent_id)
+                                for permanent_id in (cost_permanent_ids or ())
+                                if isinstance(permanent_id, int)
+                            )
+                            if claimed is not None
+                            and any(perm is claimed for perm in candidates)
+                        ),
+                        None,
+                    ) or self.default_sacrifice_pick(candidates)
+                    name = chosen.card.name
+                    return_permanent_to_owners_hand(self, chosen, caster)
+                    self.log.append(
+                        f"{caster.name} returned {name} to hand to cast {card.name}"
+                    )
+            if cost.sacrifice_all_filter is not None:
+                # "…, sacrifice **all** permanents you control." (Kaervek's
+                # Spite.) Snapshotted by identity before the loop, never
+                # re-enumerated per victim as the *counted* sacrifice above is:
+                # the counted one asks "which of these do I pick next", and this
+                # one has already picked every permanent the phrase named. A
+                # re-enumeration would be a second reading of a board the first
+                # sacrifice has begun changing — a token that ceased to exist,
+                # an Aura that fell off — and would then charge whatever was
+                # left rather than what was announced (CR 601.2b).
+                #
+                # A board of nothing pays this cost in full, which is why it is
+                # not in the CR 601.2h gate: there is no shortfall to have.
+                victims = self._additional_cost_candidates(
+                    caster_index, cost, giving_up="sacrifice_all"
+                )
+                for victim in victims:
+                    name = victim.card.name
+                    if self.sacrifice_permanent(victim) is not None:
+                        self.log.append(
+                            f"{caster.name} sacrificed {name} to cast {card.name}"
+                        )
             life = cost.life_charged(x_value)
             if life:
                 caster.life -= life
                 self.log.append(
                     f"{caster.name} paid {life} life to cast {card.name}"
+                )
+            if cost.discard_whole_hand:
+                # "…, and **discard your hand**." (Kaervek's Spite.) Every
+                # card, snapshotted before the loop because `_discard_card` may
+                # itself put something into the hand (Library of Leng's
+                # replacement offers the top of the library instead) —
+                # iterating the live list would then skip or revisit a card.
+                # The same shape `activate_permanent_ability` pays the
+                # identically printed activation cost with.
+                #
+                # The spell is on the stack by now (CR 601.2a), so it is not
+                # among the cards this bins.
+                emptied = list(caster.hand)
+                caster.hand = []
+                for cost_card in emptied:
+                    self._discard_card(caster, cost_card)
+                self.log.append(
+                    f"{caster.name} discarded their hand "
+                    f"({len(emptied)} card(s)) to cast {card.name}"
                 )
             if cost.discard_cards:
                 for _ in range(cost.discard_cards):

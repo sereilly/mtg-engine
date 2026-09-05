@@ -454,3 +454,56 @@ def test_wand_of_denial_bins_only_a_nonland_and_only_if_paid_for(set_pool):
     assert land.players[0].life == 20
     assert land.players[1].graveyard == []
     assert land.players[1].library[0].name == "Mountain"
+
+
+# --- W2G1: costs, alternative and additional ---
+
+from engine import Game as _W2G1aGame, PlayerState as _W2G1aPlayerState
+from engine.models import Permanent as _W2G1aPermanent
+from engine.card_loader import load_cards as _w2g1a_load, manifest_set_path as _w2g1a_path
+
+_W2G1A_LEA = {c.name: c for c in _w2g1a_load(_w2g1a_path("LEA"))}
+
+
+def _w2g1a_scene(set_pool, hand):
+    p1 = _W2G1aPlayerState(name="A", hand=list(hand))
+    p2 = _W2G1aPlayerState(name="B")
+    game = _W2G1aGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    p1.battlefield.append(_W2G1aPermanent(card=set_pool("VIS")["Juju Bubble"]))
+    return game, p1, p2
+
+
+def test_juju_bubble_goes_when_its_controller_plays_a_land(set_pool):
+    """CR 701.18b: to play a card is to play it as a land **or** cast it as a
+    spell. A trigger that watched only casts would leave the artifact sitting
+    through a land drop, which is half the card."""
+    game, caster, _ = _w2g1a_scene(set_pool, [_W2G1A_LEA["Forest"]])
+
+    game.queue_from_hand(0, "Forest")
+    game.resolve_stack()
+
+    assert [p.card.name for p in caster.battlefield] == ["Forest"]
+    assert [c.name for c in caster.graveyard] == ["Juju Bubble"]
+
+
+def test_juju_bubble_goes_when_its_controller_casts_a_spell(set_pool):
+    """The other half of the same rule."""
+    game, caster, _ = _w2g1a_scene(set_pool, [_W2G1A_LEA["Lightning Bolt"]])
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.resolve_stack()
+
+    assert "Juju Bubble" in {c.name for c in caster.graveyard}
+
+
+def test_juju_bubble_ignores_the_other_seat(set_pool):
+    """The printed word is "**you**"."""
+    game, caster, opponent = _w2g1a_scene(set_pool, [])
+    opponent.hand.append(_W2G1A_LEA["Forest"])
+
+    game.queue_from_hand(1, "Forest")
+    game.resolve_stack()
+
+    assert [p.card.name for p in caster.battlefield] == ["Juju Bubble"]
+    assert caster.graveyard == []

@@ -293,6 +293,23 @@ def _cast_card(event: Event) -> CardDefinition | None:
     return card if card is not None and hasattr(card, "colors") else None
 
 
+@event_filter("you_play_card")
+def _controller_played_card_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"When you play a card" (Juju Bubble) — only for the player's own
+    permanents.
+
+    Its own filter rather than a name added to the cast filter below, because
+    the event is not a cast: CR 701.18b makes playing a land half of what this
+    watches, and that half has no spell, no colours and no type line for the
+    cast narrowings to test. What it shares with a cast is only the word
+    "you", which is this whole predicate.
+    """
+    seat = event.payload.get("caster_index")
+    return seat is not None and game.controller_index_of(permanent) == seat
+
+
 @event_filter("opponent_casts_nth_spell_each_turn")
 def _opponent_nth_cast_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

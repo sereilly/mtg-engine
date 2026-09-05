@@ -537,17 +537,27 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # **Types, not colours** (CR 106.1b): a land tapping for {C} answers
         # this phrase, so the set comes off `effective_produced_mana` rather
         # than `produced_mana_colors`, which is the colour half one branch down.
-        if instruction.payload.get("any_type_from") is not None:
-            land = (context.choices or {}).get("untapped_for_cost")
+        # "…of any type **the sacrificed land** could produce" (Squandered
+        # Resources) reads the same last-known-information channel one payment
+        # over. That permanent is *gone* by the time this runs — a sacrifice
+        # cost is paid before the ability resolves — which is exactly what
+        # CR 608.2h's last-known information is for, and why the record is read
+        # rather than the board re-scanned. Which record belongs to which
+        # phrase is the lowering's own table, so the gate that admitted the
+        # line and the read that carries it out cannot disagree.
+        any_type_from = instruction.payload.get("any_type_from")
+        if any_type_from is not None:
+            from ..grammar.lowering.mana import ANY_TYPE_FROM_RECORDS
+
+            record, printed, _ = ANY_TYPE_FROM_RECORDS[any_type_from]
+            land = (context.choices or {}).get(record)
             available = tuple(dict.fromkeys(
                 str(sym).upper() for sym in (
                     land.effective_produced_mana if land is not None else ()
                 )
             ))
             if not available:
-                game.log.append(
-                    f"{card.name}: the untapped land produces no mana"
-                )
+                game.log.append(f"{card.name}: {printed} produces no mana")
                 return True, "resolved"
             if symbol not in available:
                 # CR 609.3: the player chooses among the types the land could

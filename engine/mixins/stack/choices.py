@@ -3358,7 +3358,18 @@ class PendingChoicesMixin:
 
     def _counter_payment_plan_any(self, player, data: dict):
         """The first of the offer's printed costs *player* can cover, as a plan,
-        or None when they can cover none of them."""
+        or None when they can cover none of them.
+
+        "…unless its controller pays {1} **and 1 life**" (Mundungu) is one
+        offer with two prices, so a payer who can meet only one of them can
+        meet neither: CR 119.4 lets life be paid only down to 0, and a plan
+        returned without checking it would spend the mana and then charge life
+        the player does not have. The life is not an *alternative* — CR 118.8's
+        "or 1 life" is the opposite word — so it gates every printed cost
+        rather than standing beside them.
+        """
+        if int(data.get("life", 0) or 0) > player.life:
+            return None
         for cost in self._mana_payment_costs(data):
             plan = self._counter_payment_plan(player, cost)
             if plan is not None:
@@ -3384,9 +3395,18 @@ class PendingChoicesMixin:
                 controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent
             for land in plan.tapped:
                 self.become_tapped(land)
+            # "…and 1 life" (Mundungu). Charged after the mana and before the
+            # object is left alone, because the two are one payment: the plan
+            # above is only returned when both halves can be met, so nothing
+            # here can leave a spell half-paid for.
+            life = int(data.get("life", 0) or 0)
+            if life:
+                controller.life -= life
             name = target.card.name if target is not None else "the spell"
             self.log.append(
-                f"{controller.name} paid {mana_cost_label(cost)}; {name} is not countered"
+                f"{controller.name} paid {mana_cost_label(cost)}"
+                + (f" and {life} life" if life else "")
+                + f"; {name} is not countered"
             )
         else:
             # Declined or unable to pay: the spell is countered and Power Sink's rider

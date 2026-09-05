@@ -689,3 +689,153 @@ def test_foreshadow_draws_only_when_the_named_card_is_the_one_milled(set_pool):
     miss = play("Shivan Dragon")
     assert miss.players[0].hand == []
     assert [c.name for c in miss.players[1].graveyard] == ["Black Lotus"]
+
+
+# --- W2G1: costs, alternative and additional ---
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.card_loader import load_cards as _w2g1_load, manifest_set_path as _w2g1_path
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.alternative_costs import alternative_cost_for_line as _w2g1_alt_line
+from engine.cast_costs import additional_cost_for_line as _w2g1_add_line
+
+_W2G1_LEA = {c.name: c for c in _w2g1_load(_w2g1_path("LEA"))}
+
+
+def _w2g1_duel(hand, *, board=(), enforce=True):
+    """A duel with *hand* in seat 0 and *board* (LEA card names) under it.
+
+    Costs on by default: the whole subject of this block is which price is
+    paid, and a game that enforces none cannot tell two prices apart.
+    """
+    p1 = _W2G1PlayerState(name="A", hand=list(hand))
+    p2 = _W2G1PlayerState(name="B")
+    game = _W2G1Game(players=[p1, p2])
+    game.enforce_mana_costs = enforce
+    for name in board:
+        p1.battlefield.append(_W2G1Permanent(card=_W2G1_LEA[name]))
+    return game, p1, p2
+
+
+def test_fireblast_is_cast_by_sacrificing_two_mountains(set_pool):
+    """CR 118.9's alternative cost, with the price leaving the board.
+
+    Fireblast reported ``supported`` on its damage line for the whole of
+    wave 1 and its defining sentence was claimed by nobody — so it was
+    castable only for {4}{R}{R}, and the cycle's famous free burn did not
+    exist. "The cost parsed" is exactly the evidence that was wrong, so what
+    is asserted here is the board.
+    """
+    card = set_pool("VIS")["Fireblast"]
+    game, caster, victim = _w2g1_duel(
+        [card], board=("Mountain", "Mountain", "Mountain"),
+    )
+
+    result = game.cast_from_hand(
+        0, "Fireblast", alternative_cost=True, target_player_index=1,
+    )
+
+    assert result.supported, result.details
+    assert victim.life == 16
+    assert [p.card.name for p in caster.battlefield] == ["Mountain"]
+    assert [c.name for c in caster.graveyard].count("Mountain") == 2
+    # CR 118.9c: the alternative replaces the *payment*, never the mana cost.
+    assert not any(caster.mana_pool.values())
+    assert card.mana_cost == "{4}{R}{R}"
+
+
+def test_fireblast_needs_two_mountains_not_one(set_pool):
+    """CR 601.2h: the *count* is what makes this unpayable.
+
+    A gate that asked only whether a Mountain existed would admit the
+    announcement and then charge one — a spell cast for nothing, since the
+    mana payment has already been skipped.
+    """
+    card = set_pool("VIS")["Fireblast"]
+    game, caster, victim = _w2g1_duel([card], board=("Mountain",))
+
+    result = game.cast_from_hand(
+        0, "Fireblast", alternative_cost=True, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert "CR 601.2h" in result.details
+    assert [p.card.name for p in caster.battlefield] == ["Mountain"]
+    assert [c.name for c in caster.hand] == ["Fireblast"]
+    assert victim.life == 20
+
+
+def test_fireblast_will_not_eat_two_forests(set_pool):
+    """The printed subtype is charged, not "two lands"."""
+    card = set_pool("VIS")["Fireblast"]
+    game, caster, _ = _w2g1_duel([card], board=("Forest", "Forest"))
+
+    result = game.cast_from_hand(
+        0, "Fireblast", alternative_cost=True, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert len(caster.battlefield) == 2
+
+
+def test_kaerveks_spite_sacrifices_the_whole_board_and_the_hand(set_pool):
+    """CR 601.2b: "sacrifice all permanents you control and discard your hand".
+
+    Both clauses, and neither reaching past the caster: an opponent's board is
+    not part of the price (CR 701.21a — a player can't sacrifice a permanent
+    they don't control).
+    """
+    pool = set_pool("VIS")
+    game, caster, victim = _w2g1_duel(
+        [pool["Kaervek's Spite"], _W2G1_LEA["Black Lotus"], _W2G1_LEA["Counterspell"]],
+        board=("Swamp", "Swamp", "Mons's Goblin Raiders"),
+        enforce=False,
+    )
+    victim.battlefield.append(_W2G1Permanent(card=_W2G1_LEA["Forest"]))
+
+    result = game.cast_from_hand(0, "Kaervek's Spite", target_player_index=1)
+
+    assert result.supported, result.details
+    assert caster.battlefield == []
+    assert caster.hand == []
+    assert [p.card.name for p in victim.battlefield] == ["Forest"]
+    assert victim.life == 15
+    assert {"Swamp", "Mons's Goblin Raiders", "Black Lotus", "Counterspell"} <= {
+        c.name for c in caster.graveyard
+    }
+
+
+def test_kaerveks_spite_is_castable_off_an_empty_board(set_pool):
+    """"All" of nothing is a payment in full (CR 601.2h), which is why the
+    clause is outside the unpayability gate."""
+    game, caster, victim = _w2g1_duel(
+        [set_pool("VIS")["Kaervek's Spite"]], enforce=False,
+    )
+
+    result = game.cast_from_hand(0, "Kaervek's Spite", target_player_index=1)
+
+    assert result.supported, result.details
+    assert victim.life == 15
+
+
+def test_a_cost_clause_nothing_charges_refuses_the_whole_sentence():
+    """The all-or-nothing rule, on both tables.
+
+    A clause dropped from an additional cost is a spell cast for less than it
+    prints; a clause dropped from an alternative cost is one cast for nothing.
+    """
+    assert _w2g1_add_line(
+        "As an additional cost to cast this spell, sacrifice all permanents "
+        "you control and hum a tune."
+    ) is None
+    assert _w2g1_alt_line(
+        "You may sacrifice two Mountains and hum a tune rather than pay this "
+        "spell's mana cost."
+    ) is None
+    # An "all" clause naming somebody else's board is not a payable cost at
+    # all (CR 701.21a), so it refuses rather than being charged to the caster.
+    assert _w2g1_add_line(
+        "As an additional cost to cast this spell, sacrifice all lands your "
+        "opponents control."
+    ) is None

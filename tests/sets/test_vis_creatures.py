@@ -919,3 +919,82 @@ def test_guiding_spirit_moves_only_a_creature_card(set_pool):
     game.resolve_stack()
     assert game.players[1].library[0].name == "Island"
     assert [c.name for c in game.players[1].graveyard] == ["Black Lotus", "Mountain"]
+
+
+# --- W2G1: costs, alternative and additional ---
+
+import pytest as _w2g1c_pytest
+from engine import Game as _W2G1cGame, PlayerState as _W2G1cPlayerState
+from engine.models import Permanent as _W2G1cPermanent
+from engine.card_loader import load_cards as _w2g1c_load, manifest_set_path as _w2g1c_path
+from engine.grammar import parse_line as _w2g1c_parse
+from engine.grammar.errors import GrammarError as _W2G1cGrammarError
+
+_W2G1C_LEA = {c.name: c for c in _w2g1c_load(_w2g1c_path("LEA"))}
+
+
+def _w2g1c_scene(set_pool, *, opp_life=20, opp_lands=2):
+    p1 = _W2G1cPlayerState(name="A")
+    p2 = _W2G1cPlayerState(name="B", hand=[_W2G1C_LEA["Giant Growth"]])
+    game = _W2G1cGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    source = _W2G1cPermanent(card=set_pool("VIS")["Mundungu"])
+    source.summoning_sick = False
+    p1.battlefield.append(source)
+    for _ in range(opp_lands):
+        p2.battlefield.append(_W2G1cPermanent(card=_W2G1C_LEA["Forest"]))
+    p2.life = opp_life
+    game.queue_from_hand(1, "Giant Growth")
+    return game, p1, p2
+
+
+def test_mundungu_charges_both_halves_of_one_offer(set_pool):
+    """"…unless its controller pays {1} **and 1 life**" — one offer with two
+    prices, not CR 118.8's "or 1 life", which is one offer the payer may cover
+    either way."""
+    game, _, victim = _w2g1c_scene(set_pool)
+
+    result = game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert result.supported, result.details
+    assert victim.life == 19
+    assert any(p.tapped for p in victim.battlefield)
+    assert game.stack == []
+    assert victim.graveyard[-1].name == "Giant Growth"  # it resolved
+
+
+def test_mundungu_counters_a_payer_who_can_meet_only_the_mana(set_pool):
+    """CR 119.4 caps a life payment at the payer's life total, and a payer who
+    can meet one price and not the other can meet neither: the mana must not
+    leave the board for a payment that then fails."""
+    game, _, victim = _w2g1c_scene(set_pool, opp_life=0)
+
+    game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert game.stack == []
+    assert victim.life == 0
+    assert not any(p.tapped for p in victim.battlefield)
+
+
+def test_mundungu_counters_a_payer_with_no_mana(set_pool):
+    game, _, victim = _w2g1c_scene(set_pool, opp_lands=0)
+
+    game.activate_permanent_ability(0, "Mundungu", target_stack_index=0)
+
+    assert game.stack == []
+    assert victim.life == 20
+    assert [c.name for c in victim.graveyard] == ["Giant Growth"]
+
+
+def test_the_life_rider_refuses_a_currency_nothing_charges():
+    """A production must consume every token of its line or refuse it: a
+    trailing clause this reader does not know leaves the words unconsumed."""
+    with _w2g1c_pytest.raises(_W2G1cGrammarError):
+        _w2g1c_parse(
+            "Counter target spell unless its controller pays {1} and 1 card."
+        )
+    # A life-only payment refuses too — it would reach the payment prompt as a
+    # cost of {0}, which every board covers, so the offer would read as always
+    # paid.
+    with _w2g1c_pytest.raises(_W2G1cGrammarError):
+        _w2g1c_parse("Counter target spell unless its controller pays 1 life.")

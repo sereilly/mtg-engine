@@ -818,3 +818,85 @@ def test_rowen_does_not_fire_on_an_opponents_first_draw(set_pool):
 
     assert game.reveal_events == []
     assert len(game.players[1].hand) == 1
+
+
+# --- W2G1: costs, alternative and additional ---
+
+from engine import Game as _W2G1eGame, PlayerState as _W2G1ePlayerState
+from engine.models import Permanent as _W2G1ePermanent
+from engine.card_loader import load_cards as _w2g1e_load, manifest_set_path as _w2g1e_path
+from engine.grammar import parse_line as _w2g1e_parse
+from engine.grammar.errors import GrammarError as _W2G1eGrammarError
+from engine.models import CardDefinition as _W2G1eCardDefinition
+from engine.oracle import compile_card_oracle as _w2g1e_compile
+
+_W2G1E_LEA = {c.name: c for c in _w2g1e_load(_w2g1e_path("LEA"))}
+
+
+def _w2g1e_scene(set_pool, land_name):
+    p1, p2 = _W2G1ePlayerState(name="A"), _W2G1ePlayerState(name="B")
+    game = _W2G1eGame(players=[p1, p2])
+    game.enforce_mana_costs = True
+    p1.battlefield.append(
+        _W2G1ePermanent(card=set_pool("VIS")["Squandered Resources"])
+    )
+    p1.battlefield.append(_W2G1ePermanent(card=_W2G1E_LEA[land_name]))
+    return game, p1
+
+
+def test_squandered_resources_adds_what_the_sacrificed_land_could_produce(set_pool):
+    """The mana type comes off the land the ability's own **cost** ate.
+
+    That permanent is gone by the time the ability resolves, which is exactly
+    what CR 608.2h's last-known information is for — the record is read rather
+    than the board re-scanned.
+    """
+    game, caster = _w2g1e_scene(set_pool, "Badlands")
+
+    result = game.activate_permanent_ability(
+        0, "Squandered Resources", cost_permanent_index=1, mana_color="R",
+    )
+
+    assert result.supported, result.details
+    assert caster.mana_pool["R"] == 1
+    assert [p.card.name for p in caster.battlefield] == ["Squandered Resources"]
+    assert [c.name for c in caster.graveyard] == ["Badlands"]
+
+
+def test_squandered_resources_clamps_a_type_the_land_could_not_make(set_pool):
+    """CR 609.3: the payer chooses among the types the land could produce, and
+    a choice outside that set is not one of them."""
+    game, caster = _w2g1e_scene(set_pool, "Badlands")
+
+    game.activate_permanent_ability(
+        0, "Squandered Resources", cost_permanent_index=1, mana_color="W",
+    )
+
+    assert caster.mana_pool["W"] == 0
+    assert caster.mana_pool["B"] == 1
+
+
+def _w2g1e_card(text):
+    return _W2G1eCardDefinition(
+        name="W2G1 Probe", mana_cost="{1}", cmc=1.0, type_line="Enchantment",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "W2G1 Probe"},
+    )
+
+
+def test_the_sacrificed_land_phrase_refuses_where_no_cost_sacrifices():
+    """A back-reference with no payment behind it names no land, so the line
+    refuses at lowering rather than adding a colour off nothing.
+
+    Refused where the *cost* is visible, which the effect production is not:
+    the words parse, and what they name is a payment this ability never makes.
+    """
+    program = _w2g1e_compile(_w2g1e_card(
+        "{T}: Add one mana of any type the sacrificed land could produce."
+    ))
+    assert not program.supported
+
+    # …and a phrase the production does not read refuses in the parse, before
+    # any cost is consulted: a production consumes its whole line or raises.
+    with pytest.raises(_W2G1eGrammarError):
+        _w2g1e_parse("Add one mana of any type the exiled land could produce.")

@@ -300,11 +300,13 @@ from .stack import (
     _fused_conditional_counter,
     _lower_change_target,
     _lower_counter_ability,
-    _lower_choose_target,
-    _lower_waive_shroud,
     _lower_counter_spell,
-    _lower_create_delayed_trigger,
     _lower_modal_head,
+)
+from .delayed import (
+    _lower_choose_target,
+    _lower_create_delayed_trigger,
+    _lower_waive_shroud,
 )
 from .prohibitions import _lower_cant_be
 from .combat import (

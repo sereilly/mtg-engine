@@ -984,10 +984,17 @@ def _mana_payment(ctx: PromptContext, choices: list) -> dict:
     # board covers); the label is so the payer can see what they are agreeing
     # to before they tap.
     costs = ctx.game._mana_payment_costs(data)
+    # "…and 1 life" (Mundungu) is part of the price, not an alternative to it,
+    # so it is appended to the one label rather than offered beside it. A payer
+    # shown only the mana would agree to a cost the engine then also charges in
+    # life, which is the same "cheaper than it prints" the cast path guards.
+    life = int(data.get("life", 0) or 0)
     return {
         "card_name": data["card_name"],
         "amount": int(data["amount"]),
-        "cost": " or ".join(mana_cost_label(cost) for cost in costs),
+        "cost": " or ".join(mana_cost_label(cost) for cost in costs)
+        + (f" and {life} life" if life else ""),
+        "life": life,
         "spell_name": target_item.card.name if target_item is not None else None,
     }
 

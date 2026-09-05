@@ -379,13 +379,24 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     # a production that consumed "type" and stopped would add a colour of the
     # payer's choosing off any land at all.
     if stream.accept_word("type"):
-        if not stream.accept_phrase("that", "land", "could", "produce"):
+        # Which land the phrase names is which payment the ability's own cost
+        # made: "that land" is the one it untapped (Benthic Explorers), "the
+        # sacrificed land" the one it ate (Squandered Resources). Two printed
+        # phrases, two back-references, one node field -- and the *value* is
+        # what the lowering gates on, so a card printing either on an ability
+        # whose cost makes no such payment is refused rather than adding a
+        # colour off a land nobody named.
+        if stream.accept_phrase("that", "land", "could", "produce"):
+            reference = "cost_untapped_land"
+        elif stream.accept_phrase("the", "sacrificed", "land", "could", "produce"):
+            reference = "cost_sacrificed_land"
+        else:
             raise stream.error(
                 "the only mana type this reads is one a named land could produce"
             )
         return ast.AddMana(
             (), any_color=count, source_text=_clause(),
-            any_type_from="cost_untapped_land",
+            any_type_from=reference,
         )
     stream.expect_word("color")
     # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest). The count

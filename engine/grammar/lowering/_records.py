@@ -632,6 +632,12 @@ def primary_produced(kind: str) -> str | None:
 #: the activation path that writes it — and the failure a third spelling
 #: produces is a gate that always refuses.
 UNTAPPED_FOR_COST = "untapped_for_cost"
+#: The scratchpad key a sacrifice cost writes, named here for
+#: ``UNTAPPED_FOR_COST``'s reason one line up: the mana lowering gates on it now
+#: ("Add one mana of any type **the sacrificed land** could produce",
+#: Squandered Resources), so a second spelling would be a gate that always
+#: refuses.
+SACRIFICED_FOR_COST = "sacrificed_for_cost"
 
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: "discarded_cards",
@@ -650,7 +656,7 @@ _COST_PRODUCES: dict[type, str] = {
     # Chisel, Diamond Valley) has no check that its ability sacrifices
     # anything at all, and threading ``produced`` into that branch is what
     # this row is for.
-    ast.SacrificeCost: "sacrificed_for_cost",
+    ast.SacrificeCost: SACRIFICED_FOR_COST,
     # "{T}, **Untap a tapped land an opponent controls**: Add one mana of any
     # type **that land** could produce." (Benthic Explorers.) The land the cost
     # untapped, recorded by the activation path so the effect's back-reference

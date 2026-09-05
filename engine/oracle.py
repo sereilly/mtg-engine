@@ -49,8 +49,11 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
-from .alternative_costs import alternative_cost_claims_line
-from .cast_costs import cast_cost_claims_line
+from .alternative_costs import (
+    alternative_cost_claims_line,
+    unread_alternative_cost_sentence,
+)
+from .cast_costs import cast_cost_claims_line, unread_cost_sentence
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
@@ -805,6 +808,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # type line, so "Dog" does not answer a "Dogpile".
     ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
+    # "When **you play a card**, sacrifice this artifact." (Juju Bubble.)
+    # CR 701.18b: to play a card is to play it as a land **or** cast it as a
+    # spell, so this is not the cast event with a wider name -- it is one
+    # condition with two fire sites, and a version that only watched casts
+    # would leave the artifact sitting through a land drop. Both halves are
+    # announced in ``engine/mixins`` (the cast announcement and the land
+    # branch of ``_resolve_card``); ``engine/events.py`` scopes it to the
+    # permanent's own controller, which is what the printed "you" says.
+    ("you_play_card",               r"whenever you play a card"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
     # Ankh of Mishra's land entry keeps its own kind and its own fire site, so
     # it precedes the general form below — which is the ordinary
@@ -1399,9 +1411,22 @@ def chargeable_sacrifice_payload(described: dict) -> dict | None:
     observer, so a key left in would be handed over and refuse every candidate.
     ``exclude_self`` is the other, and it comes back on: the charger holds the
     ability's source and compares by identity.
+
+    **That first reason holds for "you control" and for nothing else**, and the
+    dropped key used to be dropped whatever it said. "Sacrifice all lands your
+    opponents control" therefore read as *your own* lands: the narrowing was
+    removed on the premise that the enumeration already made it, and the
+    enumeration makes the opposite one. CR 701.21a settles it -- "a player
+    can't sacrifice ... a permanent they don't control" -- so a phrase naming
+    anyone else's permanent is not a payable cost at all, and refusing the line
+    is what leaves the card unsupported instead of charging a price nobody
+    printed. No card in either manifest role prints one; the reader is what
+    would have admitted the first.
     """
     from .subject_filters import object_only_filter
 
+    if described.get("controller") not in (None, "you"):
+        return None
     carried = object_only_filter(
         described, carried_separately=frozenset({"exclude_self", "controller"})
     )
@@ -1426,9 +1451,16 @@ def chargeable_exile_payload(described: dict) -> dict | None:
     test it would refuse every candidate. ``controller`` goes the same way and
     for the reason a sacrifice's does; ``exclude_self`` comes back on, because
     the charger holds the source and compares by identity.
+
+    And it is refused for anyone but the payer, for the reason
+    :func:`chargeable_sacrifice_payload` states one function up: the seat the
+    enumeration names is the payer's, so "a creature **an opponent controls**"
+    would have the narrowing dropped and the payer's own creature charged.
     """
     from .subject_filters import card_only_filter, object_only_filter
 
+    if described.get("controller") not in (None, "you"):
+        return None
     zone = described.get("zone")
     stripped = {
         key: value for key, value in described.items()
@@ -5072,6 +5104,37 @@ def _compile_card_oracle(
 
     if any(keyword in keywords for keyword in UNSUPPORTED_KEYWORDS):
         return OracleProgram(False, "unsupported", "unsupported keyword", normalized_text)
+
+    # A printed **cost** neither cost table can charge (CR 601.2b, CR 118.9).
+    #
+    # Ahead of every classification below, and of every card type, because this
+    # is the one defect the rest of this function cannot express. A card is
+    # supported when *any* of its lines is, so a spell whose effect line
+    # compiles reports supported however many of its other lines were dropped —
+    # and a dropped **cost** is not a missing feature, it is a card that
+    # resolves for a price it does not print. Kaervek's Spite sacrificed no
+    # permanent, Infernal Harvest returned no Swamp, and Fireblast's alternative
+    # was simply unavailable; all three read supported, all three read zero
+    # hollow lines, and only ``scripts/parse_coverage.py`` could see them,
+    # because the card is not refused. That is the population a refusal census
+    # cannot reach.
+    #
+    # Each table answers for its own sentence — the same preambles it matches
+    # with, not a third reading of the words — so a clause taught to either one
+    # closes this gate for the card in the same edit. There is no whitelist
+    # here to fall behind.
+    for raw_line in (oracle_text or "").splitlines():
+        unread_cost = (
+            unread_cost_sentence(raw_line)
+            or unread_alternative_cost_sentence(raw_line)
+        )
+        if unread_cost is not None:
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"printed cost nothing charges: {unread_cost}",
+                normalized_text,
+            )
 
     if any(pattern in normalized_text for pattern in UNSUPPORTED_PATTERNS):
         return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text)

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**350 / 612 tracked rules covered (57%)** — 1968 tests, 0 unannotated.
+**350 / 612 tracked rules covered (57%)** — 1981 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(1 tests, subrules a)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(9 tests, subrules ab)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(10 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -292,13 +292,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(3 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(18 tests, subrules ab)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(20 tests, subrules abc)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(6 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(11 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(15 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
@@ -310,7 +310,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.1** Each player begins the game with a starting life total of 20. Some variant games have different s...
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
 - [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
-- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(9 tests, subrules b)*
+- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(11 tests, subrules b)*
 - [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(5 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
 - [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(186 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(195 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(12 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -681,7 +681,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(21 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(28 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(29 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
@@ -856,10 +856,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(4 tests, subrules abd)*
 - [x] **701.17** Mill *(5 tests, subrules a)*
-- [x] **701.18** Play *(4 tests, subrules a)*
+- [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(26 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
-- [x] **701.21** Sacrifice *(11 tests, subrules a)*
+- [x] **701.21** Sacrifice *(12 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*

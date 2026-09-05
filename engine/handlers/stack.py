@@ -207,6 +207,11 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
             cost=dict(cost), amount=total_pips(cost),
             card_name=card.name, counter_card=card,
             stack_item=chosen, countered_object="ability",
+            # The life half of one offer, as the spell counter below sends it.
+            **(
+                {"life": int(instruction.payload["unless_pays_life"])}
+                if instruction.payload.get("unless_pays_life") else {}
+            ),
             # The marker the headless/AI path keys on to resolve this
             # deterministically the moment the resolution that armed it ends
             # (mixins/stack/resolution.py). Without it the prompt arms, nobody
@@ -514,7 +519,12 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 game, context, conditional.get("condition") or {}
             ):
                 cost = max(0, int(conditional["amount"]))
-            if cost == 0:
+            # "…and 1 life" (Mundungu). The life half of one offer, sent on
+            # the same prompt: what the payer decides is whether to pay the
+            # whole price, so a second prompt would be a second decision and a
+            # second counter.
+            life = int(instruction.payload.get("unless_pays_life", 0) or 0)
+            if cost == 0 and not life:
                 game.log.append(
                     f"{game.players[target.caster_index].name} pays {{0}}; "
                     f"{target.card.name} is not countered by {card.name}"
@@ -529,12 +539,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 # back to ``generic_cost(amount)`` when there is no symbol dict.
                 **({"cost": symbols} if symbols is not None else {}),
                 **({"cost_alternatives": alternatives} if alternatives else {}),
+                # Absent when the card prints no life, so every prompt written
+                # before this existed carries byte-identical data.
+                **({"life": life} if life else {}),
                 _new=True,
             )
             game.log.append(
                 f"{card.name}: {game.players[target.caster_index].name} must pay "
                 f"{mana_cost_label(symbols) if symbols is not None else f'{{{cost}}}'}"
                 + "".join(f" or {mana_cost_label(alt)}" for alt in alternatives)
+                + (f" and {life} life" if life else "")
                 + f" or {target.card.name} is countered"
             )
             return True, "resolved"
