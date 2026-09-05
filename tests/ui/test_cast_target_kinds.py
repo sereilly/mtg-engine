@@ -196,20 +196,56 @@ def _several_target_cards() -> dict[str, dict]:
     return found
 
 
+#: A printed **bare** count of targets — "two target artifacts" — with the two
+#: ways a card softens the same number in front of it: CR 601.2c's "up to two
+#: target" and the "one, two, or three target" a distributed effect prints
+#: (Bounty of the Hunt spells the second with a third number in it, which is why
+#: the lookbehind is the bare "or " rather than any one card's phrasing). Read off the
+#: text so the assertion below is the invariant rather than a list of the cards
+#: that happen to satisfy it today.
+_EXACT_COUNT = re.compile(
+    r"(?<!up to )(?<!or )\b(two|three|four|five) target\b", re.I
+)
+
+
+def _prints_a_bare_count(card) -> bool:
+    return bool(_EXACT_COUNT.search(card.oracle_text or ""))
+
+
 def test_a_printed_number_is_reported_exact():
     """The whole pool, so the two halves stay named by their quantifier rather
-    than by a list here."""
-    specs = _several_target_cards()
-    exact = {name for name, spec in specs.items() if spec.get("exact_targets")}
+    than by a list here.
 
-    # "Destroy two target nonartifact creatures" / "Exile two target artifacts"
-    # / "Choose two target creatures controlled by the same opponent".
-    assert exact == {
-        "Ashes to Ashes", "Dust to Dust", "Retribution",
-    }, sorted(exact)
-    # And the "up to" ones must not claim it, or the picker would refuse an
-    # announcement the card allows — CR 601.2c lets those choose fewer, none
-    # included.
+    It *was* a list here, and Visions' ingest is what showed the difference.
+    Undo ("Return two target creatures to their owners' hands") is a correct new
+    member of the exact half — the derivation read it right on the day the set
+    landed — and the only thing that failed was a hand-written set of three
+    names, which is the guard's own docstring not being true of the guard. A
+    list of cards that satisfy a property expires when a set prints a fourth;
+    the property does not.
+    """
+    specs = _several_target_cards()
+    assert specs, "no several-target card in the pool — the guard would pass vacuously"
+
+    wrong = []
+    for name, spec in specs.items():
+        printed = _prints_a_bare_count(_POOL[name])
+        if bool(spec.get("exact_targets")) != printed:
+            wrong.append(
+                f"{name}: exact_targets={spec.get('exact_targets')!r} for "
+                f"{_POOL[name].oracle_text!r}"
+            )
+    assert not wrong, (
+        "the spec's target count disagrees with the printed quantifier — an "
+        "'up to' reported exact refuses an announcement CR 601.2c allows, and a "
+        "printed number reported as 'up to' offers one it does not: "
+        + "; ".join(wrong)
+    )
+
+    # Both halves have to be populated, or the comparison above passes by
+    # having nothing on one side of it.
+    exact = {name for name, spec in specs.items() if spec.get("exact_targets")}
+    assert {"Ashes to Ashes", "Dust to Dust", "Retribution", "Undo"} <= exact
     assert not specs["Sanguine Indulgence"].get("exact_targets")
     assert not specs["Basri's Acolyte"].get("exact_targets")
 

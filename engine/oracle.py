@@ -1974,6 +1974,28 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         )
         if sacrifice_filter is not None:
             sacrifice_count = "any"
+    # "Sacrifice this creature **and a creature named Spitting Drake**" (Kyscu
+    # Drake). The source and one chosen permanent under one printed verb, joined
+    # by a bare "and" with no comma in front of it — which is exactly the shape
+    # every reader above declines. The Oxford-list regex needs at least one
+    # comma to match; the single-object delimiter is switched off entirely once
+    # "sacrifice this ..." has set ``sacrifice_self``; and "any number of" reads
+    # a set rather than one object. So the second half was read by nothing and
+    # the ability cost the source alone — an activation cheaper than the card,
+    # which is the direction that never crashes and never shows.
+    #
+    # Encoded the way the Oxford-list path already encodes the same facts: the
+    # source in its flag, the chosen permanent in ``sacrifice_filter``. Guarded
+    # on that field being empty so it runs only where every earlier reader
+    # declined, which keeps Sword of the Ages' "and any number of creatures you
+    # control" with the reader that understands its count.
+    if sacrifice_self and sacrifice_filter is None:
+        conjoined = re.search(
+            r"\bsacrifice this \w+ and ((?:another|an?) [^,:]+?)\s*(?=,|$)",
+            cost_lower,
+        )
+        if conjoined is not None:
+            sacrifice_filter = _chargeable_sacrifice_filter(conjoined.group(1))
     # "Discard a card" (Seasoned Hallowblade), "Discard a land card or Shrine
     # card" (Sanctum of Shattered Heights). Jandor's Ring's history-named card is
     # read above; counting it here too would charge the Ring twice.
