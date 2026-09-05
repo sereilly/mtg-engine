@@ -895,7 +895,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Visions (VIS) — measured, 158/167 after wave 2
+## Visions (VIS) — measured, 166/167 after wave 3
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
 pool.** Registered under `measured` on 2026-09-04 at release date 1997-02-03,
@@ -1322,6 +1322,76 @@ exist, 701.12 is Exchange (fight is 701.14), 701.19 is Regenerate (search is
 701.23), 701.5 is Casting (countering is 701.6a), and 701.15c is Goad. Every one
 came from a brief or a comment rather than from `MagicCompRules.txt`. Cite from
 the file.
+
+### Wave 3 closed: 158 -> 166, and the last four cards were mostly already built
+
+Five groups, nine cards briefed, eight landing. Only Necromancy is left, and it
+is down from five gaps to three because every decline re-probed rather than
+inheriting.
+
+**The turn learned to have more than five phases, and the dead API's *shape* was
+the defect.** `extra_phases_after` was a dict keyed by phase name, which cannot
+express Relentless Assault: the card creates two phases in sequence, so chaining
+by name files "a main phase after combat" — which the turn's **own** combat
+phase then consumes. Cast in the precombat main, perfectly legal for a sorcery,
+the card would have produced one combat phase where the turn already had one and
+dropped the rest of the turn. **A combat lost, not gained.** An extra combat
+phase and the turn's own have the same name; only a list can tell them apart,
+because a repeated phase is two entries. `Game.turn_phases_remaining` is that
+list, spent in `_set_phase_and_step` — the one line every entry point already
+passes through. The observationally-identical shortcut (a turn-end counter) was
+named and refused, because it is identical only while every extra phase lands at
+the end of the turn.
+
+**Two shipped-card findings, both about how many rather than whether.**
+Drain Power credited `produced_mana[0]` — Scryfall's summary of *which symbols* a
+land makes, which says nothing about how many — so **Mishra's Workshop, printing
+`{T}: Add {C}{C}{C}`, paid one**; and it ignored the restricted buckets entirely,
+where CR 106.13 says the restrictions travel with the mana. Six shipped sets.
+
+**Two more silent-nothing failures, both invisible to every instrument.**
+Equipoise chose the right permanents and **phased out none of them**, logging "0
+permanent(s) phased out" while reporting supported with every sentence claimed
+and no hollow line — because wave 1 settled `permanents_from`'s *arity* and
+nobody had settled its **element type**, and `recorded_permanent_ids` filtered on
+`isinstance(entry, int)` while `chosen_this_way_objects` holds live
+`Permanent`s. Settling an arity is only half of settling a channel. And
+**Three Wishes' opening sentence parsed, lowered, compiled, reported supported
+and did nothing**, because `exile_top_of_library` **declines at runtime** when a
+face-down exile has no source permanent to link to — and Three Wishes is an
+instant. That is a bug class this repo has no instrument for: the sentence is
+claimed, it produces a real instruction, and the *handler* refuses when it runs.
+It is the runtime twin of the hollow line, and every prior card in the family is
+a permanent, so Three Wishes is the first of 2,348 to reach it.
+
+**The hardest card in the set was a decomposition, not a build.** Four of Pygmy
+Hippo's five gaps were mechanisms shipped in 1993 and fused into name-keyed
+handlers — `card_hooks['Drain Power']` alone did three of them, and CR 106.13 is
+a Comprehensive Rules paragraph written about that card by name. The round
+*lowered* hook reliance, 60 cards to 59.
+
+**A group caught its own regression, which is the habit worth copying.**
+Crediting Necromancy's casting permission made the card report supported with its
+entire second line unimplemented, zero hollow lines and full parse coverage — the
+Mirage rehearsal class arriving from the support gate rather than a whitelist
+word. `_TIMING_ONLY_CLAIMS` now stops a timing claim being the whole of a card's
+support.
+
+**And a probe was fixed the harder, correct way.** Widening the picker sweep's
+veto to the plural passes its test and is wrong: a whole-line veto means a line
+carrying both a real cast target *and* a prohibition reads as naming nothing,
+which is exactly the Roots class the sweep exists to find. The prohibition is
+erased as a clause and the line re-asked. VIS has its **first clean picker
+sweep**.
+
+**Three size caps crossed in this set and every one was at integration, on
+nobody's branch** — `lowering/categories.py`, `conditions.py` and
+`lowering/board.py`, each by two or more groups' additions merely summing. The
+Phase 0 pre-split of `lowering/_common.py` was right and was not enough. Each
+split went along a line the repo had already drawn in prose, which is the
+argument for splitting at the cap rather than raising the number — but the
+scheduling lesson is that a wave needs its cap headroom read *per module the
+wave will touch*, not just for the tightest one.
 
 ### Phase 0 took a split before anyone branched, and that was the point
 
