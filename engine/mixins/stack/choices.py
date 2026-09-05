@@ -3719,12 +3719,23 @@ class PendingChoicesMixin:
         neutral answer; taking it is a valuation this has no basis for.
         """
         limit = int(choice.data.get("up_to", 1))
-        picks = [
-            self.permanent_id_of(perm)
-            for perm in self.live_permanent_set_choices(choice)
-            if self.controls(choice.player_index, perm)
-        ][:limit]
-        chosen = [pid for pid in picks if pid is not None]
+        floor = int(choice.data.get("at_least", 0) or 0)
+        live = self.live_permanent_set_choices(choice)
+        own = [perm for perm in live if self.controls(choice.player_index, perm)]
+        picks = own[:limit]
+        if len(picks) < floor:
+            # **A floor is not a ceiling, and the own-only rule is about the
+            # ceiling.** "Choose a land that player controls" (Equipoise) is a
+            # pick made from somebody *else's* battlefield and the card says how
+            # many, so a seat that offered nothing would not be leaving a
+            # ceiling unspent — it would be declining an instruction. Filled in
+            # board order from whatever is left, which is this policy's
+            # determinism one step further rather than a valuation.
+            picks = picks + [perm for perm in live if perm not in picks][
+                : floor - len(picks)
+            ]
+        chosen = [pid for pid in (self.permanent_id_of(perm) for perm in picks)
+                  if pid is not None]
         if not self._resolve_permanent_set_choice(choice, chosen):
             # The empty answer is the fallback only where it is a *legal*
             # answer. Under a floor it is not, and re-offering it twice would
@@ -4005,6 +4016,50 @@ class PendingChoicesMixin:
         ``engine/ai_valuation.py``, not a branch here.
         """
         self._resolve_flip_again(choice, False)
+
+    # -- Whether a printed process is run again ------------------------------
+
+    def confirm_repeat_process(self, player_index: int, accept: bool = True) -> bool:
+        """Answer Forbidden Ritual's "you may repeat this process any number of
+        times"."""
+        return self.resolve_pending_choice(
+            "repeat_process", player_index, accept=accept
+        )
+
+    def _resolve_repeat_process(self, choice: PendingChoice, accept: bool) -> bool:
+        """Run the printed process again, or stop.
+
+        The next round is the *same* instruction the handler was already
+        running, carried here when the question was armed — so this does not
+        have to know what the process is or how many rounds there have been,
+        which is the handler's business and stays there. The identical shape
+        ``_resolve_flip_again`` beside it uses, and for the same reason.
+        """
+        again = choice.data.get("_again")
+        context = choice.data.get("_context")
+        self.discard_pending_choice(choice)
+        player = self.players[choice.player_index]
+        if not accept or again is None or context is None:
+            self.log.append(
+                f"{player.name} declined to repeat "
+                f"({choice.data.get('card_name', 'an effect')})"
+            )
+            return True
+        self._execute_oracle_instruction(again, context)
+        return True
+
+    def _default_repeat_process(self, choice: PendingChoice) -> None:
+        """The stated policy: **stop after one round**.
+
+        Not a valuation, and not a shortcut. The first round is what the card
+        makes its controller do; every round after it is pure choice, and a
+        default of "yes" is not a default — it is a loop with no bound at all,
+        which "any number of times" is precisely what it says. A seat that
+        should press on wants a weight in ``engine/ai_valuation.py`` rather
+        than a branch here, exactly as ``_default_flip_again`` records for the
+        other unbounded offer in this file.
+        """
+        self._resolve_repeat_process(choice, False)
 
     # -- A card exiled out of a hand -----------------------------------------
 
@@ -7927,6 +7982,26 @@ register_choice(
     default_at_arm=True,
     # Both players' life totals are public, and so is whose decision it is.
     hidden_for_ai=False,
+    spectator_visible=True,
+)
+
+register_choice(
+    "repeat_process",
+    resolve=lambda game, choice, r: game._resolve_repeat_process(
+        choice, bool(r.get("accept", True))
+    ),
+    default=lambda game, choice: game._default_repeat_process(choice),
+    action="repeat_process_confirm",
+    prompt_key="repeat_process",
+    blocked_detail="decide whether to repeat the process before other actions",
+    # The answer is whether the *rest of this resolution* happens at all, so
+    # nothing may run past it (CR 608.2) — and the round it starts arms the
+    # next question, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default is to stop, and
+    # taking it where the question stands is what keeps AI and headless play
+    # from holding a resolution open on a decision nobody will make.
+    default_at_arm=True,
     spectator_visible=True,
 )
 

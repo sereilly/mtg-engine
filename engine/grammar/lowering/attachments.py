@@ -26,7 +26,9 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _describe_targets, _filter_payload, _is_source, _is_target
-from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
+from ._amounts import count_spec
+from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
+                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS)
 
 
 def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
@@ -104,8 +106,63 @@ def _lower_attach_chosen(node: ast.Attach) -> tuple[OracleInstruction, ...]:
     return (choose, attach)
 
 
+def _excess_left(amount: "ast.Minus", node) -> "ast.ObjectFilter":
+    """The larger side of a printed "in excess of", as the noun phrase it counts.
+
+    Two readers rather than one, and each refuses rather than guessing: a
+    computed count this could not take apart would become a count of something
+    else, and a choice sized from the wrong number takes the wrong permanents.
+    """
+    if not (
+        isinstance(amount, ast.Minus)
+        and isinstance(amount.left, ast.CountOf)
+        and isinstance(amount.right, ast.CountOf)
+    ):
+        raise LoweringError("a printed difference counts two sets", node=node)
+    return amount.left.filter
+
+
+def _excess_right(amount: "ast.Minus", node) -> "ast.ObjectFilter":
+    """:func:`_excess_left`'s other half — the number the excess is over."""
+    _excess_left(amount, node)
+    return amount.right.filter
+
+
+#: Whose battlefield each half of an "in excess of" clause is counted on, as
+#: the scope ``count_from_payload`` reads. A *scope* rather than a filter key
+#: for ``lower_difference_damage``'s stated reason: nothing downstream tests a
+#: controller, so a count narrowed by one is a count taken on the wrong
+#: battlefield. Every seat the head clause may name has a row, and a reference
+#: without one refuses.
+_EXCESS_SCOPES: dict[str, str] = {
+    "you": "you",
+    "target_player": "target",
+    "target_opponent": "target_opponent",
+    "that_player": "target",
+}
+
+
+def _side_spec(described: "ast.ObjectFilter", node) -> dict:
+    """One half of a printed difference, as a count spec scoped to its seat.
+
+    The controller comes off the filter and goes on as ``owner`` — the same
+    move ``lower_difference_damage`` makes for Superior Numbers, and for its
+    reason: ``count_spec`` refuses a controller narrowing outright because the
+    matcher underneath cannot test one.
+    """
+    scope = _EXCESS_SCOPES.get(described.controller or "you")
+    if scope is None:
+        raise LoweringError(
+            f"no count reads the {described.controller}'s battlefield", node=node
+        )
+    spec = count_spec(dataclasses.replace(described, controller=None), node)
+    spec["owner"] = scope
+    return spec
+
+
 def _lower_choose_permanents(
-    node: ast.ChoosePermanent, produced: frozenset[str]
+    node: ast.ChoosePermanent, produced: frozenset[str],
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"that player **chooses up to two Plains**" (Raiding Party.)
 
@@ -134,11 +191,58 @@ def _lower_choose_permanents(
             "a plural choice reads neither an enchant clause nor a decline",
             node=node,
         )
+    described = spec.filter
+    computed: dict[str, object] = {}
+    if spec.count_amount is not None:
+        # "**For each land target player controls in excess of the number you
+        # control**, choose a land that player controls." (Equipoise.) How many
+        # is a quantity the resolution computes, so it rides the payload as the
+        # same ``count_spec`` every other computed number in this engine goes
+        # through — one reader, so "the number of lands you control" means here
+        # what it means printed anywhere else.
+        #
+        # It is a **floor as well as a ceiling**: the sentence says how many are
+        # chosen, not how many may be. A ceiling alone would let a seat with
+        # nothing to gain by it choose none, which is a card that does nothing.
+        computed["count_from"] = _side_spec(_excess_left(spec.count_amount, node), node)
+        computed["count_from"]["minus"] = _side_spec(
+            _excess_right(spec.count_amount, node), node
+        )
+        computed["exact_count"] = True
+        # "…a land **that player** controls." The picked-from battlefield is a
+        # seat, and ``subject_matches`` refuses a controller it has nobody to
+        # compare against — so the narrowing is lifted out of the filter into
+        # the ``controlled_by`` key the candidate rule already answers, exactly
+        # as the destroy family lifts "of their choice" out of one. Left inside
+        # it the phrase would refuse the line; dropped, the choice would be made
+        # from every land on the table.
+        if described.controller is not None:
+            if described.controller != "that_player" or (
+                event in _EVENT_SUBJECT_PLAYERS or event in _EVENT_SUBJECT_CONTROLLERS
+            ):
+                # Under an event that froze a seat, "that player" is that seat
+                # and not the resolution's target — a different board, and one
+                # the candidate rule has no word for. Refused rather than
+                # guessed.
+                raise LoweringError(
+                    "the choice cannot be scoped to this player's battlefield",
+                    node=node,
+                )
+            computed["controlled_by"] = "target"
+            described = dataclasses.replace(described, controller=None)
+    # Built in the order it has always been built in, with the computed keys
+    # appended: the payload is compared as a *repr* by ``scripts/oracle_diff``,
+    # so a key inserted ahead of another moves every card that never printed it
+    # — three lines of noise around whatever a round is really about.
     payload: dict[str, object] = {
-        "filter": _filter_payload(spec.filter),
-        "up_to": spec.count,
+        "filter": _filter_payload(described),
+        **({"up_to": spec.count} if spec.count_amount is None else {}),
         "result_key": CHOSEN_THIS_WAY_OBJECTS,
-        "prompt": f"Choose up to {spec.count}.",
+        "prompt": (
+            f"Choose up to {spec.count}." if spec.count_amount is None
+            else "Choose the permanents."
+        ),
+        **computed,
     }
     untestable = untestable_filter_keys(payload["filter"])
     if untestable:

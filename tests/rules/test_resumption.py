@@ -814,3 +814,53 @@ def test_a_choice_inside_a_repetition_stops_it_until_it_is_answered():
     assert game.pending_choices == []
     assert game.effect_suspended is False
     assert context.iteration_target is None, "the loop restored what it borrowed"
+
+
+# --- W3G3: a printed process its controller may run again ---
+
+
+@pytest.mark.cr("608.2h", "117.3b")
+def test_a_repeated_process_holds_its_spell_on_the_stack_until_the_last_answer():
+    """"Sacrifice a nontoken permanent… **You may repeat this process any
+    number of times.**" (Forbidden Ritual.)
+
+    The decision is a step of the loop rather than a line after it — a round
+    that stopped to ask its controller which permanent to sacrifice would never
+    reach work written after the loop (``engine/resumption.py``). What that buys
+    is CR 608.2h's ordering: the sacrifice prompt suspends the resolution, the
+    spell stays on the stack, and the "again?" question is armed only once the
+    round it belongs to has finished.
+    """
+    from engine.card_loader import load_cards, manifest_set_path
+
+    vis = {c.name: c for c in load_cards(manifest_set_path("VIS", include_measured=True))}
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[]),
+        PlayerState(name="P2", battlefield=[]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.players[0].hand = [vis["Forbidden Ritual"]]
+    for _ in range(2):
+        game.players[0].battlefield.append(Permanent(card=vis["Panther Warriors"]))
+    game._sync_control()
+
+    game.cast_from_hand(0, "Forbidden Ritual", target_player_index=1)
+    game.resolve_stack()
+
+    # The round stopped on its first step, and the rest of it is recorded rather
+    # than lost.
+    assert game.effect_suspended is True
+    assert game.pending_choice_of("sacrifice") is not None
+    assert game.pending_choice_of("repeat_process") is None
+    assert game.resume_stack, "the rest of the round is still owed"
+
+    assert game.confirm_sacrifice(0, [0]) is True
+    game.auto_resolve_pending_choices(only_player_index=1)
+
+    # Answering resumed the round, which then asked its own last question.
+    assert game.pending_choice_of("repeat_process") is not None
+    assert game.confirm_repeat_process(0, False) is True
+    game.auto_resolve_pending_choices()
+    assert game.effect_suspended is False
+    assert game.resume_stack == []

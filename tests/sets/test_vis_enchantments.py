@@ -57,6 +57,11 @@ from engine.grammar.errors import (  # noqa: E402
 )
 from engine.models import Permanent as _W3G1ePermanent  # noqa: E402
 from engine.oracle import compile_card_oracle as _w3g1e_compile  # noqa: E402
+# --- W3G3: Equipoise, a process repeated for a printed list of card types ---
+from engine import Game as _W3G3EGame, PlayerState as _W3G3EPlayer
+from engine.card_loader import load_cards as _w3g3e_load, manifest_set_path as _w3g3e_path
+from engine.models import Permanent as _W3G3EPermanent
+from engine.oracle import compile_card_oracle as _w3g3e_compile
 
 def _rig():
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
@@ -1453,7 +1458,6 @@ def test_w3g2_a_this_way_narrowing_the_card_matcher_cannot_test_refuses():
     )
     with _w3g2_pytest.raises(_W3G2LoweringError):
         _w3g2_lower(node)
-
 @_w3g1e_pytest.fixture(scope="module")
 def _w3g1e_lea():
     return {c.name: c for c in _w3g1e_load(_w3g1e_path("LEA"))}
@@ -1621,3 +1625,98 @@ def test_a_permission_to_the_player_needs_an_event_that_names_one(set_pool):
             "Exile the top card of your library. The player may play that "
             "card this turn."
         ))
+
+_W3G3E_LEA = {c.name: c for c in _w3g3e_load(_w3g3e_path("LEA"))}
+def _w3g3e_game():
+    game = _W3G3EGame(players=[
+        _W3G3EPlayer(name="P1", battlefield=[]),
+        _W3G3EPlayer(name="P2", battlefield=[]),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game
+def _w3g3e_put(game, seat, card):
+    perm = _W3G3EPermanent(card=card)
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+def _w3g3e_upkeep(game):
+    game.resolve_upkeep(0, defer_priority=True)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+def test_equipoise_repeats_its_process_once_per_printed_card_type(set_pool):
+    """"…choose a land that player controls, then the chosen permanents phase
+    out. **Repeat this process for artifacts and creatures.**"
+
+    Not a loop: the parameters are printed, so the round is unrolled once per
+    type with one word changed. Six instructions, three types, in the order the
+    card names them.
+    """
+    program = _w3g3e_compile(set_pool("VIS")["Equipoise"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    steps = trigger.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_permanents", "phase_out_recorded_permanents",
+    ] * 3, [step.kind for step in steps]
+    assert [
+        step.payload["filter"]["type_filter"]
+        for step in steps if step.kind == "choose_permanents"
+    ] == ["land", "artifact", "creature"]
+def test_equipoise_phases_out_only_the_excess_of_each_type(set_pool):
+    """"For each land target player controls **in excess of the number you
+    control**" — a difference clamped at zero (CR 107.1b), counted per type.
+
+    Two lands and two creatures more than its controller, and an artifact each,
+    so four permanents phase out and the artifact stays.
+    """
+    game = _w3g3e_game()
+    _w3g3e_put(game, 0, set_pool("VIS")["Equipoise"])
+    _w3g3e_put(game, 0, _W3G3E_LEA["Forest"])
+    _w3g3e_put(game, 0, _W3G3E_LEA["Black Lotus"])
+    for name in ("Plains", "Island", "Swamp"):
+        _w3g3e_put(game, 1, _W3G3E_LEA[name])
+    for name in ("Grizzly Bears", "Hurloon Minotaur"):
+        _w3g3e_put(game, 1, _W3G3E_LEA[name])
+    _w3g3e_put(game, 1, _W3G3E_LEA["Mox Pearl"])
+
+    _w3g3e_upkeep(game)
+
+    gone = {perm.card.name for perm in game.players[1].phased_out}
+    assert len(gone) == 4, game.log
+    assert "Mox Pearl" not in gone, "the artifact counts are level"
+    assert {perm.card.name for perm in game.players[1].battlefield} == {
+        "Swamp", "Mox Pearl",
+    }, game.log
+    # The chooser's own board is untouched: the phrase names the target's.
+    assert game.players[0].phased_out == []
+def test_equipoise_does_nothing_when_the_boards_are_level(set_pool):
+    """A player with no more of a type than you exceeds you by nothing, and a
+    count of nothing is a step that asked for nothing rather than a prompt with
+    no answer (CR 608.2h)."""
+    game = _w3g3e_game()
+    _w3g3e_put(game, 0, set_pool("VIS")["Equipoise"])
+    _w3g3e_put(game, 0, _W3G3E_LEA["Forest"])
+    _w3g3e_put(game, 1, _W3G3E_LEA["Plains"])
+
+    _w3g3e_upkeep(game)
+
+    assert game.players[1].phased_out == [], game.log
+    assert len(game.players[1].battlefield) == 1
+def test_equipoise_phases_each_permanent_out_once(set_pool):
+    """Every round writes to the one "chosen this way" record, so the creature
+    round's sentence names the land round's picks as well — and a phased-out
+    permanent is treated as though it does not exist (CR 702.26b), which is
+    exactly a permanent this step cannot phase out again. Read without that,
+    the same land is pushed onto the phased-out pile three times and phases back
+    in as three objects.
+    """
+    game = _w3g3e_game()
+    _w3g3e_put(game, 0, set_pool("VIS")["Equipoise"])
+    for name in ("Plains", "Island"):
+        _w3g3e_put(game, 1, _W3G3E_LEA[name])
+
+    _w3g3e_upkeep(game)
+
+    names = [perm.card.name for perm in game.players[1].phased_out]
+    assert sorted(names) == ["Island", "Plains"], names

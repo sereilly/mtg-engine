@@ -79,6 +79,8 @@ from .lowering import (
     _lower_destroy,
     _lower_draw,
     _lower_exile,
+    _lower_repeat_for_types,
+    _lower_repeat_optional_process,
     _lower_repeat_process,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
@@ -254,7 +256,7 @@ def lower_statement(
         # every clause under it. Dream Fighter's sentence is a union of two
         # subjects, so it lowers under a `Conjunction` and would see no event
         # at all if this were gated on `whole_effect`.
-        return _lower_phase_out(statement, event, event_subject)
+        return _lower_phase_out(statement, event, event_subject, produced)
     if isinstance(statement, ast.PutCounter):
         # The narrowing travels with the event for `_lower_destroy`'s reason,
         # and so does the **unfiltered** event beside it: "put four fungus
@@ -834,10 +836,16 @@ def lower_statement(
             return _lower_for_each_matching(statement, repeated())
         return _lower_for_each(statement)
 
-    # The offer-round loop takes the recursion back as an argument: its lowering
-    # lives in the `game` family, which is below this dispatcher.
+    # Both repeat clauses take the recursion back as an argument: their
+    # lowerings live in the `repeats` family, which is below this dispatcher.
+    # Two arms rather than one, because the two printed sentences are two
+    # mechanisms — see `engine/grammar/repeats.py`.
     if isinstance(statement, ast.RepeatProcess):
         return _lower_repeat_process(statement, lower_statement)
+    if isinstance(statement, ast.RepeatOptionalProcess):
+        return _lower_repeat_optional_process(statement, lower_statement)
+    if isinstance(statement, ast.RepeatForEachType):
+        return _lower_repeat_for_types(statement, lower_statement)
 
     if isinstance(statement, ast.ChoosePermanent):
         # Two lowerings, told apart by the printed quantifier. The plural needs
@@ -847,7 +855,7 @@ def lower_statement(
         # admit. That argument is why this pair sits here rather than in
         # ``by_node``, whose rows take the node and nothing else.
         if statement.spec.quantifier == "up_to":
-            return _lower_choose_permanents(statement, produced)
+            return _lower_choose_permanents(statement, produced, event=event)
         return _lower_choose_permanent(statement)
 
     if isinstance(statement, ast.Exile):

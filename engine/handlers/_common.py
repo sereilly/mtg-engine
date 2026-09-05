@@ -1887,6 +1887,19 @@ def recorded_permanent_ids(context, key) -> tuple[int, ...]:
     An absent record is an empty sequence: a step that recorded nothing is a
     legal outcome (the seat had no creature, the reanimation found no card), not
     an error.
+
+    **And what a producer wrote may be the permanents themselves**, which is the
+    same question one level down and was answered the same way for the same
+    reason. ``chosen_this_way_objects`` holds live ``Permanent`` objects — the
+    sweep that reads it needs their identity (Raiding Party's "all Plains that
+    weren't chosen this way") — and Equipoise's "then the chosen permanents
+    phase out" is the first sentence to feed that record to *this* reader. Under
+    the old body every entry failed ``isinstance(entry, int)`` and was dropped,
+    so the phase-out named the right permanents and moved none of them: a card
+    reporting supported, claiming every sentence, carrying no hollow line, and
+    doing nothing. Reading the id off an object here is what makes the channel's
+    element shape as decided as its arity, rather than adding a third local
+    normalisation somewhere downstream.
     """
     if key is None:
         return ()
@@ -1895,9 +1908,17 @@ def recorded_permanent_ids(context, key) -> tuple[int, ...]:
         return ()
     if isinstance(recorded, int):
         return (recorded,)
-    return tuple(
-        entry for entry in recorded if isinstance(entry, int)
-    )
+    if not isinstance(recorded, (list, tuple)):
+        recorded = (recorded,)
+    ids = []
+    for entry in recorded:
+        if isinstance(entry, int):
+            ids.append(entry)
+            continue
+        found = getattr(entry, "permanent_id", None)
+        if isinstance(found, int):
+            ids.append(found)
+    return tuple(ids)
 
 
 def one_recorded_permanent_id(context, key) -> int | None:

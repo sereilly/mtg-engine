@@ -32,7 +32,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| VIS *(measured)* | 167 | 278 | 88.5% | 88.5% | 60.4% | 135 |
+| VIS *(measured)* | 167 | 278 | 89.2% | 89.2% | 61.2% | 137 |
 | **All (shipped)** | **3918** | **5812** | **90.0%** | **89.2%** | **58.7%** | **2824** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 311 | 132 | expected a subject |  |
+| 309 | 130 | expected a subject |  |
 | 97 | 44 | unrecognized effect verb |  |
 | 80 | 35 | unconsumed text |  |
 | 34 | 19 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -1509,6 +1509,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: This creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Epitaph Golem**
   - `{2}: Put target card from your graveyard on the bottom of your library.`
+- **Equipoise**
+  - `At the beginning of your upkeep, for each land target player controls in excess of the number you control, choose a land that player controls, then the chosen permanents phase out. Repeat this process for artifacts and creatures. (While they're phased out, they're treated as though they don't exist. They phase in before that player untaps during their next untap step.)`
 - **Erhnam Djinn**
   - `At the beginning of your upkeep, target non-Wall creature an opponent controls gains forestwalk until your next upkeep. (It can't be blocked as long as defending player controls a Forest.)`
 - **Erosion**
@@ -1729,6 +1731,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: This creature gets +1/+0 until end of turn.`
 - **Foratog**
   - `{G}, Sacrifice a Forest: This creature gets +2/+2 until end of turn.`
+- **Forbidden Ritual**
+  - `Sacrifice a nontoken permanent. If you do, target opponent loses 2 life unless that player sacrifices a permanent of their choice or discards a card. You may repeat this process any number of times.`
 - **Force Spike**
   - `Counter target spell unless its controller pays {1}.`
   - `Counter target spell unless its controller pays {1}.`

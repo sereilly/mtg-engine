@@ -249,6 +249,21 @@ PARSE_LAYERS = [
     # `parse_statement` already drew in its own shape: frame, body, frame.
     # Below `statements` and handed `_parse_statement_body` rather than
     # importing it back — the same inversion `subject_verb` and `delayed` make.
+    # The **toll** — "unless <player> <pays a price>", and what each way of
+    # covering it buys. Split out of `sentence_clauses` at the guard below,
+    # along the boundary that module's own docstring drew: everything left
+    # there says what a clause does to the *shape* of the sentence, and these
+    # say what price is offered, to whom, and what paying it buys. It is the
+    # half that grows with the pool — the printed currencies are mana, a
+    # discard, a mill, a counter, a card put back on a library and a sacrifice,
+    # one more every set or two.
+    #
+    # Below `sentence_clauses`, which re-exports it so `statements` keeps the
+    # one import it had, and above `effects`: these productions read whole
+    # *sentences* as prices, which is exactly what separates them from
+    # `prices` at the bottom of this list — that one reads printed symbols and
+    # is a floor under `phrases`.
+    "tolls",
     "sentence_clauses",
     "statements",
     # A sentence whose subject is a pronoun pointing at the sentence before it
@@ -267,6 +282,15 @@ PARSE_LAYERS = [
     # rather than forking. Beside `riders` and not under it — neither imports
     # the other, and both are handed `parse_statement` by `statements`.
     "control_flow",
+    # "Repeat this process …" — the sentence that says the sentences before it
+    # happen again. Three cards print one and no two of them are the same
+    # mechanism (see the module docstring), so they are one family rather than
+    # one production. Split out of `parser` at the guard below, along the
+    # boundary the sentence loop already draws: each of these is a clause
+    # *about* the sentences already read, not a step beside them. Above
+    # `statements`, whose parser two of them re-enter to read a restatement,
+    # and below `parser`, which is the only module that calls them.
+    "repeats",
     # The trailing clauses that attach to a sentence already parsed ("if you
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.
@@ -577,7 +601,23 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # where each find lands.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("text_changes",)
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed"]
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed",
+     # `phasing` split off `lowering/board.py` at Visions' third wave, when two
+     # groups' additions summed past the guard at **integration** — on nobody's
+     # branch, for the third time in this one set. The line is CR 702.26's own: a
+     # phased-out permanent has not changed zone and has not changed controller
+     # (702.26d, which is why a phase-out must not detach an Aura — the bug that
+     # had Cloak of Invisibility destroying itself every turn), where everything
+     # left in `board` regenerates, sacrifices, bounces, exchanges control or
+     # puts a card on a library's bottom. Asymmetric like `zones`, `library`,
+     # `redirection`, `delayed` and `prohibitions`: the parse half stays in
+     # `effects/board.py` and the guard fired on the lowerings.
+     "phasing",
+     # The mirror of `grammar/repeats.py`, and it left `lowering/game.py` the
+     # moment the family had a second member: `_lower_repeat_process` had been
+     # a section of one there, with its parse half in `parser.py` and no mirror
+     # at all.
+     "repeats"]
 # `delayed` is the lowering-only family Visions' second wave split off
 # `lowering/stack.py`, when the counter's "unless its controller pays {1} **and
 # 1 life**" (Mundungu) took that module past the guard below. The line is the

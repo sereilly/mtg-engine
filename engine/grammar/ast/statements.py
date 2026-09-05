@@ -458,6 +458,44 @@ class RepeatProcess:
 
 
 @dataclass(frozen=True)
+class RepeatOptionalProcess:
+    """"**You may repeat this process any number of times.**" (Forbidden
+    Ritual.)
+
+    :class:`RepeatProcess`'s neighbour and deliberately not its twin. That one
+    wraps a *round of offers* and ends on a fact about the round — a round
+    nobody took — which is something the thing running the round can see. This
+    one wraps whatever the line said before it, however many sentences that was,
+    and ends only when its controller declines: there is no bound, no record to
+    read, and nothing to check the answer against.
+
+    So *round* is the whole preceding statement rather than one offer, and there
+    is no ``restatement`` to check it against — the words name no act, only a
+    number of times, so there is nothing a mismatched restatement could say.
+    """
+    round: "Statement"
+
+
+@dataclass(frozen=True)
+class RepeatForEachType:
+    """"**Repeat this process for artifacts and creatures.**" (Equipoise.)
+
+    The third printed "repeat" and the one that is not a loop. Eureka's ends on
+    a fact about a round and Forbidden Ritual's on an answer; this one ends
+    because the card names how many more times there are and which card type
+    each of them is about. It is a *list of parameters*, known when the line is
+    parsed, so what it says is "the sentence again with one word changed".
+
+    *round* is the process as printed — with its own type still in it — and
+    *types* are the ones it happens for after that. The round's own type is not
+    repeated here: it is already in the round, and naming it twice would be one
+    fact in two places, free to disagree.
+    """
+    round: "Statement"
+    types: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class OneOf:
     """"sacrifice a creature **or** discard a creature card" (Crypt Lurker).
 
@@ -608,7 +646,7 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
 
 
 # ---------------------------------------------------------------------------

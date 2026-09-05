@@ -772,6 +772,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a handler cannot be half a handler.
     "finish_repeated_graveyard_pick": "zones",
     "exile_all_matching": "zones",
+    # "…then **the chosen permanents** phase out." (Equipoise.) The same zone
+    # question as every other phase-out beside it — CR 702.26 is not a zone
+    # change, and this table is where the family says so — with the set read
+    # off a record rather than off a target.
+    "phase_out_recorded_permanents": "zones",
     "phase_out_target": "zones",
     # "Until your next upkeep, target permanent **can't phase out**." (Spatial
     # Binding.) Beside the phasing actions rather than with the combat

@@ -87,6 +87,7 @@ ActionKind = Literal[
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",
     "flip_again_confirm",
+    "repeat_process_confirm",
     "exile_from_hand_confirm",
     "linked_exile_return_confirm",
     "library_cycle_confirm",

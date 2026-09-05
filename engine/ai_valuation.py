@@ -234,6 +234,18 @@ SELF_PAYMENT_KINDS = frozenset({
 })
 
 
+def payload_reference(step) -> str:
+    """The printed player reference a step aimed at a *named* seat names.
+
+    ``who`` where the lowering wrote one ("defending player discards three
+    cards", Mindstab Thrull) and "target" where it did not — an absent key is
+    the handler reading ``context.target``, which is the seat the sentence
+    chose. One reader, because the answer decides whether a step is a price and
+    a second spelling would price the same sentence two ways.
+    """
+    return str((getattr(step, "payload", None) or {}).get("who") or "target")
+
+
 def _step_is_a_payment(step, self_recipients: frozenset[str]) -> bool:
     kind = getattr(step, "kind", None)
     if kind in SELF_PAYMENT_KINDS:
@@ -248,6 +260,17 @@ def _step_is_a_payment(step, self_recipients: frozenset[str]) -> bool:
         # Arsonist's "you may have it deal 1 damage to any target" names no
         # player recipient at all and is a gift.
         return step.payload.get("recipient") in self_recipients
+    if kind == "discard_target_cards":
+        # "…unless that player **discards a card**" (Forbidden Ritual). A
+        # discard out of the offered seat's own hand is a price, and this kind
+        # is how the grammar lowers one aimed at a *named* seat —
+        # ``discard_controller_cards`` in the set above is the same deed
+        # aimed at "you". Which seat it is cannot be read off the payload
+        # alone, exactly as it cannot for damage above: the discarder is a
+        # printed reference the resolution binds, absent meaning the target the
+        # sentence chose. So the caller's resolved set answers it, and a
+        # sentence making somebody *else* discard stays what it is — a gift.
+        return str(payload_reference(step)) in self_recipients
     if kind == "choose_one":
         # "…sacrifice a creature **or** discard a creature card" (Crypt
         # Lurker). CR 601.2b lets the payer pick, so the offer is a price only

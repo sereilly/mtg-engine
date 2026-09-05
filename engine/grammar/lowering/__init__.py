@@ -197,10 +197,9 @@ from .attachments import (
     _lower_choose_permanent,
     _lower_choose_permanents,
 )
+from .phasing import (_lower_cant_phase_out, _lower_phase_out,
+                      _lower_simultaneous_phasing)
 from .board import (
-    _lower_cant_phase_out,
-    _lower_phase_out,
-    _lower_simultaneous_phasing,
     _lower_put_on_library_bottom,
     _lower_put_graveyard_top_on_library_bottom,
     _lower_delayed_self_action,
@@ -328,10 +327,11 @@ from .combat import (
 )
 from .tokens import (_lower_create_copy_token, _lower_create_emblem, _title,
                      _lower_create_token)
+from .repeats import (_lower_repeat_for_types,
+                      _lower_repeat_optional_process, _lower_repeat_process)
 from .game import (
     _lower_count_objects,
     _lower_ante,
-    _lower_repeat_process,
     _lower_extra_turn,
     _lower_extra_phases,
     _LOSE_GAME_KINDS,
@@ -588,6 +588,8 @@ __all__ = [
     "_lower_become_blocked",
     "_lower_remove_from_combat",
     "_lower_ante",
+    "_lower_repeat_for_types",
+    "_lower_repeat_optional_process",
     "_lower_repeat_process",
     "_lower_exchange_life_totals",
     "_lower_set_life_total",

@@ -397,6 +397,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # is whether the rest of the resolution happens at all, and the round it
         # starts arms the next offer.
         "flip_again",
+        # "You may repeat this process any number of times." (Forbidden
+        # Ritual.) The answer is whether the rest of the resolution happens at
+        # all — the round it starts is the whole printed process again, and
+        # that round arms the next question. `flip_again`'s shape one card
+        # over, with a process where that one has a coin.
+        "repeat_process",
         # "Then any other player may pay 2 life. If a player does, put that card
         # into its owner's graveyard. Otherwise, that player draws a card."
         # (Zur's Weirding.) The answer decides what happens to the card on top
