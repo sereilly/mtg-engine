@@ -798,6 +798,20 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.reset(mark)
         if stream.at_word("remove"):
             costs.append(_parse_counter_removal_cost(stream))
+            # "Remove five fuse counters from this enchantment **and sacrifice
+            # it**" (Goblin Bomb). One printed clause with two payments in it,
+            # joined by "and" rather than by the comma every other pair of
+            # costs uses — so the loop's separator never saw it and the whole
+            # ability refused. The pronoun is read here, attached to the clause
+            # that just named the source, because "it" has exactly one referent
+            # at this point in the sentence and reading it anywhere else would
+            # be a guess.
+            if stream.accept_phrase("and", "sacrifice", "it"):
+                costs.append(
+                    ast.SacrificeCost(
+                        ast.ObjectFilter(is_source=True), count=ast.Fixed(1)
+                    )
+                )
             stream.accept_punct(",")
             continue
         if stream.at_word("discard"):

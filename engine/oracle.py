@@ -2094,6 +2094,19 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             r"\bsacrifice this (artifact|creature|enchantment|permanent|land|token)\b",
             cost_lower,
         )
+        # "Remove five fuse counters from this enchantment **and sacrifice
+        # it**" (Goblin Bomb). The pronoun names the permanent the clause in
+        # front of it just named, so it is read as part of that clause rather
+        # than on its own: a bare "sacrifice it" anywhere in a cost would be a
+        # referent this reader cannot resolve, and charging the source for it
+        # would be a guess. The grammar reads the same two words in the same
+        # position (``costs._parse_costs``'s remove branch), so the two halves
+        # of the clause cannot admit different sentences.
+        or re.search(
+            r"\bfrom this (?:artifact|creature|enchantment|permanent|land|token) "
+            r"and sacrifice it\b",
+            cost_lower,
+        )
     )
     # "Return this enchantment to its owner's hand" (Cycle of Life) — the same
     # shape one zone over, anchored the same way and admitting the same nouns,

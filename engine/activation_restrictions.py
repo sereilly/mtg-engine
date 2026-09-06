@@ -623,6 +623,22 @@ def _controlled_since_your_last_turn(game: "Game", controller_index: int, source
     return bool(game._controlled_since_turn_start(source))
 
 
+def _source_entered_this_turn(game: "Game", controller_index: int, source) -> bool:
+    """Fungus Elemental. "Activate only if this creature entered this turn."
+
+    A property of the *permanent*, so the source is what answers and a source
+    that is gone answers no — :func:`_controlled_since_your_last_turn`'s shape
+    one record over. It has to be the **arrival** record rather than the
+    summoning-sickness one those two share: CR 302.6's stamp is rewritten by a
+    control change and carried forward by a passing turn, so a creature handed
+    over this turn would answer "entered this turn" for the control change
+    rather than for entering. ``Game.entered_this_turn`` is the fact itself.
+    """
+    if source is None:
+        return False
+    return bool(game.entered_this_turn(source))
+
+
 #: The metadata key a per-turn-limited activation tallies on its permanent, and
 #: the one every reader of that clause shares. The refusal and the stamp used to
 #: agree by both spelling the words, which is one fact with two representations
@@ -1314,6 +1330,19 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         ),
         _seven_life_above_starting,
         "you need 7 life above your starting total",
+    ),
+    ActivationRestriction(
+        # "Activate only if **this creature entered this turn**." (Fungus
+        # Elemental.) The printed noun is consumed as a word rather than
+        # matched against one spelling: the sentence says whatever the card's
+        # own type is, so an artifact or an enchantment printing it needs no
+        # second row. Unenforced, this is a +2/+2 counter every turn for the
+        # rest of the game on a card that offers one — the ability working
+        # more often than the card allows, which is this module's own opening
+        # paragraph.
+        re.compile(r"^activate only if this (?:permanent|\w+) entered this turn$"),
+        _source_entered_this_turn,
+        "it didn't enter the battlefield this turn",
     ),
     ActivationRestriction(
         re.compile(r"^activate only as a sorcery$"),
