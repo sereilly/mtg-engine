@@ -745,6 +745,20 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # "…and its activated abilities can't be activated." (Volrath's Curse.)
+        # The same clause with CR 605.1a's exception **not** printed, which is
+        # what the second name means: every activated ability, mana abilities
+        # included. Read as the row above it the Curse would leave a Birds of
+        # Paradise tapping for mana — an ability the card shuts off, wrong in
+        # the player's favour and silent, which is why the two clauses are two
+        # names rather than one.
+        if aura_restriction_active(permanent, "all_activated_abilities_shut_off"):
+            details = (
+                f"{permanent.card.name}'s activated abilities can't be activated"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # "…and their activated abilities **with {T} in their costs** can't be
         # activated." (Katabatic Winds.) The board-wide twin of the Aura clause
         # above: a permanent describing a *set* of other permanents whose tap

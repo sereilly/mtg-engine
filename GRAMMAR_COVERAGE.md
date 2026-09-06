@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 80.3% | 78.7% | 53.6% | 222 |
+| TMP *(measured)* | 335 | 478 | 81.8% | 80.1% | 55.0% | 226 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,16 +47,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 371 | 170 | expected a subject |  |
+| 370 | 169 | expected a subject |  |
 | 115 | 57 | unrecognized effect verb |  |
 | 96 | 48 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 12 | 9 | expected a keyword ability |  |
 | 12 | 11 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
+| 7 | 4 | expected a keyword ability |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
@@ -1730,6 +1730,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Enlightened Tutor**
   - `Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.`
+- **Enraging Licid**
+  - `{R}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {R} to end this effect.`
 - **Enslaved Scout**
   - `{2}: This creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Epitaph Golem**
@@ -3146,6 +3148,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Leeches**
   - `Target player loses all poison counters. Leeches deals that much damage to that player.`
 - **Leeching Licid**
+  - `{B}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {B} to end this effect.`
   - `At the beginning of the upkeep of enchanted creature's controller, this creature deals 1 damage to that player.`
 - **Leering Gargoyle**
   - `{T}: This creature gets -2/+2 and loses flying until end of turn.`
@@ -3791,6 +3794,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nova Pentacle**
   - `{3}, {T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature of an opponent's choice instead.`
 - **Nurturing Licid**
+  - `{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.`
   - `{G}: Regenerate enchanted creature.`
 - **Oasis**
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
@@ -4213,6 +4217,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
 - **Quarum Trench Gnomes**
   - `{T}: If target Plains is tapped for mana, it produces colorless mana instead of white mana. (This effect lasts indefinitely.)`
+- **Quickening Licid**
+  - `{1}{W}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {W} to end this effect.`
 - **Quicksand**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Target attacking creature without flying gets -1/-2 until end of turn.`
@@ -4530,6 +4536,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this creature: Return target artifact card from your graveyard to your hand.`
 - **Rootwater Hunter**
   - `{T}: This creature deals 1 damage to any target.`
+- **Rootwater Matriarch**
+  - `{T}: Gain control of target creature for as long as that creature is enchanted.`
 - **Roterothopter**
   - `{2}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
 - **Rousing Read**
@@ -5096,6 +5104,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.`
 - **Spike Drone**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
+- **Spinal Graft**
+  - `When enchanted creature becomes the target of a spell or ability, destroy that creature. It can't be regenerated.`
 - **Spinal Villain**
   - `{T}: Destroy target blue creature.`
 - **Spined Megalodon**
@@ -5174,6 +5184,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stench of Evil**
   - `Destroy all Plains. For each land destroyed this way, Stench of Evil deals 1 damage to that land's controller unless they pay {2}.`
 - **Stinging Licid**
+  - `{1}{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.`
   - `Whenever enchanted creature becomes tapped, this creature deals 2 damage to that creature's controller.`
 - **Stone Rain**
   - `Destroy target land.`

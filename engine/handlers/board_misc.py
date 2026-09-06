@@ -2394,12 +2394,11 @@ def _offer_to_end_this_effect(ability_line: str) -> dict[str, int] | None:
     of the sentence: that table is what will *perform* the offer, and a literal
     here would be free to drift from the words it reads.
     """
-    from ..special_actions import permanent_special_action_sentence
+    from ..special_actions import permanent_special_action_in_line
 
-    for sentence in (ability_line or "").split("."):
-        found = permanent_special_action_sentence(sentence)
-        if found is not None and found[0] == "end_own_continuous_effect":
-            return found[1]
+    found = permanent_special_action_in_line(ability_line or "")
+    if found is not None and found[0] == "end_own_continuous_effect":
+        return found[1]
     return None
 
 

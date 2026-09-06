@@ -460,8 +460,18 @@ def _action_special_action(session, req, seat_type):
         )
         if permanent is None:
             raise HTTPException(status_code=404, detail="permanent not found")
+        # "…may **sacrifice a permanent of their choice**" (CR 116.2d): the
+        # taker names the price on the same channel a CR 601.2b additional cost
+        # already travels on, resolved to a permanent by the preamble above.
+        # None leaves the deterministic pick, which is what a non-interactive
+        # seat gets everywhere else in this engine.
+        sacrificed = (
+            session.game.permanent_by_id(req.cost_permanent_id)
+            if req.cost_permanent_id is not None
+            else None
+        )
         refusal = take_permanent_special_action(
-            session.game, req.seat, permanent, kind
+            session.game, req.seat, permanent, kind, sacrificed=sacrificed
         )
         if refusal is not None:
             raise HTTPException(status_code=400, detail=refusal)

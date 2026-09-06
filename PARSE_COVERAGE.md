@@ -25,15 +25,13 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**4 unclaimed sentence(s) across 3 supported card(s).**
+**3 unclaimed sentence(s) across 2 supported card(s).**
 
 - **Duplicity**
   - `at the beginning of your upkeep, you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand`
 - **Magnetic Web**
   - `if a creature with a magnet counter on it attacks, all creatures with magnet counters on them attack if able`
   - `whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able`
-- **Volrath's Curse**
-  - `that creature's controller may sacrifice a permanent of their choice for that player to ignore this effect until end of turn`
 
 ## Acknowledged simplifications
 
@@ -317,16 +315,16 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | parse rule | 2415 |
 | activation cost | 1049 |
 | trigger table | 743 |
+| static-line table | 602 |
 | keyword table | 533 |
-| static-line table | 523 |
 | aura enchant noun (oracle_instructions attach) | 187 |
 | activation_restrictions.py | 99 |
 | card_hooks bespoke (name-keyed) | 91 |
-| aura static (oracle_instructions/permanent_state) | 68 |
-| auras.py (attached effect) | 56 |
 | loyalty cost | 33 |
 | cast_costs.py | 30 |
 | oracle.py (modal trigger head) | 29 |
+| auras.py (attached effect) | 25 |
+| aura static (oracle_instructions/permanent_state) | 21 |
 | cost_modifiers.py | 17 |
 | mixin text scan | 15 |
 | activation_permissions.py | 11 |
@@ -344,7 +342,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | lord_buffs.py (state trigger) | 2 |
 | mana_spending.py | 2 |
 | activation_restrictions.py (board-wide ban) | 2 |
-| auras.py (attached ability cost reduction) | 2 |
 | cast_restrictions.py (board-wide ban) | 1 |
 | special_actions.py | 1 |
 | cast_restrictions.py (board-wide own-turn window) | 1 |

@@ -209,7 +209,42 @@ _PERMANENT_ACTION_SENTENCES: tuple[tuple[re.Pattern[str], str], ...] = (
         re.compile(r"^you may pay (?P<cost>(?:\{[^}]+\})+) to end this effect$"),
         "end_own_continuous_effect",
     ),
+    # CR 116.2d. "That creature's controller may sacrifice a permanent of their
+    # choice for that player to ignore this effect until end of turn."
+    # (Volrath's Curse.) The offer is made to somebody who is *not* the
+    # permanent's controller and its price is not mana, which is why the two
+    # rows above and below this comment need a richer answer than a cost: see
+    # :class:`SpecialActionOffer`.
+    (
+        re.compile(
+            r"^that (?P<noun>[a-z]+)'s controller may sacrifice a permanent of "
+            r"their choice for that player to ignore this effect until end of "
+            r"turn$"
+        ),
+        "ignore_attached_static_until_eot",
+    ),
 )
+
+
+@dataclass(frozen=True)
+class SpecialActionOffer:
+    """One offer a permanent is currently making: to whom, and for what.
+
+    ``seat`` is who may take it, and it is on the offer rather than derived from
+    the permanent because CR 116.2d's is not the permanent's controller: "**That
+    creature's** controller may sacrifice a permanent" is an offer an Aura makes
+    to the player it is punishing.
+
+    ``mana`` and ``sacrifice`` are the two prices this pool prints — a mana cost
+    (CR 116.2c, the Licids) and one permanent of the taker's choice described by
+    a subject filter (CR 116.2d, Volrath's Curse). Both are paid by the seam
+    below rather than by the offer's own ``take``, because a cost is a cost
+    wherever it appears: paying it is not part of what the action *does*.
+    """
+
+    seat: int
+    mana: "dict[str, int] | None" = None
+    sacrifice: "dict[str, object] | None" = None
 
 
 @dataclass(frozen=True)
@@ -234,7 +269,7 @@ class PermanentSpecialAction:
     """
 
     kind: str
-    offer: "Callable[[Game, Permanent], dict[str, int] | None]"
+    offer: "Callable[[Game, Permanent], SpecialActionOffer | None]"
     take: "Callable[[Game, int, Permanent], None]"
 
 
@@ -296,39 +331,36 @@ def permanent_special_action_sentence(
         match = pattern.match(normalized)
         if match is None:
             continue
-        cost = mana_cost_from_symbols(match.group("cost").upper())
+        # Not every offer names a price in mana — CR 116.2d's is a sacrifice —
+        # so the group is optional and its absence is "no mana", never a
+        # refusal. The rest of the price is the offer's business
+        # (:class:`SpecialActionOffer`); this table reads only the sentence.
+        printed = match.groupdict().get("cost")
+        if printed is None:
+            return kind, {}
+        cost = mana_cost_from_symbols(printed.upper())
         if cost is None:
             return None
         return kind, cost
     return None
 
 
-def permanent_special_action_line(line: str) -> str | None:
-    """The kind of offer *line* carries, or None — asked of a whole printed
-    line rather than of one sentence.
+def permanent_special_action_in_line(
+    line: str,
+) -> "tuple[str, dict[str, int]] | None":
+    """The offer one printed *line* carries, or None.
 
     A Licid's offer is the last sentence of an activated ability's line, so the
-    line is split here and every sentence asked. The support gate and the
-    grammar's sentence reader both come through this, which is what keeps the
-    claim and the offer describing the same words.
+    line is split here and every sentence asked. The reader the *effect* uses
+    when it records what it will let its controller pay to end
+    (``handlers/board_misc``), so what the sentence table says and what the
+    offer costs cannot describe different words.
     """
     for sentence in _split_sentences(line):
         found = permanent_special_action_sentence(sentence)
         if found is not None:
-            return found[0]
+            return found
     return None
-
-
-def permanent_special_actions_for(
-    card: "CardDefinition",
-) -> "tuple[tuple[str, dict[str, int]], ...]":
-    """Every offer *card*'s own text makes, in printed order."""
-    return tuple(
-        found
-        for line in (getattr(card, "oracle_text", "") or "").splitlines()
-        for sentence in _split_sentences(line)
-        if (found := permanent_special_action_sentence(sentence)) is not None
-    )
 
 
 def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
@@ -372,33 +404,77 @@ def permanent_special_action_refusal(
         return f"no special action named {kind!r}"
     if not game.is_on_battlefield(permanent):
         return f"{permanent.card.name} is no longer on the battlefield"
-    cost = spec.offer(game, permanent)
-    if cost is None:
+    offer = spec.offer(game, permanent)
+    if offer is None:
         return f"{permanent.card.name} is not making that offer"
-    if game.controller_index_of(permanent) != seat:
-        return f"{game.players[seat].name} does not control {permanent.card.name}"
+    if offer.seat != seat:
+        return f"{permanent.card.name} is not offering that to {game.players[seat].name}"
     if not game.has_priority(seat):
         return f"{game.players[seat].name} does not have priority"
-    if _payment_plan(game, seat, cost) is None:
+    if offer.mana and _payment_plan(game, seat, offer.mana) is None:
         return f"{game.players[seat].name} can't pay for it"
+    if offer.sacrifice is not None and not _sacrificeable(game, seat, offer):
+        return f"{game.players[seat].name} has nothing to sacrifice for it"
     return None
 
 
+def _sacrificeable(game: "Game", seat: int, offer: "SpecialActionOffer") -> list:
+    """The permanents *seat* could give up to take *offer*.
+
+    Through ``subject_filters.subject_matches``, the one reader of a printed
+    noun phrase, so "a permanent" and any narrower phrase a later card prints
+    are the same question asked with different data.
+    """
+    from .subject_filters import subject_matches
+
+    return [
+        permanent
+        for permanent in game.controlled_by(seat)
+        if subject_matches(game, permanent, offer.sacrifice or {}, observer=seat)
+    ]
+
+
 def take_permanent_special_action(
-    game: "Game", seat: int, permanent: "Permanent", kind: str
+    game: "Game", seat: int, permanent: "Permanent", kind: str,
+    sacrificed: "Permanent | None" = None,
 ) -> str | None:
     """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
 
     CR 116.3 again: the player receives priority afterwards, so nothing here
     passes, advances a step or touches ``priority_player_index``.
+
+    *sacrificed* is which permanent pays a CR 116.2d offer's price — "a
+    permanent **of their choice**", so the taker names it. A caller that names
+    none gets ``Game.default_sacrifice_pick``, the one rule every other
+    deterministic sacrifice in this engine goes through; naming one that does
+    not satisfy the offer is a refusal rather than a silent substitution, for
+    the reason every targeted effect here refuses: a cost paid with something
+    the player did not choose is the quiet wrongness this repo does not ship.
     """
     refusal = permanent_special_action_refusal(game, seat, permanent, kind)
     if refusal is not None:
         return refusal
     spec = PERMANENT_SPECIAL_ACTIONS[kind]
-    plan = _payment_plan(game, seat, spec.offer(game, permanent) or {})
+    offer = spec.offer(game, permanent)
+    assert offer is not None  # the refusal above already asked
+    victim = None
+    if offer.sacrifice is not None:
+        candidates = _sacrificeable(game, seat, offer)
+        if sacrificed is not None:
+            if not any(candidate is sacrificed for candidate in candidates):
+                return f"{sacrificed.card.name} can't be sacrificed for that"
+            victim = sacrificed
+        else:
+            victim = game.default_sacrifice_pick(candidates)
+    plan = _payment_plan(game, seat, offer.mana) if offer.mana else None
     if plan:
         game._spend_payment_plan(game.players[seat], plan)
+    if victim is not None:
+        game.sacrifice_permanent(victim)
+        game.log.append(
+            f"{game.players[seat].name} sacrificed {victim.card.name} "
+            f"({permanent.card.name}, CR 116.2d)"
+        )
     spec.take(game, seat, permanent)
     return None
 
@@ -411,10 +487,16 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
     Addressed by ``permanent_id`` rather than by a battlefield slot, for the
     reason every other wire-borne permanent reference in this engine is: a slot
     renumbers the moment anything leaves (CR 400.7).
+
+    Over the **whole board**, not the seat's own permanents: CR 116.2d's offer
+    is made by an Aura to the player it is punishing, so the permanent making it
+    is one this seat does not control. Which seat may take it is the offer's own
+    answer (``SpecialActionOffer.seat``), asked through the same refusal the
+    action asks.
     """
     _load_registrations()
     entries: list[dict] = []
-    for permanent in game.controlled_by(seat):
+    for permanent in game.all_permanents():
         for kind in PERMANENT_SPECIAL_ACTIONS:
             if permanent_special_action_refusal(game, seat, permanent, kind) is None:
                 entries.append({
@@ -428,12 +510,12 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
 __all__ = [
     "PERMANENT_SPECIAL_ACTIONS",
     "PermanentSpecialAction",
+    "SpecialActionOffer",
     "available_permanent_special_actions",
     "available_special_actions",
-    "permanent_special_action_line",
+    "permanent_special_action_in_line",
     "permanent_special_action_refusal",
     "permanent_special_action_sentence",
-    "permanent_special_actions_for",
     "register_permanent_special_action",
     "take_permanent_special_action",
     "special_action_line",

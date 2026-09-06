@@ -14,6 +14,7 @@ from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
+from ..auras import clear_ignored_restrictions
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords)
@@ -232,6 +233,11 @@ class CleanupStepMixin:
                 # Beside its two siblings, because a grant and a removal that
                 # share a printed duration have to end at one moment.
                 clear_removed_ability_keywords(permanent, "end_of_turn")
+                # CR 116.2d's suspension: "…to ignore this effect **until end
+                # of turn**" (Volrath's Curse). The same printed duration in a
+                # fourth channel, swept beside the other three because a
+                # duration means one moment however it was bought.
+                clear_ignored_restrictions(permanent)
                 # "Change the text of target permanent … **until end of turn**."
                 # (Whim of Volrath.) CR 612's rewrite with a printed duration —
                 # the first in the pool — and it is filtered rather than popped

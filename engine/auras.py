@@ -1315,11 +1315,20 @@ def _became_aura_offer(game, permanent):
     longer says it. CR 611.2a's effect outlives the ability that made it, and
     CR 116.2c's offer is part of the effect.
     """
+    from .special_actions import SpecialActionOffer
+
     record = permanent.metadata.get(BECAME_AURA_ENCHANT)
     if not record:
         return None
     cost = record.get("end_cost")
-    return dict(cost) if cost else None
+    if not cost:
+        return None
+    seat = game.controller_index_of(permanent)
+    if seat is None:
+        return None
+    # "**You** may pay" — the ability's controller (CR 109.5), which for a
+    # permanent that turned itself into an Aura is whoever controls it now.
+    return SpecialActionOffer(seat=seat, mana=dict(cost))
 
 
 def _take_became_aura_offer(game, seat: int, permanent) -> None:
@@ -1328,6 +1337,93 @@ def _take_became_aura_offer(game, seat: int, permanent) -> None:
             f"{game.players[seat].name} paid to end {permanent.card.name}'s "
             "effect (CR 116.2c): it is a creature again"
         )
+
+
+#: The restriction names an Aura is currently *not* imposing, because the
+#: permanent it is attached to bought a turn off them (CR 116.2d). Recorded on
+#: the Aura and cleared by the cleanup step, like every other "until end of
+#: turn" record in this engine — nothing is undone, the record simply stops
+#: being there.
+#:
+#: The **names** rather than a flag on the Aura, because the printed offer says
+#: "ignore **this effect**" and names one sentence: an Aura whose second
+#: restriction line sat behind the offer would otherwise be suspended whole.
+IGNORED_RESTRICTIONS = "ignored_restrictions_until_eot"
+
+#: "That creature's controller may sacrifice a permanent of their choice for
+#: that player to ignore this effect until end of turn." (Volrath's Curse.)
+#: CR 116.2d, and the sentence in front of it is what "this effect" names —
+#: which is why the pattern reads the noun: the offer is about the restriction
+#: line above it, on the permanent that line is about.
+_IGNORE_STATIC_OFFER = re.compile(
+    r"^that (?P<noun>[a-z]+)'s controller may sacrifice a permanent of their "
+    r"choice for that player to ignore this effect until end of turn$"
+)
+
+
+def aura_ignore_offer(oracle_text: str) -> frozenset[str] | None:
+    """The restrictions an Aura's CR 116.2d offer suspends, or None.
+
+    "This effect" is the sentence printed in front of the offer, so the two are
+    read together: the restriction set comes from :func:`aura_restrictions` over
+    the same line, which is the reader that will be asked to skip them. An offer
+    printed against a sentence this file does not implement claims nothing —
+    a suspension of a restriction nobody imposes is not an effect.
+    """
+    for raw_line in (oracle_text or "").splitlines():
+        line = _line_text(raw_line)
+        for index, sentence in enumerate(part.strip() for part in line.split(".")):
+            if not sentence or _IGNORE_STATIC_OFFER.match(sentence) is None:
+                continue
+            preceding = ". ".join(
+                part.strip() for part in line.split(".")[:index] if part.strip()
+            )
+            restrictions = aura_restrictions(preceding)
+            return restrictions or None
+    return None
+
+
+def _ignore_static_offer(game, aura):
+    """What *aura* is offering its host's controller (CR 116.2d), or None."""
+    from .special_actions import SpecialActionOffer
+
+    restrictions = aura_ignore_offer(aura.effective_card.oracle_text)
+    if not restrictions:
+        return None
+    host = aura.metadata.get("attached_to")
+    if host is None or not game.is_on_battlefield(host):
+        return None
+    if restrictions <= set(aura.metadata.get(IGNORED_RESTRICTIONS) or ()):
+        # Already bought this turn. Offering it again would let a seat pay twice
+        # for one turn's relief, which the printed duration does not do.
+        return None
+    seat = game.controller_index_of(host)
+    if seat is None:
+        return None
+    # "…**a permanent** of their choice", which is CR 110.1's whole noun: an
+    # empty filter is every permanent, and a narrower phrase on a later card is
+    # the same field with data in it.
+    return SpecialActionOffer(seat=seat, sacrifice={})
+
+
+def _take_ignore_static_offer(game, seat: int, aura) -> None:
+    restrictions = aura_ignore_offer(aura.effective_card.oracle_text) or frozenset()
+    kept = set(aura.metadata.get(IGNORED_RESTRICTIONS) or ())
+    aura.metadata[IGNORED_RESTRICTIONS] = sorted(kept | set(restrictions))
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{game.players[seat].name} ignores {aura.card.name}'s effect until "
+        "end of turn (CR 116.2d)"
+    )
+
+
+def clear_ignored_restrictions(permanent) -> bool:
+    """CR 514.2's cleanup: an "until end of turn" suspension ends.
+
+    Beside the other cleanup sweeps and swept the same way, because that is what
+    the printed duration is. Returns whether anything was cleared.
+    """
+    return permanent.metadata.pop(IGNORED_RESTRICTIONS, None) is not None
 
 
 def _register_became_aura_special_action() -> None:
@@ -1347,6 +1443,11 @@ def _register_became_aura_special_action() -> None:
         kind="end_own_continuous_effect",
         offer=_became_aura_offer,
         take=_take_became_aura_offer,
+    ))
+    register_permanent_special_action(PermanentSpecialAction(
+        kind="ignore_attached_static_until_eot",
+        offer=_ignore_static_offer,
+        take=_take_ignore_static_offer,
     ))
 
 
@@ -1928,6 +2029,24 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "activated_abilities_shut_off",
     ),
+    (
+        # Volrath's Curse prints the same sentence **without** CR 605.1a's
+        # exception, and that is a different card rather than a wording of the
+        # row above: a Birds of Paradise under Faith's Fetters may still tap for
+        # mana and one under the Curse may not. Its own name for that reason —
+        # the enforcement site reads which of the two it is, and one name for
+        # both would have to pick a side.
+        #
+        # Anchored on the clause rather than the line, like the two "can't
+        # attack or block" rows above it: this sentence is printed with a second
+        # one behind it (the CR 116.2d offer), so a `$` would match nothing. The
+        # lookahead is what keeps it off the longer wording above.
+        re.compile(
+            rf"^{_ATTACHED} {_NOUN} can't attack or block, and its activated "
+            r"abilities can't be activated(?! unless)"
+        ),
+        "all_activated_abilities_shut_off",
+    ),
 )
 
 # A "doesn't untap" restriction that holds only while a counter is present —
@@ -2273,6 +2392,14 @@ def aura_restriction_active(
     from .turn_state import attacked_during_seats_last_turn
 
     for aura in auras_attached_to(permanent):
+        # CR 116.2d: the host's controller bought a turn off this Aura's
+        # restrictions, so it is imposing none of them for the rest of the turn
+        # (Volrath's Curse). Asked here rather than at each of the eight readers
+        # of this predicate, because this is the one place "does the restriction
+        # apply?" is answered — a suspension wired into the combat step alone
+        # would leave the creature's activated abilities still shut off.
+        if name in (aura.metadata.get(IGNORED_RESTRICTIONS) or ()):
+            continue
         text = aura.effective_card.oracle_text
         if name in aura_restrictions(text):
             return True
