@@ -35,6 +35,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_assigns_no_combat_damage, _lower_attacking_doesnt_tap,
                        _lower_attacks_this_turn_if_able,
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
+                       _lower_put_graveyard_position_onto_battlefield,
                        _lower_waive_shroud, _lower_change_target, _lower_counter_spell,
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
@@ -318,6 +319,13 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # offer, where `dispatch_event` is already None.
     ast.ActivateEachLandsManaAbility: _lower_activate_each_lands_mana_ability,
     ast.LoseUnspentMana: _lower_lose_unspent_mana,
+    # "Put the top creature card of **defending player's** graveyard onto
+    # the battlefield under your control." (Bone Dancer.) The raw `event`
+    # for the two rows above's reason, and the same seat: which pile the
+    # words name is a fact about the trigger, and this one is printed inside
+    # a "you may …" offer where `dispatch_event` is already None.
+    ast.PutGraveyardPositionOntoBattlefield:
+        _lower_put_graveyard_position_onto_battlefield,
 }
 
 

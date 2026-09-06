@@ -894,6 +894,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Teferi's Veil's delayed half and Ertai's Familiar's lock: the same
     # CR 702.26 family as every row above, on the object a delayed ability
     # bound and on the ability's own source.
+    "reanimate_graveyard_position": "zones",
     "phase_out_bound_permanent": "zones",
     "forbid_source_phase_out": "zones",
     "draw_target_cards": "zones",

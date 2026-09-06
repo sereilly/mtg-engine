@@ -24,6 +24,7 @@ from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
+                       accept_graveyard_position,
                        is_pt_counter, parse_pair_ordinal_subject)
 
 
@@ -120,6 +121,26 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         ):
             return ast.PutGraveyardTopOnLibraryBottom()
     stream.reset(top_of_graveyard)
+    # "Put **the top creature card of defending player's graveyard** onto
+    # the battlefield under your control." (Bone Dancer.) Read here, beside
+    # the library-bottom position above and before the recipient parser, for
+    # that branch's stated reason: the card is named by its place in an
+    # ordered pile (CR 404.2) rather than by a noun phrase, so
+    # `parse_recipient` refuses it on the number it expects after "the top"
+    # and takes the whole line with it.
+    #
+    # The destination is spelled out here rather than falling through to the
+    # shared "on/onto" branch below, because that branch is reached only with
+    # a `Recipient` in hand and a position is not one.
+    onto_mark = stream.mark()
+    position = accept_graveyard_position(stream)
+    if position is not None:
+        if stream.accept_phrase("onto", "the", "battlefield"):
+            under = bool(stream.accept_phrase("under", "your", "control"))
+            return ast.PutGraveyardPositionOntoBattlefield(
+                position, under_your_control=under
+            )
+    stream.reset(onto_mark)
     if stream.accept_phrase("that", "card"):
         moved = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:

@@ -3048,6 +3048,70 @@ def exile_graveyard_position(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("reanimate_graveyard_position")
+def reanimate_graveyard_position(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the top creature card of defending player's graveyard onto the
+    battlefield **under your control**." (Bone Dancer.)
+
+    Which card is ``graveyard_order.positions_named`` — the one scan, shared
+    with ``exile_graveyard_position`` above and with the activation-cost payment
+    path, so a printed position read as a cost and the same position read as an
+    effect cannot name different cards. It answers with an **index** rather than
+    a card because two copies of one card in one graveyard are the same Python
+    object, and an identity filter over the pile would take both.
+
+    Whose pile is CR 506.2's defending player, frozen into the trigger's context
+    by the combat fire site rather than read off the board — the same key
+    ``exile_cards_from_graveyard`` reads, and for its reason: this resolves in a
+    priority window after the declaration, and an attacker removed from combat
+    in between would leave a board read naming nobody.
+
+    Whose **battlefield** is the ability's controller, which is the whole of the
+    card: CR 404.1 puts the card in its owner's graveyard, so the default
+    arrival (CR 400.3) would hand the creature back to the player being
+    attacked.
+
+    An empty pile reanimates nothing and still resolves (CR 608.2 finishes what
+    it can) — and returns False from the ``may`` it sits inside, which is what
+    keeps "If you do, this creature assigns no combat damage this turn" from
+    firing on a turn where nothing came back.
+    """
+    from ..graveyard_order import positions_named
+
+    if instruction.payload.get("graveyard_owner") != "defending_player":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(
+            f"{context.card.name}: no defending player was recorded"
+        )
+        return True, "no graveyard"
+    victim = game.players[seat]
+    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    if not taken:
+        game.log.append(
+            f"{victim.name}'s graveyard has nothing {context.card.name} can "
+            f"return"
+        )
+        return True, "no card"
+    caster_index = game.players.index(context.caster)
+    moved = []
+    # Highest index first: the positions were found against the pile as it
+    # stands, and removing a lower one renumbers every position above it.
+    for index in sorted(taken, reverse=True):
+        moved.append(victim.graveyard.pop(index))
+    for card in moved:
+        game._put_permanent_onto_battlefield(
+            caster_index, Permanent(card=card), None, from_zone="graveyard"
+        )
+        game.log.append(
+            f"{context.card.name} returned {card.name} from {victim.name}'s "
+            f"graveyard under {context.caster.name}'s control"
+        )
+    return True, "resolved"
+
+
 @effect_handler("exile_cost_sacrifices")
 def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…, then exile this artifact and those creature cards." (Sword of the

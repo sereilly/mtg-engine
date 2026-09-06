@@ -1225,3 +1225,149 @@ def test_ertais_familiar_lock_stops_the_next_untap_steps_phase_out(set_pool):
         "Ertai's Familiar"
     ], game.log
     assert len(game.players[0].graveyard) - milled == 3
+
+
+def _w2g3c_bone_dancer(set_pool, defender_graveyard, interactive=(0,)):
+    """Bone Dancer attacking unblocked into a seat whose graveyard holds
+    *defender_graveyard*, stopped with the offer owed.
+
+    The seat is interactive on purpose: a non-interactive one *declines* the
+    offer by default, so a test written without this proves only that the
+    decline branch runs.
+    """
+    dancer = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Bone Dancer"]))
+    defender = PlayerState(name="P2")
+    defender.graveyard = list(defender_graveyard)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[dancer]), defender,
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare blockers
+    # CR 509.1h: a creature becomes unblocked as blocks are declared, so the
+    # trigger is announced when this step *ends*.
+    game.advance_combat_phase()
+    _w2g3c_settle(game)
+    return game, dancer, defender
+
+
+def _w2g3c_settle(game: Game) -> None:
+    """Resolve until the stack is empty **or** a seat is owed a decision.
+
+    Never a bare ``while game.stack`` — a prompt armed part-way through a
+    resolution holds the object on the stack (CR 608.2), so that loop spins.
+    """
+    for _ in range(40):
+        if not game.stack or game.waiting_prompt:
+            break
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def test_bone_dancer_reanimates_the_top_creature_card_under_your_control(set_pool):
+    """"…you may put **the top creature card of defending player's graveyard**
+    onto the battlefield **under your control**."
+
+    Three things at once, and each is a way the sentence could be read smaller.
+    The pile is the *defending player's* (CR 506.2), frozen by the combat fire
+    site. The card is the creature card **nearest the top**, not the top card if
+    it happens to be a creature — so the artifact sitting above it is skipped
+    rather than blocking the ability. And the creature arrives on the
+    **attacker's** side: CR 404.1 puts a card in its owner's graveyard, so the
+    default arrival under CR 400.3 would hand it straight back.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Bone Dancer"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "attacks_unblocked"
+    (action,) = trig.instruction.payload["action"]
+    assert action.kind == "reanimate_graveyard_position"
+    assert action.payload["graveyard_owner"] == "defending_player"
+    assert action.payload["position"] == "top"
+
+    land = CardDefinition(
+        name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
+    )
+    rock = CardDefinition(
+        name="Dead Rock", mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Rock", "type_line": "Artifact"},
+    )
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [land, _w2g3c_creature("Dead Ogre", 3, 3), rock],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Bone Dancer", "Dead Ogre",
+    ], game.log
+    assert [c.name for c in defender.graveyard] == ["Dead Land", "Dead Rock"]
+    assert not defender.battlefield
+
+
+def test_bone_dancer_assigns_no_combat_damage_after_it_reanimates(set_pool):
+    """"If you do, this creature assigns no combat damage this turn."
+
+    The half that is a *restriction*, and the only kind of thing this engine
+    calls a bug when nothing enforces it: unenforced, Bone Dancer would
+    reanimate a creature **and** connect for two, which is a strictly better
+    card than the one printed and nothing anywhere would look wrong.
+
+    Asserted through the defender's life rather than through the marker alone,
+    because a marker nothing reads is exactly the failure being tested for.
+    """
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [_w2g3c_creature("Dead Ogre", 3, 3)],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+    assert dancer.metadata.get("assigns_no_combat_damage_until_eot")
+
+    life = defender.life
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_settle(game)
+
+    assert defender.life == life, game.log
+
+
+def test_bone_dancer_that_declines_deals_its_damage(set_pool):
+    """The other branch, and the control on the one above: the restriction is
+    the *consequence* of the reanimation, not a property of the attack."""
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [_w2g3c_creature("Dead Ogre", 3, 3)],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=False), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Bone Dancer"]
+    assert not dancer.metadata.get("assigns_no_combat_damage_until_eot")
+
+    life = defender.life
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_settle(game)
+
+    assert defender.life == life - 2, game.log
+
+
+def test_bone_dancer_finds_nothing_in_a_graveyard_with_no_creature_card(set_pool):
+    """The printed noun narrows the pile, and a dropped narrowing is a card
+    reanimating a land."""
+    land = CardDefinition(
+        name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
+    )
+    game, _dancer, defender = _w2g3c_bone_dancer(set_pool, [land, land])
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Bone Dancer"]
+    assert len(defender.graveyard) == 2

@@ -22,6 +22,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     chargeable_card_filter,
+    graveyard_position_payload,
     dropped_narrowings,
     _amount_payload,
     _describe_targets,
@@ -696,6 +697,73 @@ def _lower_graveyard_pick_onto_battlefield(
                 "battlefield_owner": record,
             },
         ),
+    )
+
+
+def _lower_put_graveyard_position_onto_battlefield(
+    node: "ast.PutGraveyardPositionOntoBattlefield", event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"Put **the top creature card of defending player's graveyard** onto the
+    battlefield under your control." (Bone Dancer.)
+
+    Here beside ``_lower_graveyard_pick_onto_battlefield`` because the two
+    answer one question — which card leaves a graveyard for the battlefield
+    when the sentence names no target — and differ in the one way that decides
+    the instruction: that one is a *pick* made as the effect resolves
+    (CR 115.1b), and this one names the card by its **position** in an ordered
+    pile (CR 404.2), so nobody chooses and no prompt is armed.
+
+    That pair is not in ``lowering/zones``, where the *targeted* reanimation
+    lives, and the honest reason is worth recording rather than dressing up:
+    the sibling arrived here because of the instruction it emits, this one
+    arrived beside the sibling, and ``zones`` is at its thousand-line guard with
+    no seam this round found. A later round that splits that module should take
+    the three readings of "put a card onto the battlefield" with it.
+
+    Three refusals, each in the direction that cannot widen the effect.
+
+    The **seat** must be one the firing event froze. "Defending player" is
+    CR 506.2's, stamped by the combat fire sites, and under any other event the
+    words name nobody — the handler would find no pile while the card compiled
+    supported. ``graveyard_position_payload`` is the shared gate every reader of
+    the phrase runs through; the seat set is *passed* rather than added to its
+    default, because a cost paid out of the defending player's graveyard is a
+    shape the payment path has no seat for.
+
+    The **count** must be one: a position naming several cards is a sentence
+    this handler does not move.
+
+    ``under your control`` is **required**, and it is the whole of the card at a
+    table. CR 404.1 puts the card in its owner's graveyard, so the default
+    arrival (CR 400.3) is under the seat being attacked — a sentence that shed
+    the rider would hand the defending player a creature.
+    """
+    payload = graveyard_position_payload(
+        node.position, seats=frozenset({"defending_player"})
+    )
+    if payload is None:
+        raise LoweringError(
+            "no handler reads that graveyard position onto the battlefield",
+            node=node,
+        )
+    if event not in _DEFENDING_PLAYER_EVENTS:
+        raise LoweringError(
+            "'defending player's graveyard' names the seat the combat "
+            "froze, and this event records none",
+            node=node,
+        )
+    if payload.get("count") != 1:
+        raise LoweringError(
+            "the graveyard-position reanimation moves one card", node=node
+        )
+    if not node.under_your_control:
+        raise LoweringError(
+            "the graveyard-position reanimation only puts the card under your "
+            "control", node=node,
+        )
+    payload["graveyard_owner"] = payload.pop("owner")
+    return (
+        OracleInstruction("reanimate_graveyard_position", "", payload),
     )
 
 
