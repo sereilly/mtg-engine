@@ -24,7 +24,8 @@ from ..errors import LoweringError
 from ._common import (
     describe_independent_target_roles, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _names_several_targets,
-    _restrictions_beyond, is_mana_value_x, testable_filter_payload
+    _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
+    testable_filter_payload
 )
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
@@ -524,13 +525,7 @@ def _lower_destroy(
     # several-target destroy is not a spell that does less, it is one that
     # destroys the wrong permanents.
     if _names_several_targets(spec):
-        leftovers = _restrictions_beyond(
-            spec.filter,
-            frozenset({
-                "card_types", "supertypes", "subtypes", "colors", "controller",
-                "other_than_source",
-            }),
-        )
+        leftovers = _restrictions_beyond(spec.filter, SEVERAL_DESTROY_NARROWINGS)
         if leftovers:
             raise LoweringError(
                 "the several-target destroy cannot narrow by: " + ", ".join(leftovers),

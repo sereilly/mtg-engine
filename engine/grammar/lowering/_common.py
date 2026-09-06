@@ -606,6 +606,32 @@ def _is_enchanted(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted
 
 
+#: The filter keys ``destroy_target_permanent``'s several-target branch tests in
+#: full, and therefore the only ones a list of destroy targets may be narrowed
+#: by -- read by the plain "Destroy N target <noun>s" lowering and by the fused
+#: "for each additional {1}{R} you paid, destroy another target <noun>" one.
+#:
+#: Named here rather than in either family because both read it and families do
+#: not import each other. ``lowering/sequences.py`` had already written the
+#: sentence 'named once because two readings of "what may a list of destroy
+#: targets be narrowed by" is one reading too many' over its own copy --
+#: while ``lowering/destruction.py`` went on spelling the same six words inline,
+#: so the constant that claimed to be the single naming was the *second* of two.
+#: A set that drifts here drops a narrowing from a sweep, which destroys
+#: permanents the card does not name.
+#:
+#: ``excluded_colors`` is here because the pure matcher tests it
+#: (``exclude_colors`` is in ``TESTABLE_SUBJECT_FILTER_KEYS`` and
+#: ``permanent_matches_filter`` reads it off CR 202.2's printed mana cost), and
+#: a key the matcher tests that this set leaves out is a *false* refusal: the
+#: whole line is declined rather than narrowed, which is what left Dregs of
+#: Sorrow and Reckless Spite unsupported.
+SEVERAL_DESTROY_NARROWINGS = frozenset({
+    "card_types", "supertypes", "subtypes", "colors", "excluded_colors",
+    "controller", "other_than_source",
+})
+
+
 def _names_several_targets(subject: ast.Recipient) -> bool:
     """Whether *subject* names more than one chosen target.
 

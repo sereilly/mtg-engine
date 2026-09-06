@@ -34,7 +34,8 @@ from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
     _describe_several_targets, _filter_payload, _is_enchanted, _is_target,
-    _names_several_targets, _restrictions_beyond, testable_filter_payload
+    _names_several_targets, _restrictions_beyond, SEVERAL_DESTROY_NARROWINGS,
+    testable_filter_payload
 )
 from ._records import optional_cost_key, primary_produced, produced_keys
 
@@ -385,19 +386,6 @@ def _fused_tap_enchanted_then_counters(
     )
 
 
-#: The filter keys ``destroy_target_permanent``'s several-target branch tests in
-#: full, and therefore the only ones a fused announcement may narrow by. The
-#: same set the ``_names_several_targets`` branch of :func:`_lower_destroy`
-#: states inline, named once because two readings of "what may a list of destroy
-#: targets be narrowed by" is one reading too many -- and the direction the
-#: second one drifts is a narrowing dropped from a sweep, which destroys
-#: permanents the card does not name.
-_SEVERAL_DESTROY_NARROWINGS = frozenset({
-    "card_types", "supertypes", "subtypes", "colors", "controller",
-    "other_than_source",
-})
-
-
 def _repeated_destroy_clause(
     step: ast.Statement,
 ) -> tuple[str, ast.Destroy, tuple[ast.Statement, ...]] | None:
@@ -533,7 +521,7 @@ def _fused_cost_repeated_destroys(
                 )
             )
     filt = first.subject.filter
-    leftovers = _restrictions_beyond(filt, _SEVERAL_DESTROY_NARROWINGS)
+    leftovers = _restrictions_beyond(filt, SEVERAL_DESTROY_NARROWINGS)
     if leftovers:
         raise LoweringError(
             "the several-target destroy cannot narrow by: " + ", ".join(leftovers),

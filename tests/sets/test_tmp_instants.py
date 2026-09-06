@@ -650,3 +650,84 @@ def test_w1g5_interdict_offers_a_picker_over_the_four_printed_types(set_pool):
         "stack_ability_kinds": ["activated"],
         "stack_ability_source_types": ["artifact", "creature", "enchantment", "land"],
     }
+
+
+# --- W2G5: Reckless Spite — the printed-number twin of Dregs of Sorrow -----
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState
+from engine.models import Permanent as _W2G5Permanent
+from engine.oracle import compile_card_oracle as _w2g5_compile
+from engine.targeting import derive_cast_spec as _w2g5_cast_spec
+
+
+def _w2g5_duel(set_pool, spell, victims):
+    pool = set_pool("TMP")
+    lands = set_pool("LEA")
+    p1 = _W2G5PlayerState(
+        name="P1", hand=[pool[spell]], life=20, library=[lands["Forest"]] * 12,
+    )
+    p2 = _W2G5PlayerState(
+        name="P2", life=20,
+        battlefield=[_W2G5Permanent(card=pool[name]) for name in victims],
+    )
+    game = _W2G5Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p1, p2
+
+
+def test_w2g5_reckless_spite_destroys_two_nonblack_creatures_and_costs_5_life(set_pool):
+    """"Destroy two target nonblack creatures. You lose 5 life."
+
+    One piece for two cards: Dregs of Sorrow's X and this card's printed two
+    are the same ``_names_several_targets`` shape, so the same whitelist
+    refused both and one entry cleared both.
+    """
+    game, caster, defender = _w2g5_duel(
+        set_pool, "Reckless Spite",
+        ["Horned Turtle", "Trained Armodon", "Blood Pet"],
+    )
+
+    result = game.cast_from_hand(
+        0, "Reckless Spite",
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in defender.battlefield] == ["Blood Pet"]
+    # The life loss is the caster's own, not the defender's.
+    assert (caster.life, defender.life) == (15, 20)
+
+
+def test_w2g5_reckless_spite_refuses_a_black_creature_with_nothing_spent(set_pool):
+    """CR 601.2c, and the reason the refusal has to land at the announcement:
+    the rider is a *cost to the caster*. Accepted and then dropped at
+    resolution, this spell would have taken the 5 life for destroying one
+    creature instead of two."""
+    game, caster, defender = _w2g5_duel(
+        set_pool, "Reckless Spite", ["Horned Turtle", "Blood Pet"],
+    )
+
+    refused = game.cast_from_hand(
+        0, "Reckless Spite",
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+
+    assert not refused.supported, "Blood Pet is black (CR 202.2)"
+    assert caster.life == 20, "a refused announcement pays nothing"
+    assert len(defender.battlefield) == 2
+
+
+def test_w2g5_reckless_spite_carries_its_printed_count_and_its_exclusion(set_pool):
+    """Both halves of the announcement ride one spec: how many the caster names
+    (CR 601.2c's fixed number) and what each of them may be."""
+    card = set_pool("TMP")["Reckless Spite"]
+    spec = _w2g5_cast_spec(card, _w2g5_compile(card))
+
+    assert spec == {
+        "kind": "creature",
+        "max_targets": 2,
+        "exact_targets": True,
+        "filter": {"exclude_colors": ["B"]},
+    }

@@ -1676,3 +1676,96 @@ def test_601_2c_an_announced_target_is_addressed_by_id_and_not_by_slot():
     game.resolve_stack()
 
     assert second.damage_marked == 3, "its own announced share, not the first's"
+
+
+# ---------------------------------------------------------------------------
+# W2G5: a colour **exclusion** in the announced target's noun phrase
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2c", "202.2")
+def test_601_2c_a_named_target_must_satisfy_a_printed_colour_exclusion():
+    """"Destroy target **nonblack** creature. You gain 1 life."
+
+    The exclusion had no spec form at all. ``color_filter`` — its positive twin
+    — rides the spec root and ``_permanent_matches_target_kind`` tests it there;
+    nothing carried the negative, so ``cast_target_refusal`` enumerated every
+    creature and accepted the announcement.
+
+    Written on an invented card because that is the bar this engine sets before
+    a name may be keyed on: the same printed sentence on any card wants the same
+    answer, so the fix belongs in the derivation and not beside a card. CR 202.2
+    is what makes the question answerable off the card alone — colour is read
+    off the printed mana cost, so no board state is needed to decide it.
+
+    Two printed sentences, which is what makes ``primary`` a ``sequence`` and
+    therefore reaches no arm of ``_validate_cast_targets``: exactly the shape
+    ``cast_target_refusal`` was written for.
+    """
+    purge = _mk_card(
+        "Purging Light", "Instant",
+        "Destroy target nonblack creature. You gain 1 life.",
+    )
+    imp = _mk_card("Imp", "Creature — Imp", colors=("B",), mana_cost="{B}")
+    bear = _mk_card("Bear", "Creature — Bear", colors=("G",), mana_cost="{G}")
+    p1 = PlayerState(name="P1", hand=[purge, purge], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        battlefield=[Permanent(card=imp), Permanent(card=bear)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    refused = game.cast_from_hand(
+        0, "Purging Light", target_player_index=1, target_permanent_index=0,
+    )
+    assert not refused.supported, "the Imp is black (CR 202.2)"
+    assert p1.life == 20, "a refused announcement resolves nothing"
+
+    allowed = game.cast_from_hand(
+        0, "Purging Light", target_player_index=1, target_permanent_index=1,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert allowed.supported, allowed.details
+    assert [p.card.name for p in p2.battlefield] == ["Imp"]
+    assert p1.life == 21
+
+
+@pytest.mark.cr("601.2c", "202.2")
+def test_601_2c_the_colour_exclusion_gap_was_live_on_a_shipped_card(set_pool):
+    """Spinning Darkness (WTH) — the regression the invented card above is the
+    rule for.
+
+    "Spinning Darkness deals 3 damage to target **nonblack** creature. You gain
+    3 life." The spell dealt its 3 damage to a black creature, killed it, and
+    gained the 3 life; the printed word was enforced at the announcement, at the
+    resolution and in the picker by nothing at all. Not a crash and not a
+    missing ability — an instant that worked more often than it reads, which is
+    the one direction a target gate must never fail in.
+
+    Found by a *cast-spec differential* over both manifest roles while clearing
+    an unrelated TMP refusal: ``oracle_diff`` cannot see ``engine/targeting.py``
+    at all, because a target spec is derived at cast time and never lands in a
+    compiled program.
+    """
+    darkness = set_pool("WTH")["Spinning Darkness"]
+    imp = set_pool("LEA")["Bog Wraith"]      # {3}{B}, black
+    bear = set_pool("LEA")["Grizzly Bears"]  # {1}{G}, green
+    p1 = PlayerState(name="P1", hand=[darkness], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        battlefield=[Permanent(card=imp), Permanent(card=bear)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    refused = game.cast_from_hand(
+        0, "Spinning Darkness", target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not refused.supported, "Bog Wraith is black"
+    assert p1.life == 20, "no life was gained for damage nothing was dealt"
+    assert len(p2.battlefield) == 2

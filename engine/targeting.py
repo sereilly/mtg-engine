@@ -644,6 +644,28 @@ def _narrowing_flags(source: dict) -> dict:
         excluded = source.get(key)
         if excluded:
             narrowed[key] = list(excluded)
+    # And the colour **exclusion**, for the same reason one sentence up.
+    # "Destroy two target **nonblack** creatures" (Reckless Spite, Dregs of
+    # Sorrow) is a several-target announcement, so no arm of
+    # ``_validate_cast_targets`` sees it: ``primary`` is the ``sequence``
+    # wrapper the card's second printed sentence makes, which is exactly the
+    # shape ``cast_target_refusal`` exists for -- and that gate reads this
+    # spec. Left off it, the caster could name a black creature, the
+    # announcement was accepted, and the resolution then silently dropped the
+    # slot -- a target list shorter than the X that was paid for, refused
+    # nowhere (CR 601.2c).
+    #
+    # ``exclude_colors`` is in ``TESTABLE_SUBJECT_FILTER_KEYS`` and is answered
+    # off the permanent's layer-5 colours, so the enumeration asks it exactly
+    # as it asks the type exclusions above. Its **positive** twin is not here:
+    # ``color_filter`` already rides the spec root and
+    # ``_permanent_matches_target_kind`` tests it there, so a copy under
+    # ``filter`` would be one printed word with two readers -- the fork this
+    # module's own comments keep naming. The negative had no root form at all,
+    # which is why it needed one here rather than a second one.
+    excluded_colors = source.get("exclude_colors")
+    if excluded_colors:
+        narrowed["exclude_colors"] = list(excluded_colors)
     if narrowed:
         flags["filter"] = narrowed
     return flags
