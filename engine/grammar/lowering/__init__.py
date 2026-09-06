@@ -325,6 +325,7 @@ from .search import (
     _lower_search_library,
     _lower_search_player_library,
     _lower_search_reveal_opponent_chooses,
+    _lower_strip_cards_with_chosen_name,
 )
 from .stack import (
     _COUNTER_HONOURED_FILTER_FIELDS,
@@ -599,6 +600,7 @@ __all__ = [
     "_lower_put_graveyard_position_onto_battlefield",
     "_lower_search_library",
     "_lower_search_reveal_opponent_chooses",
+    "_lower_strip_cards_with_chosen_name",
     "HELD_SEARCH_PILE",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",

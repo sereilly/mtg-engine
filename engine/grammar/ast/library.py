@@ -350,6 +350,37 @@ class RevealTopOpponentChooses:
 
 
 @dataclass(frozen=True)
+class StripCardsWithChosenName:
+    """``Search that player's graveyard, hand, and library for all cards with
+    the same name as the chosen card and exile them. Then that player
+    shuffles.`` (Lobotomy.)
+
+    A search whose description is a **record** rather than a printed word: the
+    name comes from the sentence in front of it, which is why this is a node of
+    its own and not a filter on the ordinary search. ``ObjectFilter.named``
+    holds a literal, and a literal is exactly what a card that names nothing
+    cannot supply.
+
+    Both sentences, because CR 701.24 ends a library search with the shuffle
+    and the shuffle names the same seat this one opened — split off, the second
+    is a statement no production implements and the whole line refuses.
+
+    Necromentia prints the same two sentences behind a *named* card
+    (``NameAndStrip``), fused there with a Zombie clause that counts what one of
+    these zones gave up. This is the decomposed half of the same idea, and the
+    two stay apart deliberately: that card's last sentence reads a pile only its
+    own handler holds.
+    """
+    #: Whose zones are opened. Read as a reference and checked by the lowering:
+    #: a search of the wrong player's library is a strictly different card and
+    #: silently so.
+    player: "PlayerRef"
+    #: Which zones, in the printed order. Data, not part of the kind — a card
+    #: printing two of the three is the same effect over a smaller reach.
+    zones: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class SearchRevealOpponentChooses:
     """``Search your library for three cards and reveal them. Target opponent
     chooses one. Put that card into your hand and the rest into your graveyard.

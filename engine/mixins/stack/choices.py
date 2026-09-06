@@ -2332,6 +2332,7 @@ class PendingChoicesMixin:
         if hand_index not in (choice.data.get("legal_indices") or []):
             return False
         victim_index = int(choice.data["victim_index"])
+        self._record_revealed_hand_pick(choice, victim_index, hand_index)
         if not self._apply_revealed_hand_fate(choice, victim_index, hand_index):
             return False
         self.discard_pending_choice(choice)
@@ -2351,6 +2352,7 @@ class PendingChoicesMixin:
         if legal and 0 <= victim_index < len(self.players):
             hand = self.players[victim_index].hand
             legal.sort(key=lambda i: (-(hand[i].cmc if i < len(hand) else 0), i))
+            self._record_revealed_hand_pick(choice, victim_index, legal[0])
             taken = self._apply_revealed_hand_fate(choice, victim_index, legal[0])
         self.discard_pending_choice(choice)
         if taken:
@@ -2373,11 +2375,15 @@ class PendingChoicesMixin:
         if remaining <= 0 or not 0 <= victim_index < len(self.players):
             return
         exclude_types = list(choice.data.get("exclude_types") or ())
+        narrowing = {
+            "exclude_types": exclude_types,
+            "exclude_basic_lands": bool(choice.data.get("exclude_basic_lands")),
+        }
         victim = self.players[victim_index]
         legal = [
             index
             for index, held in enumerate(victim.hand)
-            if search_matches(held, {"exclude_types": exclude_types})
+            if search_matches(held, narrowing)
         ]
         if not legal:
             return
@@ -2389,8 +2395,37 @@ class PendingChoicesMixin:
             remaining=min(remaining, len(legal)),
             fate=str(choice.data.get("fate", "discard")),
             exclude_types=exclude_types,
+            exclude_basic_lands=narrowing["exclude_basic_lands"],
             source_id=choice.data.get("source_id"),
+            record=choice.data.get("record"),
         )
+
+    def _record_revealed_hand_pick(
+        self, choice: PendingChoice, victim_index: int, hand_index: int
+    ) -> None:
+        """Write down **which card was chosen**, before anything moves it.
+
+        "…then you choose a card other than a basic land card from it. Search
+        that player's graveyard, hand, and library for all cards with the same
+        name as **the chosen card**…" (Lobotomy.) The sentence behind the pick
+        names the card by name, and by the time it runs the card may be in a
+        graveyard, in exile or still where it was — so the name is recorded here,
+        where the answer and the hand are both in hand.
+
+        Written for **every** fate, not only the one that needs it: the pick is
+        a chosen card whatever becomes of it, which is what lets
+        ``lowering/_records`` declare the record for the instruction kind rather
+        than for one of its payload values. Under the same key
+        ``choose_card_name`` writes, because "the chosen card's name" and "the
+        chosen card name" are one question asked by two sentences.
+        """
+        record = choice.data.get("record")
+        if record is None or not 0 <= victim_index < len(self.players):
+            return
+        hand = self.players[victim_index].hand
+        if not 0 <= hand_index < len(hand):
+            return
+        record["chosen_card_name"] = hand[hand_index].name
 
     def _apply_revealed_hand_fate(
         self, choice: PendingChoice, victim_index: int, hand_index: int
@@ -2402,6 +2437,15 @@ class PendingChoicesMixin:
         from ...linked_exile import LEAVES, link_exiled_card
 
         fate = str(choice.data.get("fate", "discard"))
+        if fate == "name":
+            # "…then you choose a card other than a basic land card from it."
+            # (Lobotomy.) The choice **is** the whole sentence: nothing happens
+            # to the card, and what the pick was for is the sentence behind it,
+            # which reads the name this pick already recorded. The same shape
+            # ``statement_dispatch_naming``'s own docstring asks of every
+            # choice — "the lowering carries the bounds of the choice and
+            # nothing else".
+            return True
         if fate == "discard":
             return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
         if fate == "library_top":
@@ -8145,6 +8189,13 @@ register_choice(
     action="revealed_hand_pick_confirm",
     prompt_key="revealed_hand_pick",
     blocked_detail="choose a card from the revealed hand before other actions",
+    # "…then you choose a card … from it. **Search that player's graveyard,
+    # hand, and library for all cards with the same name as the chosen card**…"
+    # (Lobotomy.) The step behind the pick reads what it chose, so it must not
+    # run while the choice is still owed (CR 608.2, CR 117.3b) — the same reason
+    # the search beside it suspends, and inert for every printing that has
+    # nothing behind the pick.
+    suspends=True,
     # The revealed hand is public from the moment it is revealed (CR 701.20),
     # so a spectator sees the prompt exactly as the choosing seat does.
     spectator_visible=True,

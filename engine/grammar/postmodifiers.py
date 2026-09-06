@@ -320,6 +320,13 @@ def _parse_postmodifiers(
             # it — a *class*, named by the pair (CR 205.4a's Basic supertype
             # and the land card type).
             elif stream.accept_phrase("than", "a", "basic", "land"):
+                # "…a card **other than a basic land card**" (Lobotomy, Booby
+                # Trap). The same class named with the head noun repeated, which
+                # is how the phrase is printed wherever the *outer* noun is
+                # "card" rather than "permanent" — one word, accepted and
+                # dropped, because it restates the noun the phrase already has
+                # rather than narrowing anything further.
+                stream.accept_word("card")
                 d.excluded_basic_lands = True
                 continue
             elif stream.accept_phrase("than", "enchanted"):

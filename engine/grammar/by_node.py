@@ -92,6 +92,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_graveyard_top_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
                        _lower_search_reveal_opponent_chooses,
+                       _lower_strip_cards_with_chosen_name,
                        _lower_search_library, _lower_change_base_pt, _lower_set_base_pt,
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
@@ -401,6 +402,11 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # of this same effect countered, and with no such record the words name
     # nothing.
     ast.BoundPermanentActivationBan: _lower_bound_permanent_activation_ban,
+    # "Search that player's graveyard, hand, and library for all cards with the
+    # same name as **the chosen card**…" (Lobotomy.) Here for the two rows
+    # above's reason: the description is a record an earlier step of the same
+    # spell wrote, and with none the words name nothing.
+    ast.StripCardsWithChosenName: _lower_strip_cards_with_chosen_name,
     # "Create a token that's a copy of **that creature**." (Echo Chamber.) It
     # left the name-only table above for ``ast.Attach``'s reason, word for
     # word: a pronoun is only a pronoun relative to what came before it, and

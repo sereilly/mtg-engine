@@ -2547,6 +2547,65 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("strip_cards_with_chosen_name")
+def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Search that player's graveyard, hand, and library for all cards with the
+    same name as the chosen card and exile them. Then that player shuffles."
+    (Lobotomy.)
+
+    The **decomposed** half of Necromentia's paragraph. That card fuses the
+    naming, the strip and a token clause into one handler because its last
+    sentence counts a pile only that handler holds; this one has nothing behind
+    it, so the naming is the step in front and this is the strip alone — reading
+    the name out of the resolution's scratchpad, which is where every "the
+    chosen card" in this engine is written.
+
+    CR 701.23c is about this card by name: with an empty hand nothing was
+    chosen, so the quality is undefined, the searcher still searches and finds
+    nothing. An unrecorded name is exactly that case and is **not** treated as
+    "match everything" — the whole library would go to exile, which is the
+    opposite of what an empty choice means.
+
+    The zones are walked in the printed order and only the library is shuffled
+    (CR 701.24): a graveyard is an open zone and a hand is its owner's, and
+    randomising either would be a move the sentence does not describe.
+    """
+    target = context.target
+    if target is None or target not in game.players:
+        game.log.append(f"{context.card.name}: no player to search")
+        return True, "resolved"
+    named = str(context.results.get("chosen_card_name") or "").strip()
+    zones = tuple(instruction.payload.get("zones") or ())
+    if not named:
+        # The pick chose nothing (an empty hand, or a hand of nothing but basic
+        # lands). The search still happens and finds nothing, which CR 701.23c
+        # spells out on this very card.
+        game.log.append(
+            f"{context.card.name}: nothing was chosen, so nothing is exiled"
+        )
+        if "library" in zones:
+            random.shuffle(target.library)
+        return True, "resolved"
+    taken: list[str] = []
+    for zone in zones:
+        cards = getattr(target, zone, None)
+        if cards is None:
+            continue
+        kept = [card for card in cards if card.name != named]
+        found = [card for card in cards if card.name == named]
+        if found:
+            cards[:] = kept
+            target.exile.extend(found)
+            taken.extend(card.name for card in found)
+    if "library" in zones:
+        random.shuffle(target.library)
+    game.log.append(
+        f"{target.name} lost {len(taken)} copies of {named} to "
+        f"{context.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("name_and_strip")
 def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necromentia: name a card, strip every copy from an opponent's three
@@ -3174,10 +3233,21 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     if victim_index is None or caster_index is None:
         return True, "resolved"
     exclude_types = list(instruction.payload.get("exclude_types") or ())
+    # "…a card **other than a basic land card** from it" (Lobotomy). The second
+    # narrowing this picker can carry, and it travels beside the first for that
+    # one's reason: what is offered and what an answer is checked against are
+    # one predicate, and a restriction only the handler knew about would be a
+    # client offering the whole hand.
+    narrowing = {
+        "exclude_types": exclude_types,
+        "exclude_basic_lands": bool(
+            instruction.payload.get("exclude_basic_lands")
+        ),
+    }
     legal = [
         index
         for index, held in enumerate(victim.hand)
-        if search_matches(held, {"exclude_types": exclude_types})
+        if search_matches(held, narrowing)
     ]
     # CR 701.20 makes a reveal public where CR 701.20e's look shows the chooser
     # alone, so the line says which happened rather than saying "revealed" for
@@ -3214,7 +3284,14 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         # Carried so the picks after the first can recompute what is legal
         # against the hand as it then stands.
         exclude_types=exclude_types,
+        exclude_basic_lands=narrowing["exclude_basic_lands"],
         fate=str(instruction.payload.get("fate", "discard")),
+        # The resolution's own scratchpad. Every pick writes the chosen card's
+        # name into it — the pick *is* a chosen card, whatever becomes of it —
+        # so a later sentence naming "the chosen card" (Lobotomy's search) has
+        # one place to read it from, and ``lowering/_records`` can declare the
+        # record for the kind rather than for one of its fates.
+        record=context.results,
         # "…until **this creature** leaves the battlefield" (Kitesail
         # Freebooter): the source holds the exiled card, so which permanent it
         # is has to reach the answer. By id, because the prompt outlives the

@@ -129,6 +129,21 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     type_line = card.type_line.lower()
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
         return False
+    # "a card **other than a basic land card**" (Lobotomy, Booby Trap). The
+    # *pair* — CR 205.4a's Basic supertype and the land card type — rather than
+    # the supertype alone, which is the reading ``permanent_matches_filter``
+    # already gives the identical printed phrase: an exclusion by supertype
+    # would be a different sentence, and the only reason it names the same
+    # cards today is that no printed non-land carries Basic.
+    #
+    # Spelled here as well as there because this is the predicate the *hidden*
+    # zones answer with — a library, a graveyard and a revealed hand — and a
+    # restriction only one of the two knew about is a choice that is legal in
+    # one seat and not in another, which is this module's whole reason.
+    if data.get("exclude_basic_lands") and "land" in type_line and (
+        "basic" in type_line.split("\u2014")[0]
+    ):
+        return False
     restrictions = data.get("restrictions") or {}
     # "a **blue** instant card" (Merchant Scroll). A search may test a colour at
     # all for the reason it may test the type line: a card's colour is its mana

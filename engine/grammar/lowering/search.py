@@ -438,3 +438,51 @@ def _lower_search_reveal_opponent_chooses(
             },
         ),
     )
+
+
+#: The seats a strip-by-name can open the zones of. "You" is deliberately
+#: absent: no card asks its own controller to lose every copy of a card they
+#: just chose, and a seat this cannot name is a search of the wrong library —
+#: strictly a different card, and silently so.
+_STRIP_PLAYERS = frozenset({"target_player", "target_opponent", "that_player"})
+
+
+def _lower_strip_cards_with_chosen_name(
+    node: "ast.StripCardsWithChosenName", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Search that player's graveyard, hand, and library for all cards with the
+    same name as the chosen card and exile them. Then that player shuffles."
+    (Lobotomy.)
+
+    ``produced`` is the whole gate. The name is the one an earlier step of this
+    same spell recorded (``chosen_card_name``), and with no such step the words
+    name nothing — the search would then match no card and the spell would
+    resolve, report supported and do nothing at all. Refused by name instead,
+    exactly as ``_lower_reveal_top_sorting_by_chosen_name`` refuses "that name"
+    with no naming step in front of it.
+
+    CR 701.23c is about this card by name: a hand with no cards in it makes the
+    quality *undefined*, and the searcher still searches and finds nothing. That
+    is the handler's business, not this one's — what is refused here is a
+    sentence with no naming step at all, which is a different thing from a
+    naming step that named nothing.
+
+    "That player" is the seat the sentence in front of this one targeted, which
+    is the same reference ``_lower_search_player_library`` reads for Jester's
+    Mask — so no target is described here and no second picker is raised.
+    """
+    if node.player.kind not in _STRIP_PLAYERS:
+        raise LoweringError(
+            f"no flow strips {node.player.kind!r}'s zones", node=node
+        )
+    if "chosen_card_name" not in produced:
+        raise LoweringError(
+            "\"the chosen card\" names a card no step of this spell chose",
+            node=node,
+        )
+    payload: dict[str, object] = {"zones": list(node.zones)}
+    if node.player.kind != "that_player":
+        _describe_targets(payload, node.player)
+    return (
+        OracleInstruction("strip_cards_with_chosen_name", "", payload),
+    )

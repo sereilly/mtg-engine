@@ -332,6 +332,15 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         raise stream.error("expected whose library is searched")
     # The lexer splits "player's" into "player" + "'s".
     stream.expect_word("'s")
+    # "Search that player's **graveyard, hand, and library** for all cards with
+    # the same name as the chosen card and exile them." (Lobotomy.) A search
+    # across several zones and by a name nothing printed — read here, before
+    # the literal "library" this production has always expected, which is the
+    # word that failed the line. Non-consuming on refusal, so Jester's Cap and
+    # Jester's Mask keep every reading and every refusal site they have.
+    stripped = _accept_strip_cards_with_chosen_name(stream, player)
+    if stripped is not None:
+        return stripped
     stream.expect_word("library")
     stream.expect_word("for")
     count = parse_amount(stream)
@@ -808,3 +817,71 @@ def _accept_search_reveal_opponent_chooses(
         fate=_PICKED_SEARCH_FATES[fate],
         other_fate=_REST_SEARCH_FATES[rest],
     )
+
+
+#: The zones a strip-by-name may open, in the order CR 400.1 lists them and the
+#: cards print them. A closed list because each is a pile the handler actually
+#: walks — a word outside it refuses the line rather than lowering onto a zone
+#: nothing reaches.
+_STRIPPED_ZONES: tuple[str, ...] = ("graveyard", "hand", "library")
+
+
+def _accept_strip_cards_with_chosen_name(
+    stream: TokenStream, player: "ast.PlayerRef",
+) -> "ast.StripCardsWithChosenName | None":
+    """``graveyard, hand, and library for all cards with the same name as the
+    chosen card and exile them. Then that player shuffles.`` at the cursor, with
+    ``Search <player>'s`` already read — or None with the cursor where it was.
+    (Lobotomy.)
+
+    Both sentences, for :class:`ast.StripCardsWithChosenName`' reason: CR 701.24
+    ends a library search with the shuffle, and the seat it names is the one
+    this search opened.
+
+    Two or more zones are required. One zone is the ordinary counted search
+    above, whose whole tail this production has none of, and admitting a single
+    zone here would take those cards away from it.
+
+    "the same name as **the chosen card**" is read as the printed words rather
+    than as a filter: the name is not on this card at all — an earlier step of
+    the same spell recorded it — and a filter would have to describe a literal
+    the sentence never states. The lowering demands that step.
+    """
+    mark = stream.mark()
+    zones: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in _STRIPPED_ZONES:
+            break
+        stream.advance()
+        zones.append(word)
+        if stream.accept_punct(","):
+            stream.accept_word("and")
+            continue
+        if stream.accept_word("and"):
+            continue
+        break
+    if len(zones) < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "for", "all", "cards", "with", "the", "same", "name", "as", "the",
+        "chosen", "card", "and", "exile", "them",
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    stream.accept_word("then")
+    shuffler = parse_player_ref(stream)
+    if shuffler is None or shuffler.kind != "that_player":
+        # "Then **that player** shuffles" names the seat this search opened. A
+        # sentence naming anybody else would shuffle a library nothing looked
+        # through, which is a different card.
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("shuffles"):
+        stream.reset(mark)
+        return None
+    return ast.StripCardsWithChosenName(player, tuple(zones))

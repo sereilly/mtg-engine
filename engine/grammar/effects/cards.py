@@ -430,7 +430,14 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     if not stream.accept_phrase("reveals", "their", "hand"):
         stream.reset(mark)
         return None
-    stream.accept_punct(".")
+    # "…reveals their hand**, then** you choose a card…" (Lobotomy) is the same
+    # two sentences with the weaker join. English writes one clause either way
+    # and the referent is identical — "it" is the hand this sentence revealed —
+    # so it is two accepted tokens here rather than a second production, which
+    # would race this one for the word "reveals".
+    if not stream.accept_punct("."):
+        if stream.accept_punct(","):
+            stream.accept_word("then")
     if not stream.accept_phrase("you", "choose"):
         stream.reset(mark)
         return None
@@ -441,6 +448,9 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     if not stream.accept_phrase("from", "it"):
         stream.reset(mark)
         return None
+    # Marked before the full stop, because the ending may not be this
+    # production's — see the fall-through below.
+    tail = stream.mark()
     stream.accept_punct(".")
     if stream.accept_phrase("that", "player", "discards", "that", "card"):
         return ast.RevealHandAndChoose(player, chosen.filter, fate="discard")
@@ -455,8 +465,30 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
         return ast.RevealHandAndChoose(
             player, chosen.filter, fate="exile_until_source_leaves"
         )
-    stream.reset(mark)
-    return None
+    # **No ending at all** (Lobotomy): the sentence stops at "from it" and what
+    # the pick was *for* is the next printed sentence, which reads the name this
+    # one recorded. So the production stops too, and the sequence parser reads
+    # the rest — which is the decomposition this family's own docstring asks
+    # for ("the lowering carries the bounds of the choice and nothing else").
+    #
+    # Read last, so both endings above keep every word they require: a card
+    # printing one of them cannot fall through to this and leave its own last
+    # sentence to a production that has no reading for it.
+    #
+    # The full stop is **handed back**: the sentence loop in ``parser.py``
+    # requires the cursor to be sitting on it after every statement, so a
+    # production that consumed one and then stopped fails the line at
+    # "unconsumed text" — which is what this did until the mark above.
+    #
+    # Unconditional, and safe because of how much is already matched: a
+    # targeted player, "reveals their hand", the join, "you choose", a card
+    # noun phrase and "from it" is a sentence nothing else in the pool prints —
+    # Rag Man and Amnesia stop at the reveal and fail this production on "you",
+    # and Mind Warp opens on "look at".
+    stream.reset(tail)
+    return ast.RevealHandAndChoose(player, chosen.filter, fate="name")
+
+
 def parse_put_milled_card_onto_battlefield(
     stream: TokenStream,
 ) -> ast.Statement | None:
