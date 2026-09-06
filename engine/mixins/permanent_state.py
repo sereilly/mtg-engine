@@ -160,6 +160,13 @@ def _count_dynamic_pt(
         # nothing on a battlefield left to tally. The number was recorded where
         # it happened; this reads it back.
         return int(permanent.metadata.get("sacrificed_as_entered") or 0)
+    if what in ("sacrificed_total_power", "sacrificed_total_toughness"):
+        # Dracoplasm: the summed power (or toughness) of what its controller
+        # gave up as it entered. Recorded where the sacrifice happened, because
+        # by now those creatures are cards in a graveyard with no computed
+        # characteristics at all (CR 613.1) — the same reason Wood Elemental's
+        # tally rides the permanent rather than being recounted here.
+        return int(permanent.metadata.get(str(what)) or 0)
     if what == "life_paid_as_entered":
         # Nameless Race: the life was paid as the creature entered (CR 614.1c)
         # and nothing on a board records it, so it rides the permanent the same
@@ -1453,8 +1460,19 @@ class PermanentStateMixin:
                 # (Shapeshifter). The second half is derived from the same
                 # value rather than counted again, which is what makes the
                 # printed total a payload number instead of a second template.
+                # "…power becomes the total power of those creatures **and its
+                # toughness becomes their total toughness**" (Dracoplasm). The
+                # one shape whose two halves are two different numbers, so the
+                # second is counted rather than derived from the first — every
+                # branch below reads one value and computes the other from it.
+                toughness_count = dynamic_pt.payload.get("toughness_count")
                 complement = dynamic_pt.payload.get("complement")
-                if complement is not None:
+                if toughness_count is not None:
+                    set_base_pt(permanent, value, _count_dynamic_pt(
+                        self, player, permanent,
+                        {**dynamic_pt.payload, "count": toughness_count},
+                    ))
+                elif complement is not None:
                     set_base_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
                     # "…and its toughness is equal to **that number plus 1**"

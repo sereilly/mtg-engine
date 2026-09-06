@@ -536,9 +536,39 @@ def enters_with_x_named_counters(
 #: The noun phrase is a capture and is read by the same noun parser every other
 #: printed noun phrase in the engine goes through, so "any number of untapped
 #: Forests" costs no more code than "any number of creatures you control" would.
+#: The trailing sentence is **optional**, and the card that prints one is
+#: Dracoplasm: "As this creature enters, sacrifice any number of creatures. This
+#: creature's power becomes the total power of those creatures and its toughness
+#: becomes their total toughness."
+#:
+#: One pattern rather than two claims on one printed line, for the reason
+#: :data:`PAY_ANY_LIFE_ON_ENTER`'s cap rides in its own: the second sentence is
+#: not a separate ability, it is what the first sentence's cost *buys*. Read
+#: separately, whichever half was claimed first would take the line and the
+#: other would be dropped — and the half that matters is the one that keeps the
+#: creature off the battlefield as a 0/0.
+#:
+#: What it defines is not read here: this only says the entry sacrifice must be
+#: **totalled** rather than merely counted, so `_record_sacrifice_totals` knows
+#: to stamp the sums. `engine/characteristic_defining.py` reads the same printed
+#: sentence for the CDA it produces.
 SACRIFICE_ANY_NUMBER_ON_ENTER = re.compile(
-    r"^as this [a-z]+ enters, sacrifice any number of (?P<phrase>.+)$"
+    r"^as this [a-z]+ enters, sacrifice any number of (?P<phrase>.+?)"
+    r"(?P<defines_pt>\. this [a-z]+'s power becomes the total power of those "
+    r"[a-z]+ and its toughness becomes their total toughness)?$"
 )
+
+
+def sacrifice_on_enter_defines_pt(line: str, card_name: str | None = None) -> bool:
+    """Whether the entry sacrifice's *total* P/T is what the creature becomes.
+
+    Dracoplasm. Read by the entry state, so the sums are stamped where the
+    sacrifice happens (CR 608.2g's last known information — the creatures are
+    cards in a graveyard a moment later and have no power at all), and by the
+    support gate through :func:`sacrifice_any_number_on_enter` beside it.
+    """
+    match = SACRIFICE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
+    return match is not None and bool(match.group("defines_pt"))
 
 
 def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> dict | None:

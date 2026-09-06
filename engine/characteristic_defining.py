@@ -332,6 +332,21 @@ def _sacrificed_on_entry_count(match: re.Match) -> dict[str, object]:
     return {"count": "sacrificed_as_entered"}
 
 
+def _sacrificed_on_entry_totals(match: re.Match) -> dict[str, object]:
+    """Dracoplasm. The **sums** the same entry sacrifice recorded, one per half.
+
+    The row above counts what was given up; this one adds up what it was worth,
+    and the two halves are two different sums — so unlike every other entry here
+    a single number cannot define both. ``toughness_count`` names the second,
+    which is one more payload key rather than a second instruction: the sentence
+    is one CR 604.3 ability and splitting it would let a reader honour half.
+    """
+    return {
+        "count": "sacrificed_total_power",
+        "toughness_count": "sacrificed_total_toughness",
+    }
+
+
 def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     return {
         "count": "land",
@@ -547,6 +562,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"^{_SUBJECT} {_PT} (?P<phrase>.+?) sacrificed as it entered$"
         ),
         _sacrificed_on_entry_count,
+    ),
+    (
+        # Dracoplasm. The whole printed **line**, both sentences, because they
+        # are one effect: the entry sacrifice is what defines the size, and
+        # `engine/enter_effects.py` reads the same two sentences to know the
+        # totals must be stamped. Anchored on the entry clause rather than on
+        # the possessive subject every other row here opens with, for that
+        # reason — the sentence that names the characteristic has no subject of
+        # its own, it says "this creature".
+        re.compile(
+            r"^as this [a-z]+ enters, sacrifice any number of [a-z]+\. "
+            r"this [a-z]+'s power becomes the total power of those [a-z]+ and "
+            r"its toughness becomes their total toughness$"
+        ),
+        _sacrificed_on_entry_totals,
     ),
     (
         # Nameless Race: "…are each equal to **the life paid as it entered**".

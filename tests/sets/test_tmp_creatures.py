@@ -282,3 +282,60 @@ def test_w1g3_a_base_pt_choice_still_reads_the_and_spelling(set_pool, cards):
         if card is None:
             continue
         assert _compile(card).supported, name
+
+
+# --- W1G3: Dracoplasm — an entry sacrifice that defines the size ---
+def test_w1g3_dracoplasm_is_the_total_of_what_was_given_up(set_pool, cards):
+    """CR 604.3 over CR 614.1c's entry cost, and CR 608.2g's last known
+    information: the creatures are cards in a graveyard a moment later and have
+    no computed characteristics at all, so the sums are read at the removal
+    site rather than recounted afterwards.
+
+    Two sums, not one — every other entry in `characteristic_defining.py`
+    derives the second half from the first, and this is the one card where the
+    halves are independent numbers."""
+    tmp = set_pool("TMP")
+    bears = Permanent(card=cards["Grizzly Bears"])
+    angel = Permanent(card=cards["Serra Angel"])
+    for perm in (bears, angel):
+        perm.metadata["summoning_sickness_turn"] = -99
+    seats = [PlayerState(name="A", hand=[tmp["Dracoplasm"]], battlefield=[bears, angel]),
+             PlayerState(name="B")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Dracoplasm")
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game.resolve_pending_choice("sacrifice", 0, indices=[0, 1])
+    game._recompute_continuous_effects()
+    dracoplasm = seats[0].battlefield[-1]
+    assert [p.card.name for p in seats[0].battlefield] == ["Dracoplasm"]
+    # 2/2 + 4/4.
+    assert (dracoplasm.effective_power, dracoplasm.effective_toughness) == (6, 6)
+    # …and its own {R} pump is layer 7c, over the 7b the entry set.
+    result = game.activate_permanent_ability(0, "Dracoplasm", permanent_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert result.supported, result
+    game._recompute_continuous_effects()
+    assert (dracoplasm.effective_power, dracoplasm.effective_toughness) == (7, 6)
+
+
+def test_w1g3_dracoplasm_declined_enters_as_a_nothing(set_pool, cards):
+    """"Any number" answered with none is zero, which is what the card does
+    when its controller declines — the stated policy Wood Elemental already
+    follows for a non-interactive seat."""
+    tmp = set_pool("TMP")
+    seats = [PlayerState(name="A", hand=[tmp["Dracoplasm"]]), PlayerState(name="B")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Dracoplasm")
+    while game.stack:
+        game.resolve_top_of_stack()
+    dracoplasm = next(
+        (p for p in seats[0].battlefield if p.card.name == "Dracoplasm"), None
+    )
+    if dracoplasm is not None:
+        game._recompute_continuous_effects()
+        assert (dracoplasm.effective_power, dracoplasm.effective_toughness) == (0, 0)
