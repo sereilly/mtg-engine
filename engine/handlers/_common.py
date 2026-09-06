@@ -179,11 +179,6 @@ def count_from_payload(
             1 for card in (context.results.get(str(recorded_cards)) or ())
             if _card_matches_filter(card, described)
         ), spec))
-    # "…where X is the number of **+1/+1 counters on it**" (Primordial Ooze).
-    # Counters sitting on the ability's own source: not a set of objects in any
-    # zone, so `evaluate_count` has nothing to scan for it. The kind is data,
-    # and `counters_on` is the one reader that knows whether it means the P/T
-    # channel or a store the card invented (CR 122.1).
     # "…where X is the total power of the creatures sacrificed this way"
     # (Sword of the Ages). Not a set in any zone either: the creatures paid this
     # ability's cost (CR 601.2h) and are cards in a graveyard by now, so the sum
