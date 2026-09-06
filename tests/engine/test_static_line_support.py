@@ -228,7 +228,13 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # template — so a lord whose effect the engine does not implement
         # reported supported and did nothing. All three of these are the shape
         # engine/lord_buffs.py refuses: an unmodelled effect, an unimplemented
-        # keyword and an activated ability at a cost nothing charges.
+        # keyword and a quoted ability the compiler cannot read.
+        #
+        # The third read '…have "{5}: Regenerate this permanent."' while the
+        # granted ability was a dict of one entry keyed on the whole quoted text
+        # *including* its cost, so a differently-costed printing of an ability
+        # the engine performs perfectly was "unimplemented". The grant now rides
+        # as text through the compiler, which charges whatever is printed.
         #
         # A fourth used to stand here — "…as long as you control two or more
         # Mountains" — because the condition parsed and `conditional_static_holds`
@@ -239,7 +245,7 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # `test_a_counted_anthem_condition_is_evaluated_as_a_count` below.
         "Other Goblins glimmer uncontrollably.",
         "Other Goblins get +1/+1 and have shadow.",
-        'Other Zombies have "{5}: Regenerate this permanent."',
+        'Other Zombies have "{5}: Glimmer uncontrollably."',
     ],
 )
 def test_an_unimplemented_rider_is_reported_unsupported(text):

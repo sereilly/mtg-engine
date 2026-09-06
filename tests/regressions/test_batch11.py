@@ -32,6 +32,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
+from engine.keywords import derived_ability_lines
 from tests.helpers import _game
 
 
@@ -422,7 +423,10 @@ class TestZombieMasterRegenGrant:
         game = _game(p1, p2)
         game.cast_from_hand(0, "Scathe Zombies")
         zombie = p1.battlefield[-1]
-        assert zombie.metadata.get("granted_regen_ability") is True
+        # The grant is the printed *sentence* now, on the derived layer-6
+        # channel, rather than a metadata flag one branch of the activation path
+        # re-spelled as {B} and a shield (CR 113.3).
+        assert derived_ability_lines(zombie) == ("{b}: regenerate this permanent.",)
         assert game._has_keyword(zombie, "swampwalk")
 
     def test_grant_ends_when_master_leaves(self, cards):
@@ -432,10 +436,10 @@ class TestZombieMasterRegenGrant:
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
-        assert zombie.metadata.get("granted_regen_ability") is True
+        assert derived_ability_lines(zombie) == ("{b}: regenerate this permanent.",)
         p1.battlefield.remove(master)
         game._recompute_continuous_effects()
-        assert not zombie.metadata.get("granted_regen_ability")
+        assert derived_ability_lines(zombie) == ()
         assert not game._has_keyword(zombie, "swampwalk")
 
     def test_activation_charges_black_mana(self, cards):
@@ -469,7 +473,7 @@ class TestZombieMasterRegenGrant:
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
         data = _serialize_permanent(zombie, game)
-        assert data["granted_abilities"] == ["{B}: Regenerate this permanent."]
+        assert data["granted_abilities"] == ["{b}: regenerate this permanent."]
         # The Master itself ("other") gets nothing.
         assert _serialize_permanent(master, game)["granted_abilities"] == []
 

@@ -21,6 +21,7 @@ from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
+from engine.keywords import derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
 from engine.subject_filters import filter_head_noun
@@ -287,14 +288,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # into a generic ``counters`` map so future counter types render for free.
         "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),
         "counters": _serialize_counters(perm),
-        # Activated abilities granted by another permanent's static ability
-        # (Zombie Master's '{B}: Regenerate this permanent.'), which the printed
-        # oracle text doesn't show — the UI needs these to offer activation.
-        "granted_abilities": (
-            ["{B}: Regenerate this permanent."]
-            if perm.metadata.get("granted_regen_ability")
-            else []
-        ),
+        # Ability *lines* granted by another permanent's static ability
+        # (Zombie Master's '{B}: Regenerate this permanent.', Tempest's
+        # Slivers), which the printed oracle text doesn't show — the UI needs
+        # these to offer activation. Read off the derived layer-6 channel
+        # `_recalculate_lord_buffs` writes; the literal that stood here was the
+        # third copy of one card's quoted text, so a lord granting anything else
+        # showed the player nothing.
+        "granted_abilities": list(derived_ability_lines(perm)),
         # Name of the creature this permanent is a copy of (Clone / Vesuvan
         # Doppelganger), so the UI can badge the copy.
         "copied_from": perm.copied_from,

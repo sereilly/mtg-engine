@@ -425,6 +425,17 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             effects.append(
                 set_pt(only, value, value, timestamp=_DERIVED_TIMESTAMP, label=static.name)
             )
+        # "…and have base power and toughness 1/1." (Humility.) CR 613.4b, the
+        # same sublayer as the mana-value setting beside it and read off the
+        # same static — so a +1/+1 counter or an anthem still applies at 7c and
+        # the creature ends up 2/2. The printed pair rather than a computed
+        # value is the only difference between the two branches.
+        if static.sets_base_pt:
+            power, toughness = static.sets_base_pt
+            effects.append(
+                set_pt(only, power, toughness,
+                       timestamp=_DERIVED_TIMESTAMP, label=static.name)
+            )
 
     # 7c — Auras. Derived from each attached Aura's own text on every
     # recompute and stamped with the moment it became attached (CR 613.7b), so

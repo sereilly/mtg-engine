@@ -235,7 +235,21 @@ class GameHelpersMixin:
     def _recompute_continuous_effects(self) -> None:
         """Recalculate all static/continuous P/T effects (611.3). Call after any
         permanent leaves the battlefield so lord buffs (Crusade, Gauntlet of Might,
-        Lord of Atlantis, Castle) and dynamic P/T (Nightmare) reflect the new board."""
+        Lord of Atlantis, Castle) and dynamic P/T (Nightmare) reflect the new board.
+
+        **Board-wide statics are recorded first**, and that is CR 613's layer
+        order rather than a convenience. A static that removes abilities
+        (Humility, layer 6) decides whether a lord's anthem exists at all before
+        layer 7c can apply it — and `_recalculate_lord_buffs` reads each source's
+        *effective* card, which is where the removal lands. Recorded second, as
+        it was, that read saw the previous pass's answer: a Lord of Atlantis
+        played into a Humility went on buffing for one whole recompute, which is
+        long enough for anything that reads P/T in between. Idempotent, so the
+        second recording inside `_refresh_dynamic_creatures` — which has to run
+        *after* layer 4's land animation, so a creature-scoped static sees the
+        lands this pass animated — still stands.
+        """
+        self._refresh_global_statics(list(self.all_permanents()))
         self._recalculate_lord_buffs()
         self._refresh_dynamic_creatures()
 
