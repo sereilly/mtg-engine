@@ -26,7 +26,8 @@ from ._common import (
     _describe_targets, _filter_payload, _is_enchanted, _is_source, _is_target,
     refuse_untestable
 )
-from ._events import _BOUND_OBJECT_DELAYED_EVENTS, binds_block_pair
+from ._events import binds_block_pair
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._filters import _restrictions_beyond, split_bound_card_type
 
 

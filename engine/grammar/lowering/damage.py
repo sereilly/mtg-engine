@@ -50,19 +50,8 @@ from ._common import (
     _filter_payload, _is_source, _is_you, _targets_payload,
     player_deed_payload, testable_filter_payload
 )
-from ._events import (
-    _chosen_cast_amount,
-    _EVENT_SUBJECT_CONTROLLERS,
-    _EVENT_SUBJECT_OBJECTS,
-    _BOUND_OBJECT_DELAYED_EVENTS,
-    _EVENT_SUBJECT_PLAYERS,
-    EVENT_SUBJECT_CONTROLLER,
-    EVENT_SUBJECT_PLAYER,
-    LOOP_BOUND_PLAYER,
-    SWEPT_CONTROLLER_SEATS,
-    _back_reference_payload,
-    _RECORDED_PERMANENTS,
-)
+from ._events import (_chosen_cast_amount, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER, SWEPT_CONTROLLER_SEATS, _back_reference_payload, _RECORDED_PERMANENTS)
+from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
 # ---------------------------------------------------------------------------

@@ -146,10 +146,12 @@ from .loops import (
     _ANY_CREATURE_DIED,
     _lower_for_each,
 )
-from .zones import (
+from .ownership import (
     _lower_ownership_exchange_unless_paid,
     _lower_ante_offer_ownership_exchange,
     _lower_random_reveal_ownership_exchange,
+)
+from .zones import (
     _lower_shuffle_graveyard_into_library,
     _lower_shuffle_source_into_library,
     _lower_shuffle_hand_into_library,

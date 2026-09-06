@@ -28,7 +28,7 @@ from ..errors import LoweringError
 from ._common import (
     _amount_payload, _describe_targets, _is_source, testable_filter_payload
 )
-from ._events import _BOUND_OBJECT_DELAYED_EVENTS
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
 #: any name, and a player carries exactly one kind here

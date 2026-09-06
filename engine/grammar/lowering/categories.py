@@ -45,6 +45,7 @@ from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from .control_changes import BID_LIFE_FOR_CONTROL_KIND
+from .ownership import OWNERSHIP_INSTRUCTION_CATEGORIES
 from .zones import ZONE_INSTRUCTION_CATEGORIES
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
@@ -836,3 +837,4 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `zones.ZONE_INSTRUCTION_CATEGORIES` for the line). Composed rather than
 # referenced, so every reader still asks one table one question.
 INSTRUCTION_CATEGORIES.update(ZONE_INSTRUCTION_CATEGORIES)
+INSTRUCTION_CATEGORIES.update(OWNERSHIP_INSTRUCTION_CATEGORIES)

@@ -33,16 +33,8 @@ from ._common import (
 from ._records import counts_prevented_damage, names_the_shielded_object
 from ._sweeps import lower_counter_sweep
 from ._counter_stores import lower_loyalty_counters
-from ._events import (
-    _BOUND_OBJECT_DELAYED_EVENTS,
-    CHOSEN_PERMANENT,
-    OTHER_CHOSEN_PERMANENT,
-    EVENT_SUBJECT_CONTROLLER,
-    _EVENT_SUBJECT_OBJECTS,
-    binds_block_pair,
-    _REANIMATED_PERMANENTS,
-    _RECORDED_PERMANENTS,
-)
+from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, binds_block_pair, _REANIMATED_PERMANENTS, _RECORDED_PERMANENTS)
+from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
 #: Whose creature an *unchosen* counter placement lands on, and the word the

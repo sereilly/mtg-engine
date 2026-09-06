@@ -26,12 +26,8 @@ from ._common import (
     _describe_targets, _filter_payload, _is_source, _names_several_targets,
     _restrictions_beyond, is_mana_value_x, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS,
-                      _EVENT_SUBJECT_OBJECTS,
-                      _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
-                      _DELAYED_AGENT_EVENTS,
-                      binds_block_pair, names_attached_permanent,
-                      CHOSEN_PERMANENT, _BOUND_OBJECT_DELAYED_EVENTS)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
+from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.

@@ -632,6 +632,16 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("text_changes",)
 ] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed",
+     # `ownership` split off `lowering/zones.py` at Weatherlight's wave 2,
+     # when two branches' additions summed past the guard with neither at
+     # fault. The seam is `zones`' own docstring read as a question: it says
+     # everything there answers "which zone does this object end up in", and
+     # Bronze Tablet, Timmerian Fiends and Tempest Efreet answer a different
+     # one — the card may not move at all, and what changes is *whose* it is
+     # (CR 108.3, CR 407). It reuses the name `grammar/ownership.py` has
+     # carried on the parse side since Alpha's ante cards, so the mirror
+     # re-forms rather than forking.
+     "ownership",
      # `phasing` split off `lowering/board.py` at Visions' third wave, when two
      # groups' additions summed past the guard at **integration** — on nobody's
      # branch, for the third time in this one set. The line is CR 702.26's own: a
@@ -946,7 +956,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1201,6 +1211,15 @@ FAMILY_SHARED = {
     # them) are read by five unrelated families, where `_events` answers the
     # same question across every event there is. A floor, not a family.
     "_deaths",
+    # `_delays` split out of `_events` at Weatherlight's wave 2, when two
+    # branches' additions summed one line past the guard with neither at fault.
+    # A narrowing of `_events`' own question rather than a new one: it answers
+    # "what did the firing event freeze" across every event there is, and these
+    # three tables answer it for the one class that does not fire when it is
+    # created — a *delayed* ability (CR 603.7), whose bound object was chosen a
+    # step or a whole turn earlier. The same cut `_deaths` took, one event class
+    # at a time. A floor: eight lowering families read it and it reads nothing.
+    "_delays",
     # `_core` split twice in one round, when The Dark pushed it past the size
     # guard below. `_references` took the object/player/target nodes
     # (`ObjectFilter` alone was 428 lines), `_primitives` took the two literal

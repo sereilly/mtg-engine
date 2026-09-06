@@ -54,7 +54,7 @@ def test_the_bound_object_events_are_real_events():
     back-refer to "that creature". A row naming an event that no longer exists
     would be a gate nothing can pass, and the cards behind it would go quietly
     unsupported."""
-    from engine.grammar.lowering._events import _BOUND_OBJECT_DELAYED_EVENTS
+    from engine.grammar.lowering._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
     assert _BOUND_OBJECT_DELAYED_EVENTS <= set(DELAYED_EVENTS)
     assert _BOUND_OBJECT_DELAYED_EVENTS

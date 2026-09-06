@@ -87,35 +87,6 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 
-def _lower_ownership_exchange_unless_paid(
-    node: "ast.OwnershipExchangeUnlessPaid",
-) -> tuple[OracleInstruction, ...]:
-    """Bronze Tablet. The life total and the target's noun phrase are payload;
-    every other word was required by the production that read it."""
-    from ...subject_filters import object_only_filter
-
-    described = _filter_payload(node.target, carried_separately=frozenset({"owner"}))
-    described.pop("owner", None)
-    if object_only_filter(described) is None:
-        raise LoweringError(
-            "the ownership exchange cannot test that phrase", node=node
-        )
-    payload: dict[str, object] = {
-        "life": node.life,
-        # The ownership half is carried separately from the rest of the filter:
-        # the picker and the handler both ask `subject_matches`, which needs the
-        # ability's controller to answer "an opponent owns" at all.
-        "owner": node.target.owner,
-        "filter": described,
-    }
-    _describe_targets(
-        payload,
-        ast.TargetSpec("target", node.target, targeted=True),
-        carried_separately=frozenset({"owner"}),
-    )
-    return (OracleInstruction("exchange_ownership_unless_paid", "", payload),)
-
-
 def _lower_graveyard_cards_on_library_top(
     node: ast.PutOnLibraryTop,
 ) -> tuple[OracleInstruction, ...]:
@@ -621,28 +592,6 @@ def _lower_shuffle_library(node: ast.ShuffleLibrary) -> tuple[OracleInstruction,
     return (OracleInstruction("shuffle_library", "", payload),)
 
 
-def _lower_ante_offer_ownership_exchange(
-    node: "ast.AnteOfferOwnershipExchange",
-) -> tuple[OracleInstruction, ...]:
-    """Timmerian Fiends. The printed card type is payload, described the way
-    every other object target is so the activation picker, the CR 602.2b
-    legality gate and the handler all ask one question."""
-    return (
-        OracleInstruction(
-            "ante_or_exchange_ownership", "",
-            {
-                "type_word": node.type_word,
-                "targets": {
-                    "quantifier": "target",
-                    "kind": "object",
-                    "filter": {"type_filter": node.type_word},
-                },
-                "type_filter": node.type_word,
-            },
-        ),
-    )
-
-
 def _lower_exile_graveyard_position(
     node: ast.ExileGraveyardPosition,
 ) -> tuple[OracleInstruction, ...]:
@@ -671,26 +620,6 @@ def _lower_exile_graveyard_position(
         payload.update(_targets_only(node.position.owner))
     return (OracleInstruction("exile_graveyard_position", "", payload),)
 
-
-def _lower_random_reveal_ownership_exchange(
-    node: "ast.RandomRevealOwnershipExchange",
-) -> tuple[OracleInstruction, ...]:
-    """Tempest Efreet. The life total is payload; the target is the printed
-    "target opponent", described the way every other player target is so the
-    activation picker and the handler ask one question."""
-    return (
-        OracleInstruction(
-            "random_reveal_ownership_exchange", "",
-            {
-                "life": node.life,
-                "targets": {
-                    "quantifier": "target",
-                    "kind": "player",
-                    "opponents_only": True,
-                },
-            },
-        ),
-    )
 
 #: The `zones` half of `lowering/categories.INSTRUCTION_CATEGORIES`, here
 #: rather than there for the reason that table's two earlier splits both
@@ -812,9 +741,6 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
-    "exchange_ownership_unless_paid": "zones",
-    "ante_or_exchange_ownership": "zones",
-    "random_reveal_ownership_exchange": "zones",
     "take_ownership_of_exiled": "zones",
     "return_exiled_source_to_graveyard": "zones",
     "transmute_by_sacrifice": "zones",
