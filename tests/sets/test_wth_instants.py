@@ -103,3 +103,149 @@ def test_spinning_darkness_refuses_a_pile_that_cannot_pay_in_full(set_pool):
     assert len(me.graveyard) == 2, "the two black cards are still there"
     assert me.exile == []
     assert [card.name for card in me.hand] == ["Spinning Darkness"]
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.models import Permanent  # noqa: E402
+from engine.oracle import compile_card_oracle  # noqa: E402
+from engine.targeting import derive_cast_spec  # noqa: E402
+from tests.helpers import _mk_card, _nosick  # noqa: E402
+
+
+def _w2g5_creature(name: str, type_line: str = "Creature - Bear"):
+    return _nosick(Permanent(card=_mk_card(name, type_line)))
+
+
+def test_boiling_blood_forces_the_chosen_creature_to_attack(set_pool):
+    """"Target creature attacks this turn if able. Draw a card."
+
+    The card compiled to its **second** line alone: the production that reads
+    the requirement existed for Kookus' trailing "…and attacks this turn if
+    able" and nothing had ever asked it at the head of a sentence, so the whole
+    first line was dropped and Boiling Blood was a two-mana cantrip. CR 508.1a's
+    requirement now rides the same ``must_attack_until_eot`` mark the declare
+    step already reads.
+    """
+    blood = set_pool("WTH")["Boiling Blood"]
+    lazy = _w2g5_creature("Lazy Bear")
+    idle = _w2g5_creature("Idle Ogre", "Creature - Ogre")
+    game = Game(players=[
+        # A library, because the second line of this card draws: an empty one
+        # makes its controller lose at the next state-based check and the
+        # combat this test is about never happens.
+        PlayerState(
+            name="P0", hand=[blood], library=[_mk_card("Top", "Land")] * 3
+        ),
+        PlayerState(name="P1", battlefield=[lazy, idle]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    # Cast on the *defender's* turn, because "this turn" is the window the
+    # requirement lives in: on any other turn the mark is swept before the
+    # creature is ever asked to attack.
+    game.start_turn(1)
+    game._close_current_priority_step()
+
+    result = game.cast_from_hand(
+        0, "Boiling Blood", target_player_index=1,
+        target_permanent_index=game.battlefield_index_of(lazy),
+    )
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert lazy.metadata.get("must_attack_until_eot") is True, game.log
+    assert idle.metadata.get("must_attack_until_eot") is None, game.log
+
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    refused, why = game.declare_attackers(1, [])
+    assert not refused, "the requirement was not enforced"
+    assert "Lazy Bear" in why
+    assert game.declare_attackers(1, [game.battlefield_index_of(lazy)])[0]
+
+
+def test_boiling_blood_still_draws_its_card(set_pool):
+    """The line that used to be the whole card, kept — a round that teaches a
+    sentence to parse can just as easily take the sentence beside it away."""
+    blood = set_pool("WTH")["Boiling Blood"]
+    bear = _w2g5_creature("Lazy Bear")
+    game = Game(players=[
+        PlayerState(name="P0", hand=[blood], library=[_mk_card("Top", "Land")] * 3),
+        PlayerState(name="P1", battlefield=[bear]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.cast_from_hand(
+        0, "Boiling Blood", target_player_index=1,
+        target_permanent_index=0,
+    )
+    game.resolve_stack()
+
+    assert [c.name for c in game.players[0].hand] == ["Top"], game.log
+
+
+def test_boiling_blood_offers_a_creature_picker(set_pool):
+    """The Roots class: a supported card the client sends a *bare* cast for,
+    because the derivation answered None. It answers now, and it answers
+    "creature" — the printed noun — rather than "any target"."""
+    blood = set_pool("WTH")["Boiling Blood"]
+
+    spec = derive_cast_spec(blood, compile_card_oracle(blood))
+
+    assert spec is not None and spec.get("kind") == "creature"
+
+
+def test_urborg_justice_sacrifices_one_creature_per_creature_you_lost(set_pool):
+    """"Target opponent sacrifices a creature of their choice **for each
+    creature put into your graveyard from the battlefield this turn**."
+
+    The multiplier counts the *caster's* graveyard (CR 400.3's owner), so it
+    rides the shared count channel rather than the per-payer one beside it —
+    read per payer the spell would size itself from the sacrificing opponent's
+    own losses and ask for nothing whenever they had lost nothing.
+    """
+    justice = set_pool("WTH")["Urborg Justice"]
+    mine = [_w2g5_creature(f"Mine{i}") for i in range(2)]
+    theirs = [_w2g5_creature(f"Theirs{i}", "Creature - Ogre") for i in range(4)]
+    me = PlayerState(name="P0", hand=[justice], battlefield=mine)
+    them = PlayerState(name="P1", battlefield=theirs)
+    game = Game(players=[me, them])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    for perm in list(mine):
+        game.remove_from_battlefield(perm)
+        game._permanent_to_graveyard(me, perm)
+
+    game.cast_from_hand(0, "Urborg Justice", target_player_index=1)
+    game.resolve_stack()
+    game._settle()
+
+    assert len(them.battlefield) == 2, game.log
+    assert len(them.graveyard) == 2, game.log
+
+
+def test_urborg_justice_asks_for_nothing_when_you_lost_nothing(set_pool):
+    """Zero is a legal answer and no prompt: CR 608.2 does as much as possible,
+    and a seat that owes none is not asked."""
+    justice = set_pool("WTH")["Urborg Justice"]
+    theirs = [_w2g5_creature(f"Theirs{i}", "Creature - Ogre") for i in range(4)]
+    them = PlayerState(name="P1", battlefield=theirs)
+    game = Game(players=[
+        PlayerState(name="P0", hand=[justice]), them,
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.cast_from_hand(0, "Urborg Justice", target_player_index=1)
+    game.resolve_stack()
+    game._settle()
+
+    assert len(them.battlefield) == 4, game.log
+    assert them.graveyard == [], game.log
+
+# --- end W2G5 ---

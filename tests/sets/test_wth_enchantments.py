@@ -575,3 +575,73 @@ def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
     assert not board_target_immunities(
         "Creatures can't be the targets of spells or abilities."
     )
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState  # noqa: E402
+from engine.models import Permanent as _W2G5Permanent  # noqa: E402
+from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
+from tests.helpers import _mk_card as _w2g5_mk_card  # noqa: E402
+
+
+def _w2g5_aura_of_silence_game(set_pool, caster_seat: int):
+    """Seat 0 controls Aura of Silence; *caster_seat* holds an artifact to cast."""
+    rock = _w2g5_mk_card("Test Rock", "{2}", "Artifact", "")
+    seats = [
+        _W2G5PlayerState(
+            name="P0",
+            battlefield=[_W2G5Permanent(card=set_pool("WTH")["Aura of Silence"])],
+        ),
+        _W2G5PlayerState(name="P1"),
+    ]
+    seats[caster_seat].hand = [rock]
+    game = _W2G5Game(players=seats)
+    return game
+
+
+def test_aura_of_silence_taxes_an_opponents_artifact_spell(set_pool):
+    """"Artifact and enchantment spells **your opponents cast** cost {2} more
+    to cast."
+
+    ``CostModifier.controller`` has carried the word "opponents" since Terror of
+    the Peaks; the spell-tax *pattern* could only ever say " you cast", so this
+    whole sentence went unread and the tax was charged to nobody.
+    """
+    game = _w2g5_aura_of_silence_game(set_pool, caster_seat=1)
+
+    result = game.cast_from_hand(1, "Test Rock")
+
+    assert result.supported, result.details
+    assert any(
+        "taxed by aura of silence" in line.lower() for line in game.log
+    ), game.log
+
+
+def test_aura_of_silence_does_not_tax_its_own_controller(set_pool):
+    """The seat is the whole of what the clause adds, and a tax that reached its
+    own controller would be a different card — the one that reads "Artifact and
+    enchantment spells cost {2} more to cast"."""
+    game = _w2g5_aura_of_silence_game(set_pool, caster_seat=0)
+
+    result = game.cast_from_hand(0, "Test Rock")
+
+    assert result.supported, result.details
+    assert not any("taxed by" in line.lower() for line in game.log), game.log
+
+
+def test_the_caster_clause_is_which_seat_not_whether_one_was_printed(set_pool):
+    """A refusal test for the pattern rather than for the card: the two printed
+    words scope the tax in opposite directions, so a reader that only asked
+    "was something printed?" would read Aura of Silence as taxing everyone."""
+    mine, = cost_modifiers_for("creature spells you cast cost {1} more to cast")
+    theirs, = cost_modifiers_for(
+        "creature spells your opponents cast cost {1} more to cast"
+    )
+    anyone, = cost_modifiers_for("creature spells cost {1} more to cast")
+
+    assert (mine.controller, theirs.controller, anyone.controller) == (
+        "you", "opponents", None,
+    )
+
+# --- end W2G5 ---
