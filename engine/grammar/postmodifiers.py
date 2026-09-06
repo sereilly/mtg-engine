@@ -36,6 +36,7 @@ from typing import Callable
 from . import ast
 from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
                       accept_source_counter_bound,
+                      accept_comparative_characteristic,
                       accept_source_relative_comparison, parse_comparison)
 from .errors import GrammarError
 from .histories import accept_history_relation, accept_relative_clause_history
@@ -403,6 +404,16 @@ def _parse_postmodifiers(
                 continue
             if comparison == "event":
                 d.name_from_event = True
+                continue
+            # "…with **lesser power**" (No Quarter). A bound stated against the
+            # other object the sentence is about, with no number and no
+            # possessive — so it opens on the *adjective* rather than on the
+            # characteristic and is tried before the branches that expect the
+            # characteristic first. Declines without consuming, so every other
+            # "with …" phrase keeps its own reading.
+            comparative = accept_comparative_characteristic(stream)
+            if comparative is not None:
+                d.characteristic_vs_source = comparative
                 continue
             if stream.accept_word("power"):
                 # "…with power **equal to or greater than the enchanted

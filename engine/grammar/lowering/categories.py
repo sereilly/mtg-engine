@@ -737,6 +737,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # one: what it arms is the end step's destroy sweep, and the combat is only
     # the condition.
     "destroy_subject_at_end_step_if_it_didnt_attack": "destruction",
+    # "…destroy the blocking creature." / "…destroy the attacking creature."
+    # (No Quarter.) The other half of the block pair the firing was about, named
+    # by its printed combat role — the same referent
+    # `handlers/_common.block_pair_permanents` already resolves for every other
+    # block-pair effect.
+    "destroy_block_pair_partner": "destruction",
     "force_target_to_block_until_eot": "combat_restrictions",
     "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",

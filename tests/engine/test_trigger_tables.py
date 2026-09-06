@@ -102,6 +102,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature becomes blocked",
         "whenever this creature becomes blocked by a creature",
     ),
+    # The board-wide pair (No Quarter): the same two events watched by a
+    # permanent that is neither combatant nor attached to one, so both halves
+    # are printed noun phrases. Beside `matching_creature_attacks` above, which
+    # is the same relation to `creature_attacks`.
+    "matching_creature_blocks":
+        "whenever a creature blocks a creature with lesser power",
+    "matching_creature_becomes_blocked":
+        "whenever a creature becomes blocked by a creature with lesser power",
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
     "creature_dealt_damage": "whenever this creature is dealt damage",
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",

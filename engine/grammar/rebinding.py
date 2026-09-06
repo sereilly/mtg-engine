@@ -258,27 +258,20 @@ def rebind_pronoun_to_event_subject(
 #: For each printed combat role, the trigger events whose **subject** plays it.
 #:
 #: A role names one member of a combat pair, and a pair has two — so an event
-#: answers for exactly one of the words and never for both. "Whenever this
-#: creature becomes blocked" is the attacker's event: "the attacking creature"
-#: is its subject and "the blocking creature" is the *other* half, which is a
-#: different question with a different answer (``handlers/_common``'s
-#: ``block_pair_permanents``) and is deliberately not resolved here.
+#: answers for exactly one of the words and never for both. Everything not
+#: listed leaves the role a role, which every lowering refuses by name.
 #:
-#: The unions are left out on purpose. Under "whenever this creature attacks or
-#: blocks" (Imprison) and "whenever enchanted creature blocks or becomes blocked
-#: by …" (Infinite Authority) the subject is in the combat but which role it
-#: plays is not known until the trigger fires, so a role word under one of them
-#: names an object nothing can identify at compile time. Refusing is the whole
-#: point of keeping the role as a quantifier: the card is reported unsupported
-#: naming its clause instead of acting on whichever creature was at hand.
+#: **Which phrase a block event puts on its subject is why this list is so
+#: short.** "Whenever this creature becomes blocked **by a creature without
+#: flanking**" carries the *blocker* as its subject, not the attacker — so
+#: reading "the attacking creature" against it would name the wrong half of the
+#: pair, silently. The unions ("attacks or blocks", "blocks or becomes blocked
+#: by") are out for the neighbouring reason: their subject is in the combat but
+#: which role it plays is not known until the trigger fires.
 _ROLE_EVENT_SUBJECTS: dict[str, frozenset[str]] = {
     "attacking": frozenset({
         "creature_attacks",
         "attacks_unblocked",            # Farrel's Mantle
-        "matching_creature_attacks",
-        # The attacker's own event: CR 509.1a's pair is announced against the
-        # creature that *was* blocked, so its subject is the attacking half.
-        "creature_becomes_blocked",
     }),
     "blocking": frozenset({"creature_blocks"}),
 }
@@ -306,6 +299,15 @@ def rebind_combat_role_to_event_subject(
     """
     subject = event.subject
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
+        return statement
+    if not subject.is_enchanted:
+        # **The subject has to name one object.** A board-wide condition's
+        # subject is a printed noun phrase describing a *set* ("whenever a
+        # creature attacks"), and rewriting a role into it would hand the effect
+        # a filter where it expects a referent — a destroy that swept every
+        # creature the phrase describes rather than the one in the combat.
+        # Attachment is the only shape in the pool that names one, and it is the
+        # one Farrel's Mantle prints.
         return statement
     roles = {
         role for role in COMBAT_ROLES

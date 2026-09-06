@@ -189,6 +189,21 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # outright by ``card_only_filter``, since none of the three is in
     # ``CARD_ONLY_FILTER_KEYS``.
     "chosen_color", "chosen_creature_type", "chosen_land_type",
+    # "…with power **equal to or greater than the enchanted creature's
+    # toughness**" (Ironclaw Curse) / "…with **lesser power**" (No Quarter).
+    # ``to_payload`` emits it whenever it is set and ``subject_matches`` answers
+    # it, so it is honoured in exactly the sense ``banded_with_source`` above
+    # is: what it additionally needs is the *source* the comparison is stated
+    # against, and that function takes one.
+    #
+    # Left out, it was the same **false refusal** the six fields above were each
+    # added to end, and it cost a whole trigger condition rather than a
+    # narrowing: `subject_filter_payload` refused, so `engine/oracle.py`'s
+    # `_resolve_subject_groups` refused the condition, so No Quarter's two lines
+    # compiled to no trigger at all. A caller with no source refuses every
+    # permanent (`_source_relative_bound_holds` answers False), which is the
+    # direction that cannot widen an effect.
+    "characteristic_vs_source",
 })
 
 

@@ -587,6 +587,32 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this creature blocks (?P<block_pair_count>[a-z]+) or more "
      r"(?P<blocked_subjects>[^,]+)"),
     ("creature_blocks",             r"whenever this creature blocks"),
+    # **The board-wide pair.** "Whenever **a creature** blocks a creature with
+    # lesser power" / "…**a creature** becomes blocked by a creature with lesser
+    # power" (No Quarter). The same two events the four rows around this one
+    # read, watched by a permanent that is neither combatant nor attached to
+    # one — so both halves of the pair are noun phrases and the *source* is in
+    # no combat at all.
+    #
+    # Their own kinds rather than the source-scoped ones with a wider subject,
+    # for `matching_creature_attacks`' reason two hundred lines up: the
+    # source-scoped kinds are announced by a scan over the combatant's own card
+    # and its attachments, and a permanent watching the whole board is reached
+    # by the event bus instead. One kind per announcement site is what keeps a
+    # trigger from firing twice or not at all.
+    #
+    # ``combatant_subject`` is the creature the event is *about* and the other
+    # group is its partner, exactly as on the source-scoped rows — so the
+    # dispatcher reads one pair of keys whichever row matched. The partner
+    # phrase is the one that carries "with lesser power", and it is answered
+    # against the combatant, which is what the fire site supplies as the
+    # comparison's source.
+    ("matching_creature_blocks",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) blocks "
+     r"(?P<blocked_subject>(?:a|another) [^,]+)"),
+    ("matching_creature_becomes_blocked",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) becomes blocked by "
+     r"(?P<blocker_subject>(?:a|another) [^,]+)"),
     # "…becomes blocked by **a creature**" (Gloom Sower): once per blocking
     # creature that answers the filter (CR 509.1h), where the bare form below
     # fires once for the block itself. Same ordering rule.

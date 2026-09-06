@@ -249,6 +249,31 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 # Longest first, per the ordering rule the whenever table follows.
 
 
+# The **board-wide** halves of a block, keyed by the words between the two noun
+# phrases. "Whenever **a creature** becomes blocked by **a creature with lesser
+# power**" / "…**a creature** blocks **a creature with lesser power**"
+# (No Quarter).
+#
+# Its own table rather than rows of `_SUBJECT_LED_EVENTS` below, because these
+# rows have a *second* noun phrase after the verb and that table's loop has no
+# way to consume one — the same reason "a player puts <noun> onto the
+# battlefield" is a production in `triggers.py` rather than a row here.
+# "Becomes blocked by" is first: "blocks" is not a prefix of it, but the
+# specific-before-generic rule is what keeps that true when either is edited.
+#
+# The kinds are the `matching_` ones, not `creature_blocks` /
+# `creature_becomes_blocked`: those two are announced by a scan over the
+# combatant's own card and its attachments, and a permanent watching the whole
+# board is reached by the event bus instead (`engine/events.py`), exactly as
+# `matching_creature_attacks` sits beside `creature_attacks`.
+
+
+_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("becomes", "blocked", "by"), "matching_creature_becomes_blocked"),
+    (("blocks",), "matching_creature_blocks"),
+)
+
+
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),

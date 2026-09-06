@@ -1513,3 +1513,144 @@ def test_precognition_may_leave_the_card_where_it_is(set_pool):
     assert game.confirm_scry(0, card_order=[0], bottom_count=0)
 
     assert [c.name for c in game.players[1].library] == ["Top", "Under"]
+
+
+# --- W3G1: the board-wide block pair (CR 509.1a, CR 509.3b/d) ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w3g1_block(set_pool, attacker_pt, blocker_pt, watcher_seat=0):
+    """One attack, one block, No Quarter watching from *watcher_seat*.
+
+    Returns the game and both battlefields after the triggers have resolved and
+    state-based actions have run - but **before** combat damage, so a creature
+    missing from a battlefield here was destroyed by the enchantment and by
+    nothing else.
+    """
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Attacker", *attacker_pt)))
+    )
+    p1.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Blocker", *blocker_pt)))
+    )
+    watcher = [p0, p1][watcher_seat]
+    watcher.battlefield.append(
+        _nosick(Permanent(card=set_pool("TMP")["No Quarter"]))
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], 1)[0], game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0], game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+    return game, p0, p1
+
+
+def test_w3g1_no_quarter_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["No Quarter"]).supported
+
+
+def test_w3g1_no_quarter_destroys_the_weaker_blocker(set_pool):
+    """"Whenever a creature becomes blocked by a creature with lesser power,
+    destroy the blocking creature."
+
+    The comparison is between the two halves of the pair, not against the
+    enchantment: No Quarter is not in the combat at all, and a reading that
+    compared against the ability's own source would answer for a permanent with
+    no power.
+    """
+    game, p0, p1 = _w3g1_block(set_pool, (4, 4), (2, 2))
+    assert [perm.card.name for perm in p1.battlefield] == []
+    assert "Attacker" in [perm.card.name for perm in p0.battlefield]
+
+
+def test_w3g1_no_quarter_destroys_the_weaker_attacker(set_pool):
+    """"Whenever a creature blocks a creature with lesser power, destroy the
+    attacking creature." The mirror line, and the assertion that the two roles
+    do not resolve to the same creature: one printed sentence destroys the
+    blocker and the other the attacker, from one instruction kind, because the
+    *event* is what says which half of the pair the words name."""
+    game, p0, p1 = _w3g1_block(set_pool, (2, 2), (4, 4))
+    assert "Attacker" not in [perm.card.name for perm in p0.battlefield]
+    assert [perm.card.name for perm in p1.battlefield] == ["Blocker"]
+
+
+def test_w3g1_no_quarter_spares_an_even_block(set_pool):
+    """"Lesser" is strict. Read as "equal to or less than" - the spelling the
+    grammar already had for Ironclaw Curse - a mirror match would kill both
+    creatures before damage."""
+    game, p0, p1 = _w3g1_block(set_pool, (3, 3), (3, 3))
+    assert [perm.card.name for perm in p1.battlefield] == ["Blocker"]
+    assert "Attacker" in [perm.card.name for perm in p0.battlefield]
+
+
+def test_w3g1_no_quarter_watches_a_combat_it_is_not_in(set_pool):
+    """The whole point of the board-wide announcement.
+
+    Both printed scans in the declare-blockers step read a combatant's own card
+    and its attachments; an enchantment on the *defending* player's battlefield
+    is in neither, and so would never have fired. Same combat as the first test
+    with the watcher on the other seat.
+    """
+    game, p0, p1 = _w3g1_block(set_pool, (4, 4), (2, 2), watcher_seat=1)
+    assert [perm.card.name for perm in p1.battlefield] == ["No Quarter"]
+
+
+def test_w3g1_a_combat_role_refuses_under_the_wrong_half_of_the_pair():
+    """A role names the partner under exactly one of the two events.
+
+    Under the becomes-blocked announcement the firing is about the attacker, so
+    "the blocking creature" is its partner and "the attacking creature" is the
+    creature the event is already about - a different referent with a different
+    answer. Ungated, the second sentence would destroy the wrong creature and
+    nothing would report it.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    wrong = (
+        "Whenever a creature becomes blocked by a creature with lesser power, "
+        "destroy the attacking creature."
+    )
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(wrong))
+
+
+def test_w3g1_the_board_wide_block_condition_reads_the_same_on_both_front_ends(
+    set_pool,
+):
+    """``engine/oracle.py`` supplies the condition and ``engine/grammar/`` the
+    effect, so a phrase only one of them reads is a card whose halves watch
+    different sets. Asserted here on the card as well as by the pool-wide guard,
+    because these two rows are the first to carry **two** noun phrases with the
+    combatant on a narrowing stem rather than on the subject."""
+    program = compile_card_oracle(set_pool("TMP")["No Quarter"])
+    kinds = [trigger.condition.kind for trigger in program.triggered_abilities]
+    assert kinds == [
+        "matching_creature_becomes_blocked", "matching_creature_blocks",
+    ]
+    for trigger in program.triggered_abilities:
+        payload = trigger.condition.payload
+        assert payload["combatant_filter"] == {"type_filter": "creature"}
+        partner = payload.get("blocker_filter") or payload.get("blocked_filter")
+        assert partner["characteristic_vs_source"] == {
+            "characteristic": "power", "op": "lt", "source_characteristic": "power",
+        }

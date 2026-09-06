@@ -10,6 +10,7 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLE
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
 from ._common import (one_recorded_permanent_id, 
+    block_pair_permanents,
     frozen_that_player_seat,
     permanent_matches_filter, resolve_role_permanent,
     resolve_target_permanent, resolve_target_permanents,
@@ -1083,6 +1084,54 @@ def destroy_bound_permanent(game: Game, instruction: OracleInstruction, context:
     )
     if destroyed:
         game.log.append(f"{context.card.name} destroyed {victim.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("destroy_block_pair_partner")
+def destroy_block_pair_partner(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature becomes blocked by a creature with lesser power,
+    **destroy the blocking creature**." / "Whenever a creature blocks a creature
+    with lesser power, **destroy the attacking creature**." (No Quarter.)
+
+    The other half of the pair the firing was about, which is the referent
+    ``block_pair_permanents`` already resolves for every block-pair effect in
+    the engine — the pumps, the keyword grants and the end-of-combat destroy all
+    read it, and this is the immediate destroy beside them.
+
+    One handler for both printed roles, because the *event* is what says which
+    creature the words name: the becomes-blocked announcement is about the
+    attacker and its partner is the blocker, and the blocks announcement is the
+    mirror. The lowering is what holds a role to its event
+    (``ROLE_NAMES_BLOCK_PARTNER``), so nothing here has to know the word.
+
+    Through ``_destroy_swept_permanents`` like every other destroy here, so
+    regeneration and indestructibility behave as they do for a targeted one. A
+    creature that has already left is destroyed by nothing, which is CR 608.2b
+    doing as much as it can.
+    """
+    destroyed: list[str] = []
+    for victim in block_pair_permanents(game, context):
+        seat = game.controller_index_of(victim)
+        if seat is None:
+            continue
+        destroyed.extend(
+            perm.card.name
+            for perm in game._destroy_swept_permanents(
+                game.players[seat],
+                lambda candidate, victim=victim: candidate is victim,
+                allow_regeneration=not instruction.payload.get(
+                    "bypass_regeneration"
+                ),
+            )
+        )
+    if destroyed:
+        game.log.append(
+            f"{context.card.name} destroyed {', '.join(destroyed)}"
+        )
+    else:
+        game.log.append(
+            f"{context.card.name}: the creature it named is gone"
+        )
     return True, "resolved"
 
 

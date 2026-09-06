@@ -615,6 +615,7 @@ class DeclareBlockersStepMixin:
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._fire_delayed_block_pair_triggers(controller_index, assignments)
         self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
+        self._fire_board_wide_block_triggers(controller_index, assignments)
         # CR 509.2/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:
@@ -2122,6 +2123,59 @@ class DeclareBlockersStepMixin:
                     self.log.append(
                         f"{source.card.name} triggered on becoming blocked (added to stack)"
                     )
+
+    def _fire_board_wide_block_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """"Whenever **a creature** becomes blocked by a creature with lesser
+        power" / "…**a creature** blocks a creature with lesser power"
+        (No Quarter) — CR 509.1a's pair announced to the whole table.
+
+        The fourth block-fire shape and the only one whose watcher is neither
+        combatant nor attached to one, which is exactly why it is announced
+        through the event bus rather than by a scan: the two printed scans above
+        read ``blocker.effective_card`` and ``attacker.effective_card``, and an
+        enchantment sitting on a third player's battlefield is in neither.
+        ``emit`` collects from every permanent, every emblem and every graveyard
+        that carries the condition, which is what a board-wide watcher means —
+        the same arrangement ``_fire_matching_creature_attacks_triggers`` has one
+        step earlier.
+
+        **Two announcements per pair, not one**, because the two kinds are two
+        questions: which creature the firing is *about* decides which half "the
+        blocking creature" and "the attacking creature" name, and a single kind
+        would leave the effect unable to tell them apart. A card printing both
+        lines (No Quarter prints exactly both) therefore fires once per line per
+        pair, which is what the two printed sentences say.
+
+        ``blocked_permanent_ids`` carries the **partner** under the key
+        ``handlers/_common.block_pair_permanents`` already reads, so the effect
+        resolves the other half of the pair through the one reader every other
+        block-pair effect goes through. ``target_permanent_id`` carries it too,
+        for the stack item, the log and CR 400.7's identity.
+        """
+        from ..events import emit
+
+        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            for _attacker_idx, attacker in blocked:
+                emit(
+                    self, "matching_creature_becomes_blocked",
+                    subject=attacker,
+                    combatant_permanent_id=attacker.permanent_id,
+                    partner_permanent_id=blocker.permanent_id,
+                    blocked_permanent_ids=[blocker.permanent_id],
+                    target_permanent_id=blocker.permanent_id,
+                )
+                emit(
+                    self, "matching_creature_blocks",
+                    subject=blocker,
+                    combatant_permanent_id=blocker.permanent_id,
+                    partner_permanent_id=attacker.permanent_id,
+                    blocked_permanent_ids=[attacker.permanent_id],
+                    target_permanent_id=attacker.permanent_id,
+                )
 
     def _fire_delayed_becomes_blocked_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]
