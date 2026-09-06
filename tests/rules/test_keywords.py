@@ -15,6 +15,8 @@ blockers, resolve combat damage) rather than poking handlers directly.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from engine import Game, load_cards
@@ -126,16 +128,33 @@ def _get(all_cards, name: str) -> CardDefinition:
 
 
 @pytest.mark.cr("702.1")
-def test_display_keywords_are_all_covered_here():
-    """Guard: every keyword the UI displays has a test section in this file."""
-    expected = {
-        "Flying", "First Strike", "Double Strike", "Trample", "Deathtouch",
-        "Reach", "Vigilance", "Haste", "Defender", "Banding", "Fear",
-        "Lifelink", "Shroud", "Protection", "Rampage", "Flanking",
-        "Plainswalk", "Islandwalk", "Swampwalk", "Mountainwalk", "Forestwalk",
-        "Menace", "Hexproof", "Prowess",
-    }
-    assert set(web_app._DISPLAY_KEYWORDS) == expected
+def test_every_displayed_keyword_has_rules_coverage():
+    """Guard: every keyword the UI badges is exercised somewhere in `tests/rules/`.
+
+    This used to compare ``_DISPLAY_KEYWORDS`` against a **second hand-written
+    copy of itself**, which is the shape this repo keeps finding at a promotion:
+    a guard that re-spells the thing it checks fails whenever the real list
+    grows and says nothing about whether the claim in its own docstring holds.
+    It fired on shadow, phasing and desertwalk at Tempest's Phase 5 — all three
+    already had rules tests, two of them for sets.
+
+    So it asserts the invariant instead: a badge means a player is told the
+    permanent has the ability, and something under `tests/rules/` had better
+    demonstrate that ability works. Coverage may live in any file there —
+    shadow's is `test_tmp_w1g1_rules.py`, because the keyword arrived with a set.
+    """
+    rules_dir = pathlib.Path(__file__).parent
+    corpus = "\n".join(
+        path.read_text(encoding="utf-8").lower()
+        for path in rules_dir.rglob("test_*.py")
+    )
+    uncovered = [
+        keyword for keyword in web_app._DISPLAY_KEYWORDS
+        if keyword.lower() not in corpus
+    ]
+    assert not uncovered, (
+        f"badged with no rules coverage anywhere in tests/rules/: {uncovered}"
+    )
 
 
 # ---------------------------------------------------------------------------

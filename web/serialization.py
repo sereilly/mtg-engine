@@ -43,7 +43,35 @@ _DISPLAY_KEYWORDS = (
     # Flash is deliberately absent: it is a permission about casting from
     # hand (CR 702.8b), not a battlefield ability worth a badge.
     "Menace", "Hexproof", "Prowess",
+    "Shadow", "Phasing", "Desertwalk",
 )
+
+#: The implemented keywords this row deliberately does **not** badge, each with
+#: the reason. Named rather than merely absent, because the list above is
+#: hand-ordered and went stale the moment a keyword was added: shadow shipped
+#: with 25 creatures whose whole evasion the player could not see, and phasing
+#: and desertwalk had been missing since Mirage and Arabian Nights.
+#: `tests/ui/test_serialization_keywords.py` holds the two sets together, so an
+#: implemented keyword must be badged or excused here.
+_NOT_BADGED = {
+    # A permission about casting from hand, not a battlefield ability.
+    "flash",
+    # Appended separately below, because it is derived from the layer rather
+    # than read off the keyword.
+    "indestructible",
+    # The generic name of the family whose five members are badged above; no
+    # card prints the bare word.
+    "landwalk",
+    # Parameterised the way protection is ("bands with other Legends"), so a
+    # bare badge would say less than the card does. Spelled out in the oracle
+    # text the client already shows.
+    "bands with other",
+}
+
+#: The badges a **noncreature** permanent can carry. Indestructible is appended
+#: separately (it is derived from the layer, not read off the keyword); phasing
+#: is here because CR 702.26 is about a permanent of any type.
+_NONCREATURE_KEYWORDS = ("Phasing",)
 
 # Color symbol → display word, for spelling out protection qualities on the card.
 _SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
@@ -58,14 +86,28 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
 
     The combat keywords are creature-only, but Indestructible is not: Guardian
     Beast grants it to noncreature artifacts and Consecrate Land to a land, and
-    a player can't see that it applies unless the card says so.
+    a player can't see that it applies unless the card says so. **Phasing is the
+    second of those** (CR 702.26 is about a permanent, not a creature) — Teferi's
+    Isle is a land and phases, and the badge said nothing about it from Mirage
+    until Tempest's promotion smoke test asked.
+
+    Whether the permanent *is* a creature is asked of the layers rather than of
+    the printed type line: an animated land is a creature and its keywords are
+    real (Stalking Stones becomes a 3/3 that is still a land). Reading
+    ``card.type_line`` here was the second answer to a question
+    ``engine/continuous.py`` already owns — the class
+    ``tests/engine/test_layer_reads.py`` guards, which scans ``engine/`` and so
+    never saw this one.
 
     "Protection" is spelled out with the quality it's from (e.g. "Protection
     from white") so the player can see which color the permanent is protected
     against, not just that it has protection.
     """
-    if "creature" not in perm.card.type_line.lower():
-        return ["Indestructible"] if game._is_indestructible(perm) else []
+    if not game._is_creature(perm):
+        noncreature = [kw for kw in _NONCREATURE_KEYWORDS if game._has_keyword(perm, kw)]
+        if game._is_indestructible(perm):
+            noncreature.append("Indestructible")
+        return noncreature
     keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
     if game._is_indestructible(perm):
         keywords.append("Indestructible")
