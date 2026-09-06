@@ -32,6 +32,7 @@ from .rebinding import (rebind_alternative_pronoun_to_choice_target,
 from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
                       _parse_duration, _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,
+                      _parse_destroy_chosen_that_didnt_attack,
                       _parse_untap_chosen_by_paying,
                       _parse_cast_permission,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
@@ -444,6 +445,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         counted = _parse_count_objects(stream)
         if counted is not None:
             return counted
+    # "At the beginning of **that turn's** end step, destroy each of the chosen
+    # creatures that didn't attack this turn." (Oracle en-Vec.) Read before the
+    # delayed-trigger opener below, whose table has a row for these exact words
+    # meaning a different turn — Final Fortune's extra turn. Both are "that
+    # turn"; which one is decided by the sentence in front, and only this
+    # production asks. It refuses without consuming, so Final Fortune's line is
+    # untouched.
+    if stream.at_word("at"):
+        destroy_chosen = _parse_destroy_chosen_that_didnt_attack(stream)
+        if destroy_chosen is not None:
+            return destroy_chosen
     # "When that creature dies this turn, …" / "At the beginning of your next
     # main phase, …" — a delayed triggered ability (CR 603.7). Read before the
     # productions its inner effect uses, whose sentences this one's tail is:
@@ -520,7 +532,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # reaches the probe and leaves it untouched: ``_parse_duration`` answers
     # ``kind=None`` for a phrase that is not a duration, and the mark is
     # restored.
-    if stream.at_word("until", "this"):
+    # "**During that player's next turn**, the chosen creatures attack if able,
+    # and other creatures can't attack." (Oracle en-Vec.) The third opening word
+    # a leading duration can have, named here for the two above it: the probe is
+    # only reached for a word this gate lists, and a duration nothing tries is a
+    # duration nothing reads. Every other sentence beginning "During …" is
+    # untouched — ``_parse_duration`` answers ``kind=None`` for a phrase that is
+    # not in its table and the mark is restored, which is what already happens
+    # for the hundreds of sentences beginning "This creature …".
+    if stream.at_word("until", "this", "during"):
         mark = stream.mark()
         try:
             duration = _parse_duration(stream)

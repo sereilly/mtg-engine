@@ -28,13 +28,99 @@ A family rather than a floor: ``combat`` does not read it —
 nothing here is below anything and no lowering family imports it.
 """
 
-from ...oracle_types import OracleInstruction
+import dataclasses
+
+from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
+from ...turn_state import THAT_PLAYERS_NEXT_TURN
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _describe_targets, _is_source, _names_several_targets, _restrictions_beyond,
     testable_filter_payload,
 )
+from ._record_keys import CHOSEN_PLAYER
+
+
+#: The noun phrase a sentence may use to name the set an earlier step of the
+#: same effect chose: "**the chosen creatures**", and nothing narrower. The set
+#: is the record, so any extra word in the phrase would describe a subset the
+#: payload has no way to carry and the mark would go on the whole set anyway —
+#: which is a card compelling more creatures than it names.
+_CHOSEN_CREATURES = ast.ObjectFilter(card_types=("creature",))
+
+
+def _chosen_set_payload(
+    subject, produced: frozenset[str], node
+) -> dict[str, object]:
+    """The payload keys that aim an effect at "the chosen creatures" during
+    "that player's next turn".
+
+    Two records and both are required. ``CHOSEN_THIS_WAY_OBJECTS`` is the set,
+    and ``CHOSEN_PLAYER`` is the seat whose next turn the window names — the
+    player the choosing step asked. Gated on ``produced`` rather than trusted,
+    for the reason every other back-reference in this package is: with no such
+    step the words name nobody, and an effect armed for a guessed seat holds on
+    the wrong turn.
+    """
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "chosen"
+        and subject.filter == _CHOSEN_CREATURES
+    ):
+        raise LoweringError(
+            "this window is only carried over the set an earlier step chose",
+            node=node,
+        )
+    if CHOSEN_THIS_WAY_OBJECTS not in produced:
+        raise LoweringError(
+            "no step of this effect chose the creatures this sentence names",
+            node=node,
+        )
+    if CHOSEN_PLAYER not in produced:
+        raise LoweringError(
+            "no step of this effect named the player whose turn this is",
+            node=node,
+        )
+    return {"subject_from": CHOSEN_THIS_WAY_OBJECTS, "window": THAT_PLAYERS_NEXT_TURN}
+
+
+def _lower_destroy_chosen_that_didnt_attack(
+    node: "ast.DestroyChosenThatDidntAttack",
+    produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"At the beginning of **that turn's** end step, destroy each of the chosen
+    creatures that didn't attack this turn." (Oracle en-Vec.)
+
+    The same instruction Maddening Imp's tail lowers to one function up, and the
+    same mark behind it — ``engine/phases/end_step.py`` sweeps both — with the
+    window and the set as payload instead of as the sentence's position. Marked
+    now and swept later for that lowering's stated reason: "the chosen
+    creatures" is the set as it stood when the ability resolved, and re-reading
+    the phrase at an end step a turn later would name whatever the board looked
+    like by then.
+    """
+    subject = node.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.filter.attacked_this_turn is False
+    ):
+        # "…that **didn't attack** this turn" is the whole condition of the
+        # sentence and the mark is what tests it, at the end step, against the
+        # record the declaration wrote. A phrase without it would destroy the
+        # set unconditionally; one with it inverted is a different card.
+        raise LoweringError(
+            "this end-step destruction is about the creatures that stayed home",
+            node=node,
+        )
+    stripped = dataclasses.replace(
+        subject, filter=dataclasses.replace(subject.filter, attacked_this_turn=None)
+    )
+    return (
+        OracleInstruction(
+            "destroy_subject_at_end_step_if_it_didnt_attack", "",
+            _chosen_set_payload(stripped, produced, node),
+        ),
+    )
 
 
 #: Trigger events whose fire site records the **attacking** creature, so
@@ -92,6 +178,7 @@ def _lower_force_chosen_creature_to_attack(
 
 def _lower_attacks_this_turn_if_able(
     node: ast.AttacksThisTurnIfAble,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """CR 508.1a's requirement for one turn, on the source or on a chosen
     creature.
@@ -115,6 +202,27 @@ def _lower_attacks_this_turn_if_able(
     front of this one refuses the "each combat" spelling in the *parse*, which
     is what leaves the table its line.
     """
+    if node.window is None:
+        # The sentence printed no window here and no leading duration supplied
+        # one (``sentence_clauses._distribute_duration``). Refused rather than
+        # defaulted: a requirement with no end is a creature that must attack
+        # every combat for the rest of the game, which is the widening
+        # direction and the one a card may not get wrong by accident.
+        raise LoweringError(
+            "this attack requirement names no window", node=node
+        )
+    if node.window == THAT_PLAYERS_NEXT_TURN:
+        # "**During that player's next turn**, the chosen creatures attack if
+        # able." (Oracle en-Vec.) The same CR 508.1a requirement over a turn
+        # that has not started, on the set an earlier step chose — so the same
+        # instruction with the window and the record as payload, which is where
+        # every other printed parameter in this grammar goes.
+        payload = _chosen_set_payload(node.subject, produced, node)
+        if node.destroy_if_absent:
+            payload["destroy_if_absent"] = True
+        return (
+            OracleInstruction("force_subject_to_attack_until_eot", "", payload),
+        )
     if node.destroy_if_absent and not (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier in ("all", "each")

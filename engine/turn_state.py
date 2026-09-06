@@ -259,3 +259,115 @@ def attacked_during_seats_last_turn(game, permanent, seat: int) -> bool:
         stamp.get("seat") == seat
         and stamp.get("seat_turn") == game.seat_turn_counts.get(seat, 0) - 1
     )
+
+
+# ---------------------------------------------------------------------------
+# A window that opens on a named seat's *next* turn
+# ---------------------------------------------------------------------------
+#
+# "That creature can't attack during **its controller's next turn**" (Wall of
+# Dust) and "**During that player's next turn**, the chosen creatures attack if
+# able, and other creatures can't attack. At the beginning of **that turn's**
+# end step, destroy each of the chosen creatures that didn't attack this turn."
+# (Oracle en-Vec.) One printed shape: an effect that resolves now and takes hold
+# during a turn that has not started yet.
+#
+# Every other carrier this engine has is the wrong length for it. The resolution
+# scratchpad is gone when the resolution ends; a permanent's ``_EOT`` metadata is
+# swept at the next cleanup, which is *before* the named turn begins; and a
+# delayed triggered ability answers to a moment rather than spanning a turn. So
+# the window is a **stamp**: which seat, and which of that seat's turns, written
+# while the creating effect still knows and compared against the seat's own turn
+# counter at every step that reads it.
+#
+# Nothing sweeps a stamp, and nothing needs to. ``seat_turn_counts`` only ever
+# rises, so a stamp naming a turn that has been and gone answers False to every
+# later question — and one on a permanent that leaves is gone with it, which
+# CR 400.7 gives for free.
+#
+# Wall of Dust wrote this shape inline a set before Oracle en-Vec printed three
+# more clauses over it. Named here now for the reason every other pair of
+# writer-and-reader in this file is: two spellings of one comparison is how a
+# stamp comes to be written in a form nothing reads.
+
+
+def seats_next_turn_window(game, seat: int) -> dict:
+    """The stamp naming *seat*'s **next** turn.
+
+    ``+ 1`` against that seat's own counter rather than against ``game.turn``:
+    a seat's counter does not move while its opponents take their turns, so
+    "your next turn" is one ordinal up however many turns away it is.
+    """
+    return {"seat": int(seat), "seat_turn": game.seat_turn_counts.get(seat, 0) + 1}
+
+
+def stamped_turn_is_now(game, stamp) -> bool:
+    """Whether *stamp* names the turn currently being taken.
+
+    Both halves of the comparison, because either alone is wrong: the seat
+    without the ordinal answers True on every one of that player's turns for
+    the rest of the game, and the ordinal without the seat answers True on
+    whichever player's turn happens to share the number.
+    """
+    if not isinstance(stamp, dict):
+        return False
+    seat = stamp.get("seat")
+    return (
+        seat == game.active_player_index
+        and stamp.get("seat_turn") == game.seat_turn_counts.get(seat, 0)
+    )
+
+
+def stamped_turn_has_passed(game, stamp) -> bool:
+    """Whether the turn *stamp* names is over — or was never reachable.
+
+    For the one carrier that is a list on the game rather than a mark on a
+    permanent: a stamp on a permanent needs no sweep because the permanent is
+    the entry, and a game-level entry would otherwise accumulate for the rest
+    of the game. True once the seat's counter has passed the named turn, which
+    happens as that seat's *following* turn begins.
+    """
+    if not isinstance(stamp, dict):
+        return False
+    seat = stamp.get("seat")
+    try:
+        named = int(stamp.get("seat_turn"))
+    except (TypeError, ValueError):
+        return False
+    return game.seat_turn_counts.get(seat, 0) > named
+
+
+#: The mark "that creature can't attack during its controller's next turn"
+#: (Wall of Dust) leaves, and the two beside it Oracle en-Vec leaves: a
+#: requirement to attack, and an end-step destruction for staying home. All
+#: three carry a :func:`seats_next_turn_window` stamp and are read by the step
+#: that enforces them — the declaration for the first two, the end step for the
+#: third.
+#:
+#: Named here rather than spelled at the write and the read for this module's
+#: standing reason, and it is not hypothetical: ``attacked_this_turn`` needed a
+#: reader function in this file because every caller reaching for it through
+#: ``getattr`` got False forever.
+CANT_ATTACK_ON_SEAT_TURN_KEY = "cant_attack_on_seat_turn"
+MUST_ATTACK_ON_SEAT_TURN_KEY = "must_attack_on_seat_turn"
+DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY = "destroy_if_did_not_attack_on_seat_turn"
+
+
+def marked_for_this_turn(game, permanent, key: str) -> bool:
+    """Whether *permanent* carries *key* stamped for the turn being taken."""
+    return stamped_turn_is_now(game, permanent.metadata.get(key))
+
+
+#: The printed window "**during that player's next turn**" (Oracle en-Vec),
+#: spelled once for the three readers of it: the duration table that parses the
+#: words, the lowerings that put it in a payload, and the handlers that turn it
+#: into a :func:`seats_next_turn_window` stamp. "That player" is the seat an
+#: earlier step of the same resolution recorded — the one it asked to choose —
+#: so the window is not knowable until the effect resolves, which is why it
+#: travels as a *name* and not as a stamp.
+#:
+#: One value, and that is the honest state rather than a table waiting to grow:
+#: it is the only window in this engine that a *later* sentence can refer back
+#: to as "that turn", and until a second one prints, "that turn" needs no record
+#: to disambiguate it. A second value is the moment that changes.
+THAT_PLAYERS_NEXT_TURN = "that_players_next_turn"

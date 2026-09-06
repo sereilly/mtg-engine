@@ -321,6 +321,33 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # "up to two target creatures" into every creature on the battlefield.
     stream.accept_phrase("each", "of")
 
+    # "…destroy each of **the chosen creatures** that didn't attack this turn."
+    # (Oracle en-Vec.) The whole set an earlier sentence of this same effect
+    # recorded, where ``one_of_those`` above names one member of it — and its
+    # own quantifier for that reader's reason: a lowering written for the set
+    # must fail by name rather than silently receive a described class, and the
+    # reverse.
+    #
+    # Read after the "each of" wrapper above so both printed spellings arrive
+    # here — the card prints "each of the chosen creatures" in one sentence and
+    # "the chosen creatures" in the one before it, and they name the same set.
+    # Nothing is targeted: CR 601.2c chose the set as the ability resolved, and
+    # this sentence only refers back to it.
+    #
+    # The noun phrase is what refuses the other "the chosen …" phrases the pool
+    # prints — a colour, a type, a card name, a player. Those are not objects,
+    # ``parse_object_filter`` declines them, and the cursor is restored for the
+    # productions that do read them.
+    mark_chosen = stream.mark()
+    if stream.accept_phrase("the", "chosen"):
+        try:
+            chosen_filter = parse_object_filter(stream)
+        except GrammarError:
+            chosen_filter = None
+        if chosen_filter is not None:
+            return ast.TargetSpec("chosen", chosen_filter)
+        stream.reset(mark_chosen)
+
     quantifier: str | None = None
     count = 1
 

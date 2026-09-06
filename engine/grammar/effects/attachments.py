@@ -219,6 +219,19 @@ def parse_player_chooses_permanent(
             stream.reset(mark)
             return None
         return ast.ChoosePermanent(chooser, spec)
+    if spec.quantifier == "any_number":
+        # "Target opponent chooses **any number of** creatures they control."
+        # (Oracle en-Vec.) The plural above with no printed ceiling — CR 601.2c
+        # again, and the bound is the set itself rather than a number a picker
+        # shows. Its own quantifier for ``parse_target_spec``'s stated reason
+        # ("an 'up to' prints a maximum a picker shows and a re-check enforces,
+        # and there is none here"), so it arrives as a different word and the
+        # lowering must not silently read it as a ceiling of one.
+        #
+        # The same node and the same tail rule as "up to": no relative clause
+        # is read and none is tolerated, so a phrase with anything behind it
+        # refuses the line rather than dropping what it printed.
+        return ast.ChoosePermanent(chooser, spec)
     if spec.quantifier == "up_to":
         # "that player **chooses up to two Plains**" (Raiding Party). The plural
         # of the same sentence, and the same node: how many may be picked is

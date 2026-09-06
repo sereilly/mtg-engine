@@ -60,6 +60,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_redirect_damage, _lower_double_combat_damage,
                        _lower_choose_damage_source,
                        _lower_damage_cant_be_prevented, _lower_become_creature,
+                       _lower_destroy_chosen_that_didnt_attack,
                        _lower_cant_phase_out,
                        _lower_land_type_swap,
                        _lower_simultaneous_phasing,
@@ -271,7 +272,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.WinGame: _lower_win_game,
     ast.AttackAsThough: _lower_attack_as_though,
     ast.AssignsNoCombatDamage: _lower_assigns_no_combat_damage,
-    ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
     ast.AttackingDoesntTap: _lower_attacking_doesnt_tap,
     ast.ChooseTarget: _lower_choose_target,
     ast.WaiveShroud: _lower_waive_shroud,
@@ -412,4 +412,12 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # word: a pronoun is only a pronoun relative to what came before it, and
     # with no record the same words mean something else — here, nothing at all.
     ast.CreateCopyToken: _lower_create_copy_token,
+    # "During that player's next turn, **the chosen creatures** attack if able"
+    # and "destroy each of **the chosen creatures** that didn't attack this
+    # turn" (Oracle en-Vec). Both name a set *and* a seat an earlier step of
+    # the same effect recorded, so both moved out of the name-only table for
+    # ``ast.Attach``'s reason: the words are a back-reference, and with no
+    # record they name nobody.
+    ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
+    ast.DestroyChosenThatDidntAttack: _lower_destroy_chosen_that_didnt_attack,
 }

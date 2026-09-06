@@ -1801,3 +1801,245 @@ def test_the_same_is_true_rewrite_leaves_every_other_sentence_alone():
         "has trample. The same is true for first strike."
     )
     assert _w3g4_expand(once_only) == once_only
+
+
+# --- W4G1: Oracle en-Vec — a window that opens on a named seat's next turn ---
+
+from engine import Game as _W4G1Game, PlayerState as _W4G1PlayerState
+from engine.models import Permanent as _W4G1Permanent
+from engine.oracle import compile_card_oracle as _w4g1_compile
+from engine.turn_state import (
+    DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY as _W4G1_DESTROY_KEY,
+    MUST_ATTACK_ON_SEAT_TURN_KEY as _W4G1_MUST_KEY,
+)
+
+
+def _w4g1_board(set_pool, victim_names=("Horned Turtle", "Trained Armodon",
+                                        "Bayou Dragonfly")):
+    """Oracle en-Vec for seat 0, and *victim_names* for seat 1.
+
+    Seat 1 is interactive so the test makes the choice rather than taking the
+    default — which is the whole point of the card: "any number" means the
+    opponent picks, and a default that always picks everything would hide the
+    complement half.
+    """
+    pool = set_pool("TMP")
+    oracle = _W4G1Permanent(card=pool["Oracle en-Vec"])
+    oracle.summoning_sick = False
+    oracle.metadata["summoning_sickness_turn"] = -99
+    victims = []
+    for name in victim_names:
+        perm = _W4G1Permanent(card=pool[name])
+        perm.summoning_sick = False
+        perm.metadata["summoning_sickness_turn"] = -99
+        victims.append(perm)
+    game = _W4G1Game(players=[
+        _W4G1PlayerState(name="P1", life=20, battlefield=[oracle]),
+        _W4G1PlayerState(name="P2", life=20, battlefield=victims),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+    game._sync_control()
+    game.start_turn(0)
+    return game, oracle, victims
+
+
+def _w4g1_activate(game, chosen):
+    """Activate the Oracle and answer the opponent's prompt with *chosen*."""
+    result = game.activate_permanent_ability(0, "Oracle en-Vec", ability_index=0)
+    assert result.supported, game.log
+    game.resolve_stack()
+    assert game.pending_choices, game.log
+    assert game.confirm_permanent_set_choice(
+        1, [perm.permanent_id for perm in chosen]
+    ), game.log
+    game.resolve_stack()
+
+
+def test_w4g1_oracle_en_vec_compiles_to_four_windowed_steps(set_pool):
+    """One sentence per step, and the window and the record are payload.
+
+    The card is four printed sentences and it compiles to four instructions
+    that already existed — Maddening Imp's requirement and end-step
+    destruction, Festival's blanket restriction, Raiding Party's plural pick.
+    What Oracle en-Vec adds is two payload keys on three of them: *which* turn
+    (``window``) and *which set* (``subject_from`` / ``except_from``). No new
+    instruction kind, because CR 508.1a's requirement is the same requirement
+    whichever turn it holds for.
+    """
+    program = _w4g1_compile(set_pool("TMP")["Oracle en-Vec"])
+    assert program.supported
+
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_permanents",
+        "force_subject_to_attack_until_eot",
+        "cant_attack_until_eot",
+        "destroy_subject_at_end_step_if_it_didnt_attack",
+    ]
+    assert steps[0].payload["unbounded"] is True
+    assert steps[0].payload["chooser"] == "opponent"
+    assert steps[0].payload["controlled_by"] == "chooser"
+    for step in steps[1:]:
+        assert step.payload["window"] == "that_players_next_turn"
+    assert steps[1].payload["subject_from"] == "chosen_this_way_objects"
+    assert steps[2].payload["except_from"] == "chosen_this_way_objects"
+    assert steps[3].payload["subject_from"] == "chosen_this_way_objects"
+
+
+def test_w4g1_the_chosen_attack_and_the_rest_cannot_on_that_players_turn(set_pool):
+    """The card in a game, on the turn it names.
+
+    Both halves at once, because the card is the pair: the two creatures the
+    opponent picked are compelled (CR 508.1d) and the one they did not is
+    grounded (CR 508.1c). A mark that expired at the cleanup in between would
+    make both halves silently false, which is the failure this window exists to
+    prevent.
+    """
+    game, _oracle, victims = _w4g1_board(set_pool)
+    turtle, armodon, dragonfly = victims
+    _w4g1_activate(game, [turtle, armodon])
+
+    assert turtle.metadata[_W4G1_MUST_KEY] == {"seat": 1, "seat_turn": 1}
+    assert dragonfly.metadata.get(_W4G1_MUST_KEY) is None
+
+    game.start_next_turn()          # the turn the ability named
+    assert game.active_player_index == 1
+    assert game._must_attack_if_able(turtle)
+    assert game._must_attack_if_able(armodon)
+    assert not game._must_attack_if_able(dragonfly)
+    assert game.can_attack(turtle, 0)
+    assert game.can_attack(armodon, 0)
+    assert not game.can_attack(dragonfly, 0)
+
+
+def test_w4g1_a_declaration_that_leaves_a_chosen_creature_home_is_illegal(set_pool):
+    """CR 508.1d: the requirement is checked against the whole declaration."""
+    game, _oracle, victims = _w4g1_board(set_pool)
+    turtle, armodon, _dragonfly = victims
+    _w4g1_activate(game, [turtle, armodon])
+
+    game.start_next_turn()
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    refused, why = game.declare_attackers(1, [0])
+    assert not refused
+    assert "Trained Armodon must attack if able" in why
+    assert game.declare_attackers(1, [0, 1])[0]
+
+
+def test_w4g1_a_chosen_creature_that_stayed_home_dies_at_that_turns_end_step(set_pool):
+    """"At the beginning of **that turn's** end step, destroy each of the
+    chosen creatures that didn't attack this turn."
+
+    The one that could not attack is destroyed and the two that did are not —
+    which is the whole difference between this mark and an unconditional
+    delayed destruction. The Dragonfly is tapped *after* the untap step, so
+    CR 508.1a's "if able" is genuinely unmet rather than disobeyed.
+    """
+    game, _oracle, victims = _w4g1_board(set_pool)
+    turtle, armodon, dragonfly = victims
+    _w4g1_activate(game, victims)
+
+    game.start_next_turn()
+    dragonfly.tapped = True
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0, 1])[0], game.log
+    game.advance_combat_phase()
+    game.declare_blockers(0, {})
+    game._settle()
+
+    game.resolve_end_step(1)
+    assert [perm.card.name for perm in game.players[1].battlefield] == [
+        "Horned Turtle", "Trained Armodon",
+    ]
+    assert [card.name for card in game.players[1].graveyard] == ["Bayou Dragonfly"]
+    assert turtle.metadata[_W4G1_DESTROY_KEY] == {"seat": 1, "seat_turn": 1}
+    assert armodon.metadata[_W4G1_DESTROY_KEY] == {"seat": 1, "seat_turn": 1}
+
+
+def test_w4g1_the_window_is_one_turn_and_then_it_is_over(set_pool):
+    """The stamp names one of that seat's turns, not "from now on".
+
+    The failure it guards is the quiet one: a mark nothing sweeps that answered
+    "yes" on every later turn would ground the opponent's whole board for the
+    rest of the game, and no test of the turn it names would notice.
+    """
+    game, _oracle, victims = _w4g1_board(set_pool)
+    turtle, _armodon, dragonfly = victims
+    _w4g1_activate(game, [turtle])
+
+    game.start_next_turn()                       # the named turn
+    assert not game.can_attack(dragonfly, 0)
+    assert game._must_attack_if_able(turtle)
+
+    game.start_next_turn()                       # seat 0's
+    game.start_next_turn()                       # seat 1's *next* one
+    assert game.can_attack(dragonfly, 0)
+    assert not game._must_attack_if_able(turtle)
+
+
+def test_w4g1_choosing_none_grounds_that_players_whole_board(set_pool):
+    """"**Any number**" includes none (CR 601.2c), and the complement of the
+    empty set is everything.
+
+    An opponent who picks nothing keeps every creature alive and attacks with
+    none of them, which is the card working — and it is the one answer a
+    ceiling-only reading of "any number" could not tell from "up to one".
+    """
+    game, _oracle, victims = _w4g1_board(set_pool)
+    _w4g1_activate(game, [])
+
+    game.start_next_turn()
+    for victim in victims:
+        assert not game.can_attack(victim, 0)
+        assert not game._must_attack_if_able(victim)
+
+    game.resolve_end_step(1)
+    assert len(game.players[1].battlefield) == 3
+
+
+def test_w4g1_the_restriction_reaches_a_creature_that_arrived_afterwards(set_pool):
+    """CR 611.2c's second half, and the reason the restriction is state on the
+    game rather than a mark on each creature.
+
+    "Other creatures can't attack" modifies the rules rather than any object's
+    characteristics, so it "can affect objects that weren't affected when that
+    continuous effect began" — a creature that entered after the ability
+    resolved is an *other* creature and is grounded too. Per-permanent flags
+    would have missed it, which is the argument ``cant_attack_until_eot``'s
+    handler already makes for the "this turn" spelling.
+    """
+    game, _oracle, victims = _w4g1_board(set_pool)
+    turtle = victims[0]
+    _w4g1_activate(game, [turtle])
+
+    latecomer = _W4G1Permanent(card=set_pool("TMP")["Horned Turtle"])
+    latecomer.summoning_sick = False
+    latecomer.metadata["summoning_sickness_turn"] = -99
+    game.players[1].battlefield.append(latecomer)
+    game._sync_control()
+
+    game.start_next_turn()
+    assert game.can_attack(turtle, 0)
+    assert not game.can_attack(latecomer, 0)
+
+
+def test_w4g1_the_ability_is_refused_on_an_opponents_turn_with_nothing_paid(set_pool):
+    """"Activate only during your turn." (CR 602.5.)
+
+    An unenforced restriction is not a dead ability — it is one that works more
+    often than the card allows — so the check is that the Oracle is still
+    *untapped* afterwards as well as that the ability did not resolve.
+    """
+    game, oracle, _victims = _w4g1_board(set_pool)
+    game.start_next_turn()
+
+    refused = game.activate_permanent_ability(0, "Oracle en-Vec", ability_index=0)
+    assert not refused.supported
+    assert not oracle.tapped
+    assert not game.pending_choices

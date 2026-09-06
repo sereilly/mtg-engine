@@ -20,6 +20,7 @@ import dataclasses
 from dataclasses import replace
 
 from ..pt import pt_counter_deltas
+from ..turn_state import THAT_PLAYERS_NEXT_TURN
 from . import ast
 from .amounts import accept_counter_kind, parse_amount
 
@@ -141,6 +142,20 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # ability resolves in. Outside one nothing lowers it, which is the honest
     # answer: the phrase names a turn the reader cannot identify.
     ("until_end_of_that_turn", ("until", "the", "end", "of", "that", "turn")),
+    # "**During that player's next turn,** the chosen creatures attack if able,
+    # and other creatures can't attack." (Oracle en-Vec.) A window that opens on
+    # a turn nobody is taking yet, and the only entry in this table printed in
+    # the *leading* position on every card that has it — ``statements`` names
+    # the opening word so the probe is reached, and ``_distribute_duration``
+    # hands it to each effect behind the comma.
+    #
+    # "That player" is a seat an earlier sentence of the same effect recorded,
+    # so the phrase names a turn the parser cannot identify and the *lowering*
+    # is where it becomes one — exactly as ``until_end_of_that_turn`` above
+    # names a turn only a delay can resolve. The name is
+    # ``turn_state.THAT_PLAYERS_NEXT_TURN``, which the handlers read back.
+    (THAT_PLAYERS_NEXT_TURN,
+     ("during", "that", "player", "'s", "next", "turn")),
 )
 
 #: The five types CR 205.3i calls **basic** land types, in the printed order

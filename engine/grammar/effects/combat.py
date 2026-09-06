@@ -11,7 +11,7 @@ from .. import ast
 from ..lexer import MANA
 from ..nouns import parse_object_filter
 from ..back_references import parse_bound_subject
-from ..references import parse_recipient
+from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_number, _parse_duration, parse_subject_filter_at)
 from ..sacrifices import parse_counted_subject
@@ -716,12 +716,80 @@ def _parse_attacks_this_turn_if_able(
     mark = stream.mark()
     if not stream.accept_word("attacks", "attack"):
         return None
-    if not stream.accept_phrase("this", "turn", "if", "able"):
+    window: str | None = None
+    if stream.accept_phrase("this", "turn"):
+        window = "this_turn"
+    if not stream.accept_phrase("if", "able"):
+        stream.reset(mark)
+        return None
+    if window is None and not stream.at_punct(".", ",", ";") and not stream.exhausted:
+        # The durationless spelling exists only because the window was printed
+        # in *front* of the sentence ("During that player's next turn, the
+        # chosen creatures attack if able, and …", Oracle en-Vec), and a
+        # leading duration is attached to a whole sentence rather than to a
+        # clause inside one. So the sentence has to end here; anything else is
+        # a longer sentence this production has not read, and consuming three
+        # words of it would replace its refusal with one from the wrong place.
         stream.reset(mark)
         return None
     return ast.AttacksThisTurnIfAble(
-        subject, destroy_if_absent=_accept_destroy_those_that_didnt_attack(stream)
+        subject,
+        destroy_if_absent=_accept_destroy_those_that_didnt_attack(stream),
+        window=window,
     )
+
+
+def _parse_destroy_chosen_that_didnt_attack(
+    stream: TokenStream,
+) -> "ast.DestroyChosenThatDidntAttack | None":
+    """``At the beginning of that turn's end step, destroy each of the chosen
+    creatures that didn't attack this turn.`` (Oracle en-Vec.)
+
+    :func:`_accept_destroy_those_that_didnt_attack` reads the identical sentence
+    as a *tail* of the requirement it belongs to, because Maddening Imp prints
+    the two adjacent and says "those creatures". This card prints a third
+    sentence between them and names the set outright, so the tail reader never
+    sees it — and it does not need to, which is the whole content of the
+    difference: "the chosen creatures" resolves against the record rather than
+    against the sentence in front of it.
+
+    Read **before** the delayed-trigger opener, whose table has a row for these
+    very words: Final Fortune's "at the beginning of **that turn's** end step"
+    names the extra turn its own sentence just queued (CR 500.7), and this one
+    names a seat's next turn a sentence three clauses back described. Matched
+    there first, the words would arm an ability for a turn nobody granted, and
+    the lowering's refusal would take the whole line down.
+
+    Non-consuming on refusal, so both readings above keep the stream they had.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "at", "the", "beginning", "of", "that", "turn", "'s", "end", "step",
+    ):
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("destroy", "each", "of"):
+        stream.reset(mark)
+        return None
+    subject = parse_target_spec(stream)
+    if subject is None or subject.quantifier != "chosen":
+        # The window is named by a *record*, so the set has to be too: an
+        # ordinary noun phrase here would be a class re-read off the board a
+        # turn later, which is not the set CR 608.2 fixed when the ability
+        # resolved.
+        stream.reset(mark)
+        return None
+    # "…that didn't attack this turn" is a postmodifier ``parse_object_filter``
+    # has read since Siren's Call, so it is already inside the filter above and
+    # is **not** consumed here — expecting the words as words would refuse the
+    # sentence the noun parser had just read in full. Which narrowings the
+    # lowering will accept is its business; the sentence has only to end.
+    if not (stream.exhausted or stream.at_punct(".")):
+        stream.reset(mark)
+        return None
+    return ast.DestroyChosenThatDidntAttack(subject)
 
 
 def _accept_destroy_those_that_didnt_attack(stream: TokenStream) -> bool:

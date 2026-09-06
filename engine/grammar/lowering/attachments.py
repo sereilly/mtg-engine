@@ -287,14 +287,47 @@ def _lower_choose_permanents(
     # appended: the payload is compared as a *repr* by ``scripts/oracle_diff``,
     # so a key inserted ahead of another moves every card that never printed it
     # — three lines of noise around whatever a round is really about.
+    # "**any number of** creatures they control" (Oracle en-Vec): no printed
+    # ceiling, so the bound is however many candidates there are. ``unbounded``
+    # rather than a very large ``up_to``, because the two differ in exactly what
+    # a picker shows — a number, or none at all — and the handler is the only
+    # place that knows how many candidates the board has.
+    unbounded = spec.quantifier == "any_number"
+    if spec.count_amount is None and described.controller is not None:
+        # "Target opponent chooses any number of creatures **they control**."
+        # (Oracle en-Vec.) "They" is the seat this sentence has already named —
+        # the chooser — so the picked-from battlefield and the picking seat are
+        # one answer, exactly as the singular pick beside this one resolves Echo
+        # Chamber's identical possessive.
+        #
+        # Lifted out of the filter into the ``controlled_by`` key the candidate
+        # rule answers, for that lowering's reason: ``subject_matches`` has
+        # nobody to compare a bare "that_player" controller against, so left
+        # inside it the phrase offers **nothing** and the card does nothing at
+        # all. Any other possessive names a third seat this has no word for and
+        # refuses.
+        if described.controller != "that_player":
+            raise LoweringError(
+                "the choice cannot be scoped to this player's battlefield",
+                node=node,
+            )
+        computed["controlled_by"] = "chooser"
+        described = dataclasses.replace(described, controller=None)
     payload: dict[str, object] = {
         "filter": _filter_payload(described),
-        **({"up_to": spec.count} if spec.count_amount is None else {}),
+        **(
+            {}
+            if unbounded or spec.count_amount is not None
+            else {"up_to": spec.count}
+        ),
         "result_key": CHOSEN_THIS_WAY_OBJECTS,
         "prompt": (
-            f"Choose up to {spec.count}." if spec.count_amount is None
+            "Choose any number."
+            if unbounded
+            else f"Choose up to {spec.count}." if spec.count_amount is None
             else "Choose the permanents."
         ),
+        **({"unbounded": True} if unbounded else {}),
         **computed,
     }
     untestable = untestable_filter_keys(payload["filter"])

@@ -706,6 +706,21 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # record is not a property of the kind, it is the payload's ``result_key``,
     # which is the one shape this table exists for.
     "choose_permanent": ("result_key", CHOSEN_DAMAGE_SOURCE, CHOSEN_DAMAGE_SOURCE),
+    # "**Target opponent** chooses any number of creatures they control.
+    # **During that player's next turn**, …" (Oracle en-Vec.) The plural pick
+    # records *whom* it asked as well as what they chose, exactly as the
+    # singular beside it has since Takklemaggot — and a row here rather than a
+    # second entry in ``_PRODUCES`` because it is not true of every step of the
+    # kind: inside "for each creature tapped this way, **that player**
+    # chooses…" (Raiding Party) the seat comes from a per-object record and
+    # changes every iteration, so nothing records one player.
+    #
+    # Keyed on the one chooser word the pool prints in front of a window. It
+    # under-declares by construction — the handler writes the record for every
+    # seat it resolves outright — and under-declaring is the safe direction
+    # here: a gate that has not been told about a record refuses the sentence
+    # rather than admitting one that reads nothing.
+    "choose_permanents": ("chooser", "opponent", CHOSEN_PLAYER),
 }
 
 

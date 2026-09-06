@@ -336,6 +336,26 @@ def choose_permanents(
         seat = found if isinstance(found, int) and 0 <= found < len(game.players) else None
     else:
         seat = _chooser_seat(game, payload, context)
+        if seat is not None:
+            # **Who was asked**, beside what they picked — the singular pick
+            # beside this one has recorded it since Takklemaggot, for the
+            # sentence that goes on to speak about the player rather than about
+            # their choice. "Target opponent chooses any number of creatures
+            # they control. **During that player's next turn**, …" (Oracle
+            # en-Vec) is the same words on the plural, and with no record the
+            # window would have to guess a seat.
+            #
+            # Recorded whether or not they choose anything, for that handler's
+            # reason: the question was still put to them, and "any number"
+            # legally includes none.
+            #
+            # Not written on the ``chooser_seat_record`` branch above, and the
+            # difference is the sentence rather than the plumbing: that branch
+            # is inside "for each creature tapped this way, **that player**
+            # chooses…" (Raiding Party), where the seat changes every iteration
+            # and no sentence behind the loop names one. A key overwritten per
+            # iteration is a record that answers about whoever went last.
+            context.results["chosen_player"] = seat
     card_name = getattr(context.card, "name", "")
     if seat is None:
         game.log.append(f"{card_name}: there is nobody to make the choice")
@@ -352,7 +372,15 @@ def choose_permanents(
     # choose a Y" says how many *are* chosen, so the number is a floor as well
     # as a ceiling. A ceiling alone would let a seat answer none and the card
     # would do nothing.
-    up_to = int(payload.get("up_to", 1))
+    # "chooses **any number of** creatures they control" (Oracle en-Vec): the
+    # sentence prints no ceiling, so the ceiling is the candidate list — which
+    # is a number only this side knows. None is still a legal answer; "any
+    # number" includes it (CR 601.2c), which is what separates the word from
+    # "one or more".
+    up_to = (
+        len(candidates) if payload.get("unbounded")
+        else int(payload.get("up_to", 1))
+    )
     at_least = int(payload.get("at_least", 0) or 0)
     counted = payload.get("count_from")
     if counted is not None:

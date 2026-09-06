@@ -25,6 +25,11 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
+from ..turn_state import (CANT_ATTACK_ON_SEAT_TURN_KEY,
+                          THAT_PLAYERS_NEXT_TURN,
+                          DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                          MUST_ATTACK_ON_SEAT_TURN_KEY,
+                          seats_next_turn_window)
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -177,10 +182,9 @@ def cant_attack_during_controllers_next_turn(game: Game, instruction: OracleInst
         seat = game.controller_index_of(perm)
         if seat is None:
             continue
-        perm.metadata["cant_attack_on_seat_turn"] = {
-            "seat": seat,
-            "seat_turn": game.seat_turn_counts.get(seat, 0) + 1,
-        }
+        perm.metadata[CANT_ATTACK_ON_SEAT_TURN_KEY] = seats_next_turn_window(
+            game, seat
+        )
         stamped.append((perm, seat))
     if stamped:
         for perm, seat in stamped:
@@ -877,6 +881,48 @@ def force_subject_to_block_until_eot(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+def _windowed_seat(game, context, window) -> int | None:
+    """The seat a payload ``window`` names, or None when nothing recorded one.
+
+    One name today (``turn_state.THAT_PLAYERS_NEXT_TURN``) and one record: the
+    player an earlier step of this same resolution asked to choose. Read here
+    rather than at each of the three call sites so the requirement, the
+    restriction and the end-step destruction cannot come to disagree about
+    which turn "that turn" is — they are three sentences about one window,
+    computed from one record inside one resolution, so they agree by
+    construction rather than by comparison.
+    """
+    if window != THAT_PLAYERS_NEXT_TURN:
+        return None
+    seat = (context.results or {}).get("chosen_player")
+    if isinstance(seat, int) and 0 <= seat < len(game.players):
+        return seat
+    return None
+
+
+def _recorded_subject_permanents(game, context, payload):
+    """The permanents a named step of this resolution recorded, still on the
+    battlefield.
+
+    ``subject_from`` is the plural of ``binds_recorded`` one file over: the
+    sentence names "**the chosen creatures**" rather than a class, so the set is
+    the answer an earlier step wrote and not something re-read off the board.
+    Survivors only, by the same ``permanent_id`` resolution every other reader
+    of a recorded set uses — a creature that has left is not there to be
+    required to attack.
+    """
+    recorded = (context.results or {}).get(str(payload.get("subject_from"))) or ()
+    found = []
+    for entry in recorded:
+        permanent = (
+            entry if hasattr(entry, "permanent_id")
+            else game.permanent_by_id(entry) if isinstance(entry, int) else None
+        )
+        if permanent is not None and game.is_on_battlefield(permanent):
+            found.append(permanent)
+    return found
+
+
 @effect_handler("force_subject_to_attack_until_eot")
 def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Non-Wall creatures the active player controls attack this turn if able.
@@ -907,28 +953,54 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
     """
     from ..subject_filters import subject_matches
 
-    described = instruction.payload.get("subject") or {}
-    destroy = bool(instruction.payload.get("destroy_if_absent"))
+    payload = instruction.payload
+    described = payload.get("subject") or {}
+    destroy = bool(payload.get("destroy_if_absent"))
     observer = (
         game.players.index(context.caster) if context.caster in game.players
         else None
     )
+    # "**During that player's next turn**, the chosen creatures attack if able."
+    # (Oracle en-Vec.) Two payload keys over the same requirement: which turn it
+    # holds for, and where the set came from. A window nobody recorded a seat
+    # for does nothing rather than compelling the set on this turn, which is a
+    # requirement a turn early and in the wrong player's favour.
+    window = payload.get("window")
+    seat = _windowed_seat(game, context, window) if window else None
+    if window and seat is None:
+        game.log.append(f"{context.card.name}: no player's turn to name")
+        return True, "resolved"
+    stamp = seats_next_turn_window(game, seat) if seat is not None else None
+    if payload.get("subject_from"):
+        subjects = _recorded_subject_permanents(game, context, payload)
+    else:
+        subjects = [
+            perm for perm in game.all_permanents()
+            if perm.is_creature and subject_matches(
+                game, perm, described,
+                observer=observer, source=context.source_permanent,
+            )
+        ]
     marked: list[str] = []
-    for perm in list(game.all_permanents()):
-        if not perm.is_creature:
-            continue
-        if not subject_matches(
-            game, perm, described,
-            observer=observer, source=context.source_permanent,
-        ):
-            continue
-        perm.metadata["must_attack_until_eot"] = True
-        if destroy:
-            perm.metadata["destroy_if_did_not_attack_eot"] = True
+    for perm in subjects:
+        if stamp is not None:
+            perm.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
+            if destroy:
+                perm.metadata[
+                    DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
+                ] = dict(stamp)
+        else:
+            perm.metadata["must_attack_until_eot"] = True
+            if destroy:
+                perm.metadata["destroy_if_did_not_attack_eot"] = True
         marked.append(perm.card.name)
     if marked:
+        when = (
+            f"during {game.players[seat].name}'s next turn"
+            if stamp is not None else "this turn"
+        )
         game.log.append(
-            f"{context.card.name} forces {', '.join(marked)} to attack this turn"
+            f"{context.card.name} forces {', '.join(marked)} to attack {when}"
         )
     else:
         game.log.append(
@@ -992,21 +1064,40 @@ def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: Orac
     """
     from ..subject_filters import subject_matches
 
-    described = instruction.payload.get("subject") or {}
+    payload = instruction.payload
+    described = payload.get("subject") or {}
     observer = (
         game.players.index(context.caster) if context.caster in game.players
         else None
     )
+    # "At the beginning of **that turn's** end step, destroy each of **the
+    # chosen creatures** that didn't attack this turn." (Oracle en-Vec.) The
+    # same two keys the requirement above reads, and the same window computed
+    # the same way from the same record — "that turn" is the turn the sentence
+    # in front of it named, and both resolve inside one resolution, so the two
+    # arithmetics cannot disagree.
+    window = payload.get("window")
+    seat = _windowed_seat(game, context, window) if window else None
+    if window and seat is None:
+        game.log.append(f"{context.card.name}: no player's turn to name")
+        return True, "resolved"
+    stamp = seats_next_turn_window(game, seat) if seat is not None else None
+    if payload.get("subject_from"):
+        subjects = _recorded_subject_permanents(game, context, payload)
+    else:
+        subjects = [
+            perm for perm in game.all_permanents()
+            if perm.is_creature and subject_matches(
+                game, perm, described,
+                observer=observer, source=context.source_permanent,
+            )
+        ]
     marked: list[str] = []
-    for perm in list(game.all_permanents()):
-        if not perm.is_creature:
-            continue
-        if not subject_matches(
-            game, perm, described,
-            observer=observer, source=context.source_permanent,
-        ):
-            continue
-        perm.metadata["destroy_if_did_not_attack_eot"] = True
+    for perm in subjects:
+        if stamp is not None:
+            perm.metadata[DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
+        else:
+            perm.metadata["destroy_if_did_not_attack_eot"] = True
         marked.append(perm.card.name)
     if marked:
         game.log.append(
@@ -1306,16 +1397,42 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
     creature — a creature entering after this resolves cannot attack either,
     which per-permanent flags would miss.
     """
-    game.attack_restrictions_until_eot.append({
-        "filter": dict(instruction.payload.get("filter") or {}),
+    payload = instruction.payload
+    entry = {
+        "filter": dict(payload.get("filter") or {}),
         "source_name": context.card.name,
         # How many cleanups the window survives — 1 for every printed "this
         # turn", 2 for "this turn and next turn" (Peace Talks). Carried from
         # the payload rather than assumed, because the sweep is subtraction and
         # an assumed 1 ends the longer window a whole turn early.
-        "remaining_turns": int(instruction.payload.get("remaining_turns", 1)),
-    })
-    game.log.append(f"{context.card.name}: the named creatures can't attack this turn")
+        "remaining_turns": int(payload.get("remaining_turns", 1)),
+    }
+    # "**During that player's next turn**, … other creatures can't attack."
+    # (Oracle en-Vec.) A turn that has not started, so the entry carries a
+    # window stamp instead of a countdown — see ``phases/cleanup_step``, where
+    # subtracting this turn's cleanup from it would end the restriction the turn
+    # before it applied.
+    window = payload.get("window")
+    if window:
+        seat = _windowed_seat(game, context, window)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no player's turn to name")
+            return True, "resolved"
+        entry["on_seat_turn"] = seats_next_turn_window(game, seat)
+    # "**Other** creatures can't attack" — other than the set an earlier step of
+    # this resolution chose. By id and frozen now (CR 611.2c), because the entry
+    # outlives the resolution that wrote it and a creature that leaves and
+    # returns is a new object the sentence never named (CR 400.7).
+    excepted = payload.get("except_from")
+    if excepted:
+        entry["except_permanent_ids"] = [
+            permanent.permanent_id
+            for permanent in _recorded_subject_permanents(
+                game, context, {"subject_from": excepted}
+            )
+        ]
+    game.attack_restrictions_until_eot.append(entry)
+    game.log.append(f"{context.card.name}: the named creatures can't attack")
     return True, "resolved"
 
 
