@@ -79,6 +79,16 @@ class ActivationRestriction:
     #: that -- a use budget spent on one acquired ability says nothing about an
     #: identically worded one -- and the clause alone cannot tell them apart.
     reads_line: bool = False
+    #: A denial written from the clause's own printed words, for a row whose
+    #: parameters are what the player needs to hear. "You don't have that many
+    #: cards in hand" is true of every count and tells nobody which one the card
+    #: asks for; "only with exactly seven cards in hand" is the sentence.
+    #:
+    #: Its own field rather than a format string on :attr:`denial`, because a
+    #: row's parameters are not always words that read well in a message — the
+    #: board-condition row's capture is a whole noun phrase — and a template
+    #: nobody could fill would be a message that renders a regex.
+    denial_from_payload: "Callable[[re.Match[str]], str] | None" = None
     #: Whether the clause's *payload* is one this file can act on, asked of the
     #: match alone. A row whose capture ends in `.+` matches more sentences than
     #: it implements -- "controls a snow land" and "controls the highest life
@@ -1546,6 +1556,13 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "you don't have that many cards in hand",
         reads_payload=True,
         payload_readable=_readable_hand_count,
+        # The printed number, because "that many" tells the player nothing —
+        # and because the row this generalised said "only with exactly seven
+        # cards in hand", which is what a message about Library of Alexandria
+        # should still say.
+        denial_from_payload=lambda match: (
+            f"only with {match.group('count')} cards in hand"
+        ),
     ),
     ActivationRestriction(
         re.compile(
@@ -1907,6 +1924,8 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
         else:
             legal = entry.is_legal(game, controller_index, source)
         if not legal:
+            if entry.denial_from_payload is not None:
+                return entry.denial_from_payload(match)
             return entry.denial
     return None
 

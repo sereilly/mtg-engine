@@ -63,8 +63,10 @@ from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
+from engine.cast_permissions import board_free_cast_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
+                                      combat_play_ban_line,
                                       cast_damage_source_line,
                                       cast_opponent_cast_line,
                                       cast_own_cast_line,
@@ -340,6 +342,21 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # survive the removal of either gate.
     ("cast_restrictions.py (board-wide own-turn window)",
      lambda s: global_play_timing_line(s)),
+    # The same two gates over a **phase** instead of a turn — "During combat,
+    # players can't cast instant spells or activate abilities that aren't mana
+    # abilities." (Hand to Hand.) One channel for the same reason the row above
+    # has one: it is one printed sentence, and a claim split over the cast half
+    # and the activation half would survive the removal of either gate.
+    ("cast_restrictions.py (board-wide combat window)",
+     lambda s: combat_play_ban_line(s) is not None),
+    # CR 601.3a read the other way round: "Any player may cast creature spells
+    # with mana value 3 or less without paying their mana costs and as though
+    # they had flash." (Aluren.) Three permissions in one sentence — who, at
+    # what cost, and when — carried out off the board's text by
+    # `cast_permissions.permission_for` and `cast_timing.casts_at_instant_speed`.
+    # One channel, asking the one reader all three enforcement sites ask.
+    ("cast_permissions.py (board-wide free cast)",
+     lambda s: board_free_cast_line(s) is not None),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

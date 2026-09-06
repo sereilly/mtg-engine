@@ -304,7 +304,9 @@ def test_fools_tome_refuses_to_draw_while_you_hold_a_card(set_pool, catalog_by_n
     result = game.activate_permanent_ability(0, "Fool's Tome", permanent_index=0)
 
     assert not result.supported
-    assert "cards in hand" in result.details
+    assert "only with no cards in hand" in result.details, (
+        "the message names the printed count, not 'that many'"
+    )
     assert len(game.players[0].hand) == 1, "nothing was drawn"
     assert not tome.tapped, "and nothing was paid"
 
