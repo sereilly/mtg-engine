@@ -402,6 +402,17 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # the sentence behind it says what the ability is about. CR 514 gives every
     # turn one cleanup step, so the step itself names nobody.
     "next_cleanup_step",
+    # "You gain control of that creature **if it regenerates this way**."
+    # (Debt of Loyalty.) CR 701.19a's shield being spent, about the creature
+    # the creating *spell* targeted — so the entry names an object exactly
+    # as the step rows above do, and the event says when rather than what.
+    #
+    # Soldevi Sentry prints the same event about its own source and names a
+    # **player** in the sentence behind it, which is `binds_player` and not
+    # this membership; the two readings coexist because the arming handler
+    # collapses a watched object into the bound one when a card names only
+    # one.
+    "source_regenerates",
 })
 
 #: Delayed-trigger events whose fire site stamps the **agent** — the object at

@@ -603,6 +603,8 @@ _COVERED_ELSEWHERE = {
     "blocking_source": "test_blocking_source_names_only_the_source_s_blockers",
     "blocking_attached_host":
         "test_blocking_attached_host_reads_the_relation_one_hop_from_the_source",
+    "blocked_or_was_blocked_this_turn":
+        "test_blocked_or_was_blocked_this_turn_names_either_side_of_a_block",
     "blocked_source_this_turn":
         "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
@@ -871,6 +873,49 @@ def test_blocking_source_names_only_the_source_s_blockers(pool):
     assert subject_matches(game, blocker, described, source=attacker)
     assert not subject_matches(game, elsewhere, described, source=attacker)
     assert not subject_matches(game, blocker, described)
+
+
+def test_blocked_or_was_blocked_this_turn_names_either_side_of_a_block(pool):
+    """"each creature **that blocked or was blocked this turn**" (Heat Stroke).
+
+    CR 509.1a with neither end named, which is what makes it the one block
+    relation the *pure* matcher can answer: the question is whether the
+    permanent has an entry on either pair record, and neither a source nor a
+    seat is needed to ask it. So it is demonstrated through
+    ``permanent_matches_filter`` as well, which is where a sweep with no
+    observer meets it.
+
+    Both sides accept and three bystanders reject, one per way a matcher could
+    widen: an attacker nobody blocked, a creature that stayed home, and a
+    defender that blocked nothing. All five are the same card, so only the
+    records tell them apart.
+    """
+    from engine.handlers._common import permanent_matches_filter
+
+    blocked = Permanent(card=pool["Grizzly Bears"])
+    unblocked = Permanent(card=pool["Grizzly Bears"])
+    homebody = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    bystander = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[blocked, unblocked, homebody]),
+        PlayerState(name="P2", battlefield=[blocker, bystander]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    described = {"blocked_or_was_blocked_this_turn": True}
+    for perm in (blocked, blocker):
+        assert subject_matches(game, perm, described)
+        assert permanent_matches_filter(perm, described)
+    for perm in (unblocked, homebody, bystander):
+        assert not subject_matches(game, perm, described)
+        assert not permanent_matches_filter(perm, described)
 
 
 def test_blocking_attached_host_reads_the_relation_one_hop_from_the_source(pool):
