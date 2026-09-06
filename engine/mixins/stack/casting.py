@@ -47,7 +47,7 @@ from ...cost_modifiers import (
     self_per_target_tax, spell_cost_tax, spell_life_tax, spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
-from ...handlers._common import graveyard_card_matches, permanent_matches_filter
+from ...handlers._common import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_colors_from_text
