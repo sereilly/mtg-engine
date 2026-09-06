@@ -594,6 +594,25 @@ def _lower_exile(
         if filt.card_types:
             pile["card_type"] = filt.card_types[0]
         return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
+    # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
+    # counters put on the card as it arrives in exile, which only ``exile_self``
+    # performs — it is the one exile that keeps a record for them to sit on
+    # (``engine/exiled_records.py``). Every shape below moves a chosen object
+    # and keeps no record, so the phrase would be parsed and dropped: the
+    # ``Exile`` node carries it (``readers._parse_entering_counters``) and none
+    # of the three returns below reads it.
+    #
+    # Refused rather than ignored, which is the four sibling branches' rule in
+    # this same function and the reason each of them states: a card exiled
+    # *without* the counters it prints is a card whose second ability can never
+    # fire, and nothing downstream would say so. No card in the pool reaches
+    # this yet; the first one that does gets a refusal naming the clause instead
+    # of a silent half-effect.
+    if node.counters:
+        raise LoweringError(
+            "only a self-exile records the counters a card enters exile with",
+            node=node,
+        )
     # "Exile **two target** nonartifact creatures." (Ashes to Ashes; Dust to
     # Dust prints the same over artifacts.) One announcement collecting several
     # targets, resolved as a list — so it is the same instruction with the

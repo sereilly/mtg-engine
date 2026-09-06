@@ -5395,3 +5395,66 @@ def test_a_delay_narrowed_to_this_turn_keeps_its_event():
     assert windowed.payload["event"] == "controllers_next_main_phase"
     assert windowed.payload["duration"] == "end_of_turn"
 # --- end VIS W3G5 ---
+
+
+# --- W3G5 (TMP): the counters a card enters exile with ---
+#
+# Prefixed `_tmp_w3g5_` rather than `_w3g5_`: a Visions wave already owns that
+# spelling in this file, and two helpers of one name in one module is the
+# duplicate-definition class the split scans look for.
+
+from engine.grammar import parse_line as _tmp_w3g5_parse_line
+from engine.grammar.errors import GrammarError as _TmpW3g5GrammarError
+from engine.grammar.errors import LoweringError as _TmpW3g5LoweringError
+from engine.grammar.lower import lower_ability as _tmp_w3g5_lower_ability
+
+
+def _tmp_w3g5_lower(text: str, name: str = "Probe"):
+    return _tmp_w3g5_lower_ability(_tmp_w3g5_parse_line(text, card_name=name))
+
+
+def test_a_targeted_exile_refuses_the_counters_a_self_exile_records():
+    """"Exile <object> **with two delay counters on it**." (Ertai's Meddling.)
+
+    `readers._parse_entering_counters` records the phrase on the `Exile` node —
+    it has to, for All Hallow's Eve — and four branches of `lowering/exile.py`
+    refuse it because the handler behind each keeps no record for the counters
+    to sit on. The battlefield and graveyard branches did not, so the phrase was
+    parsed and dropped: a card exiled without the counters it prints is a card
+    whose second ability can never fire, and no instrument in this repo sees it
+    (the line is claimed, an instruction is produced, and nothing is hollow).
+
+    Latent rather than live — no card in the pool prints the shape, and the
+    whole-pool differential moved zero cards — which is exactly why it needed a
+    test rather than a card.
+    """
+    with pytest.raises(_TmpW3g5LoweringError):
+        _tmp_w3g5_lower("Exile target creature with two delay counters on it.")
+    # The several-target spelling never reaches the lowering at all: the parse
+    # refuses "…on **them**", which `_parse_entering_counters` does not read.
+    # Asserted as a refusal rather than as a layer, because which layer says no
+    # is not the property this guards — that the phrase is never dropped is.
+    with pytest.raises((_TmpW3g5LoweringError, _TmpW3g5GrammarError)):
+        _tmp_w3g5_lower("Exile two target creatures with two delay counters on them.")
+
+
+def test_the_self_exile_still_records_them():
+    """The one shape that does keep a record. Asserted beside the refusal
+    because a guard written only on the refusal passes just as well if the
+    counters stopped being read at all."""
+    exiled, = _tmp_w3g5_lower(
+        "Exile All Hallow's Eve with two scream counters on it.",
+        name="All Hallow's Eve",
+    )
+    assert exiled.kind == "exile_self"
+    assert exiled.payload["counters"] == {"scream": 2}
+
+
+def test_a_singular_counter_phrase_is_still_a_narrowing_not_an_arrival():
+    """"Destroy target creature **with a bounty counter on it**." (Bounty
+    Hunter.) The same five words minus the number mean the opposite thing — a
+    filter on which creature may be chosen — and the refusal above must not
+    reach it, or a live card loses its picker."""
+    exiled, = _tmp_w3g5_lower("Exile target creature with a bounty counter on it.")
+    assert exiled.kind == "exile_target_permanent"
+    assert exiled.payload["with_named_counter"] == "bounty"
