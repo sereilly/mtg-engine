@@ -1,9 +1,10 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **2,348** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/M21, all shipped and all supported)
+Target: grow the card pool from **2,515** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/M21, all shipped and all
+supported)
 to the full release line — **137 sets, 33,594 printings, 26,113 unique cards**
-per `set_progress.json`. Seventeen sets, and the recent arrivals span the whole
+per `set_progress.json`. Eighteen sets, and the recent arrivals span the whole
 range: 4ED and 5ED are pure reprint sets that bought printings rather than
 cards, Ice
 Age brought 346 new ones (the largest addition since Alpha), Fallen Empires
@@ -50,7 +51,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **14,670 tests**, CI budget **940s**, CI-measured
+2. **The suite stays fast.** **15,613 tests**, CI budget **940s**, CI-measured
    baseline **470s** (`ci.yml`). Both moved at Weatherlight's Phase 0 from run
    33977035005 on the Visions promotion commit — `suite wall time: 470s`, 94%
    of the old budget with the creep warning already firing — and the local
@@ -818,13 +819,24 @@ applies to the rest of the core-set line.
 **Alliances shipped 2026-09-02** — the section below is its ingest estimate,
 kept because its predictions were graded in the retrospective.
 
-**Mirage shipped 2026-09-04**, at index 13, 335/335 and 313 new to the pool.
-**The next work set is Visions (VIS), then Weatherlight, and only then 6ED**,
-whose 152 new cards are their reprints: a core set ingested before its sources
-arrives carrying cards nothing supports with their origins mis-stamped. Re-run
-the census table above before choosing — the last three re-fetches were all
-stale by the time they were read, and Mirage's own row was pre-ICE when the
-work started.
+**Mirage shipped 2026-09-04** at index 13, **Visions 2026-09-05** at index 14
+and **Weatherlight 2026-09-05** at index 16. That closes the Mirage block, and
+with it the sequencing constraint this paragraph was written for: **6ED is now
+the next work set**, and its 152 new cards are the Mirage block's reprints,
+which is why it waited. A core set ingested before its sources arrives carrying
+cards nothing supports with their origins mis-stamped; all three sources now
+ship.
+
+**Its row is stale and must be re-measured before it is planned.** The table
+above reads 53 new-and-unsupported at a lines-per-distinct-sentence of 1.00,
+measured against the post-HML compiler — five sets and roughly 1,500 grammar
+lines ago, and the last four re-fetches were each stale by the time they were
+read. Fetch it to a scratch directory (never `cards/`), and read **all five**
+instruments beside each other, not the refusal census alone: the fragment census
+found this set's spine where the sentence census read 1.03 and named nothing,
+`--hollow-lines` and `parse_coverage` between them added thirteen work-list
+cards the card census structurally cannot see, and the picker sweep is the only
+instrument in the repo that can find a supported card no player can cast.
 
 **Read Mirage's journal entry before briefing the next ingest.** Its four waves
 turned on one fact the census cannot show: `support_report` and
@@ -900,7 +912,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Weatherlight (WTH) — in progress (100/167 at ingest, manifest index 16 at promotion)
+## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 
 **Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the
 pool.** Registered under `measured` on 2026-09-05 at release date 1997-06-09,
@@ -1273,6 +1285,63 @@ Giving the moved table a new category name to match its new module left
 so Timmerian Fiends and Tempest Efreet went unsupported and eleven guards went
 red. A category names the migration family a *kind* belongs to, never the module
 its lowering lives in.
+
+### Where the set landed
+
+**167/167, shipped 2026-09-05 at manifest index 16**, between Fifth Edition and
+M21. Pool 2,348 → **2,515** unique cards over eighteen sets, 4,085 → **4,252**
+printings. Two waves of five worktree groups plus one closer; 83 cards claimed
+and 83 landed across the two waves, one declined and closed by the closer.
+
+| | At ingest | Shipped |
+| --- | --: | --: |
+| supported | 100/167 | **167/167** |
+| hollow lines | 6 cards | **0** |
+| unclaimed sentences | 14 on 13 cards | **0** |
+| picker findings | 5 | **0** |
+| name-keyed hooks added | — | **0** |
+
+Grammar 90.0% → 89.9% parsed and 58.8% → 59.1% executed on the printing-weighted
+All row — the parsed figure *falling* is composition, not regression: a set
+arriving at 88.0% pulls a weighted average down, and every existing set's floor
+rose. Hook reliance 2.5% → **2.3%** of supported cards, 59 entries over 2,515
+cards. Behaviour classes 90 → 95, largest 54 (2.1% of the catalog). Suite
+14,670 → **15,613** tests.
+
+**Weatherlight is the cleanest all-new set the pool has taken**: 167 of 167 new,
+sharing with the seventeen sets before it not one oracle_id *and not one card
+name*. Visions held that record on the weaker claim.
+
+**Twenty-one already-supported cards were found mis-playing, every one shipped,
+and not one was visible to any census** — because the census, `--hollow-lines`
+and `parse_coverage` all ask whether a line produced *something*, and each of
+these produced the wrong thing. Wave 1 found nine, wave 2 twelve, the closer one.
+The largest single defect was structural rather than per-card: the announced
+divided-target list was **index-keyed**, and three handlers resolved the index at
+resolution where anything leaving renumbers — so Pyrotechnics divided 1/3, the
+1-target left in response, and the survivor took 1 where its announcement said 3.
+Fireball, Meteor Shower, Fire Covenant, Rolling Thunder, Remedy and Bounty of the
+Hunt all shared it. The runner-up was ten cards whose `destroy target …`
+narrowing was enforced by nobody, because the validator asked the *pure* matcher:
+Merfolk Assassin's "target creature with islandwalk" destroyed a vanilla Bear.
+
+**Five whole CR citation blocks were wrong by subject**, which is VIS wave 4's
+finding recurring exactly where it predicted — outside the 701 keyword block,
+where no guard can see it. `CR 404.3` is the simultaneous-arrival tie-break and
+not the graveyard's order (404.1/404.2), cited from a definition-site docstring
+that twelve sites had copied. `CR 602.5c` is a restriction on an *acquired*
+ability, cited eight times for "an unpayable cost can't be paid" (601.2h through
+602.2b). `CR 115.4` is "any target", cited four times for "target opponent can't
+be you" (102.2/102.3 through 115.1). `CR 301.5f` is the *equipped* half, cited
+five times for "enchanted" (303.4m). And `CR 702.26j` is attach/unattach
+triggers, not phasing triggers (702.26g).
+
+**Phase 5 could finally do the thing Phase 3 cannot.** Serrated Biskelion was
+driven in the running app: refused for summoning sickness the turn it arrived,
+then a turn later it raised its target picker, took the opponent's creature, and
+put a -1/-1 counter on each. Phantom Warrior rendered with an "Unblockable"
+badge and attacked through — on a card whose refusal message had claimed the
+CR 613 layers engine was missing.
 
 ## Visions (VIS) — shipped (167/167, manifest index 14)
 

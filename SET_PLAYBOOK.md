@@ -58,6 +58,25 @@ Read both sides for what each *adds*, and union unless they genuinely
 contradict. Same reason the duplicate-helper scan exists: a clean textual merge
 is not a clean merge.
 
+**Weatherlight's wave 2 produced the shape twice in one wave, and the second
+one is the reverse.** Two branches found the same bug — an activation cost
+spelled "Sacrifice this **Aura**" that no self-cost reader matched, so five
+shipped Auras had a free repeatable ability — and fixed it two ways: one added
+"aura" to the hand-written alternation, the other derived the whole set from the
+grammar's `_SELF_NOUNS`. **Take the derivation, not the list**: the list *was*
+the bug, a second copy of something the module already owned, and it will go
+stale again the next time a subtype is printed. Carry the other branch's
+additions across onto the derived form rather than dropping them with its list.
+
+The reverse is **one name meaning two things**, and it merges silently: a new
+`controller_cast_ban` reader shadowed an identically named import from
+`engine/auras.py` in the same file, and Brand of Ill Omen stopped enforcing
+anything. A duplicate-*definition* grep cannot see it, because there is only
+one definition per module. Sweep for a name defined in **two modules** across
+the merged tree and then check, for each, whether any single file imports both;
+Weatherlight's wave 2 ended with three such names and all three were
+alias-imported at every call site, which is the check — not the count.
+
 Ice Age's four waves added two more, both from groups **inventing the same
 thing twice**. Two branches gave one AST node the same new field under two
 names (`gained_by` and `gainer`) for two different cards — one fact, two
@@ -530,18 +549,6 @@ while the true number was 299), and `SET_PROGRESS.md` now reports a
 `measured`-role set as "Measured (N/M supported, not shipped)" rather than a
 bare "Partial".
 
-**Added at VIS's Phase 6: a cast-side "target opponent" offers the caster's own
-face.** On the *cast* path a printed "target **opponent**" derives a bare
-`{"kind": "player"}`, so the picker offers every player including the caster —
-Vito, Ebony Charm, Forbidden Ritual, Game of Chaos and Liliana, Death Mage. It
-is a live two-player bug, not a multiplayer-only one, and it is the mirror of
-the *trigger*-side gap wave 4 closed (17 cards, `announced_opponent_seat`
-deleted). The trigger fix deliberately gated on the **printed line** rather than
-the spec, precisely because the spec answers a bare `player` for a whole family;
-the cast side needs the same treatment plus a spec that carries the narrowing.
-**Phase 3 of the next set that prints one clears it**, and it wants its own
-differential because it moves those cards' pickers.
-
 **Added at VIS's Phase 6: a bare stack-drain loop in a test is a latent hang.**
 `while game.stack: resolve_top_of_stack()` spins forever once an interactive
 seat is owed a prompt, because the game correctly waits (CR 608.2, CR 117.3b).
@@ -558,6 +565,46 @@ gives the picker one generic key it answers for one row and silently passes for
 the other two. That is an unenforced seat narrowing acting on every player,
 which is the exact failure the family exists to prevent. It needs a design
 decision, not a row.
+
+**Drained 2026-09-05, at WTH's wave 1: the cast-side "target opponent" offered
+the caster's own face.** W1G5 took it and the activation side with it, and fixed
+it where the entry did *not* predict: at the source, in the three lowerings that
+record the description the printed phrase always stated, rather than by gating
+on the printed line the way the trigger-side fix had to. The picker enforces
+what the **spec** says, so giving the spec the narrowing is the whole fix.
+
+**The entry's card list was wrong in both directions, which is the part worth
+keeping.** Of the five it named, Game of Chaos already carried the flag, Vito's
+is a trigger and Liliana's a loyalty activation — so the cast-side population
+was **three** (Ebony Charm, Forbidden Ritual, Necromentia). And the sweep found
+**two the entry could not have named**, on the activation path where nobody had
+looked: Liliana, Death Mage's −7 and Mirror Universe. A gap entry's card list
+ages exactly as badly as its premise.
+
+**Added at WTH's Phase 6: `control_flow.may` runs its `then` branch whenever the
+offer is accepted, whether or not the action did anything.** `on_accept` is
+`action + then`, so "you may X. **If you do**, Y" fires Y on an empty X — Bone
+Dancer accepting over a creature-less graveyard still marks itself as assigning
+no combat damage. It is engine-wide across every `may … if you do` card and
+**invisible to `oracle_diff`**, because no compiled program moves: the defect is
+in the handler's composition, not in what the card compiled to. W2G3 found it
+driving a game and recorded it rather than taking it, correctly — it wants a
+decision about what "did anything" means per instruction kind, which is a
+registry question rather than a branch. **Phase 3 of the next set that prints an
+"if you do" rider clears it**, and it owes a behavioural differential over every
+card in the pool that composes the two, not a compiled one.
+
+**Added at WTH's Phase 6: two readers of "is this a ⟨type⟩ card" disagreed, and
+only one of the two questions got settled.** W2G4 measured it over the whole
+pool: `CardDefinition.primary_type` returns the *first* of `land, creature,
+artifact, …` in the type line, so **77 artifact creatures** answer "creature" to
+a reader asking "artifact", and **zero** land creatures exist — which is why
+every "creature" reader was right by accident and every "artifact" reader was
+wrong. All of them now go through `search_filters.card_has_type` (CR 205.2b).
+What is **not** settled is the same question one zone over: `cast_permissions`
+and the graveyard-cast picker were only ever safe because the single card
+granting a typed permission names instant and sorcery. A card granting
+"artifact spells from your graveyard" would reopen it.
 
 **Added at VIS's Phase 6: ~60 non-701 CR citations are corrected but not
 guarded.** The 701 keyword-action block is now checked against headings read out
@@ -603,6 +650,25 @@ instruments current.
    that two groups will both reach. A module one group owns can be briefed; a
    module two groups share cannot, because neither will cross it.
 
+   **Weatherlight tested that sentence in both directions and it held exactly.**
+   Wave 1 gave each of the seven tight modules a **single owning group**, named
+   in that group's brief with the instruction to expect its own split, and left
+   one module deliberately unowned as the control. Integration crossed **zero**
+   caps; two groups crossed one in round and split it themselves, each along a
+   line the module's docstring had already drawn; and the control module was the
+   only one that drifted. Wave 2 then shared two modules between two groups on
+   purpose, told both to keep their additions small, and **both went over at
+   integration anyway** — by 3 lines and by 1. So the rule is not "brief harder":
+   **a shared module is pre-split at Phase 0 and an owned one is briefed**, and
+   there is no third option.
+
+   **A split moves no card, and there is exactly one way it can.** Giving a
+   moved lowering table a new *category* name to match its new module leaves
+   that name out of `GRAMMAR_CATEGORIES`, which has no fallback underneath it —
+   so every card whose kind moved goes unsupported. A category names the
+   migration family a **kind** belongs to, never the module its lowering lives
+   in. Two cards and eleven guards, at Weatherlight's wave-2 integration.
+
    The consolation is that the seam is findable late: every one of those splits
    went along a line the repo had already written down in prose, and two wave-2
    groups independently made the *same* split of `lowering/stack.py`, moving
@@ -627,7 +693,15 @@ is green, the trackers carry its row, and the census is in hand.
    surfaced a never-run import that was 66 failures waiting. These are engine
    bugs, found early and cheap — fix them now.
 
-   **First confirm the suite actually loaded the new set.** A green run over a
+   **Run the suite so that its exit code is the one you read.** `pytest … |
+   tail` reports `tail`'s status, so Weatherlight's ingest run read green with
+   three tests failing and the whole yield of Phase 1 was nearly lost — a
+   self-reference ratchet that wanted a card read, a shipped activation cost
+   charged by nobody, and CR 601.2b's no-unread-cost gate naming four cards.
+   Redirect to a file, read `$?`, and grep for `FAILED`. A gate piped into
+   anything is not a gate.
+
+   **Then confirm the suite actually loaded the new set.** A green run over a
    pool that does not contain it looks exactly like a green run that found
    nothing. The catalog sweep read `load_catalog()` — shipped-only by design —
    for three sets running, so every ingest's yield step had been measuring the
@@ -1032,6 +1106,15 @@ out of this rehearsal and three were *inside* guards written to catch exactly
 that, each inventing a disagreement it then reported. A guard that re-spells
 the thing it checks is the most expensive kind, because its failures look like
 real findings.
+
+**And expect that to stop being true once the guards are fixed.** Weatherlight's
+rehearsal turned seven guards red and **every one was a real finding** — the
+first promotion in this project where none of them was the guard. Ten effect
+labels falling through to the grammar-family default, two divided cards wanting
+review into the AI's inventory, and a deletion probe whose five non-new findings
+each turned out to be a word the payload provably carried. That is what the
+accumulated fixes look like from the far side, and it is a reason to read each
+finding on its merits rather than to open with "which guard is stale this time".
 
 Mirage's instance is the sharpest so far and the cheapest to check for: the
 activation-clause census called its reader **without the card's name**, so a
@@ -1734,3 +1817,38 @@ needing a design decision rather than a row; ~60 non-701 CR citations corrected
 but unguardable). *Three drained*: the testable-keys preamble (40 copies across
 21 files, not 39 across 11 — and now enforceable rather than swept), the
 `permanents_from` arity, and the optional-cost picker's four parts.
+
+### WTH — 2026-09-05
+
+*Phase 0's caps rule is now tested in both directions, and it is binary.* Wave 1
+gave each of the seven tight modules a **single owning group**, briefed to expect
+its own split, and left one unowned as the control: integration crossed **zero**
+caps, two groups split in round along a line their module's docstring already
+drew, and the control was the only module that drifted. Wave 2 then shared two
+modules between two groups, told both to keep their additions small, and both
+went over at integration anyway — by 3 lines and by 1. So there is no third
+option: **a shared module is pre-split at Phase 0, an owned one is briefed.**
+
+*Phase 1 gained the sentence that nearly cost the ingest its whole yield.* The
+suite was run as `pytest … | tail`, which reports `tail`'s exit code, so a run
+with three failures read green. A gate piped into anything is not a gate.
+
+*Phase 4 gained the far side of "read the guards as suspects".* Seven guards
+went red at the rehearsal and **every one was a real finding** — the first
+promotion here where none of them was the guard itself. Ten effect labels, two
+divided cards for the AI's inventory, and a deletion probe whose five non-new
+findings each named a word the payload provably carried.
+
+*The merge-hazard section gained the reverse of its own entry.* Two branches
+fixed one bug two ways — a hand-written noun list versus a derivation from the
+grammar's own — and **the derivation is what survives, because the list was the
+bug**. Its mirror is one name meaning two things, which merges silently: sweep
+for names defined in two modules, then check whether any single file imports
+both. That is the check; the count is not.
+
+*One item drained* (the cast-side "target opponent", whose card list was wrong
+in both directions — three cast-side cards, not five, plus two on the activation
+path nobody had looked at). *Two added*: `control_flow.may` firing its `then`
+branch on an action that did nothing, invisible to `oracle_diff` because no
+program moves; and the half of the `primary_type`/`printed_shape` disagreement
+that stayed open one zone over in `cast_permissions`.
