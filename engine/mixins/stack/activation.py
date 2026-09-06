@@ -877,7 +877,8 @@ class AbilityActivationMixin:
         # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same
         # CR 118.3 reading as the library cost below, over a pile that is
         # *scanned* rather than counted: a graveyard with no creature card in it
-        # cannot pay Necratog at all, and CR 602.5c then makes the ability
+        # cannot pay Necratog at all, and CR 601.2h ("unpayable costs can't be
+        # paid", reached through CR 602.2b) then makes the ability
         # unactivatable rather than free. Checked here with the other costs and
         # paid below with them, so a refusal further down does not leave a
         # graveyard already shorter.

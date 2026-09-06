@@ -1440,6 +1440,22 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
             1 for perm in game.controlled_by(seat)
             if subject_matches(game, perm, described, observer=seat, source=source)
         ) >= owed
+    if instruction.kind == "exile_graveyard_position":
+        # "…unless you **exile the top creature card of your graveyard**"
+        # (Barrow Ghoul, Circling Vultures). A pile with no creature card in it
+        # is a real and checkable "nothing to give": accepting would exile
+        # nothing and still skip the sacrifice the card prints for not paying,
+        # which is the same failure the sacrifice above is gated on.
+        #
+        # Only the offered seat's **own** pile is answered. "Target player's
+        # graveyard" is not a price this player pays, and answering False for
+        # it would withdraw an offer the card makes — the same narrowing
+        # ``ante_top_card`` below states for its own seat.
+        from ..graveyard_order import positions_named
+
+        if instruction.payload.get("owner", "you") != "you":
+            return True
+        return bool(positions_named(player.graveyard, dict(instruction.payload)))
     if instruction.kind == "ante_top_card":
         # "…may **ante the top card of their library**" (Amulet of Quoz,
         # Rebirth, Timmerian Fiends). An empty library is a real and checkable

@@ -586,7 +586,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # "Exile **the top card of your graveyard**" (Alms, Nature's
             # Kiss), "…the top **creature** card…" (Necratog, Zombie
             # Scavengers). Read here for the library form's reason directly
-            # above — CR 404.3 names these cards by *position*, so the object
+            # above — CR 404.1/404.2 name these cards by *position*, so the object
             # reader below refuses the phrase outright — and gated by the same
             # payload builder ``engine/oracle.py``'s charger runs, so the two
             # halves of the cost cannot admit different clauses.

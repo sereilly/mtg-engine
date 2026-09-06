@@ -319,7 +319,7 @@ class ExileGraveyardPositionCost:
 
     Its own node rather than an :class:`ExileCost` whose filter names a
     graveyard, for :class:`ExileTopOfLibraryCost`'s reason one zone over:
-    **nothing is chosen**. CR 404.3 orders the pile, so the phrase is a definite
+    **nothing is chosen**. CR 404.1/404.2 order the pile, so the phrase is a definite
     description with one answer, and an :class:`ObjectFilter` — asked of one
     card at a time — would let *any* matching card in the graveyard pay. That is
     strictly cheaper than the card prints, which is the direction a cost must

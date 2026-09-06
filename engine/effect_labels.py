@@ -224,6 +224,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the bucket above is for; that it arrives attached is the same answer.
     "reanimate_aura_onto_source": "activated_recursion",
     "exile_target_graveyard": "activated_recursion",
+    # Phyrexian Furnace: one card off a named end of the pile rather than
+    # the whole zone. Same bucket for the reason the three above share one:
+    # what the ability is for is that the graveyard stops holding it.
+    "exile_graveyard_position": "activated_recursion",
     # "Until end of turn, you may cast …" (Idol of Endurance). Not any of the
     # above: nothing moves and nothing changes characteristics — the ability's
     # whole effect is a permission (CR 601.3).

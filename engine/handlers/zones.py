@@ -2929,6 +2929,56 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("exile_graveyard_position")
+def exile_graveyard_position(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile the bottom card of target player's graveyard." (Phyrexian
+    Furnace.) The same handler runs the price of Barrow Ghoul's and Circling
+    Vultures' "unless you exile the top creature card of your graveyard",
+    which the board family decomposes into a ``May`` around this instruction.
+
+    Which cards is ``graveyard_order.positions_named`` — the one scan, shared
+    with the activation-cost payment path, so a phrase read as a cost and the
+    same phrase read as an effect cannot name different cards. It answers with
+    *indices* rather than cards because two copies of one card in one graveyard
+    are the same Python object, and an identity filter over the list would take
+    both.
+
+    A pile with nothing the phrase names exiles nothing and still resolves:
+    CR 608.2 finishes what it can, and an effect is not a cost. The **cost**
+    reading of the same phrase refuses instead, which is CR 118.3 and lives at
+    the payment site.
+    """
+    from ..graveyard_order import positions_named
+
+    owner = instruction.payload.get("owner", "you")
+    victim = (
+        context.caster if owner == "you"
+        else (context.target if context.target is not None else context.caster)
+    )
+    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    exiled = [victim.graveyard[index] for index in taken]
+    # Highest index first: the positions were found against the pile as it
+    # stands, and removing a lower one renumbers every position above it.
+    for index in sorted(taken, reverse=True):
+        del victim.graveyard[index]
+    # A graveyard is its owner's and so is the exile zone (CR 404.1, CR 406.1),
+    # so the cards go from one to the other with no CR 400.3 lookup.
+    victim.exile.extend(exiled)
+    if exiled:
+        game.log.append(
+            f"{context.card.name} exiled "
+            + ", ".join(card.name for card in exiled)
+            + f" from the {instruction.payload.get('position', 'top')} of "
+            f"{victim.name}'s graveyard"
+        )
+    else:
+        game.log.append(
+            f"{victim.name}'s graveyard has nothing {context.card.name} can exile"
+        )
+    context.results["exiled_cards"] = exiled
+    return True, "resolved"
+
+
 @effect_handler("exile_cost_sacrifices")
 def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…, then exile this artifact and those creature cards." (Sword of the

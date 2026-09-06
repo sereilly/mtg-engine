@@ -461,7 +461,7 @@ class ExileGraveyardPosition:
     Beside :class:`ExileTopOfLibrary` and separate from it for
     :class:`~.costs.ExileGraveyardPositionCost`'s stated reason: a library exile
     is counted off the top blind, and this one **scans** the ordered pile
-    (CR 404.3) for the printed characteristic. It carries a whole
+    (CR 404.1/404.2) for the printed characteristic. It carries a whole
     :class:`~._core.GraveyardPosition` rather than the three fields loose,
     because that spec is exactly what the cost node carries — one referent read
     once, so a cost and an effect printing the same words cannot disagree about

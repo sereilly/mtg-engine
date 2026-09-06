@@ -739,7 +739,8 @@ def accept_graveyard_position(
     Darkness), "the bottom card of target player's graveyard" (Phyrexian
     Furnace).
 
-    CR 404.3 makes a graveyard ordered, so this names cards by **position** and
+    CR 404.1 puts each card on **top** of its owner's graveyard and CR 404.2
+    keeps the pile in that order, so this names cards by **position** and
     nobody chooses. It therefore refuses rather than falling back to the noun
     parser: "the top card" is not a noun phrase, and a reader that let one
     through would produce a filter any card in the pile answers.

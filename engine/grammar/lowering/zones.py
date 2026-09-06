@@ -23,7 +23,8 @@ from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_targets,
-    _filter_payload, _is_target, _restrictions_beyond, refuse_untestable
+    _filter_payload, _is_target, _restrictions_beyond, _targets_only,
+    graveyard_position_payload, refuse_untestable
 )
 
 
@@ -558,6 +559,34 @@ def _lower_ante_offer_ownership_exchange(
     )
 
 
+def _lower_exile_graveyard_position(
+    node: ast.ExileGraveyardPosition,
+) -> tuple[OracleInstruction, ...]:
+    """"Exile the bottom card of target player's graveyard." (Phyrexian
+    Furnace.) The same phrase Barrow Ghoul and Circling Vultures print as the
+    price of an "unless you ..." offer, which reaches here through the ``May``
+    the board family decomposes them into.
+
+    Through the same payload gate the cost side runs
+    (``_filters.graveyard_position_payload``), so an effect and a cost printing
+    one sentence cannot name different cards — and so a narrowing the card
+    matcher cannot test refuses the line rather than being dropped where it is
+    tested.
+    """
+    payload = graveyard_position_payload(node.position)
+    if payload is None:
+        raise LoweringError(
+            "no exile handler reads this graveyard position", node=node
+        )
+    if node.position.owner.kind == "target_player":
+        # The seat is chosen (CR 115.1), so the *card* targets even though
+        # nothing about the cards themselves is chosen — the picker reads
+        # ``targets`` and would otherwise offer Phyrexian Furnace no player at
+        # all, which is the ability activating against whoever the resolution
+        # happened to be carrying.
+        payload.update(_targets_only(node.position.owner))
+    return (OracleInstruction("exile_graveyard_position", "", payload),)
+
 
 def _lower_random_reveal_ownership_exchange(
     node: "ast.RandomRevealOwnershipExchange",
@@ -684,6 +713,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    # "Exile the bottom card of target player's graveyard" (Phyrexian
+    # Furnace). A zone change like the exile above it — a card leaves a
+    # graveyard and arrives in exile — so the same category and
+    # GRAMMAR_CATEGORIES is unchanged.
+    "exile_graveyard_position": "zones",
     "exile_entire_library": "zones",
     "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",

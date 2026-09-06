@@ -117,3 +117,56 @@ def test_zombie_scavengers_regenerates_off_its_graveyard(set_pool):
     assert result.supported, result.details
     game.resolve_top_of_stack()
     assert perm.regeneration_shield == 1
+
+
+def _w1g1_ghoul_board(set_pool, name: str, graveyard: list[CardDefinition]):
+    """*name* on the battlefield with *graveyard* behind it, its upkeep trigger
+    about to fire.
+
+    ``auto_resolve_pending_choices`` rather than a bare stack drain: the offer
+    is an ``optional_pay`` prompt on the pending-choice queue, and the game
+    correctly waits until it is answered (CR 608.2, CR 117.3b).
+    """
+    perm = Permanent(card=set_pool("WTH")[name])
+    perm.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm], graveyard=list(graveyard),
+                    library=[_w1g1_card("Filler", "Artifact")] * 5),
+        PlayerState(name="P2", library=[_w1g1_card("Filler", "Artifact")] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.auto_resolve_pending_choices(kinds=("optional_pay",))
+    return game, perm
+
+
+def test_barrow_ghoul_pays_its_upkeep_with_the_topmost_creature_card(set_pool):
+    """"At the beginning of your upkeep, sacrifice this creature unless you
+    exile the top creature card of your graveyard."
+
+    The same phrase Necratog charges as an activation cost, priced here as the
+    alternative of a CR 118.8 offer — so the "unless" decomposes to a ``May``
+    and the payment, the offer and the penalty all come from machinery that
+    already works.
+    """
+    game, ghoul = _w1g1_ghoul_board(set_pool, "Barrow Ghoul", [
+        _w1g1_card("Deep Bear", "Creature — Bear"),
+        _w1g1_card("Top Land", "Land"),
+    ])
+    me = game.players[0]
+    assert ghoul in me.battlefield, "the price was paid, so nothing was sacrificed"
+    assert [card.name for card in me.exile] == ["Deep Bear"]
+    assert [card.name for card in me.graveyard] == ["Top Land"]
+
+
+def test_barrow_ghoul_is_sacrificed_when_the_price_cannot_be_paid(set_pool):
+    """A graveyard with no creature card in it is a real "nothing to give", so
+    the offer is never made and the printed penalty stands — the same gate
+    Mold Demon's "unless you sacrifice two Swamps" runs through."""
+    game, ghoul = _w1g1_ghoul_board(
+        set_pool, "Barrow Ghoul", [_w1g1_card("Top Land", "Land")]
+    )
+    me = game.players[0]
+    assert ghoul not in me.battlefield
+    assert "Barrow Ghoul" in [card.name for card in me.graveyard]
+    assert [card.name for card in me.exile] == [], "nothing was exiled"

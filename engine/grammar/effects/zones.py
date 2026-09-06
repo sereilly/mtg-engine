@@ -24,6 +24,7 @@ other, which is what the layering guard requires of two families in one package.
 
 from .. import ast
 from ..amounts import parse_amount
+from ..phrases import accept_graveyard_position
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
@@ -84,6 +85,29 @@ def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
     # with a different visibility rather than two effects.
     face_down = bool(stream.accept_phrase("face", "down"))
     return ast.ExileTopOfLibrary(count, face_down)
+
+
+def _parse_exile_graveyard_position(stream: TokenStream) -> ast.Statement | None:
+    """``Exile the bottom card of target player's graveyard.`` (Phyrexian
+    Furnace.) Returns None with the cursor unmoved for anything else.
+
+    The graveyard twin of :func:`_parse_exile_top_of_library` directly above,
+    and here for its reason: CR 404.1/404.2 name these cards by *position*, so the
+    recipient parser refuses the phrase and would fail the sentence with a
+    misleading error. The phrase itself is read by the one production three
+    families share (``phrases.accept_graveyard_position``), so the effect and
+    the cost printing the same words cannot disagree about which card they
+    name.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("exile"):
+        stream.reset(mark)
+        return None
+    position = accept_graveyard_position(stream)
+    if position is None:
+        stream.reset(mark)
+        return None
+    return ast.ExileGraveyardPosition(position)
 
 
 def _parse_put_iterated_card_on_library(

@@ -1,8 +1,13 @@
-"""Where a card sits in a graveyard, and what "above it" means (CR 404.3).
+"""Where a card sits in a graveyard, and what "above it" means (CR 404.1).
 
-A graveyard is an **ordered** zone: CR 404.3 lets any player look through one in
-any order, and CR 404.1's "a card put into a zone goes on top" is what gives
-that order a meaning at all. Three cards in the pool print a sentence about it —
+A graveyard is an **ordered** zone: CR 404.1 puts every card that arrives on
+**top** of its owner's graveyard, and CR 404.2 keeps each graveyard as a single
+face-up pile whose order a player "normally can't change" — which is what gives
+that order a meaning at all. (CR 404.3 is the *other* graveyard-order rule, and
+not this one: it is the tie-break for two or more cards arriving at the same
+time, which the owner may then arrange. This module cited it for a decade of
+sentences it does not say; the citation is corrected here and the sites that
+copied it are listed in the W1G1 report.) Three cards in the pool print a sentence about it —
 Death Spark and Krovikan Horror ("with a creature card **directly** above it"),
 Nether Shadow ("with three or more creature cards above it") — and "above"
 means *later in the list*, because a card put into a graveyard more recently is
@@ -45,7 +50,7 @@ def _is_type(card: Any, wanted: str) -> bool:
 
 
 def cards_above(graveyard: list, index: int) -> list:
-    """The cards above the one at *index* — CR 404.3's order, later is higher."""
+    """The cards above the one at *index* — CR 404.1's order, later is higher."""
     return graveyard[index + 1:]
 
 
@@ -91,6 +96,9 @@ def positions_named(graveyard: list, spec: dict) -> list[int]:
 
     *spec* is the payload ``grammar.graveyard_position_payload_for`` builds:
     ``count``, ``position`` ("top"/"bottom") and an optional ``filter``.
+
+    "Top" is the **end** of the list: CR 404.1 puts an arriving card on top and
+    this engine appends, so the most recently added card is the last element.
 
     **The scan is what makes the narrowing positional.** "The top creature card
     of your graveyard" (Necratog, Zombie Scavengers, Barrow Ghoul, Circling

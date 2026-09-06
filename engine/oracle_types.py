@@ -466,7 +466,7 @@ class ActivatedAbilityCost:
     #: Alms, Nature's Kiss: "{1}, **Exile the top card of your graveyard**: …";
     #: Necratog, Zombie Scavengers: "**Exile the top creature card of your
     #: graveyard**: …". Cards named by their **position** in an ordered zone
-    #: (CR 404.3) rather than chosen, which is what makes this a separate field
+    #: (CR 404.1, CR 404.2) rather than chosen, which is what makes this a separate field
     #: from ``exile_filter`` beside it and not a value of ``exile_zone``: every
     #: reader of that pair enumerates candidates and lets the payer pick, and
     #: here there is exactly one answer and nothing to offer.

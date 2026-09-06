@@ -607,7 +607,8 @@ class GraveyardPosition:
     Darkness), "the bottom card of target player's graveyard" (Phyrexian
     Furnace).
 
-    CR 404.3 makes a graveyard an **ordered** zone, so this is a definite
+    CR 404.1 puts each card on **top** of its owner's graveyard and CR 404.2
+    keeps the pile in that order, so this is a definite
     description with exactly one answer — nobody picks, and there is nothing
     for a targeting rule to say about it. That is the whole reason it is not an
     :class:`ObjectFilter` with a ``zone``: a filter is asked of one card at a
