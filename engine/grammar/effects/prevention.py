@@ -371,20 +371,54 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
-def _finish_named_source_shield(
-    stream: TokenStream, source_filter: "ast.ObjectFilter", mark
-) -> "ast.PreventDamage | None":
-    """The tail of "The next time <named source> would deal damage to
-    <recipient> <duration>, prevent that damage." (Mercenaries.)
+def _accept_redirect_tail(
+    stream: TokenStream,
+) -> "tuple[ast.Recipient, ast.PlayerRef | None] | None":
+    """``, that damage is dealt to <recipient> instead`` — or the same clause in
+    the active voice, ``, it deals that damage to <recipient> instead``.
+
+    Nova Pentacle prints the passive and Soltari Guerrillas the active, and they
+    are one clause: "it" is the source the sentence in front of the comma
+    already named, so the two spellings differ in nothing a reader downstream
+    could act on. One production for that reason — two would be two readings of
+    one printed idea, and the round that added a rider to one of them would
+    leave the other card without it.
+
+    Once either opening phrase is consumed the production is **committed**: what
+    follows is a redirection or the line is unreadable, so the rest raises
+    rather than rewinding. A rewind here would hand the words to whatever reads
+    "prevent…" next, which is the shield this sentence is not.
+    """
+    if not (
+        stream.accept_phrase("that", "damage", "is", "dealt", "to")
+        or stream.accept_phrase("it", "deals", "that", "damage", "to")
+    ):
+        return None
+    new_recipient = parse_recipient(stream)
+    if new_recipient is None:
+        raise stream.error("expected who takes the redirected damage")
+    chooser, new_recipient = _parse_opponents_choice(stream, new_recipient)
+    if not stream.accept_word("instead"):
+        raise stream.error("expected 'instead' to end a redirection effect")
+    return new_recipient, chooser
+
+
+def _finish_named_source_effect(
+    stream: TokenStream, source: "ast.TargetSpec", mark, combat_only: bool
+) -> "ast.PreventDamage | ast.RedirectDamage | None":
+    """The tail of "The next time <named source> would deal [combat] damage to
+    <recipient> <duration>, …" — either "prevent that damage" (Mercenaries) or
+    "it deals that damage to <recipient> instead" (Soltari Guerrillas).
 
     Split out because the sibling branch reads seven more words before reaching
     the same clause; keeping the tail in one function is what stops the two from
     drifting into two readings of one sentence.
 
-    Only "prevent that damage" — the halving and the redirect the chosen-source
-    branch also reads have no printing with a *named* source, and refusing here
-    names that rather than lowering one of them onto a shield that answers to
-    the wrong object.
+    Both endings, for the reason the chosen-source branch reads both: CR 615.8's
+    "the next time <source> would deal damage" is a way of *naming* the damage,
+    and the clause after the comma is what happens to it. The halving is still
+    absent — no card prints it of a named source — and refusing it names that
+    rather than lowering it onto a shield that answers to the wrong object.
     """
     recipient = parse_recipient(stream)
     if recipient is None:
@@ -392,11 +426,27 @@ def _finish_named_source_shield(
         return None
     duration = _parse_duration(stream)
     stream.accept_punct(",")
+    tail = _accept_redirect_tail(stream)
+    if tail is not None:
+        new_recipient, chooser = tail
+        # The source is carried whole rather than as its filter: a redirect
+        # records *which object's* damage moves, and the quantifier is how the
+        # lowering tells "this creature" from a source the sentence chose.
+        return ast.RedirectDamage(
+            to=recipient,
+            new_recipient=new_recipient,
+            dealt_by=source,
+            duration=duration,
+            one_shot=True,
+            chooser=chooser,
+            combat_only=combat_only,
+        )
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
     return ast.PreventDamage(
-        ast.Fixed(1), to=recipient, from_filter=source_filter, duration=duration
+        ast.Fixed(1), to=recipient, from_filter=source.filter, duration=duration,
+        combat_only=combat_only,
     )
 
 
@@ -552,11 +602,23 @@ def _parse_source_of_choice_effect(
         if (
             not isinstance(named, ast.TargetSpec)
             or not named.filter.is_source
-            or not stream.accept_phrase("would", "deal", "damage", "to")
+            or not stream.accept_phrase("would", "deal")
         ):
             stream.reset(mark)
             return None
-        return _finish_named_source_shield(stream, named.filter, mark)
+        # "…would deal **combat** damage to an opponent this turn" (Soltari
+        # Guerrillas). CR 510.2's narrowing, read here rather than skipped for
+        # the reason every blanket shield in this file reads its own: the word
+        # is the whole difference between a record that catches an unblocked
+        # attacker's ping ability and one that does not, and a dropped
+        # narrowing is a record wider than the card prints. It is carried, not
+        # honoured — the shield lowering refuses it, and one redirect lowering
+        # implements it.
+        combat_only = bool(stream.accept_word("combat"))
+        if not stream.accept_phrase("damage", "to"):
+            stream.reset(mark)
+            return None
+        return _finish_named_source_effect(stream, named, mark, combat_only)
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:
@@ -671,16 +733,12 @@ def _parse_source_of_choice_effect(
         others.append(further)
     duration = _parse_duration(stream)
     stream.accept_punct(",")
-    if stream.accept_phrase("that", "damage", "is", "dealt", "to"):
+    tail = _accept_redirect_tail(stream)
+    if tail is not None:
         # Nova Pentacle. The damage is *moved*, so this leaves with a
         # RedirectDamage: nothing about it is a shield, and the one thing the
         # two share is how the source was named.
-        new_recipient = parse_recipient(stream)
-        if new_recipient is None:
-            raise stream.error("expected who takes the redirected damage")
-        chooser, new_recipient = _parse_opponents_choice(stream, new_recipient)
-        if not stream.accept_word("instead"):
-            raise stream.error("expected 'instead' to end a redirection effect")
+        new_recipient, chooser = tail
         return ast.RedirectDamage(
             to=recipient,
             new_recipient=new_recipient,
@@ -846,95 +904,6 @@ def _parse_chosen_source_next_damage(
             return ast.ChosenSourceNextDamage(modification, duration)
     stream.reset(mark)
     return None
-
-
-def _parse_damage_cant_be_prevented(
-    stream: TokenStream,
-) -> "ast.DamageCantBePreventedOrRedirected | None":
-    """``Damage that would be dealt to <subject> <duration> can't be prevented
-    or dealt instead to another permanent or player.`` (Whippoorwill.)
-
-    Returns None with the cursor untouched for anything else opening with
-    "damage", so every other sentence about damage keeps its own reader.
-
-    **Both** halves of the printed clause are required. "Can't be prevented"
-    alone is a different, weaker card, and a reader that stopped there would
-    leave every redirection working while reporting the line claimed — the
-    dropped-rider bug class, in the direction that lets the damage walk away.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("damage"):
-        return None
-    if not stream.accept_phrase("that", "would", "be", "dealt", "to"):
-        stream.reset(mark)
-        return None
-    subject = parse_recipient(stream) or parse_bound_subject(stream)
-    if subject is None:
-        stream.reset(mark)
-        return None
-    duration = _parse_duration(stream)
-    if not accept_cant_be_prevented_tail(stream):
-        stream.reset(mark)
-        return None
-    return ast.DamageCantBePreventedOrRedirected(subject, duration)
-
-
-def accept_cant_be_prevented_tail(stream: TokenStream) -> bool:
-    """``can't be prevented or dealt instead to another permanent or player``.
-
-    The clause's whole predicate, shared by the two sentences that print it:
-    Whippoorwill's, which says it of a creature for a turn, and Lava Burst's
-    ``If <source> would deal damage to a creature, that damage …``, which says
-    it of one spell's own damage. One reader, because reading eleven words in
-    two places is two places for the pair of them to come apart — and it is
-    exactly the pair that matters. "Can't be prevented" alone is a weaker card
-    whose redirections all still work, so a half-read tail is the dropped-rider
-    bug in the direction that lets the damage walk away.
-
-    Consumes nothing unless the whole tail is there; the caller rewinds its own
-    opening.
-    """
-    mark = stream.mark()
-    for word in (
-        "can't", "be", "prevented", "or", "dealt", "instead", "to", "another",
-        "permanent", "or", "player",
-    ):
-        if not stream.accept_word(word):
-            stream.reset(mark)
-            return False
-    return True
-
-
-def parse_source_damage_lock(stream: TokenStream) -> bool:
-    """``If <the source> would deal damage to a creature, that damage can't be
-    prevented or dealt instead to another permanent or player.`` (Lava Burst.)
-
-    True when the whole sentence was read, cursor left after it; False with the
-    cursor untouched otherwise.
-
-    The subject must be the ability's **own source**. The clause is a statement
-    about which effects may modify this object's damage, and the only damage
-    the resolution can mark that way is the damage it is itself dealing — a
-    sentence naming some other object would be a lock nothing here can arm, so
-    it refuses rather than being read as this one.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    if not accept_source_reference(stream):
-        stream.reset(mark)
-        return False
-    if not stream.accept_phrase("would", "deal", "damage", "to", "a", "creature"):
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    if not stream.accept_phrase("that", "damage"):
-        stream.reset(mark)
-        return False
-    if not accept_cant_be_prevented_tail(stream):
-        stream.reset(mark)
-        return False
-    return True
 
 
 def _parse_bound_targeting_prevention(stream: TokenStream) -> "ast.PreventDamage | None":

@@ -858,6 +858,12 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "pump_target_creature_until_eot": {"kind": "creature"},
     "grant_regeneration_to_target_creature": {"kind": "creature"},
     "mark_non_wall_target_to_attack": {"kind": "creature"},
+    # Soltari Guerrillas: "…it deals that damage to **target creature**
+    # instead." The redirect's *new recipient* is the target, which is the
+    # opposite end from the two chosen-source rows above — those raise a picker
+    # over every source including the stack, and this one over creatures. The
+    # source needs no picker at all: it is the ability's own permanent.
+    "redirect_source_damage_to_target_until_eot": {"kind": "creature"},
 
     # Effects that act on a *player*: the handler reads `context.target`,
     # a seat, and never looks at the battlefield. ``mill_target_player`` is not

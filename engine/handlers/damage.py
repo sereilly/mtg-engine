@@ -2186,6 +2186,83 @@ def redirect_source_class_damage_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_source_damage_to_target_until_eot")
+def redirect_source_damage_to_target_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Soltari Guerrillas: "{0}: The next time this creature would deal combat
+    damage to an opponent this turn, it deals that damage to target creature
+    instead."
+
+    The redirect whose source is the ability's **own** permanent and whose
+    protected recipient is somebody else's seat. Both halves are what make it a
+    kind of its own:
+
+    * the source needs no picker and no record — it is ``source_permanent``, and
+      ``source_matches`` compares it by identity, so a second Guerrillas does
+      not answer for this one.
+    * the record is armed on the **opponents**, because that is what the
+      sentence describes. Every other recorded redirect goes on its controller.
+
+    **One record, shared between those seats.** CR 615.8's "the next *time*" is
+    one instance of one replacement effect, so a per-seat copy would fire once
+    per opponent in a multiplayer game — the list is the index, and appending the
+    same object to several of them is what makes the single ``uses`` counter the
+    one they all spend. It is also why the seats are enumerated here and not
+    frozen at lowering: a player who has left is nobody's opponent (CR 800.4a).
+
+    Nothing is armed unless the target resolved. A record with no new recipient
+    watches for nothing, and `live_recipient` would make it do nothing anyway —
+    but a card that reported "armed" and moved no damage is exactly the silence
+    this repo's Rock Hydra test exists to catch, so the log says which happened.
+    """
+    payload = instruction.payload
+    caster = context.caster
+    card_name = getattr(context.card, "name", "")
+    source = context.source_permanent
+    if source is None:
+        # A named-source record with no source watches *every* source, which is
+        # strictly wider than the card. Refusing to arm is the narrow direction.
+        game.log.append(f"{card_name}: its source has left, nothing is redirected")
+        return True, "resolved"
+    described = (payload.get("targets") or {}).get("filter") or {}
+    new_recipient = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: permanent_matches_filter(perm, described),
+        # No scan-the-board fallback, for `redirect_damage_until_eot`'s reason:
+        # damage moved onto a creature nobody named is damage the player never
+        # chose to move.
+        fallback_players=(),
+    )
+    if new_recipient is None or not game.is_on_battlefield(new_recipient):
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    record = DamageRedirect(
+        new_recipient=new_recipient,
+        source=source,
+        uses=payload.get("uses"),
+        combat_only=bool(payload.get("combat_only")),
+        source_name=card_name or None,
+    )
+    if payload.get("protects") == "opponents":
+        watched = [
+            game.players[seat]
+            for seat in game.opponents_of(game.players.index(caster))
+        ]
+    else:
+        watched = [caster]
+    for player in watched:
+        add_redirect(player, record)
+    game.log.append(
+        f"{card_name}: the next {'combat ' if record.combat_only else ''}damage "
+        f"{source.card.name} would deal to "
+        + (", ".join(p.name for p in watched) or "nobody")
+        + f" this turn is dealt to {new_recipient.card.name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_damage_from_target_spell_until_eot")
 def redirect_damage_from_target_spell_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

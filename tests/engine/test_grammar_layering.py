@@ -535,7 +535,7 @@ LOWER_LAYERS = [
 # a reveal lowers to one instruction however elaborately its sentence is
 # printed. A near-empty `lowering/reveal.py` would buy back the symmetry and
 # cost the thing symmetry is for.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -551,6 +551,21 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # clause after the comma, so a module holding half of it would import the other
 # half — the coupling this file's family rule exists to prevent. There is no
 # import between the two modules in either direction.
+# `damage_locks` split off `effects/prevention.py` at Tempest's third wave,
+# when Soltari Guerrillas' redirect tail took that module three lines past the
+# guard. The line is the one `lowering/prevention.py`'s own section header had
+# already drawn and named — *the lock* — and it is neither of the two families
+# beside it: "damage … can't be prevented or dealt instead to another permanent
+# or player" (Whippoorwill, Lava Burst) is a sentence **about** the shields and
+# the redirects rather than a member of either, and it lowers to a mark they
+# both read. Which is why it could leave without coupling anything: the split
+# adds no import in either direction, and the eleven printed words the two
+# sentences share are defined in the new module and read only there.
+# The second parse-only family after `search`, `reveal` and `text_changes`, and
+# for their reason read the other way round: the words are where the work is,
+# and both sentences lower to one instruction apiece beside the shields they
+# forbid. A near-empty `lowering/damage_locks.py` would buy back the symmetry
+# and cost the thing symmetry is for.
 # `hand` arrived on the parse side at the same wave, when `effects/cards.py`
 # crossed 1,002 lines and `lowering/cards.py` was nine from the guard. The
 # line is CR 402's own word: what a sentence does to a *hand* — reveal it,
@@ -705,7 +720,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # nobody may see, so what it has to carry is which cards the phrase admits and
 # where each find lands.
 LOWERING_FAMILIES = [
-    f for f in EFFECT_FAMILIES if f not in ("text_changes",)
+    f for f in EFFECT_FAMILIES if f not in ("text_changes", "damage_locks")
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
 # guard a second time and split along the same CR 613.4b line — so it now
@@ -935,6 +950,12 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "attachments", "returns",
+        # `damage_locks` is `prevention`'s own reason one line up: the node the
+        # two sentences build (`DamageCantBePreventedOrRedirected`) is a
+        # statement about a damage event, so it sits in `ast/damage.py` with
+        # every other one. The guard that made this a parse family fired on the
+        # *productions*; the node inventory never crossed anything.
+        "damage_locks",
         # `reveal` is `library`'s and `search`'s reason a third time, in the
         # same package: `RevealTop`, `RevealTopToHandOrBottom`,
         # `RevealTopOpponentChooses`, `RevealUntil` and the rest sit perfectly

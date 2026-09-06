@@ -424,6 +424,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     "look_top_exile_random": "activated_library",
     "reassign_blockers_between_attackers": "activated_combat",
     "redirect_source_class_damage_until_eot": "activated_prevention",
+    # Soltari Guerrillas moves its **own** combat damage off an opponent and
+    # onto a creature it targets. Same bucket for the same reason: what the
+    # ability is for is where the damage lands, not that it deals any — the
+    # fallback would label it `activated_damage`, which is the one thing this
+    # ability never does.
+    "redirect_source_damage_to_target_until_eot": "activated_prevention",
     "grant_whole_prevention_shield": "activated_prevention",
     "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------

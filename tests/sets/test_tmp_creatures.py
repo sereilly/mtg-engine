@@ -2264,3 +2264,161 @@ def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
 ])
 def test_w2g2_creatures_are_supported(set_pool, name):
     assert compile_card_oracle(set_pool("TMP")[name]).supported
+
+
+# --- W3G5: Soltari Guerrillas — a named source, an opponent's seat, a target ---
+
+from engine import Game, PlayerState  # noqa: F811  (block-local, see module docstring)
+from engine.models import Permanent  # noqa: F811
+from engine.oracle import compile_card_oracle  # noqa: F811
+from tests.helpers import _mk_creature_card, _nosick  # noqa: F811
+
+
+def _w3g5_guerrillas_board(set_pool, *, opposing=("Ox", 4)):
+    """The Guerrillas on P0's board and one creature on P1's, both able to act."""
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    guerrillas = _nosick(Permanent(card=set_pool("TMP")["Soltari Guerrillas"]))
+    p0.battlefield.append(guerrillas)
+    victim = _nosick(Permanent(
+        card=_mk_creature_card(opposing[0], 0, opposing[1], "Defender")
+    ))
+    p1.battlefield.append(victim)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p0, p1, guerrillas, victim
+
+
+def _w3g5_deal(game, recipient, source, *, combat):
+    """One damage event straight through CR 120.4, applied.
+
+    The combat step is driven for the headline test; these three ask about one
+    event in isolation — whether the record answers to it — so they go through
+    the same entry point every damage path uses rather than through a combat.
+    """
+    from engine.damage_events import deal_damage
+    outcome = deal_damage(
+        game, {"recipient": recipient, "amount": 3, "source": source, "combat": combat}
+    )
+    # `deal_damage` runs CR 120.4 and deliberately leaves the *result* to its
+    # caller, because what "apply" means differs by recipient. A redirected
+    # event comes back consumed, with the moved points already marked on
+    # whoever took them.
+    if isinstance(recipient, Permanent):
+        recipient.damage_marked += outcome.result
+    else:
+        recipient.life -= outcome.result
+    return outcome
+
+
+def _w3g5_attack_and_deal(game):
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, [0], 1)[0], game.log
+    game.advance_combat_phase()   # declare blockers
+    assert game.declare_blockers(1, {})[0], game.log
+    game.advance_combat_phase()   # combat damage
+
+
+def test_w3g5_guerrillas_moves_its_combat_damage_onto_the_target(set_pool):
+    """"{0}: The next time this creature would deal combat damage to an opponent
+    this turn, it deals that damage to target creature instead."
+
+    The Rock Hydra test for this card, and it has to be a real combat: the whole
+    ability is a CR 614.9 record armed on a seat, and nothing short of dealing
+    the damage shows whether the record was found. 3 power, so P1 keeps all 20
+    life and the 0/4 across the table takes three.
+    """
+    game, p0, p1, guerrillas, victim = _w3g5_guerrillas_board(set_pool)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    result = game.activate_permanent_ability(
+        0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w3g5_attack_and_deal(game)
+    assert p1.life == 20, game.log
+    assert victim.damage_marked == 3, game.log
+
+
+def test_w3g5_guerrillas_without_the_ability_hits_the_player(set_pool):
+    """The control. Without it the assertion above passes on a combat that
+    never dealt damage at all."""
+    game, p0, p1, guerrillas, victim = _w3g5_guerrillas_board(set_pool)
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    _w3g5_attack_and_deal(game)
+    assert p1.life == 17, game.log
+    assert victim.damage_marked == 0, game.log
+
+
+def test_w3g5_guerrillas_record_is_spent_on_one_instance(set_pool):
+    """"The next **time**" (CR 615.8) — one instance. A second combat in the
+    same turn is dealt to the player, and a per-seat copy of the record would
+    have made the count depend on how many opponents there are."""
+    game, p0, p1, guerrillas, victim = _w3g5_guerrillas_board(set_pool)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.activate_permanent_ability(
+        0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w3g5_deal(game, p1, guerrillas, combat=True)
+    assert p1.life == 20 and victim.damage_marked == 3, game.log
+    _w3g5_deal(game, p1, guerrillas, combat=True)
+    assert p1.life == 17 and victim.damage_marked == 3, game.log
+
+
+def test_w3g5_guerrillas_leaves_noncombat_damage_alone(set_pool):
+    """The printed word "combat". A record that dropped it would move a ping
+    ability's damage too — the silent direction, and the one the card excludes.
+    """
+    game, p0, p1, guerrillas, victim = _w3g5_guerrillas_board(set_pool)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.activate_permanent_ability(
+        0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w3g5_deal(game, p1, guerrillas, combat=False)
+    assert p1.life == 17, game.log
+    assert victim.damage_marked == 0, game.log
+
+
+def test_w3g5_guerrillas_does_not_catch_damage_to_a_blocking_creature(set_pool):
+    """The card says "to an **opponent**", so a blocker takes its damage
+    normally. The record lives on the opponents' seats for exactly this reason —
+    ``DamageRedirect.any_recipient`` would have been found for a permanent too.
+    """
+    game, p0, p1, guerrillas, victim = _w3g5_guerrillas_board(set_pool)
+    blocker = _nosick(Permanent(card=_mk_creature_card("Shade", 1, 5, "Shadow")))
+    p1.battlefield.append(blocker)
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.activate_permanent_ability(
+        0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w3g5_deal(game, blocker, guerrillas, combat=True)
+    assert blocker.damage_marked == 3, game.log
+    assert victim.damage_marked == 0, game.log
+
+
+def test_w3g5_guerrillas_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Soltari Guerrillas"]).supported

@@ -462,6 +462,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the damage would be dealt, so it is a different record and a
     # different handler, in the same family.
     "redirect_source_class_damage_until_eot": "damage",
+    "redirect_source_damage_to_target_until_eot": "damage",
     # "**The next N** damage that would be dealt to target <noun> this turn"
     # (Daughter of Autumn, Hazduhr the Abbot). A point pool rather than the
     # whole event, and a chosen recipient rather than the controller — both
