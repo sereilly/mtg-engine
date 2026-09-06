@@ -103,3 +103,162 @@ def test_spinning_darkness_refuses_a_pile_that_cannot_pay_in_full(set_pool):
     assert len(me.graveyard) == 2, "the two black cards are still there"
     assert me.exile == []
     assert [card.name for card in me.hand] == ["Spinning Darkness"]
+
+
+# --- W2G2: damage divided, doubled and prevented ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+
+
+def _w2g2_vanilla(name: str, power: int, toughness: int):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g2_game(p1_hand=(), p2_board=()):
+    game = Game(players=[
+        PlayerState(name="P1", hand=list(p1_hand)),
+        PlayerState(name="P2", battlefield=list(p2_board)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game
+
+
+def test_firestorm_deals_the_announced_x_to_each_of_x_targets(set_pool):
+    """"As an additional cost to cast this spell, discard X cards. Firestorm
+    deals X damage to each of X targets."
+
+    One announcement doing three jobs (CR 107.3a): it prices the discard, it
+    sizes the damage, and it fixes the number of targets. The check that matters
+    is the *third* — the amounts have to land on the right recipients, and this
+    is the shape (a cross-seat list) where an engine that only understood one
+    target puts the whole spell on one face.
+    """
+    wth = set_pool("WTH")
+    victim = Permanent(card=_w2g2_vanilla("Bear", 2, 2))
+    game = _w2g2_game(
+        p1_hand=[wth["Firestorm"], *[_w2g2_vanilla("Filler", 1, 1)] * 3],
+        p2_board=[victim],
+    )
+
+    result = game.queue_from_hand(
+        0, "Firestorm", x_value=2, divided_targets=[(1, 0), (1, None)],
+    )
+    assert result.supported, result.details
+    assert len(game.players[0].hand) == 1, "two cards paid the additional cost"
+    game.resolve_stack()
+
+    assert victim.damage_marked == 2
+    assert game.players[1].life == 18, "the face took its own 2, not the whole 4"
+
+
+def test_firestorm_refuses_a_target_list_that_is_not_x_long(set_pool):
+    """CR 601.2c fixes the number of targets as the spell is announced, and
+    Firestorm's number is the X just announced. A shorter list is an illegal
+    proposal, so CR 601.2e returns the game to before it — nothing discarded.
+    """
+    wth = set_pool("WTH")
+    game = _w2g2_game(
+        p1_hand=[wth["Firestorm"], *[_w2g2_vanilla("Filler", 1, 1)] * 3],
+        p2_board=[Permanent(card=_w2g2_vanilla("Bear", 2, 2))],
+    )
+
+    result = game.queue_from_hand(
+        0, "Firestorm", x_value=2, divided_targets=[(1, 0)],
+    )
+    assert not result.supported
+    assert "exactly 2 targets" in result.details
+    assert len(game.players[0].hand) == 4, "the refusal cost the caster nothing"
+
+
+def test_firestorm_cannot_announce_an_x_the_hand_cannot_discard(set_pool):
+    """CR 601.2h: an unpayable cost can't be paid, and the consequence is that
+    the spell isn't cast — never that it is cast for less. The spell itself is
+    on the stack before its costs are paid (CR 601.2a), so it is not one of the
+    cards that can pay for itself.
+    """
+    wth = set_pool("WTH")
+    game = _w2g2_game(
+        p1_hand=[wth["Firestorm"], _w2g2_vanilla("Filler", 1, 1)],
+        p2_board=[Permanent(card=_w2g2_vanilla("Bear", 2, 2))],
+    )
+
+    result = game.queue_from_hand(
+        0, "Firestorm", x_value=2, divided_targets=[(1, 0), (1, None)],
+    )
+    assert not result.supported
+    assert "additional cost" in result.details
+
+
+def test_fatal_blow_only_reaches_a_creature_damaged_this_turn(set_pool):
+    """"Destroy target creature that was dealt damage this turn."
+
+    The simple past of Giant Shark's "has been dealt damage this turn", and the
+    same record answers both — which is the whole point of the branch sharing a
+    field rather than earning one.
+    """
+    wth = set_pool("WTH")
+    program = _w2g2_compile(wth["Fatal Blow"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.payload["dealt_damage_this_turn"] is True
+    assert instruction.payload["bypass_regeneration"] is True, (
+        "the second sentence is still read"
+    )
+
+    untouched = Permanent(card=_w2g2_vanilla("Bear", 2, 2))
+    game = _w2g2_game(p1_hand=[wth["Fatal Blow"]], p2_board=[untouched])
+    assert not game.cast_target_spec(0, wth["Fatal Blow"])["valid_targets"], (
+        "an undamaged creature is not a legal target"
+    )
+
+    untouched.metadata["was_dealt_damage_this_turn"] = True
+    assert game.cast_target_spec(0, wth["Fatal Blow"])["valid_targets"]
+
+
+def test_choking_vines_blocks_the_creatures_it_names_and_damages_those(set_pool):
+    """"X target attacking creatures become blocked. Choking Vines deals 1
+    damage to each of those creatures."
+
+    The second sentence names what the first one chose (CR 611.2c fixed the set
+    when the effect began), so the attacker nobody named is untouched — which a
+    board read of "every blocked attacker" could not have got right.
+    """
+    wth = set_pool("WTH")
+    named = [Permanent(card=_w2g2_vanilla("Bear", 2, 2)) for _ in range(2)]
+    spare = Permanent(card=_w2g2_vanilla("Ox", 3, 3))
+    for perm in (*named, spare):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[*named, spare]),
+        PlayerState(name="P2", hand=[wth["Choking Vines"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    game.declare_attackers(0, [0, 1, 2])
+    game.advance_combat_phase()   # declare blockers
+
+    result = game.queue_from_hand(
+        1, "Choking Vines", x_value=2,
+        target_player_index=0, target_permanent_index=[0, 1],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert [perm.blocked for perm in named] == [True, True]
+    assert [perm.damage_marked for perm in named] == [1, 1]
+    assert not spare.blocked and spare.damage_marked == 0

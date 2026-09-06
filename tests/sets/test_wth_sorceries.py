@@ -371,3 +371,88 @@ def test_tariff_skips_a_seat_with_no_creature_rather_than_offering_it_nothing(se
 
     # Only the seat that owns a creature is asked anything at all.
     assert [c.player_index for c in game.pending_choices] == [1], game.pending_choices
+
+
+# --- W2G2: damage divided, doubled and prevented ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition as _w2g2_card
+from engine.models import Permanent as _w2g2_permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+
+
+def _w2g2_bear(name: str, toughness: int = 4):
+    return _w2g2_permanent(card=_w2g2_card(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": "2", "toughness": str(toughness)},
+    ))
+
+
+def _w2g2_cone_game(set_pool, board):
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("WTH")["Cone of Flame"]]),
+        PlayerState(name="P2", battlefield=list(board)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game
+
+
+def test_cone_of_flame_is_one_announcement_of_three_targets(set_pool):
+    """"Cone of Flame deals 1 damage to any target, 2 damage to another target,
+    and 3 damage to a third target."
+
+    Three printed clauses, one instruction. Three would raise three pickers for
+    one announcement (CR 601.2c settles every target at once) and only the first
+    would reach the stack item — so the compiled program is the thing to pin,
+    not just the outcome.
+    """
+    program = _w2g2_compile(set_pool("WTH")["Cone of Flame"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "deal_damage"
+    assert instruction.payload["amount"] == 6, "the total it deals"
+    assert instruction.payload["targets"]["shares"] == [1, 2, 3]
+    assert instruction.payload["targets"]["target_count"] == 3
+
+
+def test_cone_of_flame_gives_each_target_its_printed_share(set_pool):
+    """The share belongs to the target it was announced against, in printed
+    order — 1 to the first, 2 to the second, 3 to the third. An engine that
+    divided its total evenly would deal 2 to each and be invisible to any census.
+    """
+    first, second = _w2g2_bear("First"), _w2g2_bear("Second")
+    game = _w2g2_cone_game(set_pool, [first, second])
+
+    result = game.queue_from_hand(
+        0, "Cone of Flame", divided_targets=[(1, 0), (1, 1), (1, None)],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert first.damage_marked == 1
+    assert second.damage_marked == 2
+    assert game.players[1].life == 17
+
+
+def test_cone_of_flame_keeps_a_survivors_own_share_when_a_target_leaves(set_pool):
+    """CR 608.2b drops an illegal target and the rest of the effect happens —
+    and the share that was announced against the *survivor* has to travel with
+    it. Read positionally instead, the 3 would slide onto the creature the card
+    assigned 2, which is why the shares are stamped onto the announcement.
+    """
+    first, second = _w2g2_bear("First"), _w2g2_bear("Second")
+    game = _w2g2_cone_game(set_pool, [first, second])
+
+    result = game.queue_from_hand(
+        0, "Cone of Flame", divided_targets=[(1, 0), (1, 1), (1, None)],
+    )
+    assert result.supported, result.details
+    game.remove_from_battlefield(first)
+    game._settle()
+    game.resolve_stack()
+
+    assert second.damage_marked == 2, "still its own share, not the first's"
+    assert game.players[1].life == 17

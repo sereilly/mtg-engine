@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
-from ._common import (recorded_permanent_ids, 
+from ._common import (divided_target_permanent, recorded_permanent_ids, 
     apply_temp_pt_boost,
     bound_permanent,
     block_pair_permanents,
@@ -1034,7 +1034,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # A target that has left keeps its share out of the effect (CR 608.2b);
         # nothing redistributes it, which is why the surviving entries are
         # filtered before the division is read rather than after.
-        from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
+        from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide
 
         announced = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
         if announced:
@@ -1042,11 +1042,14 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             # carried as the object from there — an index held across the
             # placement loop would address the wrong creature the moment
             # anything left.
+            # By id, not by slot: an index announced under CR 601.2c names
+            # whoever holds that slot at *resolution*, and anything leaving
+            # renumbers the rest -- so the counters announced against a creature
+            # that left were placed on the one that slid into its place.
             chosen_entries = [
                 (entry, creature)
                 for entry in announced
-                for seat, index, _share in (divided_entry(entry),)
-                for creature in (game.permanent_at(seat, index),)
+                for creature in (divided_target_permanent(game, entry),)
                 if creature is not None
             ]
             if not chosen_entries:

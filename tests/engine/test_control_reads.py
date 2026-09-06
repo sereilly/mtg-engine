@@ -310,7 +310,12 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/handlers/_common.py": 2,
     "engine/handlers/board_misc.py": 2,
     "engine/handlers/combat.py": 2,
-    "engine/handlers/damage.py": 1,
+    # `engine/handlers/damage.py` left this table at Weatherlight's second
+    # wave. Its one read was the divided-damage list resolving a target by
+    # battlefield slot -- and it was not a combat map, it was the bug this
+    # whole ratchet is about: an index announced under CR 601.2c named whoever
+    # held that slot at resolution, so Pyrotechnics dealt the departed target's
+    # share to the survivor while the bounds check said everything was fine.
     "engine/handlers/prevention.py": 2,
     "engine/handlers/zones.py": 2,
     "engine/legality.py": 2,

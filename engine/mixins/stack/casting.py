@@ -39,7 +39,7 @@ from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
 from ...damage_ledger import record_cast
 from ...divided_damage import (
     CARD_DIVIDED, EVENLY, card_shares, divided_description, divided_entry,
-    division_refusal, stamp_card_shares,
+    division_refusal, stamp_card_shares, stamped_entry,
 )
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
@@ -1204,11 +1204,33 @@ class SpellCastingMixin:
                     isinstance(index, int) and 0 <= index < len(self.players[seat].battlefield)
                 ):
                     return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target")
-                # The two-tuple is kept where no share was announced: it is what
+                # **The chosen permanent's id, resolved now.** An index is not
+                # an address: the battlefield renumbers as soon as anything
+                # leaves it, so an index carried from CR 601.2c's announcement
+                # to the resolution can name a *different* permanent — and the
+                # handlers' bounds check is satisfied by it, so the spell hits
+                # the wrong creature rather than fizzling. Pyrotechnics
+                # announced 3 damage to the second of two creatures, the first
+                # left in response, and the survivor took the 1 the departed one
+                # had been assigned.
+                #
+                # Resolved here because this is the last moment the index and
+                # the board agree (CR 400.7 gives the id its meaning), which is
+                # the same reason `_stack_push` stamps one for the older
+                # multi-target list.
+                #
+                # The share stays ``None`` where none was announced: it is what
                 # every evenly-divided spell and every non-interactive caller
-                # sends, and normalizing it to a three-tuple would say a
-                # division was announced when none was.
-                cleaned.append((seat, index) if share is None else (seat, index, share))
+                # sends, and a 0 there would say a division of nothing was
+                # announced.
+                chosen = (
+                    self.permanent_at(self.players[seat], index)
+                    if index is not None else None
+                )
+                cleaned.append(stamped_entry(
+                    seat, index, share,
+                    None if chosen is None else chosen.permanent_id,
+                ))
             divided_targets = cleaned or None
 
         # "This spell costs {1} more to cast for each target beyond the first."

@@ -12,7 +12,7 @@ from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
-from ._common import (recorded_permanent_ids, 
+from ._common import (divided_target_permanent, recorded_permanent_ids, 
     apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
     flip_coin,
     frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
@@ -587,14 +587,23 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # both, so four cards printing the second sentence were played as the first.
     divided = context.choices.get(DIVIDED_TARGETS)
     if divided:
-        entries = [
-            entry
-            for entry in divided
-            for seat, index, _share in (divided_entry(entry),)
-            if 0 <= seat < len(game.players)
-            and (index is None or 0 <= index < len(game.players[seat].battlefield))
-        ]
-        if not entries:
+        # Each entry is turned into the permanent it *named* once, through the
+        # one resolver, and carried as the object from there. It was resolved by
+        # index at the point of use, and an index is not an address: a target
+        # that left renumbered every later slot, so the survivor took the share
+        # announced against the departed one and the bounds check never noticed.
+        live = []
+        for entry in divided:
+            seat, index, _share = divided_entry(entry)
+            if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+                continue
+            if index is None:
+                live.append((entry, None))
+                continue
+            permanent = divided_target_permanent(game, entry)
+            if permanent is not None:
+                live.append((entry, permanent))
+        if not live:
             game.log.append(f"{card.name} had no remaining targets")
             return True, "resolved"
         # A target that has left keeps its share out of the event — CR 608.2b
@@ -602,18 +611,23 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # assigned to it. Dividing over the survivors is what the *even* split
         # has always done and is what an unannounced division still means.
         division = (instruction.payload.get("targets") or {}).get("division", EVENLY)
-        assigned = divide(damage, entries, division=division)
+        assigned = divide(damage, [entry for entry, _who in live], division=division)
         # Creatures first (highest index first so removals can't shift earlier
         # indices), then faces. One resumable list rather than two loops: a
         # target that stops to ask the player something has to take the targets
         # behind it with it, and "behind it" spans both groups.
+        paired = [
+            (who, seat, share)
+            for (_entry, who), (seat, _index, share) in zip(live, assigned)
+        ]
         ordered = sorted(
-            (e for e in assigned if e[1] is not None), key=lambda e: e[1], reverse=True
-        ) + [e for e in assigned if e[1] is None]
+            (p for p in paired if p[0] is not None),
+            key=lambda p: game.battlefield_index_of(p[0]) or 0, reverse=True
+        ) + [p for p in paired if p[0] is None]
 
         def hit(entry) -> None:
-            seat, index, share = entry
-            if index is None:
+            target_perm, seat, share = entry
+            if target_perm is None:
                 face = game.players[seat]
                 game._deal_damage_to_player(
                     face, share, source=card, asks=True,
@@ -622,7 +636,6 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     ),
                 )
                 return
-            target_perm = game.players[seat].battlefield[index]
             game._mark_damage_on_permanent(
                 target_perm, share, source=source_permanent or card, asks=True,
                 then=_damage_reporter(game, card, target_perm),

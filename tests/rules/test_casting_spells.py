@@ -1567,3 +1567,112 @@ def test_700_2e_a_mode_that_names_no_target_arms_no_target_prompt():
     assert game.confirm_opponent_mode_choice(1, 0)
 
     assert game.pending_choices == []
+
+
+# --- W2G2: damage divided, doubled and prevented ---
+#
+# CR 601.2c's two clauses about a *list* of targets — the number, and whether
+# one object may fill two slots — asked over the two card shapes that print
+# them, plus the announcement's own address for each target.
+
+from engine.card_loader import load_cards as _w2g2_load
+from engine.card_loader import manifest_set_paths as _w2g2_paths
+from engine.models import CardDefinition as _w2g2_card
+from engine.models import Permanent as _w2g2_permanent
+
+
+def _w2g2_pool():
+    pool: dict = {}
+    for path in _w2g2_paths(include_measured=True):
+        for card in _w2g2_load(path):
+            pool.setdefault(card.name, card)
+    return pool
+
+
+def _w2g2_bear(name: str, toughness: int = 9):
+    return _w2g2_permanent(card=_w2g2_card(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": "1", "toughness": str(toughness)},
+    ))
+
+
+def _w2g2_duel(card_name: str, board):
+    pool = _w2g2_pool()
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool[card_name]]),
+        PlayerState(name="P2", battlefield=list(board)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_spell_whose_text_defines_its_target_count_refuses_any_other():
+    """"In some cases, the number of targets will be defined by the spell's
+    text."
+
+    Cone of Flame's text defines three. A list of two is an illegal proposal, so
+    CR 601.2e returns the game to before it — the spell is still in hand.
+    """
+    game = _w2g2_duel("Cone of Flame", [_w2g2_bear("A"), _w2g2_bear("B")])
+
+    result = game.queue_from_hand(
+        0, "Cone of Flame", divided_targets=[(1, 0), (1, 1)],
+    )
+
+    assert not result.supported
+    assert "exactly 3 targets" in result.details
+    assert [card.name for card in game.players[0].hand] == ["Cone of Flame"]
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_the_same_object_cannot_fill_two_slots_of_one_announcement():
+    """"The same target can't be chosen multiple times for any one instance of
+    the word 'target'."
+
+    Firestorm prints one instance, pluralised ("each of X **targets**"), so the
+    rule's own sentence forbids the repeat outright. Cone of Flame prints three
+    instances and the rule would *allow* one — what forbids it there is the
+    card's own words, "another target" and "a third target".
+    """
+    game = _w2g2_duel("Firestorm", [_w2g2_bear("A")])
+    game.players[0].hand.extend(_w2g2_bear("Filler").card for _ in range(3))
+
+    result = game.queue_from_hand(
+        0, "Firestorm", x_value=2, divided_targets=[(1, 0), (1, 0)],
+    )
+
+    assert not result.supported
+    assert "different one" in result.details
+
+
+@pytest.mark.cr("601.2c", "608.2b", "400.7")
+def test_601_2c_an_announced_target_is_addressed_by_id_and_not_by_slot():
+    """A target announced at CR 601.2c has to still mean the same object at
+    CR 608.2b, and a battlefield **index** does not: anything leaving renumbers
+    every later slot.
+
+    The failure is not a fizzle, which is what makes it worth its own rules
+    test. Pyrotechnics announces 1 damage to the first creature and 3 to the
+    second; the first leaves in response; the survivor slides into slot 0 and —
+    read by slot — takes the 1 that was announced against a creature that is
+    gone. CR 400.7 gives the id its meaning: one object for one stay on the
+    battlefield.
+    """
+    first, second = _w2g2_bear("First"), _w2g2_bear("Second")
+    game = _w2g2_duel("Pyrotechnics", [first, second])
+
+    result = game.queue_from_hand(
+        0, "Pyrotechnics", divided_targets=[(1, 0, 1), (1, 1, 3)],
+    )
+    assert result.supported, result.details
+
+    game.remove_from_battlefield(first)
+    game._settle()
+    game.resolve_stack()
+
+    assert second.damage_marked == 3, "its own announced share, not the first's"

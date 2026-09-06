@@ -81,14 +81,55 @@ CARD_DIVIDED = frozenset({FIXED, EACH})
 def divided_entry(entry) -> tuple[int, int | None, int | None]:
     """One ``divided_targets`` entry as ``(seat, index, announced amount)``.
 
-    The one reader of the two shapes, so no call site has to know there are two.
-    ``index`` is None for a player's face; ``amount`` is None when the caster
-    announced no division, which is every evenly-divided spell and every seat
-    that cannot be asked.
+    The one reader of the three shapes, so no call site has to know there are
+    three. ``index`` is None for a player's face; ``amount`` is None when the
+    caster announced no division, which is every evenly-divided spell and every
+    seat that cannot be asked.
+
+    A fourth element, when the entry has one, is the chosen permanent's **id**
+    and is read by :func:`divided_entry_id` rather than returned here — so every
+    existing caller keeps the three values it unpacks, and only the callers that
+    resolve a permanent have to know the id exists.
     """
     seat, index = entry[0], entry[1]
     amount = entry[2] if len(entry) > 2 else None
     return seat, index, amount
+
+
+def divided_entry_id(entry) -> int | None:
+    """The ``permanent_id`` *entry* was announced against, or None.
+
+    **An index is not an address.** The battlefield renumbers as soon as
+    anything leaves it, so an index held from the announcement (CR 601.2c) to
+    the resolution can name a different permanent — which is not a fizzle but a
+    *hit on the wrong creature*: Pyrotechnics announced 3 damage to the second
+    of two creatures, the first one left in response, and the survivor slid into
+    slot 0 and took the 1 that had been announced against the creature that was
+    gone. Every divided spell in the pool had it, in silence, because the bounds
+    check the handlers made was satisfied by the wrong permanent.
+
+    So the cast path resolves each announced index to an id and stamps it here
+    (CR 400.7: an id is one object for one stay on the battlefield), and the
+    handlers resolve by id with the index as the fallback for an entry that
+    predates the stamp — a test's hand-written list, most of them.
+
+    None for a player's face, which has no permanent, and None for an entry
+    written before the stamp existed.
+    """
+    return entry[3] if len(entry) > 3 else None
+
+
+def stamped_entry(seat, index, amount, permanent_id) -> tuple:
+    """The canonical ``divided_targets`` entry, with the announcement's id.
+
+    One builder, because the tuple is positional and three files write one. The
+    amount stays ``None`` where none was announced rather than becoming 0: those
+    are different facts (:func:`announced_division` reads the first as "this
+    caster announced no division" and would read the second as a division of
+    nothing), and it is why this cannot simply be a 4-tuple literal at each
+    call site.
+    """
+    return (seat, index, amount, permanent_id)
 
 
 def announced_division(entries) -> list[int] | None:
@@ -137,7 +178,7 @@ def _repeats_a_target(entries) -> bool:
 
 
 def stamp_card_shares(entries, amounts) -> list[tuple]:
-    """*entries* with *amounts* attached positionally, as three-tuples.
+    """*entries* with *amounts* attached positionally.
 
     The announcement step for a :data:`CARD_DIVIDED` spell. The share has to
     ride the entry rather than be re-derived at resolution, for the reason the
@@ -147,9 +188,9 @@ def stamp_card_shares(entries, amounts) -> list[tuple]:
     would slide Cone of Flame's 3 onto the creature the card assigned 2.
     """
     return [
-        (seat, index, int(amount))
-        for (seat, index, _announced), amount in zip(
-            (divided_entry(entry) for entry in entries), amounts
+        stamped_entry(seat, index, int(amount), divided_entry_id(entry))
+        for entry, (seat, index, _announced), amount in zip(
+            entries, (divided_entry(entry) for entry in entries), amounts
         )
     ]
 
@@ -224,14 +265,22 @@ def division_refusal(
             f"({len(entries)} named, CR 601.2c)"
         )
     if division in CARD_DIVIDED and _repeats_a_target(entries):
-        # CR 601.2c: the same object or player cannot be chosen for two targets
-        # of one spell. Both printed sentences say so in words as well —
-        # "**another** target", "a **third** target", "each of X targets" — so
-        # this is the card's own restriction and the rule's at once.
+        # The two members of this family reach the same answer by two different
+        # halves of CR 601.2c, which is worth writing down because the rule's
+        # default is *not* what forbids Cone of Flame's repeat.
+        #
+        # * :data:`EACH` is one instance of the printed word "target", made
+        #   plural ("each of X **targets**"), and the rule's own sentence
+        #   applies: "the same target can't be chosen multiple times for any one
+        #   instance of the word 'target'".
+        # * :data:`FIXED` prints the word three times, and the rule expressly
+        #   *allows* one object to be chosen once per instance. What forbids it
+        #   is the card: "**another** target", "a **third** target". Reading
+        #   601.2c alone here would be reading it backwards.
         #
         # Asked of these two divisions only, which is a smaller claim than the
-        # rule makes. "Any number of targets" is under exactly the same rule and
-        # nothing here checks it; that is a standing looseness this round
+        # rule makes. "Any number of targets" is one instance of the word too
+        # and nothing here checks it; that is a standing looseness this round
         # inherits rather than introduces, and widening it would change what
         # every shipped divided spell accepts on a round that is about two new
         # ones.
@@ -323,6 +372,6 @@ def divided_description(instructions) -> tuple[dict, dict] | None:
 __all__ = [
     "CARD_DIVIDED", "CHOSEN", "DIVIDED_TARGETS", "EACH", "EVENLY", "FIXED",
     "announced_division", "card_shares", "divide", "divided_description",
-    "divided_entry", "divided_instruction", "division_refusal",
-    "stamp_card_shares",
+    "divided_entry", "divided_entry_id", "divided_instruction",
+    "division_refusal", "stamp_card_shares", "stamped_entry",
 ]

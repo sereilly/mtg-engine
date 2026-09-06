@@ -575,3 +575,89 @@ def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
     assert not board_target_immunities(
         "Creatures can't be the targets of spells or abilities."
     )
+
+
+# --- W2G2: damage divided, doubled and prevented ---
+from engine import Game, PlayerState
+from engine.auras import attach_aura as _w2g2_attach
+from engine.models import CardDefinition as _w2g2_card
+from engine.models import Permanent as _w2g2_permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+
+
+def _w2g2_bear(name: str):
+    return _w2g2_permanent(card=_w2g2_card(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": "2", "toughness": "9"},
+    ))
+
+
+def _w2g2_armor_board(set_pool):
+    """Kithkin Armor on a bear of the caster's, with an opposing burner.
+
+    The Aura is sacrificed to pay the ability, so the host has to be findable
+    afterwards — which is the whole reason `attached_host` keeps last-known
+    information (CR 603.10).
+    """
+    host, burner = _w2g2_bear("Host"), _w2g2_bear("Burner")
+    armor = _w2g2_permanent(card=set_pool("WTH")["Kithkin Armor"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, armor]),
+        PlayerState(name="P2", battlefield=[burner]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w2g2_attach(armor, host)
+    return game, host, burner
+
+
+def test_kithkin_armor_shields_the_enchanted_creature_not_its_controller(set_pool):
+    """"Sacrifice this Aura: The next time a source of your choice would deal
+    damage to enchanted creature this turn, prevent that damage."
+
+    CR 615.1 puts a shield around a player *or* a permanent, and this is the
+    first whole-instance chosen-source shield in the pool printed on the second.
+    The lowering used to refuse it with "a chosen-source shield only protects
+    its controller", which was a fact about the pool written as a rule about the
+    engine.
+    """
+    program = _w2g2_compile(set_pool("WTH")["Kithkin Armor"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    assert ability.instruction.kind == "grant_whole_prevention_shield"
+    assert ability.instruction.payload == {"recipient": "attached"}
+
+    game, host, burner = _w2g2_armor_board(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Kithkin Armor", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert not any(
+        perm.card.name == "Kithkin Armor" for perm in game.players[0].battlefield
+    ), "the Aura paid for its own ability"
+    game._mark_damage_on_permanent(host, 4, source=burner)
+    assert host.damage_marked == 0, "the whole instance was prevented"
+    assert game.players[0].life == 20
+
+
+def test_kithkin_armors_shield_answers_only_the_chosen_source(set_pool):
+    """CR 615.8: the shield prevents the next instance from *that* source, so
+    damage from anything else goes through — which is what makes it a chosen
+    source rather than a blanket.
+    """
+    game, host, _burner = _w2g2_armor_board(set_pool)
+    other = _w2g2_bear("Other")
+    game.players[1].battlefield.append(other)
+    game._settle()
+    game.activate_permanent_ability(
+        0, "Kithkin Armor", target_player_index=1, target_permanent_index=0,
+    )
+    game.resolve_stack()
+
+    game._mark_damage_on_permanent(host, 3, source=other)
+    assert host.damage_marked == 3, "a source the shield does not name"

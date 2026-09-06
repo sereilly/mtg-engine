@@ -2056,6 +2056,41 @@ def _one_choice(chosen: object) -> object:
     return chosen
 
 
+def divided_target_permanent(game: "Game", entry):
+    """The permanent one ``divided_targets`` entry names, or None.
+
+    One resolver for the three handlers that read that list (damage, prevention
+    and the distributed counter placement), because the way an entry becomes a
+    permanent is not three questions. Each of them resolved it by **index**, and
+    an index is not an address: the battlefield renumbers as soon as anything
+    leaves it, so an entry announced under CR 601.2c against slot 1 named
+    whoever slid into slot 1 by the time the spell resolved. Their bounds checks
+    were satisfied by the wrong permanent, so nothing fizzled and nothing
+    logged — Pyrotechnics simply dealt the departed target's share to the
+    survivor.
+
+    The id first (CR 400.7 makes it one object for one stay on the
+    battlefield), the index only as the fallback for an entry that carries no
+    id — a hand-written list in a test, or one built before the cast path
+    stamped them.
+
+    None for a player's face, which is not a permanent, and None for a
+    permanent that has left: CR 608.2b makes that target illegal, and dropping
+    it is every caller's own next line.
+    """
+    from ..divided_damage import divided_entry, divided_entry_id
+
+    seat, index, _share = divided_entry(entry)
+    if not isinstance(seat, int) or not 0 <= seat < len(game.players):
+        return None
+    if index is None:
+        return None
+    permanent_id = divided_entry_id(entry)
+    if permanent_id is not None:
+        return game.permanent_by_id(permanent_id)
+    return game.permanent_at(seat, index)
+
+
 def resolve_target_permanents(
     game: Game,
     context: OracleExecutionContext,

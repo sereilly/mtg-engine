@@ -25,7 +25,7 @@ from ..shields import (
     make_whole_source,
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
-from ._common import (recorded_permanent_ids, attached_host, bound_permanent, resolve_amount,
+from ._common import (divided_target_permanent, recorded_permanent_ids, attached_host, bound_permanent, resolve_amount,
                       resolve_target_permanent)
 from .registry import effect_handler
 
@@ -274,7 +274,10 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
             if index is None:
                 live.append((entry, game.players[seat]))
                 continue
-            permanent = game.permanent_at(seat, index)
+            # By id, not by slot: an index announced under CR 601.2c names
+            # whoever holds that slot at *resolution*, and anything leaving
+            # renumbers the rest.
+            permanent = divided_target_permanent(game, entry)
             if permanent is not None:
                 live.append((entry, permanent))
         if not live:

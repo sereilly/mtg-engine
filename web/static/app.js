@@ -11776,6 +11776,17 @@ function confirmDividedTargets() {
     updateActionHint("Choose at least one target first.", true);
     return;
   }
+  // "…and 3 damage to **a third target**" (Cone of Flame): the card prints how
+  // many targets, and the engine refuses any other number with nothing spent
+  // (CR 601.2c). Checked here so the refusal is a hint rather than a round trip.
+  const printedTargets = targetSpecOf(p.card)?.divided_target_count;
+  if (Number.isInteger(printedTargets) && n !== printedTargets) {
+    updateActionHint(
+      `This spell has exactly ${printedTargets} target${printedTargets === 1 ? "" : "s"}; ${n} chosen.`,
+      true,
+    );
+    return;
+  }
   // The full cross-seat target list: creatures as {seat, index}, faces as {seat}.
   const dividedPayload = [
     ...p.dividedTargets.map((t) => ({ seat: t.seat, index: t.idx })),
@@ -11815,6 +11826,25 @@ function confirmDividedTargets() {
       x_value: dividedPayload.length,
     };
     updateActionHint(`Casting ${cardName} (X = ${dividedPayload.length})...`);
+    sendAction(body)
+      .then(() => updateActionHint(`Cast ${cardName}.`))
+      .catch((e) => updateActionHint(e.message, true))
+      .finally(() => clearPendingHandCast());
+    return;
+  }
+  // A card whose shares are printed and whose count is printed announces
+  // nothing at all: no X (`hasXCost` is false) and no division (CR 601.2d asks
+  // only where the sentence says "as you choose"). Cone of Flame is the whole
+  // of it, and without this branch the caster was shown an X prompt for a spell
+  // that has no X.
+  if (Number.isInteger(printedTargets) && !hasXCost(card)) {
+    const body = {
+      seat,
+      action: castAction || "cast",
+      card_name: cardName,
+      divided_targets: dividedPayload,
+    };
+    updateActionHint(`Casting ${cardName}...`);
     sendAction(body)
       .then(() => updateActionHint(`Cast ${cardName}.`))
       .catch((e) => updateActionHint(e.message, true))

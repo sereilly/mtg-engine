@@ -2291,6 +2291,19 @@ def _from_targets_payload(targets) -> dict | None:
         printed_count = targets.get("target_count")
         if printed_count is not None and not isinstance(printed_count, bool):
             spec["divided_target_count"] = printed_count
+        if printed_count == "x":
+            # "…to **each of X targets**" (Firestorm). X *is* how many targets
+            # were chosen, so the caster is never asked for it separately —
+            # picking the targets is announcing it. ``x_equals_targets`` is the
+            # client's own name for exactly that, read by ``app.js`` since
+            # Volcanic Eruption and emitted by nothing until now: that card's
+            # spec turned out to be a ``land`` picker with ``x_targets``, so the
+            # branch has never run. This is the first card whose sentence means
+            # it, which is also why the flag is set here and not wherever a
+            # count happens to be "x" — an announcement the caster makes
+            # separately (Winter Blast's "X target creatures") is a different
+            # question with the same letter in it.
+            spec["x_equals_targets"] = True
         bound = targets.get("max_targets")
         if isinstance(bound, int):
             # "…among **one or two** target creatures" (Contagion). A divided
