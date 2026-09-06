@@ -1408,3 +1408,52 @@ def test_shocker_redraws_what_the_discard_binned_not_the_damage_it_dealt(set_poo
 
     assert len(game.players[1].hand) == 4
     assert len(game.players[1].graveyard) == 4
+
+
+def test_wood_sage_sorts_the_revealed_four_by_the_name_that_was_chosen(set_pool):
+    """`{T}: Choose a creature card name. Reveal the top four cards of your
+    library and put all of them with that name into your hand. Put the rest
+    into your graveyard.`
+
+    The Rock Hydra test for a two-step naming card: the prompt is answered and
+    the pile is read out of the *hand* and the *graveyard*, not off the claim
+    that two instructions compiled.
+    """
+    sage = Permanent(card=set_pool("TMP")["Wood Sage"])
+    wanted = _w2g4_card("Grizzly Bears", "Creature — Bear", power=2, toughness=2)
+    other = _w2g4_card("Mountain", "Basic Land — Mountain")
+    game = _w2g4_creature_game(
+        [sage], library=[wanted, other, wanted, other, other],
+    )
+    game.interactive_seats = {0}
+
+    game.activate_permanent_ability(0, "Wood Sage", ability_index=0)
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("choose_card_name")))
+    assert prompt.data.get("card_type") == "creature", (
+        "the printed narrowing reaches the seat that answers"
+    )
+    assert game.confirm_choose_card_name(0, "Grizzly Bears")
+
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears"] * 2
+    assert [c.name for c in game.players[0].graveyard] == ["Mountain"] * 2
+    # The fifth card was never revealed.
+    assert [c.name for c in game.players[0].library] == ["Mountain"]
+
+
+def test_wood_sage_naming_nothing_bins_the_whole_pile(set_pool):
+    """An empty name is a legal answer that matches nothing (CR 202.1), and it
+    must not be read as "match everything" — which would put four cards in the
+    hand off a seat that named no card at all."""
+    sage = Permanent(card=set_pool("TMP")["Wood Sage"])
+    bear = _w2g4_card("Grizzly Bears", "Creature — Bear", power=2, toughness=2)
+    game = _w2g4_creature_game([sage], library=[bear] * 4)
+    game.interactive_seats = {0}
+
+    game.activate_permanent_ability(0, "Wood Sage", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "")
+
+    assert not game.players[0].hand
+    assert len(game.players[0].graveyard) == 4

@@ -1,12 +1,13 @@
-"""Parsing what a card **reveals** — CR 701.20, the public half of a look.
+"""Parsing what a card **reveals** — CR 701.20a, the public half of a look.
 
 Split off ``effects/library.py`` at Tempest's second wave, when Sacred Guide's
 reveal-until run took that module to 1,073 lines. The cut is the one that
-module's own docstring drew and then CR made sharp: everything left there is
-CR 701.19's **look at** — the player sees the cards and nobody else does —
-where a reveal shows a face to *every* player, which is why a card's next
-sentence may talk about what was turned up and why the engine has to record it
-(``Game.record_reveal``).
+module's own docstring drew and then CR made sharp: a **reveal** (CR 701.20a)
+shows a card to *all* players, and everything left there is CR 701.20e's
+**look**, which "follows the same rules as revealing a card, except that the
+card is shown only to the specified player". That is why a reveal is recorded
+(``Game.record_reveal``) and a look is not, and why a card's next sentence may
+talk about what a reveal turned up.
 
 The call graph had already fallen apart along that line. ``_parse_reveal_top``
 and the two acceptors behind it are reached from the imperative dispatcher and
@@ -28,6 +29,7 @@ from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..phrases import accept_a_card_at_random_from_hand
 from ..references import parse_player_ref
 from ..stream import TokenStream
 
@@ -61,6 +63,14 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     until = _accept_reveal_until_from_top(stream)
     if until is not None:
         return until
+    # "…, then **reveal a card at random from your hand**." (Cursed Scroll.)
+    # The bare imperative spelling of Wand of Ith's object phrase, which the
+    # subject-verb reader takes when a player is printed in front of the verb
+    # and nothing took when one is not — the line failed on "the" here, four
+    # words short of a production that already existed. The fragment is
+    # ``phrases``' because three families read it now.
+    if accept_a_card_at_random_from_hand(stream):
+        return ast.RevealRandomFromHand(ast.PlayerRef("you"))
     stream.expect_word("the")
     stream.expect_word("top")
     # "Reveal the top **three cards** of your library. Target opponent chooses
@@ -72,6 +82,14 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     counted = _accept_counted_reveal_top(stream)
     if counted is not None:
         return counted
+    # "Reveal the top **four cards** of your library and put all of them with
+    # that name into your hand. …" (Wood Sage.) A second counted reveal, whose
+    # first sentence differs from the one above only in the word after
+    # "library" — so both are tried here, both non-consuming, and neither takes
+    # a reading from the other.
+    sorted_by_name = _accept_counted_reveal_sorting_by_name(stream)
+    if sorted_by_name is not None:
+        return sorted_by_name
     for word in ("card", "of"):
         stream.expect_word(word)
     if stream.accept_word("your"):
@@ -125,6 +143,74 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of", "your", "library"):
         raise stream.error("expected 'put it on the bottom of your library'")
     return ast.RevealTopToHandOrBottom(filt)
+
+
+#: Where each half of a sorted reveal may be printed to go. Two closed lists
+#: rather than one, because they are different questions: the match is *kept*
+#: and the rest is *discarded*, and a card that put its finds on the bottom of
+#: the library would be a different effect from one that put the rest there.
+_SORTED_MATCH_ZONES: tuple[str, ...] = ("hand",)
+_SORTED_REST_ZONES: tuple[str, ...] = ("graveyard",)
+
+
+def _accept_counted_reveal_sorting_by_name(
+    stream: TokenStream,
+) -> "ast.RevealTopSortingByChosenName | None":
+    """``<N> cards of your library and put all of them with that name into your
+    hand. Put the rest into your graveyard.`` at the cursor, with "Reveal the
+    top" already read — or None with the cursor where it was. (Wood Sage.)
+
+    Both sentences, for :class:`ast.RevealTopSortingByChosenName`'s reason:
+    "the rest" names exactly what the first sentence did not take, so apart the
+    second moves cards out of a pile nothing recorded.
+
+    "**that name**" is required and is what makes this a naming card rather
+    than a counted mill: the name was chosen by an earlier step of the same
+    ability, and the lowering demands that step. Read as the printed words
+    rather than a filter, because a filter would have to describe a name the
+    card never states.
+
+    Both destinations are read and checked against a closed list, so a printing
+    that sorted somewhere the handler cannot reach refuses here rather than
+    lowering onto a zone nothing moves to.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 1:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "and", "put", "all", "of", "them", "with", "that", "name", "into",
+        "your",
+    ):
+        stream.reset(mark)
+        return None
+    match_zone = stream.peek_word()
+    if match_zone not in _SORTED_MATCH_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("put", "the", "rest", "into", "your"):
+        stream.reset(mark)
+        return None
+    rest_zone = stream.peek_word()
+    if rest_zone not in _SORTED_REST_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.RevealTopSortingByChosenName(
+        count, match_zone=match_zone, rest_zone=rest_zone,
+    )
 
 
 #: What the cards a reveal-until turned over *before* the match may be printed

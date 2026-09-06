@@ -496,9 +496,10 @@ LOWER_LAYERS = [
 # modules read it now, `phrases` re-exporting it under its old name.
 # `reveal` joined the parse side at Tempest's second wave, the second time
 # `effects/library.py` reached the size guard and along the *other* half of the
-# line `search` was cut on. CR draws it: a **look** (CR 701.19) shows cards to
-# one player, a **reveal** (CR 701.20) shows a face to every player — which is
-# why a reveal is recorded (`Game.record_reveal`) and a look is not, and why a
+# line `search` was cut on. CR draws it, inside one rule: a **reveal**
+# (CR 701.20a) shows a card to all players, and a **look** (CR 701.20e) follows
+# the same rules "except that the card is shown only to the specified player" —
+# which is why a reveal is recorded (`Game.record_reveal`) and a look is not, and why a
 # card's next sentence may talk about what a reveal turned up. The call graph had
 # already fallen apart there: `_parse_reveal_top` and the two acceptors behind it
 # are reached from the imperative dispatcher and from each other, and

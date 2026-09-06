@@ -829,3 +829,33 @@ def accept_graveyard_position(
         filter=None if not narrowed else described,
         position=position,
     )
+
+
+def accept_a_card_at_random_from_hand(stream: TokenStream) -> bool:
+    """``a card at random from their hand`` — the shared object phrase.
+
+    Two verbs print it and neither is the other's mode: "reveals" (Wand of Ith)
+    leaves the card where it is, "exiles" (Elkin Lair) moves it. The words in
+    between are identical, so the phrase is a fragment both verb readers accept
+    and each builds its own node from — the alternative is two spellings of one
+    noun phrase, which is how one card comes to read "from your hand" where the
+    other refuses it.
+
+    Consumes on success and nothing at all on failure, so a verb whose object is
+    something else keeps its own refusal site.
+
+    Here rather than beside either verb because a **third** family reads it now
+    (Cursed Scroll's "reveal a card at random from your hand" is a bare
+    imperative, read in ``effects/reveal.py``), and a fragment two families need
+    is not one family's property — ``tests/engine/test_grammar_layering.py``
+    forbids the import that would otherwise be needed.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_phrase("a", "card", "at", "random", "from")
+        and (stream.accept_word("their") or stream.accept_word("your"))
+        and stream.accept_word("hand")
+    ):
+        return True
+    stream.reset(mark)
+    return False

@@ -51,6 +51,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "bin_revealed_card": "zones",
     "put_revealed_card_onto_battlefield": "zones",
     "reveal_top_opponent_chooses": "zones",
+    # Wood Sage's sorted reveal, beside the pick above: what it touches is a
+    # library and two zones the pile is split between.
+    "reveal_top_sorting_by_chosen_name": "zones",
     "choose_card_name": "zones",
     "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",

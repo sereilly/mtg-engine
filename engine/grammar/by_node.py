@@ -141,7 +141,17 @@ _BY_NODE_TYPE: dict[type, object] = {
     # resolves (CR 608.2) and CR 202.1 lets a player name any card at all, so
     # nothing about it can be decided at lowering — the whole of the lowering
     # is the instruction.
-    ast.ChooseCardName: lambda node: (OracleInstruction("choose_card_name", "", {}),),
+    #
+    # "Choose a **creature** card name." (Wood Sage.) The one thing a printing
+    # can add, carried as payload and **only when it is printed**, so
+    # Foreshadow's instruction stays byte-identical and no behaviour signature
+    # moves — the same rule `NameThenRevealTop`'s `miss_damage` follows.
+    ast.ChooseCardName: lambda node: (
+        OracleInstruction(
+            "choose_card_name", "",
+            {"card_type": node.card_type} if node.card_type else {},
+        ),
+    ),
     ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,
     ast.DamageThoseDamagedThisGame: _lower_damage_this_game_history,
     ast.CoinFlipDamageLoop: _lower_coin_flip_damage_loop,

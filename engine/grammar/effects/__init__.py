@@ -168,7 +168,7 @@ from .library import (
     parse_graveyard_top_to_library,
     parse_player_separates_your_library_top,
 )
-# CR 701.20's public half of the look, split off `library` at Tempest's second
+# CR 701.20a's public half of the look, split off `library` at Tempest's second
 # wave — see that module's docstring for the line.
 from .reveal import (
     _parse_reveal_top,

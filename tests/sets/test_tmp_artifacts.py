@@ -169,3 +169,102 @@ def test_w1g5_cold_storage_returns_only_the_creature_cards_it_exiled(set_pool):
     assert [entry["card"].name for entry in linked_entries(storage)] == ["Relic"], (
         "the artifact the sentence does not name stays exiled with the pile"
     )
+
+
+# --- W2G4: naming a card, and reading the name back ---
+
+import random as _w2g4_random
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+
+
+def _w2g4_card(name, type_line, text="", power=None, toughness=None):
+    raw = {"name": name, "type_line": type_line, "oracle_text": text}
+    if power is not None:
+        raw["power"], raw["toughness"] = str(power), str(toughness)
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text=text,
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw=raw,
+        power=str(power) if power is not None else None,
+        toughness=str(toughness) if toughness is not None else None,
+    )
+
+
+def _w2g4_game(p0_permanents, *, p0_hand=(), interactive=(0,)):
+    seats = [
+        PlayerState(name="P0", battlefield=list(p0_permanents), hand=list(p0_hand)),
+        PlayerState(name="P1"),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def test_cursed_scroll_hits_when_the_random_reveal_matches_the_name(set_pool):
+    """`{3}, {T}: Choose a card name, then reveal a card at random from your
+    hand. If that card has the chosen name, this artifact deals 2 damage to any
+    target.`
+
+    Three steps, one resolution: the name is recorded, the reveal picks a card
+    nobody chose, and the condition compares the two. Every card in the hand is
+    the named one here, so the randomness cannot decide the outcome.
+    """
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    bolt = _w2g4_card("Shock", "Instant")
+    game = _w2g4_game([scroll], p0_hand=[bolt, bolt, bolt])
+
+    result = game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert game.confirm_choose_card_name(0, "Shock")
+    assert game.players[1].life == 18
+
+
+def test_cursed_scroll_misses_when_the_revealed_card_is_not_the_named_one(set_pool):
+    """The condition is a real comparison, not a rider that always fires — a
+    hand holding nothing the seat named deals no damage at all."""
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    bolt = _w2g4_card("Shock", "Instant")
+    game = _w2g4_game([scroll], p0_hand=[bolt, bolt])
+
+    game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "Lightning Bolt")
+
+    assert game.players[1].life == 20
+
+
+def test_cursed_scroll_with_an_empty_hand_reveals_nothing_and_misses(set_pool):
+    """An empty hand reveals no card (CR 608.2, as much as possible), and the
+    condition reads that as False rather than as a match against nothing."""
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    game = _w2g4_game([scroll])
+
+    game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "Shock")
+
+    assert game.players[1].life == 20
+
+
+def test_cursed_scroll_offers_any_target_at_activation(set_pool):
+    """The damage is the *conditional* half of the ability, so the picker has
+    to offer its target when the ability is activated (CR 601.2c / 115.1c) —
+    long before anybody knows whether the reveal will match."""
+    program = compile_card_oracle(set_pool("TMP")["Cursed Scroll"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec is not None, "the picker has no idea what this ability targets"
+    assert spec.get("kind") == "any"

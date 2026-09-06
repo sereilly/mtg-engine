@@ -386,6 +386,18 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         return ast.ChosenNameMilledThisWay()
     stream.reset(chosen_mark)
 
+    # "if **that card has the chosen name**" (Cursed Scroll). The same pair of
+    # records asked of one card rather than of a milled set, so it is read here
+    # beside its sibling. "That card" is the reveal's, which is the referent
+    # every "if it's a …" above already uses — the lowering demands the reveal
+    # and the naming both, so the words cannot name a record nothing wrote.
+    named_mark = stream.mark()
+    if stream.accept_phrase(
+        "that", "card", "has", "the", "chosen", "name",
+    ):
+        return ast.RevealedCardHasChosenName()
+    stream.reset(named_mark)
+
     milled_mark = stream.mark()
     if stream.accept_phrase("one", "or", "more"):
         try:

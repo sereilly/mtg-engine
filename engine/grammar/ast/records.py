@@ -115,6 +115,24 @@ class ExiledThisWay:
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 @dataclass(frozen=True)
+class RevealedCardHasChosenName:
+    """``if that card has the chosen name`` (Cursed Scroll).
+
+    :class:`ChosenNameMilledThisWay`'s sibling one zone over, and the same two
+    records in one question: the name a "choose a card name" step wrote, and
+    the card a reveal step of the same resolution turned up. What differs is
+    which reveal — a mill puts a *set* into a graveyard and this turns up
+    exactly one card, so the comparison is against one name rather than over a
+    list.
+
+    Its own node rather than a flag on that one, for that node's own reason:
+    what tells two back-references apart is which earlier step recorded what
+    they read, and a node carrying the record's name as data would be free to
+    name a record nothing writes.
+    """
+
+
+@dataclass(frozen=True)
 class ChosenNameMilledThisWay:
     """``if a card with the chosen name was milled this way`` (Foreshadow).
 

@@ -400,6 +400,32 @@ class RevealTop:
     player: PlayerRef = PlayerRef("you")
 
 @dataclass(frozen=True)
+class RevealTopSortingByChosenName:
+    """``Reveal the top four cards of your library and put all of them with
+    that name into your hand. Put the rest into your graveyard.`` (Wood Sage.)
+
+    Both sentences, for :class:`RevealTopOpponentChooses`' reason: they
+    describe one revealed pile, and "the rest" names exactly what the first
+    sentence did *not* take. Parsed apart the second would be a move out of a
+    pile nothing had recorded.
+
+    "That name" is the one a **previous step of the same effect** chose
+    (``ChooseCardName``), not a name this sentence carries — which is why the
+    node has no name field and the lowering demands the producer instead. A
+    reader that defaulted the name to the empty string would sort the whole
+    pile into the graveyard while the card compiled supported.
+
+    Both destinations are stated. A printing that put the rest on the bottom of
+    the library is the same procedure and a very different card, and nothing
+    before that word shows the difference.
+    """
+
+    count: Amount
+    match_zone: str = "hand"
+    rest_zone: str = "graveyard"
+
+
+@dataclass(frozen=True)
 class RevealTopToHandOrBottom:
     """"Reveal the top card of your library. If it's a <filter>, put it into
     your hand. Otherwise, put it on the bottom of your library." (Garruk,

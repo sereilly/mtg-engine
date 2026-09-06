@@ -22,7 +22,8 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_duration, _parse_mana_payment
+from ..phrases import (accept_a_card_at_random_from_hand, _parse_duration,
+                       _parse_mana_payment)
 from ..readers import accept_source_reference
 from ..vocabulary import CARD_TYPES, singular as _singular
 
@@ -746,30 +747,6 @@ def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand |
     # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
     drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
     return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
-
-
-def accept_a_card_at_random_from_hand(stream: TokenStream) -> bool:
-    """``a card at random from their hand`` — the shared object phrase.
-
-    Two verbs print it and neither is the other's mode: "reveals" (Wand of Ith)
-    leaves the card where it is, "exiles" (Elkin Lair) moves it. The words in
-    between are identical, so the phrase is a fragment both verb readers accept
-    and each builds its own node from — the alternative is two spellings of one
-    noun phrase, which is how one card comes to read "from your hand" where the
-    other refuses it.
-
-    Consumes on success and nothing at all on failure, so a verb whose object is
-    something else keeps its own refusal site.
-    """
-    mark = stream.mark()
-    if (
-        stream.accept_phrase("a", "card", "at", "random", "from")
-        and (stream.accept_word("their") or stream.accept_word("your"))
-        and stream.accept_word("hand")
-    ):
-        return True
-    stream.reset(mark)
-    return False
 
 
 def _parse_random_card_from_hand(

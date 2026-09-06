@@ -694,11 +694,20 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     it must not run while the name is still owed, because a seat that saw the
     milled card before naming would be choosing with information the card does
     not give them.
+
+    ``card_type`` is the printed bound on CR 202.1's freedom — "Choose a
+    **creature** card name" (Wood Sage). It is carried to the prompt and the
+    default is taken *within* it, because a headless game has to obey the same
+    restriction the prompt does; the answer is checked against the catalog when
+    it comes back, which is the only place a named card can be looked up at
+    all.
     """
     seat = game.players.index(context.caster)
+    card_type = instruction.payload.get("card_type") or None
     game.arm_pending_choice(
         "choose_card_name", seat,
         card_name=context.card.name if context.card is not None else "",
+        card_type=card_type,
         # A non-interactive seat names the commonest card it may legally look
         # at — the opponents' graveyards, which CR 400.2 makes public. Naming
         # from a library or a hand would be the AI reading hidden information.
@@ -706,7 +715,7 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
         default_name=_commonest_visible_name(
             game,
             next(iter(game.opponents_of(seat)), seat),
-            ("graveyard",), exclude_basics=False,
+            ("graveyard",), exclude_basics=False, card_type=card_type,
         ),
         record=context.results,
     )
@@ -792,6 +801,58 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
         # like every live reference on a prompt.
         _cards=revealed,
     )
+    return True, "resolved"
+
+
+@effect_handler("reveal_top_sorting_by_chosen_name")
+def reveal_top_sorting_by_chosen_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top four cards of your library and put all of them with that
+    name into your hand. Put the rest into your graveyard." (Wood Sage.)
+
+    One step for both printed sentences, because "the rest" is exactly what the
+    first did not take: split apart, the second would move cards out of a pile
+    nothing had recorded.
+
+    The name is the one the ability's earlier step wrote into this resolution's
+    scratchpad (``chosen_card_name``), and the lowering refuses the sentence
+    without that step — so an absent record here means the seat named nothing,
+    which is a legal answer that matches nothing. It is **not** treated as
+    "match everything": the whole pile would go to the hand, which is the
+    opposite of what an empty name means.
+
+    CR 701.20 shows the cards and moves none of them, so the pile is taken off
+    the library here and every card is placed by this handler. Fewer cards than
+    the printed number is an ordinary board — the reveal shows what is there.
+
+    Both zones are reached through the seams that own them
+    (``put_card_into_hand``, ``put_card_into_graveyard``), never by appending
+    to a list: CR 903.9b rides the first and the discard/mill watchers ride the
+    second.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    count = resolve_amount(
+        instruction.payload.get("amount", 0) or 0, context.x_value
+    )
+    revealed = caster.library[:max(int(count), 0)]
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards to reveal")
+        return True, "resolved"
+    del caster.library[:len(revealed)]
+    game.record_reveal(seat, [card.name for card in revealed])
+    named = str(context.results.get("chosen_card_name") or "").strip()
+    game.log.append(
+        f"{caster.name} revealed {', '.join(card.name for card in revealed)}"
+    )
+    match_zone = str(instruction.payload.get("match_zone", "hand"))
+    rest_zone = str(instruction.payload.get("rest_zone", "graveyard"))
+    for card in revealed:
+        matched = bool(named) and card.name == named
+        zone = match_zone if matched else rest_zone
+        if zone == "hand":
+            game.put_card_into_hand(caster, card)
+        else:
+            game.put_card_into_graveyard(caster, card, from_zone="library")
     return True, "resolved"
 
 
@@ -2458,7 +2519,8 @@ def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleEx
 
 
 def _commonest_visible_name(
-    game, seat: int, zones, *, exclude_basics: bool = True
+    game, seat: int, zones, *, exclude_basics: bool = True,
+    card_type: str | None = None,
 ) -> str:
     """The name a non-interactive seat picks: the one appearing most often in
     *zones* of *seat*'s cards, ties broken by name so a seed replays exactly.
@@ -2469,6 +2531,12 @@ def _commonest_visible_name(
     202.1) and excluding them there would refuse a name a player would happily
     pick. So it is a parameter, and the zone list is passed rather than dug out
     of a payload key only one caller has.
+
+    ``card_type`` is the same fact in the other direction — "Choose a
+    **creature** card name" (Wood Sage) bounds what may legally be named, and a
+    default outside the bound is a headless game breaking a rule the prompt
+    enforces. Nothing matching leaves the name empty, which is what a seat with
+    no legal answer it can see actually has.
     """
     from collections import Counter
 
@@ -2477,6 +2545,8 @@ def _commonest_visible_name(
     for zone in zones or ():
         for card in getattr(player, zone, []):
             if exclude_basics and "basic" in (card.type_line or "").lower():
+                continue
+            if card_type and card.primary_type != card_type:
                 continue
             counts[card.name] += 1
     if not counts:
@@ -7017,8 +7087,18 @@ def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, con
 
     An empty hand reveals nothing, which the condition behind it reads as False
     — a legal outcome, not an error.
+
+    **Whose hand is stated when the sentence states it.** "…then reveal a card
+    at random from **your** hand" (Cursed Scroll) is the effect's own
+    controller, and the fallback below cannot answer it: ``context.target`` is
+    the *ability's* target, which on that card is whoever the damage is aimed
+    at. The fallback stays for the targeted printings, where the ability
+    targets exactly the player the sentence names.
     """
-    victim = context.target if context.target is not None else context.caster
+    if instruction.payload.get("revealer") == "you":
+        victim = context.caster
+    else:
+        victim = context.target if context.target is not None else context.caster
     if not victim.hand:
         game.log.append(f"{victim.name} has no cards in hand to reveal")
         return True, "resolved"

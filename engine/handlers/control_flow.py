@@ -657,6 +657,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             payload.get("value"),
         )
 
+    if kind == "revealed_card_has_chosen_name":
+        # "**If that card has the chosen name**, this artifact deals 2 damage
+        # to any target." (Cursed Scroll.) The two records an earlier step of
+        # this same resolution wrote: the name a seat chose, and the one card a
+        # random reveal turned up.
+        #
+        # Compared on printed names through the same ``name_key`` the milled
+        # question below uses, so "Æther Vial" and "Aether Vial" are one card
+        # in both places. A card in a hand is not a permanent and cannot be
+        # copying anything (CR 707.2), so the printed name is the only name it
+        # has. An empty name matches nothing and an empty hand revealed
+        # nothing, and both are False rather than an error.
+        from ..search_filters import name_key
+
+        named = str(context.results.get("chosen_card_name") or "").strip()
+        revealed = context.results.get("revealed_card")
+        if not named or revealed is None:
+            return False
+        return name_key(revealed.name) == name_key(named)
+
     if kind == "chosen_name_milled_this_way":
         # "**If a card with the chosen name was milled this way**, you draw a
         # card." (Foreshadow.) Two records, both written by earlier steps of

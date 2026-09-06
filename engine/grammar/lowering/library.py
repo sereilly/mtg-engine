@@ -121,13 +121,31 @@ def _lower_reveal_random_from_hand(
     Ith.) One card nobody chose, and the record it leaves is the one every "if
     it's a …" already reads, so the sentences behind it need no new referent.
 
-    Only a *chosen* player, for ``_lower_reveal_hand``'s reason: "you" would be
-    revealing a card to the player already holding it.
+    **"You" is admitted here and refused by ``_lower_reveal_hand``**, and the
+    difference is what "at random" does. Revealing your own *hand* shows you
+    nothing you did not already know, which is why that one refuses; revealing
+    one card of it **at random** picks a card nobody chose and shows it to every
+    player, which is the whole of Cursed Scroll — the sentence behind it asks
+    which card the randomness landed on, and the answer is information the
+    revealer did not have either.
     """
-    if node.player.kind not in ("target_player", "target_opponent"):
+    if node.player.kind not in ("you", "target_player", "target_opponent"):
         raise LoweringError(
             f"no handler reveals a card from {node.player.kind!r}'s hand",
             node=node,
+        )
+    if node.player.kind == "you":
+        # ``revealer`` rather than a ``targets`` payload, and **stated** rather
+        # than left to the handler's fallback. That fallback reads
+        # ``context.target``, which is the *ability's* target — and on Cursed
+        # Scroll the ability targets somebody else for its damage, so an
+        # unstated revealer opened the opponent's hand while the card says
+        # "your hand". A target payload would have been worse: the picker would
+        # then offer a player this sentence never names.
+        return (
+            OracleInstruction(
+                "reveal_random_card_from_hand", "", {"revealer": "you"}
+            ),
         )
     return (
         OracleInstruction(
@@ -352,6 +370,42 @@ def _lower_look_top_cycle_for_life(
             {
                 "count": _amount_payload(node.count),
                 "life_cost": _amount_payload(node.life_cost),
+            },
+        ),
+    )
+
+
+def _lower_reveal_top_sorting_by_chosen_name(
+    node: "ast.RevealTopSortingByChosenName", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top four cards of your library and put all of them with
+    **that name** into your hand. Put the rest into your graveyard." (Wood
+    Sage.)
+
+    ``produced`` is the whole gate. "That name" is the one an earlier step of
+    this same ability chose (``choose_card_name``), and with no such step the
+    words name nothing — the sort would then match no card and put the whole
+    revealed pile in the graveyard, which is a card that plays, compiles and
+    reads supported while doing the opposite of what it prints. Refused by name
+    instead, exactly as ``_lower_reveal_until`` refuses a library nobody named.
+    """
+    if "chosen_card_name" not in produced:
+        raise LoweringError(
+            "\"that name\" names a card no step of this effect chose",
+            node=node,
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count <= 0:
+        raise LoweringError(
+            "the revealed pile is a fixed number of cards", node=node
+        )
+    return (
+        OracleInstruction(
+            "reveal_top_sorting_by_chosen_name", "",
+            {
+                "amount": count,
+                "match_zone": node.match_zone,
+                "rest_zone": node.rest_zone,
             },
         ),
     )
