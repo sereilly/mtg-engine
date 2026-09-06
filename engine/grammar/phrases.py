@@ -512,7 +512,7 @@ def _accept_self_reference(stream: TokenStream) -> bool:
     return False
 
 
-def _parse_zone(stream: TokenStream) -> ast.Zone:
+def _parse_zone(stream: TokenStream, *, self_possessive: str | None = None) -> ast.Zone:
     """A zone destination: ``your hand``, ``the battlefield``, ``its owner's hand``.
 
     The possessive is part of the zone, not decoration: Unsummon returns a
@@ -520,11 +520,22 @@ def _parse_zone(stream: TokenStream) -> ast.Zone:
     hand, and those are different players whenever you have stolen the creature.
     An unrecognized possessive raises rather than falling through to the bare
     zone name, so the distinction can never be lost by omission.
+
+    *self_possessive* is the extra word this sentence uses for **its own
+    actor**. "Each player may search **their** library … put that card into
+    **their** hand" (Noble Benefactor, Veteran Explorer) is the same sentence
+    Demonic Tutor prints with "your", offered to a set of seats instead of one
+    — the pronoun agrees with the subject, exactly as ``_parse_discard`` already
+    reads "discard **your** hand" and "that player discards **their** hand" as
+    one production. Passed by the caller rather than admitted here for everyone,
+    because "their" only means the actor inside a sentence whose subject the
+    caller has already read: bare, it is "its owner's" one word shorter.
+
+    Tested **after** the two-word possessives, so "their owner's hand" and
+    "their owners' hands" keep their own reading when a caller passes "their".
     """
     owner: ast.PlayerRef | None = None
-    if stream.accept_word("your"):
-        owner = ast.PlayerRef("you")
-    elif stream.accept_phrase("its", "owner", "'s") or stream.accept_phrase(
+    if stream.accept_phrase("its", "owner", "'s") or stream.accept_phrase(
         "their", "owner", "'s"
     ):
         owner = ast.PlayerRef("owner")
@@ -536,6 +547,10 @@ def _parse_zone(stream: TokenStream) -> ast.Zone:
         owner = ast.PlayerRef("owner")
     elif stream.accept_phrase("its", "controller", "'s"):
         owner = ast.PlayerRef("controller")
+    elif stream.accept_word("your"):
+        owner = ast.PlayerRef("you")
+    elif self_possessive is not None and stream.accept_word(self_possessive):
+        owner = ast.PlayerRef("you")
     else:
         stream.accept_word("a", "an", "the")
     name = stream.peek_word()

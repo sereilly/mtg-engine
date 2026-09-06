@@ -68,7 +68,21 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     and the name are read the same way in both.
     """
     stream.expect_word("search")
-    if not stream.accept_word("your"):
+    # "Each player may search **their** library …" (Noble Benefactor, Veteran
+    # Explorer, and Natural Balance's second sentence, which the whole-paragraph
+    # production reads without ever reaching here). The pronoun agrees with the
+    # sentence's subject, which the offer above this production has already
+    # read — exactly as ``_parse_discard`` reads "discard **your** hand" and
+    # "that player discards **their** hand" as one production. So the searcher
+    # stays ``PlayerRef("you")``, meaning "whoever is performing this sentence",
+    # and ``may``'s per-seat offer is what makes that each player in turn.
+    #
+    # The word is carried, not just accepted: the destination clause behind it
+    # prints the *same* possessive ("put that card into **their** hand"), and a
+    # reader admitting one and not the other refuses a line whose two halves
+    # agree with each other.
+    possessive = "their" if stream.at_word("their") else "your"
+    if not stream.accept_word(possessive):
         # "Search **target player's** library …" (Jester's Cap) — a different
         # effect, as the paragraph above says, so a different node rather than
         # a branch widening this one. Read from here and not as a production of
@@ -110,7 +124,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         count = parse_amount(stream)
         if not isinstance(count, ast.Fixed) or count.value < 1:
             raise stream.error("expected how many cards the search may find")
-        return _parse_counted_search(stream, graveyard, count.value)
+        return _parse_counted_search(stream, graveyard, count.value, possessive)
     # "Search your library for **any number of** Goblin cards, reveal them,
     # then shuffle and put those cards on top in any order." (Goblin
     # Recruiter.) The same counted tail with no printed ceiling — the plural
@@ -119,7 +133,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # production with ``None`` for the count rather than a second reader of
     # "reveal those cards, put them …".
     if stream.accept_phrase("any", "number", "of"):
-        return _parse_counted_search(stream, graveyard, None)
+        return _parse_counted_search(stream, graveyard, None, possessive)
     # "Search your library for **three cards, exile them, then shuffle**."
     # (Foresight.) A counted search whose finds are exiled rather than placed,
     # which is `SearchAndExile`'s shape with a printed ceiling — the two-zone
@@ -220,7 +234,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # implements *by name*. Refusing here instead would report the card as an
     # unparsed search rather than an unimplemented destination.
     stream.expect_word("into", "onto")
-    destination = _parse_zone(stream)
+    destination = _parse_zone(stream, self_possessive=possessive)
     # "…put it onto the battlefield **tapped**" (Fabled Passage). The two-card
     # search has read this word since Cultivate; the single-find spelling had
     # nowhere to put it and so failed the line on the word after the zone. Same
@@ -241,7 +255,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
             raise stream.error("expected 'If you search your library this way'")
         stream.accept_punct(",")
         stream.expect_word("shuffle")
-    else:
+    elif not _accept_each_searcher_shuffle(stream):
         stream.accept_punct(",")
         stream.accept_word("then")
         stream.expect_word("shuffle")
@@ -432,8 +446,43 @@ def _accept_counted_exile_search(
     return ast.SearchAndExile(filt, zones=zones, count=count.value)
 
 
+def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:
+    """``. Then each player who searched their library this way shuffles`` at
+    the cursor, or False with the cursor where it was.
+
+    CR 701.23c ends a library search with a shuffle, and this engine performs
+    it inside the search prompt — which is why the ordinary "then shuffle" is
+    read and dropped rather than lowered. This is the same clause printed as a
+    **following sentence**, because the search it ends was offered to a set of
+    seats and the sentence has to say which of them shuffle: the ones that
+    searched. Two cards print it word for word (Noble Benefactor; Natural
+    Balance, whose whole paragraph has its own production), and the set it names
+    is exactly the set the offer armed a prompt for — a seat that declined the
+    "may" never searched and never gets one.
+
+    Consumed here rather than left to the sentence parser for the reason the
+    graveyard branch above gives about its own printed full stop: split off, it
+    is a statement no production implements and the whole line refuses, and the
+    shuffle it describes would be detached from the effect that performs it.
+    The final full stop is left for the sequence parser, which is what ends the
+    line.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase(
+        "then", "each", "player", "who", "searched", "their", "library",
+        "this", "way", "shuffles",
+    ):
+        stream.reset(mark)
+        return False
+    return True
+
+
 def _parse_counted_search(
-    stream: TokenStream, graveyard: bool, count: int | None
+    stream: TokenStream, graveyard: bool, count: int | None,
+    possessive: str = "your",
 ) -> ast.Statement:
     """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
     <where they go>, then shuffle.`` (Cultivate, Land Tax.)
@@ -495,11 +544,12 @@ def _parse_counted_search(
     stream.expect_word("put")
     if stream.accept_word("them"):
         stream.expect_word("into", "onto")
-        destination = _parse_zone(stream)
+        destination = _parse_zone(stream, self_possessive=possessive)
         tapped = bool(stream.accept_word("tapped"))
-        stream.accept_punct(",")
-        stream.accept_word("then")
-        stream.expect_word("shuffle")
+        if not _accept_each_searcher_shuffle(stream):
+            stream.accept_punct(",")
+            stream.accept_word("then")
+            stream.expect_word("shuffle")
         return ast.SearchLibrary(
             ast.PlayerRef("you"), filt, destination, graveyard,
             extra_destinations=(
@@ -516,12 +566,12 @@ def _parse_counted_search(
         )
     stream.expect_word("one")
     stream.expect_word("into", "onto")
-    first = _parse_zone(stream)
+    first = _parse_zone(stream, self_possessive=possessive)
     first_tapped = bool(stream.accept_word("tapped"))
     if not stream.accept_phrase("and", "the", "other"):
         raise stream.error("expected 'and the other' before the second destination")
     stream.expect_word("into", "onto")
-    second = _parse_zone(stream)
+    second = _parse_zone(stream, self_possessive=possessive)
     second_tapped = bool(stream.accept_word("tapped"))
     stream.accept_punct(",")
     stream.accept_word("then")
