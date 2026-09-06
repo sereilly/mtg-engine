@@ -900,6 +900,84 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Weatherlight (WTH) — in progress (100/167 at ingest, manifest index 16 at promotion)
+
+**Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the
+pool.** Registered under `measured` on 2026-09-05 at release date 1997-06-09,
+which places it between Fifth Edition (1997-03-24) and Core Set 2021 —
+printing-order **index 16**. The fifth all-new set after FEM, HML, ALL and VIS,
+and the second in a row: it shares **zero** oracle_ids with any of the
+seventeen shipped sets, which means the printing-order prefix guard is blind to
+its position for the fifth time and `test_the_shipped_sets_are_in_printing_order`
+is the assertion that can fire. Rehearse the wrong insert at Phase 4 anyway —
+Mirage proved the blindness is not an all-new set's property.
+
+**Weatherlight is Visions' twin on every headline number**, which is either a
+coincidence worth naming or the Mirage block having one shape: 167 cards to
+Visions' 167, 59.9% supported to 59.3%, all-new to all-new. Where they differ
+is underneath, and the difference is the whole round plan — see the fragment
+census below.
+
+**Phase 2's first two sweeps are both empty.** Every card is `layout: normal`
+and every printed type is one the engine already ships, so nothing gates Phase 4
+absolutely. Every keyword ability the set prints is implemented, **including
+cumulative upkeep** — 13 of the 167 print it and `engine/cumulative_upkeep.py`
+has been there since Ice Age. The registry diff reports it as missing because
+`vocabulary.IMPLEMENTED_KEYWORDS` is a *keyword-ability* set and cumulative
+upkeep is implemented as the triggered ability CR 702.24a says it **is**, one
+layer below. Reading that diff without checking the third table is how a round
+goes off to build what is already there (Legends' rampage, from the other
+direction). `oracle.UNSUPPORTED_KEYWORDS` is empty, so no keyword costs a card
+here. The whole of this set's machinery cost is text.
+
+**The censuses, all five, read at ingest rather than at the gate:**
+
+| Instrument | Reading |
+| --- | --- |
+| `support_report --set WTH` | 67 unsupported |
+| `--refusals` | 73 refused lines over 71 distinct sentences — **1.03** |
+| `--fragments` | "when this creature" 11 cards, "of your graveyard" 8, "card of your" 7, "exile the top" 7, "until end of turn" 6, "at the beginning of your upkeep" 5 |
+| `--hollow-lines` | 6 supported cards, 6 instruction-less parts |
+| `parse_coverage --set WTH` | 13 supported cards, 14 unclaimed sentences |
+| `picker_sweep --set WTH` | 5 findings, 3 of them the Roots class |
+
+**1.03 for the eighth consecutive set, and for the eighth consecutive set it is
+the wrong number to plan from.** The refusal rollup's two largest sites are the
+two generic ones — 22 lines at `expected a subject`, 16 at `unconsumed text` —
+which name no family at all. One level down, the fragment census finds the
+set's actual spine: **the top of a graveyard as a resource**, which the
+sentence census scatters across four different refusal sites (`expected what to
+exile as a cost`, `unconsumed text`, `expected a subject`, and a *hollow line*)
+and therefore never groups.
+
+**So the work list is ~80 cards, not 67.** The three sentence-level instruments
+add thirteen the card census structurally cannot see, and two of them —
+Heart of Bogardan and Wave of Terror — are cumulative-upkeep cards whose second
+ability compiles to nothing at all.
+
+### The round plan — five parallel worktree groups, integrated serially
+
+The split is by **code family**, not by census bucket, and this wave adds a
+second axis: **every `engine/grammar/` module within 30 lines of the 1,000-line
+cap has exactly one owning group.** Visions' Phase 0 pre-split the tightest
+*unowned* module and still crossed five caps at integration, three of them by
+two groups' additions summing on a module neither owned. Weatherlight's Phase 0
+split five more, and the seven that remain tight are assigned rather than
+pre-split — a module one group owns can be briefed, which is the half of that
+lesson nobody has yet tested.
+
+| Group | Family | Owns (lines / headroom) | Cards |
+| --- | --- | --- | --: |
+| W1G1 | The top of a graveyard as a cost and a resource | `lowering/exile.py` (971/29), `references.py` (986/14) | 10 |
+| W1G2 | Enters, dies and leaves triggers | `triggers.py` (974/26), `lowering/_events.py` (981/19) | 10 |
+| W1G3 | Cumulative upkeep beyond a mana cost; age counters as an amount | `lowering/_amounts.py` (986/14) | 6 |
+| W1G4 | Becoming a creature; printed prohibitions nothing enforces | `effects/characteristics.py` (985/15) | 11 |
+| W1G5 | "Each player …", where every seat owes one decision at once | — | 8 |
+
+`ast/_references.py` (986/14) is the one tight module with no owner, because no
+group's family lands in it predictably. If it crosses, the split is the
+integrator's.
+
 ## Visions (VIS) — shipped (167/167, manifest index 14)
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
