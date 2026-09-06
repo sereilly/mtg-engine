@@ -407,6 +407,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # sentence grants permission over exactly what the first exiled, so a
         # step that ran before the answer would grant it over nothing.
         "exile_from_hand_choice",
+        # "Exile any number of cards from your hand face down. **Put that many
+        # cards from the top of your library into your hand.**" (Scroll Rack.)
+        # The sibling above with a pile instead of one card, and the same claim
+        # one step stronger: the next sentence's *count* is this answer, and a
+        # step that ran before it would draw nothing.
+        "exile_hand_pile_choice",
         # "…and you decide whether to flip again." (Game of Chaos.) The answer
         # is whether the rest of the resolution happens at all, and the round it
         # starts arms the next offer.

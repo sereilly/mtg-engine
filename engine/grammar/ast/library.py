@@ -400,6 +400,80 @@ class RevealTop:
     player: PlayerRef = PlayerRef("you")
 
 @dataclass(frozen=True)
+class GraveyardTopOpponentChooses:
+    """``Target opponent chooses one of the top two cards of your graveyard.
+    Exile that card and put the other one into your hand.`` (Phyrexian
+    Grimoire.)
+
+    Both sentences, for :class:`RevealTopOpponentChooses`' reason: they
+    describe one pile, and "that card" and "the other one" have nothing to name
+    without it.
+
+    Beside that node rather than a ``zone`` field on it, and the difference is
+    CR 400.2. A library is hidden, so its version has to *reveal* the pile
+    before anybody can choose from it and the reveal is half of what it
+    performs; a graveyard is public, so this one shows nobody anything and
+    simply names cards by position (CR 404.2). Folding them would make one
+    node's docstring untrue of half its cases.
+
+    ``chosen_fate`` and ``other_fate`` are both stated because the card states
+    both and they go different ways — a printing that binned the other card
+    instead is the same procedure and a very different card.
+    """
+
+    count: Amount
+    chooser: PlayerRef
+    chosen_fate: str = "exile"
+    other_fate: str = "hand"
+
+
+@dataclass(frozen=True)
+class PutLibraryTopIntoHand:
+    """``Put that many cards from the top of your library into your hand.``
+    (Scroll Rack.)
+
+    **Not a draw**, and that is the whole reason it is a node. CR 121.1 defines
+    drawing as putting the top card of a library into a hand, but an effect
+    that *says* those words rather than the word "draw" is not a draw: no draw
+    trigger sees it and no draw replacement applies to it (CR 121.3). Lowered
+    onto ``Draw`` this card would ring every "whenever you draw a card" on the
+    board and be stopped by every draw replacement, which is a different card.
+
+    ``count`` carries the printed quantity, which on the one card that prints
+    this sentence is a back-reference to the exile in front of it — "that
+    many" — rather than a number.
+    """
+
+    count: Amount
+
+
+@dataclass(frozen=True)
+class RevealTopSortingByChosenName:
+    """``Reveal the top four cards of your library and put all of them with
+    that name into your hand. Put the rest into your graveyard.`` (Wood Sage.)
+
+    Both sentences, for :class:`RevealTopOpponentChooses`' reason: they
+    describe one revealed pile, and "the rest" names exactly what the first
+    sentence did *not* take. Parsed apart the second would be a move out of a
+    pile nothing had recorded.
+
+    "That name" is the one a **previous step of the same effect** chose
+    (``ChooseCardName``), not a name this sentence carries — which is why the
+    node has no name field and the lowering demands the producer instead. A
+    reader that defaulted the name to the empty string would sort the whole
+    pile into the graveyard while the card compiled supported.
+
+    Both destinations are stated. A printing that put the rest on the bottom of
+    the library is the same procedure and a very different card, and nothing
+    before that word shows the difference.
+    """
+
+    count: Amount
+    match_zone: str = "hand"
+    rest_zone: str = "graveyard"
+
+
+@dataclass(frozen=True)
 class RevealTopToHandOrBottom:
     """"Reveal the top card of your library. If it's a <filter>, put it into
     your hand. Otherwise, put it on the bottom of your library." (Garruk,
@@ -425,3 +499,53 @@ class LookAtHand:
     #: printing "two cards at random" would need the number, and would refuse
     #: here until it had it.
     random_card: bool = False
+
+# Two nodes that arrived from ``cards`` when Tempest's second wave took that
+# module past the size guard, and both belong here by this module's own printed
+# criterion: each names **a pile being looked through**.
+#
+# ``RevealUntil`` had been in ``cards`` since Transmogrify landed, one file away
+# from every other reveal-off-the-top node — a misfiling nothing could see until
+# somebody had to move something.
+
+@dataclass(frozen=True)
+class RevealUntil:
+    """``…reveals cards from the top of their library until they reveal a
+    creature card. That player puts that card onto the battlefield, then
+    shuffles the rest into their library.`` (Transmogrify.)
+
+    One node for the whole search, not three: the reveal, the destination and
+    the shuffle are a single procedure whose steps cannot be separated — "that
+    card" names what the reveal stopped on, and "the rest" names exactly the
+    cards it turned over before that. Lowered apart they would need two
+    back-references into a list nothing had recorded.
+
+    *whose* is the library read: "your" or the referent of a previous step
+    ("that creature's controller"). *filter* is what the reveal stops on.
+    *destination* is where the found card goes, and *rest* where the others do —
+    both stated, because a card that milled the rest instead of shuffling them
+    back is a different card and the difference is invisible in the first two
+    sentences.
+    """
+    whose: str
+    filter: ObjectFilter
+    destination: str = "battlefield"
+    rest: str = "shuffle_into_library"
+
+@dataclass(frozen=True)
+class PutExiledPileOnLibrary:
+    """``Then look at the exiled cards and put them on top of your library in
+    any order.`` (Scroll Rack.)
+
+    The linked pile (CR 610.3) going back to the top of the library, in an
+    order its controller chooses. One node for both printed clauses because the
+    look is *why* the order is a choice: CR 406.3 makes the pile face down and
+    hidden from every player, so the seat arranging it has to be shown it
+    first, and a card that put the pile back without the look would be
+    arranging cards nobody may see.
+
+    ``position`` is payload for the reason it is everywhere else: a card
+    printing "on the bottom" is the same production.
+    """
+
+    position: str = "top"

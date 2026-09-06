@@ -22,7 +22,8 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_duration, _parse_mana_payment
+from ..phrases import (accept_a_card_at_random_from_hand, _parse_duration,
+                       _parse_mana_payment)
 from ..readers import accept_source_reference
 from ..vocabulary import CARD_TYPES, singular as _singular
 
@@ -154,6 +155,17 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # was read before this function was called; the pronoun only repeats them.
     if stream.accept_phrase("your", "hand") or stream.accept_phrase("their", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    # "…that player discards **all the cards in their hand**, then draws that
+    # many cards." (Shocker.) The long spelling of the two words above — every
+    # card goes and nobody chooses — so it is a branch here rather than a
+    # counted discard of "all", which is the *narrowed* sweep further down and
+    # arms no prompt for a hand it has already emptied. The possessive agrees
+    # with the sentence's subject, exactly as the short spelling's does.
+    long_hand = stream.mark()
+    if stream.accept_word("all") and stream.accept_phrase("the", "cards", "in"):
+        if stream.accept_word("their", "your") and stream.accept_word("hand"):
+            return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    stream.reset(long_hand)
     # "discards **a third of the cards in their hand**" (Pox). The fraction's
     # noun is this production's own, so the head is read here and the quantity
     # built from the zone rather than handed to `parse_amount` — the same
@@ -223,6 +235,18 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     with every number there is.
     """
     stream.expect_word("mills", "mill")
+    # "mills **cards equal to** the sacrificed creature's power" (Altar of
+    # Dementia) puts the noun in front of the count, where every other mill
+    # puts it behind — the same two spellings ``_parse_draw`` above reads, and
+    # read the same way: first, and reset if the words turn out to be an
+    # ordinary "mills two cards", because "cards" cannot start a number so
+    # nothing has been skipped.
+    equal_mark = stream.mark()
+    if stream.accept_word("cards"):
+        counted = parse_equal_to(stream)
+        if counted is not None:
+            return ast.Mill(player, counted)
+        stream.reset(equal_mark)
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
     repeated = _parse_mill_repeat_tail(stream, player, count)
@@ -735,30 +759,6 @@ def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand |
     # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
     drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
     return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
-
-
-def accept_a_card_at_random_from_hand(stream: TokenStream) -> bool:
-    """``a card at random from their hand`` — the shared object phrase.
-
-    Two verbs print it and neither is the other's mode: "reveals" (Wand of Ith)
-    leaves the card where it is, "exiles" (Elkin Lair) moves it. The words in
-    between are identical, so the phrase is a fragment both verb readers accept
-    and each builds its own node from — the alternative is two spellings of one
-    noun phrase, which is how one card comes to read "from your hand" where the
-    other refuses it.
-
-    Consumes on success and nothing at all on failure, so a verb whose object is
-    something else keeps its own refusal site.
-    """
-    mark = stream.mark()
-    if (
-        stream.accept_phrase("a", "card", "at", "random", "from")
-        and (stream.accept_word("their") or stream.accept_word("your"))
-        and stream.accept_word("hand")
-    ):
-        return True
-    stream.reset(mark)
-    return False
 
 
 def _parse_random_card_from_hand(

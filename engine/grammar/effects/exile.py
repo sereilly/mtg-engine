@@ -333,9 +333,25 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     names_source = True
     chosen = False
     owned_by_you = False
+    others_only = False
     card_type: str | None = None
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
+    elif stream.accept_phrase(
+        "put", "all", "other", "cards", "you", "own", "exiled", "with",
+    ):
+        # "Put **all other cards you own** exiled with this enchantment into
+        # your hand." (Duplicity.) The sweep above with both narrowings the
+        # sentence prints, and both are required together because each is a
+        # different half of one reading: "other" excludes the cards this same
+        # ability exiled a sentence earlier — without it the enchantment hands
+        # back what it has just taken away and the card does nothing at all —
+        # and "you own" is what stops a player who has taken the enchantment
+        # from pulling its previous controller's cards out of exile, exactly as
+        # it does on Gustha's Scepter below.
+        preposition = "into"
+        others_only = True
+        owned_by_you = True
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
     elif stream.accept_phrase("return", "each"):
@@ -416,6 +432,53 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         and stream.accept_phrase("under", "your", "control")
     )
     return ast.PutExiledWithSource(
-        zone, chosen=chosen, owned_by_you=owned_by_you,
+        zone, chosen=chosen, owned_by_you=owned_by_you, others_only=others_only,
         card_type=card_type, under_your_control=under_your_control,
     )
+
+
+#: Where a linked pile may be printed to go back on a library. A closed list
+#: for `_REVEAL_DESTINATIONS`' reason one family over: each of these is a
+#: position the handler actually reaches, and a word outside it refuses the
+#: line rather than lowering onto one nothing places.
+_EXILED_PILE_POSITIONS: tuple[str, ...] = ("top", "bottom")
+
+
+def parse_put_exiled_pile_on_library(
+    stream: TokenStream,
+) -> "ast.PutExiledPileOnLibrary | None":
+    """``Look at the exiled cards and put them on top of your library in any
+    order.`` (Scroll Rack.)
+
+    Both clauses in one production, because the look is what makes the order a
+    choice: the pile is face down (CR 406.3) and hidden from everybody, so the
+    seat arranging it has to be shown it first. Read whole rather than as a
+    look with a move behind it — "them" names the pile the look showed, and a
+    separate move would have no referent.
+
+    Refuses without consuming, so every other "Look at …" keeps its own reading
+    — "look at target player's hand" is one word away from this and is a
+    different family entirely.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("look", "at", "the", "exiled", "cards"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "put", "them", "on"):
+        stream.reset(mark)
+        return None
+    position = stream.peek_word()
+    if position not in _EXILED_PILE_POSITIONS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("of", "your", "library"):
+        stream.reset(mark)
+        return None
+    # "in any order" is consumed and not recorded, exactly as the counted
+    # search's identical clause is: the arranger names the cards in the order
+    # they want and that pick order *is* the answer.
+    if not stream.accept_phrase("in", "any", "order"):
+        stream.reset(mark)
+        return None
+    return ast.PutExiledPileOnLibrary(position=position)

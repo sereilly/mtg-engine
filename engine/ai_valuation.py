@@ -240,6 +240,14 @@ SELF_PAYMENT_KINDS = frozenset({
     "pay_life",
     "ante_top_card",
     "exile_chosen_card_from_hand",
+    # "You may **exile all cards from your hand** face down." (Duplicity.) The
+    # pile spelling of the row above, and a price for exactly its reason: the
+    # cards come out of the offered seat's own hand. Without it the offer read
+    # as free — the cost is lowered *into* the offered action, where the
+    # affordability test cannot find it — and a headless seat would exile its
+    # whole hand every upkeep, which is the failure this set is written to
+    # catch.
+    "exile_hand_pile",
     "exile_any_number_of_own_tokens",
 })
 
@@ -706,6 +714,80 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
     return tuple(sides)
 
 
+#: Instruction kinds that read back a pile something else exiled. A search whose
+#: finds one of these reaches is a search whose cards **come back**, and taking
+#: the maximum costs the searcher nothing; a search with none of them behind it
+#: spends its own library for good.
+#:
+#: Derived from the compiled program rather than named per card, which is the
+#: rule for anything that decides which cards a policy reaches. Erring towards
+#: "it comes back" is deliberate: that is the older behaviour, so a kind left
+#: off this list changes nothing until somebody notices, where a kind wrongly on
+#: it would make a card cheaper than it is.
+_EXILED_PILE_READERS = frozenset({
+    # "You may cast them this turn." (Chandra, Heart of Fire's -9.)
+    "grant_cast_permission",
+    "cast_from_exiled_with",
+    # "At the beginning of your next upkeep, put those cards into your hand."
+    # (Foresight.) The delayed ability is where the return lives, and its own
+    # effect is a payload this scan does not open — which is the erring above:
+    # a delayed trigger that did something else would read as a return.
+    "create_delayed_trigger",
+    # The linked-pile readers (Mangara's Tome, Knowledge Vault, Cold Storage).
+    "put_exiled_pile_top_into_hand",
+    "put_exiled_with_source",
+    "put_exiled_pile_on_library",
+})
+
+
+def exiled_search_pile_comes_back(card: CardDefinition) -> bool:
+    """Whether anything on *card* reads back what its exile-search found.
+
+    The question a headless seat needs before answering "search your library
+    for any number of X, exile them": Foresight, Mangara's Tome and Chandra's
+    -9 all hand the cards back and taking the maximum costs nothing, while Mana
+    Severance exiles them for good and taking the maximum empties the seat's
+    own library of lands. The stated default was written for the first three
+    and reasoned from them ("the cards come back castable"), which is a fact
+    about those cards rather than about the sentence.
+
+    Program-derived and name-free: a card printing a new "search and exile"
+    with a return behind it is covered the day it lands, and one without is
+    answered correctly without anybody adding it to a list.
+
+    ``face_down_pile`` counts on its own — that is CR 610.3's recorded pile, and
+    a pile the card bothered to record is one it means to read.
+    """
+    program = compile_card_oracle(card)
+    for instruction in _walk_program(program):
+        if instruction.kind in _EXILED_PILE_READERS:
+            return True
+        if instruction.kind == "search_and_exile_matching" and instruction.payload.get(
+            "face_down_pile"
+        ):
+            return True
+    return False
+
+
+def _walk_program(program):
+    """Every instruction on a program, wrappers opened."""
+    def walk(instructions):
+        for instruction in instructions:
+            yield instruction
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = (instruction.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)):
+                    yield from walk(nested)
+
+    yield from walk(program.instructions)
+    for ability in program.activated_abilities:
+        if ability.instruction is not None:
+            yield from walk([ability.instruction])
+    for trigger in program.triggered_abilities:
+        if trigger.instruction is not None:
+            yield from walk([trigger.instruction])
+
+
 __all__ = [
     "MANA_ABILITY_KINDS",
     "SELF_PAYMENT_KINDS",
@@ -721,6 +803,7 @@ __all__ = [
     "divided_shape",
     "is_mana_ability",
     "mana_ability_amount",
+    "exiled_search_pile_comes_back",
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",

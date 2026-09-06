@@ -497,6 +497,14 @@ class PutExiledWithSource:
     zone: Zone
     chosen: bool = False
     owned_by_you: bool = False
+    #: "Put **all other** cards you own exiled with this enchantment into your
+    #: hand." (Duplicity.) A back-reference on a *sweep*: "other" means other
+    #: than the cards the same ability exiled a sentence earlier, so the
+    #: lowering demands that step and the handler excludes exactly the entries
+    #: it created. Not expressible as a filter — the pile may already hold
+    #: another copy of the same card, and a hand repeats one immutable
+    #: ``CardDefinition`` per copy, so the cards are not distinct either.
+    others_only: bool = False
     #: "Return **each creature card** exiled with this artifact…" (Cold
     #: Storage). The printed card type narrowing the pile, as a card-type word.
     #: Carried rather than consumed for the reason ``owned_by_you`` is: the pile
@@ -547,6 +555,8 @@ class SearchAndExile:
     #: card at a time from the top — a searched pile in library order would let
     #: the searcher choose what comes back and in what sequence.
     shuffle_pile: bool = False
+
+
 
 
 @dataclass(frozen=True)
@@ -898,29 +908,6 @@ class NameThenConsult:
     exile_count: Amount
 
 
-@dataclass(frozen=True)
-class RevealUntil:
-    """``…reveals cards from the top of their library until they reveal a
-    creature card. That player puts that card onto the battlefield, then
-    shuffles the rest into their library.`` (Transmogrify.)
-
-    One node for the whole search, not three: the reveal, the destination and
-    the shuffle are a single procedure whose steps cannot be separated — "that
-    card" names what the reveal stopped on, and "the rest" names exactly the
-    cards it turned over before that. Lowered apart they would need two
-    back-references into a list nothing had recorded.
-
-    *whose* is the library read: "your" or the referent of a previous step
-    ("that creature's controller"). *filter* is what the reveal stops on.
-    *destination* is where the found card goes, and *rest* where the others do —
-    both stated, because a card that milled the rest instead of shuffling them
-    back is a different card and the difference is invisible in the first two
-    sentences.
-    """
-    whose: str
-    filter: ObjectFilter
-    destination: str = "battlefield"
-    rest: str = "shuffle_into_library"
 
 
 @dataclass(frozen=True)

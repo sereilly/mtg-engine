@@ -211,15 +211,34 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
     cursor untouched for every other "choose" sentence, so the naming, modal and
     player productions keep the ones they own.
 
+    ``Choose a creature card name.`` (Wood Sage.)
+
     Exactly four words and nothing after them but the punctuation that ends a
-    clause. Foreshadow prints ", **then** target opponent mills a card" behind
-    it, which is the sentence loop's join and not this production's business.
+    clause — or five, with a card type in front of "card". Foreshadow prints
+    ", **then** target opponent mills a card" behind it, which is the sentence
+    loop's join and not this production's business.
+
+    The type is read from the shared catalog rather than spelled here, so a
+    card printing "artifact card name" needs no code; and it is *carried*
+    rather than consumed, because a narrowing dropped at the parse is a prompt
+    that offers more than the card allows — the quiet failure this repo names
+    as an ability working more often than it should.
     """
     mark = stream.mark()
-    if stream.accept_phrase("choose", "a", "card", "name") and (
+    if not stream.accept_word("choose"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    card_type = None
+    if (word := stream.peek_word()) in CARD_TYPES and word != "card":
+        card_type = word
+        stream.advance()
+    if stream.accept_phrase("card", "name") and (
         stream.exhausted or stream.at_punct(".", ",")
     ):
-        return ast.ChooseCardName()
+        return ast.ChooseCardName(card_type=card_type)
     stream.reset(mark)
     return None
 

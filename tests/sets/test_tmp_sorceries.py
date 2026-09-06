@@ -332,3 +332,127 @@ def test_time_warp_asks_the_caster_to_pick_a_player(set_pool):
 
     assert derive_cast_spec(warp, compile_card_oracle(warp)) == {"kind": "player"}
     assert compile_card_oracle(warp).instructions[0].payload == {"recipient": "target"}
+
+
+# --- W2G4: searching a library, and the top of it ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_duel(*, libraries=((), ()), hands=((), ())):
+    """Two seats with the libraries and hands the test names, mana off.
+
+    Mana enforcement is off for the reason every rig in this file has it off:
+    what these tests are about is what the effect *does* to a hidden zone, and
+    leaving it on would make each of them a test of the mana payment.
+    """
+    seats = [
+        PlayerState(name=f"P{index}", library=list(lib), hand=list(hand))
+        for index, (lib, hand) in enumerate(zip(libraries, hands))
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game._settle()
+    return game
+
+
+def _w2g4_card(name, type_line, text="", colors=()):
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text=text,
+        cmc=0.0, colors=tuple(colors), color_identity=tuple(colors),
+        keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": text},
+    )
+
+
+def test_mana_severance_exiles_every_land_the_searcher_names(set_pool):
+    """`Search your library for any number of land cards, exile them, then
+    shuffle.` — the uncounted spelling of the exile search (CR 701.23b).
+
+    The Rock Hydra test: the search prompt is answered and the lands are read
+    out of *exile*, not off a claim that the instruction compiled.
+    """
+    card = set_pool("TMP")["Mana Severance"]
+    forest = _w2g4_card("Forest", "Basic Land — Forest")
+    bear = _w2g4_card("Grizzly Bears", "Creature — Bear")
+    game = _w2g4_duel(
+        libraries=([forest, bear, forest], ()), hands=([card], ()),
+    )
+    game.cast_from_hand(0, "Mana Severance")
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("search_exile_cards")))
+    # Only the two lands are offerable; the bear is not a land card.
+    assert prompt.data.get("card_types") == ("land",)
+    assert prompt.data.get("maximum") is None, "'any number' prints no ceiling"
+    picks = [
+        {"zone": "library", "index": index}
+        for index, entry in enumerate(game.players[0].library)
+        if entry.primary_type == "land"
+    ]
+    assert game.confirm_search_exile(0, picks)
+
+    assert [c.name for c in game.players[0].exile] == ["Forest", "Forest"]
+    assert [c.name for c in game.players[0].library] == ["Grizzly Bears"]
+
+
+def test_mana_severance_refuses_a_pick_that_is_not_a_land(set_pool):
+    """The narrowing is enforced where the answer is validated, not dropped.
+
+    A search that admitted the creature would be a tutor for anything, which is
+    the failure this whole family is written to avoid: nothing crashes and the
+    card simply does more than it prints.
+    """
+    card = set_pool("TMP")["Mana Severance"]
+    bear = _w2g4_card("Grizzly Bears", "Creature — Bear")
+    game = _w2g4_duel(libraries=([bear], ()), hands=([card], ()))
+    game.cast_from_hand(0, "Mana Severance")
+    game.resolve_top_of_stack()
+
+    assert not game.confirm_search_exile(0, [{"zone": "library", "index": 0}])
+    assert not game.players[0].exile
+
+
+def test_mana_severance_is_not_a_search_a_headless_seat_takes_the_maximum_of(set_pool):
+    """The stated default for an "any number" exile search is *take everything*,
+    and its own reasoning is "the cards come back castable" — which is a fact
+    about the three cards it was written for (Foresight's delayed return,
+    Mangara's Tome's recorded pile, Chandra's cast permission) rather than about
+    the sentence.
+
+    Mana Severance is the card that separates them: nothing on it reads the pile
+    back, so taking the maximum exiles the seat's entire land supply for good.
+    A headless seat now fails to find (CR 701.23b), which is legal and is what a
+    player would do. Nothing but driving the card finds this — the census, the
+    hollow-line report and `parse_coverage` all read it as done.
+    """
+    from engine.ai_valuation import exiled_search_pile_comes_back
+
+    card = set_pool("TMP")["Mana Severance"]
+    assert not exiled_search_pile_comes_back(card)
+
+    forest = _w2g4_card("Forest", "Basic Land — Forest")
+    game = _w2g4_duel(libraries=([forest] * 6, ()), hands=([card], ()))
+    game.interactive_seats = set()
+    game.cast_from_hand(0, "Mana Severance")
+    game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+
+    assert not game.players[0].exile
+    assert len(game.players[0].library) == 6
+
+
+def test_a_search_whose_pile_comes_back_still_takes_the_maximum(catalog_by_name):
+    """The other half, so the change is a *narrowing* and not a reversal.
+
+    Foresight, Mangara's Tome and Chandra's -9 each hand the exiled cards back,
+    and the derivation says so off the compiled program — a card printing a new
+    "search and exile" with a return behind it is answered right the day it
+    lands, and one without is answered right without anybody listing it.
+    """
+    from engine.ai_valuation import exiled_search_pile_comes_back
+
+    for name in ("Foresight", "Mangara's Tome", "Chandra, Heart of Fire"):
+        assert exiled_search_pile_comes_back(catalog_by_name[name]), name

@@ -142,6 +142,17 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # production with ``None`` for the count rather than a second reader of
     # "reveal those cards, put them …".
     if stream.accept_phrase("any", "number", "of"):
+        # "Search your library for any number of land cards, **exile them, then
+        # shuffle**." (Mana Severance.) The uncounted spelling of the exile
+        # search below, which is why it is tried here rather than given a
+        # production: `SearchAndExile.count` is already documented as "``None``
+        # for 'any number'", so the only thing the two printings differ in is
+        # whether a ceiling was printed. Tried first and non-consuming on
+        # refusal, so Goblin Recruiter's "reveal them, then shuffle and put
+        # those cards on top" keeps the counted production behind it.
+        uncounted = _accept_counted_exile_search(stream, graveyard, count=None)
+        if uncounted is not None:
+            return uncounted
         return _parse_counted_search(stream, graveyard, None, possessive)
     # "Search your library for **three cards, exile them, then shuffle**."
     # (Foresight.) A counted search whose finds are exiled rather than placed,
@@ -479,7 +490,7 @@ def _accept_search_exiling_the_rest(
 
 
 def _accept_counted_exile_search(
-    stream: TokenStream, graveyard: bool
+    stream: TokenStream, graveyard: bool, *, count: int | None = -1,
 ) -> "ast.SearchAndExile | None":
     """``<N> cards, exile them, then shuffle`` at the cursor, or None with the
     cursor where it was.
@@ -489,12 +500,21 @@ def _accept_counted_exile_search(
     filter is parsed the same way every search parses one, so "three creature
     cards" would be the same sentence with a narrowing — and the count is a
     *ceiling*, because CR 701.23b lets a search find fewer than it names.
+
+    *count* is the ceiling when the caller has **already read it**: "any number
+    of" (Mana Severance) is the same tail with the number left to the library,
+    and its words are consumed by the branch above before this is reached. The
+    default sentinel means "read it here", which is every other caller — a
+    plain ``None`` default could not tell "no ceiling was printed" from "nobody
+    has looked yet", and those two are different sentences.
     """
     mark = stream.mark()
-    count = parse_amount(stream)
-    if not isinstance(count, ast.Fixed) or count.value < 2:
-        stream.reset(mark)
-        return None
+    if count == -1:
+        parsed = parse_amount(stream)
+        if not isinstance(parsed, ast.Fixed) or parsed.value < 2:
+            stream.reset(mark)
+            return None
+        count = parsed.value
     try:
         filt = parse_object_filter(stream)
     except GrammarError:
@@ -523,7 +543,7 @@ def _accept_counted_exile_search(
         stream.accept_word("and")
         shuffled = bool(stream.accept_phrase("shuffle", "that", "pile"))
         return ast.SearchAndExile(
-            filt, zones=zones, count=count.value,
+            filt, zones=zones, count=count,
             face_down_pile=True, shuffle_pile=shuffled,
         )
     stream.accept_punct(",")
@@ -531,7 +551,7 @@ def _accept_counted_exile_search(
     if not stream.accept_word("shuffle"):
         stream.reset(mark)
         return None
-    return ast.SearchAndExile(filt, zones=zones, count=count.value)
+    return ast.SearchAndExile(filt, zones=zones, count=count)
 
 
 def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:

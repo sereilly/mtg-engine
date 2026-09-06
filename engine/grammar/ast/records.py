@@ -115,6 +115,24 @@ class ExiledThisWay:
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 @dataclass(frozen=True)
+class RevealedCardHasChosenName:
+    """``if that card has the chosen name`` (Cursed Scroll).
+
+    :class:`ChosenNameMilledThisWay`'s sibling one zone over, and the same two
+    records in one question: the name a "choose a card name" step wrote, and
+    the card a reveal step of the same resolution turned up. What differs is
+    which reveal — a mill puts a *set* into a graveyard and this turns up
+    exactly one card, so the comparison is against one name rather than over a
+    list.
+
+    Its own node rather than a flag on that one, for that node's own reason:
+    what tells two back-references apart is which earlier step recorded what
+    they read, and a node carrying the record's name as data would be free to
+    name a record nothing writes.
+    """
+
+
+@dataclass(frozen=True)
 class ChosenNameMilledThisWay:
     """``if a card with the chosen name was milled this way`` (Foreshadow).
 
@@ -125,6 +143,26 @@ class ChosenNameMilledThisWay:
     somebody chose a moment ago", and ``ObjectFilter.named`` is a printed
     literal.
     """
+
+
+@dataclass(frozen=True)
+class SharedColorMilledThisWay:
+    """``if two cards that share a color were milled this way`` (Grindstone).
+
+    :class:`MilledThisWay`'s third sibling, asking of the same record a
+    question neither of the others can: not what *kind* of card was milled and
+    not whether a named one was, but whether the milled cards have a colour in
+    common. A colour shared between two cards is a relation, and an
+    ``ObjectFilter`` describes one card at a time — so it cannot be a filter on
+    that node any more than "the chosen name" could.
+
+    ``count`` is the printed size of the comparison. Two is the only printing,
+    and it is a field rather than a constant because the question the handler
+    asks is "do *count* of them share a colour" and a card printing three would
+    be the same question.
+    """
+
+    count: int = 2
 
 
 @dataclass(frozen=True)

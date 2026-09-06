@@ -166,13 +166,28 @@ def test_every_self_payment_kind_is_a_live_instruction_kind():
     assert not missing, missing
 
 
-def test_every_self_payment_kind_is_still_printed_by_the_pool(catalog):
+def test_every_self_payment_kind_is_still_printed_by_the_pool():
     """Both directions, the way ``test_effect_labels`` holds its tables: a kind
     nothing in the pool offers is a claim about a card that is not there, and a
     frozen list nothing checks rots into a description of a pool that has moved
-    on. Prune for cause, not by guesswork."""
+    on. Prune for cause, not by guesswork.
+
+    **Both manifest roles**, unlike the shape guard below. This one asks whether
+    any card in the game prints the offer, and the compiler reads a `measured`
+    set exactly as it reads a shipped one — so a kind added for a card that has
+    not been promoted yet is a claim about a card that *is* there. The other
+    direction is the one that costs: a new offered-action kind is **free** until
+    somebody lists it here, and the failure is silent (the price is lowered into
+    the offered action, where the affordability test cannot find it), so a
+    guard that made a group wait for promotion before listing one would be a
+    guard arguing for the bug. Scoping by the shipped half alone is right for a
+    ratchet and wrong for a completeness check.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    everything = load_cards(manifest_set_paths(include_measured=True))
     offered = set()
-    for _card, _payload, accept, _otherwise in _free_offers(catalog):
+    for _card, _payload, accept, _otherwise in _free_offers(everything):
         for step in accept:
             offered.add(step.kind)
             for mode in step.payload.get("modes") or ():

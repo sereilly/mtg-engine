@@ -104,6 +104,8 @@ from .effects import (
     _parse_modal_head,
     _parse_prevent,
     _parse_put_iterated_card_on_library,
+    parse_put_library_top_into_hand,
+    parse_put_exiled_pile_on_library,
     _parse_distribute_counters,
     _parse_put_counter,
     _parse_put_exiled_with_source,
@@ -384,6 +386,13 @@ def parse_imperative(
         milled = parse_put_milled_card_onto_battlefield(stream)
         if milled is not None:
             return milled
+        # "Put that many cards from the top of your library into your hand."
+        # (Scroll Rack.) The last of them, and the same treatment for the same
+        # reason as every one above: the counter production reads "that" as a
+        # counter kind and refuses with a site naming counters.
+        off_the_top = parse_put_library_top_into_hand(stream)
+        if off_the_top is not None:
+            return off_the_top
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
@@ -598,6 +607,13 @@ def parse_imperative(
         if noted is not None:
             return noted
     if stream.at_word("look"):
+        # "Look at **the exiled cards** and put them on top of your library in
+        # any order." (Scroll Rack.) CR 610.3's linked pile rather than a
+        # player's zone, and non-consuming on refusal so every ordinary look
+        # keeps its own reading and its own refusal site.
+        pile = parse_put_exiled_pile_on_library(stream)
+        if pile is not None:
+            return pile
         return _parse_look_at_hand(stream)
     if stream.at_word("search"):
         # "Search your library for a Plains card. If target opponent controls

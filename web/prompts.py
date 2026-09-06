@@ -293,12 +293,22 @@ def _choose_card_name(ctx: PromptContext, choices: list) -> dict:
     lets the chooser name any card at all, and a list built over what they can
     see would either be useless or would hand them the answer — here the answer
     is the top of an opponent's library, which nobody may look at.
+
+    ``card_type`` is the printed *bound* on that freedom — "Choose a
+    **creature** card name" (Wood Sage) — and it is carried even though there
+    is no list, because it is the one thing about the choice the player has to
+    be told: a prompt reading "name a card" under a card that says "name a
+    creature card" is a prompt offering more than the card allows. Absent for
+    every unbounded naming, so Foreshadow's payload is unchanged.
     """
     choice = choices[0]
-    return {
+    prompt = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
     }
+    if choice.data.get("card_type"):
+        prompt["card_type"] = choice.data["card_type"]
+    return prompt
 
 
 @prompt_renderer("name_then_reveal_top")
@@ -1142,6 +1152,30 @@ def _repeat_process(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
+    }
+
+
+@prompt_renderer("exile_hand_pile_choice")
+def _exile_hand_pile(ctx: PromptContext, choices: list) -> dict:
+    """Scroll Rack: which cards in this seat's hand go under the artifact.
+
+    The candidates come from the engine's own rule, for the reason the single
+    pick below gives: the list the seat is shown and the list its answer is
+    checked against have to be one list.
+
+    No Decline, and that is the sentence rather than an omission: "exile **any
+    number of** cards" is answered with a set, and the empty set is one of the
+    answers — a Decline button would be a second spelling of it.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_exile_hand_pile_choices(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
     }
 
 

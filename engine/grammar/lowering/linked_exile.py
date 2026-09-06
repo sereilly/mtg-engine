@@ -114,6 +114,7 @@ _LINKED_EXILE_DESTINATIONS = frozenset({"hand", "graveyard", "battlefield"})
 
 def _lower_put_exiled_with_source(
     node: ast.PutExiledWithSource,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Put all cards exiled with this artifact into their owner's hand."
     (Knowledge Vault.)
@@ -155,12 +156,32 @@ def _lower_put_exiled_with_source(
         or (node.chosen and zone.name == "battlefield" and owner_kind is None)
     )
     if not under_controller and owner_kind != "owner" and not (
-        node.chosen and owner_kind == "you"
+        (node.chosen or node.others_only) and owner_kind == "you"
     ):
         raise LoweringError(
             "a linked exile goes to each card's own owner's zone", node=node
         )
+    if node.others_only:
+        # "Put **all other** cards you own exiled with this enchantment into
+        # your hand." (Duplicity.) A back-reference, demanded like every other
+        # one: "other" is other than the cards a step of *this* effect exiled,
+        # and with no such step the word excludes nothing — the sweep would
+        # hand back the cards the sentence in front of it had just taken, and
+        # the enchantment would compile clean and do nothing at all.
+        if "exiled_entries" not in produced:
+            raise LoweringError(
+                "'all other cards' names an exile this effect did not perform",
+                node=node,
+            )
     payload: dict[str, object] = {"zone": zone.name}
+    if node.others_only:
+        payload["others_only"] = True
+        # "…cards **you own**…" on a sweep. The sweep sends every card to its
+        # own owner, so this narrows *which* cards move rather than where they
+        # go — the same key the chosen form carries, because the handler asks
+        # one question.
+        if node.owned_by_you:
+            payload["owned_by_chooser"] = True
     # "Return **each creature card** exiled with this artifact…" (Cold Storage).
     # The printed narrowing, carried onto the instruction rather than dropped:
     # the pile is whatever the linked twin put there, and a card whose types
@@ -328,3 +349,24 @@ def _lower_put_exiled_card_into_zone(
     if node.only_if_unplayed:
         payload["only_if_unplayed"] = True
     return (OracleInstruction("put_exiled_cards_into_zone", "", payload),)
+
+
+def _lower_put_exiled_pile_on_library(
+    node: "ast.PutExiledPileOnLibrary",
+) -> tuple[OracleInstruction, ...]:
+    """"Then look at the exiled cards and put them on top of your library in
+    any order." (Scroll Rack.)
+
+    One instruction for both clauses, for the node's reason: the look is what
+    makes the order a choice, because CR 406.3 hides the pile from everybody
+    including the seat that made it.
+
+    Nothing to check but the position, which the production has already read
+    against a closed list — the pile is the record's answer, so there is no
+    filter and no target for the lowering to refuse.
+    """
+    return (
+        OracleInstruction(
+            "put_exiled_pile_on_library", "", {"position": node.position},
+        ),
+    )

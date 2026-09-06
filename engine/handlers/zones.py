@@ -694,11 +694,20 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     it must not run while the name is still owed, because a seat that saw the
     milled card before naming would be choosing with information the card does
     not give them.
+
+    ``card_type`` is the printed bound on CR 202.1's freedom — "Choose a
+    **creature** card name" (Wood Sage). It is carried to the prompt and the
+    default is taken *within* it, because a headless game has to obey the same
+    restriction the prompt does; the answer is checked against the catalog when
+    it comes back, which is the only place a named card can be looked up at
+    all.
     """
     seat = game.players.index(context.caster)
+    card_type = instruction.payload.get("card_type") or None
     game.arm_pending_choice(
         "choose_card_name", seat,
         card_name=context.card.name if context.card is not None else "",
+        card_type=card_type,
         # A non-interactive seat names the commonest card it may legally look
         # at — the opponents' graveyards, which CR 400.2 makes public. Naming
         # from a library or a hand would be the AI reading hidden information.
@@ -706,7 +715,7 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
         default_name=_commonest_visible_name(
             game,
             next(iter(game.opponents_of(seat)), seat),
-            ("graveyard",), exclude_basics=False,
+            ("graveyard",), exclude_basics=False, card_type=card_type,
         ),
         record=context.results,
     )
@@ -772,26 +781,98 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     opponent_index = game.players.index(opponent)
     count = resolve_amount(instruction.payload.get("count", 1) or 1, context.x_value)
-    revealed = list(caster.library[:max(int(count), 0)])
-    if not revealed:
-        game.log.append(f"{caster.name} has no cards to reveal")
-        return True, "resolved"
-    game.record_reveal(caster_index, [card.name for card in revealed])
-    game.log.append(
-        f"{caster.name} revealed {', '.join(card.name for card in revealed)} "
-        f"from the top of their library"
+    # **The pile may be a graveyard instead** (Phyrexian Grimoire: "target
+    # opponent chooses one of the top two cards of your graveyard"). The same
+    # question and the same prompt, with two things read off the payload: there
+    # is no reveal, because CR 400.2 makes a graveyard public and there is
+    # nothing to show anybody; and CR 404.2 keeps a graveyard in the order
+    # cards reached it, newest on top, so "the top two" are the *last* two of
+    # the list rather than the first. An absent `from_zone` is the library, so
+    # every payload written before this is unchanged.
+    from_zone = str(instruction.payload.get("from_zone", "library"))
+    pile = list(getattr(caster, from_zone, ()))
+    revealed = (
+        list(reversed(pile[-max(int(count), 0):])) if from_zone == "graveyard"
+        else pile[:max(int(count), 0)]
     )
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards in their {from_zone}")
+        return True, "resolved"
+    if from_zone == "library":
+        game.record_reveal(caster_index, [card.name for card in revealed])
+        game.log.append(
+            f"{caster.name} revealed {', '.join(card.name for card in revealed)} "
+            f"from the top of their library"
+        )
     game.arm_pending_choice(
         "opponent_picks_revealed", opponent_index,
         card_name=context.card.name if context.card is not None else "",
         revealer_index=caster_index,
         cards=[card.name for card in revealed],
         fate=str(instruction.payload.get("fate", "graveyard")),
+        from_zone=from_zone,
+        # "…and put **the other one** into your hand." What the pick did *not*
+        # take, which only a pile the sentence keeps talking about can have.
+        # Absent for a library pile, where CR 701.20b leaves the rest where
+        # they were.
+        other_fate=instruction.payload.get("other_fate"),
         # The card objects, so the answer moves the card that was *revealed*
         # rather than whatever has since slid into that library slot. Private,
         # like every live reference on a prompt.
         _cards=revealed,
     )
+    return True, "resolved"
+
+
+@effect_handler("reveal_top_sorting_by_chosen_name")
+def reveal_top_sorting_by_chosen_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top four cards of your library and put all of them with that
+    name into your hand. Put the rest into your graveyard." (Wood Sage.)
+
+    One step for both printed sentences, because "the rest" is exactly what the
+    first did not take: split apart, the second would move cards out of a pile
+    nothing had recorded.
+
+    The name is the one the ability's earlier step wrote into this resolution's
+    scratchpad (``chosen_card_name``), and the lowering refuses the sentence
+    without that step — so an absent record here means the seat named nothing,
+    which is a legal answer that matches nothing. It is **not** treated as
+    "match everything": the whole pile would go to the hand, which is the
+    opposite of what an empty name means.
+
+    CR 701.20 shows the cards and moves none of them, so the pile is taken off
+    the library here and every card is placed by this handler. Fewer cards than
+    the printed number is an ordinary board — the reveal shows what is there.
+
+    Both zones are reached through the seams that own them
+    (``put_card_into_hand``, ``put_card_into_graveyard``), never by appending
+    to a list: CR 903.9b rides the first and the discard/mill watchers ride the
+    second.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    count = resolve_amount(
+        instruction.payload.get("amount", 0) or 0, context.x_value
+    )
+    revealed = caster.library[:max(int(count), 0)]
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards to reveal")
+        return True, "resolved"
+    del caster.library[:len(revealed)]
+    game.record_reveal(seat, [card.name for card in revealed])
+    named = str(context.results.get("chosen_card_name") or "").strip()
+    game.log.append(
+        f"{caster.name} revealed {', '.join(card.name for card in revealed)}"
+    )
+    match_zone = str(instruction.payload.get("match_zone", "hand"))
+    rest_zone = str(instruction.payload.get("rest_zone", "graveyard"))
+    for card in revealed:
+        matched = bool(named) and card.name == named
+        zone = match_zone if matched else rest_zone
+        if zone == "hand":
+            game.put_card_into_hand(caster, card)
+        else:
+            game.put_card_into_graveyard(caster, card, from_zone="library")
     return True, "resolved"
 
 
@@ -2473,7 +2554,8 @@ def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleEx
 
 
 def _commonest_visible_name(
-    game, seat: int, zones, *, exclude_basics: bool = True
+    game, seat: int, zones, *, exclude_basics: bool = True,
+    card_type: str | None = None,
 ) -> str:
     """The name a non-interactive seat picks: the one appearing most often in
     *zones* of *seat*'s cards, ties broken by name so a seed replays exactly.
@@ -2484,6 +2566,12 @@ def _commonest_visible_name(
     202.1) and excluding them there would refuse a name a player would happily
     pick. So it is a parameter, and the zone list is passed rather than dug out
     of a payload key only one caller has.
+
+    ``card_type`` is the same fact in the other direction — "Choose a
+    **creature** card name" (Wood Sage) bounds what may legally be named, and a
+    default outside the bound is a headless game breaking a rule the prompt
+    enforces. Nothing matching leaves the name empty, which is what a seat with
+    no legal answer it can see actually has.
     """
     from collections import Counter
 
@@ -2492,6 +2580,8 @@ def _commonest_visible_name(
     for zone in zones or ():
         for card in getattr(player, zone, []):
             if exclude_basics and "basic" in (card.type_line or "").lower():
+                continue
+            if card_type and card.primary_type != card_type:
                 continue
             counts[card.name] += 1
     if not counts:
@@ -2517,7 +2607,17 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     shuffles it back. Anything else here is an infinite loop on a real board.
     """
     payload = instruction.payload
-    seat = context.results.get(payload.get("whose"))
+    whose = payload.get("whose")
+    if whose == "you":
+        # "Reveal cards from the top of **your** library …" (Sacred Guide.) The
+        # printed word rather than a back-reference, so there is no record to
+        # read and none to demand: the seat is the one performing the effect.
+        # Read through ``context.caster`` for the reason every other handler
+        # does — it is CR 109.5's answer already resolved, and a scan would
+        # differ from it under a control change.
+        seat = game.players.index(context.caster)
+    else:
+        seat = context.results.get(whose)
     if seat is None:
         game.log.append(f"{context.card.name}: nobody to reveal from")
         return True, "resolved"
@@ -2548,11 +2648,24 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     # "…then shuffles the rest into their library." The revealed cards go back
     # and the library is shuffled, which is why they were held aside rather than
     # put back one at a time — CR 701.24 shuffles once, at the end.
-    if payload.get("rest") == "shuffle_into_library":
+    rest = payload.get("rest")
+    if rest == "shuffle_into_library":
         player.library.extend(revealed)
         # Through the module RNG `run_ai_simulation` seeds, like every other
         # shuffle in the engine, so a given seed still replays exactly.
         random.shuffle(player.library)
+    elif rest == "exile":
+        # "…and **exile** all other cards revealed this way." (Sacred Guide.)
+        # The third printed fate, and the one that costs the revealer the
+        # cards for good — a graveyard is a zone half this pool can reach back
+        # into, so lowering the word onto the branch below would have made the
+        # card strictly better than it reads.
+        for card in revealed:
+            player.exile.append(card)
+        if revealed:
+            game.log.append(
+                f"{player.name} exiled {len(revealed)} card(s) revealed this way"
+            )
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
@@ -4747,6 +4860,12 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     caster.hand = []
     for card in discarded:
         game._discard_card(caster, card)
+    # "…, then draws **that many** cards." (Shocker.) How many actually went,
+    # under the key every other discard in this file already writes — a hand
+    # that was empty discards nothing and draws nothing, which is CR 608.2's
+    # "as much as possible" and the reason the number is counted here rather
+    # than read off the printed sentence, which names none.
+    context.results["discarded_count"] = len(discarded)
     game.log.append(f"{caster.name} discarded their hand ({len(discarded)} card(s))")
     return True, "resolved"
 
@@ -5036,6 +5155,169 @@ def exile_entire_library(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+@effect_handler("put_library_top_into_hand")
+def put_library_top_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put that many cards from the top of your library into your hand."
+    (Scroll Rack.)
+
+    **Not a draw**, and that is the whole of why it is its own handler.
+    CR 121.1 defines a draw as putting the top card of a library into a hand,
+    but an effect that spells those words instead of saying "draw" is not one
+    (CR 121.3): no "whenever you draw a card" trigger sees it, and no draw
+    replacement applies. Routed through ``_draw_with_replacements`` this card
+    would ring every draw trigger on the board and be stopped by every draw
+    replacement, which is a different card.
+
+    Through ``put_card_into_hand``, the CR 903.9b seam every card reaching a
+    hand goes through — a draw is the *only* thing this differs from.
+
+    Fewer cards than asked for is an ordinary board: CR 704.5b's loss fires on
+    an attempted **draw** from an empty library, and this is not one, so a short
+    library simply gives what it has.
+    """
+    caster = context.caster
+    amount = resolve_amount(instruction.payload.get("amount", 0) or 0, context.x_value)
+    recorded = instruction.payload.get("amount_from")
+    if recorded is not None:
+        amount = int(context.results.get(recorded) or 0)
+    taken = caster.library[:max(int(amount), 0)]
+    if not taken:
+        game.log.append(f"{caster.name} puts no cards into their hand")
+        return True, "resolved"
+    del caster.library[:len(taken)]
+    for card in taken:
+        game.put_card_into_hand(caster, card)
+    game.log.append(
+        f"{caster.name} put {len(taken)} card(s) from the top of their library "
+        "into their hand"
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_exiled_pile_on_library")
+def put_exiled_pile_on_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Then look at the exiled cards and put them on top of your library in
+    any order." (Scroll Rack.)
+
+    The linked pile (CR 610.3) drained back onto the library. The pile is put
+    there first and the *order* is then the ordinary reorder prompt, which is
+    what makes the look real: the seat is shown exactly those cards and
+    arranges them, and CR 406.3 is satisfied because they are no longer exiled
+    by the time anybody sees them.
+
+    Reusing ``reorder_library`` rather than arming a prompt of its own is the
+    point. That prompt already asks "here are the top N of your library, put
+    them in an order" — which is this sentence once the cards are on top — so
+    the renderer, the AI default and the wire action all already exist, and a
+    second prompt would be a second answer to one question.
+
+    A pile of fewer than two has no order to choose, so nothing is asked; the
+    cards are on the library either way.
+    """
+    source = context.source_permanent
+    caster = context.caster
+    seat = game.players.index(caster)
+    entries = take_linked_entries(source)
+    if not entries:
+        name = context.card.name if context.card is not None else "that permanent"
+        game.log.append(f"nothing is exiled with {name}")
+        return True, "resolved"
+    moved = []
+    for entry in entries:
+        owner = game.players[int(entry["owner_index"])]
+        # Through the one transition out of exile (CR 400.7): the exile
+        # register hangs a card's counters, its face-down flag and its look
+        # permission off the object, and a list write leaves them behind. It
+        # answers False for a card that has already gone by some other route,
+        # which is the same "a card put back from nowhere is a card this effect
+        # created" the sweep beside this one states.
+        if not game.take_card_from_exile(owner, entry["card"]):
+            continue
+        moved.append(entry["card"])
+    if not moved:
+        return True, "resolved"
+    if str(instruction.payload.get("position", "top")) == "bottom":
+        caster.library.extend(moved)
+        game.log.append(
+            f"{len(moved)} card(s) go on the bottom of {caster.name}'s library"
+        )
+        return True, "resolved"
+    caster.library[:0] = moved
+    game.log.append(
+        f"{len(moved)} card(s) go on top of {caster.name}'s library"
+    )
+    if len(moved) < 2:
+        return True, "resolved"
+    game.arm_pending_choice(
+        "reorder_library", seat,
+        target_index=seat, top_count=len(moved), may_shuffle=False,
+    )
+    return True, "pending_reorder_library"
+
+
+@effect_handler("exile_hand_pile")
+def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile **all** cards from your hand face down." (Duplicity.)
+    "Exile **any number of** cards from your hand face down." (Scroll Rack.)
+
+    A *pile* out of a hidden zone, recorded on the exiling permanent
+    (CR 610.3) — which is the only place a face-down exile can be recorded:
+    two copies of one card in a deck are the same ``CardDefinition`` object, so
+    nothing on the card can say which of them is hidden.
+
+    Both quantifiers are one handler because the exile is identical; what
+    differs is whether anybody is asked. "All" asks nothing. "Any number of"
+    is a pick and goes through the pending-choice queue, and **zero is a legal
+    answer** — which is why the sentence behind it on Scroll Rack draws that
+    many cards rather than a printed number.
+
+    Without a permanent to link to, the exile does not happen at all rather
+    than happening face up: that is the rule ``exile_chosen_card_from_hand``
+    already states one screen down, and for its reason — an exile that
+    silently happened in full view is the loudest kind of quiet wrong.
+
+    The entries this step created are recorded **by identity** under
+    ``exiled_entries``, for a sentence like Duplicity's "put **all other**
+    cards you own exiled with this enchantment into your hand": "other" means
+    other than the ones this resolution just put there, and a card name cannot
+    say that — the pile may already hold another copy of the same card.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    source = context.source_permanent
+    payload = dict(instruction.payload)
+    if payload.get("face_down") and source is None:
+        game.log.append("the face-down exile has no permanent to be linked to")
+        return True, "resolved"
+    described = dict(payload.get("card_filter") or {})
+    slots = [
+        index for index, card in enumerate(caster.hand)
+        if _card_matches_filter(card, described)
+    ]
+    if payload.get("quantifier") == "any_number" and seat in game.interactive_seats:
+        if not slots:
+            game.log.append(f"{caster.name} has no card to exile")
+            return True, "resolved"
+        game.arm_pending_choice(
+            "exile_hand_pile_choice", seat,
+            card_name=context.card.name if context.card is not None else "",
+            _payload=payload,
+            _context=context,
+            _source_permanent=source,
+        )
+        return True, "resolved"
+    # "All" takes every matching card, and a non-interactive seat answering
+    # "any number of" takes every matching card too — the stated policy for an
+    # unbounded may-per-card, the same one `_default_search_exile` gives: the
+    # cards come back, so the maximum is the only default that leaves nothing
+    # on the table.
+    game.exile_hand_slots(
+        context, source, seat, slots,
+        face_down=bool(payload.get("face_down")),
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_exiled_with_source")
 def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put all cards exiled with this artifact into their owner's hand."
@@ -5088,6 +5370,45 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
     # sentence names the pile whole.
     wanted_type = instruction.payload.get("card_type")
     entries = take_linked_entries(source)
+    # "Put **all other cards you own** exiled with this enchantment into your
+    # hand." (Duplicity.) Two narrowings on the sweep, applied here and then
+    # put back like the card-type one below, because a card the sentence does
+    # not name is still exiled with this permanent afterwards.
+    #
+    # "Other" is a back-reference to the exile *this same resolution* performed
+    # a step earlier, and it is answered by **entry identity**: a card name
+    # cannot say it, because the pile may already hold another copy of the same
+    # card — and a hand repeats one immutable ``CardDefinition`` per copy, so
+    # the objects are not distinct either. The entries are the only distinct
+    # things there are.
+    if instruction.payload.get("others_only") or instruction.payload.get(
+        "owned_by_chooser"
+    ):
+        just_exiled = tuple(context.results.get("exiled_entries") or ())
+        chooser_seat = game.players.index(context.caster)
+        excluded = []
+        wanted = []
+        for entry in entries:
+            if instruction.payload.get("others_only") and any(
+                entry is fresh for fresh in just_exiled
+            ):
+                excluded.append(entry)
+            elif instruction.payload.get("owned_by_chooser") and int(
+                entry["owner_index"]
+            ) != chooser_seat:
+                excluded.append(entry)
+            else:
+                wanted.append(entry)
+        entries = wanted
+        if excluded:
+            from ..linked_exile import link_exiled_card
+
+            for entry in excluded:
+                link_exiled_card(
+                    source, entry["card"], int(entry["owner_index"]),
+                    ends_on=tuple(entry.get("ends_on") or ()),
+                    face_down=bool(entry.get("face_down")),
+                )
     if wanted_type is not None:
         from ..linked_exile import link_exiled_card
 
@@ -5219,6 +5540,8 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     steps behind this one wait for the answer — the Opt lesson, applied here
     by registration rather than by hoping.
     """
+    from ..ai_valuation import exiled_search_pile_comes_back
+
     caster = context.caster
     caster_index = game.players.index(caster)
     zones = tuple(instruction.payload.get("zones") or ("graveyard", "library"))
@@ -5237,6 +5560,15 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
         # this handler only asks the question.
         face_down_pile=bool(instruction.payload.get("face_down_pile")),
         shuffle_pile=bool(instruction.payload.get("shuffle_pile")),
+        # Whether anything on this card reads the pile back, which is what a
+        # headless seat needs before it answers "any number". Derived from the
+        # compiled program (``ai_valuation.exiled_search_pile_comes_back``) and
+        # carried on the prompt, so the resolver's stated policy is read off the
+        # card rather than off the three cards that policy was written for.
+        comes_back=(
+            exiled_search_pile_comes_back(context.card)
+            if context.card is not None else True
+        ),
         _context=context,
     )
     game.log.append(f"{caster.name} is searching their {' and '.join(zones)}")
@@ -7003,8 +7335,18 @@ def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, con
 
     An empty hand reveals nothing, which the condition behind it reads as False
     — a legal outcome, not an error.
+
+    **Whose hand is stated when the sentence states it.** "…then reveal a card
+    at random from **your** hand" (Cursed Scroll) is the effect's own
+    controller, and the fallback below cannot answer it: ``context.target`` is
+    the *ability's* target, which on that card is whoever the damage is aimed
+    at. The fallback stays for the targeted printings, where the ability
+    targets exactly the player the sentence names.
     """
-    victim = context.target if context.target is not None else context.caster
+    if instruction.payload.get("revealer") == "you":
+        victim = context.caster
+    else:
+        victim = context.target if context.target is not None else context.caster
     if not victim.hand:
         game.log.append(f"{victim.name} has no cards in hand to reveal")
         return True, "resolved"

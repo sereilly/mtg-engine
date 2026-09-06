@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 84.7% | 83.7% | 57.7% | 238 |
+| TMP *(measured)* | 335 | 478 | 87.0% | 86.0% | 60.0% | 248 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,18 +47,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 363 | 162 | expected a subject |  |
+| 360 | 159 | expected a subject |  |
 | 113 | 55 | unrecognized effect verb |  |
-| 94 | 46 | unconsumed text |  |
+| 93 | 45 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 11 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
-| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 3 | expected a keyword ability |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected what this creature can't block, or a duration |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -66,12 +66,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | expected 'a' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
+| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 2 | expected 'counter or counters' |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
@@ -191,6 +191,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
 - **Altar of Bone**
   - `Search your library for a creature card, reveal it, put it into your hand, then shuffle.`
+- **Altar of Dementia**
+  - `Sacrifice a creature: Target player mills cards equal to the sacrificed creature's power.`
 - **Amber Prison**
   - `{4}, {T}: Tap target artifact, creature, or land. That permanent doesn't untap during its controller's untap step for as long as this artifact remains tapped.`
 - **Ambush**
@@ -1202,6 +1204,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
+- **Cursed Scroll**
+  - `{3}, {T}: Choose a card name, then reveal a card at random from your hand. If that card has the chosen name, this artifact deals 2 damage to any target.`
 - **Cycle of Life**
   - `Return this enchantment to its owner's hand: Target creature you cast this turn has base power and toughness 0/1 until your next upkeep. At the beginning of your next upkeep, put a +1/+1 counter on that creature.`
 - **Cyclopean Mummy**
@@ -1537,6 +1541,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Dry Spell deals 1 damage to each creature and each player.`
 - **Duplicity**
   - `When this enchantment enters, exile the top five cards of your library face down.`
+  - `At the beginning of your upkeep, you may exile all cards from your hand face down. If you do, put all other cards you own exiled with this enchantment into your hand.`
   - `At the beginning of your end step, discard a card.`
   - `When you lose control of this enchantment, put all cards exiled with this enchantment into their owner's graveyard.`
 - **Duress**
@@ -2405,6 +2410,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature is put into an opponent's graveyard from the battlefield, you gain life equal to its toughness.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
+- **Grindstone**
+  - `{3}, {T}: Target player mills two cards. If two cards that share a color were milled this way, repeat this process.`
 - **Grinning Totem**
   - `{2}, {T}, Sacrifice this artifact: Search target opponent's library for a card and exile it. Then that player shuffles. Until the beginning of your next upkeep, you may play that card. At the beginning of your next upkeep, if you haven't played it, put it into its owner's graveyard.`
 - **Grizzled Wolverine**
@@ -3390,6 +3397,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mana Prism**
   - `{T}: Add {C}.`
   - `{1}, {T}: Add one mana of any color.`
+- **Mana Severance**
+  - `Search your library for any number of land cards, exile them, then shuffle.`
 - **Mana Vault**
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
@@ -4028,6 +4037,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this artifact: Exile target card from a graveyard. Draw a card.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
+- **Phyrexian Grimoire**
+  - `{4}, {T}: Target opponent chooses one of the top two cards of your graveyard. Exile that card and put the other one into your hand.`
 - **Phyrexian Portal**
   - `{3}: If your library has ten or more cards in it, target opponent looks at the top ten cards of your library and separates them into two face-down piles. Exile one of those piles. Search the other pile for a card, put it into your hand, then shuffle the rest of that pile into your library.`
 - **Phyrexian Purge**
@@ -4123,6 +4134,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}, {T}: Target creature gets -2/-0 until end of turn.`
 - **Preacher**
   - `{T}: For as long as this creature remains tapped, gain control of target creature of an opponent's choice they control.`
+- **Precognition**
+  - `At the beginning of your upkeep, you may look at the top card of target opponent's library. If you do, you may put that card on the bottom of that player's library.`
 - **Preferred Selection**
   - `At the beginning of your upkeep, look at the top two cards of your library. You may sacrifice this enchantment and pay {2}{G}{G}. If you do, put one of those cards into your hand. If you don't, put one of those cards on the bottom of your library.`
 - **Presence of the Master**
@@ -4600,6 +4613,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sacred Boon**
   - `Prevent the next 3 damage that would be dealt to target creature this turn. At the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way.`
   - `Prevent the next 3 damage that would be dealt to target creature this turn. At the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way.`
+- **Sacred Guide**
+  - `{1}{W}, Sacrifice this creature: Reveal cards from the top of your library until you reveal a white card. Put that card into your hand and exile all other cards revealed this way.`
 - **Sacred Mesa**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you sacrifice a Pegasus.`
   - `{1}{W}: Create a 1/1 white Pegasus creature token with flying.`
@@ -4724,6 +4739,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W} or {B}.`
 - **Screeching Harpy**
   - `{1}{B}: Regenerate this creature.`
+- **Scroll Rack**
+  - `{1}, {T}: Exile any number of cards from your hand face down. Put that many cards from the top of your library into your hand. Then look at the exiled cards and put them on top of your library in any order.`
 - **Sea Kings' Blessing**
   - `One or more target creatures become blue until end of turn.`
 - **Sea Monster**
@@ -4924,6 +4941,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Shock**
   - `Shock deals 2 damage to any target.`
+- **Shocker**
+  - `Whenever this creature deals damage to a player, that player discards all the cards in their hand, then draws that many cards.`
 - **Shrieking Drake**
   - `When this creature enters, return a creature you control to its owner's hand.`
 - **Shrink**
@@ -6213,6 +6232,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {U}.`
   - `{2}, {T}: Add {W} or {B}.`
+- **Wood Sage**
+  - `{T}: Choose a creature card name. Reveal the top four cards of your library and put all of them with that name into your hand. Put the rest into your graveyard.`
 - **Wooden Sphere**
   - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`

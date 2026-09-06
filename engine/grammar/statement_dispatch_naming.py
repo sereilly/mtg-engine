@@ -35,6 +35,7 @@ from .lowering._events import CHOSEN_PLAYER, chooser_payload as _chooser_payload
 from .lowering import (
     _amount_payload,
     _lower_put_exiled_card_into_zone,
+    _lower_reveal_top_sorting_by_chosen_name,
     _lower_reveal_until,
     _targets_payload,
 )
@@ -191,6 +192,15 @@ def lower_naming_statement(
 
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)
+
+    if isinstance(statement, ast.RevealTopSortingByChosenName):
+        # "Reveal the top four cards of your library and put all of them with
+        # **that name** into your hand." (Wood Sage.) An arm here rather than a
+        # row in ``by_node``: it reads ``produced``, because the name is the
+        # one an earlier step of the same ability chose — which is this
+        # module's own subject, a sentence that reads back a decision another
+        # sentence recorded.
+        return _lower_reveal_top_sorting_by_chosen_name(statement, produced)
 
     if isinstance(statement, ast.CopyThatSpell):
         return (OracleInstruction("copy_triggering_spell", "", {}),)

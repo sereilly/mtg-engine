@@ -559,12 +559,23 @@ def _back_reference_payload(
             f"back-reference to {amount.source!r} with no producer in this effect",
             node=amount,
         )
-    key = _EVENT_QUANTITIES.get(event or "")
-    if key is not None:
-        return {"amount_from_trigger": key}
+    # A step of **this** effect that produced a number is read before the
+    # trigger's own, because it is the nearer antecedent: "that player discards
+    # all the cards in their hand, then draws **that many** cards" (Shocker) is
+    # one sentence about the discard, under a trigger whose event also carries a
+    # number (the damage dealt). Read the other way round, Shocker draws cards
+    # equal to its power — a card that plays, compiles and is wrong, with
+    # nothing in this repo able to see it.
+    #
+    # Only when the effect produced **exactly one**: two candidate numbers is a
+    # sentence with two readings, and picking one of them is the guess this
+    # whole function exists to refuse.
     within = tuple(sorted(produced & _PRODUCED_QUANTITIES))
     if len(within) == 1:
         return {"amount_from": within[0]}
+    key = _EVENT_QUANTITIES.get(event or "")
+    if key is not None:
+        return {"amount_from_trigger": key}
     raise LoweringError(
         "bare back-reference with no producer in this effect and no quantity "
         "on its trigger",

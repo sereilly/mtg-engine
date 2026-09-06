@@ -899,6 +899,11 @@ WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     # A whole printed process its controller may run again (Forbidden Ritual).
     # The same reason again: what the process *does* is the steps it carries.
     "repeat_optional_process": ("steps",),
+    # A process repeated while a condition about the round holds (Grindstone).
+    # The third repeat that is a wrapper, and for the same reason as the two
+    # above it: what the round *does* is the steps it carries, and the stopping
+    # question is not an effect.
+    "repeat_process_while": ("steps",),
 }
 
 

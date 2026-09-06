@@ -656,6 +656,44 @@ def _lower_condition(
             "op": condition.comparison.op,
             "value": bound.value,
         }
+    if isinstance(condition, ast.SharedColorMilledThisWay):
+        # One producer, demanded like every other back-reference: with no mill
+        # before it there is no set to compare, and Grindstone's loop would
+        # read an empty record, stop after one round, and compile clean.
+        if MILLED_THIS_WAY not in produced:
+            raise LoweringError(
+                "'cards that share a color were milled this way' with no mill "
+                "before it in this effect",
+                node=condition,
+            )
+        if condition.count < 2:
+            raise LoweringError(
+                "a shared colour is a relation between two or more cards",
+                node=condition,
+            )
+        return {
+            "kind": "shared_color_milled_this_way", "count": condition.count,
+        }
+    if isinstance(condition, ast.RevealedCardHasChosenName):
+        # Both producers demanded, for the mill's reason below: without the
+        # name the comparison is against nothing and answers False for ever,
+        # and without the reveal there is no card to compare — and either way
+        # Cursed Scroll would compile clean and never deal its damage.
+        missing = sorted({"chosen_card_name", "revealed_card"} - set(produced))
+        if missing:
+            raise LoweringError(
+                "'that card has the chosen name' with no "
+                + " and no ".join(
+                    {
+                        "chosen_card_name": "name chosen",
+                        "revealed_card": "reveal",
+                    }[key]
+                    for key in missing
+                )
+                + " before it in this effect",
+                node=condition,
+            )
+        return {"kind": "revealed_card_has_chosen_name"}
     if isinstance(condition, ast.ChosenNameMilledThisWay):
         # Two producers, both demanded: a back-reference names its producers or
         # refuses. Without the name the comparison is against nothing and

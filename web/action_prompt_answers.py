@@ -650,6 +650,24 @@ def _action_exile_from_hand_confirm(session, req, seat_type):
     if not session.game.confirm_exile_from_hand_choice(req.seat, hand_index):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
+@action_handler("exile_hand_pile_confirm")
+def _action_exile_hand_pile_confirm(session, req, seat_type):
+    # Scroll Rack: the seat names any number of cards in its hand to exile face
+    # down under the artifact. Zero is an answer rather than a decline — the
+    # sentence behind it draws *that many* — so there is no `accept` here, and
+    # the engine re-checks every slot against the same candidate rule the
+    # prompt was drawn from, so a client offering more cannot widen the choice.
+    pending = next(
+        (c for c in session.game.pending_choices_of("exile_hand_pile_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no hand exile pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_exile_hand_pile(req.seat, req.hand_indices or []):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("put_from_hand_confirm")
 def _action_put_from_hand_confirm(session, req, seat_type):
     # Eureka: the offered seat picks a card in its hand to put onto the

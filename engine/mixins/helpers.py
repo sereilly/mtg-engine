@@ -1942,6 +1942,74 @@ class GameHelpersMixin:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)
         return removed
 
+    def exile_hand_slots(
+        self, context, source, seat: int, slots: list[int],
+        *, face_down: bool = False,
+    ) -> list:
+        """Exile the cards in *seat*'s hand at *slots* as one linked pile.
+
+        The shared half of "exile all cards from your hand face down"
+        (Duplicity) and "exile any number of cards from your hand face down"
+        (Scroll Rack): a sweep and a pick end in the same act, and the act has
+        three things it must not forget — the hand seam, the linked-exile
+        record, and the two scratchpad keys the sentences behind it read. One
+        function so all three cannot be remembered in one place and forgotten
+        in the other, which is the ``become_tapped`` shape this repo names.
+
+        Through ``take_card_from_hand``: a deck repeats one immutable
+        definition per copy, so every copy of a card in a hand is the *same*
+        Python object and an identity filter over the list removes all of them.
+
+        The cards are resolved from their slots **before anything moves**,
+        because each removal renumbers the ones behind it — and then taken and
+        linked in the seat's own hand order, so the pile reads the way the hand
+        did rather than backwards.
+
+        Two records, both about the same cards and neither redundant.
+        ``exiled_cards`` is what a count behind this reads ("put **that many**
+        cards from the top of your library into your hand"); ``exiled_entries``
+        is what an *exclusion* behind it reads ("put **all other** cards … into
+        your hand"), and only the entries can answer that — the pile may
+        already hold another copy of the same card, and the cards are the same
+        object.
+        """
+        from ..linked_exile import link_exiled_card
+
+        player = self.players[seat]
+        wanted = [
+            player.hand[index] for index in sorted(slots)
+            if 0 <= index < len(player.hand)
+        ]
+        taken = []
+        entries = []
+        for card in wanted:
+            # Through the hand seam: a deck repeats one immutable definition
+            # per copy, so every copy of a card in a hand is the same Python
+            # object and this removes exactly one of them.
+            self.take_card_from_hand(player, card)
+            player.exile.append(card)
+            taken.append(card)
+            if source is not None:
+                entries.append(
+                    link_exiled_card(source, card, seat, face_down=face_down)
+                )
+        if context is not None:
+            context.results.setdefault("exiled_cards", []).extend(taken)
+            context.results.setdefault("exiled_entries", []).extend(entries)
+            # …and the *number*, which is a third question and the one "put
+            # that many cards from the top of your library into your hand"
+            # (Scroll Rack) asks. Its own key because a bare back-reference
+            # resolves against quantities alone — a list handed to one would
+            # make "that many" name a pile.
+            context.results["exiled_count"] = (
+                int(context.results.get("exiled_count") or 0) + len(taken)
+            )
+        self.log.append(
+            f"{player.name} exiled {len(taken)} card(s) from their hand"
+            if taken else f"{player.name} exiled no cards from their hand"
+        )
+        return taken
+
     def leave_linked_exile(
         self, entry: dict, zone: str, *, controller_index: int | None = None
     ) -> "Permanent | None":

@@ -13,6 +13,12 @@ from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec, halved_count_spec
+# The characteristics ``count_from_payload`` reads off a cost-eaten
+# permanent. A floor, shared with the damage family that named it: a mill
+# sized by one asks the same question a damage sized by one does, and two
+# copies of the list is how one of them comes to emit a characteristic the
+# evaluator cannot answer.
+from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._common import (
     chargeable_card_filter,
     _amount_payload,
@@ -670,7 +676,29 @@ def _lower_mill(
     shape. A recipient the handler cannot name refuses rather than defaulting,
     which is the original reason this function refused everything.
     """
-    payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    # "Target player mills cards equal to **the sacrificed creature's power**."
+    # (Altar of Dementia.) A characteristic of the permanent the ability's own
+    # cost ate (CR 601.2h), so it is on no board by the time this resolves — it
+    # is read off the record the activation kept, through the one
+    # ``x_from_count`` channel `_execute_oracle_instruction` resolves for every
+    # family. The characteristic is checked against what the evaluator can
+    # actually answer, because one it cannot is a card that reports supported
+    # and mills nothing.
+    if isinstance(node.count, ast.SacrificedForCost):
+        if node.count.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
+            raise LoweringError(
+                "no handler reads the sacrificed permanent's "
+                f"{node.count.characteristic!r}",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: {
+                "cost_sacrifice_characteristic": node.count.characteristic
+            },
+        }
+    else:
+        payload = {"amount": _amount_payload(node.count)}
     if node.player.kind == "that_player":
         # "Whenever this creature deals damage to an opponent, **that player**
         # mills a card." (Reef Pirates.) The seat is the one the damage event

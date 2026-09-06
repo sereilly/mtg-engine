@@ -341,3 +341,370 @@ def test_the_hand_count_clause_is_one_row_for_both_printings(set_pool, catalog_b
     assert activation_denial(
         game, 0, tome, "Activate only if you have no cards in hand."
     ) is not None
+
+
+# --- W2G4: naming a card, and reading the name back ---
+
+import random as _w2g4_random
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+
+
+def _w2g4_card(name, type_line, text="", power=None, toughness=None):
+    raw = {"name": name, "type_line": type_line, "oracle_text": text}
+    if power is not None:
+        raw["power"], raw["toughness"] = str(power), str(toughness)
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text=text,
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw=raw,
+        power=str(power) if power is not None else None,
+        toughness=str(toughness) if toughness is not None else None,
+    )
+
+
+def _w2g4_game(p0_permanents, *, p0_hand=(), interactive=(0,)):
+    seats = [
+        PlayerState(name="P0", battlefield=list(p0_permanents), hand=list(p0_hand)),
+        PlayerState(name="P1"),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def test_cursed_scroll_hits_when_the_random_reveal_matches_the_name(set_pool):
+    """`{3}, {T}: Choose a card name, then reveal a card at random from your
+    hand. If that card has the chosen name, this artifact deals 2 damage to any
+    target.`
+
+    Three steps, one resolution: the name is recorded, the reveal picks a card
+    nobody chose, and the condition compares the two. Every card in the hand is
+    the named one here, so the randomness cannot decide the outcome.
+    """
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    bolt = _w2g4_card("Shock", "Instant")
+    game = _w2g4_game([scroll], p0_hand=[bolt, bolt, bolt])
+
+    result = game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert game.confirm_choose_card_name(0, "Shock")
+    assert game.players[1].life == 18
+
+
+def test_cursed_scroll_misses_when_the_revealed_card_is_not_the_named_one(set_pool):
+    """The condition is a real comparison, not a rider that always fires — a
+    hand holding nothing the seat named deals no damage at all."""
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    bolt = _w2g4_card("Shock", "Instant")
+    game = _w2g4_game([scroll], p0_hand=[bolt, bolt])
+
+    game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "Lightning Bolt")
+
+    assert game.players[1].life == 20
+
+
+def test_cursed_scroll_with_an_empty_hand_reveals_nothing_and_misses(set_pool):
+    """An empty hand reveals no card (CR 608.2, as much as possible), and the
+    condition reads that as False rather than as a match against nothing."""
+    scroll = Permanent(card=set_pool("TMP")["Cursed Scroll"])
+    game = _w2g4_game([scroll])
+
+    game.activate_permanent_ability(
+        0, "Cursed Scroll", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "Shock")
+
+    assert game.players[1].life == 20
+
+
+def test_cursed_scroll_offers_any_target_at_activation(set_pool):
+    """The damage is the *conditional* half of the ability, so the picker has
+    to offer its target when the ability is activated (CR 601.2c / 115.1c) —
+    long before anybody knows whether the reveal will match."""
+    program = compile_card_oracle(set_pool("TMP")["Cursed Scroll"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec is not None, "the picker has no idea what this ability targets"
+    assert spec.get("kind") == "any"
+
+
+def test_altar_of_dementia_mills_the_power_of_the_creature_the_cost_ate(set_pool):
+    """`Sacrifice a creature: Target player mills cards equal to the sacrificed
+    creature's power.`
+
+    The number is the *cost's*, and by resolution the creature is in a
+    graveyard with no characteristics at all (CR 613.1) — so it is read off the
+    record the activation kept (CR 601.2h, CR 608.2h). Two creatures of
+    different sizes are on the board, so a handler reading "a creature" rather
+    than "the one the cost ate" would mill the wrong number.
+    """
+    altar = Permanent(card=set_pool("TMP")["Altar of Dementia"])
+    big = Permanent(card=_w2g4_card("Ogre", "Creature — Ogre", power=4, toughness=4))
+    small = Permanent(card=_w2g4_card("Rat", "Creature — Rat", power=1, toughness=1))
+    game = _w2g4_game([altar, big, small])
+    game.players[1].library = [_w2g4_card("Mountain", "Basic Land — Mountain")] * 10
+
+    result = game.activate_permanent_ability(
+        0, "Altar of Dementia", ability_index=0,
+        target_player_index=1,
+        # A battlefield *slot*, which is what this parameter is: the Ogre is
+        # the second permanent P0 controls.
+        cost_permanent_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 4, "four, the Ogre's power"
+    # And the cost was actually charged: wave 1 found two artifacts whose
+    # non-mana activation cost was parsed and collected by nobody.
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Altar of Dementia", "Rat",
+    ]
+    assert [c.name for c in game.players[0].graveyard] == ["Ogre"]
+
+
+def test_altar_of_dementia_mills_nothing_for_a_zero_power_sacrifice(set_pool):
+    """A 0-power creature mills nothing rather than falling back to a printed
+    number — there is no printed number, and a handler that read one would have
+    had to invent it."""
+    altar = Permanent(card=set_pool("TMP")["Altar of Dementia"])
+    wall = Permanent(card=_w2g4_card("Wall", "Creature — Wall", power=0, toughness=4))
+    game = _w2g4_game([altar, wall])
+    game.players[1].library = [_w2g4_card("Mountain", "Basic Land — Mountain")] * 5
+
+    game.activate_permanent_ability(
+        0, "Altar of Dementia", ability_index=0, target_player_index=1,
+        cost_permanent_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert not game.players[1].graveyard
+
+
+def _w2g4_coloured(name, color):
+    return CardDefinition(
+        name=name, mana_cost="", type_line="Creature — Bear", oracle_text="",
+        cmc=0.0, colors=(color,), color_identity=(color,), keywords=(),
+        produced_mana=(), power="2", toughness="2",
+        raw={"name": name, "type_line": "Creature — Bear"},
+    )
+
+
+def test_grindstone_repeats_while_the_two_milled_cards_share_a_colour(set_pool):
+    """`{3}, {T}: Target player mills two cards. If two cards that share a
+    color were milled this way, repeat this process.`
+
+    The loop is the card. Four black cards on top of six colourless ones: two
+    rounds of two black cards, then a round of two colourless ones that stops
+    it. Six cards milled, four left.
+    """
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    black = _w2g4_coloured("Bog Imp", "B")
+    plain = _w2g4_card("Ornithopter", "Artifact Creature — Thopter",
+                       power=0, toughness=2)
+    game.players[1].library = [black] * 4 + [plain] * 6
+
+    result = game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 6
+    assert len(game.players[1].library) == 4
+    # And the picker knows the ability targets. A new control-flow wrapper is
+    # invisible to `targeting.py`'s unwrap list until somebody adds it, and the
+    # failure is the Roots class: the client sends a bare activation and the
+    # ability mills whoever the resolution happened to be holding.
+    program = compile_card_oracle(set_pool("TMP")["Grindstone"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec is not None and spec.get("kind") == "player"
+
+
+def test_grindstone_stops_on_two_colourless_cards(set_pool):
+    """Colourless cards share no colour with anything, which is the card's
+    famous stop — and the reason the test is over `colors`, not over sameness:
+    two Ornithopters are the same card and still do not share a colour."""
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    plain = _w2g4_card("Ornithopter", "Artifact Creature — Thopter",
+                       power=0, toughness=2)
+    game.players[1].library = [plain] * 10
+
+    game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 2, "one round and no more"
+
+
+def test_grindstone_empties_a_library_of_one_colour_and_terminates(set_pool):
+    """An all-black library is the loop's worst case, and it terminates because
+    an empty library mills nothing — the round writes an empty record and the
+    condition reads it as False.
+
+    This is the test that would hang if `resets` were dropped or if the
+    stopping condition read the graveyard rather than the round's own record.
+    """
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    game.players[1].library = [_w2g4_coloured("Bog Imp", "B")] * 9
+
+    game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert not game.players[1].library
+    assert len(game.players[1].graveyard) == 9
+
+
+def test_scroll_rack_swaps_the_exiled_pile_for_the_same_number_off_the_top(set_pool):
+    """`{1}, {T}: Exile any number of cards from your hand face down. Put that
+    many cards from the top of your library into your hand. Then look at the
+    exiled cards and put them on top of your library in any order.`
+
+    Three steps and one resolution. The count of the second is the answer to
+    the first, so the exile prompt suspends the resolution; the third drains
+    the pile back onto the library and hands the order to the same seat.
+    """
+    from engine.linked_exile import linked_entries
+
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    hand = [_w2g4_card(f"Hand{i}", "Instant") for i in range(3)]
+    library = [_w2g4_card(f"Deck{i}", "Instant") for i in range(5)]
+    game = _w2g4_game([rack], p0_hand=hand)
+    game.players[0].library = list(library)
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("exile_hand_pile_choice")))
+    assert [c["name"] for c in
+            [{"name": game.players[0].hand[i].name}
+             for i in game.live_exile_hand_pile_choices(prompt)]] == [
+        "Hand0", "Hand1", "Hand2",
+    ]
+    assert game.confirm_exile_hand_pile(0, [0, 2])
+
+    # Two exiled, two off the top of the library into the hand.
+    assert sorted(c.name for c in game.players[0].hand) == ["Deck0", "Deck1", "Hand1"]
+    # The pile went back on top of the library, so the reorder prompt is open
+    # over exactly those two.
+    assert not linked_entries(rack), "the pile is drained when it goes back"
+    reorder = next(iter(game.pending_choices_of("reorder_library")))
+    assert reorder.data["top_count"] == 2
+    assert [c.name for c in game.players[0].library[:2]] == ["Hand0", "Hand2"]
+    assert game.confirm_reorder_library(0, new_order=[1, 0], shuffle=False)
+    assert [c.name for c in game.players[0].library] == [
+        "Hand2", "Hand0", "Deck2", "Deck3", "Deck4",
+    ]
+
+
+def test_scroll_rack_exiling_none_is_a_legal_answer_that_draws_none(set_pool):
+    """"Any number" includes zero, and it is an *answer* rather than a decline:
+    the sentence behind it puts that many cards into the hand, so an activation
+    that exiles nothing legally does nothing."""
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    hand = [_w2g4_card("Hand0", "Instant")]
+    game = _w2g4_game([rack], p0_hand=hand)
+    game.players[0].library = [_w2g4_card("Deck0", "Instant")] * 3
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_exile_hand_pile(0, [])
+
+    assert [c.name for c in game.players[0].hand] == ["Hand0"]
+    assert len(game.players[0].library) == 3
+    assert not game.players[0].exile
+
+
+def test_scroll_rack_puts_cards_into_hand_without_drawing_them(set_pool):
+    """CR 121.3: an effect that says "put the top card of your library into
+    your hand" is **not** a draw. The engine's own record of what was drawn
+    this turn is the check — a card routed through the draw seam would appear
+    in it, and every "whenever you draw" on the board would have fired.
+    """
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    game = _w2g4_game([rack], p0_hand=[_w2g4_card("Hand0", "Instant")])
+    game.players[0].library = [_w2g4_card("Deck0", "Instant")] * 3
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_exile_hand_pile(0, [0])
+
+    assert [c.name for c in game.players[0].hand] == ["Deck0"]
+    assert not game.players[0].cards_drawn_this_turn, (
+        "putting a card into a hand is not drawing it"
+    )
+
+
+def test_phyrexian_grimoire_lets_the_opponent_pick_which_card_is_lost(set_pool):
+    """`{4}, {T}: Target opponent chooses one of the top two cards of your
+    graveyard. Exile that card and put the other one into your hand.`
+
+    CR 404.2 keeps a graveyard in the order cards reached it, newest on top, so
+    "the top two" are the *last* two of the pile — the opposite end from a
+    library. No reveal happens: CR 400.2 makes a graveyard public and there is
+    nothing to show anybody.
+    """
+    grimoire = Permanent(card=set_pool("TMP")["Phyrexian Grimoire"])
+    # The *opponent* chooses, and this prompt takes its default at arm for a
+    # non-interactive seat — so seat 1 has to be one for the answer to be asked.
+    game = _w2g4_game([grimoire], interactive=(0, 1))
+    game.players[0].graveyard = [
+        _w2g4_card("Bottom", "Instant"),
+        _w2g4_card("Second", "Instant"),
+        _w2g4_card("Top", "Instant"),
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Grimoire", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert prompt.player_index == 1, "the *opponent* chooses"
+    assert prompt.data["cards"] == ["Top", "Second"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+
+    assert [c.name for c in game.players[0].exile] == ["Top"]
+    assert [c.name for c in game.players[0].hand] == ["Second"]
+    assert [c.name for c in game.players[0].graveyard] == ["Bottom"]
+
+
+def test_phyrexian_grimoire_over_one_card_still_moves_it(set_pool):
+    """Fewer cards than the printed number is an ordinary board: the pick is
+    made from what is there, and with nothing left over the "other one" clause
+    moves nothing rather than reaching further down the pile."""
+    grimoire = Permanent(card=set_pool("TMP")["Phyrexian Grimoire"])
+    game = _w2g4_game([grimoire], interactive=(0, 1))
+    game.players[0].graveyard = [_w2g4_card("Only", "Instant")]
+
+    game.activate_permanent_ability(
+        0, "Phyrexian Grimoire", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    prompt = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert prompt.data["cards"] == ["Only"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+
+    assert [c.name for c in game.players[0].exile] == ["Only"]
+    assert not game.players[0].hand

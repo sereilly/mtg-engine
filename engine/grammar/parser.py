@@ -58,7 +58,8 @@ from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_can
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do)
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
-                      _attach_repeat_this_process)
+                      _attach_repeat_this_process,
+                      _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_no_regeneration,
     _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .static_lines import (_looks_static, _parse_leading_static_condition_line,
@@ -448,6 +449,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # The same word again and a third mechanism behind it: a printed
             # list of parameters rather than a loop.
             if _attach_repeat_for_types(stream, steps):
+                continue
+            # "If two cards that share a color were milled this way, repeat
+            # this process." (Grindstone.) The fourth mechanism behind the same
+            # word — a loop that ends on a condition asked of what the round
+            # just did. Read here, after the three above and before the
+            # `Otherwise` rider, because it opens on "if" and none of them do.
+            if _attach_repeat_while_condition(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

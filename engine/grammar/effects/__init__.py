@@ -138,6 +138,7 @@ from .exile import (
     _parse_exile_cost_sacrifices,
     _parse_exile_graveyard,
     _parse_put_exiled_with_source,
+    parse_put_exiled_pile_on_library,
 )
 from .cards import (
     _parse_draw,
@@ -165,11 +166,16 @@ from .hand import (
 )
 from .library import (
     _parse_look_at_hand,
-    _parse_reveal_top,
     parse_player_looks_at_own_library_top,
-    parse_bin_revealed_card,
     parse_graveyard_top_to_library,
     parse_player_separates_your_library_top,
+)
+# CR 701.20a's public half of the look, split off `library` at Tempest's second
+# wave — see that module's docstring for the line.
+from .reveal import (
+    _parse_reveal_top,
+    parse_bin_revealed_card,
+    parse_graveyard_top_opponent_chooses,
 )
 from .zones import (
     _parse_shuffle_graveyard_into_library,
@@ -179,6 +185,7 @@ from .zones import (
     _parse_exile_top_of_library,
     _parse_exile_entire_library,
     _parse_put_iterated_card_on_library,
+    parse_put_library_top_into_hand,
 )
 from .search import _parse_search_library
 from .stack import (
@@ -299,6 +306,7 @@ __all__ = [
     "_parse_draw",
     "_parse_choose_cards_in_hand",
     "_parse_put_iterated_card_on_library",
+    "parse_put_library_top_into_hand",
     "_parse_sacrifice",
     "_parse_sacrifice_expansion_permanents",
     "_parse_delayed_self_action",
@@ -306,6 +314,7 @@ __all__ = [
     "_parse_shuffle_hand_into_library",
     "_parse_shuffle_library",
     "parse_bin_revealed_card",
+    "parse_graveyard_top_opponent_chooses",
     "parse_graveyard_top_to_library",
     "_parse_discard",
     "_parse_discard_revealed_unless_pay_life",
@@ -331,6 +340,7 @@ __all__ = [
     "_parse_exile_top_of_library",
     "_parse_exile_entire_library",
     "_parse_put_exiled_with_source",
+    "parse_put_exiled_pile_on_library",
     "parse_put_milled_card_onto_battlefield",
     "_parse_put_hand_cards_on_library",
     "_parse_player_puts_whole_hand_on_library",

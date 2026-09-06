@@ -1876,3 +1876,161 @@ def test_unstable_shapeshifter_compiles_to_one_bound_copy_instruction(set_pool):
     assert trigger.instruction.payload == {
         "filter": {"type_filter": "creature"}, "keeps_own_ability": True,
     }
+
+
+# --- W2G4: revealing until a match, and emptying a hand ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
+
+
+def _w2g4_card(name, type_line, text="", colors=(), power=None, toughness=None):
+    raw = {"name": name, "type_line": type_line, "oracle_text": text}
+    if power is not None:
+        raw["power"], raw["toughness"] = str(power), str(toughness)
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text=text,
+        cmc=0.0, colors=tuple(colors), color_identity=tuple(colors),
+        keywords=(), produced_mana=(), raw=raw,
+        power=str(power) if power is not None else None,
+        toughness=str(toughness) if toughness is not None else None,
+    )
+
+
+def _w2g4_creature_game(battlefield, *, library=(), hands=((), ())):
+    seats = [
+        PlayerState(name="P0", battlefield=[_nosick(p) for p in battlefield],
+                    library=list(library), hand=list(hands[0])),
+        PlayerState(name="P1", hand=list(hands[1])),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game._settle()
+    return game
+
+
+def test_sacred_guide_takes_the_white_card_and_exiles_what_it_passed(set_pool):
+    """`Reveal cards from the top of your library until you reveal a white
+    card. Put that card into your hand and exile all other cards revealed this
+    way.` (CR 701.20.)
+
+    The exile is the half that had no branch before this round: the same
+    sentence with the rest going to a graveyard is a strictly better card in a
+    pool that can reach a graveyard, so the word is read and carried out rather
+    than folded onto the nearest fate that existed.
+    """
+    guide = Permanent(card=set_pool("TMP")["Sacred Guide"])
+    black = _w2g4_card("Bog Imp", "Creature — Imp", colors=("B",))
+    green = _w2g4_card("Llanowar Elves", "Creature — Elf", colors=("G",))
+    white = _w2g4_card("Savannah Lions", "Creature — Cat", colors=("W",))
+    below = _w2g4_card("Mountain", "Basic Land — Mountain")
+    game = _w2g4_creature_game([guide], library=[black, green, white, below])
+
+    result = game.activate_permanent_ability(0, "Sacred Guide", ability_index=0)
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert [c.name for c in game.players[0].hand] == ["Savannah Lions"]
+    assert [c.name for c in game.players[0].exile] == ["Bog Imp", "Llanowar Elves"]
+    assert [c.name for c in game.players[0].library] == ["Mountain"]
+    # The Guide itself is there — it was the activation cost — and nothing
+    # else: the passed-over cards are exiled, not binned.
+    assert [c.name for c in game.players[0].graveyard] == ["Sacred Guide"]
+
+
+def test_sacred_guide_over_a_library_with_no_white_card_keeps_nothing(set_pool):
+    """CR 701.20a bounds the reveal by the library: a run that never matches
+    reveals the whole deck, takes nothing, and exiles all of it."""
+    guide = Permanent(card=set_pool("TMP")["Sacred Guide"])
+    black = _w2g4_card("Bog Imp", "Creature — Imp", colors=("B",))
+    game = _w2g4_creature_game([guide], library=[black, black])
+
+    game.activate_permanent_ability(0, "Sacred Guide", ability_index=0)
+    game.resolve_top_of_stack()
+
+    assert not game.players[0].hand
+    assert len(game.players[0].exile) == 2
+    assert not game.players[0].library
+
+
+def test_shocker_redraws_what_the_discard_binned_not_the_damage_it_dealt(set_pool):
+    """`Whenever this creature deals damage to a player, that player discards
+    all the cards in their hand, then draws that many cards.`
+
+    "That many" names the **discard**, and this is the assertion the round
+    turned on: Shocker's trigger event also carries a number (the damage), and
+    a bare back-reference used to read that one first. Its power is 2 and a
+    hand of four cards makes the two readings visibly different — read the
+    trigger's number, the victim discards four and draws two.
+    """
+    shocker = Permanent(card=set_pool("TMP")["Shocker"])
+    filler = _w2g4_card("Mountain", "Basic Land — Mountain")
+    game = _w2g4_creature_game([shocker])
+    game.players[1].hand = [filler] * 4
+    game.players[1].library = [filler] * 10
+
+    program = compile_card_oracle(shocker.card)
+    assert program.supported, program.reason
+    draw = program.instructions[0].payload["steps"][1]
+    assert draw.payload.get("amount_from") == "discarded_count", (
+        "the nearer antecedent is the discard this sentence just performed"
+    )
+
+    game._deal_damage_to_player(game.players[1], 2, source=shocker)
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert len(game.players[1].hand) == 4
+    assert len(game.players[1].graveyard) == 4
+
+
+def test_wood_sage_sorts_the_revealed_four_by_the_name_that_was_chosen(set_pool):
+    """`{T}: Choose a creature card name. Reveal the top four cards of your
+    library and put all of them with that name into your hand. Put the rest
+    into your graveyard.`
+
+    The Rock Hydra test for a two-step naming card: the prompt is answered and
+    the pile is read out of the *hand* and the *graveyard*, not off the claim
+    that two instructions compiled.
+    """
+    sage = Permanent(card=set_pool("TMP")["Wood Sage"])
+    wanted = _w2g4_card("Grizzly Bears", "Creature — Bear", power=2, toughness=2)
+    other = _w2g4_card("Mountain", "Basic Land — Mountain")
+    game = _w2g4_creature_game(
+        [sage], library=[wanted, other, wanted, other, other],
+    )
+    game.interactive_seats = {0}
+
+    game.activate_permanent_ability(0, "Wood Sage", ability_index=0)
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("choose_card_name")))
+    assert prompt.data.get("card_type") == "creature", (
+        "the printed narrowing reaches the seat that answers"
+    )
+    assert game.confirm_choose_card_name(0, "Grizzly Bears")
+
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears"] * 2
+    assert [c.name for c in game.players[0].graveyard] == ["Mountain"] * 2
+    # The fifth card was never revealed.
+    assert [c.name for c in game.players[0].library] == ["Mountain"]
+
+
+def test_wood_sage_naming_nothing_bins_the_whole_pile(set_pool):
+    """An empty name is a legal answer that matches nothing (CR 202.1), and it
+    must not be read as "match everything" — which would put four cards in the
+    hand off a seat that named no card at all."""
+    sage = Permanent(card=set_pool("TMP")["Wood Sage"])
+    bear = _w2g4_card("Grizzly Bears", "Creature — Bear", power=2, toughness=2)
+    game = _w2g4_creature_game([sage], library=[bear] * 4)
+    game.interactive_seats = {0}
+
+    game.activate_permanent_ability(0, "Wood Sage", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "")
+
+    assert not game.players[0].hand
+    assert len(game.players[0].graveyard) == 4

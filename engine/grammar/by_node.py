@@ -84,9 +84,11 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_ownership_exchange_unless_paid,
                        _lower_ante_offer_ownership_exchange,
                        _lower_random_reveal_ownership_exchange,
-                       _lower_exile_top_of_library, _lower_put_exiled_with_source,
+                       _lower_exile_top_of_library,
                        _lower_exile_graveyard_position,
                        _lower_look_top_exile_random, _lower_search_and_exile,
+                       _lower_put_exiled_pile_on_library,
+                       _lower_graveyard_top_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
                        _lower_search_library, _lower_change_base_pt, _lower_set_base_pt,
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
@@ -142,7 +144,17 @@ _BY_NODE_TYPE: dict[type, object] = {
     # resolves (CR 608.2) and CR 202.1 lets a player name any card at all, so
     # nothing about it can be decided at lowering — the whole of the lowering
     # is the instruction.
-    ast.ChooseCardName: lambda node: (OracleInstruction("choose_card_name", "", {}),),
+    #
+    # "Choose a **creature** card name." (Wood Sage.) The one thing a printing
+    # can add, carried as payload and **only when it is printed**, so
+    # Foreshadow's instruction stays byte-identical and no behaviour signature
+    # moves — the same rule `NameThenRevealTop`'s `miss_damage` follows.
+    ast.ChooseCardName: lambda node: (
+        OracleInstruction(
+            "choose_card_name", "",
+            {"card_type": node.card_type} if node.card_type else {},
+        ),
+    ),
     ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,
     ast.DamageThoseDamagedThisGame: _lower_damage_this_game_history,
     ast.CoinFlipDamageLoop: _lower_coin_flip_damage_loop,
@@ -226,9 +238,15 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SearchLibrary: _lower_search_library,
     ast.ExileTopOfLibrary: _lower_exile_top_of_library,
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
-    ast.PutExiledWithSource: _lower_put_exiled_with_source,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    # The same pick over a *public* pile (Phyrexian Grimoire): no reveal,
+    # because CR 400.2 makes a graveyard public — see the node.
+    ast.GraveyardTopOpponentChooses: _lower_graveyard_top_opponent_chooses,
+    # Scroll Rack's linked pile going back on the library: the record
+    # answers which cards, so the node carries the position and nothing
+    # else — a row here rather than an arm in the chain.
+    ast.PutExiledPileOnLibrary: _lower_put_exiled_pile_on_library,
     ast.SearchAndExile: _lower_search_and_exile,
     ast.ForceChosenCreatureToAttack: _lower_force_chosen_creature_to_attack,
     ast.ExileGraveyardUntilLeaves: _lower_exile_graveyard_until_leaves,

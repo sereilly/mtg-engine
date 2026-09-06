@@ -131,11 +131,16 @@ from .mana import (
     SpendManaAsThough,
 )
 from .library import (
+    PutExiledPileOnLibrary,
+    RevealUntil,
     LookAtHand,
     LookAtLibraryTop,
     LookTopCycleForLife,
     LookTopExileRandom,
     RevealTopOpponentChooses,
+    GraveyardTopOpponentChooses,
+    PutLibraryTopIntoHand,
+    RevealTopSortingByChosenName,
     LookTopPickToHand,
     RevealTop,
     RevealTopToHandOrBottom,
@@ -171,7 +176,6 @@ from .cards import (
     NameAndRandomReveal,
     NameAndStrip,
     NameThenRevealTop,
-    RevealUntil,
     Scry,
     AnteOfferOwnershipExchange,
     OwnershipExchangeUnlessPaid,
@@ -287,6 +291,7 @@ Effect = Union[
     UpkeepCounterToll,
     UpkeepDamageUnlessCost,
     ExileBoundCard, PutExiledCardIntoZone, PutExiledPileTopIntoHand,
+    PutExiledPileOnLibrary,
     RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,
     AnteOfferOwnershipExchange,
@@ -295,6 +300,9 @@ Effect = Union[
     ExileTopOfLibrary, ExileGraveyardPosition, ExileEntireLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopExileRandom, LookTopPickToHand,
     RevealTopOpponentChooses,
+    GraveyardTopOpponentChooses,
+    PutLibraryTopIntoHand,
+    RevealTopSortingByChosenName,
     PlayWithHandRevealed,
     RevealHand,
     RevealHandAndChoose,
@@ -477,6 +485,28 @@ class RepeatProcess:
     """
     round: "Statement"
     restatement: "Statement"
+
+
+@dataclass(frozen=True)
+class RepeatProcessWhile:
+    """"Target player mills two cards. **If two cards that share a color were
+    milled this way, repeat this process.**" (Grindstone.)
+
+    The **fourth** printed "repeat this process" and a fourth mechanism, which
+    is why it is a node of its own and not a flag on the three around it.
+    Eureka's loop ends on a round nobody took, Forbidden Ritual's on its
+    controller's answer, Equipoise's is not a loop at all — and this one ends
+    on a *condition asked of what the round just did*, which none of the others
+    has anywhere to put.
+
+    ``round`` is the sentence before the clause, and ``condition`` is the one
+    printed in front of "repeat". The condition reads a record the round writes
+    ("milled **this way**"), so the loop clears that record before each round —
+    otherwise "this way" would accumulate and the second round would be asked
+    about the first one's cards as well.
+    """
+    round: "Statement"
+    condition: "Condition"
 
 
 @dataclass(frozen=True)
@@ -668,7 +698,7 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
 
 
 # ---------------------------------------------------------------------------

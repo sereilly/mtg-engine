@@ -91,6 +91,7 @@ ActionKind = Literal[
     "flip_again_confirm",
     "repeat_process_confirm",
     "exile_from_hand_confirm",
+    "exile_hand_pile_confirm",
     "linked_exile_return_confirm",
     "library_cycle_confirm",
     "library_pile_split_confirm",
@@ -344,6 +345,12 @@ class GameActionRequest(BaseModel):
     emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
+    # "Exile **any number of** cards from your hand face down." (Scroll Rack.)
+    # Several slots at once, and its own field rather than a list-valued
+    # `hand_index`: one card and a pile are answered by different prompts, and
+    # a field that meant either would let a client answer one with the other's
+    # shape. An empty list is a real answer — "any number" includes zero.
+    hand_indices: list[int] | None = None
     # Which CR 116 special action the "special_action" request is taking, by
     # the kind `engine/special_actions.py` names. Its own field rather than a
     # reading of the card, because one card may in principle grant two and the

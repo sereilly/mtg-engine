@@ -309,7 +309,16 @@ class ChooseCardName:
     and CR 202.1 lets a player name **any** card, printed or not — and because
     a reader written for one that received the other would be comparing a
     colour symbol against a card name and always answering no.
+
+    ``card_type`` is the printed bound on that freedom: "Choose a **creature**
+    card name" (Wood Sage) narrows CR 202.1's "any card" to one card type, and
+    the narrowing is honoured where the choice is *made* rather than dropped —
+    a prompt that took any name would let a player name the card they actually
+    wanted and the sentence behind it would happily match it. ``None`` is
+    Foreshadow's unbounded naming, which is every other printing.
     """
+
+    card_type: str | None = None
 
 
 @dataclass(frozen=True)

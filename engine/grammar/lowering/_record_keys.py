@@ -199,6 +199,13 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     COUNTERS_REMOVED,
     # How many cards a discard this effect asked for actually went (Recall).
     "discarded_count",
+    # How many cards a hand exile this effect performed actually took (Scroll
+    # Rack), which is what "put **that many** cards from the top of your
+    # library into your hand" reads. Its own key beside ``exiled_cards``
+    # because a list is not a quantity: this set is what a *bare* back-reference
+    # resolves against, and admitting the list would let "that much" name a
+    # pile.
+    "exiled_count",
     # How many cards a "puts the cards from their hand on top of their library"
     # step moved (Jester's Mask), which is what the search behind it counts.
     HAND_CARDS_TO_LIBRARY,

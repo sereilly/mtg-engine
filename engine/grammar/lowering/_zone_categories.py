@@ -51,6 +51,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "bin_revealed_card": "zones",
     "put_revealed_card_onto_battlefield": "zones",
     "reveal_top_opponent_chooses": "zones",
+    # Wood Sage's sorted reveal, beside the pick above: what it touches is a
+    # library and two zones the pile is split between.
+    "reveal_top_sorting_by_chosen_name": "zones",
     "choose_card_name": "zones",
     "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",
@@ -149,6 +152,13 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_entire_library": "zones",
     "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",
+    # The pile spelling of the row above (Duplicity, Scroll Rack): the same
+    # hidden zone, a quantifier up.
+    "exile_hand_pile": "zones",
+    # Scroll Rack's other two sentences: cards off a library into a hand
+    # (not a draw — CR 121.3) and the linked pile back on top of it.
+    "put_library_top_into_hand": "zones",
+    "put_exiled_pile_on_library": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",

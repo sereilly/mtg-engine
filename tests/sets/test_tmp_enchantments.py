@@ -1316,3 +1316,200 @@ def test_the_free_cast_line_reads_its_two_printed_parameters(set_pool):
         "without paying their mana costs."
     ) is None
     assert compile_card_oracle(set_pool("TMP")["Aluren"]).supported
+
+
+# --- W2G4: the linked pile a hand is swapped with ---
+
+from engine import Game, PlayerState
+from engine.linked_exile import linked_entries
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g4_card(name, type_line, text=""):
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text=text,
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": text},
+    )
+
+
+def _w2g4_game(permanents, *, hand=(), library=(), interactive=(0,)):
+    seats = [
+        PlayerState(name="P0", battlefield=list(permanents), hand=list(hand),
+                    library=list(library)),
+        PlayerState(name="P1"),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def _w2g4_upkeep(game, seat=0):
+    """One upkeep step for *seat*, with its triggers resolved off the stack.
+
+    The loop stops on an owed prompt as well as on an empty stack, and that is
+    the engine working rather than a guard: a prompt armed part-way through a
+    resolution keeps its stack object *on* the stack until it is answered
+    (CR 608.2, CR 117.3b), so a bare `while game.stack` here spins for ever on
+    any card that asks its controller something. Call it again after answering
+    to carry on where it stopped.
+    """
+    game.active_player_index = seat
+    game.resolve_upkeep(seat)
+    _w2g4_drain(game)
+
+
+def _w2g4_drain(game):
+    """Resolve the stack down to the first owed prompt.
+
+    Its own function because a targeted trigger needs it *twice*: once to reach
+    the "choose your target" prompt (CR 603.3d) and again after the answer. A
+    second ``resolve_upkeep`` would put the trigger on the stack a second time.
+    """
+    while game.stack and not game.pending_choices:
+        game.resolve_top_of_stack()
+
+
+def test_duplicity_swaps_the_whole_hand_for_the_pile_it_already_holds(set_pool):
+    """`At the beginning of your upkeep, you may exile all cards from your hand
+    face down. If you do, put all other cards you own exiled with this
+    enchantment into your hand.`
+
+    The last hollow line in the set: the ability part compiled with no
+    instruction behind it at all. "All **other**" is the piece that makes it
+    work — other than the cards this same resolution just exiled — so the
+    enchantment hands back the *previous* pile rather than the one it has this
+    instant taken away. Read the other way it would give back exactly what it
+    took and the card would do nothing.
+    """
+    from engine.linked_exile import link_exiled_card
+
+    dup = Permanent(card=set_pool("TMP")["Duplicity"])
+    old_pile = [_w2g4_card(f"Old{i}", "Instant") for i in range(3)]
+    hand = [_w2g4_card(f"New{i}", "Instant") for i in range(2)]
+    game = _w2g4_game([dup], hand=hand)
+    for card in old_pile:
+        game.players[0].exile.append(card)
+        link_exiled_card(dup, card, 0, face_down=True)
+
+    program = compile_card_oracle(dup.card)
+    upkeep = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "upkeep_self"
+    )
+    assert upkeep.instruction is not None, (
+        "this ability part compiled with no instruction behind it"
+    )
+
+    _w2g4_upkeep(game)
+    # The offer is a **price** — the hand is what it spends — so a headless
+    # seat declines it (`ai_valuation.SELF_PAYMENT_KINDS`) and the swap only
+    # happens for a seat that says yes.
+    assert game.confirm_optional_pay(0, accept=True)
+
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Old0", "Old1", "Old2",
+    ]
+    # The new hand is the pile now, and only it — the old three left exile.
+    assert sorted(e["card"].name for e in linked_entries(dup)) == ["New0", "New1"]
+    assert sorted(c.name for c in game.players[0].exile) == ["New0", "New1"]
+
+
+def test_duplicity_does_not_hand_back_another_players_cards(set_pool):
+    """"…cards **you own**…" narrows the sweep, and it is the whole of what
+    stops a player who has taken the enchantment from pulling its previous
+    controller's cards out of exile."""
+    from engine.linked_exile import link_exiled_card
+
+    dup = Permanent(card=set_pool("TMP")["Duplicity"])
+    theirs = _w2g4_card("Theirs", "Instant")
+    mine = _w2g4_card("Mine", "Instant")
+    game = _w2g4_game([dup], hand=[_w2g4_card("New0", "Instant")])
+    game.players[1].exile.append(theirs)
+    link_exiled_card(dup, theirs, 1, face_down=True)
+    game.players[0].exile.append(mine)
+    link_exiled_card(dup, mine, 0, face_down=True)
+
+    _w2g4_upkeep(game)
+    assert game.confirm_optional_pay(0, accept=True)
+
+    assert [c.name for c in game.players[0].hand] == ["Mine"]
+    assert [c.name for c in game.players[1].exile] == ["Theirs"]
+    assert any(e["card"].name == "Theirs" for e in linked_entries(dup)), (
+        "the other player's card is still exiled with the enchantment"
+    )
+
+
+def test_duplicity_is_offered_as_a_price_so_a_headless_seat_declines(set_pool):
+    """A new offered-action kind is free until somebody says it is not, and the
+    failure is silent: the cost is lowered *into* the offered action, where the
+    affordability test cannot see it.
+
+    Left out of `SELF_PAYMENT_KINDS`, a headless seat exiles its whole hand
+    every upkeep — the exact shape `_default_optional_pay`'s docstring records
+    for the sacrifice and the ante.
+    """
+    dup = Permanent(card=set_pool("TMP")["Duplicity"])
+    hand = [_w2g4_card("New0", "Instant")]
+    game = _w2g4_game([dup], hand=hand, interactive=())
+
+    _w2g4_upkeep(game)
+
+    assert [c.name for c in game.players[0].hand] == ["New0"]
+    assert not linked_entries(dup)
+
+
+def test_precognition_looks_at_the_targeted_opponents_top_card(set_pool):
+    """`At the beginning of your upkeep, you may look at the top card of target
+    opponent's library. If you do, you may put that card on the bottom of that
+    player's library.`
+
+    Two pieces the brief named, and both turned out smaller than they read.
+    `look_at_library_top_then_bottom` has existed since Coral Fighters; what
+    refused was the *seat* — the one card printing a targeted look happened to
+    say "player", so "target opponent" was declined by name. And "you may put
+    that card on the bottom" is that production's own tail, four words short of
+    reading Precognition's "If you do," join.
+    """
+    pre = Permanent(card=set_pool("TMP")["Precognition"])
+    game = _w2g4_game([pre], interactive=(0,))
+    game.players[1].library = [
+        _w2g4_card("Top", "Instant"), _w2g4_card("Under", "Instant"),
+    ]
+
+    _w2g4_upkeep(game)
+    # The trigger targets, so the seat names its opponent as it goes on the
+    # stack (CR 603.3d) before anything is looked at.
+    assert game.confirm_trigger_target(0, seat=1)
+    _w2g4_drain(game)
+    assert game.confirm_optional_pay(0, accept=True)
+
+    scry = next(iter(game.pending_choices_of("scry")))
+    assert scry.player_index == 0, "the enchantment's controller does the looking"
+    assert scry.data["library_index"] == 1, "…at the *opponent's* library"
+    assert scry.data["top_count"] == 1
+    assert game.confirm_scry(0, card_order=[0], bottom_count=1)
+
+    assert [c.name for c in game.players[1].library] == ["Under", "Top"]
+
+
+def test_precognition_may_leave_the_card_where_it_is(set_pool):
+    """"You **may** put that card on the bottom" — leaving it on top is a legal
+    outcome and is the whole reason the sentence is a decision rather than a
+    move."""
+    pre = Permanent(card=set_pool("TMP")["Precognition"])
+    game = _w2g4_game([pre], interactive=(0,))
+    game.players[1].library = [
+        _w2g4_card("Top", "Instant"), _w2g4_card("Under", "Instant"),
+    ]
+
+    _w2g4_upkeep(game)
+    assert game.confirm_trigger_target(0, seat=1)
+    _w2g4_drain(game)
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.confirm_scry(0, card_order=[0], bottom_count=0)
+
+    assert [c.name for c in game.players[1].library] == ["Top", "Under"]
