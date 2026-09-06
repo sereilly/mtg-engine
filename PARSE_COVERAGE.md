@@ -311,9 +311,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 2258 |
+| parse rule | 2259 |
 | activation cost | 996 |
-| trigger table | 679 |
+| trigger table | 680 |
 | keyword table | 492 |
 | static-line table | 460 |
 | aura enchant noun (oracle_instructions attach) | 176 |
@@ -326,8 +326,8 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | cast_costs.py | 26 |
 | cast_restrictions.py | 19 |
 | untap_restrictions.py | 16 |
-| mixin text scan | 16 |
 | cost_modifiers.py | 16 |
+| mixin text scan | 15 |
 | activation_permissions.py | 10 |
 | cast_timing.py (granted flash) | 10 |
 | cast_timing.py (cleanup sacrifice rider) | 10 |

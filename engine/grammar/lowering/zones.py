@@ -400,11 +400,76 @@ def _lower_shuffle_graveyard_into_library(
 ) -> tuple[OracleInstruction, ...]:
     """Feldon's Cane. Whose graveyard is on the payload even though only one
     value is printed today — the alternative is a kind that would have to be
-    replaced the first time a card says "target player's"."""
+    replaced the first time a card says "target player's".
+
+    "Shuffle **all creature cards** from your graveyard into your library."
+    (Barishi.) The narrowed pile, on the key ``graveyard_card_matches``
+    already reads — the same predicate the graveyard-to-hand returns ask, so
+    "creature card" means one thing in this engine wherever it is printed. Only
+    a phrase that predicate can test is admitted: the alternative is a filter
+    parsed and dropped, which for this sentence is a card shuffling its owner's
+    lands and spells back in as well.
+    """
+    payload: dict[str, object] = {"whose": node.whose.kind}
+    if node.cards is not None:
+        filt = node.cards
+        # Read field by field rather than through ``_filter_payload``, which
+        # speaks the *battlefield* matcher's key names and refuses a
+        # graveyard-scoped phrase outright. The reader here is
+        # ``graveyard_card_matches``, whose keys these are — the same predicate
+        # the graveyard-to-hand returns ask, so "creature card" means one thing
+        # in this engine wherever it is printed.
+        unread = _restrictions_beyond(
+            filt,
+            frozenset({"is_card", "zone", "zone_owner", "card_types",
+                       "supertypes", "subtypes", "colors"}),
+        )
+        if unread:
+            raise LoweringError(
+                "the graveyard shuffle cannot narrow by: " + ", ".join(unread),
+                node=node,
+            )
+        cards: dict[str, object] = {}
+        if len(filt.card_types) > 1:
+            cards["card_types"] = list(filt.card_types)
+        elif filt.card_types:
+            cards["card_type"] = filt.card_types[0]
+        if filt.subtypes:
+            cards["graveyard_subtypes"] = list(filt.subtypes)
+        if filt.colors:
+            cards["graveyard_colors"] = list(filt.colors)
+        if filt.supertypes:
+            cards["supertypes"] = list(filt.supertypes)
+        if not cards:
+            raise LoweringError(
+                "the graveyard shuffle's noun phrase narrows nothing at all",
+                node=node,
+            )
+        payload["cards"] = cards
     return (
-        OracleInstruction(
-            "shuffle_graveyard_into_library", "", {"whose": node.whose.kind}
-        ),
+        OracleInstruction("shuffle_graveyard_into_library", "", payload),
+    )
+
+
+def _lower_shuffle_source_into_library(
+    node: ast.ShuffleSourceIntoLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """"When this creature dies, shuffle **it** into its owner's library."
+    (Alabaster Dragon.)
+
+    The seat is on the payload for ``_lower_shuffle_graveyard_into_library``'s
+    reason, and refused when it is not the owner's: CR 404.1 put the card in
+    its owner's graveyard, so "its owner's library" is the one library this
+    sentence can reach, and a card printing "your library" would be a different
+    card the moment a creature changed hands.
+    """
+    if node.owner.kind != "owner":
+        raise LoweringError(
+            f"no handler shuffles this card into {node.owner.kind!r}'s library",
+            node=node,
+        )
+    return (
+        OracleInstruction("shuffle_source_card_into_library", "", {}),
     )
 
 
@@ -676,6 +741,8 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # look above with the rearrangement switched on — same prompt, same zone,
     # so the same family.
     "reorder_target_library_top": "zones",
+    "reorder_own_library_top": "zones",
+    "shuffle_source_card_into_library": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.
     "search_library": "zones",

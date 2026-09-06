@@ -16,9 +16,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 85.8% | 84.3% | 47.7% | 168 |
-| LEB | 292 | 389 | 85.9% | 84.3% | 47.8% | 169 |
-| 2ED | 292 | 389 | 85.9% | 84.3% | 47.8% | 169 |
+| LEA | 290 | 388 | 86.1% | 84.5% | 47.9% | 169 |
+| LEB | 292 | 389 | 86.1% | 84.6% | 48.1% | 170 |
+| 2ED | 292 | 389 | 86.1% | 84.6% | 48.1% | 170 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 88.2% | 86.1% | 50.4% | 176 |
@@ -33,8 +33,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 65.9% | 57.8% | 37.8% | 86 |
-| **All (shipped)** | **4085** | **6090** | **90.0%** | **89.2%** | **58.8%** | **2962** |
+| WTH *(measured)* | 167 | 249 | 67.9% | 61.8% | 41.8% | 95 |
+| **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 346 | 154 | expected a subject |  |
+| 340 | 150 | expected a subject |  |
 | 107 | 51 | unrecognized effect verb |  |
-| 99 | 53 | unconsumed text |  |
+| 98 | 52 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -74,12 +74,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-2962 cards, 3581 lines.
+2965 cards, 3584 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
 - **Abduction**
   - `When this Aura enters, untap enchanted creature.`
+  - `When enchanted creature dies, return that card to the battlefield under its owner's control.`
 - **Abeyance**
   - `Draw a card.`
 - **Abjure**
@@ -140,6 +141,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a +1/+1 counter on each creature each opponent controls.`
 - **Al-abara's Carpet**
   - `{5}, {T}: Prevent all damage that would be dealt to you this turn by attacking creatures without flying.`
+- **Alabaster Dragon**
+  - `When this creature dies, shuffle it into its owner's library.`
 - **Alabaster Potion**
   - `• Target player gains X life.`
   - `• Prevent the next X damage that would be dealt to any target this turn.`
@@ -214,6 +217,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player draws three cards.`
 - **Angelic Ascension**
   - `Exile target creature or planeswalker. Its controller creates a 4/4 white Angel creature token with flying.`
+- **Angelic Renewal**
+  - `Whenever a creature is put into your graveyard from the battlefield, you may sacrifice this enchantment. If you do, return that card to the battlefield.`
 - **Angelic Voices**
   - `Creatures you control get +1/+1 as long as you control no nonartifact, nonwhite creatures.`
 - **Angus Mackenzie**
@@ -423,6 +428,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
 - **Barbed-Back Wurm**
   - `{B}: Target green creature blocking this creature gets -1/-1 until end of turn.`
+- **Barishi**
+  - `When this creature dies, exile it, then shuffle all creature cards from your graveyard into your library.`
 - **Barl's Cage**
   - `{3}: Target creature doesn't untap during its controller's next untap step.`
   - `{3}: Target creature doesn't untap during its controller's next untap step.`
@@ -829,6 +836,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature. If a white creature dies this way, Cinder Cloud deals damage to that creature's controller equal to the creature's power.`
 - **Cinder Giant**
   - `At the beginning of your upkeep, this creature deals 2 damage to each other creature you control.`
+- **Cinder Wall**
+  - `When this creature blocks, destroy it at end of combat.`
 - **Circle of Despair**
   - `{1}, Sacrifice a creature: The next time a source of your choice would deal damage to any target this turn, prevent that damage.`
 - **Circle of Protection: Artifacts**
@@ -2208,6 +2217,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, defending player may draw a card.`
 - **Harmattan Efreet**
   - `{1}{U}{U}: Target creature gains flying until end of turn.`
+- **Harvest Wurm**
+  - `When this creature enters, sacrifice it unless you return a basic land card from your graveyard to your hand.`
 - **Hasran Ogress**
   - `Whenever this creature attacks, it deals 3 damage to you unless you pay {2}.`
 - **Haunting Misery**
@@ -2899,6 +2910,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Library of Lat-Nam**
   - `• You draw three cards at the beginning of the next turn's upkeep.`
   - `• You search your library for a card, put that card into your hand, then shuffle.`
+- **Lich**
+  - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
+  - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
+  - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
 - **Lichenthrope**
   - `At the beginning of your upkeep, remove a -1/-1 counter from this creature.`
 - **Life Chisel**
@@ -4179,6 +4194,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Safe Haven**
   - `{2}, {T}: Exile target creature you control.`
   - `At the beginning of your upkeep, you may sacrifice this land. If you do, return each card exiled with this land to the battlefield under its owner's control.`
+- **Sage Owl**
+  - `When this creature enters, look at the top four cards of your library, then put them back in any order.`
 - **Sage of Lat-Nam**
   - `{T}, Sacrifice an artifact: Draw a card.`
 - **Samite Alchemist**
@@ -4718,6 +4735,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, scry 2.`
 - **Strands of Night**
   - `{B}{B}, Pay 2 life, Sacrifice a Swamp: Return target creature card from your graveyard to the battlefield.`
+- **Straw Golem**
+  - `When an opponent casts a creature spell, sacrifice this creature.`
 - **Stream of Life**
   - `Target player gains X life.`
   - `Target player gains X life.`
@@ -5022,6 +5041,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thunderbolt**
   - `• Thunderbolt deals 3 damage to target player or planeswalker.`
   - `• Thunderbolt deals 4 damage to target creature with flying.`
+- **Thundermare**
+  - `When this creature enters, tap all other creatures.`
 - **Tidal Control**
   - `Pay 2 life or {2}: Counter target red or green spell. Any player may activate this ability.`
 - **Tidal Flats**
@@ -5060,6 +5081,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Take an extra turn after this one.`
 - **Time and Tide**
   - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
+- **Timid Drake**
+  - `When another creature enters, return this creature to its owner's hand.`
 - **Timmerian Fiends**
   - `{B}{B}{B}, Sacrifice this creature: The owner of target artifact may ante the top card of their library. If that player doesn't, exchange ownership of that artifact and Timmerian Fiends. Put the artifact card into your graveyard and Timmerian Fiends from anywhere into that player's graveyard. This change in ownership is permanent.`
 - **Tin-Wing Chimera**

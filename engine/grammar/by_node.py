@@ -66,6 +66,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_reveal_top_of_library, _lower_reanimate_enchanted_card,
                        _lower_sacrifice_expansion_permanents,
                        _lower_shuffle_graveyard_into_library,
+                       _lower_shuffle_source_into_library,
                        _lower_shuffle_hand_into_library, _lower_shuffle_library,
                        _lower_destroy_each_unless_paid,
                        _lower_cast_from_exiled_with,
@@ -193,6 +194,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ChangeSupertype: _lower_change_supertype,
     ast.ChangeLandType: _lower_change_land_type,
     ast.ShuffleGraveyardIntoLibrary: _lower_shuffle_graveyard_into_library,
+    ast.ShuffleSourceIntoLibrary: _lower_shuffle_source_into_library,
     ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
     ast.ShuffleLibrary: _lower_shuffle_library,
     # CR 701.20a's bare reveal. It moved out of `lower.py`'s if-chain when

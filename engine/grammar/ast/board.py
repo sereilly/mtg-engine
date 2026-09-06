@@ -744,6 +744,38 @@ class ShuffleGraveyardIntoLibrary:
     part of the move rather than a rider on it (CR 701.24a).
     """
     whose: PlayerRef
+    #: "Shuffle **all creature cards** from your graveyard into your library."
+    #: (Barishi.) Which cards move, when the sentence names a set instead of
+    #: the zone. None is Feldon's Cane's whole graveyard.
+    #:
+    #: A field rather than a second node, because the difference really is a
+    #: narrowing: nothing is chosen either way (a graveyard is a public zone
+    #: and "all" leaves no decision), the destination is the same library, and
+    #: CR 701.24a makes it one shuffle either way. What the field must never do
+    #: is go unread — a filter dropped here is Barishi shuffling back every
+    #: land and every spell as well.
+    cards: ObjectFilter | None = None
+
+
+@dataclass(frozen=True)
+class ShuffleSourceIntoLibrary:
+    """``When this creature dies, shuffle it into its owner's library.``
+    (Alabaster Dragon.)
+
+    One *object* rather than a pile, which is what separates it from the three
+    nodes around it: they move a zone, and this moves the ability's own card
+    out of wherever it now is. By the time the trigger resolves that is a
+    graveyard (CR 603.10), but the sentence names no source zone at all, so the
+    handler reaches whichever zone actually holds it.
+
+    ``owner`` is read rather than assumed. CR 404.1 sends a permanent to its
+    owner's graveyard and CR 701.24a shuffles a library its owner owns, so "its
+    owner's" is the only seat this sentence can name — but a card printing
+    "your library" instead would be a different card for a creature that
+    changed hands, and consuming the possessive unread is how it would compile
+    onto this one.
+    """
+    owner: PlayerRef
 
 
 @dataclass(frozen=True)

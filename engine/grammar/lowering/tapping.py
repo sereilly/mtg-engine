@@ -329,6 +329,14 @@ def _lower_tap(
                 # from combat after attacking is untapped by the card and
                 # would not be by that key.
                 "attacked_this_turn",
+                # "When this creature enters, tap all **other** creatures."
+                # (Thundermare.) CR 109.5's identity rather than a
+                # characteristic: it reaches the payload as ``exclude_self``
+                # and ``subject_matches`` tests it against the ability's own
+                # source, which this handler already passes. The word is the
+                # difference between a Thundermare that attacks into an
+                # untapped board and one that taps itself out.
+                "other_than_source",
             }),
         )
         if leftovers:

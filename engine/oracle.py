@@ -1028,7 +1028,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 
 # "when" triggers (enter/leave events)
 WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
+    # `enters_battlefield` **is** the source's own entry, and the `.+` was
+    # claiming every other subject for it. "When **another creature** enters,
+    # return this creature to its owner's hand" (Timid Drake) matched here and
+    # lost the word: the Drake bounced itself the turn it arrived and never
+    # fired again — an ability firing on the wrong event, which reads to every
+    # census as implemented. The grammar had it right (`matching_permanent_enters`
+    # with `other_than_source`), so the two front ends disagreed and the one
+    # that dispatches was the wrong one.
+    #
+    # The lookahead rather than a `matching_permanent_enters` row copied down
+    # here, because a kind lives in one table (see the note in the whenever
+    # table): a quantified subject falls through to the whenever patterns, where
+    # that kind already reads the noun phrase. The bare `.+` still covers a card
+    # naming itself by a short form the self-reference collapse leaves behind
+    # ("when barrin enters"), which is the source and belongs to this kind.
+    ("enters_battlefield",
+     r"when (?!(?:a|an|another) )(?:this|.+) enters(?: the battlefield)?"),
     # "When **the token** leaves the battlefield, sacrifice this enchantment."
     # (Dance of Many.) CR 603.6c's event asked about a *different* object from
     # the one whose ability it is — the token this permanent created — which is
@@ -1091,8 +1107,16 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # would swallow the whole clause on any line that happened to end in
     # "dies" — and both front ends carry the wording, since a condition only one
     # of them reads leaves the other refusing the effect behind it.
+    # The permanent noun and the article are both read rather than fixed.
+    # "When **this enchantment** is put into **a** graveyard from the
+    # battlefield, you lose the game." (Lich.) Neither front end had this
+    # spelling, so the ability compiled to nothing and the card's whole
+    # downside never happened — CR 404.1 sends a permanent to its owner's
+    # graveyard, so "a" and "your" name the same pile for a card its controller
+    # owns, and the noun is the source either way.
     ("dies",
-     r"when this creature is put into your graveyard from the battlefield"),
+     r"when this (?:creature|artifact|enchantment|land|permanent) is put into "
+     r"(?:a|your) graveyard from the battlefield"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

@@ -24,6 +24,8 @@ other, which is what the layering guard requires of two families in one package.
 
 from .. import ast
 from ..amounts import parse_amount
+from ..errors import GrammarError
+from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
@@ -141,9 +143,48 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     # so the word is matched directly, and both occurrences are checked. A card
     # moving *another* player's graveyard is a different effect, and consuming
     # the possessive without reading it would compile that card onto this one.
-    if not stream.accept_phrase(
-        "shuffle", "your", "graveyard", "into", "your", "library"
-    ):
+    if not stream.accept_word("shuffle"):
+        stream.reset(mark)
+        return None
+    # "Shuffle **it** into **its owner's** library." (Alabaster Dragon.) One
+    # object rather than a pile, read here because the word after the verb is
+    # what tells the two apart and this is the production the verb reaches.
+    # Non-consuming on refusal, so the two pile readings below keep theirs.
+    source = stream.mark()
+    if stream.accept_word("it"):
+        if stream.accept_phrase("into", "its", "owner", "'s", "library"):
+            return ast.ShuffleSourceIntoLibrary(ast.PlayerRef("owner"))
+        stream.reset(mark)
+        return None
+    stream.reset(source)
+    # "Shuffle **all creature cards from** your graveyard into your library."
+    # (Barishi.) The same move over a named subset, so it is this node with a
+    # filter rather than a second one — see ``ShuffleGraveyardIntoLibrary.cards``.
+    # ``parse_object_filter`` is the one reader of a printed noun phrase, and a
+    # phrase it cannot express refuses here rather than shuffling back a wider
+    # set than the card names.
+    if stream.accept_word("all"):
+        try:
+            cards = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        # The source zone is part of the noun phrase, not a clause after it:
+        # ``parse_object_filter`` reads "from your graveyard" onto the filter,
+        # so it is *checked* here rather than consumed again. Anybody else's
+        # graveyard is a different effect, for the reason the whole-zone
+        # reading below states.
+        if not (
+            cards.is_card
+            and cards.zone == "graveyard"
+            and cards.zone_owner is not None
+            and cards.zone_owner.kind == "you"
+            and stream.accept_phrase("into", "your", "library")
+        ):
+            stream.reset(mark)
+            return None
+        return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"), cards=cards)
+    if not stream.accept_phrase("your", "graveyard", "into", "your", "library"):
         stream.reset(mark)
         return None
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))

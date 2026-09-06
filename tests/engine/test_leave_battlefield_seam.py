@@ -59,6 +59,14 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # (CR 701.5a), so its card was never on a battlefield to leave one, and
     # there is no permanent for the seam to name.
     ("handlers/stack.py", "_redirect_countered_card"),
+    # The *graveyard* branch of ``shuffle_source_card_into_library``, which is
+    # ``return_source_card_to_owners_hand``'s row two spellings up with a
+    # different destination: "shuffle **it** into its owner's library"
+    # (Alabaster Dragon) names no source zone, so the handler reaches whichever
+    # one holds the card, and this arm is the one where it is already in a
+    # graveyard (CR 404.1 put it there before the death trigger resolved). Its
+    # battlefield arm passes the keyword.
+    ("handlers/zones.py", "shuffle_source_card_into_library"),
 }
 
 

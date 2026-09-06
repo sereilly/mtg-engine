@@ -439,6 +439,26 @@ def _lower_look_at_library_top(
     # printing it: a *targeted* look is a spell's choice and this one is a fact
     # about a combat, and the handler reads them from different places.
     defending = node.player.kind == "defending_player"
+    # "Look at the top four cards of **your** library, then put them back in
+    # any order." (Sage Owl.) The looker's own pile, which is its own kind and
+    # not this one with a seat swapped: `reorder_target_library_top` is
+    # registered in `engine/targeting.py` as targeting a player, so lowering
+    # Sage Owl's trigger onto it would put an ability on the stack asking for a
+    # target its printed line never offers. Nothing is looked at *and* nothing
+    # is chosen, so the rearrange is the whole effect and the other two offers
+    # refuse.
+    if node.player.kind == "you":
+        if not node.may_reorder or node.may_shuffle or node.may_bottom:
+            raise LoweringError(
+                "the own-library look only rearranges what it saw", node=node
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError("the library look needs a printed number", node=node)
+        return (
+            OracleInstruction(
+                "reorder_own_library_top", "", {"amount": node.count.value}
+            ),
+        )
     if node.player.kind != "target_player" and not (defending and node.may_bottom):
         raise LoweringError(
             f"no handler looks at the top of {node.player.kind!r}'s library", node=node
