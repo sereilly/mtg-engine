@@ -28,7 +28,9 @@ instruction, the entry goes with it.
 from __future__ import annotations
 
 from ..auras import aura_continuous_claim
-from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
+from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
+                                 cast_absence_line,
+                                 combat_play_ban_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
@@ -166,6 +168,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # so the claim cannot outlive either half.
     if global_play_timing_line(normalized):
         return GLOBAL_PLAY_TIMING_CLAIM
+
+    # engine/cast_restrictions.py — the same two gates over a *phase* instead of
+    # a turn: "During combat, players can't cast instant spells or activate
+    # abilities that aren't mana abilities." (Hand to Hand.) One printed
+    # sentence, two gates, one reader — claimed through the reader both of them
+    # enforce with, so the claim cannot outlive either half.
+    if combat_play_ban_line(normalized) is not None:
+        return COMBAT_PLAY_BAN_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)

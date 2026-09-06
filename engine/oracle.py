@@ -5419,8 +5419,10 @@ def _derived_static_claims(
     # instruction means the card reports unsupported however well the
     # restriction works. Its own claim name for the two bans' reason: it is
     # what the permanent *does*, and it is about everybody else's turns.
-    from .cast_restrictions import (OWN_CAST_BAN_CLAIM,
+    from .cast_restrictions import (COMBAT_PLAY_BAN_CLAIM,
+                                    OWN_CAST_BAN_CLAIM,
                                     GLOBAL_PLAY_TIMING_CLAIM,
+                                    combat_play_ban_line,
                                     own_cast_ban_line,
                                     global_play_timing_line)
 
@@ -5429,6 +5431,16 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(GLOBAL_PLAY_TIMING_CLAIM)
+    # "During combat, players can't cast instant spells or activate abilities
+    # that aren't mana abilities." (Hand to Hand.) The same pair of gates over a
+    # *phase*, and the same reason it needs a claim: the enchantment's whole
+    # text is this sentence, so no instruction means it reports unsupported
+    # however well both halves work.
+    if any(
+        combat_play_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(COMBAT_PLAY_BAN_CLAIM)
     # "You can't cast creature spells." (Steel Golem prints it on a creature;
     # an artifact or enchantment printing it reads the same.) CR 601.3a scoped
     # to the permanent's own controller, read off the board at every cast — so

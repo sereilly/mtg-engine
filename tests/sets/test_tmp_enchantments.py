@@ -975,3 +975,97 @@ def test_eladamris_vineyard_compiles_to_one_trigger_on_the_frozen_seat(set_pool)
     assert trigger.condition.payload["main_phase_scope"] == "player"
     assert trigger.instruction.kind == "frozen_seat_adds_mana"
     assert trigger.instruction.payload == {"pips": (("G", 2),)}
+
+
+# --- W2G3: Hand to Hand, one sentence and two gates ---
+
+def _w2g3e_combat_board(set_pool, catalog_by_name, *, with_ban=True):
+    mine = [
+        Permanent(card=catalog_by_name["Mox Ruby"]),
+        Permanent(card=catalog_by_name["Icy Manipulator"]),
+    ]
+    if with_ban:
+        mine.append(Permanent(card=set_pool("TMP")["Hand to Hand"]))
+    game = _w2g3e_game(mine, [Permanent(card=catalog_by_name["Grizzly Bears"])])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.start_turn(0)
+    for permanent in mine:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def test_hand_to_hand_stops_an_instant_during_combat(set_pool, catalog_by_name):
+    """"During combat, players can't cast instant spells or activate abilities
+    that aren't mana abilities."
+
+    City of Solitude's sentence with a *phase* in place of a turn, so it is one
+    row read by the same two gates. Claiming the casting half alone would ship
+    an enchantment that stops a combat trick and lets an Icy Manipulator
+    through, which is not the card.
+    """
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+    game.enter_turn_phase("combat")
+
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert not result.supported
+    assert "Hand to Hand" in result.details
+    assert game.players[1].life == 20
+
+
+def test_hand_to_hand_stops_a_nonmana_ability_during_combat(set_pool, catalog_by_name):
+    """The activation half, and the printed exception beside it."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+    game.enter_turn_phase("combat")
+
+    tapper = game.activate_permanent_ability(
+        0, "Icy Manipulator", permanent_index=1,
+        target_permanent_index=0, target_player_index=1,
+    )
+    mox = game.activate_permanent_ability(0, "Mox Ruby", permanent_index=0)
+
+    assert not tapper.supported
+    assert "Hand to Hand" in tapper.details
+    assert mox.supported, "a mana ability is the exception the card prints"
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_hand_to_hand_leaves_the_main_phase_alone(set_pool, catalog_by_name):
+    """"**During combat**" — CR 506.1's phase, and nothing else. A gate that
+    forgot the window would be an enchantment nobody could play around."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+
+    assert game.current_turn_phase == "precombat_main"
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert result.supported, result.details
+    assert game.players[1].life == 17
+
+
+def test_without_the_enchantment_combat_is_open(set_pool, catalog_by_name):
+    """The control. Every refusal above has to be this enchantment's and not
+    some other rule about casting in combat."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name, with_ban=False)
+    game.enter_turn_phase("combat")
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    assert game.activate_permanent_ability(
+        0, "Icy Manipulator", permanent_index=1,
+        target_permanent_index=0, target_player_index=1,
+    ).supported
+
+
+def test_hand_to_hand_binds_its_own_controller_too(set_pool, catalog_by_name):
+    """"Players" names nobody, so it binds the seat that played it (CR 601.3a)
+    — which is the whole of what makes it symmetrical, and the half a seat
+    comparison would have quietly dropped. Here the enchantment is the
+    *opponent's* and the caster is still stopped."""
+    game = _w2g3e_game([], [Permanent(card=set_pool("TMP")["Hand to Hand"])])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.start_turn(0)
+    game.enter_turn_phase("combat")
+
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert not result.supported
+    assert compile_card_oracle(set_pool("TMP")["Hand to Hand"]).supported
