@@ -402,6 +402,30 @@ def _during_an_opponents_upkeep(game: "Game", controller_index: int, source) -> 
     return game.current_step == "upkeep" and game.active_player_index != controller_index
 
 
+def _during_their_draw_step(game: "Game", controller_index: int, source) -> bool:
+    """"Any player may activate this ability but only during **their** draw
+    step." (Well of Knowledge.)
+
+    "Their" is the *activating* seat, not the permanent's controller — the
+    whole point of the pairing is that the ability is reachable by everybody and
+    each of them may only reach it on their own turn. ``controller_index`` here
+    is CR 602.1a's controller of the **ability**, which
+    ``_activate_onto_stack`` takes as the activator and names
+    ``source_controller_index`` separately for whose battlefield the permanent
+    is on; so the seat comparison is already the right one, and this row is the
+    draw step's answer to what ``_during_your_upkeep`` answers one step
+    earlier.
+
+    A row of its own rather than a spelling of ``_during_any_upkeep``'s
+    step-scoped window, for the reason Armageddon Clock's comment beside that
+    function gives: "only during any upkeep step" is scoped to the step and
+    "only during their draw step" is scoped to a player's own, and reading one
+    as the other lets every seat wind this Well four times a turn round a
+    four-player table.
+    """
+    return game.current_step == "draw" and game.active_player_index == controller_index
+
+
 def _during_your_turn(game: "Game", controller_index: int, source) -> bool:
     """Disrupting Scepter, Instill Energy. The "only once each turn" half of
     Instill Energy's clause is *not* here: it is per-permanent state, not a
@@ -1348,6 +1372,17 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only during an opponent's upkeep$"),
         _during_an_opponents_upkeep,
         "only during an opponent's upkeep",
+    ),
+    ActivationRestriction(
+        # Verbless, like Armageddon Clock's: the clause is the tail of an "Any
+        # player may activate this ability but only …" sentence, which
+        # ``_clauses`` splits and re-heads with "only". The verbed spelling is
+        # admitted beside it for that row's reason — the second card to print
+        # a clause usually prints the other half of the template, and a row
+        # reading one spelling leaves the other unenforced and silent.
+        re.compile(r"^(?:activate )?only during their draw step$"),
+        _during_their_draw_step,
+        "only during their draw step",
     ),
     ActivationRestriction(
         re.compile(r"^activate only during your turn$"),
