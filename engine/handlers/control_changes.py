@@ -488,6 +488,20 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
     if target_perm is None:
         game.log.append(f"{context.card.name}: no valid target to gain control of")
         return True, "resolved"
+    # CR 611.2b once more, for the one condition that is about the **stolen**
+    # permanent: "for as long as that creature is enchanted" (Rootwater
+    # Matriarch). Asked after the target is settled, because it is a fact about
+    # the target — a creature nobody has enchanted is a legal target the ability
+    # simply does nothing to, rather than one it steals for the instant before
+    # the sweep hands it back.
+    from ..auras import auras_attached_to
+
+    if "target_remains_enchanted" in conditions and not auras_attached_to(target_perm):
+        game.log.append(
+            f"{context.card.name}: {target_perm.card.name} is not enchanted, "
+            "so the control change never starts"
+        )
+        return True, "resolved"
     # "**An opponent may** gain control of a creature you control of their
     # choice…" (Infernal Denizen.) Who *keeps* the permanent is not always the
     # resolving object's controller (CR 109.5's default): here it is the seat

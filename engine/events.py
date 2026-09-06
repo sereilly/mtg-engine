@@ -746,6 +746,9 @@ def _self_becomes_target_filter(
     "**This** creature", so the event's subject must be the very permanent whose
     ability this is — by identity, because a look-alike on the same battlefield
     is a different permanent and would otherwise draw its controller two cards.
+    Where the condition says "**enchanted** creature" instead (Spinal Graft) the
+    subject must be the permanent this one is *attached to*, by the same
+    identity test.
 
     Whose spell it must be is read off the trigger's own parsed condition, so
     the unnarrowed wording and "you control" are the same dispatcher with
@@ -757,7 +760,22 @@ def _self_becomes_target_filter(
     allows — silent, and in the player's favour. An absent key is the
     unnarrowed printing and admits both.
     """
-    if event.subject is not permanent:
+    # "When **enchanted creature** becomes the target of a spell or ability, …"
+    # (Spinal Graft.) The same event watched by something attached to the
+    # targeted permanent rather than by the permanent itself — one condition
+    # kind, two dispatch scopes, told apart by the narrowing the condition's own
+    # table wrote. The same arrangement `attached_subject_triggers` makes for
+    # the damage and combat events, and the printed noun is tested here for its
+    # reason: "enchanted **creature**" is not satisfied by an Equipment on an
+    # artifact no animation has made a creature (CR 613 layer 4).
+    attached_noun = trig.condition.payload.get("targeted_attached")
+    if attached_noun:
+        host = permanent.metadata.get("attached_to")
+        if host is None or host is not event.subject:
+            return False
+        if not host.has_type(str(attached_noun)):
+            return False
+    elif event.subject is not permanent:
         return False
     wanted = trig.condition.payload.get("targeted_by")
     if wanted in ("a spell", "an ability"):

@@ -313,6 +313,16 @@ class OracleExecutionContext:
     target_permanent_id: int | list[int | None] | None = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
+    # The printed line of the activated ability being resolved, carried through
+    # from ``StackItem.ability_text`` unchanged. One fact, one name — this is
+    # the same string that field holds, not a second reading of the card.
+    #
+    # "This creature **loses this ability**" (Tempest's Licids) is what needs
+    # it: the ability that goes away is the one that ran, and a handler matching
+    # by text would have to guess between two lines whose printed words differ
+    # only in a mana symbol. None for a spell and for a triggered ability,
+    # neither of which has one.
+    ability_text: str | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).
     stack_target: "StackItem | None" = None
     # Event data captured when a triggered ability fired, read by its effect handler

@@ -703,3 +703,143 @@ def test_w1g5_recycle_sets_its_controllers_maximum_hand_size(set_pool):
 
     game.remove_from_battlefield(recycle)
     assert maximum_hand_size(game, 0) == 7, "CR 611.3a: the static ends with it"
+
+
+# --- W2G1: Spinal Graft and Volrath's Curse ---------------------------------
+
+import pytest as _w2g1_pytest
+
+from engine import Game as _W2G1EGame, PlayerState as _W2G1EPlayer
+from engine.auras import (IGNORED_RESTRICTIONS as _W2G1_IGNORED,
+                          attach_aura as _w2g1e_attach,
+                          aura_restriction_active as _w2g1e_restricted)
+from engine.card_loader import load_cards as _w2g1e_load
+from engine.card_loader import manifest_set_path as _w2g1e_path
+from engine.models import Permanent as _W2G1EPerm
+from engine.oracle import compile_card_oracle as _w2g1e_compile
+from engine.special_actions import (
+    available_permanent_special_actions as _w2g1e_offers,
+    take_permanent_special_action as _w2g1e_take,
+)
+
+_W2G1E_LEA = {c.name: c for c in _w2g1e_load(_w2g1e_path("LEA"))}
+
+
+def _w2g1e_perm(card):
+    permanent = _W2G1EPerm(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1e_duel(mine, theirs=(), hand=()):
+    p0 = _W2G1EPlayer(name="P0", battlefield=list(mine), life=20)
+    p1 = _W2G1EPlayer(name="P1", battlefield=list(theirs), life=20,
+                      hand=list(hand))
+    game = _W2G1EGame(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.priority_player_index = 0
+    game._sync_control()
+    game._refresh_dynamic_creatures()
+    return game, p0, p1
+
+
+def test_w2g1_spinal_graft_destroys_a_host_a_spell_points_at(set_pool):
+    """"When enchanted creature becomes the target of a spell or ability,
+    destroy that creature. It can't be regenerated."
+
+    CR 603.2's targeting event watched by something *attached* to the targeted
+    permanent — one condition kind with two dispatch scopes, told apart by the
+    narrowing the condition's own table wrote. And the spell that pointed at it
+    then fizzles: by CR 608.2b every one of its targets is illegal.
+    """
+    tmp, lea = set_pool("TMP"), _W2G1E_LEA
+    graft, bear = _w2g1e_perm(tmp["Spinal Graft"]), _w2g1e_perm(tmp["Trained Armodon"])
+    game, p0, _p1 = _w2g1e_duel([graft, bear], hand=[lea["Lightning Bolt"]])
+    _w2g1e_attach(graft, bear)
+    game._refresh_dynamic_creatures()
+    assert bear.effective_power == 6, "the +3/+3 half still applies"
+
+    game.cast_from_hand(1, "Lightning Bolt", target_permanent_index=1,
+                        target_player_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(bear)
+    assert [c.name for c in p0.graveyard] == ["Trained Armodon", "Spinal Graft"]
+    assert any("no effect" in line for line in game.log), "CR 608.2b"
+
+
+def test_w2g1_spinal_grafts_trigger_names_the_attached_host(set_pool):
+    """"That creature" is the permanent the *condition* named, which the kind
+    alone cannot say — the same `self_becomes_target` kind is printed about
+    "this creature" (Warden of the Woods), where the pronoun means the source.
+    The compiled instruction is what records which reading won."""
+    program = _w2g1e_compile(set_pool("TMP")["Spinal Graft"])
+    trigger = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "self_becomes_target"
+    )
+
+    assert trigger.condition.payload["targeted_attached"] == "creature"
+    assert trigger.instruction.kind == "destroy_attached_permanent"
+    assert trigger.instruction.payload["bypass_regeneration"] is True
+
+
+def test_w2g1_volraths_curse_shuts_off_every_activated_ability(set_pool):
+    """"Enchanted creature can't attack or block, and its activated abilities
+    can't be activated."
+
+    The third clause was read by nothing before this round: the only
+    `activated_abilities_shut_off` row is anchored on Faith's Fetters' longer
+    wording, which prints CR 605.1a's mana-ability exception that this card does
+    not — so the Curse's own clause fell through the prefix rows in front of it
+    and the card reported supported with a third of its sentence unenforced.
+    """
+    tmp, lea = set_pool("TMP"), _W2G1E_LEA
+    curse = _w2g1e_perm(tmp["Volrath's Curse"])
+    elves = _w2g1e_perm(lea["Llanowar Elves"])
+    game, _p0, p1 = _w2g1e_duel([curse], [elves])
+    _w2g1e_attach(curse, elves)
+    game._refresh_dynamic_creatures()
+
+    assert _w2g1e_restricted(elves, "all_activated_abilities_shut_off")
+    result = game.activate_permanent_ability(1, "Llanowar Elves", ability_index=0)
+
+    assert not result.supported
+    assert p1.mana_pool.get("G", 0) == 0
+
+
+def test_w2g1_volraths_curse_can_be_bought_off_for_one_turn(set_pool):
+    """"That creature's controller may sacrifice a permanent of their choice
+    for that player to ignore this effect until end of turn." CR 116.2d.
+
+    The offer is made to the seat the Aura is punishing rather than to the one
+    that controls it, which is why it is enumerated over the whole board and
+    why the seat rides the offer.
+    """
+    tmp = set_pool("TMP")
+    curse = _w2g1e_perm(tmp["Volrath's Curse"])
+    victim, spare = (_w2g1e_perm(tmp["Trained Armodon"]) for _ in range(2))
+    game, _p0, p1 = _w2g1e_duel([curse], [victim, spare])
+    _w2g1e_attach(curse, victim)
+    game._refresh_dynamic_creatures()
+    assert _w2g1e_restricted(victim, "cant_attack")
+
+    game.priority_player_index = 1
+    assert [entry["kind"] for entry in _w2g1e_offers(game, 1)] == [
+        "ignore_attached_static_until_eot"
+    ]
+    assert _w2g1e_offers(game, 0) == [], "the Aura's own controller is not offered it"
+    assert _w2g1e_take(
+        game, 1, curse, "ignore_attached_static_until_eot", sacrificed=spare
+    ) is None
+
+    assert [c.name for c in p1.graveyard] == ["Trained Armodon"]
+    assert not _w2g1e_restricted(victim, "cant_attack")
+    assert not _w2g1e_restricted(victim, "all_activated_abilities_shut_off")
+
+    game.resolve_cleanup_step(1)
+    assert curse.metadata.get(_W2G1_IGNORED) is None
+    assert _w2g1e_restricted(victim, "cant_attack"), "CR 514.2 ends it"

@@ -2,8 +2,11 @@
 
 CR 116.1 defines them as "actions a player may take when they have priority
 that don't use the stack", and CR 116.2 lists twelve. This engine implements
-two: the land drop (CR 116.2a), which predates the seam and still lives on the
-play path, and CR 116.2e, the only rule in the whole CR that names a card.
+four: the land drop (CR 116.2a), which predates the seam and still lives on the
+play path; CR 116.2e, the only rule in the whole CR that names a card; and the
+two offers a **permanent** makes — 116.2c's "to end a continuous effect"
+(Tempest's Licids) and 116.2d's "to ignore the effect from that ability for a
+duration" (Volrath's Curse).
 
 The reason the second one needed a seam at all is the first clause of CR 116.1.
 No stack means no instruction to compile and no handler to dispatch, so a card
@@ -136,3 +139,214 @@ def test_116_1_a_special_action_makes_its_card_supported():
 
     assert program.supported, program.reason
     assert [t.supported for t in program.triggered_abilities] == [True]
+
+
+# --- W2G1: CR 116.2c / 116.2d — the offers a *permanent* makes ---------------
+
+from engine.auras import (IGNORED_RESTRICTIONS, attach_aura,  # noqa: E402
+                          aura_restriction_active)
+from engine.card_loader import manifest_set_path as _w2g1_set_path  # noqa: E402
+from engine.models import Permanent  # noqa: E402
+from engine.special_actions import (  # noqa: E402
+    available_permanent_special_actions, permanent_special_action_refusal,
+    permanent_special_action_sentence, take_permanent_special_action)
+
+_W2G1_TMP = {
+    c.name: c
+    for c in load_cards(_w2g1_set_path("TMP", include_measured=True))
+}
+
+
+def _w2g1_perm(card):
+    permanent = Permanent(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1_board(mine, theirs=(), pool=None):
+    p1 = PlayerState(name="A", battlefield=list(mine), life=20,
+                     mana_pool=dict(pool or {}))
+    p2 = PlayerState(name="B", battlefield=list(theirs), life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.priority_player_index = 0
+    game._sync_control()
+    game._refresh_dynamic_creatures()
+    return game, p1, p2
+
+
+@pytest.mark.cr("116.1", "116.2c", "116.3")
+def test_116_2c_a_licid_may_pay_to_end_the_effect_its_own_ability_made():
+    """"Some effects allow a player to take an action at a later time, usually
+    to end a continuous effect … Doing so is a special action."
+
+    Tempest's Licids are that sentence printed on a card: "{R}, {T}: This
+    creature loses this ability and becomes an Aura enchantment with enchant
+    creature. Attach it to target creature. **You may pay {R} to end this
+    effect.**"
+
+    Three properties, one per clause, each a way this could be built wrong:
+
+    * no stack (CR 116.1) — nothing is put on it and nothing resolves, which is
+      why a ``PendingChoice`` would be the wrong shape: that queue is a decision
+      somebody *owes*, and this one may never be taken at all;
+    * priority and nothing else (CR 116.2c's "any time they have priority");
+    * "for as long as the effect allows it" — the offer stands exactly while
+      the effect does, so it is read off the **effect's** record and not off the
+      card, whose sentence the same resolution took away with the ability.
+    """
+    assert permanent_special_action_sentence(
+        "You may pay {R} to end this effect."
+    ) == ("end_own_continuous_effect", {"R": 1})
+
+    licid = _w2g1_perm(_W2G1_TMP["Enraging Licid"])
+    bear = _w2g1_perm(_W2G1_TMP["Trained Armodon"])
+    game, p1, _p2 = _w2g1_board([licid, bear], pool={"R": 2})
+
+    # Before the ability has run there is no effect, so there is no offer.
+    assert available_permanent_special_actions(game, 0) == []
+
+    game.activate_permanent_ability(
+        0, "Enraging Licid", ability_index=0,
+        target_permanent_index=1, target_player_index=0,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    # Resolving the stack leaves nobody holding priority in this rig; the offer
+    # is about the moment a player *has* it (CR 116.2c), so the test says which.
+    game.priority_player_index = 0
+
+    assert available_permanent_special_actions(game, 0) == [
+        {"permanent_id": licid.permanent_id, "name": "Enraging Licid",
+         "kind": "end_own_continuous_effect"}
+    ]
+    assert permanent_special_action_refusal(
+        game, 1, licid, "end_own_continuous_effect"
+    ) == "Enraging Licid is not offering that to B"
+
+    depth = len(game.stack)
+    assert take_permanent_special_action(
+        game, 0, licid, "end_own_continuous_effect"
+    ) is None
+    assert len(game.stack) == depth, "CR 116.1: a special action uses no stack"
+    assert game.priority_player_index == 0, "CR 116.3"
+    assert p1.mana_pool["R"] == 1
+
+    assert licid.is_creature and not licid.has_type("aura")
+    assert available_permanent_special_actions(game, 0) == [], (
+        "the offer stands only while the effect does (CR 116.2c)"
+    )
+
+
+@pytest.mark.cr("205.1a", "613.1d", "613.1f")
+def test_205_1a_a_licid_stops_being_a_creature_and_loses_its_own_ability():
+    """"…becomes an **Aura enchantment** with enchant creature."
+
+    CR 205.1a: a sentence that *sets* a card type replaces the ones the object
+    had, and the subtypes correlated with a removed type go with it — so the
+    Licid stops being a creature and stops being a Licid. CR 613 layer 6 is the
+    other half of the same sentence: it loses the ability that ran, which is
+    what stops it being activated again from the enchantment it has become.
+
+    Both are contributions rather than a rewritten card, which is what lets the
+    CR 116.2c offer above undo them by dropping records.
+    """
+    licid = _w2g1_perm(_W2G1_TMP["Quickening Licid"])
+    bear = _w2g1_perm(_W2G1_TMP["Trained Armodon"])
+    game, _p1, _p2 = _w2g1_board([licid, bear], pool={"W": 2})
+
+    game.activate_permanent_ability(
+        0, "Quickening Licid", ability_index=0,
+        target_permanent_index=1, target_player_index=0,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert not licid.is_creature
+    assert not licid.has_type("licid")
+    assert licid.has_type("enchantment") and licid.has_type("aura")
+    assert "loses this ability" not in (licid.effective_card.oracle_text or "")
+    assert game._has_keyword(bear, "first strike"), (
+        "CR 303.4m: the Aura's own line reads the permanent it is attached to"
+    )
+
+
+@pytest.mark.cr("116.1", "116.2d", "514.2")
+def test_116_2d_volraths_curse_can_be_ignored_for_a_turn_by_a_sacrifice():
+    """"Some effects from static abilities allow a player to take an action to
+    ignore the effect from that ability for a duration."
+
+    Volrath's Curse: "That creature's controller may sacrifice a permanent of
+    their choice for that player to ignore this effect until end of turn."
+
+    The offer is made to somebody who does **not** control the permanent making
+    it, which is why the seat rides the offer; its price is a permanent rather
+    than mana, which is why the price does too. CR 514.2 ends it: the suspension
+    is an until-end-of-turn record swept by the cleanup step beside the three
+    other channels that carry that duration.
+    """
+    curse = _w2g1_perm(_W2G1_TMP["Volrath's Curse"])
+    victim = _w2g1_perm(_W2G1_TMP["Trained Armodon"])
+    spare = _w2g1_perm(_W2G1_TMP["Trained Armodon"])
+    game, _p1, p2 = _w2g1_board([curse], [victim, spare])
+    attach_aura(curse, victim)
+    game._refresh_dynamic_creatures()
+
+    assert aura_restriction_active(victim, "cant_attack")
+    assert permanent_special_action_refusal(
+        game, 0, curse, "ignore_attached_static_until_eot"
+    ) == "Volrath's Curse is not offering that to A"
+
+    game.priority_player_index = 1
+    assert available_permanent_special_actions(game, 1) == [
+        {"permanent_id": curse.permanent_id, "name": "Volrath's Curse",
+         "kind": "ignore_attached_static_until_eot"}
+    ]
+    assert take_permanent_special_action(
+        game, 1, curse, "ignore_attached_static_until_eot", sacrificed=spare
+    ) is None
+
+    assert [c.name for c in p2.graveyard] == ["Trained Armodon"]
+    assert not aura_restriction_active(victim, "cant_attack")
+    assert not aura_restriction_active(victim, "cant_block")
+    assert available_permanent_special_actions(game, 1) == [], (
+        "one turn's relief, bought once"
+    )
+
+    game.resolve_cleanup_step(1)
+    assert curse.metadata.get(IGNORED_RESTRICTIONS) is None
+    assert aura_restriction_active(victim, "cant_attack"), "CR 514.2"
+
+
+@pytest.mark.cr("602.5", "605.1a")
+def test_605_1a_volraths_curse_shuts_off_mana_abilities_and_faiths_fetters_does_not():
+    """Two printings of one clause, and the difference is a printed exception.
+
+    Faith's Fetters says "…can't be activated **unless they're mana
+    abilities**" and Volrath's Curse does not, so a Llanowar Elves under the
+    Curse cannot tap for mana and one under the Fetters can. Read as one
+    restriction the Curse would be an ability that works more often than the
+    card allows — silent, and in the player's favour.
+    """
+    curse = _w2g1_perm(_W2G1_TMP["Volrath's Curse"])
+    elves = _w2g1_perm(_CATALOG["Llanowar Elves"])
+    game, _p1, p2 = _w2g1_board([curse], [elves])
+    attach_aura(curse, elves)
+    game._refresh_dynamic_creatures()
+
+    refused = game.activate_permanent_ability(1, "Llanowar Elves", ability_index=0)
+    assert not refused.supported
+    assert p2.mana_pool.get("G", 0) == 0
+
+    fetters = _w2g1_perm(_CATALOG["Faith's Fetters"])
+    other = _w2g1_perm(_CATALOG["Llanowar Elves"])
+    game, _p1, p2 = _w2g1_board([fetters], [other])
+    attach_aura(fetters, other)
+    game._refresh_dynamic_creatures()
+
+    allowed = game.activate_permanent_ability(1, "Llanowar Elves", ability_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert allowed.supported, allowed.details
+    assert p2.mana_pool.get("G", 0) == 1

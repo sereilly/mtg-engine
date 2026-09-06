@@ -72,6 +72,7 @@ from .effects import (
     _parse_gains,
     _parse_gets,
     _parse_has,
+    _parse_becomes_aura_enchantment,
     _parse_loses,
     _parse_loses_unspent_mana,
     _parse_mill,
@@ -292,6 +293,17 @@ def parse_subject_verb(
                 drained = _parse_loses_unspent_mana(stream, source_spec)
                 if drained is not None:
                     return drained
+            # "This creature **loses this ability and becomes an Aura
+            # enchantment with enchant creature**." (Tempest's five Licids.)
+            # The same verb about an *ability* rather than about life or a
+            # keyword, and the same shape the two readings above have: tried
+            # first, non-consuming on refusal, so every other "loses …" keeps
+            # the reading it has. Left to `_parse_loses` the clause died on
+            # "expected a keyword ability" — a message about the wrong half of
+            # the verb table again.
+            licid = _parse_becomes_aura_enchantment(stream, source_spec)
+            if licid is not None:
+                return licid
             return _parse_loses(stream, source_spec)
         if token.text in ("wins", "win"):
             return _parse_wins(stream, source_spec)

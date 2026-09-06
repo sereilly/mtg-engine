@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**362 / 614 tracked rules covered (58%)** — 2136 tests, 0 unannotated.
+**362 / 614 tracked rules covered (58%)** — 2140 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -275,9 +275,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 116. Special Actions
 
-- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(3 tests)*
-- [x] **116.2** There are twelve special actions: *(3 tests, subrules e)*
-- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(1 tests)*
+- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(5 tests)*
+- [x] **116.2** There are twelve special actions: *(5 tests, subrules cde)*
+- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(2 tests)*
 
 ### 117. Timing and Priority
 
@@ -379,7 +379,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 205. Type Line
 
-- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(7 tests, subrules ab)*
+- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(8 tests, subrules ab)*
 - [x] **205.2** Card Types *(10 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
@@ -656,7 +656,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(8 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(9 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
@@ -675,7 +675,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(32 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(37 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(38 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -704,7 +704,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(8 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(9 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(5 tests, subrules a)*
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(85 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(87 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(15 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*

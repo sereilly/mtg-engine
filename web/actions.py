@@ -426,26 +426,64 @@ def _action_special_action(session, req, seat_type):
     """CR 116 — an action taken with priority that does not use the stack.
 
     One branch for every kind the table grants, because what varies between
-    them is the card and the kind, not the plumbing: the seat, the hand index
-    and the refusal are the same three questions each time. The refusal comes
-    from ``engine/special_actions.special_action_refusal``, the same gate the
-    state payload asks before offering the card — an action the client offers
-    and the engine refuses is a button that does nothing.
+    them is the card and the kind, not the plumbing: the seat, the address and
+    the refusal are the same three questions each time. The refusal comes from
+    ``engine/special_actions``' own gates, the same ones the state payload asks
+    before offering the action — an action the client offers and the engine
+    refuses is a button that does nothing.
+
+    Two seams, and the *address* is what tells them apart: 116.2e's offer is
+    made by a card in a hand and 116.2c/116.2d's by a permanent on the
+    battlefield.
 
     CR 116.3 gives the player priority again afterwards, so this deliberately
     does **not** pass or advance; ``note_priority_action_taken`` is the same
     "you did something in this window" note every other action makes.
     """
-    from engine.special_actions import take_special_action
+    from engine.special_actions import (take_permanent_special_action,
+                                        take_special_action)
+
+    kind = req.special_action_kind or ""
+    # CR 116.2c/116.2d's offers are made by a permanent, not by a card in hand,
+    # so the request names one — by `permanent_id`, which the preamble at the
+    # top of this module has already resolved (a stale id is a 404 there, never
+    # a fall back to a slot). Which of the two seams answers is decided by which
+    # address the request carries, not by the kind: a kind list here would be a
+    # second copy of the two registries.
+    if req.permanent_id is not None or req.permanent_index is not None:
+        permanent = (
+            session.game.permanent_by_id(req.permanent_id)
+            if req.permanent_id is not None
+            else session.game.permanent_at(
+                session.game.players[req.seat], req.permanent_index
+            )
+        )
+        if permanent is None:
+            raise HTTPException(status_code=404, detail="permanent not found")
+        # "…may **sacrifice a permanent of their choice**" (CR 116.2d): the
+        # taker names the price on the same channel a CR 601.2b additional cost
+        # already travels on, resolved to a permanent by the preamble above.
+        # None leaves the deterministic pick, which is what a non-interactive
+        # seat gets everywhere else in this engine.
+        sacrificed = (
+            session.game.permanent_by_id(req.cost_permanent_id)
+            if req.cost_permanent_id is not None
+            else None
+        )
+        refusal = take_permanent_special_action(
+            session.game, req.seat, permanent, kind, sacrificed=sacrificed
+        )
+        if refusal is not None:
+            raise HTTPException(status_code=400, detail=refusal)
+        session.game.note_priority_action_taken(req.seat)
+        return
 
     player = session.game.players[req.seat]
     index = req.hand_index
     if index is None or not (0 <= index < len(player.hand)):
         raise HTTPException(status_code=400, detail="card not in hand")
     card = player.hand[index]
-    refusal = take_special_action(
-        session.game, req.seat, card, req.special_action_kind or ""
-    )
+    refusal = take_special_action(session.game, req.seat, card, kind)
     if refusal is not None:
         raise HTTPException(status_code=400, detail=refusal)
     session.game.note_priority_action_taken(req.seat)

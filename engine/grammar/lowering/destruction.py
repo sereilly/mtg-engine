@@ -386,7 +386,12 @@ def _lower_destroy(
     # condition already named it -- see `names_attached_permanent`. Asked here,
     # above the "that" branch below, because that branch reads the *firing
     # event's* object and would destroy whatever the fire site had stamped.
-    if names_attached_permanent(spec, event):
+    # "When **enchanted creature** becomes the target of a spell or ability,
+    # destroy **that creature**." (Spinal Graft.) The same referent again, under
+    # a condition kind that is *also* printed about the source itself — so the
+    # event's own subject is what says which, and it is passed rather than
+    # inferred from the kind.
+    if names_attached_permanent(spec, event, event_subject):
         attached_payload: dict[str, object] = {}
         if node.no_regen:
             attached_payload["bypass_regeneration"] = True

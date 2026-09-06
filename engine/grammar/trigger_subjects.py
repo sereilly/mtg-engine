@@ -24,6 +24,7 @@ from __future__ import annotations
 from . import ast
 from .lexer import MANA, SELF
 from .stream import TokenStream
+from .trigger_tables import _BECOMES_TARGET_OBJECTS
 
 
 def _accept_ability_activated_tail(stream: TokenStream) -> bool:
@@ -159,6 +160,23 @@ _ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # already names, and the subject is the attachment's host rather than the
     # ability's own source.
     (("is", "dealt", "damage"), "creature_dealt_damage"),
+    # "When **enchanted creature becomes the target of a spell or ability**,
+    # destroy that creature." (Spinal Graft.) CR 603.2's targeting event, the
+    # same one `_BECOMES_TARGET_EVENTS` reads about "this creature" — watched by
+    # something attached to the targeted permanent rather than by the permanent
+    # itself, which is this table's whole subject.
+    #
+    # The object axis is the one `trigger_tables._BECOMES_TARGET_OBJECTS`
+    # already spells, imported rather than re-listed: a second copy would go
+    # stale the next time a narrower class of spell is printed, and the two
+    # tables have to name the same four readings or the grammar and
+    # `engine/oracle.py` would claim different lines. Longest first, which is
+    # how that tuple is already ordered — "a spell" ahead of "a spell or
+    # ability" would consume the shorter reading and strand the rest.
+    *(
+        (("becomes", "the", "target", "of") + obj, "self_becomes_target")
+        for obj in _BECOMES_TARGET_OBJECTS
+    ),
 )
 
 

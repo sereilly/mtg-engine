@@ -6,7 +6,7 @@ from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
-from ..auras import BECAME_AURA_ENCHANT
+from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
@@ -2326,17 +2326,58 @@ def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context
             f"{context.card.name}: it is no longer on the battlefield"
         )
         return True, "resolved"
+    seat = game.players.index(context.caster) if context.caster in game.players else 0
+    # "…becomes an Aura **enchantment**" (the Licids) against "…becomes an Aura"
+    # (Necromancy). CR 205.1a: a sentence that *sets* a card type replaces the
+    # ones the permanent had, so a Licid stops being a creature and its creature
+    # types go with the type they belong to. Necromancy's sentence names no card
+    # type at all, so it takes none away — its enchantment was already one.
+    gained_types = [str(word) for word in (instruction.payload.get("card_types") or ())]
+    lost = _replaced_printed_types(source, gained_types)
+    marker = {BECAME_AURA_RECORD: True} if instruction.payload.get(
+        "loses_own_ability"
+    ) or lost else {}
     source.metadata.setdefault(GAINED_TYPES, []).append({
-        "card_types": [],
+        "card_types": gained_types,
         "subtypes": ["aura"],
         "duration": "permanent",
         "pt_from_mana_value": False,
         "source": context.card.name if context.card else "effect",
-        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
+        "seat": seat,
+        **marker,
     })
+    if lost:
+        from ..layer_bridge import LOST_TYPES
+
+        source.metadata.setdefault(LOST_TYPES, []).append({
+            "card_types": list(lost[0]),
+            "subtypes": list(lost[1]),
+            "source": context.card.name if context.card else "effect",
+            "seat": seat,
+            **marker,
+        })
+    # "This creature **loses this ability**" (CR 613 layer 6). The line is the
+    # one being resolved, read off the context rather than matched by text: a
+    # permanent may carry two abilities whose printed words differ only in a
+    # mana symbol, and the ability that ran is the one the card says loses
+    # itself.
+    ability_line = str(context.ability_text or "")
+    if instruction.payload.get("loses_own_ability") and ability_line:
+        from ..keywords import remove_ability_line
+
+        remove_ability_line(source, ability_line)
     source.metadata[BECAME_AURA_ENCHANT] = {
         "noun": str(instruction.payload.get("noun") or "creature"),
         "origin": str(instruction.payload.get("origin") or ""),
+        # What ending the effect has to give back (CR 116.2c), recorded as the
+        # effect is created rather than re-derived when the offer is taken: by
+        # then the permanent is an enchantment and nothing on it says which of
+        # its printed lines it lost — the offer's own sentence went with the
+        # ability. CR 611.2a: the effect outlives the ability that made it.
+        "ability_line": ability_line if instruction.payload.get(
+            "loses_own_ability"
+        ) else "",
+        "end_cost": _offer_to_end_this_effect(ability_line),
     }
     game._refresh_dynamic_creatures()
     game.log.append(
@@ -2344,6 +2385,53 @@ def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context
         f"\"enchant {source.metadata[BECAME_AURA_ENCHANT]['noun']}\""
     )
     return True, "resolved"
+
+
+def _offer_to_end_this_effect(ability_line: str) -> dict[str, int] | None:
+    """The cost "You may pay {C} to end this effect" names on *ability_line*.
+
+    Asked of ``engine/special_actions.py``'s own table, never of a second copy
+    of the sentence: that table is what will *perform* the offer, and a literal
+    here would be free to drift from the words it reads.
+    """
+    from ..special_actions import permanent_special_action_in_line
+
+    found = permanent_special_action_in_line(ability_line or "")
+    if found is not None and found[0] == "end_own_continuous_effect":
+        return found[1]
+    return None
+
+
+def _replaced_printed_types(source, gained: list[str]):
+    """The card types and subtypes CR 205.1a takes away, or None.
+
+    A sentence that names no card type sets none, so it replaces nothing —
+    which is Necromancy, whose "becomes an Aura" adds a subtype to an
+    enchantment that stays one. A sentence that does name one replaces every
+    card type the permanent had, and CR 205.1a's last clause takes the subtypes
+    correlated with a removed type with it: a Licid stops being a creature, so
+    it stops being a Licid.
+
+    Read off the **printed** shape rather than the computed one, because what
+    this replaces is the copiable line the layer system starts from; a type
+    something else granted is a separate contribution with its own timestamp
+    and CR 613.7 decides between them.
+    """
+    if not gained:
+        return None
+    from ..layer_bridge import printed_shape
+
+    card_types, subtypes = printed_shape(source.effective_card)
+    removed_types = tuple(sorted(set(card_types) - set(gained)))
+    if not removed_types:
+        return None
+    from ..grammar.vocabulary import CREATURE_TYPES
+
+    creature_subtypes = (
+        tuple(sorted(word for word in subtypes if word in CREATURE_TYPES))
+        if "creature" in removed_types else ()
+    )
+    return removed_types, creature_subtypes
 
 
 @effect_handler("gain_type")

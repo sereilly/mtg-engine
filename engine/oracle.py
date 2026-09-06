@@ -630,6 +630,21 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # must not fire on an activated ability. Longest alternative first — the
     # match is unanchored at the end, so "a spell" listed ahead of "a spell or
     # ability" would consume the shorter reading and drop the rest.
+    # "When **enchanted creature** becomes the target of a spell or ability,
+    # destroy that creature." (Spinal Graft.) The same CR 603.2 event watched by
+    # something attached to the targeted permanent rather than by the permanent
+    # itself — one kind, with `targeted_attached` saying which permanent's
+    # ability is watching, exactly as `damaged_attached` does for the damage
+    # event and `tapped_attached` for the tap. The fire site is the same one
+    # (`mixins/helpers._announce_targeting`); what tells the two dispatch scopes
+    # apart is this group, read by `events._self_becomes_target_filter`.
+    #
+    # Above the self spelling, in the order this table's own note asks for.
+    ("self_becomes_target",
+     r"when(?:ever)? enchanted (?P<targeted_attached>[a-z]+) becomes "
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("self_becomes_target",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
@@ -4183,6 +4198,27 @@ def _restriction_line(line: str, card_name: str | None) -> str:
     )
 
 
+#: A printed line's sentence count, ignoring the full stops inside a quoted
+#: granted ability ('Enchanted creature has "{T}: Add {G}."').
+_QUOTED_SPAN = re.compile(r"[\"“‘'][^\"”’']*[\"”’']")
+
+
+def _one_sentence(line: str) -> bool:
+    """Whether *line* is a single printed sentence.
+
+    Asked before a table that speaks for **one** sentence is allowed to claim a
+    whole line. `auras.aura_continuous_claim` is such a table — its readers
+    search rather than anchor, so it answers "there is a restriction in here"
+    and not "this is all restriction" — and a line with a second sentence
+    behind the one it recognized would be claimed whole, with the rest silently
+    unread. That is Mirage's single-whitelist-word failure exactly, and
+    Volrath's Curse is the card in this pool that shows it: its restriction
+    sentence is implemented and the CR 116.2d offer printed behind it is not.
+    """
+    outside = _QUOTED_SPAN.sub("", line or "")
+    return outside.strip().rstrip(".").count(".") == 0
+
+
 def _is_supported_static_creature_line(line: str, card_name: str | None = None) -> bool:
     if _grammar_static_creature_instruction(line, card_name) is not None:
         return True
@@ -4432,6 +4468,36 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .library_top import library_top_line
 
     if library_top_line(normalized):
+        return True
+    # "You may cast Aura spells with enchant creature as though they had flash."
+    # (Rootwater Shaman.) A CR 611.1 static permission over CR 702.8a's timing,
+    # derived from every permanent's own text at the two timing gates
+    # (`cast_timing.board_flash_timing`) — so like every table above it produces
+    # no instruction, and a creature whose whole text is this sentence reported
+    # "text too complex" for a line the engine enforces end to end. Asked of the
+    # table that performs it, so a class it cannot narrow still refuses the card
+    # rather than admitting it with the narrowing dropped.
+    from .cast_timing import static_flash_permission
+
+    if static_flash_permission(normalized) is not None:
+        return True
+    # "Enchanted creature has haste." (Enraging Licid; four of the five print
+    # one of these.) CR 303.4m: an ability that refers to the "enchanted
+    # [object]" refers to whatever that permanent is attached to, **even if the
+    # permanent with the ability isn't an Aura** — which is exactly a Licid,
+    # printed as a creature and attached only once its own ability has run.
+    #
+    # The same partial-list shape this function keeps finding one table at a
+    # time: `auras.aura_continuous_claim` has been asked for a card whose
+    # printed type line says Aura since it was written, and a *creature*
+    # printing the identical sentence reported "text too complex" while the
+    # layer bridge derived the grant perfectly — it reads the attachment record,
+    # never the attacher's type line. Asked of that table, so a grant it cannot
+    # derive still refuses the card rather than admitting it with the line
+    # dropped.
+    from .auras import aura_continuous_claim
+
+    if _one_sentence(line) and aura_continuous_claim(normalized) is not None:
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
@@ -5511,6 +5577,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("special_actions")
+    # "You may cast Aura spells with enchant creature as though they had flash."
+    # (Rootwater Shaman.) The *static* timing permission, which is behaviour of
+    # the permanent rather than a clause about its own cast — which is why it is
+    # its own claim and not `cast_timing` above, a row `_TIMING_ONLY_CLAIMS`
+    # deliberately refuses to count as evidence a permanent does anything.
+    from .cast_timing import static_flash_permission
+
+    if any(
+        static_flash_permission(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("flash_permissions")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an

@@ -918,6 +918,7 @@ class StackResolutionMixin:
                 target_permanent_id=item.target_permanent_id,
                 x_value=item.x_value,
                 source_permanent=item.source_permanent,
+                ability_text=item.ability_text,
                 stack_target=item.target_stack_item,
                 trigger_context=item.trigger_context,
                 choices=item.choices,

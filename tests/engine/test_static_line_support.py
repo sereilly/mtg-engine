@@ -33,6 +33,7 @@ someone checked.
 
 import pytest
 
+from engine.auras import aura_continuous_claim
 from engine.card_loader import load_catalog
 from engine.cast_restrictions import cast_timing_claims_line
 from engine.characteristic_defining import dynamic_pt_for
@@ -156,6 +157,21 @@ def _derived(normalized: str) -> bool:
         # same clause and were never asked here before, which is why widening a
         # gate is the moment to re-read the guards keyed on the old answer.
         or cast_timing_claims_line(normalized)
+        # An **attached** permanent's continuous effect — "Enchanted creature
+        # has flying", "…gets +2/+2", "…can't attack or block". The fifteenth
+        # derivation table, applied by `engine/layer_bridge.py` off the Aura's
+        # own text on every recompute, so like every table above it needs no
+        # instruction.
+        #
+        # The gate began admitting these when the Licids arrived: they print
+        # the sentence on a **creature**, which becomes an Aura only once its
+        # own ability has resolved (CR 303.4m puts no such requirement on the
+        # word "enchanted"), and a creature is refused for any line nothing
+        # reads. Seventy shipped Auras print the same sentences and were never
+        # asked here before — which is the same lesson the `cast_timing` arm
+        # above records, arriving a second time: widening a gate is the moment
+        # to re-read the guards keyed on the old answer.
+        or aura_continuous_claim(normalized) is not None
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion

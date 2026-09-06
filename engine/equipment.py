@@ -188,12 +188,34 @@ def attachment_refusal(
     supported, offered an empty picker and moved nothing. An Aura with its own
     attach ability is not an exotic shape — it is CR 701.3 asked by the other
     kind of Attachment.
+
+    **And there is a third case, which is neither.** A Licid is a *creature*
+    when its ability is activated and an Aura by the time the attach in the
+    sentence behind it resolves — so at the picker (CR 602.2b) the permanent has
+    no attachment legality of its own to test. Asking the Equipment predicate
+    there refuses every host and empties the picker, which is Kjeldoran Pride's
+    bug arriving from the opposite direction; asking the Aura one refuses too,
+    for want of an enchant clause the permanent has not been given yet.
+
+    What the *rules* say at that moment is that there is nothing to ask: the
+    ability targets "target creature" and CR 303.4j is checked when the Aura
+    would actually move, which is at resolution — by which time the type change
+    has happened and the Aura arm above answers. So the third arm tests only
+    what is true of any attachment at any time (CR 303.4d / 301.5c: never
+    itself, and the host has to exist), and leaves the rest to the arm that
+    will be right.
     """
     from .auras import aura_attach_refusal
 
     if attachment.has_type("aura"):
         return aura_attach_refusal(game, attachment, host)
-    return equip_refusal(game, attachment, host)
+    if is_equipment(attachment):
+        return equip_refusal(game, attachment, host)
+    if host is attachment:
+        return "a permanent can't attach to itself"
+    if host is None or not game.is_on_battlefield(host):
+        return "the host is no longer on the battlefield"
+    return None
 
 
 def equipped_creature(equipment: "Permanent") -> "Permanent | None":

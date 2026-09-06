@@ -66,6 +66,15 @@ BASE_CONTROLLER = "base_controller_index"
 #                               the first, and deliberately not folded into it:
 #                               an opponent who gains control of the Bandits
 #                               does not thereby hand the artifact back.
+#   "target_remains_enchanted" — the **stolen** permanent must still have an
+#                               Aura attached ("…for as long as that creature
+#                               is enchanted", Rootwater Matriarch). The first
+#                               condition here that is not about the source at
+#                               all, which is why it is a word in this tuple
+#                               rather than a fourth question the sweep asks
+#                               of the source: the sweep already holds the
+#                               stolen permanent, and what the printed clause
+#                               names is which object the fact is about.
 #
 # The steal handlers stamp it through ``take_control(extra_meta=…)`` and the
 # state-based sweep in ``mixins/game_ending.py`` reads it from the *stolen*

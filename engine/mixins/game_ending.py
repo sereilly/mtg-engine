@@ -9,6 +9,7 @@ from ..control import (
     control_changes,
     end_control_change,
 )
+from ..auras import auras_attached_to
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
@@ -465,6 +466,16 @@ class GameEndingMixin:
                         # this one, and the artifact stays where it is.
                         "source_on_battlefield" in conditions
                         and not self.is_on_battlefield(source)
+                    ) or (
+                        # "…for as long as **that creature** is enchanted"
+                        # (Rootwater Matriarch). The one condition in this
+                        # table that is about the *stolen* permanent rather
+                        # than the source — asked of `held`, which is the very
+                        # permanent this loop is already holding. The Matriarch
+                        # may be untapped, tapped, or gone; what decides is
+                        # whether an Aura is still attached to the creature.
+                        "target_remains_enchanted" in conditions
+                        and not auras_attached_to(held)
                     )
                     if not broken:
                         continue

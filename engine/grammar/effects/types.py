@@ -94,6 +94,79 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     raise stream.error("expected a colour or a creature body after 'becomes'")
 
 
+def _parse_becomes_aura_enchantment(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.BecomeAura | None":
+    """``This creature loses this ability and becomes an Aura enchantment with
+    enchant <noun>.`` (Tempest's five Licids.)
+
+    Returns None with the cursor untouched for every other "loses …", so
+    ``_parse_loses`` next door keeps life, keywords and the game.
+
+    **One node for the whole sentence**, and the conjunction is why. CR 205.1a
+    replaces the permanent's card types, so a Licid stops being a creature; CR
+    613 layer 6 takes the ability away, so it cannot be activated again from
+    the enchantment it has become. Those are two layers, but they are one
+    printed thing the permanent *becomes* — split into two steps the second
+    would apply to a permanent the first had already made into an Aura with no
+    ability on it to lose, and a card that printed only one of them would be
+    read as this one.
+
+    The enchant clause is Necromancy's, read by
+    ``quoted_lines._parse_becomes_aura_line`` from inside quotation marks and
+    here from the bare words. Same node, same handler, same
+    ``auras.BECAME_AURA_ENCHANT`` record — a Licid's "enchant creature" is not a
+    printed ``Enchant`` line, so it cannot be read off the card's text and has
+    to be a record either way.
+
+    The subject must be the ability's own source. "This creature loses this
+    ability" is CR 201.5's self-reference; a sentence saying it of anything else
+    would be taking an ability away from a permanent whose text this node does
+    not name, and the handler has only its own source to act on.
+    """
+    mark = stream.mark()
+    stream.expect_word("loses", "lose")
+    if not stream.accept_phrase("this", "ability"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("becomes", "become"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("an", "a"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("aura"):
+        stream.reset(mark)
+        return None
+    # "…an Aura **enchantment**". The card type the sentence sets, read rather
+    # than assumed: "Aura" alone is a subtype, and a permanent given the subtype
+    # without the type is a creature the CR 704.5m sweep would start policing
+    # while combat still counted it. A word this parser cannot place refuses,
+    # for the reason every branch above it does.
+    card_types: tuple[str, ...] = ()
+    if stream.at_word(*CARD_TYPES):
+        card_types = (str(stream.peek_word()),)
+        stream.advance()
+    if not stream.accept_phrase("with", "enchant"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not isinstance(subject, ast.TargetSpec) or not subject.filter.is_source:
+        raise stream.error(
+            "only a permanent's own ability can turn it into an Aura"
+        )
+    return ast.BecomeAura(
+        noun=noun, card_types=card_types, loses_own_ability=True
+    )
+
+
 def _parse_becomes_land_type(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.ChangeLandType | None":

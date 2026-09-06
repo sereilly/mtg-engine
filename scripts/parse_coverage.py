@@ -72,9 +72,11 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       global_cast_ban_line,
                                       global_play_timing_line)
 from engine.counter_conditions import uncounterable_line  # noqa: E402
-from engine.special_actions import special_action_line  # noqa: E402
+from engine.special_actions import (permanent_special_action_sentence,  # noqa: E402
+                                    special_action_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
-                                sacrifices_at_cleanup_if_cast_at_instant_speed)
+                                sacrifices_at_cleanup_if_cast_at_instant_speed,
+                                static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
@@ -267,12 +269,25 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("cast_timing.py (granted flash)", grants_flash),
     ("cast_timing.py (cleanup sacrifice rider)",
      sacrifices_at_cleanup_if_cast_at_instant_speed),
+    # And the *static* half of the same file — "You may cast Aura spells with
+    # enchant creature as though they had flash" (Rootwater Shaman), a
+    # permission a permanent grants its controller's other spells rather than
+    # one a card grants itself. Its own channel because it is its own reader.
+    ("cast_timing.py (static flash permission)",
+     lambda s: static_flash_permission(s) is not None),
     # CR 116's special actions — "You may discard this card any time you could
     # cast an instant" (Circling Vultures, the one card CR 116.2e names). No
     # stack and so no instruction, which is exactly the population this census
     # exists to keep honest: asked of the table's own reader, the one the
     # support gate asks.
     ("special_actions.py", lambda s: special_action_line(s) is not None),
+    # CR 116.2c's half of the same file — "You may pay {R} to end this effect"
+    # (Tempest's five Licids), an offer a *permanent* makes for as long as the
+    # effect its own ability created is running. Its own channel because it is
+    # its own reader; no stack and so no instruction, which is exactly the
+    # population this census exists to keep honest.
+    ("special_actions.py (permanent offer)",
+     lambda s: permanent_special_action_sentence(s) is not None),
     # The board half of CR 601.3 — "Cast this spell only if you control a
     # snow land" (Blizzard). A row whose noun phrase is payload, so the
     # claim asks the reader that answers it rather than comparing against a

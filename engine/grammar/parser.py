@@ -236,6 +236,11 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     effect — `engine/cost_modifiers.py` applies it while the cost is being paid,
     so there is nothing here for a production to lower.
 
+    "{R}, {T}: … **You may pay {R} to end this effect.**" (Tempest's Licids) is
+    the same shape one registry over: CR 116.2c's special action, offered by
+    `engine/special_actions.py` for as long as the effect the two sentences in
+    front of it created is running.
+
     The claim **delegates to the implementing code** rather than restating its
     words, which is the rule `engine/grammar/registries.py` states for the
     whole-line case: a copy of the phrase here would be free to drift, and a
@@ -244,6 +249,7 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     the registry's matcher.
     """
     from ..cost_modifiers import cost_modifier_claims_line
+    from ..special_actions import permanent_special_action_sentence
 
     mark = stream.mark()
     start_token = stream.peek()
@@ -260,6 +266,15 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
         stream.advance()
     text = stream.line[start_token.start:end]
     if cost_modifier_claims_line(text):
+        stream.accept_punct(".")
+        return True
+    # "**You may pay {R} to end this effect.**" (Tempest's five Licids.) The
+    # third sentence of an activated ability's line, and not an effect either:
+    # CR 116.2c makes it a *special action*, taken later, with priority, without
+    # the stack — so there is nothing here for a production to lower and the
+    # sentence is consumed by the table that performs it
+    # (`engine/special_actions.py`), exactly as the cost reduction above is.
+    if permanent_special_action_sentence(text) is not None:
         stream.accept_punct(".")
         return True
     stream.reset(mark)

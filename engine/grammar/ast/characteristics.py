@@ -444,9 +444,26 @@ class BecomeAura:
     else refuses in the parse — the engine has no way to test it, and an
     untestable restriction admitted here is one the CR 704.5m sweep would
     silently ignore.
+
+    ``card_types`` is the rest of the type line the sentence sets. Necromancy
+    says only "an Aura", which is a subtype the enchantment already has; a
+    Licid says "an **Aura enchantment**" and it is a *creature* saying it, so
+    CR 205.1a's replacement is the difference between a permanent that is now
+    an enchantment and one that is a creature wearing an Aura's subtype. Empty
+    means the sentence named no card type, which is Necromancy's reading and
+    not "no types".
+
+    ``loses_own_ability`` is the Licid clause in front of the verb — "This
+    creature **loses this ability** and becomes …" (CR 613 layer 6). One node
+    for both halves, for the reason the enchant clause is on this node: the
+    sentence is one thing the permanent becomes, and a permanent that had
+    changed type while still carrying the ability that changed it could be
+    activated again from the Aura it had turned into.
     """
     noun: str
     origin_is_source: bool = False
+    card_types: tuple[str, ...] = ()
+    loses_own_ability: bool = False
 
 
 @dataclass(frozen=True)
