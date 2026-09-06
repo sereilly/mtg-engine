@@ -993,3 +993,155 @@ def test_intuition_asks_the_caster_for_an_opponent(set_pool):
     spec = derive_cast_spec(set_pool("TMP")["Intuition"], program)
     assert spec is not None and spec.get("kind") == "player"
     assert spec.get("opponents_only") is True
+
+
+# --- W4G2: Reap — an X counted as the spell is cast (CR 601.2b/601.2c) ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import cast_time_count_spec
+
+
+def _w4g2_game(set_pool, *, black, graveyard, hand=("Reap",)):
+    """A duel where the opponent controls *black* black permanents and the
+    caster's graveyard holds *graveyard*.
+
+    Two decoys sit on the board on purpose: a non-black permanent the opponent
+    controls (so a count that dropped the colour reads too high) and two black
+    permanents the **caster** controls (so a count that dropped the seat does).
+    """
+    tmp, lea = set_pool("TMP"), set_pool("LEA")
+    pool = {**lea, **tmp}
+    p0 = PlayerState(name="P0", life=20, hand=[pool[n] for n in hand],
+                     graveyard=[pool[n] for n in graveyard])
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    for _ in range(black):
+        game._put_permanent_onto_battlefield(1, Permanent(card=lea["Bog Wraith"]), None)
+    game._put_permanent_onto_battlefield(1, Permanent(card=lea["Grizzly Bears"]), None)
+    for _ in range(2):
+        game._put_permanent_onto_battlefield(0, Permanent(card=lea["Bog Wraith"]), None)
+    return game
+
+
+_W4G2_GRAVEYARD = ("Black Lotus", "Healing Salve", "Shivan Dragon", "Ancestral Recall")
+
+
+def test_reap_counts_the_opponents_black_permanents_and_nobody_elses(set_pool):
+    """The count is scoped by both halves of the printed noun phrase.
+
+    ``count_spec`` used to refuse a ``target opponent`` narrowing outright, and
+    the branch that resolves the seat has existed in ``count_from_payload``
+    since Superior Numbers — so this asserts the number, not the plumbing: the
+    opponent's non-black permanent and the caster's own two black ones are the
+    two ways a dropped narrowing shows up, and both would raise it.
+    """
+    game = _w4g2_game(set_pool, black=2, graveyard=_W4G2_GRAVEYARD)
+    assert game.announced_cast_x(0, set_pool("TMP")["Reap"]) == 2
+
+
+def test_reap_announces_its_x_and_bounds_the_target_picker(set_pool):
+    """CR 601.2b/107.3c: the card defines X, so the picker asks for no number
+    and offers at most that many cards.
+
+    ``x_targets`` is the flag that means "however many the announced X pays
+    for", and it must be *gone*: a spec carrying both would let the browser fall
+    back to an X box for a spell whose X the caster never chooses.
+    """
+    game = _w4g2_game(set_pool, black=3, graveyard=_W4G2_GRAVEYARD)
+    spec = game.cast_target_spec(0, set_pool("TMP")["Reap"])
+    assert spec["defined_x"] == 3
+    assert spec["max_targets"] == 3
+    assert "x_targets" not in spec
+    assert [t["index"] for t in spec["valid_targets"]] == [0, 1, 2, 3]
+    assert {t["seat"] for t in spec["valid_targets"]} == {0}
+
+
+def test_reap_refuses_an_announcement_naming_more_cards_than_x(set_pool):
+    """CR 601.2c, and the whole reason this card could not ship without it.
+
+    The resolution clamps the list it *acts* on to X either way, so an
+    unenforced announcement is silent: nothing crashes and nothing is missing —
+    the spell simply works more often than the card allows. Refused before any
+    cost is paid (CR 601.2e), so the card is still in hand.
+    """
+    game = _w4g2_game(set_pool, black=2, graveyard=_W4G2_GRAVEYARD)
+    result = game.cast_from_hand(0, "Reap", target_permanent_index=[0, 1, 2])
+    assert not result.supported
+    assert result.details == "Reap has 2 targets, not 3"
+    assert [c.name for c in game.players[0].hand] == ["Reap"]
+    assert not game.stack
+
+
+def test_reap_returns_exactly_the_cards_the_caster_named(set_pool):
+    game = _w4g2_game(set_pool, black=2, graveyard=_W4G2_GRAVEYARD)
+    assert game.cast_from_hand(0, "Reap", target_permanent_index=[0, 2]).supported
+    assert [c.name for c in game.players[0].hand] == ["Black Lotus", "Shivan Dragon"]
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Healing Salve", "Ancestral Recall", "Reap",
+    ]
+
+
+def test_reap_with_no_black_permanents_is_cast_for_nothing(set_pool):
+    """"Up to X" at X=0 names no target, which CR 601.2c permits — so the spell
+    is castable with an empty announcement and returns nothing.
+
+    Both halves matter. The cast used to be refused for want of a target, and
+    the resolution used to fall through to "return whatever creature is
+    nearest", which is a card returned by a spell that names none.
+    """
+    game = _w4g2_game(set_pool, black=0, graveyard=_W4G2_GRAVEYARD)
+    assert game.announced_cast_x(0, set_pool("TMP")["Reap"]) == 0
+    assert game.cast_from_hand(0, "Reap", target_permanent_index=[]).supported
+    assert game.players[0].hand == []
+    assert [c.name for c in game.players[0].graveyard] == [
+        *_W4G2_GRAVEYARD, "Reap",
+    ]
+
+    again = _w4g2_game(set_pool, black=0, graveyard=_W4G2_GRAVEYARD)
+    refused = again.cast_from_hand(0, "Reap", target_permanent_index=[0])
+    assert not refused.supported
+    assert refused.details == "Reap has 0 targets, not 1"
+
+
+@pytest.mark.cr("601.2b", "601.2c")
+def test_reap_freezes_its_x_at_the_announcement(set_pool):
+    """CR 601.2c: "once the number of targets is determined, that number
+    doesn't change, even if the information used to determine it does".
+
+    The opponent sacrifices every black permanent in response. A resolution that
+    re-counted would return one card of the three the caster legally named.
+    """
+    game = _w4g2_game(set_pool, black=3, graveyard=_W4G2_GRAVEYARD)
+    assert game.queue_from_hand(0, "Reap", target_permanent_index=[0, 1, 2]).supported
+    assert game.stack[-1].x_value == 3, "CR 601.2b announced it onto the stack"
+
+    for permanent in list(game.controlled_by(1)):
+        game.remove_from_battlefield(permanent)
+    assert list(game.controlled_by(1)) == []
+
+    game.resolve_top_of_stack()
+    assert [c.name for c in game.players[0].hand] == [
+        "Black Lotus", "Healing Salve", "Shivan Dragon",
+    ]
+
+
+def test_reap_carries_the_cast_time_marker_into_its_compiled_program(set_pool):
+    """The words "as you cast this spell" are the whole difference between this
+    card and the same sentence counted at resolution, so they are asserted on
+    the program rather than only through behaviour: a parse that consumed them
+    and dropped them would pass every test above in a two-player game where the
+    board never changes.
+    """
+    program = compile_card_oracle(set_pool("TMP")["Reap"])
+    spec = cast_time_count_spec(program)
+    assert spec == {
+        "zone": "battlefield",
+        "owner": "target_opponent",
+        "filter": {"color_filter": "B"},
+        "as_cast": True,
+    }

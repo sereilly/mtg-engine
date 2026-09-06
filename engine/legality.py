@@ -505,7 +505,6 @@ class LegalityMixin:
 
     def announced_cast_x(
         self, caster_index: int, card: CardDefinition, *,
-        target_player_index: int | None = None,
         mode_index: int | None = None,
     ) -> int | None:
         """CR 601.2b: the X this spell's own where-clause fixes **at the
@@ -528,10 +527,16 @@ class LegalityMixin:
         clause means is for both moments to ask one function. What differs is
         the moment, which is what the caller supplies.
 
-        The seat a ``target_opponent``-scoped count reads is resolved by that
-        evaluator too (CR 102.3: a player is never their own opponent), so an
-        unnamed seat lands on the first living opponent — which in a two-player
-        game is the only announcement CR 601.2c permits.
+        **No seat is taken from the caller**, and that is a rule rather than an
+        omission. The cast wire carries one ``target_player_index``, and for a
+        spell whose targets sit in a graveyard that field already means *which
+        pile* — so reading it here would count a board the caster never named,
+        and differently in the picker (which has no such field) than in the gate.
+        ``count_from_payload`` resolves the seat itself (CR 102.3: a player is
+        never their own opponent, so the fallback is the first living one),
+        which in a two-player game is the only announcement CR 601.2c permits;
+        the lowering refuses any scope that would need an answer this cannot
+        give.
         """
         from .game_types import OracleExecutionContext
         from .handlers._common import count_from_payload
@@ -543,13 +548,7 @@ class LegalityMixin:
         if spec is None:
             return None
         caster = self.players[caster_index]
-        named = (
-            self.players[target_player_index]
-            if isinstance(target_player_index, int)
-            and 0 <= target_player_index < len(self.players)
-            else caster
-        )
-        context = OracleExecutionContext(caster=caster, target=named, card=card)
+        context = OracleExecutionContext(caster=caster, target=caster, card=card)
         return max(0, int(count_from_payload(self, context, spec)))
 
     def cast_target_spec(
@@ -1491,9 +1490,7 @@ class LegalityMixin:
         # cards as they like: the resolution clamps the list it *acts* on to X
         # and nothing ever says the announcement was illegal, which is an
         # ability that works more often than the card allows.
-        announced = self.announced_cast_x(
-            caster_index, card, target_player_index=target_player_index
-        )
+        announced = self.announced_cast_x(caster_index, card)
         if announced is not None:
             named_count = len(named_ids) if named_ids else len(indices)
             if named_count > announced:

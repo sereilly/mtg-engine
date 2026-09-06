@@ -1673,7 +1673,31 @@ def _choose_several_targets(
     program = compile_card_oracle(card)
     spec = derive_cast_spec(card, program)
     maximum = (spec or {}).get("max_targets")
-    if not isinstance(maximum, int) or maximum <= 1:
+    # "Return **up to X** target cards from your graveyard to your hand, where X
+    # is the number of black permanents target opponent controls **as you cast
+    # this spell**." (Reap.) The count is a board count, so the card-only
+    # derivation above cannot carry it — it reports ``x_targets``, "however many
+    # the announced X pays for" — and a chooser that stopped there named no
+    # targets at all, which is a spell that resolves every game and does
+    # nothing. Asked of the game through the *same* reader the announcement gate
+    # and the browser's picker use, so the AI never proposes a count CR 601.2c
+    # then refuses.
+    #
+    # Derived, not name-keyed: any card printing the same tail is covered the
+    # day it is ingested. A spell whose X the *caster* announces (Shattered
+    # Crypt's {X} cost) has no answer here and keeps the behaviour it had.
+    announced = (
+        game.announced_cast_x(caster_index, card)
+        if (spec or {}).get("x_targets") else None
+    )
+    if announced is not None:
+        if announced < 1:
+            # CR 601.2c: naming nothing is a legal announcement for an "up to"
+            # spell, and it is what the caller does when this returns None — so
+            # the honest answer at X=0 is "no several-target choice to make".
+            return None
+        maximum = announced
+    elif not isinstance(maximum, int) or maximum <= 1:
         # "Destroy target artifact. For each additional {1}{R} you paid, destroy
         # **another** target artifact…" (Primitive Justice): the count is fixed
         # by an announcement (CR 601.2b) this policy does not make, since it

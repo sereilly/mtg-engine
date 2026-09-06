@@ -25,7 +25,7 @@ import dataclasses
 from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec
+from ._amounts import TARGET_OPPONENT_SCOPE, count_spec
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._records import produced_keys
@@ -173,6 +173,23 @@ def lower_where_x(
     if plus:
         spec["plus"] = plus
     if node.as_cast:
+        # And **whose** board, which is the half a cast-time count has to settle
+        # that a resolution-time one does not. At the announcement nothing has
+        # chosen a player: this engine's cast wire carries one
+        # ``target_player_index``, and for a spell whose targets sit in a
+        # graveyard that field already means *which pile*, so a count scoped to
+        # "target player" would read a seat nobody named. The three scopes below
+        # need no announcement — the caster, the whole board, and CR 102.3's
+        # first living opponent — and every other one refuses the line rather
+        # than counting a board the caster did not pick. A restriction the
+        # support gate reads too: the card is unsupported, not admitted with the
+        # wrong seat counted.
+        if spec.get("owner") not in ("you", "all", TARGET_OPPONENT_SCOPE):
+            raise LoweringError(
+                "a count taken as a spell is cast must name a seat the "
+                "announcement can resolve",
+                node=node,
+            )
         # CR 601.2b. The key the cast path reads to take this count at the
         # announcement and the resolution reads to know it must **not** take it
         # again — one flag for both halves, so "when is this counted?" has one

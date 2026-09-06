@@ -1360,10 +1360,7 @@ class SpellCastingMixin:
         # picker and the target gate already asked, so the number the caster was
         # offered, the number the announcement was checked against and the
         # number the resolution spends are one number.
-        announced_x = self.announced_cast_x(
-            caster_index, card,
-            target_player_index=target_player_index, mode_index=mode_index,
-        )
+        announced_x = self.announced_cast_x(caster_index, card, mode_index=mode_index)
         if announced_x is not None:
             resolved_x_value = announced_x
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
@@ -3215,11 +3212,22 @@ class SpellCastingMixin:
                 else caster
             )
             targets_desc = primary.payload.get("targets") or {}
-            several = (
-                isinstance(targets_desc, dict)
-                and isinstance(targets_desc.get("count"), int)
-                and targets_desc["count"] > 1
-            )
+            printed = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+            several = isinstance(printed, int) and printed > 1
+            # "Return **up to X** target cards from your graveyard to your
+            # hand" (Reap). The same announcement as the printed "up to two"
+            # below and the same rule: CR 601.2c lets the caster name zero
+            # targets, so an empty graveyard is a legal cast that does nothing
+            # rather than a spell that cannot be cast. Read off the
+            # *quantifier*, not off the letter: "X target creature cards"
+            # (Shattered Crypt) is an exact count and does need X legal ones.
+            #
+            # The ceiling on such a list is a board count and is checked where
+            # that count is known (``legality.announced_cast_x``), which is why
+            # the maximum below asks whether the printed count is a number
+            # before comparing to it.
+            if printed == "x" and targets_desc.get("quantifier") == "up_to":
+                several = True
             if several:
                 # "Up to two target creature cards ...": CR 601.2c lets the
                 # caster announce *zero* targets, so an empty graveyard is not a
@@ -3233,7 +3241,7 @@ class SpellCastingMixin:
                 )
                 if slots and wrong_seat:
                     return False, f"no valid target for {card.name}"
-                if len(slots) > targets_desc["count"]:
+                if isinstance(printed, int) and len(slots) > printed:
                     return False, f"too many targets for {card.name}"
                 for slot in slots:
                     if not isinstance(slot, int) or not (0 <= slot < len(named.graveyard)):
