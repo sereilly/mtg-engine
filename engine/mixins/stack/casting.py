@@ -23,9 +23,15 @@ from ...auras import aura_enchant_clause
 from ...alternative_costs import AlternativeCost, alternative_costs
 from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
 from ...auras import controller_cast_ban
+# `own_cast_ban` beside `auras.controller_cast_ban` above, and named apart from
+# it deliberately: both answer "which permanent forbids this seat this spell",
+# and the seat each one means is different — the Aura's is the *host's*
+# controller and this one's is the permanent's own. Named alike they would be
+# one import shadowing the other, silently, with the surviving reader answering
+# the wrong question for both cards.
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
                                   global_play_timing,
-                                  global_cast_ban)
+                                  global_cast_ban, own_cast_ban)
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
@@ -826,6 +832,20 @@ class SpellCastingMixin:
         forbidding_aura = controller_cast_ban(self, caster_index, card)
         if forbidding_aura is not None:
             details = f"can't cast {card.name}: {forbidding_aura}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "**You** can't cast creature spells." (Steel Golem.) The same CR
+        # 601.3a prohibition with the seat printed as "you", so it is asked of
+        # the caster's **own** battlefield alone — an opponent's Steel Golem
+        # says nothing about your creature spells, which is the whole of what
+        # separates this from the board-wide ban below. Beside the two rather
+        # than folded into either: what differs between the three is the scope,
+        # and a scope taken from the wrong half of a sentence bans the wrong
+        # players.
+        forbidding_own = own_cast_ban(self, caster_index, card)
+        if forbidding_own is not None:
+            details = f"can't cast {card.name}: {forbidding_own}"
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 

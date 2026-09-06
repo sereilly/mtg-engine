@@ -4009,6 +4009,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # passes through, and there is nothing here to lower.
     if denies_regeneration_line(normalized):
         return True
+    # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
+    # permanent's own controller, enforced off the board at every cast — so
+    # like every table above it produces no instruction, and a creature whose
+    # whole static half is this sentence reported "text too complex" for the one
+    # line the engine could enforce end to end. Asked of the reader that
+    # enforces it, so the claim cannot outlive the ban.
+    from .cast_restrictions import own_cast_ban_line
+
+    if own_cast_ban_line(normalized) is not None:
+        return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
     # "Creature spells with flying you cast cost {1} less" (Watcher of the
@@ -4965,7 +4975,9 @@ def _derived_static_claims(
     # instruction means the card reports unsupported however well the
     # restriction works. Its own claim name for the two bans' reason: it is
     # what the permanent *does*, and it is about everybody else's turns.
-    from .cast_restrictions import (GLOBAL_PLAY_TIMING_CLAIM,
+    from .cast_restrictions import (OWN_CAST_BAN_CLAIM,
+                                    GLOBAL_PLAY_TIMING_CLAIM,
+                                    own_cast_ban_line,
                                     global_play_timing_line)
 
     if any(
@@ -4973,6 +4985,17 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(GLOBAL_PLAY_TIMING_CLAIM)
+    # "You can't cast creature spells." (Steel Golem prints it on a creature;
+    # an artifact or enchantment printing it reads the same.) CR 601.3a scoped
+    # to the permanent's own controller, read off the board at every cast — so
+    # there is no instruction, and its own claim name for the reason the two
+    # bans above have one: it is what the permanent *does*, and it is about a
+    # player rather than about this card's own timing.
+    if any(
+        own_cast_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(OWN_CAST_BAN_CLAIM)
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
     # asks this same table on every gain, so there is no instruction to produce
     # — and a permanent whose whole text is the sentence would report

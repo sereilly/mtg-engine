@@ -33,6 +33,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
                                  chosen_name_ban_line,
+                                 OWN_CAST_BAN_CLAIM,
+                                 own_cast_ban_line,
                                  global_cast_ban_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
@@ -126,6 +128,12 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # through the reader that enforces it, so the claim cannot outlive the ban.
     if global_cast_ban_line(normalized) is not None:
         return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same rule scoped to the permanent's own
+    # controller: "You can't cast creature spells." (Steel Golem.) Claimed
+    # through the reader that enforces it, so the claim cannot outlive the ban.
+    if own_cast_ban_line(normalized) is not None:
+        return OWN_CAST_BAN_CLAIM
 
     # engine/cast_restrictions.py — the *name*-keyed half of the same rule:
     # "Spells with the chosen names can't be cast and lands with the chosen

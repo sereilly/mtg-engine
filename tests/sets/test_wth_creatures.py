@@ -19,6 +19,7 @@ Cards come from `set_pool("WTH")` / `set_cards("WTH")` — never a new
 # --- W1G4: animation and printed prohibitions ---
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
+from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 
 
@@ -125,3 +126,82 @@ def test_a_creature_can_attack_once_the_peacekeeper_is_gone(set_pool):
     assert not game.can_attack(mine, 1)
     game.remove_from_battlefield(keeper)
     assert game.can_attack(mine, 1)
+
+
+def test_steel_golem_stops_only_its_own_controllers_creature_spells(set_pool):
+    """"You can't cast creature spells." — CR 601.3a, and CR 109.5 for "you".
+
+    The third scope this prohibition is printed in, beside Aether Storm's
+    board-wide "Creature spells can't be cast" and Brand of Ill Omen's "enchanted
+    creature's controller". A ban read at the wrong scope is not a card doing
+    less — it is a card doing something else, so both halves are asserted: the
+    Golem's controller is stopped and the opponent is not.
+    """
+    golem = _w1g4c_nosick(Permanent(card=set_pool("WTH")["Steel Golem"]))
+    spell = _w1g4c_creature("Footman", 2, 2)
+    game = _w1g4c_combat([golem], [])
+    game.players[0].hand.append(spell)
+    game.players[1].hand.append(spell)
+
+    result = game.cast_from_hand(0, "Footman")
+    assert not result.supported
+    assert "Steel Golem" in result.details
+
+    # The opponent controls no Steel Golem, so the same card is castable — a
+    # gate scoped to every battlefield would fail here and pass above.
+    assert game.cast_from_hand(1, "Footman").supported
+
+
+def test_steel_golem_lets_its_controller_cast_a_noncreature_spell(set_pool):
+    """The type is payload, so the ban has to *stop at* the type it names."""
+    golem = _w1g4c_nosick(Permanent(card=set_pool("WTH")["Steel Golem"]))
+    artifact = CardDefinition(
+        name="Test Sphere", mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Test Sphere", "type_line": "Artifact"},
+    )
+    game = _w1g4c_combat([golem], [])
+    game.players[0].hand.append(artifact)
+    assert game.cast_from_hand(0, "Test Sphere").supported
+
+
+def test_roc_hatchling_grows_only_once_its_shell_counters_are_gone(set_pool):
+    """"As long as this creature has no shell counters on it, it gets +3/+2 and
+    has flying." — CR 613 layer 7c with a CR 122.1 counter store as its
+    condition, driven through four upkeeps rather than read off the payload.
+
+    The engine could already read the *existential* spelling of the zero ("as
+    long as there are no time counters on this Aura", Tourach's Gate) and the
+    possessive spelling of every count **but** zero ("if it has five or more
+    hunger counters on it", Fasting). This card is the possessive zero, which
+    was the one corner of that production nobody had printed yet.
+
+    The comparison matters more than the number: read as "at least zero" the
+    condition always holds, which is a 3/3 flier on the turn the Hatchling
+    lands. The first three upkeeps are what prove it does not.
+    """
+    hatchling = Permanent(card=set_pool("WTH")["Roc Hatchling"])
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.players[0].battlefield.append(hatchling)
+    game._initialize_permanent_state(hatchling, 0, 0)
+    assert counters_on(hatchling, "shell") == 4
+
+    seen = []
+    for _ in range(4):
+        game.start_turn(0)
+        game._recompute_continuous_effects()
+        seen.append((
+            counters_on(hatchling, "shell"),
+            hatchling.effective_power,
+            hatchling.effective_toughness,
+            game._has_keyword(hatchling, "flying"),
+        ))
+
+    assert seen == [
+        (3, 0, 1, False),
+        (2, 0, 1, False),
+        (1, 0, 1, False),
+        (0, 3, 3, True),
+    ]

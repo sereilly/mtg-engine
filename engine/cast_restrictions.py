@@ -724,6 +724,74 @@ def global_cast_ban_line(line: str) -> str | None:
     return match.group("type") if match is not None else None
 
 
+#: "**You** can't cast creature spells." (Steel Golem.) The third scope this
+#: prohibition is printed in, and the reason it is a third reader rather than a
+#: widening of :data:`_GLOBAL_CAST_BAN` above: what differs between the three is
+#: **whom the sentence binds**, and a scope taken from the wrong half of a
+#: sentence bans the wrong players. Aether Storm's "Creature spells can't be
+#: cast" binds everybody; Brand of Ill Omen's binds the enchanted creature's
+#: controller (``auras.aura_controller_cast_ban``); this one binds the seat that
+#: controls the permanent printing it, and nobody else — an opponent who steals
+#: the Golem is stopped and its former controller is freed, which is exactly what
+#: CR 109.5 makes of the word "you".
+#:
+#: The card type is payload for the reason every printed word in this table is
+#: one: "…can't cast artifact spells" is the same sentence and must need no
+#: second row.
+_OWN_CAST_BAN = re.compile(
+    rf"^you can't cast (?P<type>{_BANNABLE_SPELL_TYPES}) spells$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, not ``"cast_restrictions"``, for
+#: :data:`GLOBAL_PLAY_TIMING_CLAIM`'s reason: that claim says *when this card*
+#: may be cast, and this sentence is a standing prohibition on a player.
+OWN_CAST_BAN_CLAIM = "own_cast_ban"
+
+
+@lru_cache(maxsize=None)
+def own_cast_ban_line(line: str) -> str | None:
+    """The card type *line* forbids its own controller from casting, or None.
+
+    One reader, three callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    ``engine/oracle.py``'s two support gates ask it so the card is admitted on
+    the strength of a restriction that exists, and ``mixins/stack/casting.py``
+    asks it at CR 601.2 so the line is *enforced*. A restriction claimed and not
+    enforced is a permanent that reports supported while its controller keeps
+    casting the spells it forbids — and on Steel Golem, whose drawback is the
+    whole of what pays for a 3/3 for {3}, that is not a card doing less but a
+    card doing something else.
+    """
+    match = _OWN_CAST_BAN.match(line.strip().lower().rstrip("."))
+    return match.group("type") if match is not None else None
+
+
+def own_cast_ban(game: "Game", caster_index: int, card) -> str | None:
+    """The name of a permanent *caster_index* controls forbidding *card*, or None.
+
+    Only that seat's own battlefield is asked, which is the whole difference
+    from :func:`global_cast_ban` beside it — an opponent's Steel Golem says
+    nothing about your creature spells.
+
+    ``effective_card`` rather than the printed face, for that function's reason:
+    what a permanent says is what layer 1 and layer 3 have made of it (CR 707.2,
+    CR 612.1). The type test is :func:`search_filters.card_has_type` for its
+    reason too — a card has **every** type its line names (CR 205.2), so an
+    artifact creature is stopped by a ban on either word.
+    """
+    from .search_filters import card_has_type
+
+    for seat, permanent in game.permanents_with_controller():
+        if seat != caster_index:
+            continue
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            banned = own_cast_ban_line(raw_line)
+            if banned is not None and card_has_type(card, banned):
+                return permanent.card.name
+    return None
+
+
 #: Where a permanent records the names two seats chose as it entered (Null
 #: Chamber). A list, and the order is the choosers' — it is read as a *set* by
 #: the ban below, but recorded in order because each slot belongs to one seat
