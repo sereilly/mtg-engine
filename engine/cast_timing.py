@@ -201,6 +201,17 @@ def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = 
         return True
     if game is None or seat is None:
         return False
+    # "…and **as though they had flash**." (Aluren.) The third of the three
+    # permissions that one printed sentence states, and a fifth source for this
+    # question. Asked of ``cast_permissions.board_free_cast_line``'s own reader
+    # rather than matched again here: a second copy of the phrase would be free
+    # to drift, and the direction it drifts is a spell that can be cast for free
+    # in a window the card never opened, or one the card opened and this gate
+    # refuses.
+    from .cast_permissions import board_free_cast
+
+    if board_free_cast(game, card) is not None:
+        return True
     return granted_flash_timing(game, seat, card)
 
 

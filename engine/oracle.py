@@ -5441,6 +5441,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(COMBAT_PLAY_BAN_CLAIM)
+    # "Any player may cast creature spells with mana value 3 or less without
+    # paying their mana costs and as though they had flash." (Aluren.) Three
+    # permissions, all three read off the board at the cast — and the
+    # enchantment's whole text is this sentence, so no instruction means it
+    # reports unsupported however well all three work.
+    from .cast_permissions import BOARD_FREE_CAST_CLAIM, board_free_cast_line
+
+    if any(
+        board_free_cast_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(BOARD_FREE_CAST_CLAIM)
     # "You can't cast creature spells." (Steel Golem prints it on a creature;
     # an artifact or enchantment printing it reads the same.) CR 601.3a scoped
     # to the permanent's own controller, read off the board at every cast — so

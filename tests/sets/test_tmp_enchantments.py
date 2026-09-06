@@ -1069,3 +1069,110 @@ def test_hand_to_hand_binds_its_own_controller_too(set_pool, catalog_by_name):
 
     assert not result.supported
     assert compile_card_oracle(set_pool("TMP")["Hand to Hand"]).supported
+
+
+# --- W2G3: Aluren, three permissions in one sentence ---
+
+from engine.cast_permissions import board_free_cast_line, permission_for
+from engine.cast_timing import casts_at_instant_speed
+
+
+def _w2g3e_aluren_game(catalog_by_name, set_pool, *, with_aluren=True):
+    """Aluren on seat 0's battlefield; seat 1 holds a Bear and a Dragon and has
+    no mana at all. Mana costs **enforced** — the point of the card is that the
+    cost is not paid."""
+    mine = [Permanent(card=set_pool("TMP")["Aluren"])] if with_aluren else []
+    game = _w2g3e_game(mine, [])
+    game.enforce_mana_costs = True
+    game.players[1].hand = [
+        catalog_by_name["Grizzly Bears"], catalog_by_name["Shivan Dragon"],
+    ]
+    game.start_turn(0)
+    return game
+
+
+def test_aluren_lets_an_opponent_cast_a_cheap_creature_for_nothing(
+    set_pool, catalog_by_name
+):
+    """"**Any player** may cast creature spells with mana value 3 or less
+    **without paying their mana costs** …"
+
+    Two of the sentence's three permissions at once, and the first is the one a
+    controller check would silently drop: the enchantment is seat 0's and it is
+    seat 1 who gets the creature.
+    """
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    result = game.cast_from_hand(1, "Grizzly Bears")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+
+
+def test_aluren_reads_the_printed_mana_value(set_pool, catalog_by_name):
+    """"…with mana value **3 or less**". A six-drop is not one, and a
+    restriction admitted and then ignored would make this enchantment read
+    "any creature spell", which is a strictly different card."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    assert not game.cast_from_hand(1, "Shivan Dragon").supported
+
+
+def test_without_aluren_the_same_cast_is_refused(set_pool, catalog_by_name):
+    """The control: nothing else on this board makes a Bear free."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool, with_aluren=False)
+
+    assert not game.cast_from_hand(1, "Grizzly Bears").supported
+
+
+def test_aluren_grants_flash_timing_to_exactly_what_it_names(
+    set_pool, catalog_by_name
+):
+    """"…and **as though they had flash**." (CR 113.6b.)
+
+    The third permission, and the one that is not about cost at all — so it is
+    asked of ``casts_at_instant_speed``, the one question both timing gates
+    ask, off the same reader the waiver uses. Two readers of this sentence
+    would be a spell castable in the picker and refused by the action.
+    """
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    assert casts_at_instant_speed(catalog_by_name["Grizzly Bears"], game, 1)
+    assert not casts_at_instant_speed(catalog_by_name["Shivan Dragon"], game, 1)
+    assert not casts_at_instant_speed(catalog_by_name["Black Lotus"], game, 1), (
+        "an artifact is not a creature spell"
+    )
+
+    without = _w2g3e_aluren_game(catalog_by_name, set_pool, with_aluren=False)
+    assert not casts_at_instant_speed(catalog_by_name["Grizzly Bears"], without, 1)
+
+
+def test_alurens_permission_is_the_hand_and_is_free(set_pool, catalog_by_name):
+    """What the permission seam reports, so the browser's own reading of it and
+    the cast path's agree: the hand, waived, and derived rather than stored —
+    it ends with the enchantment (CR 611.3a) and there is nothing to expire."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    grant = permission_for(game, 1, catalog_by_name["Grizzly Bears"], "hand")
+
+    assert grant is not None
+    assert grant.free is True
+    assert grant.duration is None
+    assert grant.source_name == "Aluren"
+
+
+def test_the_free_cast_line_reads_its_two_printed_parameters(set_pool):
+    """The type and the number are payload, so a card printing "artifact spells
+    with mana value 2 or less" is the same sentence and needs no second row."""
+    assert board_free_cast_line(
+        "Any player may cast creature spells with mana value 3 or less "
+        "without paying their mana costs and as though they had flash."
+    ) == {"card_type": "creature", "mana_value": 3}
+    # The cost waiver alone is a different card and this row must not read it:
+    # the claim is honest only because all three permissions are carried out.
+    assert board_free_cast_line(
+        "Any player may cast creature spells with mana value 3 or less "
+        "without paying their mana costs."
+    ) is None
+    assert compile_card_oracle(set_pool("TMP")["Aluren"]).supported
