@@ -212,6 +212,57 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("gain_control_of_bound_permanent")
+def gain_control_of_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever this creature becomes blocked by a creature, **gain control of
+    that creature at end of combat**." (Tolarian Entrancer, CR 511.1 /
+    CR 603.7.)
+
+    The object is the one the ability that created this delay bound
+    (CR 603.7c) — the blocker its trigger fired on — carried by id in the
+    trigger's context. By the end of combat step the combat maps that named it
+    are about to be cleared and every index in them may have moved (CR 400.7),
+    so the id is the only thing that still says which creature.
+
+    Its own kind rather than ``gain_control_of_target``'s ``permanents_from``
+    branch, which reads the *resolution scratchpad*: the record that names this
+    creature was frozen when the delayed ability was created, a combat step
+    ago, and asking the scratchpad would find nothing and take nothing while
+    the card compiled clean.
+
+    Untimed, which is CR 611.2a: the contribution has no lifetime, so cleanup
+    leaves it alone and ``base_controller_index`` is untouched — the creature is
+    still owned by its owner (CR 108.3) and would revert if this contribution
+    ever ended.
+
+    A creature already gone is taken by nobody (CR 608.2b), and Guardian Beast's
+    prohibition is asked here rather than inherited, exactly as the recorded
+    branch beside this one asks it.
+    """
+    from ..control import change_control
+
+    bound = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if bound is None or not game.is_on_battlefield(bound):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    if game.cant_gain_control(bound, context.caster):
+        game.log.append(
+            f"{context.card.name}: {bound.card.name} can't change controllers"
+        )
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    change_control(bound, seat, source=context.card, until_eot=False)
+    game._sync_control()
+    context.target = context.caster
+    game.log.append(
+        f"{context.caster.name} gains control of {bound.card.name} "
+        f"for as long as the game lasts"
+    )
+    return True, "resolved"
+
+
 @effect_handler("give_control_of_source_to_player")
 def give_control_of_source_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target opponent gains control of this creature." (Chaos Lord.)

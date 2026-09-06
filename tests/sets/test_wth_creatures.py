@@ -1008,3 +1008,104 @@ def test_liege_of_the_hollows_makes_nothing_for_a_seat_that_pays_nothing(set_poo
         for p in game.players[0].battlefield + game.players[1].battlefield
     ), game.log
     assert all(not p.tapped for p in game.players[0].battlefield), game.log
+
+
+# --- W2G3: phasing and end of combat ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g3c_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g3c_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g3c_combat(*seats) -> Game:
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g3c_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def test_tolarian_entrancer_delays_the_steal_to_end_of_combat(set_pool):
+    """"Whenever this creature becomes blocked by a creature, gain control of
+    that creature **at end of combat**." (CR 511.1, CR 603.7.)
+
+    The compiled shape carries the whole of the card: a delayed ability at
+    ``next_end_of_combat`` whose effect addresses the delay's *bound* object.
+    Routed through the ordinary indefinite steal it would have needed a target
+    the card never printed; routed through the recorded-permanents spelling it
+    would have read a scratchpad that is a combat step gone.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Tolarian Entrancer"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "creature_becomes_blocked"
+    payload = trig.instruction.payload
+    assert payload["event"] == "next_end_of_combat"
+    assert payload["instruction"].kind == "gain_control_of_bound_permanent"
+    assert payload["binds_target"] is True
+
+
+def test_tolarian_entrancer_takes_the_blocker_after_damage(set_pool):
+    """The blocker changes hands at end of combat and not before.
+
+    Ordering is the assertion: a steal that happened on the block would have
+    removed the creature from combat (CR 506.4) and cancelled the damage the
+    card is printed to take. So the Wall is still blocking through the damage
+    step and only then moves — and it moves as a CR 613 layer-2 contribution,
+    which is why the bystander beside it is the control on "the trigger bound
+    exactly one creature".
+    """
+    entrancer = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Tolarian Entrancer"]))
+    wall = _w2g3c_nosick(Permanent(card=_w2g3c_creature("Wall", 0, 6)))
+    bystander = _w2g3c_nosick(Permanent(card=_w2g3c_creature("Bystander", 1, 1)))
+    game = _w2g3c_combat([entrancer], [wall, bystander])
+    assert game.declare_attackers(0, [0])[0]
+    _w2g3c_resolve(game)
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g3c_resolve(game)
+
+    (entry,) = game.delayed_triggers
+    assert entry.bound_permanent_id == wall.permanent_id
+    # Still the defender's while the damage is dealt.
+    assert game.controller_index_of(wall) == 1
+
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_resolve(game)
+    game.advance_combat_phase()   # end of combat
+    _w2g3c_resolve(game)
+
+    assert game.controller_index_of(wall) == 0, game.log
+    assert wall in game.players[0].battlefield
+    assert game.controller_index_of(bystander) == 1
+    # CR 108.3 / CR 613 layer 2: the change is a contribution, so the seat the
+    # permanent entered under is untouched and the Wall would revert if the
+    # contribution ever ended. An untimed steal has no end, which is CR 611.2a.
+    assert wall.metadata.get("base_controller_index", 1) == 1

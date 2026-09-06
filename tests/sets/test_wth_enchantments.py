@@ -575,3 +575,131 @@ def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
     assert not board_target_immunities(
         "Creatures can't be the targets of spells or abilities."
     )
+
+
+# --- W2G3: phasing and end of combat ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g3_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g3_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g3_combat(*seats) -> Game:
+    """A game sitting in the declare-attackers step, one battlefield per seat."""
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g3_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def _w2g3_run_combat(game: Game, blockers: dict) -> None:
+    """Declare blockers, then run the rest of the combat phase out."""
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, blockers)[0]
+    _w2g3_resolve(game)
+    game.advance_combat_phase()   # combat damage
+    _w2g3_resolve(game)
+    game.advance_combat_phase()   # end of combat
+    _w2g3_resolve(game)
+
+
+def test_teferis_veil_arms_one_delay_per_attacker(set_pool):
+    """"Whenever a creature you control attacks, **it** phases out at end of
+    combat." (CR 511.1 with CR 603.7's delayed ability.)
+
+    The compiled shape is what the card turns on: the trigger creates a delayed
+    ability rather than phasing anything out now, and the ability is *about* the
+    attacker. Nothing on the Veil is a target, so the id can only come from the
+    firing event — ``binds_event_subject`` is that reading, and with
+    ``binds_target`` in its place the entry would resolve the stack item's
+    target, find none, and be created about nothing at all.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Teferi's Veil"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "matching_creature_attacks"
+    payload = trig.instruction.payload
+    assert payload["event"] == "next_end_of_combat"
+    assert payload["instruction"].kind == "phase_out_bound_permanent"
+    assert payload["binds_event_subject"] is True
+    assert payload.get("binds_target") is not True
+
+
+def test_teferis_veil_phases_the_attacker_out_at_end_of_combat(set_pool):
+    """The attacker leaves at CR 511, not at declaration and not at cleanup.
+
+    Two assertions in one, and the first is the one a delayed ability can fail
+    silently: the creature is still attacking through the damage step, so the
+    Veil is not a fog. It goes to its controller's ``phased_out`` list at end of
+    combat — a phase-out is not a zone change (CR 702.26b), so what proves it is
+    the holding list rather than a graveyard.
+    """
+    veil = _w2g3_nosick(Permanent(card=set_pool("WTH")["Teferi's Veil"]))
+    bear = _w2g3_nosick(Permanent(card=_w2g3_creature("Bear", 2, 2)))
+    game = _w2g3_combat([veil, bear], [])
+    assert game.declare_attackers(0, [1])[0]
+    _w2g3_resolve(game)
+
+    # Declared and still on the battlefield: the delay has not fired yet.
+    assert bear in game.players[0].battlefield
+    (entry,) = game.delayed_triggers
+    assert entry.event == "next_end_of_combat"
+    assert entry.bound_permanent_id == bear.permanent_id
+
+    _w2g3_run_combat(game, {})
+
+    assert [p.card.name for p in game.players[0].phased_out] == ["Bear"], game.log
+    assert bear not in game.players[0].battlefield
+    # The Veil itself is an enchantment and stays where it is — "it" is the
+    # attacker, never the ability's own source.
+    assert veil in game.players[0].battlefield
+
+
+def test_teferis_veil_leaves_an_opponents_attacker_alone(set_pool):
+    """"a creature **you control**" is the trigger's own narrowing, and the
+    delayed half never gets to re-ask it.
+
+    So the check has to be that the ability is not created at all on an
+    opponent's attack: a card whose delay armed anyway would phase out the
+    attacking creature of the player it is attacking.
+    """
+    veil = _w2g3_nosick(Permanent(card=set_pool("WTH")["Teferi's Veil"]))
+    raider = _w2g3_nosick(Permanent(card=_w2g3_creature("Raider", 2, 2)))
+    game = _w2g3_combat([veil], [raider])
+    game.active_player_index = 1
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0])[0]
+    _w2g3_resolve(game)
+
+    assert game.delayed_triggers == [], game.log
