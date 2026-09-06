@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2096 tests, 0 unannotated.
+**359 / 612 tracked rules covered (58%)** — 2098 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -680,7 +680,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(22 tests, subrules bd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(24 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(41 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
 - [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(22 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(5 tests)*
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(7 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...

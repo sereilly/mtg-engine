@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 74.3% | 70.9% | 46.9% | 201 |
+| TMP *(measured)* | 335 | 478 | 76.4% | 73.2% | 49.0% | 209 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 385 | 184 | expected a subject |  |
-| 116 | 58 | unrecognized effect verb |  |
+| 376 | 175 | expected a subject |  |
+| 115 | 57 | unrecognized effect verb |  |
 | 100 | 52 | unconsumed text |  |
 | 41 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -519,6 +519,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: This creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Beasts of Bogardan**
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
+- **Bellowing Fiend**
+  - `Whenever this creature deals damage to a creature, this creature deals 3 damage to that creature's controller and 3 damage to you.`
 - **Benalish Missionary**
   - `{1}{W}, {T}: Prevent all combat damage that would be dealt by target blocked creature this turn.`
 - **Benthic Djinn**
@@ -1247,6 +1249,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent all combat damage that would be dealt this turn.`
 - **Daughter of Autumn**
   - `{W}: The next 1 damage that would be dealt to target white creature this turn is dealt to Daughter of Autumn instead.`
+- **Dauthi Ghoul**
+  - `Whenever a creature with shadow dies, put a +1/+1 counter on this creature.`
 - **Dauthi Mercenary**
   - `{1}{B}: This creature gets +1/+0 until end of turn.`
 - **Dauthi Mindripper**
@@ -1256,6 +1260,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dazzling Beauty**
   - `Target unblocked attacking creature becomes blocked. (This spell works on creatures that can't be blocked.)`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Death Pits of Rath**
+  - `Whenever a creature is dealt damage, destroy it. It can't be regenerated.`
 - **Death Spark**
   - `Death Spark deals 1 damage to any target.`
   - `At the beginning of your upkeep, if this card is in your graveyard with a creature card directly above it, you may pay {1}. If you do, return this card to your hand.`
@@ -1374,6 +1380,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature dies, this artifact deals 2 damage to that creature's controller.`
 - **Dire Fleet Warmonger**
   - `At the beginning of combat on your turn, you may sacrifice another creature. If you do, this creature gets +2/+2 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
+- **Dirtcowl Wurm**
+  - `Whenever an opponent plays a land, put a +1/+1 counter on this creature.`
 - **Dirtwater Wraith**
   - `{B}: This creature gets +1/+0 until end of turn.`
 - **Discontinuity**
@@ -1901,6 +1909,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature or land. It can't be regenerated.`
 - **Fit of Rage**
   - `Target creature gets +3/+3 and gains first strike until end of turn.`
+- **Flailing Drake**
+  - `Whenever this creature blocks or becomes blocked by a creature, that creature gets +1/+1 until end of turn.`
 - **Flame Elemental**
   - `{R}, {T}, Sacrifice this creature: It deals damage equal to its power to target creature.`
 - **Flame Spirit**
@@ -2049,6 +2059,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+1 until end of turn.`
   - `{B}: This creature gets +1/+1 until end of turn.`
   - `{B}: This creature gets +1/+1 until end of turn.`
+- **Fugitive Druid**
+  - `Whenever this creature becomes the target of an Aura spell, you draw a card.`
 - **Fumarole**
   - `Destroy target creature and target land.`
 - **Funeral Charm**
@@ -2959,6 +2971,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Target green creature gains first strike until end of turn.`
 - **Keral Keep Disciples**
   - `Whenever you activate a loyalty ability of a Chandra planeswalker, this creature deals 1 damage to each opponent.`
+- **Kezzerdrix**
+  - `At the beginning of your upkeep, if your opponents control no creatures, this creature deals 4 damage to you.`
 - **Khabál Ghoul**
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
 - **Killer Bees**
@@ -3589,6 +3603,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mole Worms**
   - `{T}: Tap target land. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
   - `{T}: Tap target land. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
+- **Mongrel Pack**
+  - `When this creature dies during combat, create four 1/1 green Dog creature tokens.`
 - **Monsoon**
   - `At the beginning of each player's end step, tap all untapped Islands that player controls and this enchantment deals X damage to the player, where X is the number of Islands tapped this way.`
 - **Morale**
@@ -4601,6 +4617,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature an opponent controls phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
 - **Sarcomancy**
   - `When this enchantment enters, create a 2/2 black Zombie creature token.`
+  - `At the beginning of your upkeep, if there are no Zombies on the battlefield, this enchantment deals 1 damage to you.`
 - **Savaen Elves**
   - `{G}{G}, {T}: Destroy target Aura attached to a land.`
 - **Savage Twister**
@@ -5066,6 +5083,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature deals damage, you gain that much life.`
   - `Whenever enchanted creature deals damage, you gain that much life.`
 - **Spirit Mirror**
+  - `At the beginning of your upkeep, if there are no Reflection tokens on the battlefield, create a 2/2 white Reflection creature token.`
   - `{0}: Destroy target Reflection.`
 - **Spirit Shackle**
   - `Whenever enchanted creature becomes tapped, put a -0/-2 counter on it.`

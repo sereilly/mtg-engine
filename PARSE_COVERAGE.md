@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 26 supported card(s).**
+**26 unclaimed sentence(s) across 24 supported card(s).**
 
 - **Anoint**
   - `buyback {3}`
@@ -63,14 +63,10 @@ anything anyone did, and every ingest would arrive red.
   - `target creature loses shadow until end of turn`
 - **Recycle**
   - `your maximum hand size is two`
-- **Sarcomancy**
-  - `at the beginning of your upkeep, if there are no zombies on the battlefield, this enchantment deals 1 damage to you`
 - **Searing Touch**
   - `buyback {4}`
 - **Shadow Rift**
   - `target creature gains shadow until end of turn`
-- **Spirit Mirror**
-  - `at the beginning of your upkeep, if there are no reflection tokens on the battlefield, create a 2/2 white reflection creature token`
 - **Stalking Stones**
   - `{6}: this land becomes a 3/3 elemental artifact creature that's still a land`
 - **Torture Chamber**
