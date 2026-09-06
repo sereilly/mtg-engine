@@ -1,4 +1,4 @@
-"""What a printed noun phrase *points at*: objects, players, and targets.
+"""What a printed noun phrase **describes**: the set of objects it names.
 
 Split out of ``_core`` when that module crossed the 1,000-line guard. The cut
 is the one ``_core``'s own docstring already drew — quantities, then "object and
@@ -7,15 +7,23 @@ hang off an effect — and it is the same boundary Antiquities used when
 ``nouns.py`` split into ``references.py``: what a noun phrase *describes*
 against what it points at.
 
-:class:`ObjectFilter` is 428 of those lines on its own, which is why this half
+:class:`ObjectFilter` is most of those lines on its own, which is why this half
 was the one to move. ``_core`` re-exports everything defined here, so no
 importer outside this package changes: ``from ._core import ObjectFilter``
 still resolves, and the AST package's flat ``__init__`` is untouched.
+
+**And it crossed the guard again**, at Tempest's third wave, when the filter
+gained the three keys Escaped Shapeshifter's condition needs. The cut that time
+was the other half of this file's own title: :class:`TargetSpec` — what a
+sentence *points at* — left for ``_targets`` beside this one, leaving only what
+a noun phrase describes. The two halves grow with different rules, which is what
+makes the boundary worth having: this one with the vocabulary of printed noun
+phrases, that one with CR 601.2's announcement.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._primitives import Fixed
@@ -257,6 +265,14 @@ class ObjectFilter:
     # narrows by, and one field meaning either would leave the matcher
     # guessing. Emitted, and answered only by a reader holding the source.
     chosen_creature_type: bool = False
+    #: "Destroy all creatures **of the creature type of your choice**."
+    #: (Extinction.) The word above is a choice the *source* made as it entered
+    #: (CR 614.1c) and is read off its metadata; this one is made while the
+    #: spell resolves (CR 608.2d) by whoever controls it, so there is no
+    #: permanent to read and no permanent to record on. The lowering turns it
+    #: into a choosing step plus a ``subtype_filter_from`` key naming the
+    #: scratchpad slot that step writes.
+    creature_type_of_your_choice: bool = False
     # "Each **land** of the chosen type" (Shimmer). The same CR 614.1c choice
     # a third characteristic over, and its own field for ``chosen_color``'s
     # reason rather than a value of the one above: the *catalog* the word came
@@ -822,6 +838,12 @@ class ObjectFilter:
             payload["chosen_color"] = True
         if self.chosen_creature_type:
             payload["chosen_creature_type"] = True
+        # Emitted, and deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS``:
+        # no matcher can answer "of your choice", so every gate asking whether a
+        # payload is testable refuses the phrase and the only way through is a
+        # lowering that reads the word and puts the choice where the rules do.
+        if self.creature_type_of_your_choice:
+            payload["creature_type_of_your_choice"] = True
         if self.chosen_land_type:
             payload["chosen_land_type"] = True
         if self.attacked_this_turn is True:
@@ -937,60 +959,3 @@ class ObjectFilter:
         if self.excluded_supertypes:
             payload["exclude_supertypes"] = list(self.excluded_supertypes)
         return payload
-
-
-@dataclass(frozen=True)
-class TargetSpec:
-    """A quantified object reference: "target creature", "each creature with
-    flying", "up to two creatures", "any target"."""
-    quantifier: str            # target | each | all | up_to | any_target | this | it | a
-    filter: ObjectFilter = field(default_factory=ObjectFilter)
-    count: int = 1
-    # "**X** target lands" (Candelabra of Tawnos). The count is the announced X
-    # (CR 601.2b), so it is not a number until the ability is activated —
-    # recorded as a fact rather than baked into `count`, because a count of 0
-    # and a count that is *not yet known* are different things and a picker
-    # shown 0 would offer nothing.
-    count_from_x: bool = False
-    # "**For each land target player controls in excess of the number you
-    # control**, choose a land that player controls." (Equipoise.) How many,
-    # said by a clause in front of the noun phrase rather than by a printed
-    # number — so it is an :class:`Amount` the resolution computes, beside
-    # ``count_from_x`` above and for that field's reason: a count of 0 and a
-    # count that is *not yet known* are different things, and folding this into
-    # ``count`` would need a number nobody can write down at parse time.
-    #
-    # It is the whole count, never a bound on one: the clause says how many are
-    # chosen, and a reading that treated it as a ceiling would let a seat choose
-    # fewer than the card makes them.
-    count_amount: "Amount | None" = None
-    # "another target creature" (Garruk, Savage Herald's −2): a second chosen
-    # object that must differ from the sentence's earlier choice — not from the
-    # ability's source, which is what the filter's other_than_source says.
-    distinct_from_prior: bool = False
-    # "Choose two target creatures **controlled by the same opponent**."
-    # (Retribution.) A relation *between* the targets rather than a property of
-    # any one of them, which is why it is here and not on the filter: no matcher
-    # asked about a single permanent can answer "is this the same seat as the
-    # other target's", and a filter key that could not be tested would be
-    # dropped by the gate that reads them. The filter still carries
-    # ``controller="opponent"`` — that half *is* per-object — so what this adds
-    # is only the "same" (CR 601.2c: an announcement naming two opponents'
-    # creatures is illegal).
-    same_controller: bool = False
-    # Whether the word "target" was printed. The quantifier alone cannot say:
-    # "up to two target creatures" (Read the Tides — chosen at cast, CR 601.2c)
-    # and "up to four lands" (Rewind — chosen on resolution, no targets at all)
-    # both read as ``up_to``, and the two reach entirely different machinery.
-    # The parser used to consume the word and discard the fact, which is the
-    # round-15 finding this field closes.
-    targeted: bool = False
-    # "among **one or two** target creatures" (Contagion; Bounty of the Hunt
-    # prints "one, two, or three"). CR 601.2c: a spell with a variable number
-    # of targets has that number announced with the targets, and the printed
-    # enumeration is its *ceiling* — so this is the bound the announcement is
-    # checked against, not a count the game picks. ``None`` is the unbounded
-    # spelling ("among any number of"), which is a different sentence and not
-    # a bound of infinity: only a production that read an enumeration sets
-    # this, and only the lowering written for that production reads it.
-    max_count: int | None = None

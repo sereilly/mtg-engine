@@ -448,6 +448,13 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # not start: that one's readers are continuous effects that re-read the
         # record on every recompute, so a late answer there really does apply.
         "card_type_choice",
+        # "Destroy all creatures **of the creature type of your choice**."
+        # (Extinction.) The same shape one catalog over: the sweep is the next
+        # step of the same sentence and spends exactly this answer, so an answer
+        # arriving after it would change nothing. The word goes into the
+        # resolution scratchpad rather than onto a permanent — the card is a
+        # sorcery and has none.
+        "creature_type_choice",
     }, suspending
 
 

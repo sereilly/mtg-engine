@@ -1098,7 +1098,7 @@ def test_layers_only_import_downward(layers):
         # board, split out at the size guard, and `conditions` reads it because
         # the `Condition` union is the roof over both halves. A floor, not a
         # family — nothing reads back.
-        ("ast", ("_core", "_primitives", "_references", "_seats", "costs", "records"), ("statements",)),
+        ("ast", ("_core", "_primitives", "_references", "_seats", "_targets", "costs", "records"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -1370,6 +1370,19 @@ FAMILY_SHARED = {
     # re-forms instead of forking. A floor, not a family: `_references` reads
     # `PlayerDeed` only as an annotation and `_core` re-exports both names.
     "_seats",
+    # `_targets` split out of `_references` at Tempest's wave 3, the next time
+    # that module crossed the guard — the filter had gained the three keys
+    # Escaped Shapeshifter's condition needs. The line is the *other* half of
+    # `_references`' own title, and the one `nouns.py` was cut on back at
+    # Antiquities: what a noun phrase **describes** (`ObjectFilter` and the
+    # comparisons bounding it) against what a sentence **points at**
+    # (`TargetSpec`). The two grow with different rules — the first with the
+    # vocabulary of printed noun phrases, the second with CR 601.2's
+    # announcement — which is what makes the boundary information rather than a
+    # place to have put the overflow. A floor, not a family: it reads
+    # `ObjectFilter` and `_core` re-exports what it defines, so no family
+    # imports it directly.
+    "_targets",
     # `_amounts` split out of `lowering/damage.py` the next time that module
     # reached the size guard, along CR 107.2/107.3's line: a quantity that is
     # **counted** — off a board, out of the resolution's own scratchpad, or off

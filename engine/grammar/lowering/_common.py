@@ -38,6 +38,47 @@ from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
                        refuse_untestable, testable_filter_payload)
 
 
+def split_creature_type_choice(described: dict) -> tuple[tuple, dict, dict]:
+    """*described* with "of the creature type of your choice" turned into the
+    steps that answer it: the instructions to run first, and the payload the
+    caller should carry.
+
+    CR 608.2d: the choice is announced while the effect is applied, by the
+    controller of the spell — so it is a *step*, not a characteristic, and it
+    goes in front of the sentence that spends it exactly as ``choose_opponent``
+    goes in front of the hand-over that reads the seat. A handler that stopped
+    to ask could not also finish the sentence.
+
+    Three things come back: the instructions to run first, the filter with the
+    phrase taken out, and the keys the caller must **add after its testability
+    gate**. ``subtype_filter_from`` names the scratchpad slot the choosing step
+    writes and is resolved by the handler, not by the matcher — so it is carried
+    separately for the reason ``exile_all_matching``'s ``mana_value`` is: a key
+    no matcher answers must not be put to a gate that asks whether every key is
+    answerable. Naming the slot rather than hard-coding it is what lets a second
+    card put the choice in a different sentence of the same effect.
+
+    An untouched filter comes back with an empty prelude and no extra keys, so
+    every caller can ask unconditionally.
+    """
+    if not described.get("creature_type_of_your_choice"):
+        return (), described, {}
+    from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                                 OracleInstruction)
+
+    rest = {
+        key: value for key, value in described.items()
+        if key != "creature_type_of_your_choice"
+    }
+    prelude = (
+        OracleInstruction(
+            "choose_creature_type", "",
+            {"result_key": CHOSEN_CREATURE_TYPE_THIS_WAY},
+        ),
+    )
+    return prelude, rest, {"subtype_filter_from": CHOSEN_CREATURE_TYPE_THIS_WAY}
+
+
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*
 # of what a line targets, kept so the engine can answer "what does this spell
 # target?" from the compiled program instead of re-reading oracle text

@@ -572,3 +572,137 @@ def test_w2g2_deadshots_biter_need_not_be_yours(set_pool):
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Ogre"], game.log
     assert p1.battlefield[0].tapped
+
+
+# --- W3G4: Extinction (a creature type chosen while the spell resolves) ---
+
+from engine import Game as _W3G4Game
+from engine import PlayerState as _W3G4PlayerState
+from engine.models import Permanent as _W3G4Permanent
+from engine.oracle import compile_card_oracle as _w3g4_compile
+from tests.helpers import _mk_card as _w3g4_mk_card
+
+
+def _w3g4_creature(name, subtype):
+    return _W3G4Permanent(
+        card=_w3g4_mk_card(name, "{2}", f"Creature - {subtype}", "")
+    )
+
+
+def _w3g4_extinction_game(set_pool, mine, theirs, interactive=()):
+    pool = set_pool("TMP")
+    game = _W3G4Game(players=[
+        _W3G4PlayerState(name="P1", battlefield=list(mine), hand=[pool["Extinction"]]),
+        _W3G4PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w3g4_cast_extinction(game):
+    result = game.cast_from_hand(0, "Extinction")
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    return result
+
+
+def _w3g4_names(game):
+    return sorted(perm.card.name for _seat, perm in game.permanents_with_controller())
+
+
+def test_extinction_compiles_to_a_choice_then_a_sweep(set_pool):
+    """"Destroy all creatures of the creature type of your choice."
+
+    Two steps for one sentence, the shape ``choose_opponent`` + the hand-over
+    behind it already has: CR 608.2d's choice is announced while the effect is
+    applied, and a handler that has to stop and ask cannot also finish the
+    sentence. The sweep names the scratchpad slot rather than a subtype, because
+    there is no subtype until the choice is made.
+    """
+    program = _w3g4_compile(set_pool("TMP")["Extinction"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_creature_type", "destroy_all_matching"
+    ]
+    key = steps[0].payload["result_key"]
+    assert steps[1].payload["subtype_filter_from"] == key
+    # And no ``subtype_filter``: a sweep that carried one would be narrowed by a
+    # type nobody chose.
+    assert "subtype_filter" not in steps[1].payload
+
+
+def test_extinction_destroys_every_creature_of_the_named_type(set_pool):
+    """The whole card, in a game. An interactive seat's answer arrives *before*
+    the sweep — the prompt suspends — so the board it takes is the one the
+    player named and not the one the default would have."""
+    mine = [_w3g4_creature("My Goblin", "Goblin")]
+    theirs = [
+        _w3g4_creature("Their Goblin", "Goblin"),
+        _w3g4_creature("Their Bear", "Bear"),
+    ]
+    game = _w3g4_extinction_game(set_pool, mine, theirs, interactive=[0])
+    _w3g4_cast_extinction(game)
+
+    assert [c.kind for c in game.pending_choices] == ["creature_type_choice"]
+    assert _w3g4_names(game) == ["My Goblin", "Their Bear", "Their Goblin"], (
+        "the sweep must wait for the answer"
+    )
+
+    assert game.confirm_creature_type_choice(0, "goblin")
+    while game.stack:
+        game.resolve_top_of_stack()
+    # Every creature of the type, the caster's own included — the card says all.
+    assert _w3g4_names(game) == ["Their Bear"]
+
+
+def test_extinction_refuses_a_word_that_is_not_a_creature_type(set_pool):
+    """CR 205.3m bounds the answer, checked against the same catalog the picker
+    offers. Refused rather than repaired: quietly keeping the default would tell
+    the player they had destroyed something they had not named."""
+    game = _w3g4_extinction_game(
+        set_pool, [], [_w3g4_creature("Their Bear", "Bear")], interactive=[0]
+    )
+    _w3g4_cast_extinction(game)
+
+    assert not game.confirm_creature_type_choice(0, "enchantment")
+    assert [c.kind for c in game.pending_choices] == ["creature_type_choice"]
+    assert game.confirm_creature_type_choice(0, "bear")
+
+
+def test_a_non_interactive_seat_names_the_type_that_costs_it_least(set_pool):
+    """The stated policy, and a real answer rather than the first catalog word:
+    the type maximising (opponents' creatures of it − own creatures of it), ties
+    by the alphabetically first word. Deterministic, which is what the
+    AI-simulation regressions depend on."""
+    mine = [_w3g4_creature("My Goblin", "Goblin")]
+    theirs = [
+        _w3g4_creature("Their Goblin", "Goblin"),
+        _w3g4_creature("Their Goblin II", "Goblin"),
+        _w3g4_creature("Their Goblin III", "Goblin"),
+        _w3g4_creature("Their Bear", "Bear"),
+    ]
+    game = _w3g4_extinction_game(set_pool, mine, theirs)
+    _w3g4_cast_extinction(game)
+
+    # Goblins score 3 − 1 = 2 against the Bear's 1, so no prompt is owed and the
+    # Goblins go — the caster's own with them.
+    assert game.pending_choices == []
+    assert _w3g4_names(game) == ["Their Bear"]
+
+
+def test_extinction_with_no_creature_on_the_board_destroys_nothing(set_pool):
+    """The direction a missing record must fail in. No creature means no type
+    worth naming, so the choosing step records nothing — and the sweep reads
+    that as destroying nothing rather than as a filter with no narrowing, which
+    on a board with creatures would take the table."""
+    only_lands = [
+        _W3G4Permanent(card=_w3g4_mk_card("Wastes", "", "Land", ""))
+    ]
+    game = _w3g4_extinction_game(set_pool, [], only_lands)
+    _w3g4_cast_extinction(game)
+
+    assert _w3g4_names(game) == ["Wastes"]
+    assert any("no creature type was chosen" in line for line in game.log)

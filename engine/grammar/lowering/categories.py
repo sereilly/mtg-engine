@@ -828,6 +828,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # of the same ability. The value is a *card type* rather than a colour,
     # which is what the key it records under says and not what the family does.
     "choose_card_type": "chosen_colors",
+    # "Destroy all creatures **of the creature type of your choice**."
+    # (Extinction.) The third member of the family and the same reasoning: the
+    # sentence produces a *word* and no effect, and the sweep behind it carries
+    # the destruction category of its own. The record is a creature type rather
+    # than a card type, which is what the key it writes says and not what the
+    # family does.
+    "choose_creature_type": "chosen_colors",
     # "…put a +0/+1 counter on that creature for each 1 damage prevented
     # this way." (Sacred Boon.) A counter placement whose number is what an
     # earlier step's shield absorbed, so it sits in the counters family with

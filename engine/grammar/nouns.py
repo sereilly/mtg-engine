@@ -250,6 +250,8 @@ class _FilterDraft:
     # "Creatures **of the chosen type**" (An-Zerrin Ruins) — see the field of
     # the same name on ``ast.ObjectFilter``.
     chosen_creature_type: bool = False
+    #: See ``ast.ObjectFilter.creature_type_of_your_choice``.
+    creature_type_of_your_choice: bool = False
     # "Each **land** of the chosen type" (Shimmer) — see the field of the same
     # name on ``ast.ObjectFilter``.
     chosen_land_type: bool = False
@@ -914,6 +916,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         colored=d.colored,
         chosen_color=d.chosen_color,
         chosen_creature_type=d.chosen_creature_type,
+        creature_type_of_your_choice=d.creature_type_of_your_choice,
         chosen_land_type=d.chosen_land_type,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,

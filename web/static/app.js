@@ -2542,6 +2542,17 @@ function getCardTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Extinction: "Destroy all creatures of the creature type of your choice."
+// CR 205.3m's whole catalog rather than the types in play, so the widget is a
+// dropdown and not a row of buttons.
+function getCreatureTypeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.creature_type_choice;
+  if (!info || info.player_index !== seat) return null;
+  if (!Array.isArray(info.creature_types) || info.creature_types.length === 0) return null;
+  return info;
+}
+
 // Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
 function getEnterChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5398,6 +5409,54 @@ function applyCardTypeChoicePrompt(info) {
         action: "card_type_choice_confirm",
         card_type: btn.dataset.cardType,
       });
+    });
+  });
+}
+
+function applyCreatureTypeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "an effect";
+  title.textContent = "Choose a creature type";
+  body.textContent = `${cardName}: every creature of the type you name is destroyed.`;
+  // A select rather than the button column the card-type prompt uses: that one
+  // offers the four the card printed, this one offers CR 205.3m's whole
+  // catalog.
+  const selected = info.default_creature_type || "";
+  const options = info.creature_types
+    .map((type) => {
+      const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
+      const value = escapeHtml(type);
+      const mark = type === selected ? " selected" : "";
+      return `<option value="${value}"${mark}>${label}</option>`;
+    })
+    .join("");
+  steps.innerHTML =
+    `<div class="prompt-choice-column">` +
+    `<select id="creatureTypeChoiceSelect">${options}</select>` +
+    `<button type="button" class="prompt-choice-btn" id="creatureTypeChoiceOk">Choose</button>` +
+    `</div>`;
+
+  const picker = steps.querySelector("#creatureTypeChoiceSelect");
+  steps.querySelector("#creatureTypeChoiceOk").addEventListener("click", async () => {
+    await sendAction({
+      seat,
+      action: "creature_type_choice_confirm",
+      creature_type: picker.value,
     });
   });
 }
@@ -9014,6 +9073,12 @@ function renderActivationPrompt() {
   const cardTypeChoiceInfo = getCardTypeChoiceInfo();
   if (cardTypeChoiceInfo) {
     applyCardTypeChoicePrompt(cardTypeChoiceInfo);
+    return;
+  }
+
+  const creatureTypeChoiceInfo = getCreatureTypeChoiceInfo();
+  if (creatureTypeChoiceInfo) {
+    applyCreatureTypeChoicePrompt(creatureTypeChoiceInfo);
     return;
   }
 
