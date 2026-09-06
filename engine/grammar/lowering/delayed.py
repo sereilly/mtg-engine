@@ -314,6 +314,14 @@ def _lower_create_delayed_trigger(
                 "one earlier step of this effect that recorded one", node=node,
             )
         payload["binds_recorded"] = recorded[0]
+        # Stated rather than left standing beside it, exactly as the branch
+        # below states it: the arming handler prefers the record, so a
+        # `binds_target` still reading True would be a second answer nothing
+        # consults. Coffin Queen is where the two came apart — its opener
+        # grants the permission and its effect names a `that` noun phrase,
+        # so `delay_binds_an_object` answered True for an entry that is
+        # bound to a record.
+        payload["binds_target"] = False
     # "…that creature's controller **sacrifices it** at end of combat."
     # (Basalt Golem.) The pronoun spelling of "sacrifice that creature", which
     # the AST cannot tell apart: the object is named in the *possessive* ("that

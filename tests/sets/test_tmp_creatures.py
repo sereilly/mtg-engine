@@ -2360,3 +2360,143 @@ def test_w3g2_carrionette_refuses_with_no_legal_target_and_spends_nothing(set_po
     assert not result.supported
     assert [c.name for c in game.players[0].graveyard] == ["Carrionette"]
     assert not game.stack
+
+
+# --- W3G2: a delayed ability answering to two events, about the permanent
+# --- its own reanimation made (Coffin Queen) -------------------------------
+
+
+def _w3g2_queen(set_pool, victims=("Hill Giant",)):
+    """Coffin Queen on seat 0's board, *victims* in seat 1's graveyard.
+
+    Summoning sickness is dated back rather than switched off: the ability
+    costs {T}, and a Queen that entered this turn could not pay it.
+    """
+    pool = set_pool("TMP")
+    lea = set_pool("LEA")
+
+    def card(name):
+        return pool[name] if name in pool else lea[name]
+
+    queen = Permanent(card=pool["Coffin Queen"])
+    queen.metadata["summoning_sickness_turn"] = -5
+    p0 = PlayerState(
+        name="P0", life=20, battlefield=[queen], library=[lea["Swamp"]] * 6,
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        graveyard=[card(name) for name in victims],
+        library=[lea["Forest"]] * 6,
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, queen
+
+
+def _w3g2_reanimate(game):
+    result = game.activate_permanent_ability(
+        0, "Coffin Queen", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    return result
+
+
+def test_w3g2_coffin_queen_exiles_the_creature_when_she_untaps(set_pool):
+    """`When this creature becomes untapped or you lose control of this
+    creature, exile that creature.`
+
+    The Rock Hydra test for the first of the two events. What the delayed
+    ability is *about* is the permanent the reanimation made — not the ability's
+    target, which is a **card** in a graveyard — and not the Queen, which is
+    what it watches.
+    """
+    game, queen = _w3g2_queen(set_pool)
+    _w3g2_reanimate(game)
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Coffin Queen", "Hill Giant",
+    ]
+
+    game.become_untapped(queen)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Coffin Queen"]
+    # CR 400.3: the card goes to its **owner's** exile, not the thief's.
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+
+
+def test_w3g2_coffin_queen_exiles_the_creature_when_she_leaves(set_pool):
+    """The second event. A permanent leaving the battlefield *is* its
+    controller losing control of it (CR 400.7 — what comes back is a different
+    object), which is the same reading the printed `lose_control_of_source`
+    trigger already takes from that transition."""
+    game, queen = _w3g2_queen(set_pool)
+    _w3g2_reanimate(game)
+
+    game.remove_from_battlefield(queen)
+    game.players[0].graveyard.append(queen.card)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+
+    assert not game.players[0].battlefield
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+
+
+def test_w3g2_coffin_queen_keeps_the_creature_while_she_stays_tapped(set_pool):
+    """Neither event has happened, so the delayed ability is still waiting.
+
+    The assertion that makes the two above mean something: an entry armed
+    without a bound object would answer the *first* permanent either event
+    named, and an entry that fired on its own arming would take the creature
+    back the moment it arrived.
+    """
+    game, _queen = _w3g2_queen(set_pool)
+    _w3g2_reanimate(game)
+    game.check_state_based_actions()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Coffin Queen", "Hill Giant",
+    ]
+    assert not game.players[1].exile
+
+
+def test_w3g2_coffin_queens_delay_is_bound_to_what_it_reanimated(set_pool):
+    """The compiled program, read for the three facts that make this card work:
+    the event it waits for, the permanent it watches, and the *record* it is
+    about — which cannot be the ability's target, because that target is a card
+    in a graveyard and the delayed ability acts on a permanent."""
+    program = compile_card_oracle(set_pool("TMP")["Coffin Queen"])
+    assert program.supported
+    (ability,) = program.activated_abilities
+    assert ability.supported
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "reanimate_creature", "create_delayed_trigger",
+    ]
+    delay = steps[1].payload
+    assert delay["event"] == "bound_permanent_untaps_or_control_lost"
+    assert delay["watches"] == "source"
+    assert delay["binds_recorded"] == "reanimated_permanents"
+    assert delay["binds_target"] is False
+    assert delay["instruction"].kind == "exile_bound_permanent"
+
+
+def test_w3g2_exile_that_creature_refuses_under_an_event_that_binds_nothing():
+    """"Exile that creature" names the firing event's object, and an event that
+    records none makes the words name nothing at all.
+
+    The loud direction: admitted, the sentence would compile and exile whatever
+    the resolution context happened to be carrying.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line("Exile that creature."))

@@ -537,6 +537,21 @@ class GameHelpersMixin:
                 self._enqueue_triggered_batch(
                     [make_trigger_event(holding, permanent, trig)]
                 )
+            # …and the delayed half of the same event (Coffin Queen's "or you
+            # lose control of this creature"). A delayed ability belongs to no
+            # permanent, so the `matching_triggers` scan above cannot reach it
+            # — the entry is on the game's own waiting list — and this is the
+            # one place in the engine a permanent changes hands, so an
+            # announcement wired into any single control-changing effect would
+            # be one every other effect forgot.
+            #
+            # Fired **before** the permanent is moved between battlefields
+            # below, for the scan above's reason: the ability is about the seat
+            # losing it, and by the next line the permanent is somebody else's.
+            fire_delayed_triggers(
+                self, "bound_permanent_untaps_or_control_lost",
+                subject=permanent,
+            )
             self.players[holding].battlefield = [
                 p for p in self.players[holding].battlefield if p is not permanent
             ]
@@ -1329,6 +1344,14 @@ class GameHelpersMixin:
         fire_delayed_triggers(
             self, "bound_permanent_leaves_or_untaps", subject=permanent,
         )
+        # "When this creature **becomes untapped** or you lose control of this
+        # creature, exile that creature." (Coffin Queen.) The first half of the
+        # other pairing, announced beside the one above and under its own key:
+        # an entry armed for one pairing must not be woken by the other's name,
+        # which is why these are two calls rather than a list of aliases.
+        fire_delayed_triggers(
+            self, "bound_permanent_untaps_or_control_lost", subject=permanent,
+        )
         # "**For as long as this creature remains tapped,** …" (Giant Oyster).
         # The same moment read the other way round: the abilities *this*
         # permanent created under that duration end now, because the condition
@@ -1920,6 +1943,16 @@ class GameHelpersMixin:
             # by the other's name.
             fire_delayed_triggers(
                 self, "bound_permanent_leaves_or_untaps", subject=perm,
+            )
+            # "…or **you lose control of this creature**." (Coffin Queen.)
+            # A permanent leaving the battlefield *is* its controller losing
+            # control of it — CR 400.7 makes what comes back a different
+            # object, and nobody controls the one that left — which is the
+            # same reading the printed `lose_control_of_source` trigger takes
+            # from this very scan. The other way to lose control is a change
+            # of hands, and that fires from `_sync_control`.
+            fire_delayed_triggers(
+                self, "bound_permanent_untaps_or_control_lost", subject=perm,
             )
             # The other half of the condition above: a permanent off the
             # battlefield is not a tapped permanent on it, so the abilities it

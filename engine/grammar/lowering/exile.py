@@ -23,6 +23,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, EXILED_THIS_WAY,
                       EXILED_THIS_WAY_OBJECTS)
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets,
     _describe_targets, _filter_payload, _is_created_token, _is_source,
@@ -287,6 +288,51 @@ def _lower_exile(
         )
 
     subject = node.subject
+    # "…**exile that creature**." (Coffin Queen, inside the delay its activated
+    # ability creates.) The object the delayed ability was armed about
+    # (CR 603.7c), addressed by id out of the trigger's context — the same
+    # reading `destroy_bound_permanent` takes of the same two words one family
+    # over, and its own kind for that handler's reason: routed through the
+    # targeted exile it would ask for a choice the card never offered and then
+    # exile whichever permanent the resolution context happened to carry.
+    #
+    # Gated on the *event*, like every other reading of "that <noun>" in this
+    # grammar. Under an event that freezes no object the words name nothing at
+    # all, and a refusal is the honest answer rather than a handler that finds
+    # nothing while the card compiles supported.
+    #
+    # Narrowed to the **restated noun phrase**, which is what tells this apart
+    # from the other three references that carry the same quantifier: "the
+    # token" (Stangg, Dance of Many) and "that card" name objects with no card
+    # type printed on them, and each has its own branch below. Reading them
+    # here refused two long-supported cards on a gate that was never about
+    # them.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and subject.filter.card_types
+        and not subject.filter.created_with_source
+    ):
+        if node.counters or node.face_down or node.same_zone:
+            raise LoweringError(
+                "the bound-object exile carries no rider", node=node
+            )
+        if event not in _BOUND_OBJECT_DELAYED_EVENTS:
+            raise LoweringError(
+                "\"that\" names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        # The **same kind and the same empty payload** the "exile it" branch
+        # below already emits (Zirilan of the Claw, Shallow Grave): the two
+        # sentences name one object two ways, and the id the arming handler
+        # froze is what says which. The noun is read and not carried, for
+        # ``destroy_event_subject``'s stated reason — the phrase re-states what
+        # the ability was already aimed at, and asking again at resolution
+        # would let a creature that stopped being one escape an exile the rules
+        # have already aimed at it.
+        return (OracleInstruction("exile_bound_permanent", "", {}),)
     # "Exile **all** / **any number of** cards from your hand face down."
     # (Duplicity, Scroll Rack.) A pile out of a *hidden* zone, read before both
     # sweep branches below — they are about permanents on a battlefield, and

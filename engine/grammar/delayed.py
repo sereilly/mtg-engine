@@ -257,6 +257,56 @@ def _parse_watched_object(stream: TokenStream) -> str | None:
     return None
 
 
+def parse_untap_or_control_delay(
+    stream: TokenStream,
+) -> tuple[str, bool, str, bool, str] | None:
+    """``when <object> becomes untapped or you lose control of <object>`` —
+    the delay Coffin Queen prints in front of its effect.
+
+    CR 603.7 with **two** events and one ability, exactly as Merieke Ri Berit's
+    "leaves the battlefield or becomes untapped" is one key announced from two
+    sites: the ability fires the first time *either* happens and, having no
+    stated duration, is done (CR 603.7b). Two entries would each be one-shot on
+    their own and the second would still be waiting.
+
+    A separate event from that one and not a wider spelling of it. Losing
+    control of a permanent and it leaving the battlefield are different things
+    — CR 603.10d's half is a change of hands, with the permanent still there —
+    and an ability armed under one name must not be woken by the other's.
+    (A permanent that *leaves* is also its controller losing control of it,
+    which is why this event's fire sites include the leave transition; that is
+    a fact about the sites, not about the key.)
+
+    **Both halves must name the same object.** "When this creature becomes
+    untapped or you lose control of *that* creature" is not a sentence Magic
+    prints, and reading the two references separately would arm an ability
+    watching one permanent and answering for another.
+
+    Returns the ``(event, once, duration, binds, watches)`` shape
+    :func:`parse_leaves_battlefield_delay` returns, so the one caller builds one
+    node.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("when"):
+        stream.reset(mark)
+        return None
+    watched = _parse_watched_object(stream)
+    if watched is None or not stream.accept_phrase("becomes", "untapped"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("or", "you", "lose", "control", "of"):
+        stream.reset(mark)
+        return None
+    if _parse_watched_object(stream) != watched:
+        stream.reset(mark)
+        return None
+    # `binds` stays False here, exactly as it does in the sibling below: the
+    # effect is printed *behind* the delay and names an object the ability
+    # already holds — the creature its own reanimation put onto the battlefield
+    # — so the permission is granted by the caller, which reads the effect.
+    return ("bound_permanent_untaps_or_control_lost", True, "until_it_triggers", False, watched)
+
+
 def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str, bool, str] | None:
     """``when <object> leaves the battlefield`` — the trailing delay whose
     opener names the object it watches (CR 603.6c, CR 603.7).
@@ -682,6 +732,16 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 # `delay_binds_an_object` reads the effect for what is acted on.
                 stream.reset(mark)
                 leading = parse_leaves_battlefield_delay(stream)
+                if leading is None:
+                    # "When this creature **becomes untapped or you lose
+                    # control of this creature**, exile that creature."
+                    # (Coffin Queen.) The sibling opener, tried after it and
+                    # declining without consuming: the two open on the same
+                    # three words and differ from the fourth on, so the order
+                    # decides which refusal survives rather than which card is
+                    # read.
+                    stream.reset(mark)
+                    leading = parse_untap_or_control_delay(stream)
                 if leading is not None:
                     event, once, duration, _permitted, watches = leading
                     binds = True

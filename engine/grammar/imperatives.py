@@ -38,6 +38,7 @@ from .paragraphs import (
     _parse_rebalance_lands,
     _parse_transmute_by_sacrifice,
 )
+from .back_references import _parse_that_object
 from .conditions import _parse_condition
 from .errors import GrammarError
 from .nouns import parse_object_filter
@@ -540,7 +541,18 @@ def parse_imperative(
         if bound_card is not None:
             return bound_card
         stream.advance()
-        subject = parse_recipient(stream)
+        # "…**exile that creature**." (Coffin Queen, inside the delay its
+        # activated ability creates.) The object the delayed ability was armed
+        # about (CR 603.7c), read locally exactly as the destroy production
+        # reads the same two words and for the same stated reason: the phrase
+        # turns up all over the pool, and teaching the shared noun parser to
+        # claim it would lower every one of those lines through a filter naming
+        # a card type nobody bound.
+        #
+        # Safe here because the quantifier is refused by default — no lowering
+        # accepts "that" unless it says so — so a sentence that reaches one
+        # without a binder fails **by name** rather than failing to parse.
+        subject = _parse_that_object(stream) or parse_recipient(stream)
         if subject is None:
             raise stream.error("expected something to exile")
         # "Exile this creature **and target creature** without flying that's
