@@ -90,6 +90,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "become_aura_with_enchant": "characteristics",
     "gain_type": "characteristics",
+    # "…becomes a copy of that creature" (Unstable Shapeshifter). CR 613 layer
+    # 1, so what it changes is every characteristic at once — which is why it
+    # sits in this family rather than in `recolor` or `pump`, each of which is
+    # one layer over the copiable values this replaces.
+    "become_copy_of_bound_permanent": "characteristics",
     "change_supertype": "characteristics",
     # "Target land becomes a Swamp until its controller's next untap step."
     # (Orcish Farmer.) CR 305.7 replaces the land's subtypes, which is the

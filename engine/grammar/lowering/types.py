@@ -39,7 +39,7 @@ from ...oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ._common import (_describe_several_targets, _describe_targets,
                       _filter_payload, _is_enchanted, _is_source, _is_target,
                       _names_several_targets)
-from ._events import binds_block_pair
+from ._events import _EVENT_SUBJECT_OBJECTS, binds_block_pair
 
 
 def _lower_become_creature(
@@ -311,6 +311,48 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
         payload["choose_land_type"] = True
     _describe_targets(payload, node.subject)
     return (OracleInstruction("change_land_type_until", "", payload),)
+
+
+def _lower_become_copy(
+    node: ast.BecomeCopy, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"…this creature becomes a copy of that creature, except it has this
+    ability." (Unstable Shapeshifter, CR 707.2.)
+
+    Three gates, and each is a refusal rather than a default:
+
+    * the **subject** must be the ability's own source. "Target creature becomes
+      a copy of …" is a different card and would need a picker this instruction
+      does not describe;
+    * the **object** must be the firing event's, and the event must be one that
+      freezes it (``_EVENT_SUBJECT_OBJECTS``). Without that the words name
+      nothing and the handler would copy whatever the resolution happened to be
+      holding — the refusal every other back-reference in this package makes;
+    * the noun phrase is carried so the handler can re-check it. It is the same
+      filter the trigger's own condition narrowed by, and a copy of a permanent
+      that does not answer it is a copy the sentence never described.
+    """
+    if not getattr(node.subject.filter, "is_source", False):
+        raise LoweringError(
+            "only the ability's own source becomes a copy this way", node=node
+        )
+    if node.of.quantifier != "that":
+        raise LoweringError(
+            "the object copied is the one the firing event bound", node=node
+        )
+    if event not in _EVENT_SUBJECT_OBJECTS:
+        raise LoweringError(
+            "\"that\" names the firing event's object, and this event records "
+            "none",
+            node=node,
+        )
+    payload: dict[str, object] = {"filter": _filter_payload(node.of.filter)}
+    if node.keeps_own_ability:
+        # CR 707.9a. Emitted only when the clause is printed, so a plain
+        # "becomes a copy of that creature" compiles to the payload it would
+        # have had without this field.
+        payload["keeps_own_ability"] = True
+    return (OracleInstruction("become_copy_of_bound_permanent", "", payload),)
 
 
 def _lower_become_color(

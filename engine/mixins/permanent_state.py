@@ -1019,7 +1019,13 @@ class PermanentStateMixin:
             controller.life -= life_loss
             self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
 
-    def _apply_copy(self, permanent: Permanent, source: Permanent) -> None:
+    def _apply_copy(
+        self,
+        permanent: Permanent,
+        source: Permanent,
+        *,
+        grants_text: tuple[str, ...] = (),
+    ) -> None:
         """Make *permanent* a copy of *source* — CR 613 layer 1a, recorded by
         ``engine/copies.py``.
 
@@ -1036,10 +1042,20 @@ class PermanentStateMixin:
         a non-copy effect on the source (a +1/+1 counter, an Aura, an animation,
         a text change, a "base power 0") cannot leak into the copy.
         """
+        # *grants_text* is CR 707.9a's "except it has this ability" where the
+        # clause is on the sentence being resolved rather than on the copier's
+        # standing text (Unstable Shapeshifter). The exception table below reads
+        # the copier's own printed clauses — Vesuvan Doppelganger's colour, Copy
+        # Artifact's added type — and cannot see a clause the resolution is
+        # carrying, which is why the caller hands it over.
+        exceptions = copies.copy_exceptions(
+            compile_card_oracle(permanent.card).normalized_text
+        )
         copies.become_copy(
             permanent,
             source,
-            **copies.copy_exceptions(compile_card_oracle(permanent.card).normalized_text),
+            grants_text=grants_text,
+            **exceptions,
         )
         self._recalculate_lord_buffs()
 

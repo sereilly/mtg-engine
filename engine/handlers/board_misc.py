@@ -1209,6 +1209,83 @@ def animate_self_until_end_of_combat(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("become_copy_of_bound_permanent")
+def become_copy_of_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever another creature enters, this creature becomes a copy of that
+    creature, except it has this ability." (Unstable Shapeshifter, CR 707.2.)
+
+    The copied object is the one the *firing event* froze — never a pick, and
+    never a board scan: two creatures entering in one turn are two firings, and
+    a scan would copy whichever one the battlefield happened to list first. The
+    id is the channel, because CR 400.7 makes a permanent that has left a new
+    object and the trigger resolves off the stack (CR 603.3), by which time the
+    creature that entered may be gone. It leaving is a real outcome: the copy
+    effect has nothing to copy and the Shapeshifter stays what it was.
+
+    The layer-1 record is written by ``Game._apply_copy``, which is the one
+    place in this engine that applies a copy — this handler decides *what* is
+    copied and hands over the printed exceptions, exactly as
+    ``create_token_copy`` beside it does.
+
+    CR 707.9a's "except it has this ability" is the granting card's own printed
+    line, found on the permanent's **effective** card so a Shapeshifter that is
+    already a copy carries the sentence it was granted rather than the one on
+    its face. Without it the copy loses the ability and the card works exactly
+    once.
+    """
+    from ..subject_filters import subject_matches
+
+    permanent = context.source_permanent
+    if permanent is None:
+        return False, "no source permanent"
+    bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+    source = None if bound is None else game.permanent_by_id(int(bound))
+    if source is None or source is permanent:
+        game.log.append(f"{context.card.name}: nothing left to copy")
+        return True, "resolved"
+    described = dict(instruction.payload.get("filter") or {})
+    seat = game.controller_index_of(permanent)
+    if described and not subject_matches(
+        game, source, described, observer=seat, source=permanent
+    ):
+        game.log.append(
+            f"{context.card.name}: {source.card.name} is not what this copies"
+        )
+        return True, "resolved"
+
+    grants_text = ()
+    if instruction.payload.get("keeps_own_ability"):
+        grants_text = _granting_lines(permanent, instruction.kind)
+    game._apply_copy(permanent, source, grants_text=grants_text)
+    game.log.append(
+        f"{context.card.name} became a copy of {source.card.name}"
+    )
+    return True, "resolved"
+
+
+def _granting_lines(permanent, kind: str) -> tuple[str, ...]:
+    """The printed line "**this** ability" names, off *permanent*'s own text.
+
+    Found by asking which of the permanent's triggered abilities compiled to
+    *this* instruction kind, rather than by threading the line down from the
+    compiler: the answer is already in the compiled program, and a second
+    channel carrying it would be a second statement of which sentence is being
+    resolved.
+
+    ``effective_card`` rather than the printed face, because a Shapeshifter
+    that has already copied something carries the sentence it was **granted**
+    (CR 707.9a) and not the one on its card — reading the face would grant the
+    line a second time under a name the board no longer has.
+    """
+    from ..oracle import compile_card_oracle
+
+    return tuple(
+        trig.source_line
+        for trig in compile_card_oracle(permanent.effective_card).triggered_abilities
+        if trig.instruction is not None and trig.instruction.kind == kind
+    )
+
+
 @effect_handler("create_copy_token")
 def create_copy_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Create a token that's a copy of target creature you control."

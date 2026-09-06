@@ -147,6 +147,7 @@ def become_copy(
     copies: Iterable[str] = ALL_VALUES,
     adds_types: Iterable[str] = (),
     grants: Iterable[str] = (),
+    grants_text: Iterable[str] = (),
     effect_source: "Permanent | None" = None,
     label: str = "",
 ) -> None:
@@ -171,6 +172,15 @@ def become_copy(
         "copies": frozenset(copies),
         "adds_types": tuple(adds_types),
         "grants": tuple(grants),
+        # CR 707.9a's "**except it has this ability**" (Unstable Shapeshifter):
+        # printed lines the copy has *in addition to* the copiable values.
+        #
+        # Beside ``grants`` rather than in it, because the two are read by
+        # different things: that one holds marker names a fire site looks up
+        # (``RECOPY_EACH_UPKEEP``), and this one holds oracle text that the
+        # compiler reads like any other line — which is what makes the granted
+        # trigger fire again without anything knowing which card granted it.
+        "grants_text": tuple(grants_text),
         # 613.7b: an effect is stamped when it is created.
         "timestamp": next_timestamp(),
         "label": label or source.card.name,
@@ -258,6 +268,9 @@ def _apply_one(base: "CardDefinition", entry: Mapping) -> "CardDefinition":
     copied: "CardDefinition" = entry["card"]
     copies: frozenset[str] = entry["copies"]
     added: tuple[str, ...] = entry["adds_types"]
+    # ``get``, because entries written before this key existed are still valid
+    # contributions — the same tolerance every optional key here has.
+    granted_text: tuple[str, ...] = tuple(entry.get("grants_text") or ())
 
     # Start from everything the copy effect hands over and put back what it
     # declines (CR 707.9c: "the affected objects instead retain their original
@@ -279,6 +292,19 @@ def _apply_one(base: "CardDefinition", entry: Mapping) -> "CardDefinition":
         overrides["type_line"] = _with_added_types(
             overrides.get("type_line", copied.type_line), added
         )
+    if granted_text:
+        # CR 707.9a: the ability is *in addition to* the copiable values, so it
+        # is appended to whatever text the fold has arrived at rather than
+        # replacing it. A line already present is not added twice — a
+        # Shapeshifter copying another Shapeshifter would otherwise accumulate
+        # one copy of the sentence per copy effect, and the trigger would fire
+        # that many times.
+        base_text = overrides.get("oracle_text", copied.oracle_text) or ""
+        lines = [line for line in base_text.splitlines() if line]
+        for line in granted_text:
+            if line not in lines:
+                lines.append(line)
+        overrides["oracle_text"] = "\n".join(lines)
     if not overrides:
         return copied
     return dataclasses.replace(copied, **overrides)
@@ -298,6 +324,7 @@ def copiable_card(permanent: "Permanent") -> "CardDefinition":
         key = (
             _identity(result), _identity(entry["card"]),
             entry["copies"], entry["adds_types"],
+            tuple(entry.get("grants_text") or ()),
         )
         cached = _COPIED_CARDS.get(key)
         if cached is None:

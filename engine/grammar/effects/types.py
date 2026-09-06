@@ -25,6 +25,7 @@ from .. import ast
 from ..amounts import expect_pt
 from ..errors import GrammarError
 from ..phrases import _parse_duration
+from ..back_references import _parse_that_object
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
                           LAND_TYPES, SUBTYPE_INDEX, TYPE_LINE_SUPERTYPES,
@@ -91,7 +92,45 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     land_type = _parse_becomes_land_type(stream, subject)
     if land_type is not None:
         return land_type
+    # "…becomes **a copy of that creature**, except it has this ability."
+    # (Unstable Shapeshifter.) Read last, because every branch above starts on
+    # a word this one does not: the article is shared with the animation and the
+    # gained type, and those two decline before the noun.
+    copied = _parse_become_copy(stream, subject)
+    if copied is not None:
+        return copied
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_become_copy(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.BecomeCopy | None":
+    """``<subject> becomes a copy of <object>[, except it has this ability]``.
+
+    Refuses without consuming, so the error the branches above raise is still
+    what a sentence that is none of these gets.
+
+    The exception clause is read **whole** or not at all: a comma after "a copy
+    of that creature" that opens anything else leaves the tail unconsumed and
+    the line refuses, which is the full-consumption invariant doing its job —
+    "except it doesn't copy that creature's color" is a different modification
+    and belongs to ``copies.copy_exceptions``, not here.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("a", "copy", "of"):
+        stream.reset(mark)
+        return None
+    of = _parse_that_object(stream)
+    if of is None:
+        stream.reset(mark)
+        return None
+    keeps_own_ability = False
+    if stream.accept_punct(","):
+        if not stream.accept_phrase("except", "it", "has", "this", "ability"):
+            stream.reset(mark)
+            return None
+        keeps_own_ability = True
+    return ast.BecomeCopy(subject, of, keeps_own_ability=keeps_own_ability)
 
 
 def _parse_becomes_land_type(
