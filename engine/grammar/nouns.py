@@ -237,6 +237,13 @@ class _FilterDraft:
     # ``ast.ObjectFilter.with_named_counter``.
     with_named_counter: str | None = None
     nontoken: bool = False
+    # "that's one or more colors" (Ugin, the Spirit Dragon's −X) — see the
+    # field of the same name on ``ast.ObjectFilter``. Declared here because
+    # the postmodifier that reads the phrase wrote a *bare local* instead: an
+    # undeclared draft attribute is dropped by the builder below, and a bare
+    # local is dropped before it even gets that far, so the guard on this
+    # mirror could not see it either.
+    colored: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
@@ -899,6 +906,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_plus1_counter=d.with_plus1_counter,
         with_named_counter=d.with_named_counter,
         nontoken=d.nontoken,
+        colored=d.colored,
         chosen_color=d.chosen_color,
         chosen_creature_type=d.chosen_creature_type,
         chosen_land_type=d.chosen_land_type,

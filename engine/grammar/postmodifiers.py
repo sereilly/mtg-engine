@@ -74,7 +74,7 @@ def _parse_postmodifiers(
         # object is colored — matching reads the effective colors, so a
         # colorless artifact escapes and a Lace-painted one does not.
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
-            colored = True
+            d.colored = True
             continue
         # The six clauses that narrow a noun phrase by a **record** of
         # something that already happened — an attack declaration, a block, a
