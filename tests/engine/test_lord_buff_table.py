@@ -19,7 +19,6 @@ import pytest
 
 from engine.lord_buffs import (
     CONDITIONS,
-    GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
     QUALIFIER_FIELDS,
     LordBuff,
@@ -170,10 +169,19 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
     "line,why",
     [
         ("Other Goblins glimmer uncontrollably.", "no effect the table models"),
-        # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+        # shadow stood here until Tempest wave 1 implemented it (CR 702.28);
+        # "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s
+        # `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
         ("Other Goblins get +1/+1 and have ward.", "layer 6 carries no ward"),
-        ('Other Zombies have "{5}: Regenerate this permanent."',
-         "nothing charges {5} for the granted ability"),
+        # '…have "{5}: Regenerate this permanent."' stood here while the
+        # granted ability was a dict of one entry keyed on the whole quoted
+        # text including its cost, so a differently-costed printing of the same
+        # sentence was genuinely unimplemented. The grant now rides as text
+        # through the compiler, which charges whatever cost is printed, so the
+        # sharper row is a quote the compiler cannot *read* — refused, rather
+        # than granted as an ability that does nothing.
+        ('Other Zombies have "{5}: Glimmer uncontrollably."',
+         "the compiler cannot read the quoted ability"),
         ("Other Goblins get +1/+1 as long as you control a Mountain.",
          "an unmodelled condition would become permanent if dropped"),
         # "Creatures **with** flying get +1/+1" stood here until Serra Aviary
@@ -249,16 +257,72 @@ def test_every_condition_has_a_predicate_that_evaluates_it():
         assert callable(getattr(PermanentStateMixin, method))
 
 
-def test_every_granted_ability_flag_is_read_by_the_activation_path():
-    """The flag names an ability someone can actually activate. An entry here
-    with no reader would grant an ability that does nothing."""
-    import inspect
+def test_a_quoted_grant_is_admitted_only_when_the_compiler_reads_it():
+    """The gate on a quoted ability is the compiler, not a list of one.
 
-    from engine.mixins.stack import activation
+    This was a dict with a single entry — ``{b}: regenerate this permanent.``
+    keyed to a metadata flag one branch of the activation path turned back into
+    a hand-written ``{B}`` payment — so a lord granting the same regeneration
+    for ``{2}`` was unsupported and one granting anything else was too. Tempest
+    prints that sentence five more times.
 
-    source = inspect.getsource(activation)
-    for flag in GRANTED_ACTIVATED_ABILITIES.values():
-        assert flag in source, flag
+    Both directions, on invented cards: a sentence the compiler reads is
+    admitted whatever its cost, and one it cannot read refuses the whole line
+    rather than granting an ability that does nothing.
+    """
+    for ability in (
+        "{2}: This creature gets +0/+1 until end of turn.",
+        "{7}: Regenerate this permanent.",
+        "{2}, Sacrifice this permanent: Draw a card.",
+    ):
+        line = normalize_creature_line(f'All Kobolds have "{ability}"')
+        buff = lord_buff_for(line)
+        assert buff is not None, ability
+        assert buff.granted_ability == ability.lower()
+        assert buff.filter.subtypes == ("kobold",)
+
+    unreadable = normalize_creature_line(
+        'All Kobolds have "{2}: This creature glimmers uncontrollably."'
+    )
+    assert lord_buff_for(unreadable) is None
+
+
+def test_a_duration_inside_the_quotes_is_the_granted_abilitys_own():
+    """A duration in the lord's own sentence ends the static reading; one
+    inside a quoted grant does not.
+
+    'All Sliver creatures have "{2}: This creature gets +0/+1 **until end of
+    turn**."' is a static ability whose grant is permanent and whose granted
+    pump is not, and the flat word test refused Armor Sliver on its own quote.
+    """
+    granting = normalize_creature_line(
+        'All Kobolds have "{2}: This creature gets +0/+1 until end of turn."'
+    )
+    assert lord_buff_for(granting) is not None
+    # …and the lord's *own* duration still ends the reading (Army of Allah is a
+    # one-shot spell effect, not an anthem).
+    one_shot = normalize_creature_line("Attacking creatures get +2/+0 until end of turn.")
+    assert lord_buff_for(one_shot) is None
+
+
+def test_a_line_global_statics_already_claims_is_refused_here():
+    """One home per printed sentence (CR 611.2c).
+
+    ``engine/global_statics.py`` reads the whole-board spellings of this
+    template and owns the half this table cannot express — the same sentence
+    spoken by a spell on the stack. Both fold their grant into the same
+    ``effective_card`` text, so a line claimed by both is the ability printed
+    twice, and The Tabernacle at Pendrell Vale asked its {1} upkeep payment two
+    times per creature.
+    """
+    from engine.global_statics import global_static_for
+
+    line = normalize_creature_line(
+        'All creatures have "At the beginning of your upkeep, '
+        'destroy this creature unless you pay {1}."'
+    )
+    assert global_static_for(line) is not None
+    assert lord_buff_for(line) is None
 
 
 def test_grantable_keywords_are_all_ones_layer_6_resolves():

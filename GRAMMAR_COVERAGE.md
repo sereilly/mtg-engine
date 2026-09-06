@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 74.7% | 72.2% | 48.1% | 205 |
+| TMP *(measured)* | 335 | 478 | 76.4% | 73.8% | 49.4% | 211 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,10 +47,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 383 | 182 | expected a subject |  |
+| 381 | 180 | expected a subject |  |
 | 116 | 58 | unrecognized effect verb |  |
-| 100 | 52 | unconsumed text |  |
-| 41 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
+| 99 | 51 | unconsumed text |  |
+| 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 9 | expected a keyword ability |  |
@@ -326,6 +326,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a doom counter on this artifact.`
   - `At the beginning of your draw step, this artifact deals damage equal to the number of doom counters on it to each player.`
   - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
+- **Armor Sliver**
+  - `All Sliver creatures have "{2}: This creature gets +0/+1 until end of turn."`
 - **Armor Thrull**
   - `{T}, Sacrifice this creature: Put a +1/+2 counter on target creature.`
 - **Armor of Faith**
@@ -455,6 +457,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barbed Sextant**
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
+- **Barbed Sliver**
+  - `All Sliver creatures have "{2}: This creature gets +1/+0 until end of turn."`
 - **Barbed-Back Wurm**
   - `{B}: Target green creature blocking this creature gets -1/-1 until end of turn.`
 - **Barishi**
@@ -1020,6 +1024,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Clockwork Swarm**
   - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
+- **Clot Sliver**
+  - `All Slivers have "{2}: Regenerate this permanent."`
 - **Cloudchaser Eagle**
   - `When this creature enters, destroy target enchantment.`
 - **Coal Golem**
@@ -3527,6 +3533,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mindstab Thrull**
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
+- **Mindwhip Sliver**
+  - `All Slivers have "{2}, Sacrifice this permanent: Target player discards a card at random. Activate only as a sorcery."`
 - **Minion of Leshrac**
   - `At the beginning of your upkeep, this creature deals 5 damage to you unless you sacrifice a creature other than this creature. If this creature deals damage to you this way, tap it.`
   - `{T}: Destroy target creature or land.`
@@ -3577,6 +3585,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Counter target spell that targets this creature.`
 - **Mistmoon Griffin**
   - `When this creature dies, exile it, then return the top creature card of your graveyard to the battlefield.`
+- **Mnemonic Sliver**
+  - `All Slivers have "{2}, Sacrifice this permanent: Draw a card."`
 - **Mob Mentality**
   - `Whenever all non-Wall creatures you control attack, enchanted creature gets +X/+0 until end of turn, where X is the number of attacking creatures.`
 - **Mogg Cannon**
@@ -5858,6 +5868,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap enchanted creature: Target creature other than the creature tapped this way gets +2/+1 until end of turn. Activate only if enchanted creature is untapped.`
 - **Vexing Arcanix**
   - `{3}, {T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. Otherwise, they put it into their graveyard and this artifact deals 2 damage to them.`
+- **Vhati il-Dal**
+  - `{T}: Until end of turn, target creature has base power 1 or base toughness 1.`
 - **Viashino Sandstalker**
   - `At the beginning of the end step, return this creature to its owner's hand. (Return it only if it's on the battlefield.)`
 - **Viashivan Dragon**

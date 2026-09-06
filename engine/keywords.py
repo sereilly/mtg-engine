@@ -45,6 +45,22 @@ DERIVED_GRANTS = "derived_ability_grants"
 # which a word was.
 DERIVED_REMOVALS = "derived_ability_removals"
 
+# The third derived channel: a whole printed **ability line** a permanent has
+# because of something else on the battlefield right now — Tempest's Slivers
+# ("All Slivers have \"{2}: Regenerate this permanent.\""), Zombie Master.
+#
+# ``DERIVED_GRANTS`` above is the *word* half of layer 6 and is no use here for
+# the reason :data:`GRANTED_ABILITY_LINES` records: what CR 113.3 grants in
+# quotes is a sentence, and only the compiler turns a sentence into behaviour.
+# So the sentence is recorded and ``Permanent.effective_card`` folds it in,
+# exactly as that channel does — the difference is the *lifetime*, which is why
+# this is a separate key rather than a write to that one. A lord's grant lasts
+# only while the lord is on the battlefield reaching this permanent, so it is
+# cleared and rebuilt on every recompute (CR 611.3a/611.3b); a grant recorded on
+# ``GRANTED_ABILITY_LINES`` waits for a *sweep* to end it, and a lord writing
+# there would append one copy of its sentence per recompute forever.
+DERIVED_ABILITY_LINES = "derived_ability_lines"
+
 # Key under which granted **printed ability lines** live — the third channel in
 # this file, and the one for an ability layer 6's word-set cannot carry.
 #
@@ -361,6 +377,10 @@ def clear_derived_grants(perm: Permanent) -> None:
     """
     perm.metadata.pop(DERIVED_GRANTS, None)
     perm.metadata.pop(DERIVED_REMOVALS, None)
+    # …and the sentence half of the same layer, cleared in the same breath. A
+    # line left behind by a clear that only knew about the words would keep a
+    # dead lord's ability on the board with nothing to point at.
+    perm.metadata.pop(DERIVED_ABILITY_LINES, None)
 
 
 #: The durations a granted ability line can be given, each naming the sweep that
@@ -460,6 +480,24 @@ def derived_removals(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(DERIVED_REMOVALS) or ())
 
 
+def add_derived_ability_line(perm: Permanent, line: str) -> None:
+    """Layer 6: *perm* says *line* for as long as the source keeps granting it.
+
+    Deduplicated on the sentence, because CR 611.2c makes two lords printing the
+    same quoted ability two grants of one sentence and the compiler would build
+    two identical abilities out of a repeat — two rows in the UI's ability list,
+    two entries the activation index has to tell apart, and nothing gained.
+    """
+    lines = perm.metadata.setdefault(DERIVED_ABILITY_LINES, [])
+    if line not in lines:
+        lines.append(line)
+
+
+def derived_ability_lines(perm: Permanent) -> tuple[str, ...]:
+    """The printed ability lines a board-wide source currently gives *perm*."""
+    return tuple(perm.metadata.get(DERIVED_ABILITY_LINES) or ())
+
+
 def remove_ability_line(perm: Permanent, line: str) -> None:
     """Layer 6: *perm* no longer has the printed ability *line*.
 
@@ -547,18 +585,21 @@ def clear_removed_ability_keywords(
 
 
 __all__ = [
-    "ABILITY_EFFECTS", "DERIVED_GRANTS", "DERIVED_REMOVALS",
+    "ABILITY_EFFECTS", "DERIVED_ABILITY_LINES", "DERIVED_GRANTS",
+    "DERIVED_REMOVALS",
     "GRANTED_ABILITY_LINES", "REMOVED_ABILITY_LINES",
     "REMOVED_ABILITY_KEYWORDS",
     "remove_ability_line", "removed_ability_lines", "normalized_ability_line",
     "remove_ability_keyword", "removed_ability_keywords",
     "clear_removed_ability_keywords",
-    "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
+    "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_ability_line",
+    "add_derived_grant",
     "add_derived_removal", "derived_removals",
     "GRANTED_ABILITY_DURATIONS",
     "clear_derived_grants", "clear_granted_ability_lines",
     "KEYWORD_GRANT_DURATIONS", "SEATED_GRANT_DURATIONS",
-    "clear_granted_keywords", "derived_grants", "grant_ability_line",
+    "clear_granted_keywords", "derived_ability_lines", "derived_grants",
+    "grant_ability_line",
     "keyword_ability_name",
     "expand_ability_removal",
     "granted_ability_lines", "grant_keyword", "remove_keyword",

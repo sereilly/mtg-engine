@@ -7479,16 +7479,27 @@ class PendingChoicesMixin:
             on_short=on_short, record=record, up_to=up_to, _count_onto=count_onto,
         )
 
-    def _record_sacrifice_count(self, count_onto, given_up: int) -> None:
-        """Stamp how many permanents were sacrificed onto the permanent that
-        asked for them (CR 604.3's "…sacrificed as it entered").
+    def _record_sacrifice_count(
+        self, count_onto, given_up: int, totals: tuple[int, int] = (0, 0)
+    ) -> None:
+        """Stamp what was sacrificed onto the permanent that asked for it
+        (CR 604.3's "…sacrificed as it entered").
 
-        A no-op for every sacrifice nobody is counting, which is all of them but
-        one shape — so the three answer paths record unconditionally rather than
-        each remembering to ask."""
+        Three numbers, not one: how many (Wood Elemental) and the **totals** of
+        their power and toughness (Dracoplasm, "this creature's power becomes
+        the total power of those creatures"). All three unconditionally, because
+        a no-op for every sacrifice nobody is counting is what lets the three
+        answer paths record without each remembering to ask.
+
+        *totals* arrives already summed, and it has to: by the time this runs
+        the creatures are cards in a graveyard and have no power or toughness at
+        all (CR 613.1), so the numbers are CR 608.2g's last known information,
+        read at the removal site."""
         if count_onto is None:
             return
         count_onto.metadata["sacrificed_as_entered"] = int(given_up)
+        count_onto.metadata["sacrificed_total_power"] = int(totals[0])
+        count_onto.metadata["sacrificed_total_toughness"] = int(totals[1])
         self._refresh_dynamic_creatures()
 
     def pending_sacrifice_state(self) -> dict | None:
@@ -7542,14 +7553,22 @@ class PendingChoicesMixin:
         # Resolved before any removal, so no index is held across one.
         removed: list[str] = []
         record = data.get("record")
+        # CR 608.2g: read the P/T *before* the removal. A moment later these are
+        # cards in a graveyard with no computed characteristics at all
+        # (CR 613.1), and Dracoplasm's whole size is their sum.
+        total_power = total_toughness = 0
         for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
+            total_power += int(perm.effective_power)
+            total_toughness += int(perm.effective_toughness)
             _record_sacrificed_card(record, player_index, perm.card)
             self.sacrifice_permanent(perm)
             removed.append(perm.card.name)
         for name in reversed(removed):
             self.log.append(f"{player.name} sacrificed {name} ({reason})")
         self.discard_pending_choice(choice)
-        self._record_sacrifice_count(data.get("_count_onto"), len(chosen))
+        self._record_sacrifice_count(
+            data.get("_count_onto"), len(chosen), (total_power, total_toughness)
+        )
         # A ceiling nobody filled is not a shortfall: "any number" was answered.
         if count > len(valid) and not data.get("up_to"):
             self._apply_sacrifice_shortfall(player_index, count - len(valid), data["on_short"], reason)

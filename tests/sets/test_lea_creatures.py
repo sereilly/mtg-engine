@@ -1382,8 +1382,11 @@ def test_zombie_master_grants_swampwalk_and_regeneration_to_other_zombies(all_ca
     assert result.supported
     # "Other Zombie creatures have swampwalk."
     assert zombie_perm.has_keyword("swampwalk")
-    # 'Other Zombies have "{B}: Regenerate this permanent."'
-    assert zombie_perm.metadata.get("granted_regen_ability") is True
+    # 'Other Zombies have "{B}: Regenerate this permanent."' — CR 113.3, so
+    # what is granted is the printed sentence, on the derived layer-6 channel.
+    from engine.keywords import derived_ability_lines
+
+    assert derived_ability_lines(zombie_perm) == ("{b}: regenerate this permanent.",)
     regen = game.activate_permanent_ability(0, "Scathe Zombies")
     assert regen.supported
     assert zombie_perm.regeneration_shield == 1

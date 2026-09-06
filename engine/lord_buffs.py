@@ -76,14 +76,36 @@ QUALIFIER_FIELDS: dict[str, tuple[str, bool]] = {
     "untapped": ("tapped", False),
 }
 
-# Activated abilities a lord can grant in quotes, mapped to the metadata flag
-# that arms them. Keyed by the **whole** quoted text including its cost: the
-# reader (mixins/stack/activation.py) charges {B} and nothing else, so a
-# differently-costed printing of the same ability is genuinely not implemented
-# and must fail loud rather than be granted for free.
-GRANTED_ACTIVATED_ABILITIES: dict[str, str] = {
-    "{b}: regenerate this permanent.": "granted_regen_ability",
-}
+def grantable_quoted_ability(text: str) -> bool:
+    """Whether a lord may hand its tribe the quoted ability *text*.
+
+    This was a dict of **one** entry — ``"{b}: regenerate this permanent."``
+    mapped to a metadata flag — and the flag was read by a single branch in
+    ``mixins/stack/activation.py`` that charged ``{B}`` in words. Which is to
+    say the cost, the effect and the restriction were all spelled into the
+    reader: a lord granting the same regeneration for ``{2}`` was unsupported,
+    and one granting anything else was unsupported however ordinary the
+    sentence. Tempest's five Slivers are that sentence five times over.
+
+    CR 113.3 says what is granted in quotes is a whole printed ability, and this
+    engine has exactly one thing that turns a printed ability into behaviour —
+    the compiler. So the ability rides as its text, is recorded on the derived
+    grant channel (`engine/keywords.py`'s ``DERIVED_ABILITY_LINES``) and is
+    folded into ``Permanent.effective_card``, from which the compiler produces
+    it like any printed line. The cost parser charges it, the picker targets it
+    and ``activation_restrictions.py`` enforces its "Activate only …" rider,
+    none of them knowing a lord granted it.
+
+    The question left here is the one the compiler cannot answer for the *gate*:
+    whether it reads the sentence at all. Asked of
+    ``granted_abilities.granted_ability_supported``, which compiles the quote on
+    a card that says nothing else — exactly what ``effective_card`` will hand it
+    — so a quote the engine cannot read refuses the whole lord line rather than
+    granting an ability that does nothing.
+    """
+    from .granted_abilities import granted_ability_supported
+
+    return granted_ability_supported(text)
 
 # Conditions a lord buff may hang on, mapped to the predicate that evaluates
 # them (resolved by the consumer, which is the only thing holding a game).
@@ -365,6 +387,24 @@ def _split_per_counter(effect: str) -> tuple[str, str | None]:
 
 # A duration ends the static reading: see the module docstring.
 _DURATIONS = ("until end of turn", "until end of combat", "this turn", "until your next turn")
+
+#: Everything between a pair of double quotes, for the one question that must be
+#: asked of the sentence **outside** them.
+_QUOTED_SPAN = re.compile(r'"[^"]*"')
+
+
+def _outside_quotes(line: str) -> str:
+    """*line* with every quoted span removed.
+
+    The duration test below is about the **lord's own** sentence: a duration in
+    it means a one-shot spell effect that locks its set in at resolution, not a
+    static (see the module docstring). A duration inside a quoted grant belongs
+    to the granted ability instead — 'All Sliver creatures have "{2}: This
+    creature gets +0/+1 **until end of turn**."' is a static ability whose
+    *grant* is permanent and whose granted pump is not, and reading the words
+    flat made Armor Sliver and Barbed Sliver refuse on their own quote.
+    """
+    return _QUOTED_SPAN.sub("", line)
 
 
 #: "**As long as enchanted land is a basic Mountain**, Goblin creatures get
@@ -651,7 +691,10 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     Takes an already-normalized line (``oracle.normalize_creature_line``).
     """
     line = normalized_line.strip().strip(".").strip()
-    if not line or any(duration in line for duration in _DURATIONS):
+    if not line:
+        return None
+    unquoted = _outside_quotes(line)
+    if any(duration in unquoted for duration in _DURATIONS):
         return None
 
     split = _split_condition(line)
@@ -697,7 +740,26 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
                 return None
             keywords = (band,)
             return LordBuff(subject, 0, 0, keywords, (), None, condition)
-        if ability not in GRANTED_ACTIVATED_ABILITIES:
+        # **One home per printed sentence.** `engine/global_statics.py` already
+        # reads the whole-board spellings of this template — "All creatures have
+        # \"…\"" (The Tabernacle at Pendrell Vale, Pendrell Mists), "All
+        # artifacts have \"…\"" (Energy Flux), "Green creatures have \"…\""
+        # (Breath of Dreams) — and it owns the half this table cannot express at
+        # all: the same sentence spoken by a *spell on the stack* (CR 113.6b,
+        # Torrent of Lava). Both tables fold their grant into the same
+        # `Permanent.effective_card` text, so a line claimed by both is the
+        # ability printed twice: CR 611.2c makes that two abilities, and the
+        # Tabernacle asked its {1} upkeep payment two times per creature.
+        #
+        # Nothing failed and nothing was missing — the *stricter* reading is
+        # what this file's one-entry `GRANTED_ACTIVATED_ABILITIES` dict was
+        # silently providing before it was generalised, which is why the
+        # collision only became reachable here.
+        from .global_statics import global_static_for
+
+        if global_static_for(line) is not None:
+            return None
+        if not grantable_quoted_ability(ability):
             return None
         granted_ability = ability
     elif (both := _PT_AND_KEYWORD_RE.match(effect)) is not None:
@@ -827,8 +889,8 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
 
 
 __all__ = [
-    "CONDITIONS", "GRANTED_ACTIVATED_ABILITIES", "LORD_BUFF_KIND", "LordBuff",
+    "CONDITIONS", "LORD_BUFF_KIND", "LordBuff",
     "LordBuffFilter", "QUALIFIER_FIELDS", "SACRIFICE_WHEN_CONDITION_FAILS",
-    "grantable_keywords", "lord_buff_for",
+    "grantable_keywords", "grantable_quoted_ability", "lord_buff_for",
     "lord_buff_from_payload", "lord_buff_payload", "sacrifice_state_trigger",
 ]

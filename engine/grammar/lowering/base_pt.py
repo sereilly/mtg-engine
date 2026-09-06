@@ -60,6 +60,43 @@ _BASE_PT_TARGET_NARROWINGS = frozenset({
 
 
 def _lower_set_base_pt(node: ast.SetBasePT) -> tuple[OracleInstruction, ...]:
+    # "…has base power 1 **or** base toughness 1." (Vhati il-Dal.) A choice the
+    # *effect* offers, announced while the effect is applied — CR 608.2d, not
+    # CR 700.2, which defines a mode as a bulleted option chosen when the
+    # ability is activated and this sentence prints no bullets. It lowers onto
+    # the same ``choose_one`` seam "gains your choice of deathtouch or lifelink"
+    # already uses, so there is no new prompt kind and no new handler: the
+    # non-interactive default is the first printed option, `targeting.py` reads
+    # the shared target spec off the uniform modes, and `effect_labels.py`
+    # already buckets the wrapper.
+    #
+    # Each option is lowered through **this same function**, which is what keeps
+    # an option the engine cannot perform refusing the whole line rather than
+    # being offered and doing nothing.
+    if node.alternative is not None:
+        # The duration is the *sentence's*, not each option's. "**Until end of
+        # turn**, target creature has base power 1 or base toughness 1" prints
+        # it once and in front, where the fronted-duration reader distributes it
+        # over the statement it wraps — which is the node this arrives on and
+        # not the sibling hanging off it. Taken from the node rather than left
+        # where the parse put it, or the second option refuses for want of a
+        # duration the card states for both.
+        alternative = node.alternative
+        if alternative.duration.kind is None:
+            alternative = dataclasses.replace(alternative, duration=node.duration)
+        options = (dataclasses.replace(node, alternative=None), alternative)
+        modes = []
+        for option in options:
+            lowered = _lower_set_base_pt(option)
+            if len(lowered) != 1:
+                raise LoweringError(
+                    "a base-P/T choice needs one instruction per option", node=node
+                )
+            modes.append({
+                "label": "base power" if option.power is not None else "base toughness",
+                "instruction": lowered[0],
+            })
+        return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
     duration = _BASE_PT_DURATIONS.get(node.duration.kind)
     if duration is None:
         raise LoweringError("base P/T change needs an end-of-turn duration", node=node)

@@ -71,6 +71,16 @@ class GlobalStatic:
     # colour above reaches two more populations. Kept with the effect it
     # extends, so a reader cannot have one without the other.
     extends_to_spells_and_cards: bool = False
+    # "…and have **base power and toughness 1/1**." (Humility.) CR 613.4b, layer
+    # 7b: a *set*, so a +1/+1 counter or an anthem still applies over it at 7c
+    # and the creature is 2/2. Its own field beside ``pt_from_mana_value``
+    # rather than a second static, because the two are one question — what does
+    # this static set the P/T to — answered off the sentence in one case and off
+    # a printed pair in the other.
+    #
+    # A tuple, empty when the static sets nothing, for the reason ``colors`` is
+    # one: a frozen dataclass has to stay hashable.
+    sets_base_pt: tuple[int, int] = ()
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -126,6 +136,29 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
             r"(?P<scope>artifacts|creatures) have \"(?P<ability>.+)\"$"
         ),
         GlobalStatic(name="granted_board_wide_ability", applies_to=""),
+    ),
+    (
+        # Humility. Two clauses over one subject and one static, because they
+        # are one sentence and CR 613 puts them in *different layers*: the
+        # removal is layer 6 (CR 613.1f) and the base-P/T setting is layer 7b
+        # (CR 613.4b). Splitting them into two rows would be two timestamps for
+        # a card that has one, and a reader could then have the P/T without the
+        # removal.
+        #
+        # The layer order is the whole card. An ability granted **after**
+        # Humility's timestamp survives (layer 6 is timestamp-ordered), and a
+        # +1/+1 counter or an anthem still applies over the 1/1 (layer 7c is
+        # after 7b) — so the famous 1/1s are a *floor*, not a ceiling.
+        re.compile(
+            r"^all creatures lose all abilities and have base power and "
+            r"toughness 1/1$"
+        ),
+        GlobalStatic(
+            name="humility",
+            applies_to="creature",
+            removes_abilities=True,
+            sets_base_pt=(1, 1),
+        ),
     ),
     (
         # Celestial Dawn. The second sentence is optional in the pattern and
@@ -258,3 +291,21 @@ def global_statics_applying_to(permanent) -> list[GlobalStatic]:
     )]
     statics.extend(permanent.metadata.get(STACK_STATICS_KEY) or ())
     return statics
+
+
+def removes_all_abilities(permanent) -> bool:
+    """Whether a board-wide static is currently stripping *permanent*'s
+    abilities (CR 613.1f) — Humility, Titania's Song.
+
+    **One predicate for every reader**, which is what
+    ``land_types.lost_abilities_to_type_change`` already is for CR 305.7's
+    losing half one file over. Layer 6 drops the *keyword* set, and that is only
+    a third of an ability: an activated ability is read off the compiled
+    program at the activation gate and a triggered one off the card at the
+    trigger scan, so a removal wired into the keyword channel alone leaves a
+    Jayemdae Tome under Titania's Song still drawing and a creature under
+    Humility still dying-triggering. Three readers, one answer.
+    """
+    return any(
+        static.removes_abilities for static in global_statics_applying_to(permanent)
+    )

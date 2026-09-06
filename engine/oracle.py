@@ -4346,9 +4346,25 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # spelling used to sit in the list above — a second copy of a sentence
     # `engine/untap_restrictions.py` already reads, and one that named a single
     # noun, so the artifact printings were admitted by an unrelated route.
-    from .untap_restrictions import self_untap_line
+    from .untap_restrictions import self_untap_line, untap_restriction_for
 
-    return self_untap_line(normalized, card_name) is not None
+    if self_untap_line(normalized, card_name) is not None:
+        return True
+    # "Creatures with power 3 or greater don't untap during their controllers'
+    # untap steps." (Marble Titan.) The *board-wide* half of the same file, and
+    # the partial-list shape this function keeps finding one table at a time —
+    # Azusa against `land_play_allowance`, Gloom against `cost_modifiers`,
+    # Containment Priest against the replacement registry. The line above claims
+    # only what a permanent says about **itself**; `_derived_static_claims` has
+    # asked the board-wide table since it was written, so Meekstone (an
+    # artifact) worked and Marble Titan (a creature printing the same sentence
+    # with a different number) was "text too complex" — with the untap step
+    # already honouring it, because that step walks `all_permanents()` and never
+    # cared which card type imposed the restriction.
+    #
+    # Asked of the table that performs it, so a wording it cannot read still
+    # refuses the card rather than admitting it with the restriction absent.
+    return untap_restriction_for(normalized) is not None
 
 
 # ---------------------------------------------------------------------------

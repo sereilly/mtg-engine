@@ -76,6 +76,23 @@ class SetBasePT:
     power: Amount | None
     toughness: Amount | None
     duration: Duration = field(default_factory=Duration)
+    #: "…has base power 1 **or** base toughness 1." (Vhati il-Dal.) The other
+    #: half of a sentence that offers its controller a choice between two
+    #: rewrites of one creature.
+    #:
+    #: **Not CR 700.2's modality**, which that rule defines as a bulleted list
+    #: preceded by "Choose one —": there are no bullets here, so the mode is not
+    #: chosen as the ability is activated. It is CR 608.2d — a choice the effect
+    #: offers, announced while the effect is applied — which is the same rule
+    #: "gains your choice of deathtouch or lifelink" (Alchemist's Gift) is read
+    #: under, and it lowers through the same ``choose_one`` seam.
+    #:
+    #: Recorded as a whole sibling node rather than as a flag, because the two
+    #: options are two *different payloads*: one sets power and leaves the
+    #: printed toughness, the other the reverse. A flag would have to be turned
+    #: back into the second payload by whoever read it, which is a second
+    #: reading of the sentence.
+    alternative: "SetBasePT | None" = None
 
 
 @dataclass(frozen=True)

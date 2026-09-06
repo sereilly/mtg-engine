@@ -19,6 +19,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
 from engine.text_changes import change_land_word
 
 
@@ -377,16 +378,65 @@ def test_a_named_anthem_reaches_every_bearer_of_the_name_and_nothing_else():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("611.3a", "611.3b")
+@pytest.mark.cr("611.3a", "611.3b", "113.3")
 def test_a_granted_activated_ability_arrives_and_leaves_with_its_source(cards):
+    """CR 113.3: what a lord grants in quotes is a whole printed ability.
+
+    It used to be a metadata flag whose only reader was one branch of the
+    activation path that re-spelled ``{B}`` and a regeneration shield by hand.
+    It is now the *sentence*, on the derived grant channel, folded into
+    ``effective_card`` — so the compiler builds the ability and the cost parser,
+    the picker and ``activation_restrictions`` all read it without knowing a
+    lord granted it. The lifetime is unchanged and is what this test is about:
+    the grant is rebuilt from the board on every recompute, so the lord leaving
+    takes it away with nothing to undo (CR 611.3b).
+    """
+    from engine.keywords import derived_ability_lines
+
     zombie = Permanent(card=cards["Scathe Zombies"])
     master = Permanent(card=cards["Zombie Master"])
     game, players = _game([master, zombie])
-    assert zombie.metadata.get("granted_regen_ability") is True
+    assert derived_ability_lines(zombie) == ("{b}: regenerate this permanent.",)
+    assert "{b}: regenerate this permanent." in zombie.effective_card.oracle_text
 
     players[0].battlefield.remove(master)
     game._recompute_continuous_effects()
-    assert not zombie.metadata.get("granted_regen_ability")
+    assert derived_ability_lines(zombie) == ()
+    assert "regenerate" not in zombie.effective_card.oracle_text.lower()
+
+
+@pytest.mark.cr("611.3a", "602.2a")
+def test_a_granted_ability_reaches_a_creature_that_has_one_of_its_own(cards):
+    """The grant is in the ability *list*, not a fallback beneath it.
+
+    The flag this replaced was read only where the permanent had no usable
+    ability at all, so every Zombie with a printed activated ability — Scavenging
+    Ghoul, Cadaverous Knight, Necrosavant — silently could not use the cheaper
+    regeneration Zombie Master gives it. Nothing failed: the card simply did
+    less than the board said.
+    """
+    # An invented Zombie, so the point is the template rather than whichever
+    # printed Zombie happens to carry an ability today.
+    ghoul = Permanent(card=_card(
+        "Warren Ghoul", "Creature — Zombie",
+        "{2}: This creature gets +1/+0 until end of turn.", colors=("B",),
+    ))
+    ghoul.metadata["summoning_sickness_turn"] = -99
+    master = Permanent(card=cards["Zombie Master"])
+    game, players = _game([master, ghoul], [])
+    program = compile_card_oracle(game.playable_card_of(ghoul))
+    lines = [ability.source_line for ability in program.activated_abilities]
+    assert "{b}: regenerate this permanent." in lines
+    assert len(lines) == 2, lines
+
+    result = game.activate_permanent_ability(
+        0, "Warren Ghoul", permanent_index=1,
+        ability_index=lines.index("{b}: regenerate this permanent."),
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert result.supported, result
+    assert ghoul.regeneration_shield == 1
 
 
 # ---------------------------------------------------------------------------

@@ -84,6 +84,7 @@ class CombatRestriction:
 #                                   phases/declare_blockers_step._can_block_attacker
 #                                   + declare_blockers (the charge)
 #   cant_block                      phases/declare_blockers_step
+#   creatures_cant_block            phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
 #                                   (the declaration, not the creature)
@@ -313,6 +314,26 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         ),
         ("creatures_cant_attack", "creatures_cant_block",
          "tap_abilities_cant_be_activated"),
+    ),
+    (
+        # "Black creatures can't attack or block." (Light of Day; Dread of
+        # Night's cycle-mate spelling.) The row above with its third clause
+        # unprinted — one sentence, two prohibitions, one subject — so it is
+        # the same ``also_kinds`` union over the same payload rather than two
+        # rows in two files.
+        #
+        # **Anchored on the plural head noun**, like `board_attack_subject`'s
+        # row below and for its reason: `_printed_noun` answers
+        # ``{"type_filter": "creature"}`` for "this creature" and for "enchanted
+        # creature" alike, so a `.+` subject here would read a self-reference as
+        # a ban on every creature on the board. The `.+` in the Katabatic row
+        # above is safe only because the tail it requires is a whole further
+        # clause no self-reference prints.
+        re.compile(
+            r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) "
+            r"can't attack or block$"
+        ),
+        ("creatures_cant_attack", "creatures_cant_block"),
     ),
     (
         # "Creatures without flying can't attack." (Moat.) A restriction over a

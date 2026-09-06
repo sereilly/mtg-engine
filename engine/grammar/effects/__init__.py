@@ -8,6 +8,7 @@ precisely so this stays true. Independence is the point: it is what makes
 
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
+    base_pt          CR 613.4b: what a base power/toughness *is* rewritten to
     board            destruction, sacrificing
     text_changes     rewriting a printed word (CR 612)
     returns          an object put back into a zone it came from
@@ -75,6 +76,8 @@ from .characteristics import (
     _parse_has,
     _parse_has_base_pt,
     _parse_for_each,
+)
+from .base_pt import (
     _parse_change_base_pt,
     _parse_becomes_base_pt,
 )

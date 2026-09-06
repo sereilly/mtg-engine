@@ -184,6 +184,37 @@ def _with_granted_abilities(
 _GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
+def _abilities_stripped(permanent) -> bool:
+    """Whether a board-wide static is stripping *permanent*'s abilities."""
+    from .global_statics import removes_all_abilities
+
+    return removes_all_abilities(permanent)
+
+
+def _without_any_abilities(card: "CardDefinition") -> "CardDefinition":
+    """*card* with no rules text and no keywords at all (CR 613.1f).
+
+    The whole text, not a line list: Humility says "lose **all** abilities", and
+    a card with an empty ``oracle_text`` is exactly what every reader downstream
+    already knows how to read — the compiler makes no ability out of it, the
+    trigger scan finds none, the activation enumerator offers none and the
+    derivation tables match nothing.
+
+    Type line, printed P/T and mana cost are untouched, because none of them is
+    an ability: a Serra Angel under Humility is still a 4/4 Angel with a flying
+    ability it no longer has, and layer 7b is what makes it 1/1.
+    """
+    key = (id(card), "no-abilities")
+    cached = _STRIPPED_CARDS.get(key)
+    if cached is None:
+        cached = dataclasses.replace(card, oracle_text="", keywords=())
+        _STRIPPED_CARDS[key] = cached
+    return cached
+
+
+_STRIPPED_CARDS: dict[tuple, "CardDefinition"] = {}
+
+
 def _without_ability_lines(
     card: "CardDefinition", removed: tuple[str, ...]
 ) -> "CardDefinition":
@@ -485,9 +516,17 @@ class Permanent:
         # Appended after the board-wide ones so the fold order matches the order
         # the two were recorded in — a static applies from the board, a grant
         # from the moment it resolved.
-        from .keywords import granted_ability_lines, removed_ability_lines
+        from .keywords import (derived_ability_lines, granted_ability_lines,
+                               removed_ability_lines)
 
         granted.extend(granted_ability_lines(self))
+        # …and an ability a **lord on the battlefield** grants its tribe in
+        # quotes ('All Slivers have "{2}: Regenerate this permanent."'). Same
+        # channel and the same reason as the two above; the difference is only
+        # that `_recalculate_lord_buffs` clears and rebuilds it from the board
+        # on every recompute, so the lord leaving takes the sentence with it
+        # (CR 611.3b) with nothing here to undo.
+        granted.extend(derived_ability_lines(self))
         # …and an ability an **Aura attached to this permanent** grants
         # ('Enchanted land has "{T}: Counter target spell …"', Equinox). Derived
         # from the attachments on every read rather than recorded when the Aura
@@ -514,6 +553,25 @@ class Permanent:
         removed = removed_ability_lines(self)
         if removed:
             base = _without_ability_lines(base, removed)
+        # …and layer 6's blanket removal (CR 613.1f): a board-wide static that
+        # takes **all** abilities away — Humility, Titania's Song.
+        #
+        # Struck out here rather than at each reader, because "what does it say?"
+        # has exactly one accessor and an ability is three different things
+        # downstream: a keyword layer 6 holds, an activated ability read off the
+        # compiled program, a triggered one read off the card, and a static one
+        # re-derived from the text on every recompute. A removal wired into the
+        # keyword channel alone reaches the first of those four, which is what
+        # Titania's Song did — its own activation gate is the patch that was
+        # needed for the second.
+        #
+        # **Before the grants, and that ordering is the card.** CR 613.3 applies
+        # layer 6 in timestamp order, so an ability granted *after* the static
+        # survives it; appending the grants after the strike is that rule, and it
+        # is the same order the line-removal above already uses for its own
+        # reason.
+        if _abilities_stripped(self):
+            base = _without_any_abilities(base)
         if granted:
             base = _with_granted_abilities(base, tuple(granted))
         # …and layer 6's third removal channel, a **line-derived** keyword

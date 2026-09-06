@@ -39,8 +39,8 @@ from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
 from ..tokens import make_token_card
-from ..keywords import (add_derived_grant, add_derived_removal,
-                        clear_derived_grants)
+from ..keywords import (add_derived_ability_line, add_derived_grant,
+                        add_derived_removal, clear_derived_grants)
 from ..enter_tapped_statics import (
     ENTER_TAPPED_STATIC_KIND,
     enter_tapped_filter_from_payload,
@@ -67,7 +67,6 @@ from ..layer_bridge import (
     types_before_timestamp,
 )
 from ..lord_buffs import (
-    GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
     LordBuff,
     lord_buff_from_payload,
@@ -161,6 +160,13 @@ def _count_dynamic_pt(
         # nothing on a battlefield left to tally. The number was recorded where
         # it happened; this reads it back.
         return int(permanent.metadata.get("sacrificed_as_entered") or 0)
+    if what in ("sacrificed_total_power", "sacrificed_total_toughness"):
+        # Dracoplasm: the summed power (or toughness) of what its controller
+        # gave up as it entered. Recorded where the sacrifice happened, because
+        # by now those creatures are cards in a graveyard with no computed
+        # characteristics at all (CR 613.1) — the same reason Wood Elemental's
+        # tally rides the permanent rather than being recounted here.
+        return int(permanent.metadata.get(str(what)) or 0)
     if what == "life_paid_as_entered":
         # Nameless Race: the life was paid as the creature entered (CR 614.1c)
         # and nothing on a board records it, so it rides the permanent the same
@@ -185,11 +191,18 @@ def _count_dynamic_pt(
     # second Rat with the same name is a different permanent.
     subtype = payload.get("subtype")
     exclude_self = bool(payload.get("exclude_self"))
+    # "the number of **tapped** lands the chosen player controls" (Pallimud). A
+    # state rather than a characteristic, so it is a key of its own and is asked
+    # of each permanent here — dropped, Pallimud's power would be every land the
+    # chosen player has rather than the ones they have spent.
+    tapped = payload.get("tapped")
 
     total = 0
     for battlefield in battlefields:
         for perm in battlefield:
             if supertype is not None and not perm.has_supertype(supertype):
+                continue
+            if tapped is not None and bool(perm.tapped) is not bool(tapped):
                 continue
             if exclude_self and perm is permanent:
                 continue
@@ -1447,8 +1460,19 @@ class PermanentStateMixin:
                 # (Shapeshifter). The second half is derived from the same
                 # value rather than counted again, which is what makes the
                 # printed total a payload number instead of a second template.
+                # "…power becomes the total power of those creatures **and its
+                # toughness becomes their total toughness**" (Dracoplasm). The
+                # one shape whose two halves are two different numbers, so the
+                # second is counted rather than derived from the first — every
+                # branch below reads one value and computes the other from it.
+                toughness_count = dynamic_pt.payload.get("toughness_count")
                 complement = dynamic_pt.payload.get("complement")
-                if complement is not None:
+                if toughness_count is not None:
+                    set_base_pt(permanent, value, _count_dynamic_pt(
+                        self, player, permanent,
+                        {**dynamic_pt.payload, "count": toughness_count},
+                    ))
+                elif complement is not None:
                     set_base_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
                     # "…and its toughness is equal to **that number plus 1**"
@@ -2758,9 +2782,9 @@ class PermanentStateMixin:
             perm.metadata.pop("static_buff_power", None)
             perm.metadata.pop("static_buff_toughness", None)
             perm.metadata.pop(QUALIFIED_BUFFS, None)
+            # Clears the *three* layer-6 derived channels together — the
+            # granted words, the removed words and the granted printed lines.
             clear_derived_grants(perm)
-            for flag in perm.metadata.pop("_lord_granted_flags", None) or ():
-                perm.metadata.pop(flag, None)
 
         def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
             if not (buff.power or buff.toughness):
@@ -2785,11 +2809,6 @@ class PermanentStateMixin:
             power, toughness = qualified.get(qualifiers, (0, 0))
             qualified[qualifiers] = (power + buff.power, toughness + buff.toughness)
 
-        def _grant_ability(perm: Permanent, flag: str) -> None:
-            perm.metadata[flag] = True
-            tracked = perm.metadata.setdefault("_lord_granted_flags", [])
-            if flag not in tracked:
-                tracked.append(flag)
 
         # A copy uses the copied creature's copiable card (types + abilities), so
         # lord static abilities and subtype checks resolve against it (CR 707.2).
@@ -2851,12 +2870,7 @@ class PermanentStateMixin:
                     buff = replace(
                         buff, power=buff.power * scale, toughness=buff.toughness * scale
                     )
-                flag = (
-                    GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
-                    if buff.granted_ability
-                    else None
-                )
-                gathered.append((source_perm, buff, flag))
+                gathered.append((source_perm, buff))
 
         def _reached_by(source_perm, buff):
             # Every permanent on every battlefield, because "creatures you
@@ -2872,22 +2886,29 @@ class PermanentStateMixin:
         # Pass 2a — layer 6 (CR 613.3): every ability this board's lords grant
         # or take away ("Other Goblins … have mountainwalk", Gravity Sphere's
         # "All creatures lose flying").
-        for source_perm, buff, _flag in gathered:
-            if not (buff.keywords or buff.lost_keywords):
+        for source_perm, buff in gathered:
+            if not (buff.keywords or buff.lost_keywords or buff.granted_ability):
                 continue
             for target_perm in _reached_by(source_perm, buff):
                 for keyword in buff.keywords:
                     add_derived_grant(target_perm, keyword)
                 for keyword in buff.lost_keywords:
                     add_derived_removal(target_perm, keyword)
+                # …and the sentence half of the same layer (CR 113.3): a quoted
+                # ability is granted here rather than in pass 2b because it is
+                # layer 6 like the words beside it, and because a granted
+                # ability can *be* one of the words a 7c filter asks about —
+                # '"Sliver creatures have \"...\"" gets +1/+1' is not printed
+                # today, and putting the grant in the later pass would be the
+                # ordering bug the two passes exist to prevent, waiting.
+                if buff.granted_ability:
+                    add_derived_ability_line(target_perm, buff.granted_ability)
 
-        # Pass 2b — layer 7c (CR 613.4c) and the granted activated ability,
-        # over a board whose layer 6 is complete.
-        for source_perm, buff, flag in gathered:
+        # Pass 2b — layer 7c (CR 613.4c), over a board whose layer 6 is
+        # complete.
+        for source_perm, buff in gathered:
             for target_perm in _reached_by(source_perm, buff):
                 _add_static_buff(target_perm, buff)
-                if flag is not None:
-                    _grant_ability(target_perm, flag)
 
         # Step 3: conditional self-grants — the keyword half of "…as long as
         # <condition>" (Sigiled Contender's lifelink, Gnarled Sage's
@@ -2965,9 +2986,17 @@ class PermanentStateMixin:
         seam for the first (``controls`` is a seat question, CR 109.5) and the
         card matcher for the second, because a card in a zone has no computed
         characteristics at all (CR 613.1).
+
+        An **empty** spec is the card that prints no cap at all (Minion of the
+        Wastes), and its ceiling is the one CR 119.4 imposes on every life
+        payment: a player may pay more than 0 only up to their life total. Read
+        here rather than left to the prompt, so the two spellings of one
+        printed entry cost reach the same arming code.
         """
         from ..handlers._common import _card_matches_filter, permanent_matches_filter
 
+        if not described:
+            return max(0, int(self.players[seat].life))
         total = 0
         for opponent in self.opponents_of(seat):
             for perm in self.controlled_by(opponent):

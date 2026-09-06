@@ -121,13 +121,32 @@ _WHOSE_BATTLEFIELD: dict[str, str] = {
 
 def _type_count_plus(match: re.Match) -> dict[str, object]:
     """Gaea's Avenger. A card-type tally on a named battlefield, plus a printed
-    constant — three payload keys rather than three templates."""
-    return {
+    constant — payload keys rather than templates.
+
+    Every one of the four things a card can vary here is a capture: which half
+    of the P/T it defines, the constant, whether the objects must be tapped, and
+    whose battlefield they are on. Pallimud ("**power is** equal to the number
+    of **tapped** lands **the chosen player** controls") differs from Gaea's
+    Avenger in three of the four and needs no row of its own.
+    """
+    payload: dict[str, object] = {
         "count": "card_type",
         "card_type": match.group("card_type"),
         "scope": _WHOSE_BATTLEFIELD[match.group("whose")],
-        "plus": int(match.group("plus")),
     }
+    if match.group("plus"):
+        payload["plus"] = int(match.group("plus"))
+    half = _DEFINED_HALF[match.group("half")]
+    if half is not None:
+        payload["defines"] = half
+    # "**tapped** lands" (Pallimud). A state rather than a characteristic, so it
+    # is its own key and is tested against each permanent by the counter — the
+    # narrowing must reach the tally or Pallimud's power is every land the
+    # chosen player has, untapped ones included.
+    state = (match.group("state") or "").strip()
+    if state:
+        payload["tapped"] = state == "tapped"
+    return payload
 
 
 def _toughness_land_count(match: re.Match) -> dict[str, object]:
@@ -313,6 +332,21 @@ def _sacrificed_on_entry_count(match: re.Match) -> dict[str, object]:
     return {"count": "sacrificed_as_entered"}
 
 
+def _sacrificed_on_entry_totals(match: re.Match) -> dict[str, object]:
+    """Dracoplasm. The **sums** the same entry sacrifice recorded, one per half.
+
+    The row above counts what was given up; this one adds up what it was worth,
+    and the two halves are two different sums — so unlike every other entry here
+    a single number cannot define both. ``toughness_count`` names the second,
+    which is one more payload key rather than a second instruction: the sentence
+    is one CR 604.3 ability and splitting it would let a reader honour half.
+    """
+    return {
+        "count": "sacrificed_total_power",
+        "toughness_count": "sacrificed_total_toughness",
+    }
+
+
 def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     return {
         "count": "land",
@@ -438,9 +472,15 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # (Lost Order of Jarkeld.) A fourth value for the battlefield the
         # sentence names, and nothing else: the offset it needs was already
         # payload, so the card differs from Gaea's Avenger by one alternative.
+        # "**Pallimud's power is** equal to the number of **tapped** lands the
+        # chosen player controls." The same row with three of its four
+        # parameters set differently — the defined half, the absent constant and
+        # the tapped state — which is what makes it a row rather than a card.
         re.compile(
-            rf"^{_SUBJECT} power and toughness are each equal to "
-            r"(?P<plus>\d+) plus the number of "
+            rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
+            r"toughness is) equal to "
+            r"(?:(?P<plus>\d+) plus )?the number of "
+            r"(?P<state>tapped |untapped )?"
             r"(?P<card_type>artifact|creature|enchantment|land)s "
             r"(?P<whose>you|your opponents|the chosen player) controls?$"
         ),
@@ -522,6 +562,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"^{_SUBJECT} {_PT} (?P<phrase>.+?) sacrificed as it entered$"
         ),
         _sacrificed_on_entry_count,
+    ),
+    (
+        # Dracoplasm. The whole printed **line**, both sentences, because they
+        # are one effect: the entry sacrifice is what defines the size, and
+        # `engine/enter_effects.py` reads the same two sentences to know the
+        # totals must be stamped. Anchored on the entry clause rather than on
+        # the possessive subject every other row here opens with, for that
+        # reason — the sentence that names the characteristic has no subject of
+        # its own, it says "this creature".
+        re.compile(
+            r"^as this [a-z]+ enters, sacrifice any number of [a-z]+\. "
+            r"this [a-z]+'s power becomes the total power of those [a-z]+ and "
+            r"its toughness becomes their total toughness$"
+        ),
+        _sacrificed_on_entry_totals,
     ),
     (
         # Nameless Race: "…are each equal to **the life paid as it entered**".
