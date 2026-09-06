@@ -350,6 +350,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # graveyard, under the key the repeated mill beside it already writes: "put
     # into that graveyard **this way**" is one question, and a second key would
     # be a second reader of it.
+    # "…that player discards all the cards in their hand, then draws **that
+    # many** cards." (Shocker.) How many the sweep actually binned, under the
+    # key the counted discards already write — the printed sentence names no
+    # number, and an empty hand makes the draw zero rather than the hand's
+    # printed size, which is the only reading CR 608.2 allows.
+    "discard_hand": "discarded_count",
     "mill_target_player": MILLED_THIS_WAY,
     "mill_until_matching": MILLED_THIS_WAY,
     # And the graveyard exile, which is what "If **it** was a creature card"

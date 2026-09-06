@@ -164,11 +164,15 @@ from .hand import (
 )
 from .library import (
     _parse_look_at_hand,
-    _parse_reveal_top,
     parse_player_looks_at_own_library_top,
-    parse_bin_revealed_card,
     parse_graveyard_top_to_library,
     parse_player_separates_your_library_top,
+)
+# CR 701.20's public half of the look, split off `library` at Tempest's second
+# wave — see that module's docstring for the line.
+from .reveal import (
+    _parse_reveal_top,
+    parse_bin_revealed_card,
 )
 from .zones import (
     _parse_shuffle_graveyard_into_library,

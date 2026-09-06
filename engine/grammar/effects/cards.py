@@ -154,6 +154,17 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # was read before this function was called; the pronoun only repeats them.
     if stream.accept_phrase("your", "hand") or stream.accept_phrase("their", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    # "…that player discards **all the cards in their hand**, then draws that
+    # many cards." (Shocker.) The long spelling of the two words above — every
+    # card goes and nobody chooses — so it is a branch here rather than a
+    # counted discard of "all", which is the *narrowed* sweep further down and
+    # arms no prompt for a hand it has already emptied. The possessive agrees
+    # with the sentence's subject, exactly as the short spelling's does.
+    long_hand = stream.mark()
+    if stream.accept_word("all") and stream.accept_phrase("the", "cards", "in"):
+        if stream.accept_word("their", "your") and stream.accept_word("hand"):
+            return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    stream.reset(long_hand)
     # "discards **a third of the cards in their hand**" (Pox). The fraction's
     # noun is this production's own, so the head is read here and the quantity
     # built from the zone rather than handed to `parse_amount` — the same

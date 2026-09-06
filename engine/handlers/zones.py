@@ -2502,7 +2502,17 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     shuffles it back. Anything else here is an infinite loop on a real board.
     """
     payload = instruction.payload
-    seat = context.results.get(payload.get("whose"))
+    whose = payload.get("whose")
+    if whose == "you":
+        # "Reveal cards from the top of **your** library …" (Sacred Guide.) The
+        # printed word rather than a back-reference, so there is no record to
+        # read and none to demand: the seat is the one performing the effect.
+        # Read through ``context.caster`` for the reason every other handler
+        # does — it is CR 109.5's answer already resolved, and a scan would
+        # differ from it under a control change.
+        seat = game.players.index(context.caster)
+    else:
+        seat = context.results.get(whose)
     if seat is None:
         game.log.append(f"{context.card.name}: nobody to reveal from")
         return True, "resolved"
@@ -2533,11 +2543,24 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     # "…then shuffles the rest into their library." The revealed cards go back
     # and the library is shuffled, which is why they were held aside rather than
     # put back one at a time — CR 701.24 shuffles once, at the end.
-    if payload.get("rest") == "shuffle_into_library":
+    rest = payload.get("rest")
+    if rest == "shuffle_into_library":
         player.library.extend(revealed)
         # Through the module RNG `run_ai_simulation` seeds, like every other
         # shuffle in the engine, so a given seed still replays exactly.
         random.shuffle(player.library)
+    elif rest == "exile":
+        # "…and **exile** all other cards revealed this way." (Sacred Guide.)
+        # The third printed fate, and the one that costs the revealer the
+        # cards for good — a graveyard is a zone half this pool can reach back
+        # into, so lowering the word onto the branch below would have made the
+        # card strictly better than it reads.
+        for card in revealed:
+            player.exile.append(card)
+        if revealed:
+            game.log.append(
+                f"{player.name} exiled {len(revealed)} card(s) revealed this way"
+            )
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
@@ -4732,6 +4755,12 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     caster.hand = []
     for card in discarded:
         game._discard_card(caster, card)
+    # "…, then draws **that many** cards." (Shocker.) How many actually went,
+    # under the key every other discard in this file already writes — a hand
+    # that was empty discards nothing and draws nothing, which is CR 608.2's
+    # "as much as possible" and the reason the number is counted here rather
+    # than read off the printed sentence, which names none.
+    context.results["discarded_count"] = len(discarded)
     game.log.append(f"{caster.name} discarded their hand ({len(discarded)} card(s))")
     return True, "resolved"
 

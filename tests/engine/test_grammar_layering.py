@@ -494,7 +494,23 @@ LOWER_LAYERS = [
 # where a second group's move would have summed past the guard) because it
 # reads `parse_recipient` and `parse_bound_subject`, both defined there; five
 # modules read it now, `phrases` re-exporting it under its old name.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
+# `reveal` joined the parse side at Tempest's second wave, the second time
+# `effects/library.py` reached the size guard and along the *other* half of the
+# line `search` was cut on. CR draws it: a **look** (CR 701.19) shows cards to
+# one player, a **reveal** (CR 701.20) shows a face to every player — which is
+# why a reveal is recorded (`Game.record_reveal`) and a look is not, and why a
+# card's next sentence may talk about what a reveal turned up. The call graph had
+# already fallen apart there: `_parse_reveal_top` and the two acceptors behind it
+# are reached from the imperative dispatcher and from each other, and
+# `_parse_look_at_hand` and its six tails from the look dispatcher and from each
+# other. Neither module calls the other.
+# Asymmetric the same way `search` was until Visions: `RevealTop`,
+# `RevealTopToHandOrBottom`, `RevealTopOpponentChooses` and `RevealUntil` all
+# lower in `lowering/library.py` a few lines from the look-at lowerings, because
+# a reveal lowers to one instruction however elaborately its sentence is
+# printed. A near-empty `lowering/reveal.py` would buy back the symmetry and
+# cost the thing symmetry is for.
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -641,6 +657,10 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
+# `reveal` joins `text_changes` in having no twin on the lowering side, for the
+# reason recorded at `EFFECT_FAMILIES` above: every reveal node lowers in
+# `lowering/library.py`, beside the look-at lowerings, because the words are
+# where a reveal's work is.
 # `text_changes` joins `search` in having no twin on the lowering side: the
 # instruction one produces (`mark_text_modified`) lowers in
 # `lowering/characteristics.py` beside the colour and P/T changes it sits
@@ -656,7 +676,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # nobody may see, so what it has to carry is which cards the phrase admits and
 # where each find lands.
 LOWERING_FAMILIES = [
-    f for f in EFFECT_FAMILIES if f not in ("text_changes",)
+    f for f in EFFECT_FAMILIES if f not in ("text_changes", "reveal")
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
 # guard a second time and split along the same CR 613.4b line — so it now
@@ -874,6 +894,14 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "attachments", "returns",
+        # `reveal` is `library`'s and `search`'s reason a third time, in the
+        # same package: `RevealTop`, `RevealTopToHandOrBottom`,
+        # `RevealTopOpponentChooses` and `RevealUntil` are four nodes that sit
+        # perfectly well in `ast/cards.py` beside the look-at ones, because what
+        # a reveal *is* — a pile, a filter and the fate of what was turned up —
+        # is the same inventory a look is. The guard that made `reveal` a parse
+        # family fired on the productions.
+        "reveal",
         # `redirection` is the fourth of `types`' shape: `RedirectDamage`,
         # `DoubleCombatDamage` and `DamageBecomesCounterRemoval` are all facts
         # about a **damage event**, and they live in `ast/damage.py` beside
