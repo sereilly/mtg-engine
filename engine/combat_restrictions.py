@@ -87,6 +87,8 @@ class CombatRestriction:
 #   cant_block                      phases/declare_blockers_step
 #   creatures_cant_block            phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
+#   must_block_each_combat          phases/declare_blockers_step.declare_blockers
+#                                   (the declaration, CR 509.1c)
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
@@ -459,6 +461,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
+    # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
+    # requirement, the mirror of the attack one above and a *separate kind*
+    # rather than a payload on it: the two are checked at different steps by
+    # different predicates, and one kind read at both would have to be told
+    # which half it meant at every site.
+    #
+    # It is the weakest blocking requirement in this file. "Must be blocked"
+    # (Canopy Stalker) compels somebody to block *this attacker*; Lure compels
+    # everybody able; this compels *this creature* to block **something** — any
+    # one attacker it can legally block. Folding it into either of those would
+    # take away a legal declaration the card does not touch.
+    (
+        re.compile(r"^this creature blocks each combat if able$"),
+        "must_block_each_combat",
+    ),
     # "**If a creature you control attacks**, this creature also attacks if
     # able." (Ekundu Cyclops.) CR 508.1d's requirement with a condition, and
     # the condition is about the *declaration being made* rather than about the

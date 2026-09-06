@@ -269,6 +269,17 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue
+        # "all creatures **attacking you**" (Watchdog). The participle spelling
+        # of the relative clause above, setting the same field: two printings
+        # of one relation, and a second field would be a second thing every
+        # matcher has to remember to test. Only the "you" form is read here --
+        # a bare trailing "attacking" is already the *leading* adjective the
+        # noun parser takes ("attacking creature"), and reading it in both
+        # positions would let a noun phrase swallow the participle of a verb
+        # the sentence still needs.
+        if stream.accept_phrase("attacking", "you"):
+            d.attacking_you = True
+            continue
         # "target nonartifact, nonblack creature **that attacked you this
         # turn**" (Jabari's Influence). The past tense of the clause above and
         # a different question: that one reads the live combat relation, this

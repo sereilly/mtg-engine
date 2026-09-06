@@ -853,6 +853,44 @@ def choose_combat_blockers(
             elif assigned == attacker_idx:
                 del assignments[blocker_idx]
 
+    # "This creature blocks each combat if able." (Watchdog.) CR 509.1c aimed
+    # at the blocker: declare_blockers refuses a declaration that leaves such a
+    # creature out while it could legally block something, so the AI assigns it
+    # the first attacker it can block rather than submitting a declaration that
+    # bounces every combat.
+    #
+    # **After the menace pruning above**, not before it: that loop strips
+    # blocks that under-fill a minimum, and a compelled block stripped there
+    # would leave the declaration illegal for the reason it was added. Which
+    # is also why the minimum is checked here — CR 509.1c asks for the
+    # requirement to be obeyed *without disobeying a restriction*, and joining
+    # a menace attacker alone disobeys one.
+    for blocker_idx in available_blockers:
+        if blocker_idx in assignments:
+            continue
+        blocker = game.permanent_at(defender, blocker_idx)
+        if blocker is None:
+            continue
+        if not any(
+            i.kind == "must_block_each_combat"
+            for i in compile_card_oracle(blocker.effective_card).instructions
+        ):
+            continue
+        for attacker_idx in attackers:
+            attacker = game.permanent_at(attacker_player, attacker_idx)
+            if attacker is None or not game._can_block_attacker(blocker, attacker):
+                continue
+            joined = sum(
+                1
+                for assigned in assignments.values()
+                if attacker_idx == assigned
+                or (isinstance(assigned, list) and attacker_idx in assigned)
+            )
+            if joined + 1 < minimum_blockers.get(attacker_idx, 1):
+                continue
+            assignments[blocker_idx] = attacker_idx
+            break
+
     return assignments
 
 

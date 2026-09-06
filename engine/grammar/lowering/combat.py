@@ -38,11 +38,12 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
     """"That creature can block up to two additional creatures this turn."
     (Yare.)
 
-    CR 509.1b's ceiling raised for one turn, on one chosen creature. Targeted
-    only: the printed sentence names a creature the spell chose, and a plural
-    subject would be a board-wide permission no card in this pool prints -- so
-    it refuses rather than reaching every creature the noun phrase describes,
-    which is the direction that lets the whole defending team multi-block.
+    CR 509.1b's ceiling raised for one turn, on **one named creature**: the
+    spell's target, the object an earlier sentence bound, or the ability's own
+    source ("{W}: This creature can block an additional creature this turn.",
+    Mounted Archers). A plural subject is still refused -- a board-wide
+    permission no card in this pool prints, and refusing is the direction that
+    does not let the whole defending team multi-block.
 
     The count travels as payload for the reason every printed number in this
     family does, and the duration is checked here rather than trusted: a
@@ -54,9 +55,12 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
             "static ability",
             node=node,
         )
-    if (
-        not isinstance(node.subject, ast.TargetSpec)
-        or node.subject.quantifier not in ("target", "that")
+    if not isinstance(node.subject, ast.TargetSpec) or (
+        node.subject.quantifier not in ("target", "that")
+        # "this" qualifies on being the ability's own source and not merely on
+        # the word: the payload key below says *source*, so a "this" that is
+        # anything else would be described by a key the handler reads as one.
+        and not _is_source(node.subject)
     ):
         raise LoweringError(
             "no handler grants extra blocks to an untargeted subject", node=node
@@ -64,6 +68,14 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
     payload: dict[str, object] = {"count": node.count}
     if node.subject.quantifier == "target":
         _describe_targets(payload, node.subject)
+    # "**This creature** can block an additional creature this turn." (Mounted
+    # Archers.) The ability's own source, named by the payload key every other
+    # handler in this family reads for it -- so the handler resolves the
+    # permanent whose line this is rather than falling through to
+    # ``resolve_target_permanent``, whose no-target fallback scans the
+    # battlefield and would hand the permission to somebody else's creature.
+    elif _is_source(node.subject):
+        payload["subject"] = "source"
     # "**That creature** can block up to two additional creatures this turn."
     # (Yare's second sentence.) The bound object the sentence in front of it
     # already targeted, not a second choice — so no ``targets`` description is

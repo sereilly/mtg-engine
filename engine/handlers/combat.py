@@ -949,10 +949,20 @@ def grant_additional_blocks_until_eot(game: Game, instruction: OracleInstruction
     creature that already blocks an additional one by its own printed line
     keeps that too. Assignment rather than addition would have made the second
     copy of the spell do nothing.
+
+    ``subject: "source"`` is the ability's own permanent ("{W}: This creature
+    can block an additional creature this turn.", Mounted Archers). Resolved
+    explicitly rather than through ``resolve_target_permanent``, whose
+    no-target fallback scans the battlefield -- an activated ability names no
+    target, so the fallback would grant the permission to whichever creature
+    the scan reached first.
     """
-    blocker = resolve_target_permanent(
-        game, context, predicate=lambda p: p.is_creature
-    )
+    if instruction.payload.get("subject") == "source":
+        blocker = context.source_permanent
+    else:
+        blocker = resolve_target_permanent(
+            game, context, predicate=lambda p: p.is_creature
+        )
     if blocker is None:
         game.log.append(
             f"{context.card.name}: no creature to grant extra blocks to"

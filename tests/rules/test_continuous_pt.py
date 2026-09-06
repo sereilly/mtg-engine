@@ -168,17 +168,22 @@ def test_lord_buffs_do_not_leak_into_the_counter_channel(cards):
 
 @pytest.mark.cr("611.3a")
 def test_a_qualified_lord_buff_does_not_accumulate_across_recomputes(cards):
-    """The qualified channel is a dict keyed by qualifier, and its contributions
-    are summed. Rebuilding it without clearing it first would add Castle's
-    +0/+2 again on every pass — invisible while the creature is tapped, which is
-    exactly when nobody is looking."""
+    """The qualified channel is a dict keyed by ``(qualifiers, seat)``, and its
+    contributions are summed. Rebuilding it without clearing it first would add
+    Castle's +0/+2 again on every pass — invisible while the creature is tapped,
+    which is exactly when nobody is looking.
+
+    The seat is in the key because one qualifier ("attacking you", Watchdog) is
+    a relation to CR 109.5's "you" rather than a state of the creature, so two
+    lords printing the same description contribute to the same entry only when
+    they are also the same "you"."""
     from engine.layer_bridge import QUALIFIED_BUFFS
 
     game, bear = _lord_board(cards)
     for _ in range(10):
         game._recompute_continuous_effects()
 
-    assert bear.metadata[QUALIFIED_BUFFS] == {("untapped",): (0, 2)}
+    assert bear.metadata[QUALIFIED_BUFFS] == {(("untapped",), 0): (0, 2)}
 
 
 @pytest.mark.cr("611.3a", "611.3b", "613.1f")

@@ -94,17 +94,32 @@ class DeclareBlockersStepMixin:
         """How many attackers this creature may block at once (CR 509.1b). Normally
         1; each "can block an additional creature" grant (Two-Headed Giant of
         Foriys) adds one. Blaze of Glory grants "can block any number of creatures",
-        modeled as effectively unlimited."""
+        modeled as effectively unlimited.
+
+        The printed grant is counted over the compiled program's **static**
+        lines, not over the whole oracle text. The same sentence is printed as
+        an *activated* ability ("{W}: This creature can block an additional
+        creature this turn.", Mounted Archers), and a text scan cannot tell the
+        two apart -- it would hand that creature the extra block every combat,
+        for free and whether or not the ability was ever activated, which is
+        the "works more often than the card allows" failure rather than a
+        missing one. The activated printing arrives instead through
+        ``ADDITIONAL_BLOCKS_UNTIL_EOT`` below, written by its handler and swept
+        with the turn.
+        """
         if blocker.metadata.get(CAN_BLOCK_ANY_NUMBER_UNTIL_EOT):
             return 1_000_000
-        text = blocker.effective_card.oracle_text.lower()
+        printed = sum(
+            line.count("can block an additional creature")
+            for line in compile_card_oracle(blocker.effective_card).static_lines
+        )
         # "That creature can block up to two additional creatures this turn."
         # (Yare.) A granted ceiling, added to the printed one for CR 509.1b's
         # reason: restrictions and the permissions that lift them are
         # cumulative, so a creature whose own line already blocks an additional
         # one keeps that and gains these.
         granted = int(blocker.metadata.get(ADDITIONAL_BLOCKS_UNTIL_EOT, 0) or 0)
-        return 1 + text.count("can block an additional creature") + granted
+        return 1 + printed + granted
 
     def declare_blockers(
         self,
@@ -393,6 +408,62 @@ class DeclareBlockersStepMixin:
                         f"{blocker.card.name} must block {attacker.card.name} "
                         "(Blaze of Glory)"
                     )
+
+        # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
+        # requirement aimed at the *blocker* rather than at an attacker, and the
+        # weakest one in this step: it compels this creature to block
+        # **something** — any one attacker aimed at this defender that it can
+        # legally block — where Lure compels every able creature onto one
+        # attacker and Blaze of Glory compels one creature onto every attacker.
+        #
+        # Read off the creature's own compiled program and off its *effective*
+        # card, so a copy of it carries the requirement (CR 707.2), beside the
+        # Aura channel every other combat requirement here already asks.
+        for blocker_idx, blocker in enumerate(
+            self.controlled_by(controller_index) if not _camouflage_resolution else ()
+        ):
+            if not blocker.is_creature or blocker.tapped:
+                continue
+            if assignments.get(blocker_idx):
+                continue
+            program = compile_card_oracle(blocker.effective_card)
+            if not any(
+                i.kind == "must_block_each_combat" for i in program.instructions
+            ) and not aura_restriction_active(blocker, "must_block_each_combat"):
+                continue
+            able = False
+            for attacker_idx in own_attackers:
+                attacker = self.permanent_at(attacker_controller, attacker_idx)
+                if attacker is None:
+                    continue
+                if not self._can_block_attacker(blocker, attacker):
+                    continue
+                # CR 509.1c, last clause: a creature that can't block unless a
+                # cost is paid is never *compelled* to, whether or not its
+                # controller could pay.
+                if self._block_mana_costs_of(blocker, attacker):
+                    continue
+                if self._left_right_block_illegal(
+                    attacker_idx, blocker_idx, blocker
+                ):
+                    continue
+                # CR 509.1c measures the requirement against "the maximum
+                # possible number … **without disobeying any restrictions**".
+                # Menace is a restriction (CR 509.1b), so a lone able creature
+                # joining a menace attacker nobody else blocks would be an
+                # illegal declaration — which means the requirement cannot be
+                # obeyed there and this creature is not "able".
+                joined = sum(
+                    1
+                    for assigned in assignments.values()
+                    if attacker_idx in assigned
+                )
+                if joined + 1 < self._minimum_blockers(attacker):
+                    continue
+                able = True
+                break
+            if able:
+                return False, f"{blocker.card.name} blocks each combat if able"
 
         # "No more than two creatures can block each combat." (Caverns of
         # Despair.) The blocking twin of the attack cap, and a restriction on
