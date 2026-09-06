@@ -4081,6 +4081,29 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # (loud) instead.
     if combat_restriction_for(_restriction_line(line, card_name), card_name) is not None:
         return True
+    # "Cast this spell only if you've cast another spell this turn."
+    # (Skyshroud Condor.) CR 601.3, gated by `check_cast_timing` from the cast
+    # path — so, like every table above, it needs no instruction to work. What
+    # it needed was this line: Skyshroud Condor is the first *creature* in the
+    # pool to print one of these clauses, and a creature is refused for any
+    # line nothing reads, so a card the table gates perfectly reported "text
+    # too complex". Asked of the table's own reader, so a clause it cannot read
+    # still refuses the card rather than admitting it with the restriction
+    # unenforced.
+    from .cast_restrictions import cast_timing_claims_line
+
+    if cast_timing_claims_line(normalized):
+        return True
+    # "This spell can't be countered." (Scragnoth.) CR 113.6g: a static ability
+    # of the object *on the stack*, so it produces no instruction for a
+    # permanent — the counter path reads it off the card at CR 608.2. Asked of
+    # that reader, so a card admitted here is one the counter path really
+    # honours; a parsed-and-dropped "can't be countered" is worse than none,
+    # because it looks like protection nobody has.
+    from .counter_conditions import uncounterable_line
+
+    if uncounterable_line(normalized):
+        return True
     # "<this creature> can't be the target of Aura spells" (Bartel Runeaxe,
     # Tetsuo Umezawa). Asked of the same reader `_can_be_targeted` consults, so
     # a wording the table cannot read is reported unsupported rather than
@@ -5163,6 +5186,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(LETHAL_DAMAGE_CLAIM)
+    # "This spell can't be countered." (Scragnoth prints it on a creature; an
+    # instant or sorcery printing the same sentence reads identically.)
+    # CR 113.6g: a static ability that functions on the stack, read off the card
+    # by the counter handler at CR 608.2 — so there is no instruction, and its
+    # own claim name for the reason the bans above have one: it is what the
+    # *spell* says about itself, not a condition some counter carries.
+    from .counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
+
+    if any(
+        uncounterable_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(UNCOUNTERABLE_CLAIM)
     # "Reveal the first card you draw each turn." (Rowen.) The draw seam reads
     # the permanent's own text on every draw, so there is no instruction to
     # point at — and on a card whose static half is only this sentence, no

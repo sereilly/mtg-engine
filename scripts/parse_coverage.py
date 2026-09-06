@@ -67,9 +67,11 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
                                       cast_opponent_cast_line,
+                                      cast_own_cast_line,
                                       chosen_name_ban_line,
                                       global_cast_ban_line,
                                       global_play_timing_line)
+from engine.counter_conditions import uncounterable_line  # noqa: E402
 from engine.special_actions import special_action_line  # noqa: E402
 from engine.cast_timing import (grants_flash,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed)
@@ -297,6 +299,18 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # reader that answers it.
     ("cast_restrictions.py (opponent-cast window)",
      lambda s: cast_opponent_cast_line(s) is not None),
+    # The same window of casts asked about the caster's own record -- "Cast this
+    # spell only if you've cast another spell this turn." (Skyshroud Condor.)
+    # Its own channel beside the opponent-scoped one for that channel's reason:
+    # it is its own row and its own scan, and the claim asks the reader that
+    # answers it.
+    ("cast_restrictions.py (own-cast window)",
+     lambda s: cast_own_cast_line(s) is not None),
+    # "This spell can't be countered." (Scragnoth.) CR 113.6g -- a static
+    # ability of the object on the stack, read off the card by the counter
+    # handler at CR 608.2, so it carries no instruction. Asked of the reader
+    # that enforces it.
+    ("counter_conditions.py (uncounterable spell)", uncounterable_line),
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by

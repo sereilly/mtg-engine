@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 74.3% | 70.9% | 46.9% | 201 |
+| TMP *(measured)* | 335 | 478 | 74.7% | 71.3% | 46.9% | 201 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,7 +47,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 385 | 184 | expected a subject |  |
+| 384 | 183 | expected a subject |  |
 | 116 | 58 | unrecognized effect verb |  |
 | 100 | 52 | unconsumed text |  |
 | 41 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -66,9 +66,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 4 | 4 | expected 'a' |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | granting 'shadow' needs the keyword implemented |  |
 | 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |

@@ -532,6 +532,124 @@ def cast_opponent_cast_line(line: str) -> "tuple[dict, str] | None":
     return testable, described
 
 
+#: "Cast this spell only if **you've cast another spell this turn**."
+#: (Skyshroud Condor.) The row above with the seat turned around, and its own
+#: row rather than a seat flag on that one because the two scans are different:
+#: that one walks ``opponents_of``, this one walks the caster's own record, and
+#: a flag would put the choice between them inside a predicate that is otherwise
+#: pure about *which spell*.
+#:
+#: **"Another" is honoured by construction, not dropped.** The word means "a
+#: spell other than this one", and CR 601.3 asks this gate as part of announcing
+#: the spell — before ``casting`` appends it to ``spells_cast_this_turn``, which
+#: it does only once the cast has succeeded. So the record this reads can never
+#: contain the spell being cast, and a non-empty record *is* "another spell".
+#: Reading the word as an unnarrowed "spell" without that reasoning would be the
+#: dropped-rider bug this file exists to refuse, so the article is admitted by
+#: name below rather than by falling through.
+_YOU_CAST_RE = re.compile(
+    r"^cast this spell only if you(?:'ve|’ve| have) cast (?P<spell>.+) this turn$"
+)
+
+
+@lru_cache(maxsize=None)
+def cast_spell_filter(phrase: str) -> "dict | None":
+    """What "a creature spell" / "another spell" names, as a card filter.
+
+    ``{}`` for a phrase that narrows nothing — a real answer, meaning "every
+    spell" — and ``None`` for one this cannot read. The two are distinguished
+    because each caller decides whether the unnarrowed reading is a sentence its
+    card prints: Skyshroud Condor's "another spell" is, and no card in the pool
+    prints an unnarrowed *opponent*-scoped one, so that row refuses it rather
+    than admitting a reading nothing tests.
+
+    **One reader for two tables.** The clause is one fact — "has a spell the
+    phrase names been cast this turn" — and Tempest prints it twice, once as a
+    casting gate (Skyshroud Condor, CR 601.3) and once as a combat restriction
+    (Mogg Conscripts, CR 506), so ``engine/combat_restrictions.py`` asks this
+    rather than reading the phrase again. Two readers of one printed phrase
+    drift, and a *restriction* drifts in the direction of applying more or less
+    often than the card says.
+
+    Through **the grammar's noun parser** and then through
+    ``subject_filters.card_only_filter``: what this asks about is a *spell*, and
+    a spell is not a permanent — CR 613.1 gives it no computed characteristics,
+    so the printed face is the whole of what is testable and the permanent
+    matcher's keys would promise answers nobody can give.
+
+    "a"/"an"/"another" and nothing else. "no spell" and "two or more" are
+    different conditions, and reading either as presence lifts the restriction
+    on a turn the card does not name. (The two rows above predate this helper
+    and still inline its body; adopting them is a tidy-up, not a fix, because
+    they refuse the unnarrowed phrase where this returns it.)
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import card_only_filter
+
+    article, _, rest = phrase.strip().partition(" ")
+    if article not in ("a", "an", "another") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        parsed = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = parsed.to_payload()
+    if not payload:
+        return {}
+    return card_only_filter(payload) or None
+
+
+@lru_cache(maxsize=None)
+def cast_own_cast_line(line: str) -> "tuple[dict, str] | None":
+    """``(filter payload, the printed noun phrase)`` for the own-cast row.
+
+    The tuple is what distinguishes "read, no narrowing" from "not my
+    sentence" — ``cast_spell_filter`` returns ``{}`` for the first and this
+    returns None for the second, so a caller can never mistake one for the
+    other.
+    """
+    match = _YOU_CAST_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    described = match.group("spell")
+    payload = cast_spell_filter(described)
+    return None if payload is None else (payload, described)
+
+
+def spells_cast_matching(game: "Game", seat: int, payload: dict) -> bool:
+    """Whether *seat* has already cast a spell :func:`cast_spell_filter` names.
+
+    The **one reader of the record**, for :func:`cast_spell_filter`'s reason one
+    function up: Skyshroud Condor asks it as a casting gate and Mogg Conscripts
+    asks it as a combat restriction (``phases/declare_attackers_step``), and the
+    two must not come to disagree about which casts count.
+
+    *seat* is whose "you" it is: the caster for a casting gate (CR 109.5's
+    observer for a spell being cast is its controller), the attacker's current
+    controller for a creature's own text.
+
+    An empty payload admits every spell in the record, which is what an
+    unnarrowed "another spell" says. The card is tested with
+    ``_card_matches_filter``, the matcher ``card_only_filter`` gates for: the
+    record holds ``CardDefinition``s, the printed faces, which is exactly what
+    there is to ask about a spell that is no longer anywhere.
+    """
+    from .handlers._common import _card_matches_filter
+
+    if not 0 <= seat < len(game.players):
+        return False
+    cast = game.players[seat].spells_cast_this_turn
+    if not payload:
+        return bool(cast)
+    return any(_card_matches_filter(spell, payload) for spell in cast)
+
+
 def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
     """Whether any opponent of *caster_index* has cast a spell the phrase names.
 
@@ -596,6 +714,48 @@ def _condition_holds(game: "Game", caster_index: int, payload: dict) -> bool:
     )
 
 
+def cast_timing_claims_line(line: str) -> bool:
+    """Whether this table reads *line* as a gate the casting card prints about
+    itself (CR 601.3).
+
+    The **table's own** answer to "is this my sentence?", asked by the support
+    gate in ``engine/oracle.py`` — the same seam ``cast_costs``'s
+    ``cast_cost_claims_line`` and ``enter_effects.enter_effect_line`` are, and
+    for their reason: what the engine enforces and what it claims to have read
+    cannot be two lists.
+
+    It exists because **Skyshroud Condor is the first creature in the pool to
+    print one of these clauses**. Every other card carrying one is an instant or
+    an enchantment, and those classifiers do not require every line to be read —
+    so the clause has never had to make a card supported, only to be enforced.
+    A creature is refused for any line nothing reads, which meant a card the
+    table gates perfectly reported "text too complex".
+
+    Only the rows a card prints *about its own cast*. The board-wide bans
+    further down this file ("Creature spells can't be cast.") are a permanent's
+    sentence about everybody else's spells, claimed by their own names in
+    ``_derived_static_claims``, and folding them in here would let a creature's
+    own timing gate be satisfied by a reader that has nothing to do with it.
+
+    A run of readers rather than a list of phrases, so a row added above is a
+    row this answers for; the corpus-wide check that no printed "Cast this spell
+    only …" escapes it lives in ``tests/rules/test_cast_restrictions.py``.
+    """
+    normalized = line.strip().lower().rstrip(".")
+    if any(restriction.phrase == normalized for restriction in CAST_RESTRICTIONS):
+        return True
+    return any(
+        reader(normalized) is not None
+        for reader in (
+            cast_condition_line,
+            cast_absence_line,
+            cast_damage_source_line,
+            cast_opponent_cast_line,
+            cast_own_cast_line,
+        )
+    )
+
+
 def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -> str | None:
     """The denial message for the first violated casting restriction present in
     *oracle_text_lower*, or None if every restriction present is satisfied."""
@@ -642,6 +802,16 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
         payload, described = opponent_cast
         if not _an_opponent_cast(game, caster_index, payload):
             return f"can only be cast if an opponent cast {described} this turn"
+    # Per line for the four loops above's reason: the phrase ends with its
+    # sentence, and a window read out of the middle of a longer one would be a
+    # restriction the card does not print.
+    for line in oracle_text_lower.split("\n"):
+        own_cast = cast_own_cast_line(line)
+        if own_cast is None:
+            continue
+        payload, described = own_cast
+        if not spells_cast_matching(game, caster_index, payload):
+            return f"can only be cast if you've cast {described} this turn"
     return None
 
 

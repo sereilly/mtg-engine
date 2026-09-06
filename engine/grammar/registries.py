@@ -32,6 +32,7 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
+                                 cast_own_cast_line,
                                  chosen_name_ban_line,
                                  OWN_CAST_BAN_CLAIM,
                                  own_cast_ban_line,
@@ -39,6 +40,7 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
 from ..cost_modifiers import cost_modifier_claims_line
+from ..counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
@@ -119,6 +121,21 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # dropped.
     if cast_opponent_cast_line(normalized) is not None:
         return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same window of casts asked about the
+    # caster's own record: "Cast this spell only if you've cast another spell
+    # this turn." (Skyshroud Condor.) Its own row and its own scan, claimed
+    # through the reader that enforces it, so the claim cannot outlive the row.
+    if cast_own_cast_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/counter_conditions.py -- "This spell can't be countered."
+    # (Scragnoth.) CR 113.6g: a static ability that functions while the object
+    # is on the stack, read off the card by `counter_top_stack_spell` at
+    # CR 608.2. No instruction to lower, so the line is claimed through the
+    # reader that enforces it and the claim cannot outlive the enforcement.
+    if uncounterable_line(normalized):
+        return UNCOUNTERABLE_CLAIM
 
     # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature
     # spells can't be cast." (Aether Storm.) Not a gate the casting card prints

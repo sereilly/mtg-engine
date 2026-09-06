@@ -25,35 +25,19 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 26 supported card(s).**
+**17 unclaimed sentence(s) across 15 supported card(s).**
 
-- **Anoint**
-  - `buyback {3}`
-- **Capsize**
-  - `buyback {3}`
 - **Cold Storage**
   - `sacrifice this artifact: return each creature card exiled with this artifact to the battlefield under your control`
-- **Corpse Dance**
-  - `buyback {2}`
-- **Disturbed Burial**
-  - `buyback {3}`
 - **Duplicity**
   - `at the beginning of your upkeep, you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand`
-- **Elvish Fury**
-  - `buyback {4}`
 - **Essence Bottle**
   - `{t}, remove all elixir counters from this artifact: you gain 2 life for each elixir counter removed this way`
-- **Evincar's Justice**
-  - `buyback {3}`
 - **Ghost Town**
   - `{0}: return this land to its owner's hand. activate only if it's not your turn`
-- **Imps' Taunt**
-  - `buyback {3}`
 - **Interdict**
   - `counter target activated ability from an artifact, creature, enchantment, or land`
   - `that permanent's activated abilities can't be activated this turn`
-- **Invulnerability**
-  - `buyback {3}`
 - **Legacy's Allure**
   - `sacrifice this enchantment: gain control of target creature with power less than or equal to the number of treasure counters on this enchantment`
 - **Magnetic Web**
@@ -65,8 +49,6 @@ anything anyone did, and every ingest would arrive red.
   - `your maximum hand size is two`
 - **Sarcomancy**
   - `at the beginning of your upkeep, if there are no zombies on the battlefield, this enchantment deals 1 damage to you`
-- **Searing Touch**
-  - `buyback {4}`
 - **Shadow Rift**
   - `target creature gains shadow until end of turn`
 - **Spirit Mirror**
@@ -77,10 +59,6 @@ anything anyone did, and every ingest would arrive red.
   - `{1}, {t}, remove all pain counters from this artifact: it deals damage to target creature equal to the number of pain counters removed this way`
 - **Volrath's Curse**
   - `that creature's controller may sacrifice a permanent of their choice for that player to ignore this effect until end of turn`
-- **Whispers of the Muse**
-  - `buyback {5}`
-- **Worthy Cause**
-  - `buyback {2}`
 
 ## Acknowledged simplifications
 
@@ -364,7 +342,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation cost | 1049 |
 | trigger table | 743 |
 | keyword table | 533 |
-| static-line table | 483 |
+| static-line table | 507 |
 | aura enchant noun (oracle_instructions attach) | 187 |
 | activation_restrictions.py | 99 |
 | card_hooks bespoke (name-keyed) | 91 |
@@ -373,7 +351,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | loyalty cost | 33 |
 | cast_costs.py | 30 |
 | oracle.py (modal trigger head) | 29 |
-| cast_restrictions.py | 20 |
 | cost_modifiers.py | 17 |
 | untap_restrictions.py | 16 |
 | mixin text scan | 15 |
@@ -394,22 +371,18 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation_restrictions.py (board-wide ban) | 2 |
 | auras.py (attached ability cost reduction) | 2 |
 | cast_restrictions.py (board-wide ban) | 1 |
-| cast_restrictions.py (board condition) | 1 |
 | special_actions.py | 1 |
 | cast_restrictions.py (board-wide own-turn window) | 1 |
 | target_restrictions.py | 1 |
 | land_play_allowance.py | 1 |
 | life_prohibitions.py | 1 |
 | oracle.py (delayed trigger rider) | 1 |
-| cast_restrictions.py (opponent-cast window) | 1 |
 | cast_restrictions.py (chosen-name ban) | 1 |
 | handler ← counter_top_stack_spell | 1 |
 | named_protection.py | 1 |
 | extra_triggers.py | 1 |
 | cost_modifiers.py (ability reduction) | 1 |
 | cost_x_definitions.py (cast) | 1 |
-| cast_restrictions.py (damage-source window) | 1 |
 | oracle.py (loyalty timing static) | 1 |
-| cast_restrictions.py (board absence) | 1 |
 | stack_statics.py | 1 |
 | cost_x_definitions.py (ceiling) | 1 |

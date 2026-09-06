@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**360 / 613 tracked rules covered (58%)** — 2104 tests, 0 unannotated.
+**360 / 613 tracked rules covered (58%)** — 2115 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -244,7 +244,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **113.3** There are four general categories of abilities: *(2 tests, subrules c)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(8 tests, subrules bkm)*
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(11 tests, subrules bgkm)*
 - [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(4 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
@@ -262,7 +262,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(20 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(21 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(5 tests)*
@@ -615,7 +615,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(31 tests, subrules abcdfgk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(34 tests, subrules abcdfgk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -663,7 +663,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(217 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(18 tests, subrules a)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(23 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -848,7 +848,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(4 tests, subrules ab)*
+- [x] **701.6** Counter *(5 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(4 tests, subrules ab)*
 - [x] **701.9** Discard *(4 tests, subrules ac)*
