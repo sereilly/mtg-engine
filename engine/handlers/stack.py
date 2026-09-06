@@ -299,7 +299,11 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         chosen_mode_index=announcement.chosen_mode_index,
         chosen_modes=announcement.chosen_modes,
         target_stack_item=announcement.target_stack_item,
-        cast_from_zone="exile",
+        # ``cast_from_zone`` is deliberately left at its default. CR 707.10: "a
+        # copy of a spell isn't cast" — so the honest answer to "was this spell
+        # cast from somewhere other than your hand" is *no*, and that is what
+        # the default gives. Stamping "exile" because the card came from there
+        # would answer *yes* to a question about a casting that never happened.
     )
     game._stack_push(item=copy, targets_already_chosen=True)
     game.log.append(
