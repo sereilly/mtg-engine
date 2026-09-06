@@ -89,6 +89,14 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     tapped", and Purraj of Urborg puts a counter "on Purraj". Both are the
     legend naming itself; neither first word ("Hivis", "Purraj") is a word the
     game uses to describe objects.
+
+    Weatherlight added one, and it is the first to arrive with a **possessive**:
+    Maraxus of Keld's characteristic-defining line reads "Maraxus's power and
+    toughness are each equal to ...". The expansion writes "Maraxus of Keld's",
+    which is what the P/T reader needs to recognise the subject as the source;
+    left short, the line names a card no reader in the engine knows. "Maraxus"
+    is not a word the game uses to describe objects, so this is the same case as
+    the six above and not a word the rule should have left alone.
     """
     changed = {
         card.name
@@ -107,4 +115,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Veldrane of Sengir",
         "Hivis of the Scale",
         "Purraj of Urborg",
+        "Maraxus of Keld",
     }
