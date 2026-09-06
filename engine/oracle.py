@@ -4198,6 +4198,27 @@ def _restriction_line(line: str, card_name: str | None) -> str:
     )
 
 
+#: A printed line's sentence count, ignoring the full stops inside a quoted
+#: granted ability ('Enchanted creature has "{T}: Add {G}."').
+_QUOTED_SPAN = re.compile(r"[\"“‘'][^\"”’']*[\"”’']")
+
+
+def _one_sentence(line: str) -> bool:
+    """Whether *line* is a single printed sentence.
+
+    Asked before a table that speaks for **one** sentence is allowed to claim a
+    whole line. `auras.aura_continuous_claim` is such a table — its readers
+    search rather than anchor, so it answers "there is a restriction in here"
+    and not "this is all restriction" — and a line with a second sentence
+    behind the one it recognized would be claimed whole, with the rest silently
+    unread. That is Mirage's single-whitelist-word failure exactly, and
+    Volrath's Curse is the card in this pool that shows it: its restriction
+    sentence is implemented and the CR 116.2d offer printed behind it is not.
+    """
+    outside = _QUOTED_SPAN.sub("", line or "")
+    return outside.strip().rstrip(".").count(".") == 0
+
+
 def _is_supported_static_creature_line(line: str, card_name: str | None = None) -> bool:
     if _grammar_static_creature_instruction(line, card_name) is not None:
         return True
@@ -4459,6 +4480,24 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .cast_timing import static_flash_permission
 
     if static_flash_permission(normalized) is not None:
+        return True
+    # "Enchanted creature has haste." (Enraging Licid; four of the five print
+    # one of these.) CR 303.4m: an ability that refers to the "enchanted
+    # [object]" refers to whatever that permanent is attached to, **even if the
+    # permanent with the ability isn't an Aura** — which is exactly a Licid,
+    # printed as a creature and attached only once its own ability has run.
+    #
+    # The same partial-list shape this function keeps finding one table at a
+    # time: `auras.aura_continuous_claim` has been asked for a card whose
+    # printed type line says Aura since it was written, and a *creature*
+    # printing the identical sentence reported "text too complex" while the
+    # layer bridge derived the grant perfectly — it reads the attachment record,
+    # never the attacher's type line. Asked of that table, so a grant it cannot
+    # derive still refuses the card rather than admitting it with the line
+    # dropped.
+    from .auras import aura_continuous_claim
+
+    if _one_sentence(line) and aura_continuous_claim(normalized) is not None:
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",

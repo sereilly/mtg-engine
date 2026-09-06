@@ -17728,6 +17728,9 @@ const _CAST_ACTIONS = new Set(["cast", "debug_cast_free", "debug_cast_free_oppon
 // game that does not contain one of these cards.
 const SPECIAL_ACTION_LABELS = {
   discard_from_hand: (name) => `Discard ${name}`,
+  // CR 116.2c — an offer a permanent makes for as long as the effect its own
+  // ability created is running (Tempest's Licids).
+  end_own_continuous_effect: (name) => `End ${name}'s effect`,
 };
 
 function renderSpecialActions(state, hasPriority) {
@@ -17745,9 +17748,13 @@ function renderSpecialActions(state, hasPriority) {
     button.textContent = label(entry.name);
     button.title = "A special action (CR 116): it does not use the stack.";
     button.addEventListener("click", () => {
+      // Whichever address the entry carries: a hand slot for CR 116.2e and a
+      // permanent id for 116.2c/116.2d. The server decides from the same two
+      // fields, so the client never has to know which kinds are which.
       sendAction({
         action: "special_action",
         hand_index: entry.hand_index,
+        permanent_id: entry.permanent_id,
         special_action_kind: entry.kind,
       });
     });

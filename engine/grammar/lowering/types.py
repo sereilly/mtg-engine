@@ -187,17 +187,29 @@ def _lower_become_aura(node: ast.BecomeAura) -> tuple[OracleInstruction, ...]:
     ``auras.enchant_card_refusal`` tests and what stops the Aura being moved
     onto a creature it never reanimated. The parse admits no other quality, so
     there is no shape here that reaches the handler with a rider nothing reads.
+
+    A Licid prints the same sentence with **no** rider and two extra facts: the
+    card type it becomes (CR 205.1a — an "Aura enchantment" stops being a
+    creature, where Necromancy's "an Aura" is a subtype an enchantment already
+    is) and the ability it loses (CR 613 layer 6). Both ride the payload for
+    this file's standing reason — a printed word is data — so the two cards are
+    one instruction kind and one handler rather than two of each.
+
+    An unrestricted enchant clause needs no rider *test*, only the noun, and
+    ``mixins/stack.permanent_matches_enchant_noun`` is what tests that — the
+    same reader every printed ``Enchant <noun>`` line goes through. So the
+    refusal here is no longer "the clause has no rider" but "the clause has a
+    rider the engine cannot test", which is the shape of every gate in this
+    package.
     """
-    if not node.origin_is_source:
-        raise LoweringError(
-            "no handler tests an enchant clause this Aura was given", node=node
-        )
-    return (
-        OracleInstruction(
-            "become_aura_with_enchant", "",
-            {"noun": node.noun, "origin": "source"},
-        ),
-    )
+    payload: dict[str, object] = {"noun": node.noun}
+    if node.origin_is_source:
+        payload["origin"] = "source"
+    if node.card_types:
+        payload["card_types"] = list(node.card_types)
+    if node.loses_own_ability:
+        payload["loses_own_ability"] = True
+    return (OracleInstruction("become_aura_with_enchant", "", payload),)
 
 
 def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:

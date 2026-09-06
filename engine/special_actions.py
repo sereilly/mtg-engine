@@ -42,11 +42,12 @@ Three properties follow, and each is load-bearing:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from .game import Game
-    from .models import CardDefinition
+    from .models import CardDefinition, Permanent
 
 
 #: The kind of special action a printed sentence grants, keyed by the sentence.
@@ -177,8 +178,264 @@ def available_special_actions(game: "Game", seat: int) -> list[dict]:
     return entries
 
 
+
+# ---------------------------------------------------------------------------
+# CR 116.2c / 116.2d — an offer a *permanent* makes, taken from the battlefield
+# ---------------------------------------------------------------------------
+#
+# The row above is about a card in a **hand**. These two subrules are about
+# something already on the battlefield, and they are why this file is a seam
+# rather than one card's exception:
+#
+#   116.2c  Some effects allow a player to take an action at a later time,
+#           usually to end a continuous effect … Doing so is a special action.
+#   116.2d  Some effects from static abilities allow a player to take an action
+#           to ignore the effect from that ability for a duration.
+#
+# Tempest prints both. Every Licid ends its own type change with "You may pay
+# {C} to end this effect" (116.2c) and Volrath's Curse lets the *enchanted*
+# creature's controller buy a turn off its restriction (116.2d) — two cards,
+# one rule, and neither of them a trigger, an activated ability or anything
+# else that uses the stack. A `PendingChoice` is the wrong shape for both: that
+# queue is a decision somebody **owes**, and this is a decision that simply
+# stands, for as long as the effect does, and may never be taken at all.
+
+#: The sentence a permanent prints to make one of these offers, and the kind of
+#: offer it is. Matched against a whole **sentence** rather than a whole line,
+#: because a Licid prints its offer as the third sentence of an activated
+#: ability's line — where the two before it are the effect the offer undoes.
+_PERMANENT_ACTION_SENTENCES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"^you may pay (?P<cost>(?:\{[^}]+\})+) to end this effect$"),
+        "end_own_continuous_effect",
+    ),
+)
+
+
+@dataclass(frozen=True)
+class PermanentSpecialAction:
+    """One kind of battlefield offer, and the two questions it answers.
+
+    ``offer`` is what *permanent* is offering **right now**, as the mana cost of
+    taking it, or None when it is making no such offer. One question rather than
+    a separate "is it open?" and "what does it cost?", because CR 116.2c's offer
+    is made by an **effect** and not by a card: the sentence table above says
+    which sentence *creates* one, and by the time a Licid's offer can be taken
+    the sentence has gone from the permanent's text — CR 613 layer 6 took the
+    whole ability away, which is the other half of what the ability did. The
+    effect outlives its ability (CR 611.2a), and so does the offer.
+
+    ``take`` performs it, with the cost already paid.
+
+    A registration rather than a branch, for this file's own stated reason: the
+    sentence table says what a card *offers* and this says what the engine
+    *does about it*, and a kind in one without the other is either an offer
+    nothing performs or a performance nothing offers.
+    """
+
+    kind: str
+    offer: "Callable[[Game, Permanent], dict[str, int] | None]"
+    take: "Callable[[Game, int, Permanent], None]"
+
+
+#: Registered by the modules that create the effects these offers end.
+#: `engine/auras.py` holds the only entry today — it owns the record a
+#: became-an-Aura permanent carries, so it is the only place that can say
+#: whether the effect is still running or take it back.
+PERMANENT_SPECIAL_ACTIONS: dict[str, PermanentSpecialAction] = {}
+
+
+def register_permanent_special_action(spec: PermanentSpecialAction) -> None:
+    """Register *spec*. A duplicate kind raises at import, as every other
+    registry in this engine does."""
+    if spec.kind in PERMANENT_SPECIAL_ACTIONS:
+        raise ValueError(f"duplicate permanent special action {spec.kind!r}")
+    PERMANENT_SPECIAL_ACTIONS[spec.kind] = spec
+
+
+def _load_registrations() -> None:
+    """Import the modules that register the offers above.
+
+    Function-level and idempotent: this module imports nothing from the engine
+    at module scope (which is what lets `engine/oracle.py` import it from the
+    top), and the registry would otherwise be empty for any caller that had not
+    happened to import `engine/auras.py` first — an offer that exists or not
+    depending on import order.
+    """
+    from . import auras  # noqa: F401
+
+
+def _split_sentences(line: str) -> list[str]:
+    """*line* split on the full stops that end its sentences.
+
+    Naive on purpose: a mana symbol carries no full stop and neither does any
+    number in this pool, so splitting on "." is exact for the sentences the
+    table above reads. A printing that broke that would fail to match and leave
+    its card unsupported, which is the direction every reader in this file
+    fails in.
+    """
+    return [part.strip() for part in (line or "").split(".") if part.strip()]
+
+
+def permanent_special_action_sentence(
+    sentence: str,
+) -> "tuple[str, dict[str, int]] | None":
+    """The ``(kind, mana cost)`` one printed *sentence* offers, or None.
+
+    Matched whole, for :func:`special_action_line`'s reason: a substring match
+    is how a whitelist comes to claim text it does not implement.
+
+    Read by the support gate, by `scripts/parse_coverage.py` and by the offer
+    enumerator below — so what the engine claims to have read and what it
+    actually offers are one table.
+    """
+    from .mana_payment import mana_cost_from_symbols
+
+    normalized = _normalize(sentence).rstrip(".")
+    for pattern, kind in _PERMANENT_ACTION_SENTENCES:
+        match = pattern.match(normalized)
+        if match is None:
+            continue
+        cost = mana_cost_from_symbols(match.group("cost").upper())
+        if cost is None:
+            return None
+        return kind, cost
+    return None
+
+
+def permanent_special_action_line(line: str) -> str | None:
+    """The kind of offer *line* carries, or None — asked of a whole printed
+    line rather than of one sentence.
+
+    A Licid's offer is the last sentence of an activated ability's line, so the
+    line is split here and every sentence asked. The support gate and the
+    grammar's sentence reader both come through this, which is what keeps the
+    claim and the offer describing the same words.
+    """
+    for sentence in _split_sentences(line):
+        found = permanent_special_action_sentence(sentence)
+        if found is not None:
+            return found[0]
+    return None
+
+
+def permanent_special_actions_for(
+    card: "CardDefinition",
+) -> "tuple[tuple[str, dict[str, int]], ...]":
+    """Every offer *card*'s own text makes, in printed order."""
+    return tuple(
+        found
+        for line in (getattr(card, "oracle_text", "") or "").splitlines()
+        for sentence in _split_sentences(line)
+        if (found := permanent_special_action_sentence(sentence)) is not None
+    )
+
+
+def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
+    """How *seat* would pay *cost*, or None.
+
+    Over the pool **and** the seat's untapped lands. CR 116.2c gives the player
+    priority for this, so they could have tapped for mana first — which is
+    exactly what this plan does on their behalf, through the one reader every
+    other "you may pay" in this engine goes through
+    (``mana_payment.plan_payment``).
+    """
+    from .mana_payment import plan_payment, untapped_mana_lands
+
+    if not any(cost.values()):
+        return {}
+    return plan_payment(
+        game.players[seat].mana_pool,
+        untapped_mana_lands(game.controlled_by(seat)),
+        cost,
+        produces=game._land_payment_colors,
+    )
+
+
+def permanent_special_action_refusal(
+    game: "Game", seat: int, permanent: "Permanent", kind: str
+) -> str | None:
+    """Why *seat* may not take *kind* with *permanent* right now, or None.
+
+    The battlefield twin of :func:`special_action_refusal`, asked by the engine
+    before it acts and by the web layer before it offers — the same arrangement,
+    and the same reason.
+
+    Four questions, and the first is what a hand card has no equivalent of: the
+    permanent must still be making the offer (CR 116.2c's "for as long as the
+    effect allows it"), which is asked of the registered offer rather than of
+    the card's text — see :class:`PermanentSpecialAction`.
+    """
+    _load_registrations()
+    spec = PERMANENT_SPECIAL_ACTIONS.get(kind)
+    if spec is None:
+        return f"no special action named {kind!r}"
+    if not game.is_on_battlefield(permanent):
+        return f"{permanent.card.name} is no longer on the battlefield"
+    cost = spec.offer(game, permanent)
+    if cost is None:
+        return f"{permanent.card.name} is not making that offer"
+    if game.controller_index_of(permanent) != seat:
+        return f"{game.players[seat].name} does not control {permanent.card.name}"
+    if not game.has_priority(seat):
+        return f"{game.players[seat].name} does not have priority"
+    if _payment_plan(game, seat, cost) is None:
+        return f"{game.players[seat].name} can't pay for it"
+    return None
+
+
+def take_permanent_special_action(
+    game: "Game", seat: int, permanent: "Permanent", kind: str
+) -> str | None:
+    """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
+
+    CR 116.3 again: the player receives priority afterwards, so nothing here
+    passes, advances a step or touches ``priority_player_index``.
+    """
+    refusal = permanent_special_action_refusal(game, seat, permanent, kind)
+    if refusal is not None:
+        return refusal
+    spec = PERMANENT_SPECIAL_ACTIONS[kind]
+    plan = _payment_plan(game, seat, spec.offer(game, permanent) or {})
+    if plan:
+        game._spend_payment_plan(game.players[seat], plan)
+    spec.take(game, seat, permanent)
+    return None
+
+
+def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
+    """What *seat* may currently do with a permanent, one entry per
+    (permanent, kind) — the battlefield half of
+    :func:`available_special_actions`.
+
+    Addressed by ``permanent_id`` rather than by a battlefield slot, for the
+    reason every other wire-borne permanent reference in this engine is: a slot
+    renumbers the moment anything leaves (CR 400.7).
+    """
+    _load_registrations()
+    entries: list[dict] = []
+    for permanent in game.controlled_by(seat):
+        for kind in PERMANENT_SPECIAL_ACTIONS:
+            if permanent_special_action_refusal(game, seat, permanent, kind) is None:
+                entries.append({
+                    "permanent_id": permanent.permanent_id,
+                    "name": permanent.card.name,
+                    "kind": kind,
+                })
+    return entries
+
+
 __all__ = [
+    "PERMANENT_SPECIAL_ACTIONS",
+    "PermanentSpecialAction",
+    "available_permanent_special_actions",
     "available_special_actions",
+    "permanent_special_action_line",
+    "permanent_special_action_refusal",
+    "permanent_special_action_sentence",
+    "permanent_special_actions_for",
+    "register_permanent_special_action",
+    "take_permanent_special_action",
     "special_action_line",
     "special_action_refusal",
     "special_actions_for",

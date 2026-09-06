@@ -1248,6 +1248,110 @@ BECAME_AURA_ENCHANT = "became_aura_enchant"
 #: the writer and the reader sit at opposite ends of the pipeline.
 PUT_ONTO_BATTLEFIELD_BY = "put_onto_battlefield_by"
 
+#: The mark a layer-4 record carries when :func:`end_became_aura_effect` is the
+#: thing that will take it away again. Necromancy's Aura is permanent and
+#: carries none; a Licid's is a continuous effect its controller may pay to end
+#: (CR 116.2c), so the records that effect wrote have to be findable again —
+#: and findable *exactly*, because a permanent may have gained a type from
+#: something else in between.
+BECAME_AURA_RECORD = "from_became_aura"
+
+
+def end_became_aura_effect(game, permanent) -> bool:
+    """Undo what ``become_aura_with_enchant`` did to *permanent*. CR 116.2c.
+
+    "You may pay {C} to end this effect" (Tempest's five Licids). The effect is
+    everything that one instruction recorded — the gained enchantment type and
+    Aura subtype (CR 613 layer 4), the creature type and creature subtypes it
+    replaced (CR 205.1a), the ability it took away (layer 6) and the enchant
+    clause it granted (CR 702.5) — so ending it is dropping exactly those
+    records and nothing else. Nothing is *restored*: every one of them is a
+    contribution, so the permanent goes back to being what its printed card says
+    by the contribution ceasing to exist, which is the same shape
+    ``detach_aura`` has one screen up.
+
+    The attachment goes with it. An Aura that stopped being an Aura is not
+    attached to anything (CR 301.5f's word only means something while the
+    permanent is an Attachment), and leaving the record would make the host go
+    on counting a creature among its Auras.
+
+    Returns whether there was an effect to end.
+    """
+    from .keywords import restore_ability_line
+    from .layer_bridge import GAINED_TYPES, LOST_TYPES
+
+    record = permanent.metadata.pop(BECAME_AURA_ENCHANT, None)
+    if record is None:
+        return False
+    host = permanent.metadata.get("attached_to")
+    if host is not None:
+        detach_aura(permanent, host)
+    for key in (GAINED_TYPES, LOST_TYPES):
+        entries = permanent.metadata.get(key)
+        if not entries:
+            continue
+        kept = [entry for entry in entries if not entry.get(BECAME_AURA_RECORD)]
+        if kept:
+            permanent.metadata[key] = kept
+        else:
+            permanent.metadata.pop(key, None)
+    line = record.get("ability_line")
+    if line:
+        restore_ability_line(permanent, str(line))
+    game._refresh_dynamic_creatures()
+    return True
+
+
+def _became_aura_offer(game, permanent):
+    """What *permanent* is offering to end its became-an-Aura effect for, or None.
+
+    The record is the effect: `become_aura_with_enchant` writes it and
+    :func:`end_became_aura_effect` removes it, so "is the offer open?" and "is
+    there anything to undo?" are one question with one answer.
+
+    The **cost** comes out of that record rather than off the card, and it has
+    to: the printed sentence sits inside the ability the same resolution took
+    away (CR 613 layer 6), so by the time anyone can accept, the permanent no
+    longer says it. CR 611.2a's effect outlives the ability that made it, and
+    CR 116.2c's offer is part of the effect.
+    """
+    record = permanent.metadata.get(BECAME_AURA_ENCHANT)
+    if not record:
+        return None
+    cost = record.get("end_cost")
+    return dict(cost) if cost else None
+
+
+def _take_became_aura_offer(game, seat: int, permanent) -> None:
+    if end_became_aura_effect(game, permanent):
+        game.log.append(
+            f"{game.players[seat].name} paid to end {permanent.card.name}'s "
+            "effect (CR 116.2c): it is a creature again"
+        )
+
+
+def _register_became_aura_special_action() -> None:
+    """Register CR 116.2c's offer, once.
+
+    Guarded rather than bare, because `engine/special_actions.py` imports this
+    module from inside its own seam to make sure the registration has happened —
+    and a duplicate kind raises there by design.
+    """
+    from .special_actions import (PERMANENT_SPECIAL_ACTIONS,
+                                  PermanentSpecialAction,
+                                  register_permanent_special_action)
+
+    if "end_own_continuous_effect" in PERMANENT_SPECIAL_ACTIONS:
+        return
+    register_permanent_special_action(PermanentSpecialAction(
+        kind="end_own_continuous_effect",
+        offer=_became_aura_offer,
+        take=_take_became_aura_offer,
+    ))
+
+
+_register_became_aura_special_action()
+
 
 def _became_aura_refusal(game, aura, granted, host) -> str | None:
     """Why a permanent that *became* an Aura may not enchant *host*.

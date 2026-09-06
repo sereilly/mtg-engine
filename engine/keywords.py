@@ -516,6 +516,33 @@ def remove_ability_line(perm: Permanent, line: str) -> None:
         removed.append(normalized)
 
 
+def restore_ability_line(perm: Permanent, line: str) -> bool:
+    """Layer 6's undo: *perm* has the printed ability *line* again.
+
+    :func:`remove_ability_line` has no duration, which is the honest reading
+    while nothing in the pool gives an ability back on a timer — but a
+    CR 116.2c special action is not a timer. A Licid's controller may pay to
+    end the effect the Licid's own ability created, and the ability it lost is
+    part of that effect; without this the offer would hand back the type and
+    leave the permanent an enchantment that can never become a creature again.
+
+    Returns whether anything was recorded, so a caller can tell "the ability
+    came back" from "it had never gone".
+    """
+    removed = perm.metadata.get(REMOVED_ABILITY_LINES)
+    if not removed:
+        return False
+    normalized = normalized_ability_line(line)
+    remaining = [entry for entry in removed if entry != normalized]
+    if len(remaining) == len(removed):
+        return False
+    if remaining:
+        perm.metadata[REMOVED_ABILITY_LINES] = remaining
+    else:
+        perm.metadata.pop(REMOVED_ABILITY_LINES, None)
+    return True
+
+
 def normalized_ability_line(line: str) -> str:
     """One spelling of a printed ability line, for comparing two of them."""
     return " ".join((line or "").split()).strip().lower().rstrip(".")

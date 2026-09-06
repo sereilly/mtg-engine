@@ -88,6 +88,7 @@ from .text_changes import (
 from .types import (
     parse_land_type_swap,
     _parse_becomes,
+    _parse_becomes_aura_enchantment,
     _parse_no_longer_supertype,
 )
 from .board import (
@@ -276,6 +277,7 @@ __all__ = [
     "_parse_becomes_base_pt",
     "_parse_change_text",
     "_parse_becomes",
+    "_parse_becomes_aura_enchantment",
     "_parse_no_longer_supertype",
     "_parse_bid_life_for_control",
     "_parse_gain_control",
