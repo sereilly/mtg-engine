@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 80.3% | 78.7% | 53.6% | 222 |
+| TMP *(measured)* | 335 | 478 | 81.0% | 79.7% | 54.6% | 226 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,14 +47,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 371 | 170 | expected a subject |  |
-| 115 | 57 | unrecognized effect verb |  |
-| 96 | 48 | unconsumed text |  |
+| 370 | 169 | expected a subject |  |
+| 116 | 58 | unrecognized effect verb |  |
+| 94 | 46 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 12 | 9 | expected a keyword ability |  |
 | 12 | 11 | expected 'unless defending player controls' |  |
+| 11 | 8 | expected a keyword ability |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 2 | expected 'card' |  |
@@ -685,6 +685,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of storage counters from this land: Add {B} for each storage counter removed this way.`
 - **Bounty Hunter**
   - `{T}: Put a bounty counter on target nonblack creature.`
+  - `{T}: Destroy target creature with a bounty counter on it.`
 - **Bounty of the Hunt**
   - `Distribute three +1/+1 counters among one, two, or three target creatures. For each +1/+1 counter you put on a creature this way, remove a +1/+1 counter from that creature at the beginning of the next cleanup step.`
 - **Braingeyser**
@@ -1516,6 +1517,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player may choose any number of tapped nongreen creatures they control and pay {2} for each creature chosen this way. If the player does, untap those creatures.`
 - **Dreams of the Dead**
   - `{1}{U}: Return target white or black creature card from your graveyard to the battlefield. That creature gains "Cumulative upkeep {2}." If the creature would leave the battlefield, exile it instead of putting it anywhere else. (At the beginning of its controller's upkeep, that player puts an age counter on it, then sacrifices it unless they pay its upkeep cost for each age counter on it.)`
+- **Dregs of Sorrow**
+  - `Destroy X target nonblack creatures. Draw X cards.`
 - **Drought**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
 - **Drowned**
@@ -4308,6 +4311,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Reality Ripple**
   - `Target artifact, creature, or land phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
+- **Reanimate**
+  - `Put target creature card from a graveyard onto the battlefield under your control. You lose life equal to that card's mana value.`
 - **Rebirth**
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
@@ -4316,6 +4321,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
 - **Reckless Embermage**
   - `{1}{R}: This creature deals 1 damage to any target and 1 damage to itself.`
+- **Reckless Spite**
+  - `Destroy two target nonblack creatures. You lose 5 life.`
 - **Reclamation**
   - `Black creatures can't attack unless their controller sacrifices a land of their choice for each black creature they control that's attacking. (This cost is paid as attackers are declared.)`
 - **Reconstruction**
@@ -6149,6 +6156,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
+- **Winds of Rath**
+  - `Destroy all creatures that aren't enchanted. They can't be regenerated.`
 - **Winged Sliver**
   - `All Sliver creatures have flying.`
 - **Winter Blast**

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**361 / 614 tracked rules covered (58%)** — 2132 tests, 0 unannotated.
+**362 / 614 tracked rules covered (58%)** — 2136 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [122. Counters](#122-counters) | 4/9 | 44% |
 | [200. General](#200-general) | 0/3 | 0% |
 | [201. Name](#201-name) | 1/6 | 16% |
-| [202. Mana Cost and Color](#202-mana-cost-and-color) | 2/4 | 50% |
+| [202. Mana Cost and Color](#202-mana-cost-and-color) | 3/4 | 75% |
 | [205. Type Line](#205-type-line) | 4/4 | 100% |
 | [207. Text Box](#207-text-box) | 0/5 | 0% |
 | [208. Power/Toughness](#208-powertoughness) | 1/5 | 20% |
@@ -265,7 +265,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(22 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
-- [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(5 tests)*
+- [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(4 tests)*
 - [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(3 tests, subrules a)*
@@ -373,7 +373,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 202. Mana Cost and Color
 
 - [x] **202.1** A card’s mana cost is indicated by mana symbols near the top of the card. (See rule 107.4.) On mo... *(3 tests, subrules ab)*
-- [ ] **202.2** An object is the color or colors of the mana symbols in its mana cost, regardless of the color of...
+- [x] **202.2** An object is the color or colors of the mana symbols in its mana cost, regardless of the color of... *(2 tests)*
 - [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(9 tests, subrules a)*
 - [ ] **202.4** Any additional cost listed in an object’s rules text or imposed by an effect isn’t part of the ma...
 
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(217 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(221 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(23 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
