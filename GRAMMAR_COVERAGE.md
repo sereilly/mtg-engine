@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 76.7% | 73.1% | 51.0% | 114 |
+| WTH *(measured)* | 167 | 249 | 77.9% | 75.1% | 53.0% | 119 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 336 | 146 | expected a subject |  |
 | 103 | 47 | unrecognized effect verb |  |
-| 95 | 48 | unconsumed text |  |
+| 93 | 46 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -825,6 +825,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: Until end of turn, this artifact becomes a 3/2 Construct artifact creature and loses flying.`
 - **Choking Sands**
   - `Destroy target non-Swamp land. If that land was nonbasic, Choking Sands deals 2 damage to the land's controller.`
+- **Choking Vines**
+  - `X target attacking creatures become blocked. Choking Vines deals 1 damage to each of those creatures. (This spell works on creatures that can't be blocked.)`
 - **Chromatic Armor**
   - `{X}: Put a sleight counter on this Aura and choose a color. X is the number of sleight counters on this Aura.`
 - **Chromatic Orrery**
@@ -977,6 +979,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, you gain life equal to its power.`
 - **Concordant Crossroads**
   - `All creatures have haste.`
+- **Cone of Flame**
+  - `Cone of Flame deals 1 damage to any target, 2 damage to another target, and 3 damage to a third target.`
 - **Conservator**
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
@@ -1650,6 +1654,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fasting**
   - `At the beginning of your upkeep, put a hunger counter on this enchantment. Then destroy this enchantment if it has five or more hunger counters on it.`
   - `When you draw a card, destroy this enchantment.`
+- **Fatal Blow**
+  - `Destroy target creature that was dealt damage this turn. It can't be regenerated.`
 - **Fatal Lore**
   - `• You draw three cards.`
 - **Favorable Destiny**
@@ -1745,6 +1751,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
+- **Firestorm**
+  - `Firestorm deals X damage to each of X targets.`
 - **Fissure**
   - `Destroy target creature or land. It can't be regenerated.`
   - `Destroy target creature or land. It can't be regenerated.`
@@ -2763,6 +2771,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Artifacts, creatures, and lands your opponents control enter tapped.`
 - **Kitesail Freebooter**
   - `When this creature enters, target opponent reveals their hand. You choose a noncreature, nonland card from it. Exile that card until this creature leaves the battlefield.`
+- **Kithkin Armor**
+  - `Sacrifice this Aura: The next time a source of your choice would deal damage to enchanted creature this turn, prevent that damage.`
 - **Kjeldoran Dead**
   - `When this creature enters, sacrifice a creature.`
   - `{B}: Regenerate this creature.`
