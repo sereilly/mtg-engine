@@ -564,6 +564,15 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         # different card for printing a comma.
         if not (stream.accept_punct(".") or stream.accept_punct(",")):
             raise stream.error("expected the sorting sentence after the look")
+        # "…, **then put them back in any order**." (Sage Owl.) The same tail
+        # ``_parse_look_other_library_tail`` reads for Natural Selection and
+        # Portent, over the looker's **own** library — nothing is taken and
+        # nothing is bottomed, so it is ``LookAtLibraryTop`` with the rearrange
+        # rather than any of the pick nodes below, which all move a card. Read
+        # before them because "then" is a word none of them opens on and the
+        # first of them (`expect_word("put")`) would fail the line there.
+        if stream.accept_phrase("then", "put", "them", "back", "in", "any", "order"):
+            return ast.LookAtLibraryTop(count, owner, may_reorder=True)
         # Garruk's Harbinger's optional, filtered pick shares this position with
         # See the Truth's compulsory one; reading the second sentence is what
         # decides which card this is.

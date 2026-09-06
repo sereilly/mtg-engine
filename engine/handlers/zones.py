@@ -613,6 +613,44 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     return True, "pending_reorder_library"
 
 
+@effect_handler("reorder_own_library_top")
+def reorder_own_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Look at the top four cards of your library, then put them back in any
+    order." (Sage Owl.)
+
+    ``reorder_target_library_top`` over the looker's **own** pile, and its own
+    kind rather than that one with a seat swapped: that kind is registered in
+    ``engine/targeting.py`` as targeting a player, so a trigger lowered onto it
+    would go on the stack asking for a target Sage Owl never offers.
+
+    One seat answers and one library is rearranged, and they are the same
+    player by construction — the printed possessive says so — which is why
+    neither is read off a target. How many cards is payload, where the printed
+    sentence put it; the library being shorter is not an error (CR 609.3's "as
+    many as you can"), and with fewer than two cards there is no order left to
+    choose, so nothing is asked.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    top_count = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+        len(caster.library),
+    )
+    if top_count < 2:
+        game.log.append(
+            f"{caster.name} has no order left to choose ({context.card.name})"
+        )
+        return True, "resolved"
+    game.arm_pending_choice(
+        "reorder_library", seat,
+        target_index=seat, top_count=top_count, may_shuffle=False,
+    )
+    game.log.append(
+        f"{caster.name} is looking at the top {top_count} cards of their library"
+    )
+    return True, "pending_reorder_library"
+
+
 @effect_handler("choose_card_name")
 def choose_card_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"**Choose a card name**, then target opponent mills a card…"
@@ -5520,15 +5558,84 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     player = context.caster if whose == "you" else context.target
     if player is None:
         return False, "no player to shuffle"
-    moved = len(player.graveyard)
-    player.library.extend(player.graveyard)
-    player.graveyard.clear()
+    # "Shuffle **all creature cards** from your graveyard into your library."
+    # (Barishi.) The named subset, tested by ``graveyard_card_matches`` — the
+    # one predicate this engine has for a printed noun phrase over a graveyard,
+    # so the phrase means here what it means in every return that reads it. The
+    # key's absence is Feldon's Cane's whole pile, which is why the loop below
+    # is one loop rather than two paths.
+    described = instruction.payload.get("cards")
+    if described:
+        moving = [c for c in player.graveyard if graveyard_card_matches(described, c)]
+    else:
+        moving = list(player.graveyard)
+    moved = len(moving)
+    # By identity, and one pass: a graveyard holding two copies of one card is
+    # the reason ``list.remove`` is not used anywhere near a zone in this
+    # engine, and the survivors are what stays.
+    moving_ids = {id(card) for card in moving}
+    player.graveyard[:] = [c for c in player.graveyard if id(c) not in moving_ids]
+    player.library.extend(moving)
     # Through the module-level RNG every other shuffle uses, so a seeded run
-    # stays reproducible (the determinism invariant).
+    # stays reproducible (the determinism invariant). CR 701.24a: the library is
+    # shuffled even when nothing moved into it, because the sentence says to.
     random.shuffle(player.library)
     game.log.append(
         f"{player.name} shuffled {moved} card(s) from their graveyard into their library"
     )
+    return True, "resolved"
+
+
+@effect_handler("shuffle_source_card_into_library")
+def shuffle_source_card_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature dies, shuffle **it** into its owner's library."
+    (Alabaster Dragon.)
+
+    The ability's own card, printed with **no source zone** — so like
+    ``return_source_card_to_owners_hand`` this reaches whichever zone actually
+    holds it rather than one it assumes. Usually the graveyard, since CR 404.1
+    put it there before the trigger resolved; the battlefield branch is for a
+    caller that resolves the stack with no state-based check in between.
+
+    Located by identity across **every** graveyard, not the resolving seat's:
+    CR 404.1 files a card under its *owner*, and a creature that changed hands
+    before it died is in the other player's pile. ``put_card_into_library`` is
+    the seam rather than an append, for CR 903.9b's reason — a commander goes to
+    the command zone instead, and thirty fire sites is twenty-nine places to
+    forget it.
+
+    The shuffle happens even when the card has already left (exiled in response,
+    CR 608.2's "as much as possible"), because CR 701.24a's randomisation is
+    what this sentence is mostly for: it is the reason a player cannot count
+    the Dragon's return.
+    """
+    card = context.card
+    source = context.source_permanent
+    owner = None
+    if source is not None and game.is_on_battlefield(source):
+        owner = game.players[source.metadata.get("base_controller_index", 0)]
+        game.remove_from_battlefield(source)
+        game.put_card_into_library(owner, card, from_battlefield=source)
+    else:
+        for player in game.players:
+            found = next(
+                (i for i, held in enumerate(player.graveyard) if held is card), None
+            )
+            if found is not None:
+                player.graveyard.pop(found)
+                owner = player
+                game.put_card_into_library(player, card)
+                break
+    if owner is None:
+        # Nothing to move. The library is still shuffled — the sentence names
+        # one, and a player who could tell "the card was gone" from "the card
+        # came back" by watching the deck would know something the card never
+        # tells them.
+        owner = context.caster
+        game.log.append(f"{card.name} was no longer in a graveyard")
+    else:
+        game.log.append(f"{card.name} was shuffled into {owner.name}'s library")
+    random.shuffle(owner.library)
     return True, "resolved"
 
 

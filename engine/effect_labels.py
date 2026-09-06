@@ -745,6 +745,16 @@ TRIGGERED_LABELS: dict[str, str] = {
     "discard_target_cards": "triggered_discard",
     "return_bound_card_to_owners_hand": "triggered_return",
     "reanimate_bound_card": "triggered_return",
+    # "When this creature enters, look at the top four cards of your library,
+    # then put them back in any order." (Sage Owl.) Beside
+    # ``reorder_target_library_top``'s ``activated_library`` in the other
+    # table: what the label reports is what the ability does, and the only
+    # difference here is the position the line occupies.
+    "reorder_own_library_top": "triggered_library",
+    # "When this creature dies, shuffle it into its owner's library."
+    # (Alabaster Dragon.) The card goes from one zone to another, which is what
+    # every self-move in these tables reports.
+    "shuffle_source_card_into_library": "triggered_library",
     "add_named_counter_to_target": "triggered_counter",
     "prevent_damage_to_target_until_eot": "triggered_prevention",
     "exile_target_permanent": "triggered_exile",
