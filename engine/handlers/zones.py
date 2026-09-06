@@ -37,7 +37,7 @@ from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
 from ..revealed_hands import reveal_hand_while_present
 from ..resumption import run_resumable
-from ..search_filters import search_matches
+from ..search_filters import card_has_type, search_matches
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from .registry import effect_handler
 
@@ -587,6 +587,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         enters_tapped=bool(instruction.payload.get("enters_tapped")),
         untap_found_if=instruction.payload.get("untap_found_if"),
         up_to=bool(instruction.payload.get("up_to")),
+        # "…and exile the rest." (Doomsday.) What happens to the searched piles
+        # once the finds are out of them. It rides to the prompt like the zones
+        # and the restriction do, because the seat that answers is the seat
+        # whose zones are emptied and the answer is what says which cards
+        # survive.
+        exile_rest=bool(instruction.payload.get("exile_rest")),
         # "…, reveal it/those cards, …" (CR 701.20): the finds are shown to
         # every player, which the resolution records as one reveal event when
         # the search ends. A search that does not print the word shows nothing.
@@ -731,10 +737,91 @@ def bin_revealed_card(game: Game, instruction: OracleInstruction, context: Oracl
         for index, held in enumerate(player.library):
             if held is card:
                 player.library.pop(index)
-                game.put_card_into_graveyard(player, held)
+                game.put_card_into_graveyard(player, held, from_zone="library")
                 game.log.append(
                     f"{context.card.name}: {held.name} goes into "
                     f"{player.name}'s graveyard"
+                )
+                return True, "resolved"
+    game.log.append(f"{context.card.name}: {card.name} has already moved")
+    return True, "resolved"
+
+
+@effect_handler("reveal_top_opponent_chooses")
+def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top three cards of your library. Target opponent chooses one
+    of those cards. Put that card into your graveyard." (Thran Tome.)
+
+    The reveal and the choice are one step because the choice is made **from**
+    what the reveal showed \u2014 ``reveal_hand_and_choose`` one zone over records
+    the same reasoning. What is new here is *who* chooses: CR 608.2c makes the
+    ability's controller the actor for everything the sentence does not say
+    otherwise about, and this sentence says otherwise, so the prompt is queued
+    on the opponent's seat with the revealer's carried as payload.
+
+    CR 701.20 moves nothing, so the cards stay on top of the library and the
+    answer moves exactly one of them. Fewer cards than the printed number is a
+    legal board \u2014 the reveal shows what is there \u2014 and an empty library shows
+    nothing and chooses nothing.
+    """
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    opponent = context.target
+    if opponent not in game.players:
+        game.log.append(f"{context.card.name}: no opponent to choose")
+        return True, "resolved"
+    opponent_index = game.players.index(opponent)
+    count = resolve_amount(instruction.payload.get("count", 1) or 1, context.x_value)
+    revealed = list(caster.library[:max(int(count), 0)])
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards to reveal")
+        return True, "resolved"
+    game.record_reveal(caster_index, [card.name for card in revealed])
+    game.log.append(
+        f"{caster.name} revealed {', '.join(card.name for card in revealed)} "
+        f"from the top of their library"
+    )
+    game.arm_pending_choice(
+        "opponent_picks_revealed", opponent_index,
+        card_name=context.card.name if context.card is not None else "",
+        revealer_index=caster_index,
+        cards=[card.name for card in revealed],
+        fate=str(instruction.payload.get("fate", "graveyard")),
+        # The card objects, so the answer moves the card that was *revealed*
+        # rather than whatever has since slid into that library slot. Private,
+        # like every live reference on a prompt.
+        _cards=revealed,
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_revealed_card_onto_battlefield")
+def put_revealed_card_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top card of your library. If it's a creature card, **put it
+    onto the battlefield**." (Call of the Wild.)
+
+    ``bin_revealed_card`` above with the other destination, and located the same
+    way and for the same reason: CR 701.20 moves a revealed card nowhere, so it
+    is still in the library it was turned up in — found by **identity**, because
+    two copies of a card in a deck are the same immutable ``CardDefinition`` and
+    ``list.remove`` would take whichever entry came first.
+
+    It enters under its owner's control, which is the seat whose library it came
+    out of: the sentence names no other, and CR 110.2 gives a permanent nobody
+    was told to control to its owner. A card that has moved since is left alone
+    — CR 608.2 doing as much as it can.
+    """
+    card = context.results.get("revealed_card")
+    if card is None:
+        game.log.append(f"{context.card.name}: no card was turned up")
+        return True, "resolved"
+    for seat, player in enumerate(game.players):
+        for index, held in enumerate(player.library):
+            if held is card:
+                player.library.pop(index)
+                game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+                game.log.append(
+                    f"{context.card.name}: {card.name} enters the battlefield"
                 )
                 return True, "resolved"
     game.log.append(f"{context.card.name}: {card.name} has already moved")
@@ -1084,7 +1171,7 @@ def place_held_card(game: Game, instruction: OracleInstruction, context: OracleE
         return True, "resolved"
     # CR 400.3: a card put into a graveyard goes to its **owner's**, and the
     # only owner a library card can have is the player whose library it was.
-    game.put_card_into_graveyard(seat, card)
+    game.put_card_into_graveyard(seat, card, from_zone="library")
     game.log.append(f"{card.name} is put into its owner's graveyard")
     return True, "resolved"
 
@@ -1511,8 +1598,9 @@ def return_chosen_cards_from_graveyard_to_hand(
 REANIMATED_PERMANENTS = "reanimated_permanents"
 
 
-def _holds_a_reanimable_card(player, index, card_filter) -> bool:
-    """Whether *player*'s graveyard holds a creature card this effect may take.
+def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -> bool:
+    """Whether *player*'s graveyard holds a card of *card_type* this effect may
+    take.
 
     With *index* given, the question is only about that slot — the announced
     target — because a named target that is legal settles where the card comes
@@ -1521,7 +1609,7 @@ def _holds_a_reanimable_card(player, index, card_filter) -> bool:
     graveyard = getattr(player, "graveyard", ())
 
     def eligible(card) -> bool:
-        return card.primary_type == "creature" and (
+        return card_has_type(card, card_type) and (
             card_filter is None or card_filter(card)
         )
 
@@ -1530,7 +1618,7 @@ def _holds_a_reanimable_card(player, index, card_filter) -> bool:
     return any(eligible(card) for card in graveyard)
 
 
-def _reanimable_slot(player, card_filter):
+def _reanimable_slot(player, card_filter, card_type="creature"):
     """The first slot of *player*'s graveyard this effect may take, or nothing.
 
     A generator so the caller can write one ``next`` over seats and slots
@@ -1538,7 +1626,7 @@ def _reanimable_slot(player, card_filter):
     out afterwards.
     """
     for index, card in enumerate(getattr(player, "graveyard", ())):
-        if card.primary_type == "creature" and (
+        if card_has_type(card, card_type) and (
             card_filter is None or card_filter(card)
         ):
             yield index
@@ -1555,6 +1643,15 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
+    # "Return target **artifact** card from your graveyard to the battlefield."
+    # (Argivian Restoration.) Which kind of card comes back is the sentence's
+    # own word and rides the payload; "creature" is what every printing before
+    # it said, so a payload written without the key means exactly what it did.
+    # Every reader of it below goes through ``card_has_type`` — CR 205.2a gives
+    # a card every type its line names, and ``primary_type`` picks one of them
+    # by the order of a list, which is what made an Artifact Creature card
+    # invisible to a phrase naming an artifact.
+    card_type = str(instruction.payload.get("card_type", "creature"))
     # "Return **the top** creature card of your graveyard to the
     # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on *top* of
     # its owner's graveyard and CR 404.2 keeps the pile in that order, and this
@@ -1571,13 +1668,13 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             (
                 slot
                 for slot in range(len(caster.graveyard) - 1, -1, -1)
-                if caster.graveyard[slot].primary_type == "creature"
+                if card_has_type(caster.graveyard[slot], card_type)
             ),
             None,
         )
         if idx is None:
             game.log.append(
-                f"{context.card.name}: no creature card in the graveyard"
+                f"{context.card.name}: no {card_type} card in the graveyard"
             )
             context.results[REANIMATED_PERMANENTS] = ()
             return True, "resolved"
@@ -1596,7 +1693,9 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     if colors:
         spec = {"graveyard_colors": list(colors)}
         card_filter = lambda card: graveyard_card_matches(spec, card)
-    if any_graveyard and not _holds_a_reanimable_card(source_player, idx, card_filter):
+    if any_graveyard and not _holds_a_reanimable_card(
+        source_player, idx, card_filter, card_type
+    ):
         # **No card was named, and the seat that was named holds none.** The
         # index fallback below searches the *caster's* graveyard, which is right
         # for "from your graveyard" and blind for "from a graveyard": an AI seat
@@ -1610,7 +1709,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             (
                 (player, slot)
                 for player in (source_player, caster, *game.players)
-                for slot in _reanimable_slot(player, card_filter)
+                for slot in _reanimable_slot(player, card_filter, card_type)
             ),
             None,
         )
@@ -1621,7 +1720,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             # been enough here.
             source_player, idx = found
     reanimated = game._reanimate_creature_to_battlefield(
-        caster, source_player, idx, card_filter=card_filter
+        caster, source_player, idx, card_filter=card_filter, card_type=card_type
     )
     # "enchant creature **put onto the battlefield with Necromancy**" — the
     # relation that clause is about, stamped by the step that performs it
@@ -1660,8 +1759,8 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         (reanimated.permanent_id,) if reanimated is not None else ()
     )
     game.log.append(
-        "Reanimated creature to battlefield" if reanimated is not None
-        else "No creature to reanimate"
+        f"Reanimated {card_type} to battlefield" if reanimated is not None
+        else f"No {card_type} to reanimate"
     )
     return True, "resolved"
 
@@ -2441,7 +2540,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         random.shuffle(player.library)
     else:
         for card in revealed:
-            game.put_card_into_graveyard(player, card)
+            game.put_card_into_graveyard(player, card, from_zone="library")
     return True, "resolved"
 
 
@@ -3444,7 +3543,7 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             if not victim.library:
                 break
             card = victim.library.pop(0)
-            game.put_card_into_graveyard(victim, card)
+            game.put_card_into_graveyard(victim, card, from_zone="library")
             put_there.append(card)
             milled += 1
         game.log.append(f"{victim.name} milled {milled} card(s)")
@@ -3559,7 +3658,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
     milled = 0
     while milled < limit and victim.library:
         card = victim.library.pop(0)
-        game.put_card_into_graveyard(victim, card)
+        game.put_card_into_graveyard(victim, card, from_zone="library")
         milled += 1
         if _card_matches_filter(card, stop_filter, game=game, owner=victim):
             matched.append(card)
@@ -5177,7 +5276,13 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         colors = tuple(payload.get("colors") or ())
 
         def _legal(card) -> bool:
-            if card_types and card.primary_type not in card_types:
+            # ``card_has_type`` for ``cast_permissions._covers``' reason, and it
+            # is the same question one step earlier: which card in the pile the
+            # permission may name. The two disagreeing would offer a card the
+            # permission then refuses.
+            if card_types and not any(
+                card_has_type(card, name) for name in card_types
+            ):
                 return False
             if colors and not any(color in card.colors for color in colors):
                 return False
@@ -5633,6 +5738,35 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     player = context.caster if whose == "you" else context.target
     if player is None:
         return False, "no player to shuffle"
+    # "Target player shuffles **up to three target cards** from their graveyard
+    # into their library." (Gaea's Blessing.) The moving cards were chosen at
+    # announcement (CR 601.2c), so they are resolved as slots rather than
+    # described — the same resolution ``put_graveyard_cards_on_library_top``
+    # performs for the identical noun phrase one destination over, and through
+    # the same predicate, so the picker and this cannot disagree about which
+    # cards the line may name. An "up to" that named none is a legal
+    # announcement and shuffles the library anyway (CR 701.24a).
+    described_targets = instruction.payload.get("targets") or {}
+    if described_targets:
+        limit = (
+            len(player.graveyard) if described_targets.get("unbounded")
+            else min(int(described_targets.get("count") or 1), len(player.graveyard))
+        )
+        picked = _resolve_graveyard_slots(
+            player, context, limit,
+            lambda card: graveyard_card_matches(instruction.payload, card),
+        )
+        # ``_resolve_graveyard_slots`` has already taken them out of the pile,
+        # highest slot first, which is the only way two copies of one card can
+        # be told apart there (they are one ``CardDefinition`` object).
+        for card in picked:
+            game.put_card_into_library(player, card, position="top")
+        random.shuffle(player.library)
+        game.log.append(
+            f"{player.name} shuffled {len(picked)} chosen card(s) from their "
+            "graveyard into their library"
+        )
+        return True, "resolved"
     # "Shuffle **all creature cards** from your graveyard into your library."
     # (Barishi.) The named subset, tested by ``graveyard_card_matches`` — the
     # one predicate this engine has for a printed noun phrase over a graveyard,

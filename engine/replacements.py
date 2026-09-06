@@ -2683,7 +2683,7 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
         game.record_reveal(game.players.index(player), [revealed.name])
         if card_has_type(revealed, "creature"):
             player.library.pop(0)
-            game.put_card_into_graveyard(player, revealed)
+            game.put_card_into_graveyard(player, revealed, from_zone="library")
             game.log.append(
                 f"{player.name} revealed {revealed.name} and put it into their "
                 f"graveyard ({source.card.name})"
@@ -2803,7 +2803,9 @@ def _mill_cards(game, player, count: int) -> int:
     for _ in range(count):
         if not player.library:
             break
-        game.put_card_into_graveyard(player, player.library.pop(0))
+        game.put_card_into_graveyard(
+            player, player.library.pop(0), from_zone="library"
+        )
         milled += 1
     return milled
 

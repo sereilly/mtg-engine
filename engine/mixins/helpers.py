@@ -854,8 +854,17 @@ class GameHelpersMixin:
             library.append(card)
         return True
 
-    def put_card_into_graveyard(self, owner, card) -> bool:
+    def put_card_into_graveyard(self, owner, card, *, from_zone=None) -> bool:
         """Put *card* into *owner*'s graveyard, unless something diverts it.
+
+        *from_zone* is the zone it came out of, named only where a card says
+        the words. "When this card is put into your graveyard **from your
+        library**" (Gaea's Blessing) is a trigger no permanent can ever fire
+        (CR 113.6k), so nothing on the battlefield can be scanned for it and
+        the announcement has to happen where the move does. Optional and
+        defaulting to None because the seam has twenty-six callers and only the
+        library ones have a card watching: an unnamed source zone announces
+        nothing, which is what every caller meant before the words existed.
 
         The third of the zone seams, and it exists for the reason CR 903.9b gave
         the first two: "if a card would be put into your graveyard **from
@@ -891,6 +900,15 @@ class GameHelpersMixin:
         if consumed:
             return False
         self.players[seat].graveyard.append(card)
+        # Announced **after** the card has arrived, because CR 603.6 has a
+        # zone-change trigger look for its object in the zone it moved to — and
+        # a replacement that diverted the card returned above, so nothing fires
+        # for a card that never got here.
+        if from_zone == "library":
+            emit(
+                self, "self_put_into_graveyard_from_library",
+                subject=card, owner_index=seat,
+            )
         return True
 
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:

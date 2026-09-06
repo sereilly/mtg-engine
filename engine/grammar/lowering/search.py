@@ -79,7 +79,15 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
     # than somewhere random. The parse side carries no owner on this zone —
     # the library just shuffled is the searcher's by construction.
     to_library_top = node.to.name == "library_top"
-    if not to_battlefield and not to_library_top and (
+    # "…put them into your **graveyard**, then shuffle." (Buried Alive; Entomb
+    # prints the single-find spelling.) A fourth destination with a flow, and
+    # the possessive is required for the hand's reason: CR 404.1 sends a card
+    # to the graveyard of the player who owns it, and the only owner this flow
+    # can name is the seat whose library was opened.
+    to_graveyard = node.to.name == "graveyard" and (
+        node.to.owner is not None and node.to.owner.kind == "you"
+    )
+    if not to_battlefield and not to_library_top and not to_graveyard and (
         node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you"
     ):
         raise LoweringError(
@@ -160,7 +168,9 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
             raise LoweringError(
                 f"the search flow has no destination {zone.name!r}", node=node
             )
-        if zone.name == "hand" and (zone.owner is None or zone.owner.kind != "you"):
+        if zone.name in ("hand", "graveyard") and (
+            zone.owner is None or zone.owner.kind != "you"
+        ):
             raise LoweringError(
                 "the search flow puts a found card into the searcher's own hand",
                 node=node,
@@ -208,8 +218,20 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["restrictions"] = restrictions
     if node.graveyard:
         payload["zones"] = ("library", "graveyard")
+    if node.exile_rest:
+        # "…and exile the rest." (Doomsday.) What becomes of the searched piles
+        # once the finds are out of them \u2014 a fact about the zones rather than
+        # about a find, which is why it rides beside ``zones`` and not in
+        # ``destinations``. Emitted only when the card prints it, so every
+        # search written before this keeps a byte-identical payload.
+        payload["exile_rest"] = True
     if to_library_top:
         payload["destination"] = "library_top"
+    if to_graveyard and len(destinations) == 1:
+        # The single-find spelling (Entomb). The counted one carries its zone in
+        # ``destinations`` above, which is the list `_place_found_card` walks;
+        # this key is what the one-card resolver reads instead.
+        payload["destination"] = "graveyard"
     if to_battlefield and len(destinations) == 1:
         payload["destination"] = "battlefield"
         # "…put it onto the battlefield **tapped**" (Fabled Passage). Emitted
@@ -238,8 +260,13 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
 #: The third is "on top of your library" (the three Mirage tutors), and it is
 #: the one whose *order* is part of the effect: the flow shuffles first and
 #: places the find after, so the card is on top rather than back in the deck.
+#: The fourth is the searcher's own graveyard (Buried Alive, Entomb) — an
+#: ordered zone too (CR 404.1), but its order is not this card's business:
+#: nothing is placed relative to what is already there, so each find is simply
+#: put in, through ``put_card_into_graveyard``.
 _SEARCH_DESTINATIONS = {
     "hand": "hand", "battlefield": "battlefield", "library_top": "library_top",
+    "graveyard": "graveyard",
 }
 
 #: The same question for a search of *somebody else's* library. Exile is here

@@ -1390,3 +1390,109 @@ def test_605_1a_an_effect_that_targets_is_not_a_mana_ability_at_any_depth():
 
     assert is_mana_ability(adds) is True
     assert is_mana_ability(fused) is False
+
+
+# ---------------------------------------------------------------------------
+# 113.6k — a trigger condition that cannot fire from the battlefield
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("113.6k")
+def test_113_6k_a_condition_that_cannot_fire_from_the_battlefield_fires_elsewhere(
+    set_pool,
+):
+    """"When this card is put into your graveyard **from your library**, shuffle
+    your graveyard into your library." (Gaea's Blessing.)
+
+    CR 113.6k: a trigger condition that can't trigger from the battlefield
+    functions in every zone it *can* trigger from. This one names a move no
+    permanent can make, so no battlefield scan can find it and the announcement
+    has to happen where the card actually moves — ``Game.put_card_into_graveyard``
+    naming the zone the card came out of.
+
+    The twin of ``113.6m``'s test above: that one is an ability declared to
+    function in a graveyard by what its *effect* does, and this one by what its
+    *condition* is.
+    """
+    from engine.replacements import _mill_cards
+
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    blessing = wth["Gaea's Blessing"]
+    p1 = PlayerState(
+        name="P1",
+        library=[blessing, lea["Island"], lea["Island"]],
+        graveyard=[lea["Grizzly Bears"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", library=[lea["Island"]] * 5)])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    _mill_cards(game, p1, 1)
+
+    assert [item.card.name for item in game.stack] == ["Gaea's Blessing"]
+    game.resolve_stack()
+    assert p1.graveyard == []
+    assert len(p1.library) == 4, game.log
+
+
+@pytest.mark.cr("113.6k")
+def test_113_6k_the_same_card_on_the_battlefield_never_fires_it(set_pool):
+    """The rule's other half: the condition does not function on the
+    battlefield, so a permanent that somehow carried this ability answers no
+    library move at all. Checked through the fire site rather than through the
+    scan, because a scan that never looks is indistinguishable from one that
+    looks and finds nothing."""
+    from engine.replacements import _mill_cards
+
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    p1 = PlayerState(name="P1", library=[lea["Island"], lea["Island"]])
+    game = Game(players=[p1, PlayerState(name="P2", library=[lea["Island"]] * 5)])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    p1.battlefield.append(Permanent(card=wth["Gaea's Blessing"]))
+    game._sync_control()
+
+    _mill_cards(game, p1, 1)
+
+    assert game.stack == [], game.log
+
+
+# ---------------------------------------------------------------------------
+# 205.2b — an object with more than one card type
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("205.2b")
+def test_205_2b_an_artifact_creature_card_answers_a_phrase_naming_either_type(
+    set_pool,
+):
+    """"Return target **artifact** card from your graveyard to the battlefield."
+    (Argivian Restoration.)
+
+    CR 205.2b: an object with more than one card type satisfies the criteria for
+    any effect that applies to any of them. ``CardDefinition.primary_type``
+    picks one type by the order of a list and answers "creature" for an Artifact
+    Creature, so every reader asking it about an artifact was wrong for the 77
+    such cards in the pool. ``search_filters.card_has_type`` is the one function
+    that answers this, and the picker, the cast-time re-check and the handler
+    all reach it.
+    """
+    from engine.search_filters import card_has_type
+
+    statue = set_pool("ATQ")["Clay Statue"]
+    assert statue.primary_type == "creature"
+    assert card_has_type(statue, "artifact")
+    assert card_has_type(statue, "creature")
+
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    p1 = PlayerState(
+        name="P1",
+        hand=[wth["Argivian Restoration"]],
+        graveyard=[statue],
+        library=[lea["Island"]] * 5,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", library=[lea["Island"]] * 5)])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.cast_from_hand(0, "Argivian Restoration", target_permanent_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Clay Statue"], game.log

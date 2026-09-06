@@ -97,6 +97,7 @@ from .lowering import (
     _lower_discard_revealed_unless_pay_life,
     _lower_lose_life,
     _lower_bin_revealed_card,
+    _lower_put_revealed_card_onto_battlefield,
     _lower_put_milled_card_onto_battlefield,
     _lower_put_counter,
     _lower_put_onto_battlefield,
@@ -397,6 +398,16 @@ def lower_statement(
         picked = _lower_graveyard_pick_onto_battlefield(statement)
         if picked is not None:
             return picked
+        # "Reveal the top card of your library. If it's a creature card, put
+        # **it** onto the battlefield." (Call of the Wild.) A third family, and
+        # the one only `produced` can pick out: the pronoun names the card an
+        # earlier step of this same effect turned up, where the zone lowering
+        # below reads it as the ability's own source. Asked here for the pick's
+        # reason — it answers nothing for any line with no reveal in front of
+        # it, so it can only add a reading, never take one away.
+        revealed = _lower_put_revealed_card_onto_battlefield(statement, produced)
+        if revealed:
+            return revealed
         # ``bound_card_from`` over ``event``: which event recorded the card
         # "that card" names is a fact about the whole printed line, and the
         # parser is what reads one (``rebinding.bind_recorded_card``).

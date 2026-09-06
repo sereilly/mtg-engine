@@ -484,3 +484,352 @@ def test_cone_of_flame_is_proposable_by_the_ai(set_pool):
     action = choose_cast_action(game, 0)
     assert action is not None and action.card_name == "Cone of Flame"
     assert len(action.divided_targets) == 3, "the count the card prints"
+
+
+# --- W2G4: libraries and graveyards as piles ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle as _w2g4_compile
+from engine.targeting import derive_cast_spec as _w2g4_cast_spec
+
+
+def _w2g4_game(set_pool, hand, *, library=(), graveyard=(), opponent_graveyard=(),
+               life=20, interactive=(0,)):
+    """A two-seat board with the piles this group's cards read."""
+    lea = set_pool("LEA")
+    game = Game(players=[
+        PlayerState(
+            name="P1", hand=list(hand), library=list(library),
+            graveyard=list(graveyard), life=life,
+        ),
+        PlayerState(
+            name="P2", library=[lea["Island"]] * 10,
+            graveyard=list(opponent_graveyard),
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    return game
+
+
+def test_buried_alive_searches_a_library_into_a_graveyard(set_pool):
+    """"Search your library for up to three creature cards, put them into your
+    graveyard, then shuffle."
+
+    The search flow already carried its destination as a parameter; a graveyard
+    simply was not in the closed set of destinations it implements, so the card
+    refused with "the search flow puts the found card into the searcher's own
+    hand". The three finds land in the graveyard and nothing else moves.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Buried Alive"])
+    assert program.supported, program.reason
+    (search,) = program.instructions
+    assert search.kind == "search_library"
+    assert search.payload["destinations"] == ["graveyard"] * 3
+
+    game = _w2g4_game(
+        set_pool, [wth["Buried Alive"]],
+        library=[lea[n] for n in
+                 ("Grizzly Bears", "Craw Wurm", "Shivan Dragon", "Forest", "Island")],
+        interactive=(),
+    )
+    game.cast_from_hand(0, "Buried Alive")
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Buried Alive", "Craw Wurm", "Grizzly Bears", "Shivan Dragon",
+    ], game.log
+    assert sorted(c.name for c in game.players[0].library) == ["Forest", "Island"]
+    assert game.players[0].hand == []
+
+
+def test_argivian_restoration_finds_an_artifact_creature(set_pool):
+    """"Return target artifact card from your graveyard to the battlefield."
+
+    Clay Statue's printed line is "Artifact Creature", and CR 205.2b makes it an
+    artifact card **and** a creature card. ``primary_type`` picks one of them by
+    the order of a list and answers "creature", so a reanimation reading it
+    would have offered the player nothing at all.
+    """
+    wth, lea, atq = set_pool("WTH"), set_pool("LEA"), set_pool("ATQ")
+    statue = atq["Clay Statue"]
+    assert statue.primary_type == "creature"
+
+    program = _w2g4_compile(wth["Argivian Restoration"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "reanimate_creature"
+    assert instruction.payload == {"card_type": "artifact"}
+
+    game = _w2g4_game(
+        set_pool, [wth["Argivian Restoration"]],
+        graveyard=[lea["Grizzly Bears"], statue, lea["Black Lotus"]],
+    )
+    spec = _w2g4_cast_spec(wth["Argivian Restoration"], program)
+    offered = game._enumerate_targets(
+        0, wth["Argivian Restoration"], spec, for_cast=True
+    )
+    assert [entry["name"] for entry in offered] == ["Clay Statue", "Black Lotus"]
+
+    game.cast_from_hand(0, "Argivian Restoration", target_permanent_index=1)
+    game.resolve_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Clay Statue"]
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Grizzly Bears", "Black Lotus", "Argivian Restoration",
+    ]
+
+
+def test_argivian_restoration_declines_a_graveyard_of_creatures(set_pool):
+    """The other half of the same narrowing: a pile with no artifact card in it
+    offers nothing, where a reanimation that ignored the printed type would
+    have returned the Bears."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Argivian Restoration"])
+    game = _w2g4_game(
+        set_pool, [wth["Argivian Restoration"]], graveyard=[lea["Grizzly Bears"]],
+    )
+    spec = _w2g4_cast_spec(wth["Argivian Restoration"], program)
+
+    assert game._enumerate_targets(
+        0, wth["Argivian Restoration"], spec, for_cast=True
+    ) == []
+
+
+def test_agonizing_memories_stacks_two_cards_in_the_order_chosen(set_pool):
+    """"Look at target player's hand and choose two cards from it. Put them on
+    top of that player's library in any order."
+
+    The order is the pick order: the chooser is asked one card at a time and
+    each goes on top of the last, so the **second** card named ends up on top.
+    That is what "in any order" buys, and it is why the clause is consumed
+    rather than recorded.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Agonizing Memories"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "reveal_hand_and_choose"
+    assert instruction.payload["count"] == 2
+    assert instruction.payload["fate"] == "library_top"
+
+    game = _w2g4_game(set_pool, [wth["Agonizing Memories"]], library=[lea["Island"]] * 5)
+    game.players[1].hand = [
+        lea["Grizzly Bears"], lea["Shivan Dragon"], lea["Forest"],
+    ]
+    game.cast_from_hand(0, "Agonizing Memories", target_player_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["revealed_hand_pick"]
+    assert game.confirm_revealed_hand_pick(0, 1)   # Shivan Dragon
+    assert game.confirm_revealed_hand_pick(0, 0)   # Grizzly Bears
+
+    assert [c.name for c in game.players[1].hand] == ["Forest"]
+    assert [c.name for c in game.players[1].library[:2]] == [
+        "Grizzly Bears", "Shivan Dragon",
+    ], game.log
+
+
+def test_agonizing_memories_refuses_a_pronoun_that_disagrees_with_the_count():
+    """"Put **that card** on top" after "choose **two** cards" is not a sentence
+    any card prints, and admitting it would let a two-card choice claim the
+    one-card reading."""
+    from engine.grammar.errors import GrammarError
+    from engine.grammar.parser import parse_line
+
+    parse_line(
+        "Look at target player's hand and choose a card from it. "
+        "Put that card on top of that player's library."
+    )
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Look at target player's hand and choose two cards from it. "
+            "Put that card on top of that player's library in any order."
+        )
+
+
+def test_gaeas_blessing_shuffles_the_cards_its_target_chose(set_pool):
+    """"Target player shuffles up to three target cards from their graveyard
+    into their library. Draw a card."
+
+    The card was already "supported" on its cantrip alone: this sentence
+    compiled to nothing and the picker offered nothing, which is the Roots
+    class. The cards are chosen out of the *target's* graveyard and the
+    remainder stays where it was.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Gaea's Blessing"])
+    shuffle, draw = program.instructions
+    assert shuffle.kind == "shuffle_graveyard_into_library"
+    assert shuffle.payload["graveyard_owner"] == "target_player"
+    assert shuffle.payload["targets"] == {
+        "quantifier": "up_to", "kind": "card", "count": 3,
+    }
+    assert draw.kind == "draw_controller_cards"
+
+    game = _w2g4_game(
+        set_pool, [wth["Gaea's Blessing"]], library=[lea["Island"]] * 5,
+        opponent_graveyard=[lea[n] for n in
+                            ("Grizzly Bears", "Black Lotus", "Forest", "Mountain")],
+    )
+    before = len(game.players[1].library)
+    game.cast_from_hand(
+        0, "Gaea's Blessing", target_player_index=1, target_permanent_index=[0, 2],
+    )
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Black Lotus", "Mountain"]
+    assert len(game.players[1].library) == before + 2
+    assert [c.name for c in game.players[0].hand] == ["Island"]
+
+
+def test_gaeas_blessing_returns_the_graveyard_when_it_is_milled(set_pool):
+    """"When this card is put into your graveyard from your library, shuffle
+    your graveyard into your library."
+
+    A trigger no permanent can ever fire (CR 113.6k), announced from the seam
+    the card actually moves through. The Blessing itself is in the graveyard
+    when the ability resolves, so it goes back too.
+    """
+    from engine.replacements import _mill_cards
+
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Gaea's Blessing"])
+    (trigger,) = [
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "self_put_into_graveyard_from_library"
+    ]
+    assert trigger.instruction.kind == "shuffle_graveyard_into_library"
+
+    game = _w2g4_game(
+        set_pool, [],
+        library=[wth["Gaea's Blessing"], lea["Island"], lea["Island"]],
+        graveyard=[lea["Grizzly Bears"], lea["Forest"]],
+    )
+    _mill_cards(game, game.players[0], 1)
+
+    assert [item.card.name for item in game.stack] == ["Gaea's Blessing"]
+    game.resolve_stack()
+
+    assert game.players[0].graveyard == []
+    assert len(game.players[0].library) == 5, game.log
+
+
+def test_a_second_copy_in_the_graveyard_does_not_trigger(set_pool):
+    """The fire site is scoped to **the card that moved**. A graveyard scan
+    would find a copy already lying in the pile and fire for a card that never
+    went anywhere."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w2g4_game(
+        set_pool, [],
+        library=[lea["Island"], lea["Island"]],
+        graveyard=[wth["Gaea's Blessing"]],
+    )
+    from engine.replacements import _mill_cards
+
+    _mill_cards(game, game.players[0], 1)
+
+    assert game.stack == [], game.log
+
+
+def test_paradigm_shift_exiles_a_library_and_refills_it(set_pool):
+    """"Exile all cards from your library. Then shuffle your graveyard into
+    your library."
+
+    The whole-library exile existed for Thought Lash's third-person spelling
+    ("that player exiles all cards from their library") and was simply
+    unreachable from the imperative.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Paradigm Shift"])
+    assert program.supported, program.reason
+    (sequence,) = program.instructions
+    exile, shuffle = sequence.payload["steps"]
+    assert exile.kind == "exile_entire_library"
+    assert shuffle.kind == "shuffle_graveyard_into_library"
+
+    game = _w2g4_game(
+        set_pool, [wth["Paradigm Shift"]], library=[lea["Island"]] * 7,
+        graveyard=[lea[n] for n in ("Grizzly Bears", "Forest", "Black Lotus")],
+    )
+    game.cast_from_hand(0, "Paradigm Shift")
+    game.resolve_stack()
+
+    assert len(game.players[0].exile) == 7
+    assert sorted(c.name for c in game.players[0].library) == [
+        "Black Lotus", "Forest", "Grizzly Bears",
+    ]
+    # The spell itself finishes resolving *after* the shuffle (CR 608.2), so it
+    # is not one of the cards that went back.
+    assert [c.name for c in game.players[0].graveyard] == ["Paradigm Shift"]
+
+
+def test_doomsday_keeps_five_cards_and_exiles_both_zones(set_pool):
+    """"Search your library and graveyard for five cards and exile the rest.
+    Put the chosen cards on top of your library in any order. You lose half
+    your life, rounded up."
+
+    Two zones searched at once, the *piles* exiled rather than the finds, and
+    the pick order is the stack order — the first card named ends up on top.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Doomsday"])
+    assert program.supported, program.reason
+    (sequence,) = program.instructions
+    search, life = sequence.payload["steps"]
+    assert search.payload["zones"] == ("library", "graveyard")
+    assert search.payload["exile_rest"] is True
+    assert search.payload["destinations"] == ["library_top"] * 5
+    assert life.kind == "target_loses_life"
+
+    game = _w2g4_game(
+        set_pool, [wth["Doomsday"]],
+        library=[lea[n] for n in
+                 ("Grizzly Bears", "Shivan Dragon", "Forest", "Island",
+                  "Mountain", "Plains", "Swamp", "Black Lotus")],
+        graveyard=[lea["Healing Salve"], lea["Ancestral Recall"]],
+    )
+    game.cast_from_hand(0, "Doomsday")
+    game.resolve_stack()
+    assert game.confirm_search_library_picks(0, [
+        {"zone": "library", "index": 0},
+        {"zone": "library", "index": 1},
+        {"zone": "graveyard", "index": 1},
+        {"zone": "library", "index": 7},
+        {"zone": "library", "index": 2},
+    ]), game.log
+
+    assert [c.name for c in game.players[0].library] == [
+        "Grizzly Bears", "Shivan Dragon", "Ancestral Recall", "Black Lotus",
+        "Forest",
+    ], game.log
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Healing Salve", "Island", "Mountain", "Plains", "Swamp",
+    ]
+    assert [c.name for c in game.players[0].graveyard] == ["Doomsday"]
+    assert game.players[0].life == 10
+
+
+def test_doomsday_empties_both_zones_even_when_nothing_is_found(set_pool):
+    """A search that finds nothing still searched, so "exile the rest" still
+    empties both piles — and the life loss still happens."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w2g4_game(
+        set_pool, [wth["Doomsday"]], library=[lea["Island"]] * 3,
+        graveyard=[lea["Forest"]], life=7,
+    )
+    game.cast_from_hand(0, "Doomsday")
+    game.resolve_stack()
+    assert game.decline_search_library(0)
+
+    assert game.players[0].library == []
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Forest", "Island", "Island", "Island",
+    ]
+    assert game.players[0].life == 3

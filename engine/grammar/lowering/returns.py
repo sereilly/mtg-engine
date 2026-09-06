@@ -30,10 +30,19 @@ from ._common import (
     _describe_several_targets, _names_several_targets, testable_filter_payload
 )
 
+#: The printed noun phrases a graveyard-to-battlefield return may name.
+#: CR 110.4a's four permanent types, because the instruction puts the card onto
+#: the battlefield and only a permanent card can be there — an instant card
+#: named here would be a sentence with no legal outcome, so it refuses rather
+#: than lowering to a move that finds nothing.
+#:
+#: The empty tuple is deliberately **absent**: Regrowth's untyped "target card"
+#: would be admitted by any type the handler happened to scan for, which is a
+#: silent narrowing of the player's choice rather than a card.
+_REANIMABLE_CARD_TYPES = frozenset({
+    ("creature",), ("artifact",), ("enchantment",), ("land",),
+})
 
-# The filter both exile shapes are compared against. Two readers, one
-# definition — an equality check written twice is two chances to widen one
-# of them.
 
 def _lower_reanimate_enchanted_card(
     node: ast.ReanimateEnchantedCard,
@@ -103,8 +112,19 @@ def _lower_return_self_instead_of_untapping(
     return (OracleInstruction("return_self_instead_of_untapping", "", {}),)
 
 
-def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
+def _lower_put_source_into_zone(
+    node, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """``Put it into your graveyard.`` (All Hallow's Eve.)
+
+    ``Reveal the top card of your library. … Otherwise, put it into your
+    graveyard.`` (Call of the Wild.) **The same printed words about a different
+    card**, and the parse cannot tell them apart: ``_parse_put_source_into_zone``
+    reads "it" as a self-reference and claims the clause before the
+    revealed-card production is ever asked. What separates them is whether an
+    earlier step of this same effect turned a card up, which is only in view
+    here — the arrangement ``RevealedCardIs`` already documents for "if it's a
+    …", and CR 608.2c is why it can be: the sentences are one effect.
 
     The zone stays payload — the handler switches on it — but only the
     destination that has a handler is admitted here. A "put it into your hand"
@@ -123,6 +143,13 @@ def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             f"no handler puts a source into a {zone.name}", node=node
         )
+    if "revealed_card" in produced:
+        # A reveal claims the pronoun first, and only a line with no reveal at
+        # all falls through to the source reading below. ``bin_revealed_card``
+        # is the instruction that already moves that card — out of whatever
+        # library it is still sitting in (CR 701.20 moves nothing) and into its
+        # owner's graveyard (CR 400.3).
+        return (OracleInstruction("bin_revealed_card", "", {}),)
     if zone.owner is not None and zone.owner.kind not in ("you", "owner"):
         raise LoweringError(
             "the source goes to its owner's graveyard, not a named player's",
@@ -429,16 +456,34 @@ def _lower_return_to_zone(
                          "card_type": "enchantment"},
                     ),
                 )
-            # `reanimate_creature` only ever puts a creature onto the
-            # battlefield. Regrowth's untyped "target card" has no lowering
-            # here: claiming it would silently narrow the player's choice.
-            if filt.card_types != ("creature",):
-                raise LoweringError("the reanimation handler only moves creature cards", node=node)
+            # Which *kind* of card comes back is the sentence's own word, so it
+            # travels as payload the way the colour narrowing below does.
+            # Restricted to the four permanent types (CR 110.4a) because the
+            # instruction puts the card **onto the battlefield**: an instant
+            # card returned there is CR 111.1's nothing, and a phrase naming
+            # one is a card this engine has not got. Regrowth's untyped "target
+            # card" still has no lowering here — claiming it would silently
+            # narrow the player's choice to whatever the handler happened to
+            # scan for.
+            if filt.card_types not in _REANIMABLE_CARD_TYPES:
+                raise LoweringError(
+                    "the reanimation handler only moves permanent cards",
+                    node=node,
+                )
             # A printed colour narrowing rides the payload; a card with none
             # keeps emitting the empty payload byte for byte.
             payload: dict[str, object] = (
                 {"colors": tuple(filt.colors)} if filt.colors else {}
             )
+            # Emitted only when the card prints something other than "creature",
+            # so every reanimation written before this keeps a byte-identical
+            # payload and no behaviour signature moves. The handler, the picker
+            # and the cast-time re-check all read it through
+            # ``graveyard_card_matches``/``card_has_type``, which is CR 205.2a's
+            # answer — an Artifact Creature card in a graveyard *is* an artifact
+            # card, and `primary_type` says it is only a creature one.
+            if filt.card_types[0] != "creature":
+                payload["card_type"] = filt.card_types[0]
             # "…**If the creature would leave the battlefield, exile it instead
             # of putting it anywhere else.**" (Dreams of the Dead.) Folded onto
             # the move by the parse, because the permanent it applies to does
@@ -447,10 +492,13 @@ def _lower_return_to_zone(
             if node.exile_on_leave:
                 payload["exile_on_leave"] = True
             # "Return **the top** creature card of your graveyard to the
-            # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard an
-            # ordered zone, so the card is named by position and nobody
-            # chooses: the handler takes the most recently added creature
-            # card rather than offering a picker the card never printed.
+            # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on
+            # top and CR 404.2 keeps the pile in that order, so the card is
+            # named by position and nobody chooses: the handler takes the most
+            # recently added creature card rather than offering a picker the
+            # card never printed. (CR 404.3 is the *simultaneous-arrival*
+            # tie-break and is not this rule; ``engine/graveyard_order.py``
+            # records the correction.)
             #
             # A payload rather than a second kind, for the reason the colour
             # narrowing above is one: what changes is *which* card in the

@@ -490,6 +490,23 @@ def _lower_lose_life(
         if isinstance(node.amount, ast.Half)
         else None
     )
+    if halved is not None and halved.get("board_count") == "their_life":
+        # **Whose life is halved is the seat losing it.** The parse reads
+        # "half **their** life" (Peer into the Abyss) and "half **your** life"
+        # (Infernal Contract, Doomsday) with one production and one node, and
+        # `halved_count_spec` mints the spec for the printing that was minted
+        # first — "target". So a card whose sentence names *you* counted the
+        # target's life total instead: Infernal Contract at 7 life against an
+        # opponent at 20 cost its controller 10 and killed them, and the two
+        # cards read identically at equal life totals, which is why nothing had
+        # seen it.
+        #
+        # The node already carries the answer, because a life loss and the
+        # amount that sizes it are one clause: the player who loses the life is
+        # the player whose life is halved. So the seat is read off `node.player`
+        # rather than left where the spec put it.
+        halved = dict(halved)
+        halved["owner"] = "you" if node.player.kind == "you" else "target"
     if halved is not None:
         # "**Each player** loses a third of their life" (Pox). One number per
         # seat, and `X_FROM_COUNT` is resolved once at the dispatch point

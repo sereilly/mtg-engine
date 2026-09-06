@@ -604,6 +604,10 @@ class PendingChoicesMixin:
                 random.shuffle(caster.library)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
+            # A search that found nothing still *searched*, so a printed "exile
+            # the rest" still empties the zones (Doomsday with an empty library
+            # and graveyard is a legal, and lethal, cast).
+            self._exile_searched_remainder(choice.data, caster, zones)
             self.log.append(f"{caster.name} searched and found nothing more")
             return True
         # A counted search ("up to two basic land cards") takes its whole
@@ -717,6 +721,15 @@ class PendingChoicesMixin:
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
+        elif destination == "graveyard":
+            # "…put that card into your graveyard, then shuffle." (Entomb; the
+            # counted spelling is Buried Alive's.) Through
+            # ``put_card_into_graveyard`` rather than an append, because
+            # anything that must happen when a card arrives in a graveyard has
+            # one place to be — Gaea's Blessing's "when this card is put into
+            # your graveyard from your library" is a trigger a raw append would
+            # walk straight past.
+            self.put_card_into_graveyard(caster, card, from_zone=zone)
         elif destination == "exile":
             # CR 400.3: the card goes to its owner's exile, and its owner is the
             # player whose library it came out of — which is `caster` here, the
@@ -730,6 +743,7 @@ class PendingChoicesMixin:
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"
+                else "into their graveyard" if destination == "graveyard"
                 else "into hand"
             )
         )
@@ -829,8 +843,42 @@ class PendingChoicesMixin:
             random.shuffle(caster.library)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
+        # "…**and exile the rest**." (Doomsday.) Before the finds are placed,
+        # or the cards about to go on top of the library would be exiled with
+        # everything else \u2014 they are out of the zones already, but the library
+        # is where they are going.
+        self._exile_searched_remainder(choice.data, caster, zones)
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
+
+    def _exile_searched_remainder(self, data: dict, searched, zones: tuple) -> None:
+        """"Search your library and graveyard for five cards **and exile the
+        rest**." (Doomsday.)
+
+        What becomes of the piles a search looked through, which for every other
+        printing is nothing at all: CR 701.23a looks and leaves the zone as it
+        was. Both named zones are emptied, because "the rest" is the rest of
+        what was searched \u2014 emptying only the library would leave a graveyard
+        the sentence also opened.
+
+        CR 400.3 sends each card to its **owner's** exile, which is the player
+        whose zones these are: a search of somebody else's library is a
+        different flow (``zone_owner_target``) and no printing of it exiles the
+        remainder, so the seat here is the one the finds were taken from.
+        """
+        if not data.get("exile_rest"):
+            return
+        moved = 0
+        for zone_name in zones:
+            pile = searched.library if zone_name == "library" else searched.graveyard
+            moved += len(pile)
+            searched.exile.extend(pile)
+            pile.clear()
+        self.log.append(
+            f"{searched.name} exiled the rest of their "
+            + " and ".join(zones)
+            + f" ({moved} card(s))"
+        )
 
 
     def _search_destination_slots(self, data: dict) -> list[tuple[str, bool]]:
@@ -948,6 +996,24 @@ class PendingChoicesMixin:
             # different card. The shuffle already happened, up in the picks
             # resolver, so a card placed here stays on top.
             self.put_card_into_library(caster, card, "top")
+        elif destination == "graveyard":
+            # "Search your library for up to three creature cards, put them
+            # into your graveyard, then shuffle." (Buried Alive.) Through the
+            # seam for the reason the single-find branch gives: a card arriving
+            # in a graveyard from a library is an event Gaea's Blessing triggers
+            # on, and an append is a place for that to be forgotten.
+            #
+            # The source zone is claimed only for a search that looked in one
+            # zone. This path is handed the finds without the slot each came
+            # out of, and a two-zone search (`zones` naming a graveyard too)
+            # could have taken this card from the graveyard — announcing
+            # "from your library" for it would be a trigger firing on an event
+            # that did not happen, which is worse than one that does not fire.
+            zones = tuple(data.get("zones", ("library",))) if data else ("library",)
+            self.put_card_into_graveyard(
+                caster, card,
+                from_zone="library" if zones == ("library",) else None,
+            )
         else:
             self.put_card_into_hand(caster, card)
         where = (
@@ -955,6 +1021,7 @@ class PendingChoicesMixin:
             else "onto the battlefield" if destination == "battlefield"
             else "into exile" if destination == "exile"
             else "on top of their library" if destination == "library_top"
+            else "into their graveyard" if destination == "graveyard"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")
@@ -1286,7 +1353,16 @@ class PendingChoicesMixin:
             del caster.library[:top_count]
             _bottom_the_rest(looked)
             self.discard_pending_choice(choice)
-            self.log.append(f"{caster.name} took nothing and put the rest on the bottom")
+            # The log names where the rest actually went. It said "on the
+            # bottom" for every printing, which is Garruk's Harbinger's and not
+            # Ancestral Knowledge's — the destination has been payload since
+            # `rest_destination` existed.
+            where = {
+                "library_top": "back on top", "graveyard": "into the graveyard",
+                "exile": "into exile",
+            }.get(str(choice.data.get("rest_destination", "library_bottom")),
+                  "on the bottom")
+            self.log.append(f"{caster.name} took nothing and put the rest {where}")
             return True
 
         if not isinstance(keep_index, int) or not (0 <= keep_index < top_count):
@@ -1306,11 +1382,22 @@ class PendingChoicesMixin:
         remaining = int(choice.data.get("remaining", 1))
         if remaining > 1 and top_count > 1:
             caster.library.pop(keep_index)
-            self.put_card_into_hand(caster, kept)
+            # Where the taken card goes, read the same way the terminal link
+            # below reads it. This branch put every card in a **hand** whatever
+            # the print said, which was safe only because the lowering refused
+            # any other destination for a counted pick — and the moment
+            # Ancestral Knowledge printed "exile any number of them", the first
+            # nine of its ten picks would have been drawn instead of exiled.
+            taken_to = str(choice.data.get("pick_destination", "hand"))
+            if taken_to == "exile":
+                caster.exile.append(kept)
+            else:
+                self.put_card_into_hand(caster, kept)
             self.discard_pending_choice(choice)
             self.log.append(
-                f"{caster.name} put {kept.name} into their hand "
-                f"({remaining - 1} more to take)"
+                f"{caster.name} took {kept.name} "
+                + ("into exile " if taken_to == "exile" else "into their hand ")
+                + f"({remaining - 1} more to take)"
             )
             # The keys are listed rather than the whole ``data`` dict passed
             # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
@@ -1329,6 +1416,7 @@ class PendingChoicesMixin:
                 rest_destination=choice.data.get("rest_destination", "library_bottom"),
                 pick_destination=choice.data.get("pick_destination", "hand"),
                 remaining=remaining - 1,
+                pile_index=choice.data.get("pile_index"),
             )
             return True
         del caster.library[:top_count]
@@ -1379,7 +1467,23 @@ class PendingChoicesMixin:
 
     def _default_look_top_pick(self, choice: PendingChoice) -> None:
         """A non-interactive seat keeps the first card it *may* keep, and takes
-        nothing when the phrase names none of them."""
+        nothing when the phrase names none of them.
+
+        The exception is an optional pick that **exiles from the chooser's own
+        library** (Ancestral Knowledge): "any number" includes none, and there
+        the pick is a cost rather than a gain — taking the first card ten times
+        would exile a tenth of the deck for nothing. A stated policy, like the
+        up-to-N maximum and the modal first mode; Sealed Fate's exile is not
+        optional and empties somebody else's library, so it is untouched.
+        """
+        exiles_own = (
+            choice.data.get("pick_destination") == "exile"
+            and self.look_top_pile_index(choice) == choice.player_index
+        )
+        if choice.data.get("optional") and exiles_own:
+            if not self._resolve_look_top_pick(choice, None):
+                self.discard_pending_choice(choice)
+            return
         eligible = self.live_look_top_candidates(choice)
         keep = eligible[0] if eligible else None
         if not self._resolve_look_top_pick(choice, keep):
@@ -1931,6 +2035,62 @@ class PendingChoicesMixin:
         queued = int(choice.data.get("queued_draws", 0) or 0)
         if queued > 0:
             self._draw_with_replacements(player, queued)
+
+    # -- An opponent picks out of a revealed pile (Thran Tome) ---------------
+
+    def confirm_opponent_picks_revealed(self, player_index: int, index: int) -> bool:
+        return self.resolve_pending_choice(
+            "opponent_picks_revealed", player_index, index=index
+        )
+
+    def _resolve_opponent_picks_revealed(self, choice: PendingChoice, index) -> bool:
+        """The opponent's pick out of the cards the revealer turned up.
+
+        *index* addresses the **revealed list**, not the library: CR 701.20 left
+        the cards where they were, and the list is what the prompt showed. The
+        card is then located in the library by identity \u2014 two copies of a card
+        in a deck are the same immutable ``CardDefinition``, so ``list.remove``
+        would take whichever entry came first \u2014 and moved through the one seam
+        a card reaches a graveyard by, naming the library it came out of so a
+        card watching for that move sees it.
+
+        A card that has already left is left alone, which is CR 608.2 doing as
+        much as it can.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        if not isinstance(index, int) or not (0 <= index < len(cards)):
+            return False
+        card = cards[index]
+        revealer = self.players[int(choice.data.get("revealer_index", 0))]
+        for slot, held in enumerate(revealer.library):
+            if held is card:
+                revealer.library.pop(slot)
+                self.put_card_into_graveyard(revealer, card, from_zone="library")
+                self.log.append(
+                    f"{self.players[choice.player_index].name} chose {card.name}; "
+                    f"it goes into {revealer.name}'s graveyard"
+                )
+                break
+        else:
+            self.log.append(f"{card.name} has already moved")
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_opponent_picks_revealed(self, choice: PendingChoice) -> None:
+        """A non-interactive chooser takes the **costliest** revealed card.
+
+        The same stated policy as ``_default_revealed_hand_pick``, and for the
+        same reason: this seat is an opponent, the card it names is the one the
+        revealer loses, and mana value is the one ranking every card in the pool
+        answers.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        if not cards:
+            self.discard_pending_choice(choice)
+            return
+        best = max(range(len(cards)), key=lambda i: (cards[i].cmc, -i))
+        if not self._resolve_opponent_picks_revealed(choice, best):
+            self.discard_pending_choice(choice)
 
     def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
         return self.resolve_pending_choice(
@@ -7065,7 +7225,7 @@ class PendingChoicesMixin:
         player = self.players[drawing_seat]
         if bought and player.library:
             card = player.library.pop(0)
-            self.put_card_into_graveyard(player, card)
+            self.put_card_into_graveyard(player, card, from_zone="library")
             self.log.append(
                 f"{card.name} was put into {player.name}'s graveyard "
                 f"({source_name})"
@@ -7669,6 +7829,28 @@ register_choice(
     blocked_detail="choose a card from the revealed hand before other actions",
     # The revealed hand is public from the moment it is revealed (CR 701.20),
     # so a spectator sees the prompt exactly as the choosing seat does.
+    spectator_visible=True,
+)
+
+register_choice(
+    "opponent_picks_revealed",
+    resolve=lambda game, choice, r: game._resolve_opponent_picks_revealed(
+        choice, r.get("index")
+    ),
+    default=lambda game, choice: game._default_opponent_picks_revealed(choice),
+    action="opponent_picks_revealed_confirm",
+    prompt_key="opponent_picks_revealed",
+    blocked_detail="choose one of the revealed cards before other actions",
+    # The draw behind the pick is a later step of the same resolution
+    # (CR 608.2), and it must not run against a library the answer is about to
+    # change \u2014 so arming this stops the sequence until it is answered.
+    suspends=True,
+    # A non-interactive chooser answers where the offer stands: the resolution
+    # is suspended on this prompt, and a seat that never queues would hold it
+    # open for the rest of the game.
+    default_at_arm=True,
+    # A reveal is public: CR 701.20 reveals the cards to every player, and so
+    # is whose choice this is.
     spectator_visible=True,
 )
 

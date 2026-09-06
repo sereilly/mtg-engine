@@ -1366,6 +1366,15 @@ def _reanimation_spec(payload: dict) -> dict | None:
     spec: dict = {"kind": "graveyard_creature"}
     if not payload.get("any_graveyard"):
         spec["own_graveyard_only"] = True
+    # "Return target **artifact** card from your graveyard to the battlefield"
+    # (Argivian Restoration). The printed type, handed straight over in the key
+    # ``graveyard_card_matches`` reads — the same arrangement the colours below
+    # get and for the same reason: the handler re-checks the card against this
+    # payload, so a picker offering a type the resolution then declines is the
+    # disagreement this function exists to prevent. Absent means "creature",
+    # which is what every printing before this one said.
+    if payload.get("card_type"):
+        spec["card_type"] = payload["card_type"]
     colors = tuple(payload.get("colors") or ())
     if colors:
         spec["graveyard_colors"] = list(colors)
@@ -1531,6 +1540,23 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     return spec
 
 
+def _chosen_graveyard_shuffle_spec(payload: dict) -> dict | None:
+    """The picker for a graveyard shuffle that names its cards as targets.
+
+    None for every other printing of this kind, and that is the whole of what
+    this wrapper adds: "Shuffle your graveyard into your library" (Feldon's
+    Cane) and "Shuffle all creature cards from your graveyard into your library"
+    (Barishi) choose nothing at all — CR 115.1 makes a target something the
+    sentence says the word "target" about — so a spec here would raise a picker
+    the client must fill for a spell that names no target, which is a cast that
+    cannot be made. The evidence is the ``targets`` description, exactly as it
+    is for every other kind that answers None: absent, there is nothing to pick.
+    """
+    if not (payload.get("targets") or {}):
+        return None
+    return _graveyard_to_library_spec(payload)
+
+
 def _retarget_spec(payload: dict) -> dict:
     """"Target spell with a single target [if that target is you]"
     (Deflection, Reflecting Mirror — CR 115.7a, CR 115.9a).
@@ -1568,6 +1594,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "choose_new_spell_target": _retarget_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
+    # "Target player shuffles up to three target cards from their graveyard
+    # into their library." (Gaea's Blessing.) The same picker: the cards are
+    # named out of a graveyard by the same noun phrase, and only what happens to
+    # them afterwards differs. `_chosen_graveyard_shuffle` writes the payload in
+    # the keys that function reads, which is what lets one spec serve both.
+    "shuffle_graveyard_into_library": _chosen_graveyard_shuffle_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "deal_damage_each_matching": _sweep_controller_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so

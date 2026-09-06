@@ -46,7 +46,18 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     while the card named an opponent's.
     """
     stream.expect_word("reveal")
-    for word in ("the", "top", "card", "of"):
+    stream.expect_word("the")
+    stream.expect_word("top")
+    # "Reveal the top **three cards** of your library. Target opponent chooses
+    # one of those cards. \u2026" (Thran Tome.) A counted reveal, read here because
+    # the singular below expects the literal word "card" and failed the line on
+    # the number \u2014 the same one-line gap ``_parse_exile_top_of_library``
+    # answers this way. Non-consuming on refusal, so a counted reveal with any
+    # other tail keeps whatever refusal it had.
+    counted = _accept_counted_reveal_top(stream)
+    if counted is not None:
+        return counted
+    for word in ("card", "of"):
         stream.expect_word(word)
     if stream.accept_word("your"):
         player = ast.PlayerRef("you")
@@ -99,6 +110,70 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of", "your", "library"):
         raise stream.error("expected 'put it on the bottom of your library'")
     return ast.RevealTopToHandOrBottom(filt)
+
+
+def _accept_counted_reveal_top(
+    stream: TokenStream,
+) -> "ast.RevealTopOpponentChooses | None":
+    """``<N> cards of your library. Target opponent chooses one of those cards.
+    Put that card into your graveyard[, then draw <N> cards].`` at the cursor,
+    with "Reveal the top" already read \u2014 or None with the cursor where it was.
+    (Thran Tome.)
+
+    All three sentences, for ``_parse_reveal_top``'s reason: they describe one
+    revealed pile, and "those cards" and "that card" have nothing to name
+    without it. Every word is required. The chooser is read rather than assumed
+    (a pick made by the wrong player is the whole card), and so is where the
+    card goes \u2014 a printing that exiled it instead would be a different card
+    with nothing to notice the difference.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        # The singular "Reveal the top **card**", whose word this reader is not
+        # looking at. Refusing without consuming is what keeps its own refusal
+        # site intact.
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    chooser = parse_player_ref(stream)
+    if chooser is None or not stream.accept_phrase(
+        "chooses", "one", "of", "those", "cards"
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("put", "that", "card", "into", "your", "graveyard"):
+        stream.reset(mark)
+        return None
+    # "\u2026, then draw two cards." The sentence behind the pick, consumed here
+    # because it is inside the same printed sentence \u2014 it lowers to its own
+    # instruction, so nothing is fused by reading it.
+    drawn = None
+    probe = stream.mark()
+    if stream.accept_punct(",") and stream.accept_word("then") and stream.accept_word(
+        "draw"
+    ):
+        drawn = parse_amount(stream)
+        if not stream.accept_word("cards", "card"):
+            stream.reset(mark)
+            return None
+    else:
+        stream.reset(probe)
+    return ast.RevealTopOpponentChooses(
+        count, chooser, fate="graveyard", then_draw=drawn,
+    )
 
 
 def _parse_look_pick_tail(
@@ -602,8 +677,41 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         # nothing reaches a hand, so it is a different statement that happens
         # to end the same way — the shared tail is read by the same words
         # below and carried out in the same place.
+        # "…**then** exile any number of them and put the rest back on top of
+        # your library in any order." (Ancestral Knowledge.) The conjunction is
+        # this card's punctuation — Orcish Librarian runs the two sentences on
+        # without it — so it is accepted here rather than treated as the word
+        # that ends the look. Read after the Sage Owl tail above, which spells
+        # its own "then put them back".
+        mark_exile = stream.mark()
+        stream.accept_word("then")
         if stream.at_word("exile"):
             stream.expect_word("exile")
+            # "exile **any number of** them" (Ancestral Knowledge): the count is
+            # the looker's, up to the whole pile, and none is a legal answer.
+            # A `LookTopPickToHand` rather than the random node below, because
+            # somebody chooses — which is the difference between the two, and
+            # the reason the shared tail is read by the same words either way.
+            if stream.accept_phrase("any", "number", "of", "them"):
+                stream.accept_punct(",")
+                stream.accept_word("and")
+                for word in ("put", "the", "rest"):
+                    stream.expect_word(word)
+                # "put the rest **back** on top" — the word Sage Owl also prints
+                # for the same move, optional because Orcish Librarian omits it.
+                stream.accept_word("back")
+                stream.expect_word("on")
+                if not stream.accept_phrase("top", "of", "your", "library"):
+                    raise stream.error("expected 'top of your library'")
+                for word in ("in", "any", "order"):
+                    stream.expect_word(word)
+                return ast.LookTopPickToHand(
+                    count,
+                    pick_count=count,
+                    pick_destination="exile",
+                    rest_destination="library_top",
+                    optional=True,
+                )
             exile_count = parse_amount(stream)
             for word in ("of", "them", "at", "random"):
                 stream.expect_word(word)
@@ -616,6 +724,7 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
             for word in ("in", "any", "order"):
                 stream.expect_word(word)
             return ast.LookTopExileRandom(count, exile_count)
+        stream.reset(mark_exile)
         stream.expect_word("put")
         # "Put **two** of them into your hand" (Ancestral Memories). The count
         # was the literal word "one", so the only card in the pool that takes
@@ -752,7 +861,17 @@ def _accept_look_and_choose(
     # the same back-reference the discard's subject is: a sentence naming
     # somebody else would look in one hand and stack another player's library.
     tuck = stream.mark()
-    if stream.accept_phrase("put", "that", "card", "on", "top", "of"):
+    # "Put **that card** …" (Painful Memories) and "Put **them** …" (Agonizing
+    # Memories): one pronoun per number of cards chosen, and the pronoun is
+    # *checked against the count* rather than merely consumed — the same
+    # agreement `_parse_search_untap_rider` demands of "that land". A singular
+    # pronoun after "choose two cards" is not a sentence any card prints, and
+    # admitting it would let a two-card choice claim the one-card reading.
+    singular = isinstance(count, ast.Fixed) and count.value == 1
+    if stream.accept_word("put") and (
+        stream.accept_phrase("that", "card") if singular
+        else stream.accept_word("them")
+    ) and stream.accept_phrase("on", "top", "of"):
         owner = parse_player_ref(stream) if stream.at_word("that", "the") else None
         if (
             owner is not None
@@ -760,11 +879,17 @@ def _accept_look_and_choose(
             and stream.accept_word("'s")
             and stream.accept_word("library")
         ):
+            # "…**in any order**." The chooser names the cards one at a time
+            # and each goes on top of the last, so the pick order *is* the
+            # order — consumed and not recorded, exactly as the counted
+            # search's identical clause is. A field saying "the player
+            # chooses" would be a second spelling of what the answer carries.
+            stream.accept_phrase("in", "any", "order")
             return ast.RevealHandAndChoose(
                 player, ast.ObjectFilter(is_card=True), fate="library_top",
                 count=count, revealed=False,
             )
-        stream.reset(tuck)
+    stream.reset(tuck)
     # Whose discard, read as a reference rather than as the literal words
     # "that player": Leshrac's Sigil prints "**The player** discards that
     # card", which `parse_player_ref` already reads as the same back-reference

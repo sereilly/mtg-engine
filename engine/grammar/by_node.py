@@ -84,6 +84,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_exile_top_of_library, _lower_put_exiled_with_source,
                        _lower_exile_graveyard_position,
                        _lower_look_top_exile_random, _lower_search_and_exile,
+                       _lower_reveal_top_opponent_chooses,
                        _lower_search_library, _lower_change_base_pt, _lower_set_base_pt,
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
@@ -220,6 +221,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     ast.PutExiledWithSource: _lower_put_exiled_with_source,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
+    ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
     ast.SearchAndExile: _lower_search_and_exile,
     ast.ForceChosenCreatureToAttack: _lower_force_chosen_creature_to_attack,
     ast.ExileGraveyardUntilLeaves: _lower_exile_graveyard_until_leaves,
@@ -243,7 +245,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.WaiveShroud: _lower_waive_shroud,
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
-    ast.PutSourceIntoZone: _lower_put_source_into_zone,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
 }
 
@@ -339,4 +340,10 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "Put **it** into your graveyard" is All Hallow's Eve's own card or Call of
+    # the Wild's revealed one, and only a reveal earlier in the same effect
+    # tells them apart. It left the name-only table above for ``ast.Attach``'s
+    # reason, word for word: a pronoun is only a pronoun relative to what came
+    # before it, and with no record the same words mean something else.
+    ast.PutSourceIntoZone: _lower_put_source_into_zone,
 }

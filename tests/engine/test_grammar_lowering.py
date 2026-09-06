@@ -981,16 +981,49 @@ def test_a_graveyard_return_requires_the_card_noun():
 
 
 def test_reanimation_refuses_an_untyped_card():
-    """`reanimate_creature` only ever puts a creature onto the battlefield.
-    Claiming Regrowth's untyped noun phrase for it would narrow the player's
-    choice without saying so."""
+    """`reanimate_creature` names the kind of card it moves. Claiming
+    Regrowth's untyped noun phrase for it would narrow the player's choice to
+    whatever the handler happened to scan for, without saying so."""
     result = compile_line(
         "Return target card from your graveyard to the battlefield.", card_name="Test"
     )
 
     assert result.parsed
     assert not result.lowered
-    assert "creature cards" in result.failure_reason
+    assert "permanent cards" in result.failure_reason
+
+
+def test_reanimation_refuses_a_card_that_cannot_be_a_permanent():
+    """The instruction puts the card **onto the battlefield**, and CR 110.4a
+    lists the four types that may be there. "Target instant card from your
+    graveyard to the battlefield" has no legal outcome, so it refuses rather
+    than lowering to a move that finds nothing."""
+    result = compile_line(
+        "Return target instant card from your graveyard to the battlefield.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+    assert "permanent cards" in result.failure_reason
+
+
+def test_reanimation_carries_the_printed_card_type():
+    """"Return target **artifact** card from your graveyard to the
+    battlefield." (Argivian Restoration.) The type is payload, and the printing
+    that says "creature" keeps emitting no key at all — so every reanimation
+    written before this one has a byte-identical payload."""
+    artifact = _full_payloads(
+        "Return target artifact card from your graveyard to the battlefield.",
+        "Argivian Restoration",
+    )
+    creature = _full_payloads(
+        "Return target creature card from your graveyard to the battlefield.",
+        "Resurrection",
+    )
+
+    assert artifact == [("reanimate_creature", {"card_type": "artifact"})]
+    assert creature == [("reanimate_creature", {})]
 
 
 def test_bounce_returns_a_creature_to_its_owner_not_to_you():

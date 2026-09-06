@@ -1117,6 +1117,15 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("dies",
      r"when this (?:creature|artifact|enchantment|land|permanent) is put into "
      r"(?:a|your) graveyard from the battlefield"),
+    # "When **this card** is put into your graveyard **from your library**"
+    # (Gaea's Blessing). Not a death and not this table's `dies` row: the
+    # source zone is a library, which is a move no permanent can make — so
+    # CR 113.6k has the condition function wherever it *can* trigger from, and
+    # `engine/events.moved_card_trigger_events` is what announces it. Above the
+    # bare "dies" row for that row's stated reason: its `.+` would otherwise
+    # swallow any line ending in the word.
+    ("self_put_into_graveyard_from_library",
+     r"when this card is put into your graveyard from your library"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

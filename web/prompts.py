@@ -679,6 +679,27 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("opponent_picks_revealed")
+def _opponent_picks_revealed(ctx: PromptContext, choices: list) -> dict:
+    """Thran Tome: the *opponent* picks one of the cards the revealer turned up.
+
+    The names as the reveal showed them, in library order, because that is what
+    CR 701.20 made public \u2014 and the revealer's seat beside them, since the
+    chooser is not the player whose card is about to be binned. Every card is a
+    legal answer, so no legality list rides along: the sentence narrows nothing.
+    """
+    choice = choices[0]
+    revealer_seat = int(choice.data.get("revealer_index", 0))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "revealer_seat": revealer_seat,
+        "revealer_name": ctx.game.players[revealer_seat].name,
+        "cards": list(choice.data.get("cards") or []),
+        "fate": str(choice.data.get("fate", "graveyard")),
+    }
+
+
 @prompt_renderer("discard")
 def _discard(ctx: PromptContext, choices: list) -> dict:
     """The whole hand, with the positions that may actually be chosen.

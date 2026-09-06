@@ -307,6 +307,14 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "search_destination",
         # Reshapes the library; the spell's own CR 608.2n move waits behind it.
         "look_top_pick",
+        # "Reveal the top three cards of your library. Target opponent chooses
+        # one of those cards. Put that card into your graveyard, **then draw two
+        # cards**." (Thran Tome.) The answer takes one of the three off the top,
+        # and the draw behind it is what the next two cards of that same library
+        # are — drawn first, the revealer would draw the card the opponent was
+        # still choosing. The pick is the opponent's; only an interactive one
+        # queues it, since `default_at_arm` answers for everybody else.
+        "opponent_picks_revealed",
         # Phyrexian Portal's three decisions, each of which arms the next.
         # The division decides what the controller is choosing between, the
         # choice decides which pile is searched, and the search decides what

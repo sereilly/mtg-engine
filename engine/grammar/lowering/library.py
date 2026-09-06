@@ -356,6 +356,51 @@ def _lower_look_top_cycle_for_life(
     )
 
 
+def _lower_reveal_top_opponent_chooses(
+    node: ast.RevealTopOpponentChooses,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top three cards of your library. Target opponent chooses one
+    of those cards. Put that card into your graveyard, then draw two cards."
+    (Thran Tome.)
+
+    Two instructions, not one. The reveal, the pick and the binning are a single
+    step because the pick is made **from** what the reveal showed and the
+    binning is what the pick was for \u2014 ``RevealHandAndChoose`` one zone over
+    records the same reasoning. The draw behind them is an ordinary effect that
+    happens afterwards (CR 608.2), so it composes as its own step; the prompt
+    suspends the sequence, which is what keeps it from drawing before the
+    opponent has chosen.
+
+    The chooser is required to be a targeted opponent. CR 608.2c makes the
+    ability's controller the actor for everything a spell does not say
+    otherwise about, so a seat this cannot name would silently become the
+    revealer \u2014 which is the card choosing its own discard.
+    """
+    if node.chooser.kind != "target_opponent":
+        raise LoweringError(
+            f"no flow lets {node.chooser.kind!r} choose from a revealed pile",
+            node=node,
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count <= 0:
+        raise LoweringError(
+            "the revealed pile is a fixed number of cards", node=node
+        )
+    payload: dict[str, object] = {"count": count, "fate": node.fate}
+    _describe_targets(payload, node.chooser)
+    steps = [OracleInstruction("reveal_top_opponent_chooses", "", payload)]
+    if node.then_draw is not None:
+        drawn = _amount_payload(node.then_draw)
+        if not isinstance(drawn, int) or drawn <= 0:
+            raise LoweringError("this draw takes a printed number", node=node)
+        steps.append(
+            OracleInstruction("draw_controller_cards", "", {"amount": drawn})
+        )
+    if len(steps) == 1:
+        return (steps[0],)
+    return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
+
+
 def _lower_bin_revealed_card(
     node: ast.BinRevealedCard, produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
@@ -380,6 +425,33 @@ def _lower_bin_revealed_card(
             node=node,
         )
     return (OracleInstruction("bin_revealed_card", "", {}),)
+
+
+def _lower_put_revealed_card_onto_battlefield(
+    node: ast.PutOntoBattlefield, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top card of your library. If it's a creature card, **put it
+    onto the battlefield**." (Call of the Wild.)
+
+    ``_lower_bin_revealed_card``'s sibling one destination over, and here for
+    its reason: "it" is the card an earlier step of this same effect turned up,
+    which is still on top of the library (CR 701.20 moves nothing), so the
+    handler has to take it out of the pile rather than read a target index.
+
+    A back-reference names its producer or refuses. Without a reveal in front of
+    it the pronoun names the ability's own source, which for this destination is
+    a permanent putting itself onto the battlefield it is already on — so this
+    returns None rather than raising, and the ordinary battlefield lowering
+    keeps its reading and its refusal.
+    """
+    if "revealed_card" not in produced:
+        return ()
+    if node.under_owners_control or node.gains or node.sacrifice_when_control_lost:
+        raise LoweringError(
+            "the revealed card enters under its owner's control with no rider",
+            node=node,
+        )
+    return (OracleInstruction("put_revealed_card_onto_battlefield", "", {}),)
 
 
 def _lower_graveyard_top_to_library(
@@ -532,14 +604,19 @@ def _lower_look_top_pick(
         raise LoweringError("the look-top pick takes a fixed pick count", node=node)
     if picks > 1:
         # Several picks are a *chain* of one-card prompts (see
-        # ``_resolve_look_top_pick``), and the chain only knows how to put a
-        # card in a hand: "puts one of them back on top of their library"
-        # (Ashnod's Cylix) names a single card by construction, and taking
-        # several to one library position is a shape no card prints. Refused
-        # rather than collapsed, so a card that ever prints it fails loudly.
-        if node.pick_destination != "hand" or node.optional:
+        # ``_resolve_look_top_pick``), and each link looks at what is left of
+        # the same pile. So a destination that puts the card **back** in that
+        # pile refuses: "puts one of them back on top of their library"
+        # (Ashnod's Cylix) names a single card by construction, and a chain
+        # spelled that way would re-offer the card it just placed. The two
+        # destinations that take the card out of the library entirely — a hand
+        # (Ancestral Memories) and exile (Ancestral Knowledge) — are the chain's
+        # whole vocabulary, and ``optional`` rides along because "exile **any
+        # number of** them" is a chain the looker may stop at any link.
+        if node.pick_destination not in ("hand", "exile"):
             raise LoweringError(
-                "several picks are taken into a hand, and not optionally",
+                "several picks leave the library, and this destination puts one "
+                "back in it",
                 node=node,
             )
         payload["pick_count"] = picks

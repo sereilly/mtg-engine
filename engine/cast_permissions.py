@@ -34,6 +34,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .search_filters import card_has_type
+
 if TYPE_CHECKING:
     from .models import CardDefinition
 
@@ -131,7 +133,17 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
         return False
     if as_land and permission.mode != "play":
         return False
-    if permission.card_types and card.primary_type not in permission.card_types:
+    # ``card_has_type``, not ``primary_type``: CR 205.2a gives a card **every**
+    # type its line names, and ``primary_type`` picks one of them by the order
+    # of a list — so an Artifact Creature card is not "an artifact" to a
+    # permission naming one, and the pool holds 77 of them. Safe today only
+    # because the one card that grants a typed permission names instant and
+    # sorcery, which never co-occur with another type; the next one to name a
+    # permanent type would have been silently narrowed. One reader for the
+    # whole engine (``engine/search_filters.card_has_type``).
+    if permission.card_types and not any(
+        card_has_type(card, name) for name in permission.card_types
+    ):
         return False
     if permission.cards is not None:
         # Identity, not name: the grant covers the copies it named, one use

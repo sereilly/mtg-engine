@@ -724,6 +724,25 @@ def _action_pile_exile_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid pile")
 
 
+@action_handler("opponent_picks_revealed_confirm")
+def _action_opponent_picks_revealed_confirm(session, req, seat_type):
+    # Thran Tome: which of the revealed cards the *opponent* sends to the
+    # revealer's graveyard. ``pile_index`` addresses the revealed list the
+    # prompt showed, not the library \u2014 CR 701.20 moved nothing, and the engine
+    # locates the card by identity from there.
+    pending = next(
+        (c for c in session.game.pending_choices_of("opponent_picks_revealed")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no revealed-card choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.pile_index is None:
+        raise HTTPException(status_code=400, detail="pile_index is required")
+    if not session.game.confirm_opponent_picks_revealed(req.seat, req.pile_index):
+        raise HTTPException(status_code=400, detail="invalid revealed card")
+
+
 @action_handler("pile_search_confirm")
 def _action_pile_search_confirm(session, req, seat_type):
     # Phyrexian Portal: which card the search takes, or none at all

@@ -25,19 +25,14 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**8 unclaimed sentence(s) across 7 supported card(s).**
+**5 unclaimed sentence(s) across 5 supported card(s).**
 
 - **Abeyance**
   - `until end of turn, target player can't cast instant or sorcery spells, and that player can't activate abilities that aren't mana abilities`
-- **Ancestral Knowledge**
-  - `when this enchantment enters, look at the top ten cards of your library, then exile any number of them and put the rest back on top of your library in any order`
 - **Aura of Silence**
   - `artifact and enchantment spells your opponents cast cost {2} more to cast`
 - **Boiling Blood**
   - `target creature attacks this turn if able`
-- **Gaea's Blessing**
-  - `target player shuffles up to three target cards from their graveyard into their library`
-  - `when this card is put into your graveyard from your library, shuffle your graveyard into your library`
 - **Goblin Bomb**
   - `remove five fuse counters from this enchantment and sacrifice it: it deals 20 damage to target player or planeswalker`
 - **Winding Canyons**

@@ -209,6 +209,57 @@ def cast_trigger_events(game: Game, event: Event) -> list[dict]:
     ]
 
 
+#: Trigger conditions that fire about **the card that just moved**, from
+#: wherever it landed (CR 113.6k: a trigger condition that cannot trigger from
+#: the battlefield functions in every zone it can trigger from). A condition
+#: rather than a ``FUNCTIONS_FROM`` stamp, for ``_STACK_CAST_CONDITIONS``'
+#: reason: "when **this card** is put into your graveyard from your library"
+#: (Gaea's Blessing) can only ever be about the object that moved, so there is
+#: nothing for a card to declare and nothing for a second reader to disagree
+#: with.
+_MOVED_CARD_CONDITIONS: frozenset[str] = frozenset(
+    {"self_put_into_graveyard_from_library"}
+)
+
+
+def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
+    """The moved card's own triggers matching *event*, as enqueueable dicts.
+
+    The fifth fire site, and the one scoped to a **single object** rather than
+    to a zone. ``graveyard_trigger_events`` beside it scans every graveyard,
+    which is the wrong shape here twice over: a second copy of Gaea's Blessing
+    already lying in the pile would fire for a card that never moved, and the
+    scan cannot see a card the event sent somewhere other than a graveyard at
+    all.
+
+    The seat is the card's **owner** — CR 404.1 files a card in its owner's
+    graveyard and CR 108.4a makes the controller of a card that has none its
+    owner, so "shuffle **your** graveyard into **your** library" is that
+    player's.
+    """
+    if event.kind not in _MOVED_CARD_CONDITIONS:
+        return []
+    from .trigger_utils import matching_triggers
+
+    card = event.subject
+    seat = event.payload.get("owner_index")
+    if card is None or not isinstance(seat, int):
+        return []
+    return [
+        {
+            "controller_index": seat,
+            "source_permanent": None,
+            "card": card,
+            "instruction": trig.instruction,
+            "effect_kind": trig.effect_kind,
+            "ability_text": trig.source_line,
+            "trigger_context": dict(event.payload) or None,
+        }
+        for trig in matching_triggers(card, condition_kinds={event.kind})
+        if trig.instruction is not None
+    ]
+
+
 def collect(game: Game, event: Event) -> list[dict]:
     """Every trigger that fires for *event*, as enqueueable event dicts.
 
@@ -260,6 +311,11 @@ def collect(game: Game, event: Event) -> list[dict]:
     # other two rather than at the cast site, so APNAP ordering and the enqueue
     # path treat every zone's triggers alike.
     events.extend(cast_trigger_events(game, event))
+    # And about one card that just changed zones, wherever it landed
+    # (CR 113.6k). Beside the other three for their reason, and *after* the
+    # graveyard scan so a card that both resides in a graveyard and just
+    # arrived in one is still collected once per matching condition.
+    events.extend(moved_card_trigger_events(game, event))
     return events
 
 
@@ -291,6 +347,23 @@ _COLOR_SYMBOLS = {
 def _cast_card(event: Event) -> CardDefinition | None:
     card = event.subject
     return card if card is not None and hasattr(card, "colors") else None
+
+
+@event_filter("self_put_into_graveyard_from_library")
+def _moved_card_only_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """CR 113.6k's other half, and the only thing that enforces it.
+
+    "When **this card** is put into your graveyard from your library" cannot
+    trigger from the battlefield: a permanent is not in a library, so the move
+    the condition names is one it can never make. The battlefield scan in
+    :func:`collect` has no such notion — it matches on the condition's kind
+    alone — so a permanent carrying this ability would fire on every other
+    card's mill. ``moved_card_trigger_events`` is what announces it instead, and
+    that one is scoped to the object that moved.
+    """
+    return False
 
 
 @event_filter("you_play_card")
