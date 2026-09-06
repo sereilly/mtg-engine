@@ -88,6 +88,23 @@ class AlternativeCost:
     #: than none (CR 601.2h).
     sacrifice_filter: dict | None = None
     sacrifice_count: int = 1
+    #: "You may **exile the top three black cards of your graveyard** rather
+    #: than pay this spell's mana cost." (Spinning Darkness.) The payload
+    #: ``grammar.graveyard_position_payload_for`` builds — ``count``,
+    #: ``position``, ``owner`` and an optional ``filter``.
+    #:
+    #: Its own field rather than a value on ``exile_from_hand`` above, for the
+    #: reason that one is separate from ``sacrifice_filter``: nothing is
+    #: **chosen** here. CR 404.1 puts each card on top of its owner's graveyard
+    #: and CR 404.2 keeps the pile in that order, so the phrase has exactly one
+    #: answer and there is no picker, no named index and no re-check. Read as a
+    #: filter it would let any three black cards in the pile pay, which is
+    #: strictly cheaper than the card prints.
+    #:
+    #: Only the caster's **own** graveyard: a payment out of somebody else's
+    #: pile is a shape this cast path has no seat for, which is the narrowing
+    #: the reader applies rather than a fact about the pool.
+    exile_graveyard_position: dict | None = None
 
     def describe(self) -> str:
         """The cost as a player would say it, for a log line and a prompt label.
@@ -110,6 +127,20 @@ class AlternativeCost:
             parts.append(
                 f"sacrifice a {noun}" if self.sacrifice_count == 1
                 else f"sacrifice {self.sacrifice_count} {noun}s"
+            )
+        if self.exile_graveyard_position is not None:
+            spec = self.exile_graveyard_position
+            count = int(spec.get("count", 1))
+            # Through the same describer the hand exile above uses, so the one
+            # narrowing this cost's pool actually prints — a colour — is spelled
+            # out rather than reduced to the head noun "permanent".
+            noun = _a_card_answering((spec.get("filter") or {},))
+            noun = noun[2:] if noun.startswith("a ") else noun
+            parts.append(
+                f"exile the {spec.get('position', 'top')} "
+                + ("" if count == 1 else f"{count} ")
+                + noun + ("" if count == 1 else "s")
+                + " of your graveyard"
             )
         return " and ".join(parts) or "pay nothing"
 
@@ -138,6 +169,16 @@ _ALTERNATIVE_COST_PREAMBLE = re.compile(
 #: parser is a second reader of one phrase, and the direction those drift in is
 #: a cost charged more widely than the card prints.
 _EXILE_FROM_HAND = re.compile(r"^exile (?P<noun>.+) from your hand$")
+
+#: "…exile **the top three black cards of your graveyard**…" (Spinning
+#: Darkness). The phrase is delimited here and *read* by the grammar's own
+#: production (``grammar.graveyard_position_payload_for``), never by a second
+#: regex: a regex approximating that production is a second reader of one
+#: clause, and the direction a cost drifts in is a price nobody pays. The zone
+#: is part of the phrase rather than of this pattern, so a sentence naming a
+#: library or somebody else's graveyard is refused by the reader instead of
+#: being charged against the caster's own pile.
+_EXILE_GRAVEYARD_POSITION = re.compile(r"^exile (the (?:top|bottom) .+)$")
 
 _PAY_LIFE = re.compile(r"^pay (\d+) life$")
 
@@ -192,6 +233,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "exile_from_hand": None,
         "sacrifice_filter": None,
         "sacrifice_count": 1,
+        "exile_graveyard_position": None,
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
@@ -200,6 +242,30 @@ def _read_cost_clauses(costs: str) -> dict | None:
         life = _PAY_LIFE.match(clause)
         if life is not None:
             fields["pay_life"] += int(life.group(1))
+            continue
+        # Read **before** the hand spelling below, which cannot claim these
+        # words ("the top …" is not "… from your hand") — the order is what
+        # keeps the two from ever being one question rather than what resolves
+        # a fight between them.
+        positioned = _EXILE_GRAVEYARD_POSITION.match(clause)
+        if positioned is not None:
+            from .grammar import graveyard_position_payload_for
+
+            if fields["exile_graveyard_position"] is not None:
+                # Two such clauses would need two payloads and one field cannot
+                # hold two; folded together they would read as one, which is a
+                # strictly cheaper cost than the two printed.
+                return None
+            described = graveyard_position_payload_for(
+                positioned.group(1), seats=frozenset({"you"})
+            )
+            if described is None:
+                # A phrase the payment path cannot resolve — somebody else's
+                # pile, a narrowing the card matcher cannot test. Refused whole
+                # rather than charged as the part that was read, this
+                # function's all-or-nothing rule.
+                return None
+            fields["exile_graveyard_position"] = described
             continue
         exiled = _EXILE_FROM_HAND.match(clause)
         if exiled is not None:
@@ -241,6 +307,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         not fields["pay_life"]
         and fields["exile_from_hand"] is None
         and fields["sacrifice_filter"] is None
+        and fields["exile_graveyard_position"] is None
     ):
         # "You may — rather than pay this spell's mana cost." A sentence whose
         # every clause was read as nothing is a free spell, which is the one

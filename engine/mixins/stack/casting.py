@@ -1789,6 +1789,24 @@ class SpellCastingMixin:
                         f"{filter_head_noun(cost.exile_filter)} to "
                         f"exile for its additional cost (CR 601.2h)"
                     )
+            # "…, **exile X creature cards from your graveyard**." (Haunting
+            # Misery.) The same rule one zone over, and the *count* is the whole
+            # of it: CR 107.3a has the caster announce X as part of casting, so
+            # a graveyard holding two creature cards cannot pay an announced
+            # three — and a gate that asked only whether one existed would admit
+            # the cast and then charge what it found, a spell cast for a
+            # fraction of its price. Through the same enumeration the payment
+            # picks from, so the two cannot count different sets.
+            if cost.exile_graveyard_filter is not None:
+                wanted = cost.exiled_from_graveyard(x_value)
+                available = self._graveyard_exile_candidates(caster_index, cost)
+                if len(available) < wanted:
+                    noun = filter_head_noun(cost.exile_graveyard_filter)
+                    return (
+                        f"{card.name} can't be cast: {caster.name}'s graveyard "
+                        f"holds {len(available)} {noun} card(s) and its "
+                        f"additional cost exiles {wanted} (CR 601.2h)"
+                    )
             # CR 119.4: a player may pay life only down to 0, and CR 601.2h then
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
@@ -1942,6 +1960,37 @@ class SpellCastingMixin:
             and card_matches_any(held, cost.exile_from_hand or ())
         ]
 
+    def _graveyard_exile_candidates(
+        self, caster_index: int, cost: "AdditionalCost"
+    ) -> list[int]:
+        """Which cards in the caster's own graveyard could pay *cost*'s exile,
+        as **indices** in pile order.
+
+        One enumeration for the gate and the payment, the arrangement
+        ``_alternative_cost_payers`` and ``_additional_cost_candidates`` both
+        make and for their reason: a gate counting a different set from the one
+        the payment takes from would admit a cast the payment cannot collect.
+
+        Indices rather than cards, which is ``engine/graveyard_order.py``'s own
+        rule: ``load_cards`` dedupes by ``oracle_id``, so two copies of one card
+        in one graveyard are the same Python object and a caller handed only the
+        card cannot say which copy it named — an identity filter would remove
+        both.
+
+        Through ``_card_matches_filter``, never the permanent matcher: a card in
+        a graveyard has no computed characteristics (CR 613.1), and the charger
+        that admitted this clause gated it on exactly the keys that function can
+        answer.
+        """
+        from ...handlers._common import _card_matches_filter
+
+        described = dict(cost.exile_graveyard_filter or {})
+        return [
+            index
+            for index, held in enumerate(self.players[caster_index].graveyard)
+            if _card_matches_filter(held, described)
+        ]
+
     def _resolve_alternative_cost(
         self,
         caster_index: int,
@@ -2076,6 +2125,28 @@ class SpellCastingMixin:
                     f"{card.name} can't be cast: {shortfall} to sacrifice for "
                     f"its alternative cost (CR 601.2h)"
                 )
+        # "You may **exile the top three black cards of your graveyard** rather
+        # than pay this spell's mana cost." (Spinning Darkness.) The *count*
+        # again, and the scan with it: CR 118.3 lets a cost be paid only in
+        # full, so a pile holding two black cards pays nothing at all — and a
+        # gate that asked only whether one existed would admit the announcement
+        # and then charge less, which for an alternative cost is a spell cast
+        # for nothing, the mana payment having already been skipped.
+        #
+        # Through the same scan the effect and the activation cost run
+        # (``graveyard_order.positions_named``), so what the gate counts and
+        # what the payment takes are one answer.
+        if cost.exile_graveyard_position is not None:
+            from ...graveyard_order import positions_named
+
+            if not positions_named(
+                caster.graveyard, cost.exile_graveyard_position
+            ):
+                return (
+                    f"{card.name} can't be cast: {caster.name}'s graveyard "
+                    f"cannot pay its alternative cost, {cost.describe()} "
+                    f"(CR 601.2h)"
+                )
         return None
 
     def _pay_alternative_cost(
@@ -2126,6 +2197,26 @@ class SpellCastingMixin:
                     self.log.append(
                         f"{caster.name} sacrificed {name} to cast {card.name}"
                     )
+        if cost.exile_graveyard_position is not None:
+            from ...graveyard_order import positions_named
+
+            taken = positions_named(
+                caster.graveyard, cost.exile_graveyard_position
+            )
+            paid = [caster.graveyard[index] for index in taken]
+            # Highest index first: the positions were found against the pile as
+            # it stands, and removing a lower one renumbers every position
+            # above it — the same removal order the activation cost and the
+            # effect handler use.
+            for index in sorted(taken, reverse=True):
+                del caster.graveyard[index]
+            caster.exile.extend(paid)
+            if paid:
+                self.log.append(
+                    f"{caster.name} exiled "
+                    + ", ".join(held.name for held in paid)
+                    + f" from their graveyard to cast {card.name}"
+                )
         if cost.exile_from_hand is None:
             return
         paying = chosen
@@ -2179,6 +2270,32 @@ class SpellCastingMixin:
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
         for cost in costs:
+            # "…, **exile X creature cards from your graveyard**." (Haunting
+            # Misery.) A *card* payment, so nothing leaves the battlefield and
+            # `exiled` above — which carries the Permanent a battlefield exile
+            # ate — is deliberately not touched.
+            #
+            # Taken from the top of the pile down, which is a deterministic pick
+            # and not the payer's choice: CR 601.2b lets them choose, and this
+            # engine has no graveyard picker on the cast path yet. Recorded in
+            # the W1G1 report rather than left silent — the choice matters to a
+            # deck with recursion, and the default is the honest floor until
+            # there is somewhere to make it.
+            if cost.exile_graveyard_filter is not None:
+                owed = cost.exiled_from_graveyard(x_value)
+                for _ in range(owed):
+                    candidates = self._graveyard_exile_candidates(
+                        caster_index, cost
+                    )
+                    if not candidates:
+                        break  # gated above; a pile that changed since is a no-op
+                    index = candidates[-1]
+                    paid = caster.graveyard.pop(index)
+                    caster.exile.append(paid)
+                    self.log.append(
+                        f"{caster.name} exiled {paid.name} from their graveyard "
+                        f"to cast {card.name}"
+                    )
             # "…, **exile a creature you control**." (Soul Exchange.) Paid
             # before the sacrifice beside it only in source order; both are one
             # payment moment (CR 601.2h), and no card in the pool prints both.

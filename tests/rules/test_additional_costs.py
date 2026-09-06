@@ -603,11 +603,15 @@ def test_107_3a_an_x_is_announced_for_a_cost_outside_the_mana_cost():
 def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
     """The census behind the fix, as a test rather than as a claim.
 
-    Two cards in both manifest roles announce an X that is nowhere in their mana
-    cost, and one of them (Fire Covenant, Ice Age) is in the **shipped** pool —
-    so this was a live defect in a set players can already deck, not a Visions
-    pre-ship item. A third card arriving here without a picker that asks for its
-    X is the regression this pins.
+    Three cards in both manifest roles announce an X that is nowhere in their
+    mana cost, and one of them (Fire Covenant, Ice Age) is in the **shipped**
+    pool — so this was a live defect in a set players can already deck, not a
+    Visions pre-ship item. A fourth card arriving here without a picker that
+    asks for its X is the regression this pins.
+
+    Haunting Misery (Weatherlight) is the third, and it arrived exactly the way
+    the list is written to catch: its {1}{B}{B} prints no {X} at all, and the X
+    lives only in "exile X creature cards from your graveyard".
     """
     from engine.cast_costs import cast_announces_x
 
@@ -616,7 +620,9 @@ def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
         for card in _W4G2_POOL.values()
         if cast_announces_x(card) and "{X}" not in (card.mana_cost or "").upper()
     )
-    assert outside == ["Fire Covenant", "Infernal Harvest"], outside
+    assert outside == [
+        "Fire Covenant", "Haunting Misery", "Infernal Harvest",
+    ], outside
 
 
 @pytest.mark.cr("107.3a", "119.4", "601.2h")
