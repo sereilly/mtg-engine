@@ -7707,9 +7707,22 @@ function getSearchDestinationInfo(state = currentState) {
   return info;
 }
 
+// The printed slots a counted search offers, in words. Two of the four
+// destinations the engine can arm read "Hand" under the old two-way test —
+// a find bound for the graveyard or the top of the library was labelled with
+// the zone it was not going to, which is the one thing this dialog exists to
+// say.
+const SEARCH_SLOT_LABELS = {
+  battlefield: "Battlefield",
+  hand: "Hand",
+  graveyard: "Graveyard",
+  library_top: "Top of Library",
+  exile: "Exile",
+};
+
 function searchDestSlotLabel(slot) {
   if (!slot) return "";
-  const base = slot.destination === "battlefield" ? "Battlefield" : "Hand";
+  const base = SEARCH_SLOT_LABELS[slot.destination] || "Hand";
   return slot.tapped ? `${base} (tapped)` : base;
 }
 

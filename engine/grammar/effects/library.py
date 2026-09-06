@@ -752,7 +752,17 @@ def _accept_look_and_choose(
     # the same back-reference the discard's subject is: a sentence naming
     # somebody else would look in one hand and stack another player's library.
     tuck = stream.mark()
-    if stream.accept_phrase("put", "that", "card", "on", "top", "of"):
+    # "Put **that card** …" (Painful Memories) and "Put **them** …" (Agonizing
+    # Memories): one pronoun per number of cards chosen, and the pronoun is
+    # *checked against the count* rather than merely consumed — the same
+    # agreement `_parse_search_untap_rider` demands of "that land". A singular
+    # pronoun after "choose two cards" is not a sentence any card prints, and
+    # admitting it would let a two-card choice claim the one-card reading.
+    singular = isinstance(count, ast.Fixed) and count.value == 1
+    if stream.accept_word("put") and (
+        stream.accept_phrase("that", "card") if singular
+        else stream.accept_word("them")
+    ) and stream.accept_phrase("on", "top", "of"):
         owner = parse_player_ref(stream) if stream.at_word("that", "the") else None
         if (
             owner is not None
@@ -760,11 +770,17 @@ def _accept_look_and_choose(
             and stream.accept_word("'s")
             and stream.accept_word("library")
         ):
+            # "…**in any order**." The chooser names the cards one at a time
+            # and each goes on top of the last, so the pick order *is* the
+            # order — consumed and not recorded, exactly as the counted
+            # search's identical clause is. A field saying "the player
+            # chooses" would be a second spelling of what the answer carries.
+            stream.accept_phrase("in", "any", "order")
             return ast.RevealHandAndChoose(
                 player, ast.ObjectFilter(is_card=True), fate="library_top",
                 count=count, revealed=False,
             )
-        stream.reset(tuck)
+    stream.reset(tuck)
     # Whose discard, read as a reference rather than as the literal words
     # "that player": Leshrac's Sigil prints "**The player** discards that
     # card", which `parse_player_ref` already reads as the same back-reference

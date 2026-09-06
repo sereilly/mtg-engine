@@ -717,6 +717,15 @@ class PendingChoicesMixin:
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
+        elif destination == "graveyard":
+            # "…put that card into your graveyard, then shuffle." (Entomb; the
+            # counted spelling is Buried Alive's.) Through
+            # ``put_card_into_graveyard`` rather than an append, because
+            # anything that must happen when a card arrives in a graveyard has
+            # one place to be — Gaea's Blessing's "when this card is put into
+            # your graveyard from your library" is a trigger a raw append would
+            # walk straight past.
+            self.put_card_into_graveyard(caster, card)
         elif destination == "exile":
             # CR 400.3: the card goes to its owner's exile, and its owner is the
             # player whose library it came out of — which is `caster` here, the
@@ -730,6 +739,7 @@ class PendingChoicesMixin:
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"
+                else "into their graveyard" if destination == "graveyard"
                 else "into hand"
             )
         )
@@ -948,6 +958,13 @@ class PendingChoicesMixin:
             # different card. The shuffle already happened, up in the picks
             # resolver, so a card placed here stays on top.
             self.put_card_into_library(caster, card, "top")
+        elif destination == "graveyard":
+            # "Search your library for up to three creature cards, put them
+            # into your graveyard, then shuffle." (Buried Alive.) Through the
+            # seam for the reason the single-find branch gives: a card arriving
+            # in a graveyard from a library is an event Gaea's Blessing triggers
+            # on, and an append is a place for that to be forgotten.
+            self.put_card_into_graveyard(caster, card)
         else:
             self.put_card_into_hand(caster, card)
         where = (
@@ -955,6 +972,7 @@ class PendingChoicesMixin:
             else "onto the battlefield" if destination == "battlefield"
             else "into exile" if destination == "exile"
             else "on top of their library" if destination == "library_top"
+            else "into their graveyard" if destination == "graveyard"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")

@@ -1366,6 +1366,15 @@ def _reanimation_spec(payload: dict) -> dict | None:
     spec: dict = {"kind": "graveyard_creature"}
     if not payload.get("any_graveyard"):
         spec["own_graveyard_only"] = True
+    # "Return target **artifact** card from your graveyard to the battlefield"
+    # (Argivian Restoration). The printed type, handed straight over in the key
+    # ``graveyard_card_matches`` reads — the same arrangement the colours below
+    # get and for the same reason: the handler re-checks the card against this
+    # payload, so a picker offering a type the resolution then declines is the
+    # disagreement this function exists to prevent. Absent means "creature",
+    # which is what every printing before this one said.
+    if payload.get("card_type"):
+        spec["card_type"] = payload["card_type"]
     colors = tuple(payload.get("colors") or ())
     if colors:
         spec["graveyard_colors"] = list(colors)

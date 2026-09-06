@@ -1159,8 +1159,14 @@ def graveyard_card_matches(spec: dict, card) -> bool:
         return True
     card_type = spec.get("card_type")
     if card_type is not None:
-        return card_type in card.type_line.lower()
-    return card.primary_type == "creature"
+        return card_has_type(card, card_type)
+    # The unnarrowed default — the reanimation Auras, whose enchant clause says
+    # "creature card in a graveyard" and carries no type of its own. Through
+    # ``card_has_type`` like every branch above it, so the last spelling of
+    # "is this a creature card" in this function is the same as the first: no
+    # card in the pool is a land creature, so nothing moves today, and the
+    # reading that would have moved it is the one CR 205.2a rules out.
+    return card_has_type(card, "creature")
 
 
 #: What each printed state adjective asks of a permanent. One table, because

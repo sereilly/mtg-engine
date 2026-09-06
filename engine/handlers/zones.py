@@ -37,7 +37,7 @@ from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
 from ..revealed_hands import reveal_hand_while_present
 from ..resumption import run_resumable
-from ..search_filters import search_matches
+from ..search_filters import card_has_type, search_matches
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from .registry import effect_handler
 
@@ -1511,8 +1511,9 @@ def return_chosen_cards_from_graveyard_to_hand(
 REANIMATED_PERMANENTS = "reanimated_permanents"
 
 
-def _holds_a_reanimable_card(player, index, card_filter) -> bool:
-    """Whether *player*'s graveyard holds a creature card this effect may take.
+def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -> bool:
+    """Whether *player*'s graveyard holds a card of *card_type* this effect may
+    take.
 
     With *index* given, the question is only about that slot — the announced
     target — because a named target that is legal settles where the card comes
@@ -1521,7 +1522,7 @@ def _holds_a_reanimable_card(player, index, card_filter) -> bool:
     graveyard = getattr(player, "graveyard", ())
 
     def eligible(card) -> bool:
-        return card.primary_type == "creature" and (
+        return card_has_type(card, card_type) and (
             card_filter is None or card_filter(card)
         )
 
@@ -1530,7 +1531,7 @@ def _holds_a_reanimable_card(player, index, card_filter) -> bool:
     return any(eligible(card) for card in graveyard)
 
 
-def _reanimable_slot(player, card_filter):
+def _reanimable_slot(player, card_filter, card_type="creature"):
     """The first slot of *player*'s graveyard this effect may take, or nothing.
 
     A generator so the caller can write one ``next`` over seats and slots
@@ -1538,7 +1539,7 @@ def _reanimable_slot(player, card_filter):
     out afterwards.
     """
     for index, card in enumerate(getattr(player, "graveyard", ())):
-        if card.primary_type == "creature" and (
+        if card_has_type(card, card_type) and (
             card_filter is None or card_filter(card)
         ):
             yield index
@@ -1555,6 +1556,15 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
+    # "Return target **artifact** card from your graveyard to the battlefield."
+    # (Argivian Restoration.) Which kind of card comes back is the sentence's
+    # own word and rides the payload; "creature" is what every printing before
+    # it said, so a payload written without the key means exactly what it did.
+    # Every reader of it below goes through ``card_has_type`` — CR 205.2a gives
+    # a card every type its line names, and ``primary_type`` picks one of them
+    # by the order of a list, which is what made an Artifact Creature card
+    # invisible to a phrase naming an artifact.
+    card_type = str(instruction.payload.get("card_type", "creature"))
     # "Return **the top** creature card of your graveyard to the
     # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on *top* of
     # its owner's graveyard and CR 404.2 keeps the pile in that order, and this
@@ -1571,13 +1581,13 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             (
                 slot
                 for slot in range(len(caster.graveyard) - 1, -1, -1)
-                if caster.graveyard[slot].primary_type == "creature"
+                if card_has_type(caster.graveyard[slot], card_type)
             ),
             None,
         )
         if idx is None:
             game.log.append(
-                f"{context.card.name}: no creature card in the graveyard"
+                f"{context.card.name}: no {card_type} card in the graveyard"
             )
             context.results[REANIMATED_PERMANENTS] = ()
             return True, "resolved"
@@ -1596,7 +1606,9 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     if colors:
         spec = {"graveyard_colors": list(colors)}
         card_filter = lambda card: graveyard_card_matches(spec, card)
-    if any_graveyard and not _holds_a_reanimable_card(source_player, idx, card_filter):
+    if any_graveyard and not _holds_a_reanimable_card(
+        source_player, idx, card_filter, card_type
+    ):
         # **No card was named, and the seat that was named holds none.** The
         # index fallback below searches the *caster's* graveyard, which is right
         # for "from your graveyard" and blind for "from a graveyard": an AI seat
@@ -1610,7 +1622,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             (
                 (player, slot)
                 for player in (source_player, caster, *game.players)
-                for slot in _reanimable_slot(player, card_filter)
+                for slot in _reanimable_slot(player, card_filter, card_type)
             ),
             None,
         )
@@ -1621,7 +1633,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             # been enough here.
             source_player, idx = found
     reanimated = game._reanimate_creature_to_battlefield(
-        caster, source_player, idx, card_filter=card_filter
+        caster, source_player, idx, card_filter=card_filter, card_type=card_type
     )
     # "enchant creature **put onto the battlefield with Necromancy**" — the
     # relation that clause is about, stamped by the step that performs it
@@ -1660,8 +1672,8 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         (reanimated.permanent_id,) if reanimated is not None else ()
     )
     game.log.append(
-        "Reanimated creature to battlefield" if reanimated is not None
-        else "No creature to reanimate"
+        f"Reanimated {card_type} to battlefield" if reanimated is not None
+        else f"No {card_type} to reanimate"
     )
     return True, "resolved"
 
@@ -5177,7 +5189,13 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         colors = tuple(payload.get("colors") or ())
 
         def _legal(card) -> bool:
-            if card_types and card.primary_type not in card_types:
+            # ``card_has_type`` for ``cast_permissions._covers``' reason, and it
+            # is the same question one step earlier: which card in the pile the
+            # permission may name. The two disagreeing would offer a card the
+            # permission then refuses.
+            if card_types and not any(
+                card_has_type(card, name) for name in card_types
+            ):
                 return False
             if colors and not any(color in card.colors for color in colors):
                 return False

@@ -23,6 +23,7 @@ from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 from ..damage_redirects import source_matches
+from ..search_filters import card_has_type
 
 class EffectsMixin:
     def _fire_delayed_combat_damage_triggers(
@@ -1397,8 +1398,9 @@ class EffectsMixin:
         target: PlayerState | None = None,
         target_permanent_index: int | None = None,
         card_filter=None,
+        card_type: str = "creature",
     ) -> "Permanent | None":
-        """Put one creature card from a graveyard onto *caster*'s battlefield.
+        """Put one permanent card from a graveyard onto *caster*'s battlefield.
 
         Returns the arriving :class:`Permanent`, or None when there was none to
         return. **The object, not a boolean**: the sentences a card prints after
@@ -1428,7 +1430,14 @@ class EffectsMixin:
         controller_index = self.players.index(caster)
 
         def eligible(card) -> bool:
-            if card.primary_type != "creature":
+            # ``card_has_type``, not ``primary_type``: CR 205.2a gives a card
+            # **every** type printed on it, and ``primary_type`` picks one of
+            # them by the order of a list — so "target artifact card" (Argivian
+            # Restoration) would not see Clay Statue, whose line reads "Artifact
+            # Creature". One reader for the whole engine, in
+            # ``engine/search_filters.py``, so the next caller cannot spell it a
+            # fourth way.
+            if not card_has_type(card, card_type):
                 return False
             return card_filter is None or card_filter(card)
 
