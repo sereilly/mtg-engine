@@ -119,9 +119,9 @@ class EndStepMixin:
                 self, "granted_extra_turns_end_step", seat=player_index
             )
 
-        def _delayed_eot_removal(permanent: Permanent) -> bool:
-            # Nettling Imp / Siren's Call: destroy creatures that were
-            # required to attack this turn but didn't.
+        def _delayed_eot_destruction(permanent: Permanent) -> bool:
+            # Nettling Imp / Siren's Call / Maddening Imp: destroy creatures
+            # that were required to attack this turn but didn't.
             did_not_attack = permanent.metadata.get(
                 "destroy_if_did_not_attack_eot"
             ) and not permanent.metadata.get("attacked_this_turn")
@@ -129,22 +129,38 @@ class EndStepMixin:
             berserk_attacked = permanent.metadata.get(
                 "destroy_if_attacked_eot"
             ) and permanent.metadata.get("attacked_this_turn")
-            # Dragon Whelp / Berserk set a delayed end-of-turn destruction.
+            # Dragon Whelp sets a plain delayed end-of-turn destruction.
             return bool(
                 permanent.metadata.get("destroy_at_next_end_step")
-                or permanent.metadata.get("sacrifice_at_next_end_step")
                 or did_not_attack
                 or berserk_attacked
             )
 
-        # Regeneration is deliberately not offered here: the flags conflate
-        # sacrifices (not destruction, so no replacement effect applies —
-        # CR 701.21a) with destructions; separating them is a rules feature,
-        # not cleanup.
+        def _delayed_eot_sacrifice(permanent: Permanent) -> bool:
+            return bool(permanent.metadata.get("sacrifice_at_next_end_step"))
+
+        # **Two sweeps, because a sacrifice is not a destruction.** This was one
+        # sweep with regeneration and indestructibility both switched off, and
+        # its own comment named the reason and the fix: the flags conflated
+        # CR 701.21a's sacrifice — which no replacement effect and no
+        # indestructibility can stop — with the three that say *destroy*, and
+        # "separating them is a rules feature".
+        #
+        # Separated, the destruction half is an ordinary destruction:
+        # CR 702.12b spares an indestructible permanent and CR 701.8c lets a
+        # regeneration shield replace it. Every card on that half printed the
+        # word "destroy" and none of them was getting it — an indestructible
+        # creature that stayed home was destroyed by Nettling Imp, and a
+        # regenerating one by Berserk.
         destroyed_names: list[str] = []
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
-                controller, _delayed_eot_removal,
+                controller, _delayed_eot_destruction,
+            ):
+                destroyed_names.append(permanent.card.name)
+        for controller in self.players:
+            for permanent in self._destroy_swept_permanents(
+                controller, _delayed_eot_sacrifice,
                 allow_regeneration=False, respect_indestructible=False,
             ):
                 destroyed_names.append(permanent.card.name)
