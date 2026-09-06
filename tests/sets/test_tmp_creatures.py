@@ -2264,3 +2264,99 @@ def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
 ])
 def test_w2g2_creatures_are_supported(set_pool, name):
     assert compile_card_oracle(set_pool("TMP")[name]).supported
+
+
+# --- W3G2: an ability activated from a graveyard, and the zone its own
+# --- restriction states (Carrionette) --------------------------------------
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w3g2_carrionette(set_pool, *, in_graveyard=True, victims=("Hill Giant",)):
+    """Carrionette in seat 0's graveyard (or on its battlefield), with *victims*
+    on seat 1's board. Mana costs off — every assertion below is about the zone
+    gate and the target gate, not about paying {2}{B}{B}."""
+    pool = set_pool("TMP")
+    lea = set_pool("LEA")
+
+    def card(name):
+        return pool[name] if name in pool else lea[name]
+
+    carrionette = pool["Carrionette"]
+    p0 = PlayerState(
+        name="P0", life=20,
+        graveyard=[carrionette] if in_graveyard else [],
+        battlefield=[] if in_graveyard else [Permanent(card=carrionette)],
+        library=[lea["Swamp"]] * 6,
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=card(name)) for name in victims],
+        library=[lea["Forest"]] * 6,
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game
+
+
+def test_w3g2_carrionette_states_the_zone_it_functions_from(set_pool):
+    """`Activate only if this card is in your graveyard.`
+
+    CR 113.6b: the clause states where the ability functions, and it is the
+    **only** place this card says so — its effect prints no zone at all. So the
+    key that the graveyard activation path gates on is derived from the
+    restriction, not from the effect.
+    """
+    program = compile_card_oracle(set_pool("TMP")["Carrionette"])
+    assert program.supported
+    (ability,) = program.activated_abilities
+    assert ability.supported
+    assert ability.instruction.payload.get("functions_from") == "graveyard"
+
+
+def test_w3g2_carrionette_exiles_itself_and_its_target_from_the_graveyard(set_pool):
+    """The Rock Hydra test: activate it out of the pile and read both cards out
+    of *exile* rather than off the claim that it compiled."""
+    game = _w3g2_carrionette(set_pool)
+    victim = game.players[1].battlefield[0]
+    result = game.activate_from_graveyard(
+        0, "Carrionette", target_permanent_ids=[victim.permanent_id],
+    )
+    assert result.supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game.check_state_based_actions()
+
+    # "Exile **this card**" — out of the graveyard it was activated from, which
+    # is the branch that used to set the resolving-spell flag and move nothing.
+    assert [c.name for c in game.players[0].exile] == ["Carrionette"]
+    assert not game.players[0].graveyard
+    # "…and target creature."
+    assert not game.players[1].battlefield
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+
+
+def test_w3g2_carrionette_cannot_be_activated_from_the_battlefield(set_pool):
+    """CR 113.6m the other way round: the ability functions **only** from the
+    graveyard, so the permanent has nothing to activate."""
+    game = _w3g2_carrionette(set_pool, in_graveyard=False)
+    assert not game.activate_permanent_ability(0, "Carrionette").supported
+
+
+def test_w3g2_carrionette_refuses_with_no_legal_target_and_spends_nothing(set_pool):
+    """CR 602.2b/601.2c, and the reason it matters here rather than generally:
+    the target sits in the toll's `otherwise` half, which the mandatory-target
+    walk did not read. Ungated, the ability went on the stack with nothing to
+    aim at and exiled the card out of its own graveyard for no effect.
+    """
+    game = _w3g2_carrionette(set_pool, victims=())
+    result = game.activate_from_graveyard(0, "Carrionette")
+    assert not result.supported
+    assert [c.name for c in game.players[0].graveyard] == ["Carrionette"]
+    assert not game.stack

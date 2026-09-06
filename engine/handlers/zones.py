@@ -2805,19 +2805,6 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
 
     source = context.source_permanent
     if source is None or not game.is_on_battlefield(source):
-        # **A spell exiling itself** (Experimental Overload's "Exile Experimental
-        # Overload."). There is no permanent — the object is the spell on the
-        # stack — so this is CR 608.2n's "where the card goes" rather than a
-        # zone change of something in play, and it routes through the same flag
-        # the "if that spell would be put into your graveyard, exile it instead"
-        # rider uses. Set rather than performed: the card is still resolving,
-        # and the resolution tail is the one place that bins it.
-        if source is None and context.card is not None:
-            game.exile_resolving_spell = True
-            context.results["exiled_self"] = True
-            game.log.append(f"{context.card.name} will be exiled as it resolves")
-            _register(game.players.index(context.caster), context.card)
-            return True, "resolved"
         # "When this creature dies, **exile it** if it had a death counter on
         # it." (Bogardan Phoenix.) A dies-trigger's source is in a graveyard by
         # the time the ability resolves (CR 603.3 puts the trigger on the stack
@@ -2831,8 +2818,34 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
         # By identity through the hand/graveyard seam's own reasoning: two
         # copies of a card in a deck are the same immutable ``CardDefinition``,
         # so a name match would take whichever entry came first.
-        if source is not None and context.card is not None:
-            for player in game.players:
+        # …and **an ability activated from a graveyard** (Carrionette's
+        # "Exile this card and target creature", CR 113.6m). There is no
+        # permanent at all there, so the branch below would read the sentence
+        # as a spell exiling itself and set the resolving-spell flag on an
+        # ability — which bins nothing and leaves the card in the pile, exactly
+        # the failure the Phoenix note above describes.
+        #
+        # ``ability_text`` is the discriminator and it is the only sound one:
+        # it is set for an activated ability and None for a spell, where the
+        # zone is not. A graveyard scan run for a *spell* would find another
+        # copy of the same card in the pile — two copies of a card in a deck
+        # are the same object — and exile that one instead of the spell.
+        #
+        # Hoisted above the resolving-spell branch for that same reason: the
+        # two are told apart by the discriminator rather than by which one is
+        # tried first.
+        if context.card is not None and (
+            source is not None or context.ability_text is not None
+        ):
+            # The resolving seat's own pile first. Two copies of one card in
+            # two graveyards are the *same* ``CardDefinition`` object, so a
+            # scan in seat order would take an opponent's copy whenever they
+            # sit earlier — and for a graveyard-activated ability CR 113.6m
+            # names one pile in particular, the activator's.
+            piles = [context.caster] + [
+                player for player in game.players if player is not context.caster
+            ]
+            for player in piles:
                 for index, held in enumerate(player.graveyard):
                     if held is context.card:
                         player.graveyard.pop(index)
@@ -2844,6 +2857,19 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
                             f"{player.name}'s graveyard"
                         )
                         return True, "resolved"
+        # **A spell exiling itself** (Experimental Overload's "Exile Experimental
+        # Overload."). There is no permanent — the object is the spell on the
+        # stack — so this is CR 608.2n's "where the card goes" rather than a
+        # zone change of something in play, and it routes through the same flag
+        # the "if that spell would be put into your graveyard, exile it instead"
+        # rider uses. Set rather than performed: the card is still resolving,
+        # and the resolution tail is the one place that bins it.
+        if source is None and context.card is not None:
+            game.exile_resolving_spell = True
+            context.results["exiled_self"] = True
+            game.log.append(f"{context.card.name} will be exiled as it resolves")
+            _register(game.players.index(context.caster), context.card)
+            return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
     owner_index = game.owner_index_of(source)

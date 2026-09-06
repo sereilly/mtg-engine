@@ -386,6 +386,23 @@ def _ability_target_quantifiers(instruction) -> list[str]:
             quantifiers.append("target")
         for step in payload.get("steps") or ():
             walk(step)
+        # …and a **toll's** default half. "Exile this card and target creature
+        # **unless that creature's controller pays {2}**" (Carrionette) lowers
+        # to a `may` offered to the other player with the effect in
+        # ``otherwise``, and that effect is the ability's mainline rather than a
+        # conditional branch of it: CR 601.2c announces the target as the
+        # ability is activated, and the toll is offered at resolution. Left
+        # unwalked the gate saw no mandatory target at all, so the ability was
+        # activatable with nothing to aim at — and on Carrionette that exiles
+        # the card out of its own graveyard for no effect.
+        #
+        # Deliberately not ``then``/``else``/``action``, which the docstring
+        # above excludes and this does not disturb: those are branches of a
+        # decision made *during* the resolution, and ``otherwise`` is what the
+        # ability does when nobody buys it off. Two cards in the pool carry a
+        # target there (Carrionette, Tainted Specter) and both print "unless".
+        for step in payload.get("otherwise") or ():
+            walk(step)
 
     walk(instruction)
     return quantifiers
@@ -1134,7 +1151,18 @@ class LegalityMixin:
         or doing nothing. Returns the refusal text, or None when the ability
         does not target (so nothing is gated).
         """
-        card = source_permanent.effective_card
+        # The source is a permanent on almost every path and a **card in a
+        # graveyard** on one (Carrionette, CR 113.6m). Both answer "which card
+        # is this", and only a permanent can be a *referent* — "another
+        # creature", "a creature other than this one" are questions about an
+        # object on the battlefield — so the card is read either way and the
+        # permanent is passed on only when there is one. Handing a
+        # ``CardDefinition`` to ``_enumerate_targets`` instead would make every
+        # source-relative filter ask a card a permanent's question.
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        source = source_permanent if hasattr(
+            source_permanent, "permanent_id"
+        ) else None
         spec, _ = _activation_spec([ability])
         kind = spec.get("kind")
         if kind in ("none", "modal", "hand_card"):
@@ -1166,9 +1194,9 @@ class LegalityMixin:
             if named:
                 legal = self._role_targets_legal(
                     controller_index, card, spec, named, for_cast=False,
-                    source_permanent=source_permanent,
+                    source_permanent=source,
                     ability_instruction=ability_instruction,
-                    ability_source=source_permanent,
+                    ability_source=source,
                 )
                 return None if legal else refused
             # Nothing named: CR 602.2b's half of the question — could the whole
@@ -1176,9 +1204,9 @@ class LegalityMixin:
             # is never paid.
             walked = self._role_target_walk(
                 controller_index, card, spec, (), for_cast=False,
-                source_permanent=source_permanent,
+                source_permanent=source,
                 ability_instruction=ability_instruction,
-                ability_source=source_permanent,
+                ability_source=source,
             )
             return None if walked else refused
         quantifiers = _ability_target_quantifiers(instruction)
@@ -1194,8 +1222,8 @@ class LegalityMixin:
         valid = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,
-            source_permanent=source_permanent,
-            ability_source=source_permanent,
+            source_permanent=source,
+            ability_source=source,
         )
         # A player/"any" ability always has a legal target (a player is always
         # there), so those never refuse for want of one — the whole set of
