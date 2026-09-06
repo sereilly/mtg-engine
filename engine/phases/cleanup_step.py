@@ -10,6 +10,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 
 from ..delayed_triggers import expire_delayed_triggers, fire_delayed_triggers
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
+from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
@@ -122,6 +123,10 @@ class CleanupStepMixin:
         # end with the turn; an undurationed grant (Chandra, Flame's Catalyst's
         # −2) survives the sweep and dies with its card's zone instead.
         expire_end_of_turn_permissions(self)
+        # CR 514.2 again, one axis over: a "this turn" *timing* grant ends
+        # here too (Winding Canyons). Beside the zone sweep rather than in
+        # it, because the two records answer different questions.
+        expire_end_of_turn_flash(self)
         # "…can't block this turn" blanket restrictions end with the turn too.
         self.blocking_restrictions_until_eot = _turn_expired(
             self.blocking_restrictions_until_eot

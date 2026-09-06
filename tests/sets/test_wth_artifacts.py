@@ -447,3 +447,89 @@ def test_well_of_knowledge_is_open_to_everyone_on_their_own_draw_step(set_pool):
     # permission widens who may reach the ability, it does not widen when.
     refused, drew = _w1g5a_try(game, 0, "draw", 1)
     assert not refused.supported and drew == 0, refused.details
+
+
+# --- W2G1: costs charged and permissions granted ---
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.cast_permissions import permission_for, playable_from_zones
+from engine.models import Permanent as _W2G1Permanent
+
+
+def _w2g1_main_phase():
+    p1, p2 = _W2G1PlayerState(name="A"), _W2G1PlayerState(name="B")
+    game = _W2G1Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.turn = 3
+    game.current_turn_phase = "precombat_main"
+    return game, p1, p2
+
+
+def test_bosium_strip_opens_only_the_top_of_the_graveyard(
+    set_pool, catalog_by_name
+):
+    """"{3}, {T}: Until end of turn, you may cast instant and sorcery spells
+    from the top of your graveyard."
+
+    A **blanket** grant: no card is named, so what it covers is a union of card
+    types plus a position in an ordered zone (CR 400.5). Dropping the position
+    is not a smaller permission but a strictly larger one — the whole graveyard
+    becomes castable, which is a card nobody printed.
+    """
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_main_phase()
+    p1.battlefield.append(_W2G1Permanent(card=pool["Bösium Strip"]))
+    p1.graveyard = [
+        catalog_by_name["Giant Growth"],
+        catalog_by_name["Grizzly Bears"],
+        catalog_by_name["Lightning Bolt"],
+    ]
+
+    assert playable_from_zones(game, 0) == []
+
+    result = game.activate_permanent_ability(0, "Bösium Strip")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [entry["name"] for entry in playable_from_zones(game, 0)] == [
+        "Lightning Bolt"
+    ]
+    buried = {card.name: card for card in p1.graveyard}
+    assert permission_for(game, 0, buried["Giant Growth"], "graveyard") is None, (
+        "an instant, but not on top"
+    )
+    assert permission_for(game, 0, buried["Grizzly Bears"], "graveyard") is None, (
+        "on top of nothing, and not an instant or a sorcery either way"
+    )
+
+
+def test_bosium_strip_exiles_what_was_cast_this_way(set_pool, catalog_by_name):
+    """"If a spell cast this way would be put into a graveyard, exile it
+    instead."
+
+    The rider is the card's whole balance: without it the spell goes straight
+    back on top of the pile it was cast from and can be cast again the same
+    turn, for ever. The wording differs from the one printing the engine
+    already read ("that spell" / "your graveyard"), and one field takes both.
+    """
+    pool = set_pool("WTH")
+    game, p1, p2 = _w2g1_main_phase()
+    p1.battlefield.append(_W2G1Permanent(card=pool["Bösium Strip"]))
+    p1.graveyard = [catalog_by_name["Grizzly Bears"], catalog_by_name["Lightning Bolt"]]
+
+    game.activate_permanent_ability(0, "Bösium Strip")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    result = game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=1, from_zone="graveyard"
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert p2.life == 17
+    assert [c.name for c in p1.exile] == ["Lightning Bolt"]
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears"]
+    assert playable_from_zones(game, 0) == [], "and the new top is a creature"

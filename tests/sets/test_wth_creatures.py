@@ -1008,3 +1008,65 @@ def test_liege_of_the_hollows_makes_nothing_for_a_seat_that_pays_nothing(set_poo
         for p in game.players[0].battlefield + game.players[1].battlefield
     ), game.log
     assert all(not p.tapped for p in game.players[0].battlefield), game.log
+
+
+# --- W2G1: costs charged and permissions granted ---
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.enter_effects import ENTERED_BATTLEFIELD_TURN
+from engine.models import Permanent as _W2G1Permanent
+
+
+def _w2g1_turn_one_board():
+    p1, p2 = _W2G1PlayerState(name="A"), _W2G1PlayerState(name="B")
+    game = _W2G1Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.turn = 1
+    return game, p1, p2
+
+
+def test_fungus_elemental_grows_only_on_the_turn_it_arrived(
+    set_pool, catalog_by_name
+):
+    """"{G}, Sacrifice a Forest: Put a +2/+2 counter on this creature. Activate
+    only if this creature entered this turn."
+
+    The restriction is the card. Unenforced it is a +2/+2 every turn for the
+    rest of the game on a card that offers exactly one — an ability working
+    more often than the card allows, wrong in the player's favour and silent.
+    """
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_turn_one_board()
+    elemental = _W2G1Permanent(card=pool["Fungus Elemental"])
+    elemental.metadata[ENTERED_BATTLEFIELD_TURN] = game.turn
+    p1.battlefield.append(elemental)
+    p1.battlefield.append(_W2G1Permanent(card=catalog_by_name["Forest"]))
+
+    result = game.activate_permanent_ability(0, "Fungus Elemental")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert (elemental.effective_power, elemental.effective_toughness) == (5, 5)
+    assert [c.name for c in p1.graveyard] == ["Forest"], "the Forest paid for it"
+
+
+def test_fungus_elemental_refuses_on_a_later_turn(set_pool, catalog_by_name):
+    """The same board one turn on. CR 602.5's clause is checked before any cost
+    is paid, so the Forest is still there afterwards."""
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_turn_one_board()
+    game.turn = 2
+    elemental = _W2G1Permanent(card=pool["Fungus Elemental"])
+    elemental.metadata[ENTERED_BATTLEFIELD_TURN] = 1
+    p1.battlefield.append(elemental)
+    p1.battlefield.append(_W2G1Permanent(card=catalog_by_name["Forest"]))
+
+    result = game.activate_permanent_ability(0, "Fungus Elemental")
+
+    assert not result.supported
+    assert "enter the battlefield this turn" in result.details
+    assert (elemental.effective_power, elemental.effective_toughness) == (3, 3)
+    assert [p.card.name for p in p1.battlefield] == [
+        "Fungus Elemental", "Forest",
+    ], "nothing was spent"

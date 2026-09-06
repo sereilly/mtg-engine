@@ -161,8 +161,9 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
         return True
     if filt.is_enchanted:
         # "**Sacrifice enchanted creature**: …" (Betrothed of Fire). The host,
-        # not a chosen permanent — CR 301.5f's "enchanted"/"equipped" names one
-        # object and the attachment record is the whole answer, so there is
+        # not a chosen permanent — CR 303.4m's "enchanted [object]" (and
+        # CR 301.5f's "equipped") names one object and the attachment record
+        # is the whole answer, so there is
         # nothing for a filter to narrow. It is chargeable for
         # :attr:`is_source`'s reason one branch up and charged in the same
         # field family (``ActivatedAbilityCost.sacrifice_attached``); read as a

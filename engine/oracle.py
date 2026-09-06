@@ -1773,9 +1773,10 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
 #: "**Sacrifice enchanted creature**: Creatures you control get +2/+0 until end
 #: of turn." (Betrothed of Fire.) :data:`_TAP_ATTACHED_COST_RE` one payment
 #: over, anchored per cost segment for that pattern's reason: a rule matching a
-#: prefix would charge a *narrower* cost than the card prints. CR 301.5f puts
-#: "enchanted" and "equipped" on the same footing, so an Equipment printing the
-#: clause charges the same cost with no second row.
+#: prefix would charge a *narrower* cost than the card prints. CR 303.4m reads
+#: "enchanted [object]" as whatever the permanent is attached to and CR 301.5f
+#: reads "equipped" the same way, so an Equipment printing the clause charges
+#: the same cost with no second row.
 _SACRIFICE_ATTACHED_COST_RE = re.compile(
     r"^sacrifice (?:enchanted|equipped) \w+$"
 )

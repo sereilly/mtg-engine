@@ -672,7 +672,9 @@ class CastPermission:
     instruction kind, so a look permission can never reach a cast one.
     """
     mode: str  # "play" | "cast" | "look"
-    what: str  # "exiled_this_way" | "target_card" | "spells_from_hand"
+    #: "exiled_this_way" | "target_card" | "spells_from_hand" |
+    #: "spells_from_zone" | "spells_at_instant_speed"
+    what: str
     target: TargetSpec | None = None
     #: Who is permitted, when the sentence prints a subject other than "you":
     #: "**The player** may play that card this turn" (Elkin Lair), where the
@@ -721,6 +723,28 @@ class CastPermission:
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.
     exile_instead: bool = False
+    #: Which spells a **blanket** grant covers, by printed card type:
+    #: ``("instant", "sorcery")`` for Bosium Strip, ``("creature",)`` for
+    #: Winding Canyons. Empty on every grant that names its cards instead
+    #: (:attr:`target` or the exiled-this-way pile), where *which* cards is the
+    #: list itself and a type would be a second, weaker answer to one question.
+    #:
+    #: It is required rather than optional for the two ``what`` values that
+    #: read it: an empty union on a blanket grant is "every spell", which is a
+    #: strictly different card from either of the two that print one.
+    card_types: tuple[str, ...] = ()
+    #: The zone a blanket grant opens ("graveyard"), or None for a grant that
+    #: is about *timing* rather than about a zone. Its own field rather than a
+    #: value of :attr:`what` because the two vary independently — the same
+    #: union of card types is printed on both sides of that difference.
+    zone: str | None = None
+    #: **Where in that zone.** "…from **the top of** your graveyard" (Bosium
+    #: Strip) is one card, not the pile, and CR 400.5 keeps a graveyard
+    #: ordered so the phrase has a referent. Dropping it is not a smaller
+    #: permission, it is a strictly larger one: the whole graveyard becomes
+    #: castable, which is a card nobody printed. None means the whole zone,
+    #: which is what every other grant here means.
+    position: str | None = None
 
 
 @dataclass(frozen=True)

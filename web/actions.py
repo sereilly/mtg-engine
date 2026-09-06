@@ -240,7 +240,7 @@ def _action_cast(session, req, seat_type):
     # grants itself flash (Mirage's five Auras) — and this question is asked in
     # two places: a card castable in the picker and refused by the action is the
     # shape a second copy produces.
-    instant_speed = casts_at_instant_speed(card)
+    instant_speed = casts_at_instant_speed(card, session.game, req.seat)
     if req.seat != session.current_turn and not instant_speed:
         raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
 

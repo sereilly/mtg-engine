@@ -685,3 +685,36 @@ def test_107_3a_the_ceiling_is_exactly_what_the_cast_gate_accepts():
             f"the gate accepted {ceiling + 1} with {swamps} Swamps, so the "
             f"ceiling is hiding a legal announcement"
         )
+
+
+# ---------------------------------------------------------------------------
+# W2G1 (Weatherlight): a cost narrowed on an axis that is not a card type
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2b", "601.2h")
+def test_601_2b_an_additional_cost_may_name_its_payment_by_colour():
+    """Abjure: "As an additional cost to cast this spell, sacrifice a blue
+    permanent." / "Counter target spell."
+
+    The cost table refused the phrase for pinning no card *type*, which was the
+    right refusal written as the wrong question. What the refusal is for is an
+    **unnamed** cost — one whose noun phrase narrows nothing the charger can
+    test, so the payment eats the cheapest thing the caster owns. "A blue
+    permanent" names what may pay it exactly as precisely as "a creature" does;
+    what it names is a colour.
+
+    Refusing loudly was the right direction while it stood: the alternative is
+    a counterspell cast for {U} with the cost claimed and skipped, which is
+    what this whole module exists to prevent.
+    """
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice a blue permanent."
+    )
+    assert cost is not None
+    assert cost.sacrifice_filter == {"color_filter": "U"}
+    # A phrase that narrows *nothing* still refuses, which is the half of the
+    # old rule that was load-bearing.
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice a permanent."
+    ) is None

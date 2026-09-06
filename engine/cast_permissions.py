@@ -90,6 +90,17 @@ class CastPermission:
     #: the wrong player would be allowed to cast it. None means "the grantee's
     #: own", which is every other grant.
     zone_player_index: int | None = None
+    #: **Where in the zone**, for a grant that names no cards. "…you may cast
+    #: instant and sorcery spells from **the top of** your graveyard"
+    #: (Bösium Strip) covers one card at a time, and which card it is changes
+    #: as the pile does — so it cannot be resolved into ``cards`` at grant
+    #: time the way every named grant is.
+    #:
+    #: None means the whole zone, which is what every other grant means.
+    #: Leaving it off for a card that prints the phrase is not a smaller
+    #: permission but a strictly larger one: the entire graveyard becomes
+    #: castable.
+    position: str | None = None
 
     @property
     def zone_seat(self) -> int:
@@ -133,6 +144,16 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
         return False
     if permission.card_types and card.primary_type not in permission.card_types:
         return False
+    if permission.position == "top":
+        # CR 400.5 keeps a graveyard ordered, and this engine keeps the top as
+        # the *end* of the list: every path that bins a card appends
+        # (``handlers/zones.graveyard_top_to_library`` states the same
+        # convention). Compared by identity, because a deck repeats one
+        # immutable ``CardDefinition`` per copy and a value test would answer
+        # "yes" for a second copy sitting anywhere in the pile.
+        pile = _zone_cards(game, permission)
+        if not pile or pile[-1] is not card:
+            return False
     if permission.cards is not None:
         # Identity, not name: the grant covers the copies it named, one use
         # each. The card must also still be in the granted zone — a card that

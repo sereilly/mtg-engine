@@ -232,6 +232,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # above: nothing moves and nothing changes characteristics — the ability's
     # whole effect is a permission (CR 601.3).
     "grant_cast_permission": "activated_permission",
+    # "…as though they had flash" (Winding Canyons). A permission like its
+    # neighbours, about timing rather than about a zone.
+    "grant_flash_timing": "activated_permission",
     # "{T}, Sacrifice this land: Search your library for a basic land card…"
     # (Fabled Passage). A tutor, whatever the destination: `activated_look`
     # is for cards seen and chosen among, and a search is chosen from a

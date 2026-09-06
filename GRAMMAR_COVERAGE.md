@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 76.7% | 73.1% | 51.0% | 114 |
+| WTH *(measured)* | 167 | 249 | 78.7% | 75.1% | 53.0% | 117 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,11 +46,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 336 | 146 | expected a subject |  |
+| 333 | 143 | expected a subject |  |
 | 103 | 47 | unrecognized effect verb |  |
 | 95 | 48 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 9 | 9 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -713,6 +713,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Burnt Offering**
   - `Add X mana in any combination of {B} and/or {R}, where X is the sacrificed creature's mana value.`
+- **Bösium Strip**
+  - `{3}, {T}: Until end of turn, you may cast instant and sorcery spells from the top of your graveyard. If a spell cast this way would be put into a graveyard, exile it instead.`
 - **Cadaverous Bloom**
   - `Exile a card from your hand: Add {B}{B} or {G}{G}.`
 - **Cadaverous Knight**
@@ -1901,6 +1903,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{G}: Put a spore counter on target Fungus.`
 - **Fungal Rebirth**
   - `Return target permanent card from your graveyard to your hand. If a creature died this turn, create two 1/1 green Saproling creature tokens.`
+- **Fungus Elemental**
+  - `{G}, Sacrifice a Forest: Put a +2/+2 counter on this creature. Activate only if this creature entered this turn.`
 - **Fungusaur**
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
@@ -2049,6 +2053,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gains flying until end of turn.`
 - **Goblin Bomb**
   - `At the beginning of your upkeep, you may flip a coin. If you win the flip, put a fuse counter on this enchantment. If you lose the flip, remove a fuse counter from this enchantment.`
+  - `Remove five fuse counters from this enchantment and sacrifice it: It deals 20 damage to target player or planeswalker.`
 - **Goblin Caves**
   - `As long as enchanted land is a basic Mountain, Goblin creatures get +0/+2.`
 - **Goblin Chirurgeon**
@@ -2512,6 +2517,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Infernal Medusa**
   - `Whenever this creature blocks a creature, destroy that creature at end of combat.`
   - `Whenever this creature becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+- **Infernal Tribute**
+  - `{2}, Sacrifice a nontoken permanent: Draw a card.`
 - **Inferno**
   - `Inferno deals 6 damage to each creature and each player.`
   - `Inferno deals 6 damage to each creature and each player.`
@@ -5629,6 +5636,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {R} or {W}.`
 - **Winding Canyons**
   - `{T}: Add {C}.`
+  - `{2}, {T}: You may cast creature spells this turn as though they had flash.`
 - **Winds of Change**
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`

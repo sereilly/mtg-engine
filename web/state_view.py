@@ -278,7 +278,7 @@ def _card_castable_now(
     # CR 702.8b: flash casts any time an instant could be cast, so both timing
     # gates ask instant-or-flash rather than the type line alone — through the
     # one derivation, so the picker and the action cannot disagree.
-    instant_speed = casts_at_instant_speed(card)
+    instant_speed = casts_at_instant_speed(card, game, player_index)
 
     # Non-instant-speed spells require it to be your turn
     if player_index != window.current_turn and not instant_speed:

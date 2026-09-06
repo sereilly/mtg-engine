@@ -314,3 +314,136 @@ def test_400_7_a_face_down_record_stops_speaking_once_its_card_leaves_exile():
     game.players[0].exile.remove(hidden)
     assert list(live_records(game)) == []
     assert face_down_exiled_cards(game, 0) == []
+
+
+# ---------------------------------------------------------------------------
+# A blanket grant over one position in an ordered zone, and a timing grant (W2G1)
+# ---------------------------------------------------------------------------
+
+from engine.card_loader import load_cards as _w2g1_load_cards
+from engine.card_loader import load_catalog as _w2g1_load_catalog
+from engine.card_loader import manifest_set_path as _w2g1_set_path
+from engine.cast_permissions import playable_from_zones as _w2g1_playable
+from engine.cast_timing import casts_at_instant_speed as _w2g1_instant_speed
+from engine.cast_timing import expire_end_of_turn as _w2g1_expire_flash
+from engine.models import Permanent as _W2G1Permanent
+
+_W2G1_WTH = {
+    c.name: c
+    for c in _w2g1_load_cards(_w2g1_set_path("WTH", include_measured=True))
+}
+_W2G1_CATALOG = {c.name: c for c in _w2g1_load_catalog()}
+
+
+def _w2g1_main_phase_duel():
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.turn = 3
+    game.current_turn_phase = "precombat_main"
+    return game, p1, p2
+
+
+@pytest.mark.cr("601.3", "400.5")
+def test_601_3_a_blanket_grant_opens_one_position_in_an_ordered_zone():
+    """"A player can begin to cast a spell only if a rule or effect allows
+    that player to cast it."
+
+    Bösium Strip: "Until end of turn, you may cast instant and sorcery spells
+    from the top of your graveyard." No card is named, so the grant carries a
+    class of spells plus a *position* — and CR 400.5 is what makes the position
+    meaningful, since a graveyard's order can't be changed except when an
+    effect allows it.
+
+    Dropping the position is not a smaller permission but a strictly larger
+    one: the whole graveyard becomes castable, which is a card nobody printed.
+    """
+    game, p1, _p2 = _w2g1_main_phase_duel()
+    p1.battlefield.append(_W2G1Permanent(card=_W2G1_WTH["Bösium Strip"]))
+    p1.graveyard = [
+        _W2G1_CATALOG["Giant Growth"],
+        _W2G1_CATALOG["Grizzly Bears"],
+        _W2G1_CATALOG["Lightning Bolt"],
+    ]
+
+    assert _w2g1_playable(game, 0) == []
+    game.activate_permanent_ability(0, "Bösium Strip")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert [e["name"] for e in _w2g1_playable(game, 0)] == ["Lightning Bolt"]
+    buried = {card.name: card for card in p1.graveyard}
+    assert permission_for(game, 0, buried["Giant Growth"], "graveyard") is None
+    assert permission_for(game, 0, buried["Grizzly Bears"], "graveyard") is None
+
+
+@pytest.mark.cr("614.1a", "404.1")
+def test_614_1a_a_spell_cast_from_the_top_of_a_graveyard_is_exiled_instead():
+    """"If a spell cast this way would be put into a graveyard, exile it
+    instead."
+
+    CR 404.1 is what makes the rider load-bearing: a finished instant is put on
+    **top** of its owner's graveyard, which for this card is the very position
+    it was just cast from — so without the replacement the spell is castable
+    again the same turn, for ever. The wording differs from the printing the
+    engine already read ("that spell" / "your graveyard"), and one field takes
+    both.
+    """
+    game, p1, p2 = _w2g1_main_phase_duel()
+    p1.battlefield.append(_W2G1Permanent(card=_W2G1_WTH["Bösium Strip"]))
+    p1.graveyard = [
+        _W2G1_CATALOG["Grizzly Bears"], _W2G1_CATALOG["Lightning Bolt"],
+    ]
+
+    game.activate_permanent_ability(0, "Bösium Strip")
+    while game.stack:
+        game.resolve_top_of_stack()
+    result = game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=1, from_zone="graveyard"
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert p2.life == 17
+    assert [c.name for c in p1.exile] == ["Lightning Bolt"]
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears"]
+
+
+@pytest.mark.cr("702.8a", "611.1", "514.2")
+def test_702_8a_a_granted_flash_widens_when_rather_than_where():
+    """"Flash means 'You may play this card any time you could cast an
+    instant.'"
+
+    Winding Canyons grants it to a *class of spells* for a turn (CR 611.1's
+    continuous effect), which is a different axis from every other permission
+    in this file: those say which zone a spell may be cast **from**, and this
+    says **when**. Folded together, a timing grant would have to name a zone it
+    does not have.
+
+    Three things have to be true of it and none is visible from the card: it
+    reaches only the seat that granted it, only the printed type, and it ends
+    at CR 514.2's cleanup with the "until end of turn" effects.
+    """
+    game, p1, _p2 = _w2g1_main_phase_duel()
+    p1.battlefield.append(_W2G1Permanent(card=_W2G1_WTH["Winding Canyons"]))
+    bears = _W2G1_CATALOG["Grizzly Bears"]
+
+    game.active_player_index = 1
+    assert not _w2g1_instant_speed(bears, game, 0)
+
+    game.active_player_index = 0
+    game.activate_permanent_ability(0, "Winding Canyons", ability_index=1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.active_player_index = 1
+    assert _w2g1_instant_speed(bears, game, 0), "on the opponent's turn"
+    assert not _w2g1_instant_speed(bears, game, 1), "and only for the granter"
+    assert not _w2g1_instant_speed(_W2G1_CATALOG["Black Lotus"], game, 0), (
+        "and only for the type it names"
+    )
+
+    _w2g1_expire_flash(game)
+    assert not _w2g1_instant_speed(bears, game, 0)

@@ -506,8 +506,9 @@ class ActivatedAbilityCost:
     #: direction — the Aura eats itself, or it eats any creature on the board
     #: while the enchanted one lives.
     #:
-    #: :attr:`tap_attached`'s shape one payment over (CR 301.5f puts
-    #: "enchanted" and "equipped" on the same footing, so both words are read):
+    #: :attr:`tap_attached`'s shape one payment over (CR 303.4m says
+    #: "enchanted [object]" names whatever the permanent is attached to and
+    #: CR 301.5f says the same of "equipped", so both words are read):
     #: nothing is chosen, there is no picker and no filter, and the attachment
     #: record is the whole answer. The two ways it can fail — no host, or a
     #: host that has left — refuse the activation with nothing paid
