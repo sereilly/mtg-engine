@@ -21,10 +21,10 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import parse_amount
+from .amounts import accept_counter_kind, parse_amount
 
 from .errors import GrammarError
-from .lexer import GToken, NUMBER, PT, PUNCT, WORD, tokenize
+from .lexer import GToken, NUMBER, PUNCT, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 # The price fragments, re-exported so every existing caller keeps its import
 # — the arrangement `readers` already has one layer down.
@@ -725,11 +725,16 @@ def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
     "mire"). Which of those anything can actually *do* is a question for the
     caller: the two callers differ precisely there, so the check stays with
     them rather than being frozen into one shared list here.
+
+    **What** a counter kind is spells out once, in
+    ``amounts.accept_counter_kind``; this function is that reading plus the one
+    thing that made it a separate copy — the refusal. Four modules had written
+    the same three-line probe, and each of them was a place the next spelling of
+    a kind could be forgotten in only three of the four.
     """
-    token = stream.peek()
-    if token is None or token.kind not in (PT, WORD) or token.is_word("counter", "counters"):
+    token = accept_counter_kind(stream)
+    if token is None:
         raise stream.error("expected a counter kind" + suffix)
-    stream.advance()
     return token
 
 

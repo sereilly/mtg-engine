@@ -209,6 +209,19 @@ class ObjectFilter:
     # least one +1/+1 counter, read off the ``plus_counters`` record the
     # placing handlers keep (CR 122).
     with_plus1_counter: bool = False
+    # "with a **bounty** counter on it" (Bounty Hunter) — the object carries at
+    # least one counter of the kind the card names, read off
+    # ``engine/named_counters.py``'s open key space (CR 122.1: a counter's kind
+    # is whatever word the card invents, and nothing in the rules reacts to it).
+    #
+    # A **separate field from ``with_plus1_counter`` above**, not a widening of
+    # it. CR 122.1a's +1/+1 counter has rules meaning — it is layer 7d and it
+    # lives in ``engine/pt.py``'s channel, under the ``plus_counters`` key —
+    # while every other kind is an inert marker in a different store. One field
+    # carrying both would be one question with two places to look for the
+    # answer, which is the exact failure ``named_counters.py``'s own docstring
+    # records: a card put counters where nothing read them.
+    with_named_counter: str | None = None
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False
@@ -873,6 +886,10 @@ class ObjectFilter:
         # byte-identical.
         if self.with_plus1_counter:
             payload["with_plus1_counter"] = True
+        # "with a **bounty** counter on it" (Bounty Hunter). Emitted only when
+        # set, for the reason its neighbour is.
+        if self.with_named_counter:
+            payload["with_named_counter"] = self.with_named_counter
         # "a **legendary** card" (Niambi), "target **legendary** creature". A
         # supertype is a restriction like any other and rides the payload like
         # any other; until this key existed it rode nothing at all, and

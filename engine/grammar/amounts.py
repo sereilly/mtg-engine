@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..oracle_types import MANA_PAID_BY_SEAT
 from . import ast
 from .errors import GrammarError
-from .lexer import MANA, NUMBER, PT, WORD
+from .lexer import GToken, MANA, NUMBER, PT, WORD
 # `parse_equal_to` below reads the record-shaped quantities too — one
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
@@ -301,6 +301,40 @@ def accept_counters_on_it_bound(stream: TokenStream) -> str | None:
     )
 
 
+def accept_counter_kind(stream: TokenStream) -> "GToken | None":
+    """The counter's written name as its token, or None with the cursor where
+    it was.
+
+    **CR 122.1's open key space, read in one place.** A counter's kind is
+    whatever word the card invented ("bounty", "corpse", "wind", "mire") *or* a
+    P/T token, which the lexer gives its own kind — and "counter"/"counters"
+    itself is never the kind, which is what stops a bare "put a counter on it"
+    from inventing a counter called "counter".
+
+    Written here because the reading was **four** productions in four modules
+    by the time a fifth wanted it: ``phrases._expect_counter_kind`` (the same
+    question, raising instead of declining),
+    ``condition_clauses._accept_counter_kind``, the inline form inside
+    :func:`accept_counters_on_source` below, and now the noun-phrase
+    postmodifier "…with a <kind> counter on it". Each was correct when written
+    and each was a place the next kind of counter could be forgotten. In
+    ``amounts`` because this module is unlayered — every parse layer may read
+    it — and the four callers sit at four different layers, so no layered home
+    could serve them all.
+
+    ``+1/+0`` is the reason it is not ``peek_word``: the lexer gives a P/T its
+    own token kind, so a word-only reader silently refused "three or more
+    **+1/+0** counters" while its "**echo** counters" twin worked.
+    """
+    token = stream.peek()
+    if token is None or token.kind not in (PT, WORD):
+        return None
+    if token.is_word("counter", "counters"):
+        return None
+    stream.advance()
+    return token
+
+
 def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
     """``<word> counters on <the source>`` — the count of a named counter the
     ability's own source is carrying, or None when the words are something else.
@@ -321,11 +355,9 @@ def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | No
     the card invented and the P/T channel.
     """
     mark = stream.mark()
-    pt = stream.accept_kind(PT)
-    kind = pt.text if pt is not None else stream.peek_word()
-    if kind is not None:
-        if pt is None:
-            stream.advance()
+    token = accept_counter_kind(stream)
+    if token is not None:
+        kind = token.text
         if stream.accept_word("counter", "counters") and stream.accept_word("on"):
             # Late import for the reason the noun imports below give: nouns
             # depends on this module for comparisons, so the cycle is broken at

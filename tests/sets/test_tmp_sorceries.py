@@ -110,3 +110,79 @@ def test_w2g5_dregs_of_sorrow_offers_only_the_nonblack_creatures(set_pool):
         "x_targets": True,
         "filter": {"exclude_colors": ["B"]},
     }
+
+
+# --- W2G5: a sweep narrowed by attachment state ----------------------------
+
+
+def test_w2g5_winds_of_rath_spares_only_the_enchanted(set_pool):
+    """"Destroy all creatures that aren't enchanted. They can't be regenerated."
+
+    Two things had to be true and only one was. ``ObjectFilter.not_enchanted``
+    has existed since Time Elemental — but only in the **singular** spelling
+    ("that isn't enchanted"), so the same restriction on a plural head noun was
+    an unread relative clause and the whole line fell. The number of the verb
+    is agreement with the noun and says nothing about the restriction, so the
+    two spellings are now one branch.
+
+    Driven through a game rather than asserted off the program: a sweep that
+    reported the right payload and swept the board anyway is the failure this
+    card could have, and only a board shows it. The Aura itself survives —
+    it is not a creature — and the regenerator does not, which is the second
+    printed sentence doing its work.
+    """
+    pool = set_pool("TMP")
+    bare = Permanent(card=pool["Horned Turtle"])
+    enchanted = Permanent(card=pool["Trained Armodon"])
+    regenerator = Permanent(card=set_pool("LEA")["Drudge Skeletons"])
+    aura = Permanent(card=pool["Giant Strength"])
+    caster = PlayerState(name="P1", hand=[pool["Winds of Rath"]], life=20)
+    defender = PlayerState(
+        name="P2", life=20,
+        battlefield=[bare, enchanted, regenerator, aura],
+    )
+    game = Game(players=[caster, defender])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    from engine.auras import attach_aura
+
+    attach_aura(aura, enchanted)
+    regenerator.regeneration_shield = 1
+
+    result = game.cast_from_hand(0, "Winds of Rath")
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert sorted(p.card.name for p in defender.battlefield) == [
+        "Giant Strength", "Trained Armodon",
+    ]
+    assert sorted(c.name for c in defender.graveyard) == [
+        "Drudge Skeletons", "Horned Turtle",
+    ], "the shield does not save a creature from a no-regeneration sweep"
+
+
+def test_w2g5_winds_of_rath_reads_the_plural_clause_as_the_singular_one(set_pool):
+    """The payload, so the *equality* of the two spellings is asserted and not
+    only the behaviour above. Time Elemental's singular clause and this card's
+    plural one must reduce to the same key, or the pool has two questions where
+    it printed one."""
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    plural = lower_ability(parse_line("Destroy all creatures that aren't enchanted."))
+    assert plural[0].payload == {"type_filter": "creature", "not_enchanted": True}
+
+    singular = lower_ability(
+        parse_line("Destroy target permanent that isn't enchanted.")
+    )
+    assert singular[0].payload["not_enchanted"] is True
+
+    card = set_pool("TMP")["Winds of Rath"]
+    program = compile_card_oracle(card)
+    assert program.supported
+    assert program.instructions[0].payload == {
+        "type_filter": "creature",
+        "not_enchanted": True,
+        "bypass_regeneration": True,
+    }

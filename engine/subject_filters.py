@@ -65,6 +65,18 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
+    # "target creature **with a bounty counter on it**" (Bounty Hunter). The
+    # open half of CR 122.1's counter space, answered off
+    # ``named_counters.counters_on`` — the same record every other reader of an
+    # invented counter kind asks. Beside ``with_plus1_counter`` rather than
+    # folded into it because the two live in different stores: the +1/+1 kind
+    # has rules meaning (layer 7d) and is ``engine/pt.py``'s, and one key
+    # spanning both would be one question with two places to look.
+    #
+    # Here rather than merely tested, for ``any_classes``' reason: the key set
+    # is what a compiler admits a narrowed line on, so without the word the
+    # whole ability refused and the card was unsupported.
+    "with_named_counter",
     # "…each artifact **with mana value less than or equal to the number of
     # rust counters on it**" (Corrosion). Two characteristics of the *same*
     # object compared against each other, both read off the permanent being

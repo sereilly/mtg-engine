@@ -233,6 +233,9 @@ class _FilterDraft:
     not_enchanted: bool = False
     is_card: bool = False
     with_plus1_counter: bool = False
+    # "with a <kind> counter on it" (Bounty Hunter) — see
+    # ``ast.ObjectFilter.with_named_counter``.
+    with_named_counter: str | None = None
     nontoken: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
@@ -894,6 +897,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         zone_owner=d.zone_owner,
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,
+        with_named_counter=d.with_named_counter,
         nontoken=d.nontoken,
         chosen_color=d.chosen_color,
         chosen_creature_type=d.chosen_creature_type,

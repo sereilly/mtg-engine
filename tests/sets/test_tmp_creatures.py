@@ -1299,3 +1299,132 @@ def test_w1g5_a_bare_becomes_blocked_trigger_refuses_the_tuck():
     )
     with _pytest.raises(LoweringError):
         lower_ability(node)
+
+
+# --- W2G5: a target narrowed by a counter kind the card invented ------------
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState
+from engine.models import Permanent as _W2G5Permanent
+from engine.named_counters import counters_on as _w2g5_counters_on
+from engine.oracle import compile_card_oracle as _w2g5_compile
+from engine.targeting import derive_activation_spec as _w2g5_activation_spec
+
+
+def _w2g5_bounty_board(set_pool):
+    """Bounty Hunter, and three creatures for it to point at."""
+    pool = set_pool("TMP")
+    hunter = _W2G5Permanent(card=pool["Bounty Hunter"])
+    hunter.summoning_sick = False
+    victims = [
+        _W2G5Permanent(card=pool["Horned Turtle"]),     # blue
+        _W2G5Permanent(card=pool["Trained Armodon"]),   # green
+        _W2G5Permanent(card=pool["Blood Pet"]),         # black
+    ]
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="P1", life=20, battlefield=[hunter]),
+        _W2G5PlayerState(name="P2", life=20, battlefield=victims),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, hunter, victims
+
+
+def test_w2g5_bounty_hunter_marks_then_destroys_what_it_marked(set_pool):
+    """"{T}: Put a bounty counter on target nonblack creature." /
+    "{T}: Destroy target creature with a bounty counter on it."
+
+    Both ends of one card, in one game. The second line refused before this
+    round because "with a <kind> counter on it" was read for the +1/+1 kind
+    alone — the counters CR 122.1 lets a card invent had no matcher, so the
+    phrase failed the line loudly. It has one now
+    (``ObjectFilter.with_named_counter``, over
+    ``engine/named_counters.py``'s store).
+    """
+    game, hunter, (turtle, armodon, blood_pet) = _w2g5_bounty_board(set_pool)
+
+    assert game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    game.resolve_stack()
+    assert _w2g5_counters_on(turtle, "bounty") == 1
+    assert _w2g5_counters_on(armodon, "bounty") == 0
+
+    hunter.tapped = False
+    assert game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    ).supported, game.log
+    game.resolve_stack()
+
+    defender = game.players[1]
+    assert [p.card.name for p in defender.battlefield] == [
+        "Trained Armodon", "Blood Pet",
+    ]
+    assert [c.name for c in defender.graveyard] == ["Horned Turtle"]
+
+
+def test_w2g5_bounty_hunter_refuses_an_unmarked_creature_with_nothing_paid(set_pool):
+    """CR 602.2b via 601.2c: an ability with a mandatory target it cannot fill
+    is refused before the cost is paid — so the Hunter is still untapped and
+    can be aimed somewhere legal this turn.
+
+    The failure this guards is the quiet one: a narrowing the matcher cannot
+    test is one the dispatcher ignores, and an ability that destroys *any*
+    creature is not the card.
+    """
+    game, hunter, _victims = _w2g5_bounty_board(set_pool)
+
+    refused = game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=1,
+    )
+
+    assert not refused.supported
+    assert not hunter.tapped, "nothing is paid for a refused activation"
+    assert len(game.players[1].battlefield) == 3
+
+
+def test_w2g5_a_named_counter_is_not_the_plus_one_counter(set_pool):
+    """The two stores stay apart in a game, not only in the matcher's unit test.
+
+    CR 122.1a's +1/+1 counter is layer 7d and lives in ``engine/pt.py``'s
+    ``plus_counters`` record; a bounty counter is an inert marker in the open
+    store. A matcher reading one for the other would let Bounty Hunter destroy
+    a creature somebody had merely been pumping.
+    """
+    game, hunter, (turtle, _armodon, _blood_pet) = _w2g5_bounty_board(set_pool)
+    turtle.metadata["plus_counters"] = 2
+
+    refused = game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not refused.supported, "+1/+1 counters are not bounty counters"
+    assert not hunter.tapped
+
+
+def test_w2g5_the_bounty_picker_offers_only_the_marked_creatures(set_pool):
+    """The picker and the activation gate are one reading — the list the client
+    is offered is the list the engine will accept, through the same
+    ``_destroy_target_legal`` both ask."""
+    game, hunter, (turtle, _armodon, _blood_pet) = _w2g5_bounty_board(set_pool)
+    program = _w2g5_compile(hunter.card)
+    ability = program.activated_abilities[1]
+    spec = _w2g5_activation_spec(ability)
+
+    def offered():
+        return [
+            t.get("name") for t in game._enumerate_targets(
+                0, hunter.card, spec, for_cast=False,
+                ability_source=hunter, ability_instruction=ability.instruction,
+            )
+        ]
+
+    assert offered() == []
+
+    from engine.named_counters import add_counters
+
+    add_counters(turtle, "bounty", 1)
+    assert offered() == ["Horned Turtle"]

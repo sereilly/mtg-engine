@@ -34,7 +34,7 @@ COST_TAPPED_REFERENT = "the creature tapped this way"
 from typing import Callable
 
 from . import ast
-from .amounts import (accept_counters_on_it_bound,
+from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
                       accept_source_counter_bound,
                       accept_source_relative_comparison, parse_comparison)
 from .errors import GrammarError
@@ -503,10 +503,24 @@ def _parse_postmodifiers(
             if stream.accept_phrase("a", "single", "target"):
                 d.target_count = 1
                 continue
-            # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
-            # kind is accepted: the counters the engine records under another
-            # name have no matcher, so a phrase naming one fails the line
-            # loudly rather than matching every creature.
+            # "with a +1/+1 counter on it" (Tempered Veteran), and "with a
+            # **bounty** counter on it" (Bounty Hunter) beside it.
+            #
+            # Two fields, one production. CR 122.1a's +1/+1 counter has rules
+            # meaning — layer 7d, ``engine/pt.py``'s channel, the
+            # ``plus_counters`` record — while every other kind CR 122.1 admits
+            # is an inert marker in ``engine/named_counters.py``'s open store.
+            # The *sentence* is one sentence, so it is read once; where the
+            # answer is looked up is the matcher's business and not the parser's.
+            #
+            # The comment this replaced said only the +1/+1 kind was accepted
+            # "because the counters the engine records under another name have
+            # no matcher, so a phrase naming one fails the line loudly rather
+            # than matching every creature". That was the right refusal and it
+            # has expired: ``with_named_counter`` is now in
+            # ``TESTABLE_SUBJECT_FILTER_KEYS`` with ``counters_on`` behind it.
+            # Loudly is still what happens to a kind nothing can answer — the
+            # key check refuses the payload, one layer down.
             if stream.at_word("a", "an"):
                 counter_probe = stream.mark()
                 stream.advance()
@@ -520,7 +534,15 @@ def _parse_postmodifiers(
                     if stream.accept_word("counter") and stream.accept_phrase("on", "it"):
                         d.with_plus1_counter = True
                         continue
-                stream.reset(counter_probe)
+                    stream.reset(counter_probe)
+                else:
+                    kind = accept_counter_kind(stream)
+                    if kind is not None and stream.accept_word(
+                        "counter"
+                    ) and stream.accept_phrase("on", "it"):
+                        d.with_named_counter = kind.text
+                        continue
+                    stream.reset(counter_probe)
             # "with mana value X" (Spell Blast). Two words, so it is tried
             # before the keyword list — "mana" alone is not a keyword, but
             # leaving the phrase unmatched would strand "value X" and fail the
@@ -601,7 +623,17 @@ def _parse_postmodifiers(
             # enchanted, which is why the matcher asks for the Aura subtype
             # rather than for the attachment record this engine shares between
             # the two (CR 301.5f).
-            elif stream.accept_phrase("isn't", "enchanted"):
+            #
+            # **"aren't" is the same clause about a plural head noun** — "all
+            # creatures **that aren't enchanted**" (Winds of Rath). The number
+            # of the verb is agreement with the noun the postmodifier is
+            # attached to and says nothing about the restriction, so the two
+            # spellings are one branch rather than two: split, the plural half
+            # would be an unread relative clause on every sweep in the pool
+            # while the singular half went on working, and nothing would fail.
+            elif stream.accept_phrase("isn't", "enchanted") or stream.accept_phrase(
+                "aren't", "enchanted"
+            ):
                 d.not_enchanted = True
                 continue
             # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).

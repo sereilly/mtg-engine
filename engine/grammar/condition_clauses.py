@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 
 from . import ast
-from .amounts import parse_amount
+from .amounts import accept_counter_kind, parse_amount
 from .errors import GrammarError
 from .nouns import parse_object_filter
 # The moved block's own imports, and they moved *with* it: a function that
@@ -27,7 +27,7 @@ from .phrases import (_accept_self_reference, _parse_duration,
                       parse_bound_subject)
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
-from .lexer import PT, WORD
+from .lexer import PT
 from .readers import accept_source_reference
 
 
@@ -520,22 +520,19 @@ def _accept_counter_kind(stream: TokenStream) -> str | None:
     """The counter's written name, or None with the cursor untouched.
 
     A **P/T token or a word**, because CR 122.1a spells one kind with symbols
-    and CR 122.1 lets the rest have any name — the same pair
-    ``phrases._expect_counter_kind`` admits one layer down, read here rather
-    than imported because a condition declines where that one raises.
+    and CR 122.1 lets the rest have any name.
 
-    Reading ``peek_word`` alone was why "three or more **+1/+0** counters"
-    (Consuming Ferocity) failed a clause whose "three or more **echo**
-    counters" twin has worked since Fasting: the lexer gives "+1/+0" its own
-    token kind, so the word table never saw it.
+    Two lines, because the reading is now ``amounts.accept_counter_kind`` and
+    it used to be four productions in four modules. This copy was written out
+    rather than imported "because a condition declines where that one raises" —
+    a real difference from ``phrases._expect_counter_kind``, and the wrong one
+    to settle by copying the *reader*: declining and raising are one accept plus
+    what its caller does with a None, and the copy meant a counter kind could be
+    admitted in one module and refused in another. ``amounts`` is unlayered, so
+    a condition may read it.
     """
-    token = stream.peek()
-    if token is None or token.kind not in (PT, WORD):
-        return None
-    if token.is_word("counter", "counters"):
-        return None
-    stream.advance()
-    return token.text
+    token = accept_counter_kind(stream)
+    return None if token is None else token.text
 
 
 def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":

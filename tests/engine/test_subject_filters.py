@@ -87,6 +87,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("power", {"power": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
+    # "target creature **with a bounty counter on it**" (Bounty Hunter).
+    # CR 122.1's open kind space. The rejection is the cheap half; the two
+    # halves that matter — that a permanent carrying the counter *is* matched,
+    # and that a +1/+1 counter is not a bounty counter — are demonstrated
+    # below, because both stores would pass this row.
+    ("with_named_counter", {"with_named_counter": "bounty"}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
     # The negative twin (Moat's "creatures without flying"). Air Elemental
     # prints the keyword, so a matcher that ignored the key — or one that read
@@ -1938,3 +1944,42 @@ def test_w1g5_a_power_bound_counts_the_ability_s_own_source_counters(pool):
     # pumped out of range after the counters were counted is out of range.
     add_pt_modifier(ogre, 3, 0)
     assert not subject_matches(game, ogre, described, source=allure), "over the bound"
+
+
+# --- W2G5: the open half of CR 122.1's counter space ------------------------
+
+
+def test_w2g5_a_named_counter_is_read_off_its_own_store_not_the_plus1_one(pool):
+    """"target creature **with a bounty counter on it**" (Bounty Hunter).
+
+    Three assertions, and the third is the reason this key is not a widening of
+    ``with_plus1_counter``. A +1/+1 counter has rules meaning (CR 122.1a,
+    layer 7d) and lives in ``engine/pt.py``'s ``plus_counters`` record; every
+    other kind CR 122.1 admits is an inert marker in
+    ``engine/named_counters.py``'s open store. A matcher reading one record for
+    both would let Bounty Hunter destroy a creature somebody had merely been
+    pumping — which is a creature the card does not name.
+
+    The rejection row above is passed by a matcher that always answers False, so
+    the direction the key is *for* is demonstrated here.
+    """
+    from engine.named_counters import add_counters
+
+    hunted = Permanent(card=pool["Grizzly Bears"])
+    pumped = Permanent(card=pool["Grizzly Bears"])
+    bare = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[hunted, pumped, bare]),
+        PlayerState(name="P2"),
+    ])
+    add_counters(hunted, "bounty", 1)
+    pumped.metadata["plus_counters"] = 3
+
+    assert subject_matches(game, hunted, {"with_named_counter": "bounty"})
+    assert not subject_matches(game, bare, {"with_named_counter": "bounty"})
+    assert not subject_matches(game, pumped, {"with_named_counter": "bounty"}), (
+        "a +1/+1 counter is not a bounty counter"
+    )
+    # And the mirror, so neither store answers for the other.
+    assert subject_matches(game, pumped, {"with_plus1_counter": True})
+    assert not subject_matches(game, hunted, {"with_plus1_counter": True})

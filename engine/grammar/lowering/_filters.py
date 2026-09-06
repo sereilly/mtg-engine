@@ -126,7 +126,8 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # unhonoured field while its negation went through.
     "nontoken", "token_only",
     "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter", "supertypes", "excluded_supertypes",
+    "colored", "with_plus1_counter", "with_named_counter",
+    "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
     # "…tapped this turn to pay for its abilities" (Vodalian War Machine).
