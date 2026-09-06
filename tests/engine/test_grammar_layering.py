@@ -476,7 +476,7 @@ LOWER_LAYERS = [
 # where a second group's move would have summed past the guard) because it
 # reads `parse_recipient` and `parse_bound_subject`, both defined there; five
 # modules read it now, `phrases` re-exporting it under its old name.
-EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "redirection", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -639,7 +639,12 @@ EFFECT_FAMILIES = ["damage", "characteristics", "types", "board", "cards", "exil
 # where each find lands.
 LOWERING_FAMILIES = [
     f for f in EFFECT_FAMILIES if f not in ("text_changes",)
-] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "base_pt", "prohibitions", "delayed",
+# `base_pt` was appended here when it was a lowering family with no parse twin.
+# Tempest's first wave gave it one — `effects/characteristics.py` crossed the
+# guard a second time and split along the same CR 613.4b line — so it now
+# arrives from `EFFECT_FAMILIES` above and naming it twice would be a list
+# disagreeing with itself.
+] + ["returns", "exile", "permissions", "keywords", "redirection", "fighting", "where_x", "control_flow", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops", "sequences", "life", "prohibitions", "delayed",
      # `ownership` split off `lowering/zones.py` at Weatherlight's wave 2,
      # when two branches' additions summed past the guard with neither at
      # fault. The seam is `zones`' own docstring read as a question: it says
@@ -845,6 +850,14 @@ AST_FAMILIES = [
         # ante. Splitting them out would put a node in one family and both of
         # its readers in another.
         "tokens",
+        # `base_pt` is a parse family and a lowering family with no AST module
+        # of its own, for `types`' reason directly below: `SetBasePT` and
+        # `ChangeBasePT` are what a permanent *is*, and they already live in
+        # `ast/characteristics.py` beside every other characteristic node. The
+        # guard that made it a parse family fired on Tempest's productions and
+        # on nothing else, and splitting the two nodes out would put them in one
+        # family with both of their readers in another.
+        "base_pt",
         # `text_changes` is the eighth, and the same reason again: `ChangeText`
         # is one node that sits perfectly well beside the characteristics ones,
         # and the guard that made `text_changes` a parse family fired on the

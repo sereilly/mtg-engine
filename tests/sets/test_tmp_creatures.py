@@ -164,3 +164,121 @@ def test_w1g3_mindwhip_sorcery_restriction_is_enforced(set_pool):
         game.resolve_top_of_stack()
     assert allowed.supported, allowed
     assert seats[1].hand == []
+
+
+# --- W1G3: characteristic-defining P/T and a CR 608.2d choice ---
+# Pallimud and Minion of the Wastes are CR 604.3 abilities whose value comes
+# from something no battlefield holds: a seat chosen as the permanent entered,
+# and life paid as it entered. Vhati il-Dal is the other half of this group's
+# family — an effect that *offers* a rewrite of one creature's base P/T two
+# ways.
+from engine.pt import set_base_pt as _w1g3_set_base_pt  # noqa: F401  (channel doc)
+
+
+def test_w1g3_pallimud_power_counts_the_chosen_players_tapped_lands(set_pool, cards):
+    """CR 604.3 over CR 614.1c's chosen seat, narrowed by a *state*. The
+    narrowing has to reach the tally: dropped, Pallimud's power would be every
+    land the chosen player has rather than the ones they have spent."""
+    tmp = set_pool("TMP")
+    seats = [
+        PlayerState(name="A", hand=[tmp["Pallimud"]]),
+        PlayerState(name="B"),
+    ]
+    for name, tapped in (("Mountain", True), ("Mountain", True),
+                         ("Forest", False), ("Grizzly Bears", True)):
+        perm = Permanent(card=cards[name])
+        perm.metadata["summoning_sickness_turn"] = -99
+        perm.tapped = tapped
+        seats[1].battlefield.append(perm)
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Pallimud")
+    while game.stack:
+        game.resolve_top_of_stack()
+    pallimud = seats[0].battlefield[-1]
+    assert pallimud.metadata.get("chosen_player_index") == 1
+    game._recompute_continuous_effects()
+    # Two tapped Mountains. The tapped Grizzly Bears is not a land and the
+    # untapped Forest is not tapped; the printed toughness (3) stands, because
+    # the sentence defines the power half alone.
+    assert (pallimud.effective_power, pallimud.effective_toughness) == (2, 3)
+
+    seats[1].battlefield[2].tapped = True
+    game._recompute_continuous_effects()
+    assert pallimud.effective_power == 3
+
+
+def test_w1g3_minion_of_the_wastes_pays_any_life_up_to_its_controllers_total(set_pool):
+    """Nameless Race's entry cost with the cap sentence unprinted. Uncapped,
+    the ceiling is CR 119.4's: a player may pay more than 0 only up to their
+    life total."""
+    tmp = set_pool("TMP")
+    seats = [PlayerState(name="A", hand=[tmp["Minion of the Wastes"]], life=20),
+             PlayerState(name="B")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Minion of the Wastes")
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game.pending_choices[0].data["maximum"] == 20
+    assert game.confirm_number_choice(0, 7)
+    game._recompute_continuous_effects()
+    minion = seats[0].battlefield[-1]
+    assert seats[0].life == 13
+    assert (minion.effective_power, minion.effective_toughness) == (7, 7)
+
+
+def test_w1g3_the_pay_life_ceiling_is_the_payers_life_total(set_pool):
+    tmp = set_pool("TMP")
+    seats = [PlayerState(name="A", hand=[tmp["Minion of the Wastes"]], life=3),
+             PlayerState(name="B")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Minion of the Wastes")
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game.pending_choices[0].data["maximum"] == 3
+    assert not game.confirm_number_choice(0, 5)
+
+
+@pytest.mark.parametrize(
+    "mode_index,expected", [(0, (1, 4)), (1, (4, 1))]
+)
+def test_w1g3_vhati_offers_the_choice_at_resolution(set_pool, cards, mode_index, expected):
+    """CR 608.2d, not CR 700.2. A modal ability is a *bulleted* list preceded
+    by "Choose one —" and its mode is chosen as the ability is activated; Vhati
+    prints no bullets, so the option is announced while the effect is applied —
+    the same rule "gains your choice of deathtouch or lifelink" is read under,
+    and the same ``choose_one`` seam."""
+    tmp = set_pool("TMP")
+    vhati = Permanent(card=tmp["Vhati il-Dal"])
+    vhati.metadata["summoning_sickness_turn"] = -99
+    angel = Permanent(card=cards["Serra Angel"])
+    seats = [PlayerState(name="A", battlefield=[vhati]),
+             PlayerState(name="B", battlefield=[angel])]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    result = game.activate_permanent_ability(
+        0, "Vhati il-Dal", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=mode_index)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._recompute_continuous_effects()
+    assert (angel.effective_power, angel.effective_toughness) == expected
+
+
+def test_w1g3_a_base_pt_choice_still_reads_the_and_spelling(set_pool, cards):
+    """"base power **and** toughness 0/2" is one rewrite, not two options —
+    the branch above must not eat its "and". Sorceress Queen, Jolrael and Cycle
+    of Life all compiled to nothing the first time this was written, and only
+    the pool-wide differential said so."""
+    from engine.oracle import compile_card_oracle as _compile
+
+    for name in ("Sorceress Queen", "Jolrael, Mwonvuli Recluse"):
+        card = cards.get(name) or set_pool("TMP").get(name)
+        if card is None:
+            continue
+        assert _compile(card).supported, name

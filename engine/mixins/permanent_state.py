@@ -184,11 +184,18 @@ def _count_dynamic_pt(
     # second Rat with the same name is a different permanent.
     subtype = payload.get("subtype")
     exclude_self = bool(payload.get("exclude_self"))
+    # "the number of **tapped** lands the chosen player controls" (Pallimud). A
+    # state rather than a characteristic, so it is a key of its own and is asked
+    # of each permanent here — dropped, Pallimud's power would be every land the
+    # chosen player has rather than the ones they have spent.
+    tapped = payload.get("tapped")
 
     total = 0
     for battlefield in battlefields:
         for perm in battlefield:
             if supertype is not None and not perm.has_supertype(supertype):
+                continue
+            if tapped is not None and bool(perm.tapped) is not bool(tapped):
                 continue
             if exclude_self and perm is permanent:
                 continue
@@ -2961,9 +2968,17 @@ class PermanentStateMixin:
         seam for the first (``controls`` is a seat question, CR 109.5) and the
         card matcher for the second, because a card in a zone has no computed
         characteristics at all (CR 613.1).
+
+        An **empty** spec is the card that prints no cap at all (Minion of the
+        Wastes), and its ceiling is the one CR 119.4 imposes on every life
+        payment: a player may pay more than 0 only up to their life total. Read
+        here rather than left to the prompt, so the two spellings of one
+        printed entry cost reach the same arming code.
         """
         from ..handlers._common import _card_matches_filter, permanent_matches_filter
 
+        if not described:
+            return max(0, int(self.players[seat].life))
         total = 0
         for opponent in self.opponents_of(seat):
             for perm in self.controlled_by(opponent):

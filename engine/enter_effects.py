@@ -583,10 +583,20 @@ def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> di
 #: so what the sentence narrows by costs no code here - and a phrase the parser
 #: refuses refuses the whole line, because a cap read wider than printed is a
 #: creature its controller may pay more life for than the card allows.
+#: The cap sentence is **optional**, and the card without it is Minion of the
+#: Wastes: "As this creature enters, pay any amount of life." Uncapped, the
+#: ceiling is the one CR 119.4 already imposes — a player may pay an amount of
+#: life greater than 0 only up to their life total — so there is nothing for the
+#: card to say and nothing here to read. One pattern rather than two, because
+#: the printed sentence the two cards share is the whole entry cost and the cap
+#: is a rider on it: two rows would be two claims on one sentence, and the
+#: reader that dropped the rider would let Nameless Race's controller pay more
+#: life than the card allows.
 PAY_ANY_LIFE_ON_ENTER = re.compile(
-    r"^as this [a-z]+ enters, pay any amount of life\. the amount you pay can't "
+    r"^as this [a-z]+ enters, pay any amount of life"
+    r"(?:\. the amount you pay can't "
     r"be more than the total number of (?P<board_phrase>.+?) your opponents "
-    r"control plus the total number of (?P<pile_phrase>.+?) in their graveyards$"
+    r"control plus the total number of (?P<pile_phrase>.+?) in their graveyards)?$"
 )
 
 
@@ -608,6 +618,12 @@ def pay_any_life_on_enter(line: str, card_name: str | None = None) -> dict | Non
     match = PAY_ANY_LIFE_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
         return None
+    if match.group("board_phrase") is None:
+        # Uncapped (Minion of the Wastes): an empty spec, which is not None —
+        # the sentence *is* claimed and the entry state does arm the payment.
+        # The ceiling is CR 119.4's, read off the payer's life total by the
+        # caller rather than off two noun phrases the card never printed.
+        return {}
     board = parse_subject_filter(match.group("board_phrase"), plural=True)
     pile = parse_subject_filter(match.group("pile_phrase"), plural=True)
     if board is None or pile is None:
