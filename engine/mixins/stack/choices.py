@@ -725,7 +725,7 @@ class PendingChoicesMixin:
             # one place to be — Gaea's Blessing's "when this card is put into
             # your graveyard from your library" is a trigger a raw append would
             # walk straight past.
-            self.put_card_into_graveyard(caster, card)
+            self.put_card_into_graveyard(caster, card, from_zone=zone)
         elif destination == "exile":
             # CR 400.3: the card goes to its owner's exile, and its owner is the
             # player whose library it came out of — which is `caster` here, the
@@ -964,7 +964,18 @@ class PendingChoicesMixin:
             # seam for the reason the single-find branch gives: a card arriving
             # in a graveyard from a library is an event Gaea's Blessing triggers
             # on, and an append is a place for that to be forgotten.
-            self.put_card_into_graveyard(caster, card)
+            #
+            # The source zone is claimed only for a search that looked in one
+            # zone. This path is handed the finds without the slot each came
+            # out of, and a two-zone search (`zones` naming a graveyard too)
+            # could have taken this card from the graveyard — announcing
+            # "from your library" for it would be a trigger firing on an event
+            # that did not happen, which is worse than one that does not fire.
+            zones = tuple(data.get("zones", ("library",))) if data else ("library",)
+            self.put_card_into_graveyard(
+                caster, card,
+                from_zone="library" if zones == ("library",) else None,
+            )
         else:
             self.put_card_into_hand(caster, card)
         where = (
@@ -7083,7 +7094,7 @@ class PendingChoicesMixin:
         player = self.players[drawing_seat]
         if bought and player.library:
             card = player.library.pop(0)
-            self.put_card_into_graveyard(player, card)
+            self.put_card_into_graveyard(player, card, from_zone="library")
             self.log.append(
                 f"{card.name} was put into {player.name}'s graveyard "
                 f"({source_name})"

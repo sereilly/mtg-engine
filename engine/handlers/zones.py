@@ -731,7 +731,7 @@ def bin_revealed_card(game: Game, instruction: OracleInstruction, context: Oracl
         for index, held in enumerate(player.library):
             if held is card:
                 player.library.pop(index)
-                game.put_card_into_graveyard(player, held)
+                game.put_card_into_graveyard(player, held, from_zone="library")
                 game.log.append(
                     f"{context.card.name}: {held.name} goes into "
                     f"{player.name}'s graveyard"
@@ -1084,7 +1084,7 @@ def place_held_card(game: Game, instruction: OracleInstruction, context: OracleE
         return True, "resolved"
     # CR 400.3: a card put into a graveyard goes to its **owner's**, and the
     # only owner a library card can have is the player whose library it was.
-    game.put_card_into_graveyard(seat, card)
+    game.put_card_into_graveyard(seat, card, from_zone="library")
     game.log.append(f"{card.name} is put into its owner's graveyard")
     return True, "resolved"
 
@@ -2453,7 +2453,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         random.shuffle(player.library)
     else:
         for card in revealed:
-            game.put_card_into_graveyard(player, card)
+            game.put_card_into_graveyard(player, card, from_zone="library")
     return True, "resolved"
 
 
@@ -3456,7 +3456,7 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             if not victim.library:
                 break
             card = victim.library.pop(0)
-            game.put_card_into_graveyard(victim, card)
+            game.put_card_into_graveyard(victim, card, from_zone="library")
             put_there.append(card)
             milled += 1
         game.log.append(f"{victim.name} milled {milled} card(s)")
@@ -3571,7 +3571,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
     milled = 0
     while milled < limit and victim.library:
         card = victim.library.pop(0)
-        game.put_card_into_graveyard(victim, card)
+        game.put_card_into_graveyard(victim, card, from_zone="library")
         milled += 1
         if _card_matches_filter(card, stop_filter, game=game, owner=victim):
             matched.append(card)
@@ -5651,6 +5651,35 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     player = context.caster if whose == "you" else context.target
     if player is None:
         return False, "no player to shuffle"
+    # "Target player shuffles **up to three target cards** from their graveyard
+    # into their library." (Gaea's Blessing.) The moving cards were chosen at
+    # announcement (CR 601.2c), so they are resolved as slots rather than
+    # described — the same resolution ``put_graveyard_cards_on_library_top``
+    # performs for the identical noun phrase one destination over, and through
+    # the same predicate, so the picker and this cannot disagree about which
+    # cards the line may name. An "up to" that named none is a legal
+    # announcement and shuffles the library anyway (CR 701.24a).
+    described_targets = instruction.payload.get("targets") or {}
+    if described_targets:
+        limit = (
+            len(player.graveyard) if described_targets.get("unbounded")
+            else min(int(described_targets.get("count") or 1), len(player.graveyard))
+        )
+        picked = _resolve_graveyard_slots(
+            player, context, limit,
+            lambda card: graveyard_card_matches(instruction.payload, card),
+        )
+        # ``_resolve_graveyard_slots`` has already taken them out of the pile,
+        # highest slot first, which is the only way two copies of one card can
+        # be told apart there (they are one ``CardDefinition`` object).
+        for card in picked:
+            game.put_card_into_library(player, card, position="top")
+        random.shuffle(player.library)
+        game.log.append(
+            f"{player.name} shuffled {len(picked)} chosen card(s) from their "
+            "graveyard into their library"
+        )
+        return True, "resolved"
     # "Shuffle **all creature cards** from your graveyard into your library."
     # (Barishi.) The named subset, tested by ``graveyard_card_matches`` — the
     # one predicate this engine has for a printed noun phrase over a graveyard,

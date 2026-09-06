@@ -5,12 +5,12 @@ rather than an arbitrary cut: everything here answers one question — which zon
 does this object end up in — and none of it touches the battlefield state the
 rest of `board` is about (tapping, destruction, regeneration, control).
 
-It has no twin in `effects/`, and that is deliberate rather than an oversight.
-The parsing side of these templates is small — one `return`/`exile`/`put`
-production each, all still in `effects/board.py` — while the lowering side is
-where the work is, because every one of them has to decide *which* handler moves
-the object and refuse the shapes none of them implement. A near-empty
-`effects/zones.py` would buy the symmetry and cost the thing symmetry is for.
+It had no twin in `effects/` for most of its life: a `return`/`exile`/`put`
+parses in one small production, and the work is all on this side, deciding
+*which* handler moves the object and refusing the shapes none implement. The
+twin arrived at Weatherlight, when `effects/library.py` crossed the guard and
+the shuffles came out under this module's name — so the mirror re-formed rather
+than forking, and neither half imports the other.
 """
 
 from __future__ import annotations
@@ -26,11 +26,6 @@ from ._common import (
     _filter_payload, _is_target, _restrictions_beyond, _targets_only,
     graveyard_position_payload, refuse_untestable
 )
-
-
-# The filter both exile shapes are compared against. Two readers, one
-# definition — an equality check written twice is two chances to widen one
-# of them.
 
 
 def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruction, ...]:
@@ -189,41 +184,11 @@ def _lower_graveyard_cards_on_library_top(
             "that same player's library",
             node=node,
         )
-    if len(filt.card_types) > 1:
-        raise LoweringError(
-            "the graveyard-to-library handler narrows by one card type", node=node
-        )
-    # "up to three target **cards**" (Misinformation) — a head noun with no card
-    # type at all, which is not the absence of a narrowing but a narrowing that
-    # says "any card". The predicate every reader of this instruction shares
-    # already has the key; what it lacked was a lowering willing to emit it, so
-    # a bare "cards" reached "narrows by one card type" and refused.
-    any_card = not filt.card_types
-    leftover = _restrictions_beyond(
-        filt,
-        frozenset({"card_types", "is_card", "zone", "zone_owner", "supertypes"}),
-    )
-    if leftover:
-        raise LoweringError(
-            f"the graveyard-to-library handler does not honour {leftover[0]!r}",
-            node=node,
-        )
     return (
         OracleInstruction(
             "put_graveyard_cards_on_library_top", "",
             {
-                # The narrowing, in the key names ``graveyard_card_matches``
-                # reads — one predicate for the picker, the cast-time re-check
-                # and the handler, which is what stops the three disagreeing
-                # about which cards this line may name.
-                **({"any_card": True} if any_card else {"card_type": filt.card_types[0]}),
-                # "up to four target **basic** land cards" (Lodestone Bauble).
-                # A supertype is read off the printed type line, which for a
-                # card in a graveyard is the whole of what there is (CR 613.1),
-                # so it is testable in that zone for exactly the reason the card
-                # type is — and dropping it would let the Bauble return any
-                # land, which is a strictly better card than the one printed.
-                **({"supertypes": list(filt.supertypes)} if filt.supertypes else {}),
+                **_chosen_graveyard_cards(filt, subject, node),
                 # "In any order" is the printed rider, and it is the *only*
                 # thing that says the controller decides the sequence. Recorded
                 # rather than consumed: a card printing it and one not printing
@@ -235,22 +200,60 @@ def _lower_graveyard_cards_on_library_top(
                 # reading a missing key as "the chosen target player" is exactly
                 # the silent default this pair of seats exists to remove.
                 "graveyard_owner": graveyard_owner,
-                # "Any number" prints no ceiling, so the only cap is how many
-                # legal targets there are — a number the picker knows and this
-                # lowering does not. "Up to three" (Reinforcements) prints one,
-                # and it rides the same description every counted target list
-                # uses.
-                "targets": (
-                    {"quantifier": "any_number", "kind": "card", "unbounded": True}
-                    if subject.quantifier == "any_number"
-                    else {
-                        "quantifier": "up_to", "kind": "card",
-                        "count": int(subject.count or 1),
-                    }
-                ),
             },
         ),
     )
+
+
+def _chosen_graveyard_cards(
+    filt: ast.ObjectFilter, subject: ast.TargetSpec, node
+) -> dict[str, object]:
+    """The payload half naming **which cards in a graveyard were chosen** — the
+    narrowing and the target description, in the key names
+    ``graveyard_card_matches`` reads and ``_graveyard_to_library_spec`` derives
+    a picker from. One definition, because two sentences name the same set and
+    differ only in what then happens to it: "put ... on top of their library in
+    any order" (Drafna's Restoration) and "shuffles ... into their library"
+    (Gaea's Blessing). A second copy would be a second answer to which cards the
+    line may name, and the picker, the cast-time re-check and the handler all
+    read it. A head noun with no card type (Misinformation's bare "cards") is
+    not the absence of a narrowing but a narrowing saying "any card"; a
+    supertype (Lodestone Bauble's "basic land cards") is read off the printed
+    type line, which for a card in a graveyard is the whole of what there is
+    (CR 613.1). Dropping either is a strictly better card than the one printed.
+    """
+    if len(filt.card_types) > 1:
+        raise LoweringError(
+            "the graveyard-to-library handler narrows by one card type", node=node
+        )
+    leftover = _restrictions_beyond(
+        filt,
+        frozenset({"card_types", "is_card", "zone", "zone_owner", "supertypes"}),
+    )
+    if leftover:
+        raise LoweringError(
+            f"the graveyard-to-library handler does not honour {leftover[0]!r}",
+            node=node,
+        )
+    return {
+        **(
+            {"card_type": filt.card_types[0]} if filt.card_types
+            else {"any_card": True}
+        ),
+        **({"supertypes": list(filt.supertypes)} if filt.supertypes else {}),
+        # "Any number" prints no ceiling, so the only cap is how many legal
+        # targets there are — a number the picker knows and this lowering does
+        # not. "Up to three" (Reinforcements) prints one, and it rides the same
+        # description every counted target list uses.
+        "targets": (
+            {"quantifier": "any_number", "kind": "card", "unbounded": True}
+            if subject.quantifier == "any_number"
+            else {
+                "quantifier": "up_to", "kind": "card",
+                "count": int(subject.count or 1),
+            }
+        ),
+    }
 
 
 def _lower_put_onto_battlefield(
@@ -412,6 +415,22 @@ def _lower_shuffle_graveyard_into_library(
     lands and spells back in as well.
     """
     payload: dict[str, object] = {"whose": node.whose.kind}
+    if node.chosen is not None:
+        # "**Target player shuffles up to three target cards** from their
+        # graveyard into their library." (Gaea's Blessing.) The moving subset
+        # chosen rather than described, with the payload half
+        # ``put_graveyard_cards_on_library_top`` builds for the identical noun
+        # phrase one destination over. ``graveyard_owner`` is the chosen seat
+        # rather than the printed pronoun: CR 404.1 makes that seat's library
+        # the only one those cards can be shuffled into.
+        if node.whose.kind != "target_player":
+            raise LoweringError(
+                "a chosen-card graveyard shuffle names the player it targets",
+                node=node,
+            )
+        payload["whose"] = payload["graveyard_owner"] = "target_player"
+        payload.update(_chosen_graveyard_cards(node.chosen.filter, node.chosen, node))
+        return (OracleInstruction("shuffle_graveyard_into_library", "", payload),)
     if node.cards is not None:
         filt = node.cards
         # Read field by field rather than through ``_filter_payload``, which

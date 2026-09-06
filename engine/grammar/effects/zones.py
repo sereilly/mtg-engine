@@ -162,6 +162,16 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     checking it would compile that card onto this one.
     """
     mark = stream.mark()
+    # "**Target player shuffles** up to three target cards from their graveyard
+    # into their library." (Gaea's Blessing.) The same move with its subject
+    # printed in front of it and the cards *chosen* rather than described, so it
+    # is a branch of this production rather than a second one — the verb is the
+    # same word in another inflection, and two productions racing for it would
+    # make which reading a card gets depend on their order. Tried first because
+    # it is the only branch that opens on a player reference.
+    chosen = _accept_player_shuffles_chosen_cards(stream)
+    if chosen is not None:
+        return chosen
     # "your graveyard" is a possessive, not a player reference — `parse_player_ref`
     # reads "you" / "target player" / "each opponent" and rightly refuses it —
     # so the word is matched directly, and both occurrences are checked. A card
@@ -212,6 +222,65 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
+
+
+def _accept_player_shuffles_chosen_cards(
+    stream: TokenStream,
+) -> "ast.ShuffleGraveyardIntoLibrary | None":
+    """``<player> shuffles up to <N> target cards from their graveyard into
+    their library`` at the cursor, or None with the cursor where it was.
+    (Gaea's Blessing.)
+
+    Barishi's ``cards`` filter one step further: there the moving subset is
+    *described* and nobody chooses, here it is **targeted** and the controller
+    picks the slots (CR 601.2c). One node either way, because what changes is
+    which cards move and not what happens to them — CR 701.24a still shuffles
+    the whole library once, and the destination is still the pile's own owner's.
+
+    Every possessive is read rather than assumed, for the whole-zone reading's
+    reason: "their graveyard … their library" both name the player this
+    sentence has already named, and a card pairing one player's graveyard with
+    another's library would be a different card that consuming the words unread
+    would compile onto this one.
+
+    Refuses without consuming, so "That player shuffles." keeps its own
+    production and its own refusal site.
+    """
+    mark = stream.mark()
+    player = parse_player_ref(stream)
+    if player is None or not stream.accept_word("shuffles"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("up", "to"):
+        stream.reset(mark)
+        return None
+    count = parse_amount(stream)
+    if not isinstance(count, ast.Fixed) or count.value < 1:
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # The source zone rides the noun phrase — ``parse_object_filter`` reads
+    # "from their graveyard" onto the filter — so it is *checked* here rather
+    # than consumed again, exactly as the "all …" branch above checks its own.
+    if not (
+        filt.is_card
+        and filt.zone == "graveyard"
+        and filt.zone_owner is not None
+        and filt.zone_owner.kind == "owner"
+        and stream.accept_phrase("into", "their", "library")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ShuffleGraveyardIntoLibrary(
+        player,
+        chosen=ast.TargetSpec(
+            "up_to", filt, count=count.value, targeted=True,
+        ),
+    )
 
 
 def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | None:

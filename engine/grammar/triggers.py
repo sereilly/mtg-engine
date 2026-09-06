@@ -704,6 +704,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # of them sees leaves the other refusing the effect behind it.
         if stream.accept_phrase("you", "cast", "this", "spell"):
             return ast.TriggerEvent("self_cast", "when")
+        # "When **this card is put into your graveyard from your library**"
+        # (Gaea's Blessing). CR 113.6k: a trigger condition that cannot trigger
+        # from the battlefield functions in every zone it can trigger from, and
+        # this one names a move a permanent cannot make — so it watches the
+        # card wherever it is. Read on this front end too, for the reason every
+        # condition around it is: a condition only one of them sees leaves the
+        # other refusing the effect behind it.
+        if stream.accept_phrase(
+            "this", "card", "is", "put", "into", "your", "graveyard",
+            "from", "your", "library",
+        ):
+            return ast.TriggerEvent(
+                "self_put_into_graveyard_from_library", "when"
+            )
         # "When you control **no Islands** / **no Forests**, sacrifice this
         # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice
         # Age.) The negative twin of `controls_matching_permanent` below, and

@@ -86,6 +86,7 @@ from .effects import (
     _parse_exile_graveyard,
     _parse_coin_flip_stakes_loop,
     _parse_exile_graveyard_position,
+    _parse_exile_entire_library,
     _parse_exile_top_of_library,
     _parse_extra_turn,
     _parse_flip_coin,
@@ -471,6 +472,16 @@ def parse_imperative(
         from_library = _parse_exile_top_of_library(stream)
         if from_library is not None:
             return from_library
+        # "**Exile all cards from your library.**" (Paradigm Shift.) The
+        # imperative spelling of the sentence Thought Lash prints in the third
+        # person, so it is the same production read from the other entry point
+        # rather than a second one — and read here for the reason the
+        # top-of-library form above is: the recipient parser below takes
+        # "all cards" as a battlefield sweep and refuses it on the zone, which
+        # is a misleading refusal for a sentence that never named a permanent.
+        whole_library = _parse_exile_entire_library(stream, ast.PlayerRef("you"))
+        if whole_library is not None:
+            return whole_library
         # "Exile the bottom card of target player's graveyard" (Phyrexian
         # Furnace) names cards by position in an *ordered* zone (CR 404.1,
         # CR 404.2), so

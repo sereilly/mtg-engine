@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 76.7% | 73.1% | 51.0% | 114 |
+| WTH *(measured)* | 167 | 249 | 77.9% | 75.5% | 53.4% | 118 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 336 | 146 | expected a subject |  |
+| 335 | 145 | expected a subject |  |
 | 103 | 47 | unrecognized effect verb |  |
-| 95 | 48 | unconsumed text |  |
+| 93 | 46 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -135,6 +135,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: Add {B}.`
 - **Aggression**
   - `At the beginning of the end step of enchanted creature's controller, destroy that creature if it didn't attack this turn.`
+- **Agonizing Memories**
+  - `Look at target player's hand and choose two cards from it. Put them on top of that player's library in any order.`
 - **Aisling Leprechaun**
   - `Whenever this creature blocks or becomes blocked by a creature, that creature becomes green. (This effect lasts indefinitely.)`
 - **Aku Djinn**
@@ -284,6 +286,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Prevent the next 2 damage that would be dealt to target artifact creature this turn.`
 - **Argivian Find**
   - `Return target artifact or enchantment card from your graveyard to your hand.`
+- **Argivian Restoration**
+  - `Return target artifact card from your graveyard to the battlefield.`
 - **Armageddon**
   - `Destroy all lands.`
   - `Destroy all lands.`
@@ -700,6 +704,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy X target artifacts. Builder's Bane deals damage to each player equal to the number of artifacts they controlled that were put into a graveyard this way.`
 - **Bull Elephant**
   - `When this creature enters, sacrifice it unless you return two Forests you control to their owner's hand.`
+- **Buried Alive**
+  - `Search your library for up to three creature cards, put them into your graveyard, then shuffle.`
 - **Burlfist Oak**
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
@@ -1932,7 +1938,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gadrak, the Crown-Scourge**
   - `At the beginning of your end step, create a Treasure token for each nontoken creature that died this turn. (It's an artifact with "{T}, Sacrifice this token: Add one mana of any color.")`
 - **Gaea's Blessing**
+  - `Target player shuffles up to three target cards from their graveyard into their library.`
   - `Draw a card.`
+  - `When this card is put into your graveyard from your library, shuffle your graveyard into your library.`
 - **Gaea's Touch**
   - `{0}: You may put a basic Forest card from your hand onto the battlefield. Activate only as a sorcery and only once each turn.`
   - `Sacrifice this enchantment: Add {G}{G}.`
@@ -3600,6 +3608,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Target creature can't block this turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Paradigm Shift**
+  - `Exile all cards from your library. Then shuffle your graveyard into your library.`
 - **Paralyze**
   - `When this Aura enters, tap enchanted creature.`
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {4}. If the player does, untap the creature.`

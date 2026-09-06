@@ -30,11 +30,6 @@ from ._common import (
     _describe_several_targets, _names_several_targets, testable_filter_payload
 )
 
-
-# The filter both exile shapes are compared against. Two readers, one
-# definition — an equality check written twice is two chances to widen one
-# of them.
-
 #: The printed noun phrases a graveyard-to-battlefield return may name.
 #: CR 110.4a's four permanent types, because the instruction puts the card onto
 #: the battlefield and only a permanent card can be there — an instant card

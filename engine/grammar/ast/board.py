@@ -773,6 +773,17 @@ class ShuffleGraveyardIntoLibrary:
     #: is go unread — a filter dropped here is Barishi shuffling back every
     #: land and every spell as well.
     cards: ObjectFilter | None = None
+    #: "Target player shuffles **up to three target cards** from their
+    #: graveyard into their library." (Gaea's Blessing.) The moving subset
+    #: again, this time **chosen** rather than described: the controller names
+    #: the slots at announcement (CR 601.2c), where ``cards`` above leaves
+    #: nobody a decision.
+    #:
+    #: Beside ``cards`` rather than folded into it because the two are read by
+    #: different machinery — a filter is tested against every card in the pile,
+    #: a target list is enumerated for a picker and re-checked at resolution —
+    #: and a card printing both would be naming one set twice.
+    chosen: "TargetSpec | None" = None
 
 
 @dataclass(frozen=True)

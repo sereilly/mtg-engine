@@ -1540,6 +1540,23 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     return spec
 
 
+def _chosen_graveyard_shuffle_spec(payload: dict) -> dict | None:
+    """The picker for a graveyard shuffle that names its cards as targets.
+
+    None for every other printing of this kind, and that is the whole of what
+    this wrapper adds: "Shuffle your graveyard into your library" (Feldon's
+    Cane) and "Shuffle all creature cards from your graveyard into your library"
+    (Barishi) choose nothing at all — CR 115.1 makes a target something the
+    sentence says the word "target" about — so a spec here would raise a picker
+    the client must fill for a spell that names no target, which is a cast that
+    cannot be made. The evidence is the ``targets`` description, exactly as it
+    is for every other kind that answers None: absent, there is nothing to pick.
+    """
+    if not (payload.get("targets") or {}):
+        return None
+    return _graveyard_to_library_spec(payload)
+
+
 def _retarget_spec(payload: dict) -> dict:
     """"Target spell with a single target [if that target is you]"
     (Deflection, Reflecting Mirror — CR 115.7a, CR 115.9a).
@@ -1577,6 +1594,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "choose_new_spell_target": _retarget_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
+    # "Target player shuffles up to three target cards from their graveyard
+    # into their library." (Gaea's Blessing.) The same picker: the cards are
+    # named out of a graveyard by the same noun phrase, and only what happens to
+    # them afterwards differs. `_chosen_graveyard_shuffle` writes the payload in
+    # the keys that function reads, which is what lets one spec serve both.
+    "shuffle_graveyard_into_library": _chosen_graveyard_shuffle_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "deal_damage_each_matching": _sweep_controller_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
