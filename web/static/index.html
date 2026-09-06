@@ -370,6 +370,13 @@
             <section class="phase-row">
               <div id="phaseRail" class="phase-rail" aria-label="Turn phases"></div>
               <div class="phase-controls">
+                <!-- CR 116 special actions: filled from state.special_actions,
+                     one button per (hand card, kind), hidden when there are
+                     none. A hand card cannot carry the affordance itself —
+                     clicking one is a cast — and a special action is not a
+                     cast, so it gets its own control rather than a second
+                     meaning for an existing gesture. -->
+                <span id="specialActions" class="special-actions"></span>
                 <button id="undoBtn" type="button" class="secondary-btn">Undo</button>
                 <button id="nextPhaseBtn" type="button">Next Phase</button>
                 <button id="endTurnBtn" type="button">End Turn</button>

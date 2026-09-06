@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2082 tests, 0 unannotated.
+**359 / 612 tracked rules covered (58%)** — 2084 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -275,9 +275,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 116. Special Actions
 
-- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(4 tests)*
-- [x] **116.2** There are twelve special actions: *(7 tests, subrules a)*
-- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(2 tests)*
+- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(3 tests)*
+- [x] **116.2** There are twelve special actions: *(3 tests, subrules e)*
+- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(1 tests)*
 
 ### 117. Timing and Priority
 
@@ -422,7 +422,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **302.3** Creature subtypes are usually a single word long and are listed after a long dash: “Creature — Hu...
 - [ ] **302.4** Power and toughness are characteristics only creatures have.
 - [ ] **302.5** Creatures can attack and block. (See rule 508, “Declare Attackers Step,” and rule 509, “Declare B...
-- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(5 tests)*
+- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(6 tests)*
 - [ ] **302.7** Damage dealt to a creature by a source with neither wither nor infect is marked on that creature ...
 
 ### 303. Enchantments
@@ -430,7 +430,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(41 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(42 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -445,8 +445,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(4 tests)*
-- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(25 tests, subrules ab)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(3 tests)*
+- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
@@ -479,9 +479,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(4 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(7 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(8 tests)*
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
-- [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
+- [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
 - [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(15 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
@@ -516,7 +516,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 404. Graveyard
 
-- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(5 tests)*
+- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(6 tests)*
 - [ ] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ...
 - [x] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o... *(2 tests)*
 
@@ -656,14 +656,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(6 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(7 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(209 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(15 tests, subrules a)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(213 tests, subrules abcdefghi)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(16 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -672,10 +672,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(28 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(30 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(35 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(36 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -753,7 +753,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 611. Continuous Effects
 
-- [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(2 tests)*
+- [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
 - [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(38 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(52 tests, subrules abc)*
 
@@ -786,7 +786,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(38 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(39 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -874,7 +874,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.5** Enchant *(7 tests, subrules a)*
 - [x] **702.6** Equip *(15 tests, subrules ace)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
-- [x] **702.8** Flash *(2 tests, subrules ab)*
+- [x] **702.8** Flash *(3 tests, subrules ab)*
 - [x] **702.9** Flying *(7 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*

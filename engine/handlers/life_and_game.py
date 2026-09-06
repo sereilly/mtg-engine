@@ -866,6 +866,42 @@ def grant_extra_land_plays_this_turn(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("grant_flash_timing")
+def grant_flash_timing_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may cast creature spells this turn as though they had flash."
+    (Winding Canyons, CR 702.8a through CR 611.1.)
+
+    Recorded on the game beside the land-play grant above, and for that
+    handler's reason: there is nothing to hang a static ability on — the
+    ability resolves and leaves behind only a permission that ends at cleanup.
+    The record is read by ``cast_timing.casts_at_instant_speed``, which is the
+    **one** question both timing gates ask, so the browser's picker and the
+    cast action cannot disagree about whether the spell may be cast now.
+
+    Its own record rather than a ``CastPermission`` with a flag: that seam
+    answers "from which zone", and a timing grant has no zone to name.
+
+    The seat is the ability's controller (CR 109.5), which is what the printed
+    "you" means; the lowering refuses every other subject rather than letting
+    one arrive here.
+    """
+    from ..cast_timing import grant_flash_timing
+
+    seat = game.seat_index(context.caster)
+    card_types = tuple(instruction.payload.get("card_types") or ())
+    grant_flash_timing(
+        game, seat, card_types,
+        duration=instruction.payload.get("duration", "end_of_turn"),
+        source_name=context.card.name if context.card is not None else "",
+    )
+    game.log.append(
+        f"{game.players[seat].name} may cast "
+        + " and ".join(card_types)
+        + " spells this turn as though they had flash"
+    )
+    return True, "resolved"
+
+
 @effect_handler("forbid_land_plays_this_turn")
 def forbid_land_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target player can't play lands this turn." (Solfatara, CR 305.1.)

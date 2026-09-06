@@ -503,6 +503,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # halves take the same one, because a permission and its withdrawal are the
     # same question answered twice.
     "grant_extra_land_plays_this_turn": "turns",
+    # "You may cast creature spells this turn as though they had flash."
+    # (Winding Canyons.) The same family as the land-play grant above and for
+    # the same reason: a turn-scoped permission recorded on the game, about
+    # *when* in a turn something may be done. Not "zones", where its sibling
+    # ``grant_cast_permission`` sits — that one is about which pile a spell
+    # comes out of, and this one moves no card at all.
+    "grant_flash_timing": "turns",
     "forbid_land_plays_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent

@@ -179,7 +179,8 @@ ACTIVATION_PERMISSIONS: tuple[ActivationPermission, ...] = (
         denial="only the player who granted this ability may activate it",
     ),
     ActivationPermission(
-        # CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
+        # CR 303.4m reads "enchanted [object]" as whatever the permanent is
+        # attached to and CR 301.5f reads "equipped" the same way, so both
         # words are read: an Equipment printing the clause names the same seat.
         pattern=re.compile(
             r"^only the controller of the (?:enchanted|equipped) [a-z]+ "

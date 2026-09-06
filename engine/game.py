@@ -391,6 +391,12 @@ class Game(
     # cost waivers ("without paying their mana costs"). CastPermission entries
     # (engine/cast_permissions.py); turn-scoped ones are swept at cleanup.
     cast_permissions: list = field(default_factory=list)
+    # CR 611.1 grants that widen *when* a spell may be cast rather than from
+    # where — "you may cast creature spells this turn as though they had
+    # flash" (Winding Canyons). ``engine/cast_timing.py`` holds the record and
+    # the two timing gates ask it; turn-scoped ones are swept at cleanup
+    # beside the zone permissions above.
+    flash_timing_grants: list = field(default_factory=list)
     # "Creatures without flying can't block this turn." (Destructive
     # Tampering's second mode) — one-shot blanket blocking restrictions,
     # CR 509.1b. Each entry: {"filter": {type_filter, with_keywords,

@@ -630,3 +630,61 @@ def test_602_5_the_opponent_upkeep_clause_is_readable_by_the_gate():
     assert not unreadable_activation_clauses(
         _opponent_upkeep_card().oracle_text
     )
+
+
+# ---------------------------------------------------------------------------
+# "Activate only if this creature entered this turn" (W2G1)
+# ---------------------------------------------------------------------------
+
+from engine.activation_restrictions import (
+    activation_restriction_line as _w2g1_restriction_line,
+)
+from engine.enter_effects import ENTERED_BATTLEFIELD_TURN as _W2G1_ENTERED
+
+
+@pytest.mark.cr("602.5", "302.6")
+def test_602_5_activate_only_if_this_permanent_entered_this_turn():
+    """"A player can't begin to activate an ability that's prohibited from
+    being activated."
+
+    Fungus Elemental prints the clause and it is the whole card: unenforced, a
+    one-shot +2/+2 becomes one every turn for the rest of the game. That is the
+    failure this table exists for — not a dead ability but one that works more
+    often than the card allows, wrong in the player's favour and silent.
+
+    The predicate reads the **arrival** record rather than CR 302.6's
+    summoning-sickness stamp beside it. That stamp is "continuously since their
+    most recent turn began", which a control change rewrites — so a creature
+    handed over this turn would answer "entered this turn" for the handover.
+    """
+    assert _w2g1_restriction_line(
+        "Activate only if this creature entered this turn."
+    )
+
+    from engine.card_loader import load_cards, manifest_set_path
+
+    pool = {
+        c.name: c
+        for c in load_cards(manifest_set_path("WTH", include_measured=True))
+    }
+    from engine.card_loader import load_catalog
+
+    catalog = {c.name: c for c in load_catalog()}
+
+    for entered_on, expected in ((1, True), (0, False)):
+        p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+        game.turn = 1
+        elemental = Permanent(card=pool["Fungus Elemental"])
+        elemental.metadata[_W2G1_ENTERED] = entered_on
+        p1.battlefield.append(elemental)
+        p1.battlefield.append(Permanent(card=catalog["Forest"]))
+
+        result = game.activate_permanent_ability(0, "Fungus Elemental")
+        while game.stack:
+            game.resolve_top_of_stack()
+
+        assert result.supported is expected, result.details
+        # Refused *before* any cost is paid: the Forest is still there.
+        assert (len(p1.battlefield) == 1) is expected

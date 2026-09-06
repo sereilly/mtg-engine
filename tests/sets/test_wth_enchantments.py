@@ -805,3 +805,188 @@ def test_ancestral_knowledge_exiles_nothing_for_a_non_interactive_seat(set_pool)
 
     assert game.players[0].exile == []
     assert len(game.players[0].library) == 11
+
+
+# --- W2G1: costs charged and permissions granted ---
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.models import Permanent
+from engine.named_counters import add_counters
+from engine.oracle import parse_activated_ability_cost
+from engine.targeting import derive_activation_spec
+from engine.oracle import compile_card_oracle as _w2g1_compile
+
+
+def _w2g1_board():
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.turn = 1
+    return game, p1, p2
+
+
+def test_betrothed_of_fire_eats_the_creature_it_enchants(set_pool, catalog_by_name):
+    """"Sacrifice enchanted creature: Creatures you control get +2/+0 until end
+    of turn."
+
+    Neither the source nor a chosen permanent: CR 303.4m's "enchanted
+    [object]" names the *host*. The grammar admitted the line on the filter's ``card_types``, the
+    charger found no article to match, and the ability was **free and
+    repeatable** — an unbounded team pump for nothing, on a card that costs a
+    creature per use.
+    """
+    pool = set_pool("WTH")
+    charged = parse_activated_ability_cost(
+        "Sacrifice enchanted creature: Creatures you control get +2/+0 until "
+        "end of turn."
+    )
+    assert charged.sacrifice_attached
+    assert charged.sacrifice_self is False, "not the Aura"
+    assert charged.sacrifice_filter is None, "and not a chosen creature"
+
+    game, p1, _p2 = _w2g1_board()
+    host = Permanent(card=catalog_by_name["Grizzly Bears"])
+    other = Permanent(card=catalog_by_name["Mons's Goblin Raiders"])
+    aura = Permanent(card=pool["Betrothed of Fire"])
+    p1.battlefield.extend([host, aura, other])
+    attach_aura(aura, host)
+
+    result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Betrothed of Fire"]
+    assert other.effective_power == 3, "and the team got its +2/+0"
+
+
+def test_betrothed_of_fire_is_not_activated_with_nothing_to_sacrifice(set_pool):
+    """CR 602.2b: an ability whose cost cannot be paid is not activated, and
+    nothing is spent. An unattached Aura has no host — the state a state-based
+    action is about to clean up — and reading the cost as "sacrifice this"
+    would eat the Aura for a pump it never printed."""
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_board()
+    aura = Permanent(card=pool["Betrothed of Fire"])
+    p1.battlefield.append(aura)
+
+    result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
+
+    assert not result.supported
+    assert [p.card.name for p in p1.battlefield] == ["Betrothed of Fire"]
+    assert game.stack == []
+
+
+def test_infernal_tribute_charges_the_nontoken_narrowing(set_pool, catalog_by_name):
+    """"{2}, Sacrifice a nontoken permanent: Draw a card."
+
+    The narrowing is the whole card: with tokens allowed to pay it, a token
+    generator turns this into unbounded draw. The phrase pins no card type, so
+    the cost table refused it and the enchantment was unsupported.
+    """
+    pool = set_pool("WTH")
+    charged = parse_activated_ability_cost(
+        "{2}, Sacrifice a nontoken permanent: Draw a card."
+    )
+    assert charged.sacrifice_filter == {"nontoken": True}
+
+    game, p1, _p2 = _w2g1_board()
+    p1.battlefield.append(Permanent(card=pool["Infernal Tribute"]))
+    p1.battlefield.append(Permanent(card=catalog_by_name["Mons's Goblin Raiders"]))
+    p1.library = [catalog_by_name["Swamp"]] * 3
+
+    # The payer names which permanent pays (CR 601.2b) — index 1, the Goblin;
+    # left to the default the enchantment would eat itself, which is a legal
+    # payment and not the one under test.
+    result = game.activate_permanent_ability(
+        0, "Infernal Tribute", cost_permanent_index=1
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Mons's Goblin Raiders"]
+    assert [p.card.name for p in p1.battlefield] == ["Infernal Tribute"]
+    assert len(p1.hand) == 1
+
+
+def test_infernal_tribute_will_not_eat_a_token(set_pool):
+    """The narrowing enforced from the other side, and it is the whole card:
+    with tokens allowed to pay it, one token generator turns this into
+    unbounded draw. The payer names the token and it is not a candidate, so
+    the payment falls to the enchantment itself and the token survives."""
+    from engine.tokens import make_token_card
+
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_board()
+    p1.battlefield.append(Permanent(card=pool["Infernal Tribute"]))
+    token = Permanent(card=make_token_card("Goblin", 1, 1, "Creature — Goblin"))
+    token.metadata["is_token"] = True
+    p1.battlefield.append(token)
+    p1.library = [pool["Infernal Tribute"]] * 3
+
+    result = game.activate_permanent_ability(
+        0, "Infernal Tribute", cost_permanent_index=1
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p1.battlefield] == ["Goblin"], (
+        "the token was named and refused; the enchantment paid instead"
+    )
+    assert [c.name for c in p1.graveyard] == ["Infernal Tribute"]
+
+
+def test_goblin_bomb_pays_both_halves_of_one_printed_clause(set_pool):
+    """"Remove five fuse counters from this enchantment **and sacrifice it**:
+    It deals 20 damage to target player or planeswalker."
+
+    Two payments in one clause, joined by "and" rather than by the comma every
+    other cost pair uses — so the cost loop's separator never saw it and the
+    whole ability refused, which is why the card reported supported with a
+    hollow line and offered the picker no target.
+    """
+    pool = set_pool("WTH")
+    program = _w2g1_compile(pool["Goblin Bomb"])
+    ability = program.activated_abilities[0]
+    assert ability.cost.remove_counter == "fuse"
+    assert ability.cost.remove_counter_count == 5
+    assert ability.cost.sacrifice_self
+    assert derive_activation_spec(ability) == {"kind": "player_or_planeswalker"}
+
+    game, p1, p2 = _w2g1_board()
+    bomb = Permanent(card=pool["Goblin Bomb"])
+    add_counters(bomb, "fuse", 5)
+    p1.battlefield.append(bomb)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Bomb", target_player_index=1
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert p2.life == 0
+    assert [c.name for c in p1.graveyard] == ["Goblin Bomb"], "the cost ate it"
+
+
+def test_goblin_bomb_needs_all_five_counters(set_pool):
+    """CR 601.2h through CR 602.2b: four counters is no more a payment of a
+    five-counter cost than none, so the activation is refused with the
+    enchantment and its counters untouched."""
+    pool = set_pool("WTH")
+    game, p1, p2 = _w2g1_board()
+    bomb = Permanent(card=pool["Goblin Bomb"])
+    add_counters(bomb, "fuse", 4)
+    p1.battlefield.append(bomb)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Bomb", target_player_index=1
+    )
+
+    assert not result.supported
+    assert p2.life == 20
+    assert [p.card.name for p in p1.battlefield] == ["Goblin Bomb"]
+    assert bomb.metadata.get("fuse_counters") == 4

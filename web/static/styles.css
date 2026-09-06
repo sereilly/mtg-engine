@@ -4788,3 +4788,20 @@ pre {
     animation-duration: 0.6s;
   }
 }
+
+/* CR 116 special actions — one button per (hand card, kind), beside the phase
+   controls because that is where a with-priority action belongs. Inline-flex
+   rather than a block so an empty list occupies nothing even before `.hidden`
+   applies. */
+.special-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* `.hidden` is declared earlier in this file at the same specificity, so it
+   would lose the cascade to the rule above; the compound restores it. Same
+   reason `.canvas-overlay.hidden` exists a few hundred lines up. */
+.special-actions.hidden {
+  display: none;
+}

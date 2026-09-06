@@ -70,6 +70,7 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       chosen_name_ban_line,
                                       global_cast_ban_line,
                                       global_play_timing_line)
+from engine.special_actions import special_action_line  # noqa: E402
 from engine.cast_timing import (grants_flash,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed)
 from engine.replacements import replacement_claims_line  # noqa: E402
@@ -264,6 +265,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("cast_timing.py (granted flash)", grants_flash),
     ("cast_timing.py (cleanup sacrifice rider)",
      sacrifices_at_cleanup_if_cast_at_instant_speed),
+    # CR 116's special actions — "You may discard this card any time you could
+    # cast an instant" (Circling Vultures, the one card CR 116.2e names). No
+    # stack and so no instruction, which is exactly the population this census
+    # exists to keep honest: asked of the table's own reader, the one the
+    # support gate asks.
+    ("special_actions.py", lambda s: special_action_line(s) is not None),
     # The board half of CR 601.3 — "Cast this spell only if you control a
     # snow land" (Blizzard). A row whose noun phrase is payload, so the
     # claim asks the reader that answers it rather than comparing against a

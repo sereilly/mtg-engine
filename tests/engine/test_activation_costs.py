@@ -101,9 +101,25 @@ def test_every_admitted_cost_clause_is_charged(pool):
             # positional: asked one at a time against the single
             # `sacrifice_filter`, the second clause reported the first field as
             # a dropped rider — a false failure that hides the real one.
+            # "**Sacrifice enchanted creature**" (Betrothed of Fire) is neither
+            # the source nor a chosen permanent: CR 301.5f's word names the
+            # host, and the payload the filter produces drops it — so compared
+            # as a filter it reads "sacrifice a creature", which is the printed
+            # cost with the one word that matters removed. It is charged in its
+            # own field and compared here, before the positional pairing below
+            # sees it.
+            for cost in node.costs:
+                if (
+                    isinstance(cost, ast.SacrificeCost)
+                    and cost.filter.is_enchanted
+                    and not charged.sacrifice_attached
+                ):
+                    unpaid.append(f"{card.name}: {ability.source_line}")
             chosen_sacrifices = [
                 cost for cost in node.costs
-                if isinstance(cost, ast.SacrificeCost) and not cost.filter.is_source
+                if isinstance(cost, ast.SacrificeCost)
+                and not cost.filter.is_source
+                and not cost.filter.is_enchanted
             ]
             charged_sacrifices = [
                 charged.sacrifice_filter, charged.sacrifice_also_filter,

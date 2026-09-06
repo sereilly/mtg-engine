@@ -240,7 +240,7 @@ def _action_cast(session, req, seat_type):
     # grants itself flash (Mirage's five Auras) — and this question is asked in
     # two places: a card castable in the picker and refused by the action is the
     # shape a second copy produces.
-    instant_speed = casts_at_instant_speed(card)
+    instant_speed = casts_at_instant_speed(card, session.game, req.seat)
     if req.seat != session.current_turn and not instant_speed:
         raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
 
@@ -418,6 +418,36 @@ def _action_channel_mana(session, req, seat_type):
     result = session.game.use_channel_mana(req.seat, amount)
     if not result.supported:
         raise HTTPException(status_code=400, detail=result.details)
+    session.game.note_priority_action_taken(req.seat)
+
+
+@action_handler("special_action", human_only=HUMAN_ONLY)
+def _action_special_action(session, req, seat_type):
+    """CR 116 — an action taken with priority that does not use the stack.
+
+    One branch for every kind the table grants, because what varies between
+    them is the card and the kind, not the plumbing: the seat, the hand index
+    and the refusal are the same three questions each time. The refusal comes
+    from ``engine/special_actions.special_action_refusal``, the same gate the
+    state payload asks before offering the card — an action the client offers
+    and the engine refuses is a button that does nothing.
+
+    CR 116.3 gives the player priority again afterwards, so this deliberately
+    does **not** pass or advance; ``note_priority_action_taken`` is the same
+    "you did something in this window" note every other action makes.
+    """
+    from engine.special_actions import take_special_action
+
+    player = session.game.players[req.seat]
+    index = req.hand_index
+    if index is None or not (0 <= index < len(player.hand)):
+        raise HTTPException(status_code=400, detail="card not in hand")
+    card = player.hand[index]
+    refusal = take_special_action(
+        session.game, req.seat, card, req.special_action_kind or ""
+    )
+    if refusal is not None:
+        raise HTTPException(status_code=400, detail=refusal)
     session.game.note_priority_action_taken(req.seat)
 
 

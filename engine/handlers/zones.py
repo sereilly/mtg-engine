@@ -5308,6 +5308,29 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{caster.name} may cast {chosen.name} from their graveyard")
         return True, "resolved"
 
+    if payload.get("blanket"):
+        # "Until end of turn, you may cast instant and sorcery spells from the
+        # top of your graveyard." (Bösium Strip.) No card is named, so
+        # ``cards`` stays None and what the grant covers is re-asked of the
+        # board on every read — which is what the printed sentence means: the
+        # top of a graveyard is whatever is on top *now*, and a card resolved
+        # at grant time would go on being castable after something else was
+        # binned on top of it.
+        grant_permission(
+            game, player_index=caster_index, zone=payload.get("zone", "graveyard"),
+            mode=payload.get("mode", "cast"), cards=None,
+            card_types=tuple(payload.get("card_types") or ()),
+            position=payload.get("position"),
+            exile_instead=bool(payload.get("exile_instead")),
+            duration=duration, source_name=source_name,
+        )
+        game.log.append(
+            f"{caster.name} may cast "
+            + " and ".join(payload.get("card_types") or ("any",))
+            + " spells from the top of their graveyard this turn"
+        )
+        return True, "resolved"
+
     if payload.get("free"):
         grant_permission(
             game, player_index=caster_index, zone=payload.get("zone", "hand"),

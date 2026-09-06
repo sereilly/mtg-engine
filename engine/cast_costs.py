@@ -865,7 +865,8 @@ def _chargeable_object(
     phrase.
     """
     from .grammar import subject_filter_payload
-    from .oracle import chargeable_exile_payload, chargeable_sacrifice_payload
+    from .oracle import (chargeable_exile_payload, chargeable_sacrifice_payload,
+                         cost_object_is_named)
 
     described = subject_filter_payload(phrase.strip(), plural=plural)
     if described is None:
@@ -877,13 +878,13 @@ def _chargeable_object(
         else chargeable_exile_payload
     )
     carried = reader(described)
-    if carried is None or not (
-        carried.get("type_filter") or carried.get("subtype_filter")
-    ):
-        # An *unnamed* cost — one whose noun phrase pins neither a card type nor
-        # a subtype — would let the payment eat anything the caster controls,
-        # a land included. The same narrowing ``grammar/costs.py`` makes for an
-        # activation cost, and the one a key set cannot express.
+    if carried is None or not cost_object_is_named(carried):
+        # An *unnamed* cost — one whose noun phrase narrows nothing the payment
+        # can be held to — would let it eat anything the caster controls, a
+        # land included. Through the same reader ``grammar/costs.py`` asks for
+        # an activation cost, because CR 601.2b and CR 602.2b are one
+        # announcement step: a phrase one admits and the other refuses is a
+        # cost charged on one card and not on the next.
         return None
     return carried
 

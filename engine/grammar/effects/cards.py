@@ -24,6 +24,7 @@ from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _parse_duration, _parse_mana_payment
 from ..readers import accept_source_reference
+from ..vocabulary import CARD_TYPES, singular as _singular
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -458,6 +459,40 @@ def parse_put_milled_card_onto_battlefield(
     return ast.PutMilledCardOntoBattlefield()
 
 
+def _accept_spell_type_union(stream: TokenStream) -> "tuple[str, ...] | None":
+    """``instant and sorcery`` / ``creature`` in front of the word "spells",
+    consumed — or None with the cursor where it was.
+
+    A **cross-type union**, which is why it is read here rather than by the
+    noun parser: that reader answers "instant and sorcery **cards**" already,
+    and the word a permission sentence prints is "spells". CR 112.1 makes a
+    spell a card on the stack, so the two nouns name the same characteristics
+    and only the zone differs — but a permission's zone is stated separately
+    ("from the top of your graveyard"), so folding the two would give the
+    sentence two answers about where the card is.
+
+    Both joining words are read. "Instant **and** sorcery spells" is a union
+    despite the conjunction (no spell is both), exactly as "instant **or**
+    sorcery card" is, and refusing one spelling would refuse the card that
+    prints it for a grammatical accident.
+    """
+    mark = stream.mark()
+    found: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word is None or _singular(word) not in CARD_TYPES:
+            break
+        found.append(_singular(word))
+        stream.advance()
+        if stream.accept_word("and", "or"):
+            continue
+        break
+    if not found or not stream.accept_word("spells"):
+        stream.reset(mark)
+        return None
+    return tuple(found)
+
+
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     """A sentence granting permission to cast or play from a zone the rules
     alone would not allow (CR 601.3) — see :class:`ast.CastPermission` for the
@@ -614,6 +649,49 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
             until_your_next_upkeep=next_upkeep,
             until_your_next_turn=next_turn,
         )
+    # A **blanket** grant over a class of spells rather than over named cards:
+    # "instant and sorcery spells from the top of your graveyard" (Bosium
+    # Strip) and "creature spells this turn as though they had flash" (Winding
+    # Canyons). One reader for the noun phrase, because the two sentences print
+    # the same union and differ only in what follows it — a zone in one and a
+    # timing permission in the other.
+    named_types = _accept_spell_type_union(stream)
+    if named_types is not None:
+        # "…from **the top of** your graveyard." One card, not the pile: read
+        # here rather than left to the noun parser because the phrase is a
+        # *position* in an ordered zone (CR 400.5) rather than a
+        # characteristic, and a permission that dropped it would open the whole
+        # graveyard.
+        if stream.accept_phrase(
+            "from", "the", "top", "of", "your", "graveyard"
+        ):
+            _trailing_duration()
+            return ast.CastPermission(
+                mode=mode, what="spells_from_zone", grantee=grantee,
+                card_types=named_types, zone="graveyard", position="top",
+                until_end_of_turn=until_eot,
+                until_your_next_upkeep=next_upkeep,
+                until_your_next_turn=next_turn,
+            )
+        # "…**this turn** as though they had flash." CR 702.8a timing rather
+        # than a zone: the duration is printed in front of the permission, so
+        # the shared trailing reader runs first and the words after it decide
+        # which sentence this is.
+        _trailing_duration()
+        if stream.accept_phrase("as", "though", "they", "had", "flash"):
+            return ast.CastPermission(
+                mode=mode, what="spells_at_instant_speed", grantee=grantee,
+                card_types=named_types,
+                until_end_of_turn=until_eot,
+                until_your_next_upkeep=next_upkeep,
+                until_your_next_turn=next_turn,
+            )
+        # A union nothing followed is not this sentence. Reset rather than
+        # raise: "you may cast creature spells" alone is not a permission any
+        # card prints, and consuming the words would take the line away from
+        # whatever production really reads it.
+        stream.reset(mark)
+        return None
     # "target red instant or sorcery card from your graveyard" — the noun
     # parser reads the zone and its owner onto the filter, and lowering
     # refuses any zone the cast path cannot open.

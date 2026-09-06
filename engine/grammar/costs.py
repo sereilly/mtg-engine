@@ -155,40 +155,38 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     direction they drift in is a cost nobody pays. The word "another" is left in
     the filter: the charger has the ability's source and compares by identity.
     """
+    from ..oracle import cost_object_is_named
+
     if filt.is_source:
         return True
-    if not (filt.card_types or filt.subtypes or filt.named):
-        # An *unnamed* cost — one whose noun phrase pins neither a card type nor
-        # a subtype — would let the charger eat anything on the board, including
-        # a land. This is the one narrowing the key set cannot express, because
-        # "which keys are set" and "does one of them name the object" are
-        # different questions.
-        #
-        # A subtype alone does name it: "Sacrifice a Swamp" (Horror of Horrors)
-        # is a land type (CR 205.3i) with no card type printed beside it, and
-        # the charger's own reader carries it as ``subtype_filter`` — so
-        # demanding a card type here refused a cost the payment path could
-        # already collect, which is the two-readers-disagree failure this
-        # function exists to prevent, in the direction that costs a card its
-        # support rather than its narrowing.
-        #
-        # …and so does a **name**: "Sacrifice a token named Wood" (Jungle
-        # Patrol) pins the object harder than any type would (CR 201.2), and
-        # ``named`` is a key ``subject_matches`` tests like any other. The
-        # question this branch asks is "does the phrase name what may be eaten?"
-        # — a name is the strongest yes there is, and the ``token_only`` beside
-        # it narrows further still.
-        return False
+    if filt.is_enchanted:
+        # "**Sacrifice enchanted creature**: …" (Betrothed of Fire). The host,
+        # not a chosen permanent — CR 303.4m's "enchanted [object]" (and
+        # CR 301.5f's "equipped") names one object and the attachment record
+        # is the whole answer, so there is
+        # nothing for a filter to narrow. It is chargeable for
+        # :attr:`is_source`'s reason one branch up and charged in the same
+        # field family (``ActivatedAbilityCost.sacrifice_attached``); read as a
+        # *filter* it would have been "sacrifice a creature", which is the
+        # printed cost with its one word dropped.
+        return True
     # ``controller`` travels beside it, for the reason the comment on the
     # charger gives: a sacrifice is paid from the payer's own battlefield, so
     # "creatures **you control**" narrows nothing the enumeration has not
     # already done — but a key handed to a matcher that cannot test it is a key
     # silently dropped, so it is lifted out rather than left in. Sword of the
     # Ages prints the phrase and refused for it.
-    return object_only_filter(
+    carried = object_only_filter(
         filt.to_payload(),
         carried_separately=frozenset({"exclude_self", "controller"}),
-    ) is not None
+    )
+    # An *unnamed* cost — one whose noun phrase narrows nothing the charger can
+    # test — would let the charger eat anything on the board, a land included.
+    # Asked of the charger's own reduction rather than of the AST fields, so
+    # the two halves of a sacrifice cost cannot answer it differently; see
+    # ``oracle.cost_object_is_named`` for what the axes are and why a card type
+    # is not one of them.
+    return carried is not None and cost_object_is_named(carried)
 
 
 def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
@@ -203,7 +201,7 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     is what Necropolis prints, and a phrase naming somebody else's pile is a
     cost this charger has no enumeration for.
     """
-    from ..oracle import chargeable_exile_payload
+    from ..oracle import chargeable_exile_payload, cost_object_is_named
 
     if filt.zone == "graveyard":
         # Whose pile. "your graveyard" (Necropolis) is the payer's own; **no
@@ -238,11 +236,6 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
         return chargeable_exile_payload(filt.to_payload()) is not None
     elif filt.zone != "battlefield" or filt.is_card:
         return False
-    if not (filt.card_types or filt.subtypes):
-        # An unnamed cost would let the charger eat anything the zone holds —
-        # the same refusal `_is_chargeable_sacrifice` makes, for the same
-        # reason, and it is the one narrowing a key set cannot express.
-        return False
     # A restriction with no ``to_payload`` key at all would vanish before the
     # key check below ever saw it - the failure the AST gate in
     # ``subject_filter_payload`` exists for. Asked here as well, because this
@@ -251,7 +244,11 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
         filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
     ):
         return False
-    return chargeable_exile_payload(filt.to_payload()) is not None
+    carried = chargeable_exile_payload(filt.to_payload())
+    # An unnamed cost would let the charger eat anything the zone holds — the
+    # same refusal `_is_chargeable_sacrifice` makes, through the same reader,
+    # so a phrase one admits and the other refuses cannot exist.
+    return carried is not None and cost_object_is_named(carried)
 
 
 def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
@@ -802,6 +799,20 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.reset(mark)
         if stream.at_word("remove"):
             costs.append(_parse_counter_removal_cost(stream))
+            # "Remove five fuse counters from this enchantment **and sacrifice
+            # it**" (Goblin Bomb). One printed clause with two payments in it,
+            # joined by "and" rather than by the comma every other pair of
+            # costs uses — so the loop's separator never saw it and the whole
+            # ability refused. The pronoun is read here, attached to the clause
+            # that just named the source, because "it" has exactly one referent
+            # at this point in the sentence and reading it anywhere else would
+            # be a guess.
+            if stream.accept_phrase("and", "sacrifice", "it"):
+                costs.append(
+                    ast.SacrificeCost(
+                        ast.ObjectFilter(is_source=True), count=ast.Fixed(1)
+                    )
+                )
             stream.accept_punct(",")
             continue
         if stream.at_word("discard"):

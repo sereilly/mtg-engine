@@ -260,3 +260,72 @@ def test_choking_vines_blocks_the_creatures_it_names_and_damages_those(set_pool)
     assert [perm.blocked for perm in named] == [True, True]
     assert [perm.damage_marked for perm in named] == [1, 1]
     assert not spare.blocked and spare.damage_marked == 0
+
+
+# --- W2G1: costs charged and permissions granted ---
+from engine import Game, PlayerState
+from engine.cast_costs import additional_cost_for_line
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_duel(hand=()):
+    p1, p2 = PlayerState(name="A", hand=list(hand)), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, p1, p2
+
+
+def test_abjure_charges_the_blue_permanent_it_names(set_pool, catalog_by_name):
+    """"As an additional cost to cast this spell, sacrifice a blue permanent."
+
+    The cost table refused the phrase because it pinned no card *type*, and a
+    refused cost line is a refused card (`cast_costs.unread_cost_sentence`) —
+    which is the right direction, since the alternative is a counterspell cast
+    for {U} and nothing else. "A blue permanent" names what may pay it exactly
+    as precisely as "a creature" does; what it names is a colour.
+    """
+    pool = set_pool("WTH")
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice a blue permanent."
+    )
+    assert cost is not None
+    assert cost.sacrifice_filter == {"color_filter": "U"}
+    assert compile_card_oracle(pool["Abjure"]).supported
+
+    game, caster, victim = _w2g1_duel([pool["Abjure"]])
+    blue = Permanent(card=catalog_by_name["Vodalian Soldiers"])
+    caster.battlefield.append(blue)
+    victim.hand = [catalog_by_name["Lightning Bolt"]]
+    victim.library = [catalog_by_name["Island"]] * 4
+
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    result = game.queue_from_hand(0, "Abjure", target_stack_index=0)
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert caster.battlefield == [], "the blue permanent paid for it"
+    assert "Vodalian Soldiers" in [c.name for c in caster.graveyard]
+    assert caster.life == 20, "and the bolt was countered"
+
+
+def test_abjure_is_not_cast_with_no_blue_permanent_to_sacrifice(
+    set_pool, catalog_by_name
+):
+    """CR 601.2h: an unpayable cost can't be paid, and casting rewinds. A green
+    creature is not a legal payment, which is the whole of what the colour
+    narrowing buys — dropped, this would eat the nearest thing on the board."""
+    pool = set_pool("WTH")
+    game, caster, victim = _w2g1_duel([pool["Abjure"]])
+    green = Permanent(card=catalog_by_name["Grizzly Bears"])
+    caster.battlefield.append(green)
+    victim.hand = [catalog_by_name["Lightning Bolt"]]
+
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    result = game.queue_from_hand(0, "Abjure", target_stack_index=0)
+
+    assert not result.supported
+    assert [c.name for c in caster.hand] == ["Abjure"], "still in hand"
+    assert [p.card.name for p in caster.battlefield] == ["Grizzly Bears"]
+    assert len(game.stack) == 1, "and the bolt is still on the stack"

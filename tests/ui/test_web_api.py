@@ -3393,3 +3393,102 @@ def test_a_division_that_does_not_total_the_damage_is_refused_at_announcement():
     state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     assert len(state["players"][1]["battlefield"]) == 2
 # --- end W3G3 ---
+
+
+# --- W2G1 (Weatherlight): CR 116 special actions over the wire ---
+
+
+def _w2g1_hvh_session():
+    """A joined human-vs-human session, with both seats at the table."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4242,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    return sid, store.get(sid)
+
+
+def _w2g1_vultures():
+    """A card printing CR 116.2e's sentence.
+
+    Built here rather than pulled from the catalog because Weatherlight is
+    `measured`: `web/runtime.CARD_PATHS` is shipped-only by design, so no path
+    in the running app can put one of its cards anywhere. The sentence is what
+    the table reads, and this is the sentence.
+    """
+    return _mk_creature_card(
+        "Circling Vultures", 3, 1,
+        "Flying\nYou may discard this card any time you could cast an instant.",
+    )
+
+
+def test_special_action_discards_the_card_and_keeps_priority():
+    """CR 116.2e over the wire: the state payload offers the action, the action
+    endpoint takes it, and the card is in the graveyard afterwards.
+
+    CR 116.3 gives the player priority back, so the turn does not move; the
+    assertion below is that the same seat still holds it.
+    """
+    sid, session = _w2g1_hvh_session()
+    card = _w2g1_vultures()
+    seat = session.game.priority_player_index
+    session.game.players[seat].hand.append(card)
+    hand_index = len(session.game.players[seat].hand) - 1
+
+    state = client.get(f"/api/sessions/{sid}/state?seat={seat}").json()
+    assert {
+        "hand_index": hand_index,
+        "name": "Circling Vultures",
+        "kind": "discard_from_hand",
+    } in state["special_actions"]
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": seat,
+            "action": "special_action",
+            "hand_index": hand_index,
+            "special_action_kind": "discard_from_hand",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert [c.name for c in session.game.players[seat].graveyard] == [
+        "Circling Vultures"
+    ]
+    assert not any(c is card for c in session.game.players[seat].hand)
+    assert session.game.has_priority(seat), "CR 116.3"
+    after = client.get(f"/api/sessions/{sid}/state?seat={seat}").json()
+    assert after["special_actions"] == []
+
+
+def test_special_action_is_refused_for_a_card_that_does_not_grant_one():
+    """The gate the payload asks is the gate the action asks, so a request the
+    client could not have produced is refused rather than performed."""
+    sid, session = _w2g1_hvh_session()
+    seat = session.game.priority_player_index
+    ordinary = _mk_creature_card("Plain Bear", 2, 2)
+    session.game.players[seat].hand.append(ordinary)
+    hand_index = len(session.game.players[seat].hand) - 1
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": seat,
+            "action": "special_action",
+            "hand_index": hand_index,
+            "special_action_kind": "discard_from_hand",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "no such special action" in response.json()["detail"]
+    assert session.game.players[seat].graveyard == []

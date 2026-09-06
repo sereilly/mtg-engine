@@ -152,9 +152,9 @@ class TapAttachedCost:
     the payer picks from. Here nothing is picked — the attachment record is the
     whole answer — so the node carries no filter and no count.
 
-    CR 301.5f puts "equipped" and "enchanted" on the same footing, so the word
-    is not carried either: what is tapped is the host, whichever noun the card
-    printed.
+    CR 303.4m reads "enchanted [object]" as whatever the permanent is attached
+    to and CR 301.5f reads "equipped" the same way, so the word is not carried
+    either: what is tapped is the host, whichever noun the card printed.
     """
 
 
@@ -169,8 +169,9 @@ class PayAttachedManaCost:
     (CR 202.1), so the number does not exist until the ability is activated.
 
     Nothing is picked and no filter is carried — the attachment record is the
-    whole answer, exactly as it is for the tap. CR 301.5f puts "equipped" and
-    "enchanted" on the same footing, so the word is not carried either.
+    whole answer, exactly as it is for the tap. CR 303.4m reads "enchanted
+    [object]" as whatever the permanent is attached to and CR 301.5f reads
+    "equipped" the same way, so the word is not carried either.
     """
 
 

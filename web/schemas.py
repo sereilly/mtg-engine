@@ -11,6 +11,7 @@ ActionKind = Literal[
     "activate",
     "activate_emblem",
     "channel_mana",
+    "special_action",
     "pass_priority",
     "concede",
     "tap",
@@ -343,6 +344,12 @@ class GameActionRequest(BaseModel):
     emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
+    # Which CR 116 special action the "special_action" request is taking, by
+    # the kind `engine/special_actions.py` names. Its own field rather than a
+    # reading of the card, because one card may in principle grant two and the
+    # request has to say which — and because a request that named none would
+    # have to be resolved by guessing.
+    special_action_kind: str | None = None
     # Forgotten Lore: which card in the *caster's* graveyard the chooser
     # picked. Its own field rather than `hand_index`, because the zone is
     # not the answering seat's and not a hand.

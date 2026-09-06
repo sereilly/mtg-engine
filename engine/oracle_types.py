@@ -498,6 +498,26 @@ class ActivatedAbilityCost:
     #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
     #: field inserted among them silently rebinds one of them.
     exile_graveyard_position: dict | None = None
+    #: Betrothed of Fire: "**Sacrifice enchanted creature**: Creatures you
+    #: control get +2/+0 until end of turn." The *host*, which neither
+    #: ``sacrifice_self`` nor ``sacrifice_filter`` can say: the first is the
+    #: Aura, and the second is a permanent the payer picks out of everything
+    #: matching a noun phrase. Read as either, the printed cost is wrong in a
+    #: direction — the Aura eats itself, or it eats any creature on the board
+    #: while the enchanted one lives.
+    #:
+    #: :attr:`tap_attached`'s shape one payment over (CR 303.4m says
+    #: "enchanted [object]" names whatever the permanent is attached to and
+    #: CR 301.5f says the same of "equipped", so both words are read):
+    #: nothing is chosen, there is no picker and no filter, and the attachment
+    #: record is the whole answer. The two ways it can fail — no host, or a
+    #: host that has left — refuse the activation with nothing paid
+    #: (CR 602.2b) rather than charging the Aura instead.
+    #:
+    #: Last for ``exile_graveyard_position``'s stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    sacrifice_attached: bool = False
 
     @property
     def is_loyalty(self) -> bool:

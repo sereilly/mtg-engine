@@ -39,19 +39,37 @@ def _parse_exile_instead_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:
     """``If that spell would be put into your graveyard, exile it instead.``
-    after a cast-permission sentence (Chandra, Flame's Catalyst's −2).
+    after a cast-permission sentence (Chandra, Flame's Catalyst's −2), and
+    ``If a spell cast this way would be put into a graveyard, exile it
+    instead.`` after a blanket one (Bösium Strip).
 
     Folded onto the permission rather than parsed as a step, because it is a
     property of the cast the permission allows — the engine stamps it onto the
     stack object at cast time — and as a standalone sentence "that spell"
     would dangle with nothing binding it.
+
+    **Both subjects, because both permissions exist.** A grant naming one card
+    says "that spell"; a grant covering a class of them says "a spell cast this
+    way", and the possessive goes with it ("your graveyard" becomes "a
+    graveyard", CR 404.1 sending each card to its owner's). The two phrasings
+    are one rider and reach one field, so the wording a card happens to print
+    is not a difference the engine has.
     """
     last = steps[-1] if steps else None
-    if not isinstance(last, ast.CastPermission) or last.what != "target_card":
+    if not isinstance(last, ast.CastPermission) or last.what not in (
+        "target_card", "spells_from_zone"
+    ):
         return False
     mark = stream.mark()
-    if not stream.accept_phrase(
-        "if", "that", "spell", "would", "be", "put", "into", "your", "graveyard"
+    if not (
+        stream.accept_phrase(
+            "if", "that", "spell", "would", "be", "put", "into", "your",
+            "graveyard",
+        )
+        or stream.accept_phrase(
+            "if", "a", "spell", "cast", "this", "way", "would", "be", "put",
+            "into", "a", "graveyard",
+        )
     ):
         stream.reset(mark)
         return False

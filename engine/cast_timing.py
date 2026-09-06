@@ -45,6 +45,7 @@ reach the battlefield marked by more than one route.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -69,6 +70,76 @@ _CLEANUP_SACRIFICE_RIDER = re.compile(
     r"controller of the permanent it becomes sacrifices it at the beginning "
     r"of the next cleanup step"
 )
+
+
+@dataclass
+class FlashGrant:
+    """"You may cast creature spells this turn as though they had flash."
+    (Winding Canyons.) CR 611.1's continuous effect over CR 702.8a's timing
+    ("you may play this card any time you could cast an instant").
+
+    Its own record rather than a :class:`~engine.cast_permissions.CastPermission`
+    with a flag, because the two answer different questions and this module's
+    docstring already draws the line: that one says **where** a spell may be
+    cast from (CR 601.3's zones) and is asked by the cast path before it will
+    look outside the hand; this one says **when**, and is asked by the two
+    timing gates. Folded together, a timing grant would have to name a zone it
+    does not have and would be returned by ``permission_for`` to a caller
+    asking about cost waivers.
+
+    ``card_types`` is which spells it covers, by printed card type — the
+    rules the grant overrides are the per-type timing ones (CR 302.1 for a
+    creature, CR 307.1 for a sorcery). Empty would be every spell, which is
+    a strictly different card from the one that prints a class.
+    """
+
+    player_index: int
+    card_types: tuple[str, ...]
+    duration: str | None = "end_of_turn"
+    source_name: str = ""
+
+
+def grant_flash_timing(
+    game: "Game",
+    player_index: int,
+    card_types: tuple[str, ...],
+    *,
+    duration: str | None = "end_of_turn",
+    source_name: str = "",
+) -> FlashGrant:
+    """Record that *player_index* may cast those spells at instant speed."""
+    grant = FlashGrant(
+        player_index=player_index,
+        card_types=tuple(card_types),
+        duration=duration,
+        source_name=source_name,
+    )
+    game.flash_timing_grants.append(grant)
+    return grant
+
+
+def expire_end_of_turn(game: "Game") -> None:
+    """CR 514.2: a "this turn" timing grant ends at cleanup.
+
+    Beside ``cast_permissions.expire_end_of_turn`` in the cleanup step and
+    swept the same way, because both are CR 611.2a durations on a permission —
+    what differs is only which question the permission answers.
+    """
+    # Slice assignment rather than rebinding, for the reason the zone sweep
+    # gives: a caller may be holding the same list.
+    game.flash_timing_grants[:] = [
+        grant for grant in game.flash_timing_grants
+        if grant.duration != "end_of_turn"
+    ]
+
+
+def granted_flash_timing(game: "Game", seat: int, card) -> bool:
+    """Whether a live grant lets *seat* cast *card* at instant speed."""
+    return any(
+        grant.player_index == seat
+        and card.primary_type in grant.card_types
+        for grant in getattr(game, "flash_timing_grants", ())
+    )
 
 
 def a_sorcery_could_be_cast(game: "Game", seat: int) -> bool:
@@ -105,19 +176,32 @@ def sacrifices_at_cleanup_if_cast_at_instant_speed(oracle_text: str) -> bool:
     return _CLEANUP_SACRIFICE_RIDER.search(_normalize(oracle_text)) is not None
 
 
-def casts_at_instant_speed(card) -> bool:
+def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = None) -> bool:
     """Whether *card* may be cast whenever an instant could be (CR 601.3d).
 
     The one question both timing gates ask. An instant by type, a card with
-    printed flash, or a card whose own text grants it — three sources, one
-    answer, so a card cannot be castable in the picker and refused by the
-    action or the other way round.
+    printed flash, a card whose own text grants it, or a **grant on the game**
+    covering its type — four sources, one answer, so a card cannot be castable
+    in the picker and refused by the action or the other way round.
+
+    *game* and *seat* are what the fourth source needs, and every caller inside
+    a game has them: a permission granted by an effect (Winding Canyons) is
+    state rather than text, so no reading of the card alone can see it. They
+    are optional because the question is legitimately asked *of a card* too —
+    a test of Mirage's five Auras, and `engine/oracle.py`'s support gate, ask
+    whether the printed text grants flash and have no board to ask about. A
+    caller that has one and does not pass it gets the printed half, which is
+    the pre-grant answer and never a wider one.
     """
-    return (
+    if (
         card.primary_type == "instant"
         or card.has_flash
         or grants_flash(card.oracle_text or "")
-    )
+    ):
+        return True
+    if game is None or seat is None:
+        return False
+    return granted_flash_timing(game, seat, card)
 
 
 def cast_permission_line(line: str) -> bool:
@@ -138,7 +222,11 @@ def cast_permission_line(line: str) -> bool:
 
 __all__ = [
     "CAST_AT_INSTANT_SPEED",
+    "FlashGrant",
     "a_sorcery_could_be_cast",
+    "expire_end_of_turn",
+    "grant_flash_timing",
+    "granted_flash_timing",
     "cast_permission_line",
     "casts_at_instant_speed",
     "grants_flash",

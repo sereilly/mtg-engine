@@ -272,4 +272,88 @@ def _lower_cast_permission(
             ),
         )
 
+    if node.what == "spells_from_zone":
+        # "Until end of turn, you may cast instant and sorcery spells from the
+        # top of your graveyard." (Bösium Strip.) A **blanket** grant: no card
+        # is named, so what it covers is a class of spells plus a position in
+        # an ordered zone, and both halves are required. An empty union is
+        # "every spell" and a missing position is "the whole graveyard" — each
+        # is a strictly larger permission than the card prints, which is the
+        # direction a dropped narrowing must never go.
+        if node.grantee is not None:
+            raise LoweringError(
+                "a blanket zone permission reads the caster's own zone, so it "
+                "is granted to the caster",
+                node=node,
+            )
+        if node.mode != "cast":
+            raise LoweringError(
+                "no card grants a blanket permission to *play* from a zone",
+                node=node,
+            )
+        if not node.card_types:
+            raise LoweringError(
+                "a blanket zone permission names which spells it covers",
+                node=node,
+            )
+        if node.zone != "graveyard" or node.position != "top":
+            raise LoweringError(
+                "the only blanket zone permission the cast path opens is the "
+                "top of your own graveyard",
+                node=node,
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "an unbounded blanket zone permission is a different card",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "graveyard",
+                    "mode": "cast",
+                    "blanket": True,
+                    "card_types": tuple(node.card_types),
+                    "position": node.position,
+                    "exile_instead": node.exile_instead,
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
+    if node.what == "spells_at_instant_speed":
+        # "You may cast creature spells this turn as though they had flash."
+        # (Winding Canyons.) CR 702.8a timing rather than a CR 601.3 zone, so
+        # its own instruction kind: the cast path asks
+        # ``cast_permissions.permission_for`` about zones and the two timing
+        # gates ask ``cast_timing.casts_at_instant_speed``, and a grant that
+        # reached the first would be a spell castable from a graveyard.
+        if node.grantee is not None:
+            raise LoweringError(
+                "no card grants another player instant-speed casting",
+                node=node,
+            )
+        if node.mode != "cast":
+            raise LoweringError(
+                "a timing permission is about casting a spell", node=node
+            )
+        if not node.card_types:
+            raise LoweringError(
+                "a timing permission names which spells it covers", node=node
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "an unbounded flash grant is a different card", node=node
+            )
+        return (
+            OracleInstruction(
+                "grant_flash_timing", "",
+                {
+                    "card_types": tuple(node.card_types),
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
     raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)

@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**5 unclaimed sentence(s) across 5 supported card(s).**
+**3 unclaimed sentence(s) across 3 supported card(s).**
 
 - **Abeyance**
   - `until end of turn, target player can't cast instant or sorcery spells, and that player can't activate abilities that aren't mana abilities`
@@ -33,10 +33,6 @@ anything anyone did, and every ingest would arrive red.
   - `artifact and enchantment spells your opponents cast cost {2} more to cast`
 - **Boiling Blood**
   - `target creature attacks this turn if able`
-- **Goblin Bomb**
-  - `remove five fuse counters from this enchantment and sacrifice it: it deals 20 damage to target player or planeswalker`
-- **Winding Canyons**
-  - `{2}, {t}: you may cast creature spells this turn as though they had flash`
 
 ## Acknowledged simplifications
 

@@ -448,3 +448,78 @@ def test_a_counter_placing_cost_names_its_counter_in_symbols():
     )
     assert chosen.put_counter == "-1/-1"
     assert chosen.put_counter_filter == {"type_filter": "creature"}
+
+
+# ---------------------------------------------------------------------------
+# A cost that names the permanent the source is attached to (W2G1)
+# ---------------------------------------------------------------------------
+
+from engine.auras import attach_aura as _w2g1_attach
+from engine.card_loader import load_cards as _w2g1_load
+from engine.card_loader import manifest_set_path as _w2g1_path
+
+_W2G1_WTH = {
+    c.name: c for c in _w2g1_load(_w2g1_path("WTH", include_measured=True))
+}
+
+
+@pytest.mark.cr("303.4m", "602.2b", "601.2h")
+def test_303_4m_a_sacrifice_cost_may_name_the_attached_permanent():
+    """"An ability of a permanent that refers to the 'enchanted [object]'
+    refers to whatever object that permanent is attached to."
+
+    Betrothed of Fire: "Sacrifice enchanted creature: Creatures you control get
+    +2/+0 until end of turn." That is neither ``sacrifice_self`` (the Aura) nor
+    ``sacrifice_filter`` (a permanent the payer picks), and reading it as
+    either is wrong in a stated direction — the Aura eats itself, or it eats
+    any creature on the board while the enchanted one lives.
+
+    The filter payload the noun phrase produces **drops the word**, so a
+    charger that went through it would have collected "sacrifice a creature"
+    and never known. Before this the cost was collected by nobody at all: the
+    ability was free and repeatable, an unbounded team pump on a card that
+    costs a creature per use.
+    """
+    charged = parse_activated_ability_cost(
+        "Sacrifice enchanted creature: Creatures you control get +2/+0 until "
+        "end of turn."
+    )
+    assert charged.sacrifice_attached
+    assert not charged.sacrifice_self
+    assert charged.sacrifice_filter is None
+
+    game, p1, _p2 = _duel()
+    host = Permanent(card=_CATALOG["Grizzly Bears"])
+    aura = Permanent(card=_W2G1_WTH["Betrothed of Fire"])
+    bystander = Permanent(card=_CATALOG["Mons's Goblin Raiders"])
+    p1.battlefield.extend([host, aura, bystander])
+    _w2g1_attach(aura, host)
+
+    result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Betrothed of Fire"]
+    assert bystander.effective_power == 3
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_602_2b_an_attached_cost_with_no_host_activates_nothing():
+    """"Unpayable costs can't be paid" (CR 601.2h), and CR 602.2b routes an
+    activation through the same announcement steps a cast uses — so an ability
+    whose cost cannot be paid is not activated and nothing is spent.
+
+    An unattached Aura is the state a state-based action is about to clean up;
+    the cost has no object to name, and eating the Aura instead would be a pump
+    the card never printed.
+    """
+    game, p1, _p2 = _duel()
+    aura = Permanent(card=_W2G1_WTH["Betrothed of Fire"])
+    p1.battlefield.append(aura)
+
+    result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
+
+    assert not result.supported
+    assert [p.card.name for p in p1.battlefield] == ["Betrothed of Fire"]
+    assert game.stack == []

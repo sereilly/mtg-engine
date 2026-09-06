@@ -55,6 +55,7 @@ from .alternative_costs import (
     unread_alternative_cost_sentence,
 )
 from .cast_costs import cast_cost_claims_line, unread_cost_sentence
+from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
@@ -1530,6 +1531,36 @@ def chargeable_exile_payload(described: dict) -> dict | None:
     return carried
 
 
+def cost_object_is_named(carried: dict | None) -> bool:
+    """Whether a charged cost's *reduced* payload narrows what may pay it.
+
+    The one reader of a question three cost tables were each answering with
+    their own spelling: ``grammar/costs._is_chargeable_sacrifice`` asked
+    ``card_types or subtypes or named``, ``_is_chargeable_exile`` asked
+    ``card_types or subtypes``, and ``cast_costs._chargeable_object`` asked
+    ``type_filter or subtype_filter``. Three answers to one question is the
+    second-copy shape this repo refuses, and here the copies had already
+    drifted: "Sacrifice a token named Wood" (Jungle Patrol) was chargeable as
+    an *activation* cost and would have been refused as an additional one, on
+    a phrase that pins the object harder than any type could.
+
+    The rule is what the refusal was always for: an **unnamed** cost — one
+    whose noun phrase narrows nothing the charger can test — would let the
+    payment eat the cheapest thing the payer owns, a land included. So the
+    test is that the reduction carries *something*, not that it carries a card
+    type. "A **blue** permanent" (Abjure) and "a **nontoken** permanent"
+    (Infernal Tribute) name what may pay them exactly as precisely as "a
+    creature" does, and both were refused for printing the narrowing on an
+    axis the copies happened to spell out.
+
+    It takes the reduction rather than the raw phrase payload deliberately: a
+    key the charger *drops* (``controller``, ``zone``) is not a narrowing the
+    payment can be held to, so a phrase whose only word is one of those is
+    unnamed however much it looks narrowed.
+    """
+    return bool(carried)
+
+
 def _chargeable_exile_filter(phrase: str, *, plural: bool = False) -> dict | None:
     """The filter payload an "Exile <noun phrase>" cost charges, or None when the
     payment path cannot collect it. The two-halves pairing
@@ -1740,11 +1771,45 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
     attachment. A pre-symbol templating of the same payment, so nothing else
     can pay it — there is no picker and no filter, only the attachment record.
 
-    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
-    words are read: an Equipment printing the clause charges the same cost.
+    CR 303.4m reads "enchanted [object]" as whatever the permanent is attached
+    to and CR 301.5f reads "equipped" the same way, so both words are read: an
+    Equipment printing the clause charges the same cost.
     """
     return any(
         _TAP_ATTACHED_COST_RE.match(segment.strip())
+        for segment in cost_lower.split(",")
+    )
+
+
+#: "**Sacrifice enchanted creature**: Creatures you control get +2/+0 until end
+#: of turn." (Betrothed of Fire.) :data:`_TAP_ATTACHED_COST_RE` one payment
+#: over, anchored per cost segment for that pattern's reason: a rule matching a
+#: prefix would charge a *narrower* cost than the card prints. CR 303.4m reads
+#: "enchanted [object]" as whatever the permanent is attached to and CR 301.5f
+#: reads "equipped" the same way, so an Equipment printing the clause charges
+#: the same cost with no second row.
+_SACRIFICE_ATTACHED_COST_RE = re.compile(
+    r"^sacrifice (?:enchanted|equipped) \w+$"
+)
+
+
+def _sacrifices_the_attached_permanent(cost_lower: str) -> bool:
+    """Whether a cost clause sacrifices the permanent this Aura is attached to.
+
+    :func:`_taps_the_attached_permanent` one payment over, and the same shape:
+    the host is the whole answer, nothing is picked, and there is no filter to
+    narrow. It needs its own reader because the two fields
+    ``ActivatedAbilityCost`` already had are each wrong here in a direction —
+    ``sacrifice_self`` eats the Aura and ``sacrifice_filter`` eats any matching
+    creature on the board, while the enchanted one lives.
+
+    The grammar's half of the same clause is ``costs._is_chargeable_sacrifice``,
+    which admits the line on ``ObjectFilter.is_enchanted``; the payload that
+    filter produces drops the word entirely, so a reader that went through it
+    would charge "sacrifice a creature" and never know.
+    """
+    return any(
+        _SACRIFICE_ATTACHED_COST_RE.match(segment.strip())
         for segment in cost_lower.split(",")
     )
 
@@ -1770,8 +1835,8 @@ def _pays_the_attached_permanents_mana_cost(cost_lower: str) -> bool:
     the activator has to produce the mana — so the activation path builds the
     symbols from the host rather than reading a fixed dict.
 
-    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
-    words are read.
+    CR 303.4m reads "enchanted [object]" as whatever the permanent is attached
+    to and CR 301.5f reads "equipped" the same way, so both words are read.
     """
     return any(
         _PAY_ATTACHED_MANA_COST_RE.match(segment.strip())
@@ -2055,6 +2120,19 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         re.search(
             r"\bsacrifice this "
             r"(artifact|aura|creature|enchantment|permanent|land|token)\b",
+            cost_lower,
+        )
+        # "Remove five fuse counters from this enchantment **and sacrifice
+        # it**" (Goblin Bomb). The pronoun names the permanent the clause in
+        # front of it just named, so it is read as part of that clause rather
+        # than on its own: a bare "sacrifice it" anywhere in a cost would be a
+        # referent this reader cannot resolve, and charging the source for it
+        # would be a guess. The grammar reads the same two words in the same
+        # position (``costs._parse_costs``'s remove branch), so the two halves
+        # of the clause cannot admit different sentences.
+        or re.search(
+            r"\bfrom this (?:artifact|creature|enchantment|permanent|land|token) "
+            r"and sacrifice it\b",
             cost_lower,
         )
     )
@@ -2355,6 +2433,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         pay_life_per_counter=_life_payment_per_counter(cost_lower),
         alternative_mana=alternative_mana,
         tap_attached=_taps_the_attached_permanent(cost_lower),
+        sacrifice_attached=_sacrifices_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,
         exile_graveyard_position=exile_graveyard_position,
@@ -4275,6 +4354,19 @@ def _parse_creature_program(
         if alternative_cost_claims_line(line):
             continue
 
+        # 1d. A CR 116 **special action** — "You may discard this card any time
+        # you could cast an instant" (Circling Vultures, the one card CR 116.2e
+        # names). Not an effect and so not an instruction, for the reason the
+        # two costs above are not: CR 116.1 says a special action does not use
+        # the stack, so there is nothing to put on it and nothing to dispatch.
+        # `engine/special_actions.py` performs it and this asks that table, so
+        # what is claimed and what acts cannot drift.
+        #
+        # A creature is where the pool prints it, and the noncreature path
+        # reaches the same table through `_derived_static_claims`.
+        if special_action_line(line) is not None:
+            continue
+
         # 2. Triggered ability
         trig = _parse_triggered_ability(line, card_name)
         if trig is not None:
@@ -4987,6 +5079,7 @@ def _derived_static_claims(
     from .regeneration import denies_regeneration_line, self_regeneration_line
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
+    from .special_actions import special_action_line
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
     from .target_immunity import immunity_claims_line
     from .lethal_damage import CLAIM as LETHAL_DAMAGE_CLAIM
@@ -5162,6 +5255,20 @@ def _derived_static_claims(
         cast_permission_line(line) for line in (oracle_text or "").splitlines()
     ):
         claims.append("cast_timing")
+    # "You may discard this card any time you could cast an instant."
+    # (Circling Vultures.) CR 116.2e's special action, which by CR 116.1 does
+    # not use the stack — so there is nothing to compile, and on a creature
+    # whose other text is a keyword and an upkeep trigger, "nothing to compile"
+    # meant the card reported unsupported however well the action works.
+    #
+    # Claimed line by line and through the table's own reader, for the reason
+    # every row above is asked that way: a literal here would be a second copy
+    # of the sentence, free to drift from the one that acts.
+    if any(
+        special_action_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("special_actions")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an
