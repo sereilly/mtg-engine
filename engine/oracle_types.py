@@ -463,6 +463,31 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     untap_filter: dict | None = None
+    #: Alms, Nature's Kiss: "{1}, **Exile the top card of your graveyard**: …";
+    #: Necratog, Zombie Scavengers: "**Exile the top creature card of your
+    #: graveyard**: …". Cards named by their **position** in an ordered zone
+    #: (CR 404.3) rather than chosen, which is what makes this a separate field
+    #: from ``exile_filter`` beside it and not a value of ``exile_zone``: every
+    #: reader of that pair enumerates candidates and lets the payer pick, and
+    #: here there is exactly one answer and nothing to offer.
+    #:
+    #: It is also separate from ``exile_top_of_library`` — an ``int``, because
+    #: that payment is unnarrowed and taken off the top blind. This one
+    #: **scans** the pile for the printed characteristic, so it carries the
+    #: whole payload ``grammar.graveyard_position_payload_for`` builds:
+    #: ``count``, ``position``, ``owner`` and an optional ``filter``. A charger
+    #: that read the library form's absent filter as "no narrowing" is one word
+    #: away from reading this one's the same way, which would let a Necratog
+    #: eat a land.
+    #:
+    #: CR 118.3 makes it unpayable when the scan finds fewer than ``count``
+    #: cards, which is what stops it costing nothing on a pile with no creature
+    #: card in it. ``None`` is the honest "no such cost".
+    #:
+    #: After ``untap_filter`` for that field's stated reason: the six positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
+    #: field inserted among them silently rebinds one of them.
+    exile_graveyard_position: dict | None = None
 
     @property
     def is_loyalty(self) -> bool:

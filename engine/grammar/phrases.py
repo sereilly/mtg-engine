@@ -21,6 +21,7 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
+from .amounts import parse_amount
 
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PT, PUNCT, WORD, tokenize
@@ -42,6 +43,7 @@ from .references import (PAIR_ORDINALS,  # noqa: F401
                          parse_bound_subject, parse_pair_ordinal_subject,
                          parse_target_spec)
 from .stream import TokenStream
+from .zones import accept_zone_possessive
 from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
 from .keywords import (PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords,
                        parse_keyword_list)
@@ -716,3 +718,98 @@ def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
     return token
 
 
+
+
+# A fragment three families need — the cost parser one layer up, the exile
+# effect in ``effects/zones`` and the "unless you …" offer in ``effects/board``
+# — so it lives here for the reason ``_expect_counter_kind`` above does: the
+# layering rule sends a production several families share down to ``phrases``,
+# and leaving it with any one of them would make the other two import a family.
+
+
+def accept_graveyard_position(
+    stream: TokenStream,
+) -> "ast.GraveyardPosition | None":
+    """``the top [N] [<described>] card[s] of <whose> graveyard`` at the cursor,
+    or None with the cursor unmoved.
+
+    "the top card of your graveyard" (Alms, Nature's Kiss), "the top creature
+    card of your graveyard" (Necratog, Zombie Scavengers, Barrow Ghoul,
+    Circling Vultures), "the top three black cards of your graveyard" (Spinning
+    Darkness), "the bottom card of target player's graveyard" (Phyrexian
+    Furnace).
+
+    CR 404.3 makes a graveyard ordered, so this names cards by **position** and
+    nobody chooses. It therefore refuses rather than falling back to the noun
+    parser: "the top card" is not a noun phrase, and a reader that let one
+    through would produce a filter any card in the pile answers.
+
+    Every word after the count is required. The possessive goes through
+    ``zones.accept_zone_possessive``, the engine's one reader of "whose pile",
+    and the noun through ``parse_object_filter`` — so "the top **creature** card"
+    and "the top **black** cards" are the same production with the phrase read
+    once. The filter must be a **card** phrase (``is_card``): "the top creature
+    of your graveyard" names a permanent in a zone that holds none, and reading
+    it as a card would compile a sentence no card prints.
+
+    A narrowing the phrase carries beyond the card's own characteristics — a
+    zone, a controller — refuses too, because the scan below tests a card in a
+    graveyard, where CR 613.1 leaves nothing computed to test against.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("the"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("top"):
+        position = "top"
+    elif stream.accept_word("bottom"):
+        position = "bottom"
+    else:
+        stream.reset(mark)
+        return None
+    # The count is optional and printed in front of the noun, which leaves that
+    # noun the bare plural `parse_object_filter` reads either way. Only a fixed
+    # count of two or more: "the top card" is the singular already, and a
+    # variable one would be a number the charger cannot know before the cost is
+    # paid (CR 118.3).
+    count: "ast.Amount" = ast.Fixed(1)
+    counted = stream.mark()
+    if not stream.at_word("card", "cards"):
+        try:
+            amount = parse_amount(stream)
+        except GrammarError:
+            amount = None
+        if isinstance(amount, ast.Fixed) and amount.value >= 2:
+            count = amount
+        else:
+            stream.reset(counted)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not described.is_card:
+        stream.reset(mark)
+        return None
+    for word in ("of",):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    owner = accept_zone_possessive(stream)
+    if owner is None or not stream.accept_word("graveyard"):
+        stream.reset(mark)
+        return None
+    narrowed = described.to_payload()
+    if narrowed.get("zone") or narrowed.get("zone_owner"):
+        # "the top creature card **from your graveyard** of your graveyard" is
+        # not a sentence anyone prints, but a filter that read a zone would be
+        # one this production then names a *second* pile for. Refused rather
+        # than dropped, which is the direction this grammar fails in.
+        stream.reset(mark)
+        return None
+    return ast.GraveyardPosition(
+        owner=owner,
+        count=count,
+        filter=None if not narrowed else described,
+        position=position,
+    )

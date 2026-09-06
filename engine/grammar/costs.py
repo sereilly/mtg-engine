@@ -19,11 +19,12 @@ from ..subject_filters import object_only_filter, untestable_filter_keys
 from . import ast
 from .amounts import parse_amount
 from .effects import _expect_counter_kind
-from .phrases import _parse_card_alternatives
+from .phrases import _parse_card_alternatives, accept_graveyard_position
 from .errors import GrammarError
 from .lexer import MANA, SELF
 from .lowering._common import (_PAYLOAD_HONOURED_FILTER_FIELDS,
-                               _restrictions_beyond, chargeable_tap_filter)
+                               _restrictions_beyond, chargeable_tap_filter,
+                               graveyard_position_payload)
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_target_spec
@@ -580,6 +581,28 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             from_library = _accept_exile_top_of_library(stream)
             if from_library is not None:
                 costs.append(from_library)
+                stream.accept_punct(",")
+                continue
+            # "Exile **the top card of your graveyard**" (Alms, Nature's
+            # Kiss), "…the top **creature** card…" (Necratog, Zombie
+            # Scavengers). Read here for the library form's reason directly
+            # above — CR 404.3 names these cards by *position*, so the object
+            # reader below refuses the phrase outright — and gated by the same
+            # payload builder ``engine/oracle.py``'s charger runs, so the two
+            # halves of the cost cannot admit different clauses.
+            #
+            # Only the payer's own pile: an activation cost paid out of
+            # somebody else's graveyard is a shape no payment path has a seat
+            # for, and reading it as the payer's own would eat the wrong card.
+            from_graveyard = accept_graveyard_position(stream)
+            if from_graveyard is not None:
+                if graveyard_position_payload(
+                    from_graveyard, seats=frozenset({"you"})
+                ) is None:
+                    raise stream.error(
+                        "no cost path charges an exile of this graveyard position"
+                    )
+                costs.append(ast.ExileGraveyardPositionCost(from_graveyard))
                 stream.accept_punct(",")
                 continue
             # ``ExileSelf`` names no object, so the source gets its own entry:

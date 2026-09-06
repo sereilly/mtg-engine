@@ -597,6 +597,47 @@ class Zone:
     owner: PlayerRef | None = None
 
 
+@dataclass(frozen=True)
+class GraveyardPosition:
+    """Cards named by **where they sit** in a graveyard, not by a choice.
+
+    "the top card of your graveyard" (Alms, Nature's Kiss), "the top creature
+    card of your graveyard" (Necratog, Zombie Scavengers, Barrow Ghoul,
+    Circling Vultures), "the top three black cards of your graveyard" (Spinning
+    Darkness), "the bottom card of target player's graveyard" (Phyrexian
+    Furnace).
+
+    CR 404.3 makes a graveyard an **ordered** zone, so this is a definite
+    description with exactly one answer — nobody picks, and there is nothing
+    for a targeting rule to say about it. That is the whole reason it is not an
+    :class:`ObjectFilter` with a ``zone``: a filter is asked of one card at a
+    time and cannot express "the topmost", so a phrase read as one would let
+    any matching card in the pile pay, which for a cost is strictly cheaper
+    than the card prints.
+
+    Here in ``_core`` rather than in a family because three families build a
+    node out of it and the AST forbids them importing each other: the cost
+    (:class:`~.costs.ExileGraveyardPositionCost`), the effect
+    (:class:`~.cards.ExileGraveyardPosition`) and the "unless you …" offer the
+    board family decomposes into a :class:`~.statements.May`.
+
+    *filter* narrows **which** cards count, and the scan is what makes the
+    narrowing positional: "the top creature card" is the creature card nearest
+    the top, not "the top card, if it is a creature". ``None`` is the
+    unnarrowed "the top card", never "any card at all" — the two differ the
+    moment the pile's top card is a land.
+    """
+    owner: PlayerRef
+    count: "Amount" = field(default_factory=lambda: Fixed(1))
+    filter: "ObjectFilter | None" = None
+    #: Which end of the pile the scan starts at — ``"top"`` (CR 404.1's most
+    #: recently added, the last element) or ``"bottom"``. A string rather than
+    #: two nodes because everything downstream is the same walk in the other
+    #: direction, and a reader that defaulted to one end would silently answer
+    #: the other card.
+    position: str = "top"
+
+
 
 
 @dataclass(frozen=True)

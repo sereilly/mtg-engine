@@ -390,10 +390,41 @@ def card_filter_payload(phrase: str) -> dict | None:
     return chargeable_card_filter(filt)
 
 
+def graveyard_position_payload_for(
+    phrase: str, *, seats: "frozenset[str] | None" = None
+) -> dict | None:
+    """The payload "the top <n> <described> cards of <whose> graveyard" means,
+    read off the printed *phrase*, or None to refuse it.
+
+    The string-in front door onto ``phrases.accept_graveyard_position``, for the
+    readers that arrive with a delimited clause rather than a token stream:
+    ``engine/oracle.py``'s activation-cost charger, ``engine/cast_costs.py``'s
+    additional cost and ``engine/alternative_costs.py``'s alternative one. All
+    three used to have no reader at all; giving each its own regex would be
+    three more answers to "which card does this name", and the direction a cost
+    drifts in is a price nobody pays.
+
+    The whole phrase must be consumed, exactly as :func:`card_filter_payload`
+    requires: a trailing word nothing read is a rider the charger would ignore.
+    """
+    from .lowering._common import graveyard_position_payload
+    from .phrases import accept_graveyard_position
+
+    lexed = tokenize(phrase.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, lexed.normalized)
+    position = accept_graveyard_position(stream)
+    if position is None or not stream.exhausted:
+        return None
+    return graveyard_position_payload(position, seats=seats)
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
     "CompiledLine", "GRAMMAR_CATEGORIES", "GrammarError", "LoweringError",
-    "ast", "card_filter_payload", "compile_line", "parse_line",
+    "ast", "card_filter_payload", "compile_line",
+    "graveyard_position_payload_for", "parse_line",
     "subject_filter_payload",
 ]

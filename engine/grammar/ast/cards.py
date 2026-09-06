@@ -18,6 +18,7 @@ from ._core import (
     Amount,
     Duration,
     Fixed,
+    GraveyardPosition,
     ObjectFilter,
     PlayerRef,
     TargetSpec,
@@ -448,6 +449,25 @@ class ExileTopOfLibrary:
     """
     count: Amount
     face_down: bool = False
+
+
+@dataclass(frozen=True)
+class ExileGraveyardPosition:
+    """``Exile the bottom card of target player's graveyard.`` (Phyrexian
+    Furnace.) The same phrase Barrow Ghoul and Circling Vultures print as the
+    price of an "unless you …" offer, which the board family decomposes into a
+    :class:`~.statements.May` around this node.
+
+    Beside :class:`ExileTopOfLibrary` and separate from it for
+    :class:`~.costs.ExileGraveyardPositionCost`'s stated reason: a library exile
+    is counted off the top blind, and this one **scans** the ordered pile
+    (CR 404.3) for the printed characteristic. It carries a whole
+    :class:`~._core.GraveyardPosition` rather than the three fields loose,
+    because that spec is exactly what the cost node carries — one referent read
+    once, so a cost and an effect printing the same words cannot disagree about
+    which card they name.
+    """
+    position: GraveyardPosition
 
 
 @dataclass(frozen=True)

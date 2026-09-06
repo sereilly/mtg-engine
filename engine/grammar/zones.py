@@ -77,6 +77,87 @@ def _parse_zone_owner_of(stream: TokenStream) -> "ast.PlayerRef | None":
     return None
 
 
+def accept_zone_possessive(stream: TokenStream) -> "ast.PlayerRef | None":
+    """The possessive in front of a zone noun — "**your** graveyard", "**target
+    player's** graveyard" — as the seat it names, or None with the cursor
+    unmoved.
+
+    Extracted from :func:`accept_zone_scope` when a second family needed the
+    same spellings: "the top card **of your graveyard**" (Alms, Necratog,
+    Spinning Darkness) prints the possessive after "of" rather than after
+    "from"/"in", so the preposition differs and the seat vocabulary does not.
+    A second copy would be a second answer to "whose pile is this", and the
+    direction that drift fails in is a card taken out of the wrong graveyard.
+
+    Only the possessive is read. The article fallback ("a graveyard", "the
+    graveyard of …") stays with the caller, because what an *absent* possessive
+    means depends on the phrase around it.
+    """
+    if stream.accept_word("your"):
+        return ast.PlayerRef("you")
+    # "their <zone>", and the spelled-out "that player's <zone>" (Storm
+    # Seeker): one node for both, because `parse_player_ref` already reads
+    # "they" as an alias of "that player", and a second kind here would be
+    # a second answer every count lowering had to learn.
+    elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
+        return ast.PlayerRef("owner")
+    # "from **its owner's** graveyard" (Reincarnation). The same
+    # referent `_parse_zone` already reads on the destination side, and
+    # the same kind: "the owner of the object this sentence is about".
+    # Which object that is depends on the sentence, and is the
+    # lowering's question rather than the noun parser's.
+    elif stream.accept_phrase("its", "owner", "'s"):
+        return ast.PlayerRef("owner")
+    # "from **target player's** graveyard" (Drafna's Restoration): a
+    # chosen player rather than a fixed one, and a *second* target on the
+    # same line — the cards are targets too.
+    elif stream.accept_phrase("target", "player", "'s"):
+        return ast.PlayerRef("target_player")
+    # "in **target opponent's** graveyard" (Spoils of Evil). The same
+    # chosen seat with CR 115.4's own-seat exclusion, and its own kind
+    # rather than `target_player`, because that exclusion is the whole
+    # difference: read as "target player" the card would let its caster
+    # count their own graveyard.
+    elif stream.accept_phrase("target", "opponent", "'s"):
+        return ast.PlayerRef("target_opponent")
+    # "from **defending player's** graveyard" (Rysorian Badger). CR
+    # 506.2's seat, which the *combat* named rather than the sentence:
+    # nothing is chosen, so it is neither of the two target spellings
+    # above, and the lowering admits it only under a trigger whose fire
+    # site froze one (`_events._DEFENDING_PLAYER_EVENTS`).
+    elif stream.accept_phrase("defending", "player", "'s"):
+        return ast.PlayerRef("defending_player")
+    # "from **an opponent's** graveyard" (Misinformation). CR 601.2c
+    # chooses nobody here — the *cards* are the targets and the pile is
+    # wherever they lie — so it is neither of the two "target" seats
+    # above, and it carries the kind ``parse_player_ref`` already gives
+    # the bare article one layer up. What it says is a restriction on
+    # which piles the cards may be chosen from, which the lowering
+    # hands to the picker.
+    elif stream.accept_phrase("an", "opponent", "'s"):
+        return ast.PlayerRef("opponent")
+    # "in **the chosen player's** graveyard" (Haunting Apparition). The seat
+    # the source picked as it entered (CR 614.1c), recorded on that permanent —
+    # so it is a seat nothing about *this* sentence chooses and the reader must
+    # be handed the source to resolve it. Its own kind for that reason: read as
+    # ``owner`` it would count the pile the cards happen to lie in, which for a
+    # graveyard is every seat's, and read as ``you`` it would count the
+    # controller's own. ``ast.PlayerRef`` has documented the kind since Lost
+    # Order of Jarkeld printed the *battlefield* half of the same possessive.
+    elif stream.accept_phrase("the", "chosen", "player", "'s"):
+        return ast.PlayerRef("chosen_player")
+    # "from **a player's** graveyard" (Lodestone Bauble). The same
+    # unchosen seat with no exclusion on it, and ``owner`` is exactly
+    # what it means: a card in a graveyard is in the graveyard of the
+    # player who owns it (CR 404.1), so "a player's graveyard" and "the
+    # graveyard of whoever owns these cards" name one pile. The same
+    # kind "its owner's" and "their" above already carry, for that
+    # reason and not as an alias of convenience.
+    elif stream.accept_phrase("a", "player", "'s"):
+        return ast.PlayerRef("owner")
+    return None
+
+
 def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     """Read a `from <zone>` / `in <zone>` scope onto *d*, if one is here.
 
@@ -99,70 +180,8 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     # "from a graveyard" rather than search the wrong one.
     probe = stream.mark()
     stream.advance()
-    owner: ast.PlayerRef | None = None
-    if stream.accept_word("your"):
-        owner = ast.PlayerRef("you")
-    # "their <zone>", and the spelled-out "that player's <zone>" (Storm
-    # Seeker): one node for both, because `parse_player_ref` already reads
-    # "they" as an alias of "that player", and a second kind here would be
-    # a second answer every count lowering had to learn.
-    elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
-        owner = ast.PlayerRef("owner")
-    # "from **its owner's** graveyard" (Reincarnation). The same
-    # referent `_parse_zone` already reads on the destination side, and
-    # the same kind: "the owner of the object this sentence is about".
-    # Which object that is depends on the sentence, and is the
-    # lowering's question rather than the noun parser's.
-    elif stream.accept_phrase("its", "owner", "'s"):
-        owner = ast.PlayerRef("owner")
-    # "from **target player's** graveyard" (Drafna's Restoration): a
-    # chosen player rather than a fixed one, and a *second* target on the
-    # same line — the cards are targets too.
-    elif stream.accept_phrase("target", "player", "'s"):
-        owner = ast.PlayerRef("target_player")
-    # "in **target opponent's** graveyard" (Spoils of Evil). The same
-    # chosen seat with CR 115.4's own-seat exclusion, and its own kind
-    # rather than `target_player`, because that exclusion is the whole
-    # difference: read as "target player" the card would let its caster
-    # count their own graveyard.
-    elif stream.accept_phrase("target", "opponent", "'s"):
-        owner = ast.PlayerRef("target_opponent")
-    # "from **defending player's** graveyard" (Rysorian Badger). CR
-    # 506.2's seat, which the *combat* named rather than the sentence:
-    # nothing is chosen, so it is neither of the two target spellings
-    # above, and the lowering admits it only under a trigger whose fire
-    # site froze one (`_events._DEFENDING_PLAYER_EVENTS`).
-    elif stream.accept_phrase("defending", "player", "'s"):
-        owner = ast.PlayerRef("defending_player")
-    # "from **an opponent's** graveyard" (Misinformation). CR 601.2c
-    # chooses nobody here — the *cards* are the targets and the pile is
-    # wherever they lie — so it is neither of the two "target" seats
-    # above, and it carries the kind ``parse_player_ref`` already gives
-    # the bare article one layer up. What it says is a restriction on
-    # which piles the cards may be chosen from, which the lowering
-    # hands to the picker.
-    elif stream.accept_phrase("an", "opponent", "'s"):
-        owner = ast.PlayerRef("opponent")
-    # "in **the chosen player's** graveyard" (Haunting Apparition). The seat
-    # the source picked as it entered (CR 614.1c), recorded on that permanent —
-    # so it is a seat nothing about *this* sentence chooses and the reader must
-    # be handed the source to resolve it. Its own kind for that reason: read as
-    # ``owner`` it would count the pile the cards happen to lie in, which for a
-    # graveyard is every seat's, and read as ``you`` it would count the
-    # controller's own. ``ast.PlayerRef`` has documented the kind since Lost
-    # Order of Jarkeld printed the *battlefield* half of the same possessive.
-    elif stream.accept_phrase("the", "chosen", "player", "'s"):
-        owner = ast.PlayerRef("chosen_player")
-    # "from **a player's** graveyard" (Lodestone Bauble). The same
-    # unchosen seat with no exclusion on it, and ``owner`` is exactly
-    # what it means: a card in a graveyard is in the graveyard of the
-    # player who owns it (CR 404.1), so "a player's graveyard" and "the
-    # graveyard of whoever owns these cards" name one pile. The same
-    # kind "its owner's" and "their" above already carry, for that
-    # reason and not as an alias of convenience.
-    elif stream.accept_phrase("a", "player", "'s"):
-        owner = ast.PlayerRef("owner")
-    else:
+    owner = accept_zone_possessive(stream)
+    if owner is None:
         stream.accept_word("a", "an", "the")
     noun = stream.peek_word()
     if noun in _ZONE_NOUNS:
