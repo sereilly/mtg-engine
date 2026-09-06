@@ -331,6 +331,29 @@ def _parse_become_creature(
                 in_addition = True
             else:
                 stream.reset(relative)
+    # …and the fourth spelling, which is **no clause at all**: "Until end of
+    # turn, this artifact becomes a 2/1 Construct **artifact** creature with
+    # flying." (Chimeric Sphere, Xanthic Statue, Jade Statue.) CR 205.1b's
+    # *replacement* — the listed types are what the permanent is, and nothing
+    # says the old ones survive.
+    #
+    # Admitted only where the body names every card type the printed subject
+    # does, which is CR 205.1b's own arithmetic done on the words: if the
+    # animation lists "artifact" and the subject is "this **artifact**", the
+    # replacement and the addition produce the same type line, so the record the
+    # lowering writes is right either way and no layer-4 removal is needed.
+    #
+    # Every card in the pool that prints the clause-less form prints it this way
+    # — and that is *why* Mishra's Factory prints "It's still a land" and these
+    # do not: a land becoming an artifact creature loses the word the card needs
+    # back. So the gate is not a convenience. "Target land becomes a 4/4
+    # creature until end of turn" names no land in its body and keeps refusing,
+    # because admitting it under an *adding* record is the silent half of the
+    # replacement this engine has not built (see the node).
+    if not in_addition and isinstance(subject, ast.TargetSpec):
+        printed = set(subject.filter.card_types)
+        if printed and printed <= set(card_types) | {"creature"}:
+            in_addition = True
     # **Read, not required.** A sentence printing no duration is CR 611.2b's
     # default — the animation lasts indefinitely (Mishra's Groundbreaker) — and
     # the two lower to different instruction kinds, so the absence is carried

@@ -22,9 +22,11 @@ statement its caller has already parsed, exactly as `delayed` is handed
 """
 
 from . import ast
+from .errors import GrammarError
 from .stream import TokenStream
-from .effects import (_parse_attacks_this_turn_if_able, _parse_damage,
-                      _parse_doesnt_untap_next_step)
+from .effects import (_parse_attacks_this_turn_if_able, _parse_becomes,
+                      _parse_damage, _parse_doesnt_untap_next_step,
+                      _parse_loses)
 
 
 def _with_damage_conjunct(
@@ -140,6 +142,92 @@ def _with_attack_conjunct(
         return statement
     joined = _parse_attacks_this_turn_if_able(stream, source)
     if joined is None:
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((statement, joined))
+
+
+def _with_keyword_loss_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and loses <keyword>`` trailing a clause whose subject is a permanent.
+
+    "{2}: Until end of turn, this artifact becomes a 3/2 Construct artifact
+    creature **and loses flying**." (Chimeric Sphere.) The fourth tail this
+    module reads, and the same shape as the three above: one noun phrase
+    printed once, two things said about it, joined across two effect families
+    that may not import each other — ``effects/types.py`` and
+    ``effects/characteristics.py``.
+
+    The card is why the clause exists at all rather than being redundant: the
+    Sphere's *other* ability animates it **with** flying, so the second body has
+    to take the keyword back off a permanent the first one gave it to. CR 613
+    layer 6 answers that by timestamp, so the removal is a real effect and not a
+    restatement of the default.
+
+    The verb alone is not enough to commit, exactly as the untap joiner's
+    auxiliary is not: `_parse_loses` reads life and "loses the game" as well as
+    keywords, and a subject that is a permanent cannot do either — so the
+    production is asked and its refusal rewinds the "and" with it, leaving every
+    other "and loses …" the reading it had.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    if not stream.at_word("loses", "lose"):
+        stream.reset(mark)
+        return statement
+    try:
+        joined = _parse_loses(stream, source)
+    except GrammarError:
+        stream.reset(mark)
+        return statement
+    if not isinstance(joined, ast.LoseKeyword):
+        # A life loss or a loss of the game read off a permanent's noun phrase
+        # is not this sentence; rewinding leaves the clause to whatever else
+        # can read it rather than joining a statement about the wrong subject.
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((statement, joined))
+
+
+def _with_gained_type_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and becomes <type> in addition to its other types`` trailing a clause
+    whose subject is a permanent.
+
+    "{2}: Until end of turn, target nonartifact creature gets +1/+0 **and
+    becomes an artifact in addition to its other types**." (Thran Forge.) The
+    mirror of :func:`_with_keyword_loss_conjunct` above — that one joins a type
+    change to a keyword loss, this one joins a P/T change to a type change — and
+    here for the same reason: ``effects/characteristics.py`` may not import
+    ``effects/types.py``.
+
+    `_parse_becomes` raises rather than rewinding on a body it cannot read, so
+    the refusal is caught and the "and" put back: "gets +1/+1 and becomes
+    blocked" is a sentence for somebody else, and a clause half-read here would
+    take the whole line down with a message about the wrong verb.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    if not stream.at_word("becomes", "become"):
+        stream.reset(mark)
+        return statement
+    try:
+        joined = _parse_becomes(stream, source)
+    except GrammarError:
         stream.reset(mark)
         return statement
     return ast.Conjunction((statement, joined))
