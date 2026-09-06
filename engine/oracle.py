@@ -1091,8 +1091,16 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # would swallow the whole clause on any line that happened to end in
     # "dies" — and both front ends carry the wording, since a condition only one
     # of them reads leaves the other refusing the effect behind it.
+    # The permanent noun and the article are both read rather than fixed.
+    # "When **this enchantment** is put into **a** graveyard from the
+    # battlefield, you lose the game." (Lich.) Neither front end had this
+    # spelling, so the ability compiled to nothing and the card's whole
+    # downside never happened — CR 404.1 sends a permanent to its owner's
+    # graveyard, so "a" and "your" name the same pile for a card its controller
+    # owns, and the noun is the source either way.
     ("dies",
-     r"when this creature is put into your graveyard from the battlefield"),
+     r"when this (?:creature|artifact|enchantment|land|permanent) is put into "
+     r"(?:a|your) graveyard from the battlefield"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

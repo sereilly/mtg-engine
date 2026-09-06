@@ -200,6 +200,13 @@ PARSE_LAYERS = [
     # a line the family already had; `triggers` reaches down for the one name,
     # and nothing here reads a word table from up there.
     "state_triggers",
+    # What a **cast** trigger's clause narrows on — the fourth split off
+    # `triggers` and the fourth along a line the family already had: one
+    # chain of productions that all read "…casts a <narrowing> spell" and
+    # differ only in which narrowing hangs on the verb. Above `nouns`, whose
+    # object parser the unshared-colour clause reads, and below `triggers`,
+    # which asks it and is never imported back.
+    "trigger_casts",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it

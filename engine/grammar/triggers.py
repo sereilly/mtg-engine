@@ -21,7 +21,6 @@ above.
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import replace
 
 from . import ast
@@ -42,48 +41,16 @@ from .trigger_subjects import (
     _parse_attached_step_event,
     _parse_named_subject_tap_event,
 )
-from .vocabulary import (
-    CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
-    ORDINAL_WORDS,
-)
+from .trigger_casts import _parse_cast_event
 from .trigger_tables import (
     _WHENEVER_EVENTS,
     _FILTERED_EVENTS,
     _SUBJECT_LED_EVENTS,
     _AT_EVENTS,
-    _CAST_TYPE_FILTERS,
-    _CAST_TYPE_UNIONS,
     _DAMAGE_RECIPIENTS,
     _DAMAGER_NOUNS,
 )
 
-
-_REFUSED = object()
-
-
-def _accept_ordinal_exclusion(stream: TokenStream, type_word: str):
-    """"…other than the **first** <type> spell that player casts each turn".
-
-    The ordinal an opponent-cast trigger exempts, or None when no such clause
-    is printed. The type word is repeated by the printed clause and must be the
-    one already read: a card exempting a *different* type is not this trigger
-    narrowed, it is a trigger this production cannot express, so it refuses.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("other", "than", "the"):
-        stream.reset(mark)
-        return None
-    ordinal = stream.peek_word()
-    if ordinal is None or ordinal not in ORDINAL_WORDS:
-        stream.reset(mark)
-        return _REFUSED
-    stream.advance()
-    if not stream.accept_phrase(
-        type_word, "spell", "that", "player", "casts", "each", "turn"
-    ):
-        stream.reset(mark)
-        return _REFUSED
-    return ordinal
 
 
 def accept_event_phrase(stream: TokenStream, phrase: tuple[str, ...]) -> bool:
@@ -318,477 +285,312 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     return None
 
 
-def _accept_unshared_colour(stream: TokenStream) -> ast.ObjectFilter | None:
-    """``that doesn't share a color with <noun phrase>``, or None.
 
-    CR 105.2's question asked of two objects at once. The set on the far side is
-    read with the ordinary noun parser, so "a creature you control" needs no
-    words of its own here and the next card comparing against something else
-    gets the phrase for free.
+
+def _parse_matched_event(
+    stream: TokenStream, word: str
+) -> "ast.TriggerEvent | None":
+    """The condition clause after a trigger word, whichever word was printed.
+
+    **The word is not part of the event.** CR 603.1 makes "when" and "whenever"
+    one kind of triggered ability; the difference is how often it triggers
+    while it exists, and every fire site in this engine reads the condition's
+    *kind*. This body used to sit inside the ``whenever`` branch, so the whole
+    of it — every narrowed cast, every subject-led entry, every quantified noun
+    phrase — was unreachable from a card that printed the other word. Two
+    Weatherlight cards found it: "**When** another creature enters" (Timid
+    Drake) and "**When** an opponent casts a creature spell" (Straw Golem) were
+    both refused while the same clauses under "whenever" were read, and
+    ``engine/oracle.py``'s regex table reads both words for either — so what
+    the two front ends disagreed about was not the condition but which cards
+    have one at all.
+
+    The ``when`` branch keeps its own readers in front of this, because they
+    are the specific ones: "this creature dies" and the state triggers are
+    printed with that word, and the phrase table this ends with would not have
+    reached them any faster.
     """
+
+    # CR 603.8's state trigger, under the other printed word ("Whenever
+    # there are four or more tide counters on this creature", Homarid).
+    # First, because "there" is not a subject and every branch below this
+    # one expects one.
+    state = _parse_state_trigger_event(stream, word)
+    if state is not None:
+        return state
+    # "…one or more +1/+1 counters are put on <noun phrase>" (Wildwood
+    # Scourge). The subject is parsed as a noun phrase and carried on the
+    # event, so the exclusion and the controller scope are data — the same
+    # shape the quantified tap events above use.
     mark = stream.mark()
-    if stream.accept_phrase(
-        "that", "doesn't", "share", "a", "color", "with"
-    ):
-        stream.accept_word("a", "an")
-        try:
-            return parse_object_filter(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
+    if stream.accept_phrase("one", "or", "more"):
+        token = stream.peek()
+        if token is not None and token.kind == PT and token.text == "+1/+1":
+            stream.advance()
+            if stream.accept_phrase("counters", "are", "put", "on"):
+                # "another" sits where the article does, so it is read here
+                # and folded onto the filter's existing exclusion field —
+                # the idiom `_parse_cost_object` and the condition parser
+                # already use, rather than a noun-parser quantifier that
+                # would change every targeted line in the pool.
+                another = bool(stream.accept_word("another"))
+                subject = parse_target_spec(stream)
+                if subject is not None:
+                    filt = subject.filter
+                    if another:
+                        filt = replace(filt, other_than_source=True)
+                    return ast.TriggerEvent(
+                        "counters_put_on_creature", word, subject=filt,
+                    )
     stream.reset(mark)
-    return None
+    cast = _parse_cast_event(stream, word)
+    if cast is not None:
+        return cast
+    # Events whose *subject* is a noun phrase rather than the source. Each
+    # is read before the phrase table below, whose bare entry is its strict
+    # prefix — matching that first is what left Snarespinner compiled to an
+    # unnarrowed "this creature blocks" with its rider on the floor.
+    # "Whenever **a player puts a Swamp onto the battlefield**" (Thelon's
+    # Chant, Tourach's Chant). The entry event named from the player's side
+    # rather than the permanent's — one event, so one kind: whatever put it
+    # there, a permanent entering the battlefield is what happened, and the
+    # engine announces that once from the seam every entry path goes
+    # through. Reading it as a condition of its own would need a second fire
+    # site watching the same moment.
+    #
+    # A production rather than a `_FILTERED_EVENTS` row because the phrase
+    # continues *after* the noun ("onto the battlefield"), which that
+    # table's rows have no way to consume — and an unconsumed tail fails the
+    # line.
+    mark = stream.mark()
+    if stream.accept_phrase("a", "player", "puts"):
+        entering = parse_subject_filter_at(stream)
+        if entering is not None and stream.accept_phrase(
+            "onto", "the", "battlefield"
+        ):
+            return ast.TriggerEvent(
+                "matching_permanent_enters", word, subject=entering,
+            )
+    stream.reset(mark)
+    for phrase, kind in _FILTERED_EVENTS:
+        mark = stream.mark()
+        if accept_event_phrase(stream, phrase):
+            # "…becomes blocked by **one or more** Orcs" (Dwarven Soldier).
+            # The counted spelling of the same narrowing, read before the
+            # quantified one because a bare plural is a different reading of
+            # the noun ("Orcs" is a kind, "an Orc" is one of them) and the
+            # number in front is what says how many. CR 509.3e is what the
+            # count means; `engine/oracle.py`'s table is where it lands as
+            # the condition's payload, and this side has only to agree that
+            # the words describe a subject.
+            counted = stream.mark()
+            count = _accept_number(stream)
+            if count is not None and stream.accept_phrase("or", "more"):
+                subject = parse_subject_filter_at(stream, plural=True)
+                if subject is not None:
+                    return ast.TriggerEvent(kind, word, subject=subject)
+            stream.reset(counted)
+            subject = parse_subject_filter_at(stream)
+            if subject is not None:
+                return ast.TriggerEvent(kind, word, subject=subject)
+        stream.reset(mark)
+    # The two triggers on the *declaration* (CR 508.1) — how many creatures
+    # attacked, which no per-creature event can answer. Both read a printed
+    # number, and both are tried before the phrase table below, whose
+    # "this creature attacks" entry is the generic reading of the second.
+    mark = stream.mark()
+    # "Whenever **a player** attacks with one or more creatures" (Total
+    # War) — the same declaration asked of every seat instead of the
+    # ability's controller, so one kind with the difference in the
+    # condition's payload: what differs is the question, not the event.
+    if stream.accept_phrase("a", "player", "attacks", "with"):
+        count = _accept_number(stream)
+        if count is not None and stream.accept_phrase("or", "more"):
+            subject = parse_subject_filter_at(stream, plural=True)
+            if subject is not None:
+                return ast.TriggerEvent(
+                    "attackers_declared", word, subject=subject
+                )
+    stream.reset(mark)
+    if stream.accept_phrase("you", "attack", "with"):
+        count = _accept_number(stream)
+        if count is not None and stream.accept_phrase("or", "more"):
+            # The counted position: a bare plural names a *kind* here, and
+            # the number in front of it is what says how many.
+            subject = parse_subject_filter_at(stream, plural=True)
+            if subject is not None:
+                return ast.TriggerEvent(
+                    "attackers_declared", word, subject=subject
+                )
+    stream.reset(mark)
+    # "Whenever **all** non-Wall creatures you control attack" (Mob
+    # Mentality). The declaration again, asked as a comparison of two sets
+    # rather than as a count — and printed in the other word order, with
+    # the verb after the noun phrase instead of before it. The verb is
+    # required, so a sentence that merely opens "all <noun phrase>" leaves
+    # its tokens unconsumed and falls through rather than being claimed as
+    # a trigger on a combat it never mentions.
+    if stream.accept_word("all"):
+        subject = parse_subject_filter_at(stream, plural=True)
+        if subject is not None and stream.accept_word("attack"):
+            return ast.TriggerEvent(
+                "attackers_declared", word, subject=subject
+            )
+    stream.reset(mark)
+    if stream.accept_phrase("this", "creature", "and", "at", "least"):
+        count = _accept_number(stream)
+        if count is not None and stream.accept_phrase("other", "creatures", "attack"):
+            return ast.TriggerEvent("attackers_declared", word)
+    stream.reset(mark)
+    # The two named-subject tap events (Artifact Possession, Psychic Venom,
+    # City of Brass, Spirit Shackle). Read before the phrase table, whose
+    # entries would claim their prefixes.
+    # The activation event whose subject is the *ability's* permanent
+    # rather than the sentence's opening noun (Imprison). Before the tap
+    # productions for the same reason they sit before the phrase table:
+    # "a player activates …" would otherwise be read as a quantified
+    # subject and named a condition the legacy table does not.
+    activated = _parse_ability_activated_event(stream, word)
+    if activated is not None:
+        return activated
+    attached = _parse_attached_event(stream, word)
+    if attached is not None:
+        return attached
+    named_tap = _parse_named_subject_tap_event(stream, word)
+    if named_tap is not None:
+        return named_tap
+    damage = _parse_damage_dealt_event(stream, word)
+    if damage is not None:
+        return damage
+    for kind, phrase in _WHENEVER_EVENTS:
+        if accept_event_phrase(stream, phrase):
+            return ast.TriggerEvent(kind, word)
+    # "Whenever an **artifact you control** is put into a graveyard from
+    # the battlefield" (Tablet of Epityr, Urza's Miter). Subject-led, so it
+    # sits **after** the phrase table for the reason stated just below: the
+    # table holds the specific readings, and "a land is put into a
+    # graveyard from the battlefield" is Dingus Egg's own event with its own
+    # fire site and its own damage shape. Read first, this production would
+    # claim that line as a generic death and Dingus Egg would stop working.
+    #
+    # The article is consumed here rather than by the noun parser, which
+    # refuses "an" as an unknown adjective — the same split the condition
+    # parser makes for "you control **a** Swamp".
+    grave_mark = stream.mark()
+    stream.accept_word("a", "an")
+    try:
+        dying = parse_object_filter(stream)
+    except GrammarError:
+        dying = None
+    # "…is put into **a**/**your**/**an opponent's** graveyard from the
+    # battlefield". Whose graveyard is a narrowing on the condition, which
+    # this front end does not carry — `engine/oracle.py`'s table supplies the condition and this
+    # one supplies the effect. The word still has to be *consumed* or the
+    # line fails full-token consumption and the card loses its ability.
+    dying_grave = (
+        stream.accept_phrase(
+            "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
+        )
+        or stream.accept_phrase(
+            "is", "put", "into", "your", "graveyard", "from", "the", "battlefield"
+        )
+        or stream.accept_phrase(
+            "is", "put", "into", "an", "opponent", "'s", "graveyard",
+            "from", "the", "battlefield"
+        )
+    )
+    if dying is not None and dying_grave:
+        # "…**, if it wasn't sacrificed**" (Urza's Miter). CR 603.4's
+        # intervening-if, consumed here so the sentence is read whole —
+        # left for the effect parser it would be an imperative nobody can
+        # perform, and the line would fail on a clause it does understand.
+        # The condition's own payload carries it; this side only has to
+        # not choke on it.
+        qualifier = stream.mark()
+        if not (
+            stream.accept_punct(",")
+            and stream.accept_phrase("if", "it", "wasn't", "sacrificed")
+        ):
+            stream.reset(qualifier)
+        return ast.TriggerEvent("permanent_dies", word, subject=dying)
+    stream.reset(grave_mark)
+    # "Whenever a creature you control with deathtouch attacks / deals
+    # damage to a planeswalker" (Hooded Blightfang): the subject leads, so
+    # there is no fixed prefix to key on — the noun phrase is tried and the
+    # verb behind it decides whether it was one. *After* the phrase table,
+    # because that table's entries are the specific readings: "a land
+    # enters" is Ankh of Mishra's own event with its own fire site, and this
+    # production would otherwise claim it as a generic entry.
+    # "Whenever **one or more** Cats you control deal combat damage to a
+    # player" (Feline Sovereign). Counted rather than quantified, which is
+    # what the plural subject reading is for — and read before the
+    # subject-led table below, whose productions expect the phrase to lead.
+    # "Whenever **you reveal a basic land card this way**, draw a card."
+    # (Rowen.) The subject is the player and the noun phrase is the *card*
+    # revealed, so neither the phrase table (fixed words) nor the
+    # subject-led table (the phrase leads) can read it. "This way" is
+    # required and is the whole narrowing: it names the reveal the card's
+    # own first sentence asks for — see `engine/draw_reveals.py` — where a
+    # bare "whenever you reveal a card" would fire on a search, a scry and
+    # a hand reveal too.
+    reveal_mark = stream.mark()
+    if stream.accept_phrase("you", "reveal"):
+        revealed = parse_subject_filter_at(stream)
+        if revealed is not None and stream.accept_phrase("this", "way"):
+            return ast.TriggerEvent(
+                "revealed_drawn_card", word, subject=revealed
+            )
+    stream.reset(reveal_mark)
+    batch_mark = stream.mark()
+    if stream.accept_phrase("one", "or", "more"):
+        batched = parse_subject_filter_at(stream, plural=True)
+        if batched is not None and stream.accept_phrase(
+            "deal", "combat", "damage", "to", "a", "player"
+        ):
+            return ast.TriggerEvent(
+                "one_or_more_deal_combat_damage", word, subject=batched
+            )
+    stream.reset(batch_mark)
+    mark = stream.mark()
+    # "Whenever **this creature or** another Rogue you control enters"
+    # (Thieves' Guild Enforcer) — the source's own entry spelled out. The
+    # subject that follows is the same noun phrase the bare form reads, and
+    # the difference is exactly the word "another": with the prefix the
+    # source is *included*, so the exclusion the noun parser folds on for
+    # "another" has to be undone here rather than left to narrow a set the
+    # card widened.
+    explicit_self = bool(stream.accept_phrase("this", "creature", "or"))
+    subject = parse_subject_filter_at(stream)
+    if subject is not None:
+        if explicit_self:
+            subject = replace(subject, other_than_source=False)
+        for phrase, kind in _SUBJECT_LED_EVENTS:
+            if stream.accept_phrase(*phrase):
+                # "Whenever a creature attacks **you**" (Barbed Foliage).
+                # CR 508.1a makes attacking a state of the creature and
+                # CR 506.2 makes *whom* it attacks the defending player it
+                # was declared against, so the extra word is a narrowing of
+                # the subject rather than a second event — the same
+                # `attacking_you` field the printed relative clause
+                # ("target creature that's attacking you") already sets, and
+                # answered against the ability's own controller.
+                #
+                # Read here rather than as a second table row because the
+                # row would have to carry a subject rewrite, and a table
+                # whose values are two different kinds of thing stops being
+                # a table. Dropping the word instead would be the silent
+                # widening this whole file is written to avoid: Barbed
+                # Foliage would fire on an attack aimed at somebody else.
+                if kind == "matching_creature_attacks" and stream.accept_word("you"):
+                    subject = replace(subject, attacking_you=True)
+                return ast.TriggerEvent(kind, word, subject=subject)
+    stream.reset(mark)
+    return _parse_quantified_tap_event(stream)
 
 
 def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("whenever"):
-        # CR 603.8's state trigger, under the other printed word ("Whenever
-        # there are four or more tide counters on this creature", Homarid).
-        # First, because "there" is not a subject and every branch below this
-        # one expects one.
-        state = _parse_state_trigger_event(stream, "whenever")
-        if state is not None:
-            return state
-        # "…one or more +1/+1 counters are put on <noun phrase>" (Wildwood
-        # Scourge). The subject is parsed as a noun phrase and carried on the
-        # event, so the exclusion and the controller scope are data — the same
-        # shape the quantified tap events above use.
-        mark = stream.mark()
-        if stream.accept_phrase("one", "or", "more"):
-            token = stream.peek()
-            if token is not None and token.kind == PT and token.text == "+1/+1":
-                stream.advance()
-                if stream.accept_phrase("counters", "are", "put", "on"):
-                    # "another" sits where the article does, so it is read here
-                    # and folded onto the filter's existing exclusion field —
-                    # the idiom `_parse_cost_object` and the condition parser
-                    # already use, rather than a noun-parser quantifier that
-                    # would change every targeted line in the pool.
-                    another = bool(stream.accept_word("another"))
-                    subject = parse_target_spec(stream)
-                    if subject is not None:
-                        filt = subject.filter
-                        if another:
-                            filt = replace(filt, other_than_source=True)
-                        return ast.TriggerEvent(
-                            "counters_put_on_creature", "whenever", subject=filt,
-                        )
-        stream.reset(mark)
-        # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle, Freyalise's Charm,
-        # Leshrac's Sigil). The colour is part of the condition rather than a
-        # per-card hook, which is what lets one dispatcher serve every card
-        # written this way — and both printed scopes are read here for the
-        # reason the type-word loop below reads both: a scope with no colour
-        # reading is a card whose colour word strands the line, and the
-        # narrowing itself is already one helper on the dispatch side.
-        for scope, opener in (
-            ("spell_cast", ("a", "player", "casts", "a")),
-            ("opponent_casts_spell", ("an", "opponent", "casts", "a")),
-        ):
-            mark = stream.mark()
-            if stream.accept_phrase(*opener):
-                colour = stream.peek_word()
-                if colour in COLOR_WORDS:
-                    stream.advance()
-                    if stream.accept_word("spell"):
-                        return ast.TriggerEvent(
-                            scope, "whenever",
-                            subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
-                        )
-            stream.reset(mark)
-        # "…casts an **artifact** spell" (Urza's Chalice, Citanul Druid). The
-        # type narrowing beside the colour one above, and for the same reason:
-        # one dispatcher for every card printed this way. Both scopes are read
-        # here because both are printed, and the bare spellings in the phrase
-        # table below are strict prefixes of these — so a table entry would
-        # claim the shorter reading and strand the type word, which is the
-        # failure this whole file orders longest-first to avoid.
-        for scope, opener in (
-            ("spell_cast", ("a", "player", "casts")),
-            ("opponent_casts_spell", ("an", "opponent", "casts")),
-        ):
-            mark = stream.mark()
-            if stream.accept_phrase(*opener) and (
-                stream.accept_word("a") or stream.accept_word("an")
-            ):
-                type_word = stream.peek_word()
-                # "…casts a **noncreature** spell" (Mystic Remora). The negated
-                # spellings are not card types, so they live in the same table
-                # the "you cast" productions below read — asked first, because
-                # a scope that knew only `CARD_TYPES` refused the printed word
-                # and took the whole line with it. `CARD_TYPES` still answers
-                # for the words that table does not carry ("enchantment",
-                # "land"), which is why both are consulted rather than one.
-                narrowed = _CAST_TYPE_FILTERS.get(type_word or "")
-                if narrowed is None and type_word in CARD_TYPES:
-                    narrowed = ast.ObjectFilter(card_types=(type_word,))
-                if narrowed is not None:
-                    stream.advance()
-                    if stream.accept_word("spell"):
-                        # "…**that doesn't share a color with a creature you
-                        # control**" (Invoke Prejudice). A narrowing that
-                        # compares the cast spell's colours against a set of
-                        # *permanents*, so what follows is a whole noun phrase
-                        # naming a different object than the one the trigger
-                        # fires on — which is why it rides `narrowings` rather
-                        # than the subject. Optional, because the bare form
-                        # above is a real card (Citanul Druid); the words are
-                        # consumed either way, or the line fails the
-                        # full-consumption invariant.
-                        unshared = _accept_unshared_colour(stream)
-                        # "…**other than the first <type> spell that player
-                        # casts each turn**" (Ichneumon Druid). The ordinal
-                        # exclusion, read here so the words are consumed —
-                        # left to the effect parser they would fail the line,
-                        # and skipped they would be a narrowing this front end
-                        # dropped while the other kept it.
-                        # The clause is *consumed* and not carried: the
-                        # condition — this narrowing included — comes from
-                        # `engine/oracle.py`'s table, and this side only has to
-                        # read the whole line rather than choke on it. The same
-                        # split the "if it wasn't sacrificed" qualifier makes
-                        # below. A clause it cannot read refuses the line, so
-                        # the two front ends cannot end up watching different
-                        # sets.
-                        if _accept_ordinal_exclusion(stream, type_word) is _REFUSED:
-                            stream.reset(mark)
-                            break
-                        return ast.TriggerEvent(
-                            scope, "whenever",
-                            subject=narrowed,
-                            narrowings=(
-                                () if unshared is None
-                                else (("unshared_color", unshared),)
-                            ),
-                        )
-            stream.reset(mark)
-        # "…you cast a spell that's white, blue, black, or red" (Quirion
-        # Dryad): a colour-list narrowing of you_cast_spell. Read before the
-        # phrase table, whose bare "you cast a spell" entry is its prefix.
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "a", "spell", "that", "'s"):
-            colors: list[str] = []
-            while True:
-                word = stream.peek_word()
-                if word not in COLOR_WORDS:
-                    break
-                stream.advance()
-                colors.append(COLOR_WORDS[word])
-                if stream.accept_punct(","):
-                    stream.accept_word("or")
-                    continue
-                if stream.accept_word("or"):
-                    continue
-                break
-            if len(colors) >= 2:
-                return ast.TriggerEvent(
-                    "you_cast_spell", "whenever",
-                    subject=ast.ObjectFilter(colors=tuple(colors)),
-                )
-        stream.reset(mark)
-        # "…you cast a noncreature spell" (Spellgorger Weird): a type
-        # narrowing of the same condition. The word list mirrors the oracle
-        # table's — only what the cast filter tests may be consumed, so a
-        # subtype word ("Dog spell") keeps refusing the line rather than
-        # compiling a trigger that fires on every spell. Read before the
-        # phrase table, whose bare "you cast a spell" entry is its prefix.
-        # "Whenever you cast **your first** instant or sorcery spell **each
-        # turn**" (Double Vision). An ordinal: the trigger fires on the first
-        # such spell of the turn and on no other, so the count is part of the
-        # condition rather than of the effect. Read before the bare forms, whose
-        # phrases are its strict prefixes.
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "your", "first"):
-            for phrase, narrowed in _CAST_TYPE_UNIONS:
-                if stream.accept_phrase(*phrase):
-                    if stream.accept_phrase("spell", "each", "turn"):
-                        return ast.TriggerEvent(
-                            "you_cast_first_spell_each_turn", "whenever",
-                            subject=narrowed,
-                        )
-                    break
-            word = stream.peek_word()
-            narrowed = _CAST_TYPE_FILTERS.get(word or "")
-            if narrowed is not None:
-                stream.advance()
-                if stream.accept_phrase("spell", "each", "turn"):
-                    return ast.TriggerEvent(
-                        "you_cast_first_spell_each_turn", "whenever",
-                        subject=narrowed,
-                    )
-        stream.reset(mark)
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "an"):
-            for phrase, narrowed in _CAST_TYPE_UNIONS:
-                if stream.accept_phrase(*phrase) and stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "you_cast_spell", "whenever", subject=narrowed,
-                    )
-        stream.reset(mark)
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "a"):
-            word = stream.peek_word()
-            narrowed = _CAST_TYPE_FILTERS.get(word or "")
-            if narrowed is not None:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "you_cast_spell", "whenever", subject=narrowed,
-                    )
-            # "…you cast a **Dog** spell" (Rin and Seri, Inseparable). A
-            # creature subtype, which this production refused until the cast
-            # filter learned to test one. Read from the vocabulary rather than a
-            # literal list, and *after* the type words above so a card type
-            # keeps its own narrowing — "creature" is both a type word and, in
-            # no set, a subtype, but the ordering is what guarantees it.
-            if word in CREATURE_TYPES:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "you_cast_spell", "whenever",
-                        subject=ast.ObjectFilter(subtypes=(word,)),
-                    )
-        stream.reset(mark)
-        # Events whose *subject* is a noun phrase rather than the source. Each
-        # is read before the phrase table below, whose bare entry is its strict
-        # prefix — matching that first is what left Snarespinner compiled to an
-        # unnarrowed "this creature blocks" with its rider on the floor.
-        # "Whenever **a player puts a Swamp onto the battlefield**" (Thelon's
-        # Chant, Tourach's Chant). The entry event named from the player's side
-        # rather than the permanent's — one event, so one kind: whatever put it
-        # there, a permanent entering the battlefield is what happened, and the
-        # engine announces that once from the seam every entry path goes
-        # through. Reading it as a condition of its own would need a second fire
-        # site watching the same moment.
-        #
-        # A production rather than a `_FILTERED_EVENTS` row because the phrase
-        # continues *after* the noun ("onto the battlefield"), which that
-        # table's rows have no way to consume — and an unconsumed tail fails the
-        # line.
-        mark = stream.mark()
-        if stream.accept_phrase("a", "player", "puts"):
-            entering = parse_subject_filter_at(stream)
-            if entering is not None and stream.accept_phrase(
-                "onto", "the", "battlefield"
-            ):
-                return ast.TriggerEvent(
-                    "matching_permanent_enters", "whenever", subject=entering,
-                )
-        stream.reset(mark)
-        for phrase, kind in _FILTERED_EVENTS:
-            mark = stream.mark()
-            if accept_event_phrase(stream, phrase):
-                # "…becomes blocked by **one or more** Orcs" (Dwarven Soldier).
-                # The counted spelling of the same narrowing, read before the
-                # quantified one because a bare plural is a different reading of
-                # the noun ("Orcs" is a kind, "an Orc" is one of them) and the
-                # number in front is what says how many. CR 509.3e is what the
-                # count means; `engine/oracle.py`'s table is where it lands as
-                # the condition's payload, and this side has only to agree that
-                # the words describe a subject.
-                counted = stream.mark()
-                count = _accept_number(stream)
-                if count is not None and stream.accept_phrase("or", "more"):
-                    subject = parse_subject_filter_at(stream, plural=True)
-                    if subject is not None:
-                        return ast.TriggerEvent(kind, "whenever", subject=subject)
-                stream.reset(counted)
-                subject = parse_subject_filter_at(stream)
-                if subject is not None:
-                    return ast.TriggerEvent(kind, "whenever", subject=subject)
-            stream.reset(mark)
-        # The two triggers on the *declaration* (CR 508.1) — how many creatures
-        # attacked, which no per-creature event can answer. Both read a printed
-        # number, and both are tried before the phrase table below, whose
-        # "this creature attacks" entry is the generic reading of the second.
-        mark = stream.mark()
-        # "Whenever **a player** attacks with one or more creatures" (Total
-        # War) — the same declaration asked of every seat instead of the
-        # ability's controller, so one kind with the difference in the
-        # condition's payload: what differs is the question, not the event.
-        if stream.accept_phrase("a", "player", "attacks", "with"):
-            count = _accept_number(stream)
-            if count is not None and stream.accept_phrase("or", "more"):
-                subject = parse_subject_filter_at(stream, plural=True)
-                if subject is not None:
-                    return ast.TriggerEvent(
-                        "attackers_declared", "whenever", subject=subject
-                    )
-        stream.reset(mark)
-        if stream.accept_phrase("you", "attack", "with"):
-            count = _accept_number(stream)
-            if count is not None and stream.accept_phrase("or", "more"):
-                # The counted position: a bare plural names a *kind* here, and
-                # the number in front of it is what says how many.
-                subject = parse_subject_filter_at(stream, plural=True)
-                if subject is not None:
-                    return ast.TriggerEvent(
-                        "attackers_declared", "whenever", subject=subject
-                    )
-        stream.reset(mark)
-        # "Whenever **all** non-Wall creatures you control attack" (Mob
-        # Mentality). The declaration again, asked as a comparison of two sets
-        # rather than as a count — and printed in the other word order, with
-        # the verb after the noun phrase instead of before it. The verb is
-        # required, so a sentence that merely opens "all <noun phrase>" leaves
-        # its tokens unconsumed and falls through rather than being claimed as
-        # a trigger on a combat it never mentions.
-        if stream.accept_word("all"):
-            subject = parse_subject_filter_at(stream, plural=True)
-            if subject is not None and stream.accept_word("attack"):
-                return ast.TriggerEvent(
-                    "attackers_declared", "whenever", subject=subject
-                )
-        stream.reset(mark)
-        if stream.accept_phrase("this", "creature", "and", "at", "least"):
-            count = _accept_number(stream)
-            if count is not None and stream.accept_phrase("other", "creatures", "attack"):
-                return ast.TriggerEvent("attackers_declared", "whenever")
-        stream.reset(mark)
-        # The two named-subject tap events (Artifact Possession, Psychic Venom,
-        # City of Brass, Spirit Shackle). Read before the phrase table, whose
-        # entries would claim their prefixes.
-        # The activation event whose subject is the *ability's* permanent
-        # rather than the sentence's opening noun (Imprison). Before the tap
-        # productions for the same reason they sit before the phrase table:
-        # "a player activates …" would otherwise be read as a quantified
-        # subject and named a condition the legacy table does not.
-        activated = _parse_ability_activated_event(stream, "whenever")
-        if activated is not None:
-            return activated
-        attached = _parse_attached_event(stream, "whenever")
-        if attached is not None:
-            return attached
-        named_tap = _parse_named_subject_tap_event(stream, "whenever")
-        if named_tap is not None:
-            return named_tap
-        damage = _parse_damage_dealt_event(stream, "whenever")
-        if damage is not None:
-            return damage
-        for kind, phrase in _WHENEVER_EVENTS:
-            if accept_event_phrase(stream, phrase):
-                return ast.TriggerEvent(kind, "whenever")
-        # "Whenever an **artifact you control** is put into a graveyard from
-        # the battlefield" (Tablet of Epityr, Urza's Miter). Subject-led, so it
-        # sits **after** the phrase table for the reason stated just below: the
-        # table holds the specific readings, and "a land is put into a
-        # graveyard from the battlefield" is Dingus Egg's own event with its own
-        # fire site and its own damage shape. Read first, this production would
-        # claim that line as a generic death and Dingus Egg would stop working.
-        #
-        # The article is consumed here rather than by the noun parser, which
-        # refuses "an" as an unknown adjective — the same split the condition
-        # parser makes for "you control **a** Swamp".
-        grave_mark = stream.mark()
-        stream.accept_word("a", "an")
-        try:
-            dying = parse_object_filter(stream)
-        except GrammarError:
-            dying = None
-        # "…is put into **a**/**your**/**an opponent's** graveyard from the
-        # battlefield". Whose graveyard is a narrowing on the condition, which
-        # this front end does not carry — `engine/oracle.py`'s table supplies the condition and this
-        # one supplies the effect. The word still has to be *consumed* or the
-        # line fails full-token consumption and the card loses its ability.
-        dying_grave = (
-            stream.accept_phrase(
-                "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
-            )
-            or stream.accept_phrase(
-                "is", "put", "into", "your", "graveyard", "from", "the", "battlefield"
-            )
-            or stream.accept_phrase(
-                "is", "put", "into", "an", "opponent", "'s", "graveyard",
-                "from", "the", "battlefield"
-            )
-        )
-        if dying is not None and dying_grave:
-            # "…**, if it wasn't sacrificed**" (Urza's Miter). CR 603.4's
-            # intervening-if, consumed here so the sentence is read whole —
-            # left for the effect parser it would be an imperative nobody can
-            # perform, and the line would fail on a clause it does understand.
-            # The condition's own payload carries it; this side only has to
-            # not choke on it.
-            qualifier = stream.mark()
-            if not (
-                stream.accept_punct(",")
-                and stream.accept_phrase("if", "it", "wasn't", "sacrificed")
-            ):
-                stream.reset(qualifier)
-            return ast.TriggerEvent("permanent_dies", "whenever", subject=dying)
-        stream.reset(grave_mark)
-        # "Whenever a creature you control with deathtouch attacks / deals
-        # damage to a planeswalker" (Hooded Blightfang): the subject leads, so
-        # there is no fixed prefix to key on — the noun phrase is tried and the
-        # verb behind it decides whether it was one. *After* the phrase table,
-        # because that table's entries are the specific readings: "a land
-        # enters" is Ankh of Mishra's own event with its own fire site, and this
-        # production would otherwise claim it as a generic entry.
-        # "Whenever **one or more** Cats you control deal combat damage to a
-        # player" (Feline Sovereign). Counted rather than quantified, which is
-        # what the plural subject reading is for — and read before the
-        # subject-led table below, whose productions expect the phrase to lead.
-        # "Whenever **you reveal a basic land card this way**, draw a card."
-        # (Rowen.) The subject is the player and the noun phrase is the *card*
-        # revealed, so neither the phrase table (fixed words) nor the
-        # subject-led table (the phrase leads) can read it. "This way" is
-        # required and is the whole narrowing: it names the reveal the card's
-        # own first sentence asks for — see `engine/draw_reveals.py` — where a
-        # bare "whenever you reveal a card" would fire on a search, a scry and
-        # a hand reveal too.
-        reveal_mark = stream.mark()
-        if stream.accept_phrase("you", "reveal"):
-            revealed = parse_subject_filter_at(stream)
-            if revealed is not None and stream.accept_phrase("this", "way"):
-                return ast.TriggerEvent(
-                    "revealed_drawn_card", "whenever", subject=revealed
-                )
-        stream.reset(reveal_mark)
-        batch_mark = stream.mark()
-        if stream.accept_phrase("one", "or", "more"):
-            batched = parse_subject_filter_at(stream, plural=True)
-            if batched is not None and stream.accept_phrase(
-                "deal", "combat", "damage", "to", "a", "player"
-            ):
-                return ast.TriggerEvent(
-                    "one_or_more_deal_combat_damage", "whenever", subject=batched
-                )
-        stream.reset(batch_mark)
-        mark = stream.mark()
-        # "Whenever **this creature or** another Rogue you control enters"
-        # (Thieves' Guild Enforcer) — the source's own entry spelled out. The
-        # subject that follows is the same noun phrase the bare form reads, and
-        # the difference is exactly the word "another": with the prefix the
-        # source is *included*, so the exclusion the noun parser folds on for
-        # "another" has to be undone here rather than left to narrow a set the
-        # card widened.
-        explicit_self = bool(stream.accept_phrase("this", "creature", "or"))
-        subject = parse_subject_filter_at(stream)
-        if subject is not None:
-            if explicit_self:
-                subject = replace(subject, other_than_source=False)
-            for phrase, kind in _SUBJECT_LED_EVENTS:
-                if stream.accept_phrase(*phrase):
-                    # "Whenever a creature attacks **you**" (Barbed Foliage).
-                    # CR 508.1a makes attacking a state of the creature and
-                    # CR 506.2 makes *whom* it attacks the defending player it
-                    # was declared against, so the extra word is a narrowing of
-                    # the subject rather than a second event — the same
-                    # `attacking_you` field the printed relative clause
-                    # ("target creature that's attacking you") already sets, and
-                    # answered against the ability's own controller.
-                    #
-                    # Read here rather than as a second table row because the
-                    # row would have to carry a subject rewrite, and a table
-                    # whose values are two different kinds of thing stops being
-                    # a table. Dropping the word instead would be the silent
-                    # widening this whole file is written to avoid: Barbed
-                    # Foliage would fire on an attack aimed at somebody else.
-                    if kind == "matching_creature_attacks" and stream.accept_word("you"):
-                        subject = replace(subject, attacking_you=True)
-                    return ast.TriggerEvent(kind, "whenever", subject=subject)
-        stream.reset(mark)
-        return _parse_quantified_tap_event(stream)
+        return _parse_matched_event(stream, "whenever")
     if stream.accept_word("at"):
         attached_step = _parse_attached_step_event(stream, "at")
         if attached_step is not None:
@@ -811,11 +613,21 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # long phrase in this file is read before a short one: nothing else
         # opens on these words, and a production that got there first would
         # strand the tail.
-        if accept_event_phrase(stream, (
-            "this", "creature", "is", "put", "into", "your", "graveyard",
-            "from", "the", "battlefield",
-        )):
-            return ast.TriggerEvent("dies", "when")
+        #
+        # The permanent noun and the article are both read rather than fixed.
+        # Lich prints "**this enchantment** … into **a** graveyard", and with
+        # neither spelling here the subject-led death production below claimed
+        # it as `permanent_dies` — a *different* fire site, watching every
+        # permanent that matches a filter rather than this one's own death.
+        # CR 404.1 sends a permanent to its owner's graveyard, so "a" and
+        # "your" name one pile for a card its controller owns.
+        for noun in _DAMAGER_NOUNS:
+            for article in ("your", "a"):
+                if accept_event_phrase(stream, (
+                    "this", noun, "is", "put", "into", article, "graveyard",
+                    "from", "the", "battlefield",
+                )):
+                    return ast.TriggerEvent("dies", "when")
         state = _parse_state_trigger_event(stream, "when")
         if state is not None:
             return state
@@ -959,16 +771,21 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         stream.reset(mark)
         # "**When** this creature blocks" (Elder Land Wurm), "**when** this
         # creature attacks or blocks" (Time Elemental) — events the "whenever"
-        # table already names, printed with the one-shot word. CR 603.1 makes
+        # branch already reads, printed with the one-shot word. CR 603.1 makes
         # the two words one kind of ability; the difference is how often it
         # triggers while it exists, not what triggers it, and every fire site in
-        # this engine reads the kind rather than the word. So the *table* is
-        # asked here rather than a hand-written subset of it: a branch naming
-        # "blocks" alone was why Elder Land Wurm's condition read and Time
-        # Elemental's — one printed word longer, and already in the table —
-        # did not.
-        for kind, phrase in _WHENEVER_EVENTS:
-            if accept_event_phrase(stream, phrase):
-                return ast.TriggerEvent(kind, "when")
-        return None
+        # this engine reads the kind rather than the word.
+        #
+        # So the **whole** reader is asked here rather than a hand-written
+        # subset of it. It used to be the phrase table alone, which is one
+        # subset smaller than the last one this line held ("blocks", which was
+        # why Elder Land Wurm's condition read and Time Elemental's did not) —
+        # and every clause that carries a *noun phrase* was still out of reach:
+        # a narrowed cast, a subject-led entry, a quantified tap. Timid Drake
+        # ("When another creature enters") and Straw Golem ("When an opponent
+        # casts a creature spell") are the two Weatherlight cards that name it,
+        # and `engine/oracle.py`'s regex table reads both words for either — so
+        # the disagreement was never about the condition, only about which
+        # cards have one.
+        return _parse_matched_event(stream, "when")
     return None
