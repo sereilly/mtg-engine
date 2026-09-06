@@ -53,8 +53,14 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **15,613 tests**, CI budget **940s**, CI-measured
-   baseline **470s** (`ci.yml`). Both moved at Weatherlight's Phase 0 from run
+2. **The suite stays fast.** **16,780 tests**, CI budget **940s**, CI-measured
+   baseline **470s** (`ci.yml`). Tempest added 1,167 tests across four waves and
+   the budget has **not** been re-read in CI since — the local serial wall on
+   the promotion commit is 569s, which is a different machine and not
+   comparable to the 470s figure. **The next set's Phase 0 owes a CI reading**
+   before deciding whether the baseline moved: a local number cannot tell creep
+   from a faster laptop, and quoting one as if it could is how a baseline stops
+   meaning anything. Both moved at Weatherlight's Phase 0 from run
    33977035005 on the Visions promotion commit — `suite wall time: 470s`, 94%
    of the old budget with the creep warning already firing — and the local
    `--durations` read shows no single culprit: a 27s parse-coverage setup, one
