@@ -153,6 +153,33 @@ class AdditionalCost:
     #: and a spell may read back either. ``None`` means "no exile", never
     #: "anything".
     exile_filter: dict | None = None
+    #: "As an additional cost to cast this spell, **exile X creature cards from
+    #: your graveyard**." (Haunting Misery.) The same verb one zone over, and
+    #: its own pair of fields for the reason ``exile_filter`` above is separate
+    #: from ``sacrifice_filter``: that one enumerates the caster's own
+    #: *battlefield* and this one enumerates their *graveyard*, so a shared
+    #: field would be read by the wrong enumerator on whichever card was
+    #: written second -- and a card in a graveyard answers a strictly different
+    #: matcher (CR 613.1: it has no computed characteristics at all).
+    #:
+    #: ``None`` means "no such cost", never "any card", for
+    #: ``sacrifice_filter``'s reason: an empty filter would let the payment eat
+    #: a land the card never named.
+    exile_graveyard_filter: dict | None = None
+    #: How many that cost exiles -- the announced X when
+    #: :attr:`exile_graveyard_count_x` is set. Beside the filter for
+    #: ``sacrifice_count``'s reason: only the *number* can make such a cost
+    #: unpayable, since one card is no more a payment of a three-card cost than
+    #: none (CR 601.2h).
+    exile_graveyard_count: int = 1
+    #: "...exile **X** creature cards..." (Haunting Misery). CR 107.3a: an X in
+    #: an additional cost is announced by the caster as part of casting, and
+    #: Haunting Misery's printed mana cost is {1}{B}{B} with no {X} in it -- so
+    #: this clause is the *only* place its X lives, exactly as Infernal
+    #: Harvest's return clause is for that card. A separate flag rather than a
+    #: sentinel in the count above, for ``pay_life_x``'s reason: every reader of
+    #: that field is arithmetic and a string in it would be charged as garbage.
+    exile_graveyard_count_x: bool = False
     discard_cards: int = 0
     #: "…, discard **a red or green card**." (Surge of Strength.) Which cards in
     #: hand may pay the discard above, as the alternatives the payer chooses
@@ -226,6 +253,22 @@ class AdditionalCost:
             return max(0, int(x_value or 0))
         return self.return_count
 
+    def exiled_from_graveyard(self, x_value: int | None) -> int:
+        """How many cards this cost exiles from the graveyard, given the
+        announced X.
+
+        One reader for the gate and the payment, for :meth:`life_charged`'s
+        reason two methods up: CR 601.2h refuses the cast when the answer is
+        more cards than the graveyard holds, and CR 107.3a's announcement is
+        what makes the answer knowable at all. A cost that read X and charged
+        the printed 1 would be a spell cast for a fraction of its price -- and
+        for Haunting Misery, whose X *is* this cost, it would also make the
+        spell's damage and its price disagree.
+        """
+        if self.exile_graveyard_count_x:
+            return max(0, int(x_value or 0))
+        return self.exile_graveyard_count
+
     def describe(self) -> str:
         parts = []
         for offer in self.optional_mana:
@@ -256,6 +299,17 @@ class AdditionalCost:
             )
         if self.exile_filter is not None:
             parts.append(f"exile a {filter_head_noun(self.exile_filter)}")
+        if self.exile_graveyard_filter is not None:
+            noun = filter_head_noun(self.exile_graveyard_filter)
+            how_many = (
+                "X" if self.exile_graveyard_count_x
+                else str(self.exile_graveyard_count)
+            )
+            parts.append(
+                f"exile {how_many} {noun} card"
+                + ("" if how_many == "1" else "s")
+                + " from your graveyard"
+            )
         if self.pay_life_x:
             parts.append("pay X life")
         elif self.pay_life:
@@ -384,6 +438,17 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # one zone over, gated by the exile charger's own reader for the same
     # reason -- two readers of one phrase drift, and the direction they drift
     # in is a cost nobody pays.
+    # "..., **exile X creature cards from your graveyard**." (Haunting
+    # Misery.) Read **before** the battlefield exile below, whose catch-all
+    # noun would claim these words and then refuse them:
+    # ``_chargeable_object`` admits one zone only, and a row that refuses is
+    # a row that costs the card its support. The zone is part of the clause
+    # rather than an afterthought, exactly as the return row states one
+    # field over.
+    (
+        re.compile(r"^(?:exile|exiling) (?P<noun>.+ from your graveyard)$"),
+        "exile_graveyard",
+    ),
     (re.compile(r"^(?:exile|exiling) (?P<noun>.+)$"), "exile"),
 )
 
@@ -453,6 +518,86 @@ def read_return_clause(phrase: str) -> tuple[dict, int, bool] | None:
     return None if described is None else (described, 1, False)
 
 
+def read_graveyard_exile_clause(phrase: str) -> tuple[dict, int, bool] | None:
+    """What "exile <n> <noun phrase> from your graveyard" charges, as
+    ``(filter, count, count_is_x)``, or None.
+
+    "As an additional cost to cast this spell, exile **X creature cards from
+    your graveyard**." (Haunting Misery.) The count splits off the front exactly
+    as :func:`read_return_clause` splits one, X included -- CR 107.3a lets an X
+    stand where the number does, and Haunting Misery's printed mana cost is
+    {1}{B}{B}, so this clause is the only place its X lives.
+
+    The noun phrase goes through the **card** charger
+    (``chargeable_card_filter``), not the permanent one every other clause in
+    this file uses, and that is the whole reason this is its own reader: a card
+    in a graveyard has no computed characteristics (CR 613.1), so
+    ``_card_matches_filter`` answers a strictly different question from
+    ``subject_matches``, and a key one can test the other silently drops.
+
+    Both halves of the zone are **checked**, never assumed: a phrase naming a
+    library, or somebody else's graveyard, is a payment this cast path has no
+    enumerator for, and reading it as the caster's own pile would charge a cost
+    out of the wrong zone.
+    """
+    import dataclasses
+
+    from .grammar import ast
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.lowering._common import chargeable_card_filter
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+
+    count, _, rest = phrase.partition(" ")
+    if count == "x" and rest:
+        number, is_x = 0, True
+    else:
+        number = int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
+        is_x = False
+        if number < 2:
+            # No count printed at all: the whole phrase is the noun, which is
+            # the singular "exile a creature card from your graveyard". The
+            # article stays on it, and the noun parser refuses it -- the pool
+            # prints no such additional cost, and admitting one here would be a
+            # reading nothing tests.
+            number, rest = 1, phrase
+    if not rest:
+        return None
+    lexed = tokenize(rest.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, lexed.normalized)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    if described.zone != "graveyard":
+        return None
+    owner = described.zone_owner
+    if owner is None or getattr(owner, "kind", None) != "you":
+        return None
+    # Back to the *unstated* zone, which is ``ObjectFilter``'s default and is
+    # not ``None``: the charger's key check compares every field against the
+    # dataclass default, so a ``None`` here reads as a narrowing it cannot
+    # honour and refuses the phrase this function has already read.
+    unstated = ast.ObjectFilter()
+    stripped = dataclasses.replace(
+        described, zone=unstated.zone, zone_owner=unstated.zone_owner
+    )
+    carried = chargeable_card_filter(stripped)
+    if carried is None or not (
+        carried.get("type_filter") or carried.get("subtype_filter")
+    ):
+        # An *unnamed* cost would let the payment eat any card in the pile --
+        # the same narrowing every other clause in this file makes, and for its
+        # reason: the payer would give up the cheapest thing they had.
+        return None
+    return carried, (0 if is_x else number), is_x
+
+
 def read_sacrifice_all_clause(phrase: str) -> dict | None:
     """What "sacrifice **all** <noun phrase>" charges, as a filter, or None.
 
@@ -500,6 +645,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (),
         "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
+        "exile_graveyard_filter": None, "exile_graveyard_count": 1,
+        "exile_graveyard_count_x": False,
         "sacrifice_all_filter": None, "discard_whole_hand": False,
         "return_filter": None, "return_count": 1, "return_count_x": False,
         "optional_mana": (),
@@ -555,6 +702,20 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     fields["return_filter"],
                     fields["return_count"],
                     fields["return_count_x"],
+                ) = read
+            elif field == "exile_graveyard":
+                if fields["exile_graveyard_filter"] is not None:
+                    # Two such clauses would need two filters and one field
+                    # cannot hold two; folded together they read as a union,
+                    # which is a strictly cheaper cost than the two printed.
+                    return None
+                read = read_graveyard_exile_clause(found.group("noun"))
+                if read is None:
+                    return None
+                (
+                    fields["exile_graveyard_filter"],
+                    fields["exile_graveyard_count"],
+                    fields["exile_graveyard_count_x"],
                 ) = read
             elif field == "discard_whole_hand":
                 fields["discard_whole_hand"] = True
@@ -780,7 +941,7 @@ def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
     if "{X}" in (card.mana_cost or "").upper():
         return True
     return any(
-        cost.pay_life_x or cost.return_count_x
+        cost.pay_life_x or cost.return_count_x or cost.exile_graveyard_count_x
         for cost in costs_charged_from(card, from_zone)
     )
 

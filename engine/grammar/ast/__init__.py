@@ -56,6 +56,7 @@ from .costs import (
     ReturnPermanentsToHandCost,
     ExileCost,
     ExileTopOfLibraryCost,
+    ExileGraveyardPositionCost,
     RemoveCounterCost,
     Cost,
 )
@@ -97,6 +98,7 @@ from ._core import (
     Recipient,
     Duration,
     Zone,
+    GraveyardPosition,
     RawEffect,
 )
 from .conditions import (
@@ -292,6 +294,7 @@ from .cards import (
     RevealRandomFromHand,
     ExileRandomFromHand,
     ExileTopOfLibrary,
+    ExileGraveyardPosition,
     ExileEntireLibrary,
     PutExiledWithSource,
     AnteOfferOwnershipExchange,
@@ -437,6 +440,7 @@ __all__ = [
     "Recipient",
     "Duration",
     "Zone",
+    "GraveyardPosition",
     "ManaCost",
     "TapSelf",
     "SacrificeCost",
@@ -452,6 +456,7 @@ __all__ = [
     "ReturnSelfToHandCost",
     "ReturnPermanentsToHandCost",
     "ExileTopOfLibraryCost",
+    "ExileGraveyardPositionCost",
     "RemoveCounterCost",
     "Cost",
     "CoinFlipResult",
@@ -629,6 +634,7 @@ __all__ = [
     "RevealRandomFromHand",
     "ExileRandomFromHand",
     "ExileTopOfLibrary",
+    "ExileGraveyardPosition",
     "ExileEntireLibrary",
     "PutExiledWithSource",
     "LookTopExileRandom",

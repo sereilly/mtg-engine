@@ -34,7 +34,7 @@ from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (
     _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
-    _parse_that_object, _parse_zone,
+    _parse_that_object, _parse_zone, accept_graveyard_position,
 )
 from ..sacrifices import (_parse_counted_sacrifice, _parse_sacrificed_subject,
                          parse_counted_subject)
@@ -206,6 +206,29 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     # phrase ("tapped", "under your control", entering counters) describes a
     # permanent entering the battlefield, which is a destination this price
     # cannot have.
+    # "… unless you **exile the top creature card of your graveyard**." (Barrow
+    # Ghoul, Circling Vultures.) The fifth printed alternative, decomposed for
+    # the reason the three above are: an "unless" is an offer with a penalty,
+    # which is what `May` already says — so the offer, the penalty and the "your
+    # graveyard holds no creature card" case all come from machinery that
+    # works, the last through `_action_is_takeable`'s entry for the kind.
+    #
+    # Read out of the shared fragment three families use
+    # (`phrases.accept_graveyard_position`) rather than by calling the exile
+    # family's own production, because families do not import each other — the
+    # same arrangement the return tail below makes with `sacrifices` and
+    # `phrases._parse_zone`. One reading of "the top creature card of your
+    # graveyard", so the offer, the takeability gate and the payment cannot
+    # disagree about which card the card asks for.
+    if stream.accept_phrase("unless", "you", "exile"):
+        priced = accept_graveyard_position(stream)
+        if priced is not None:
+            return ast.May(
+                actor=player,
+                action=ast.ExileGraveyardPosition(priced),
+                otherwise=ast.Sacrifice(player, subject),
+            )
+    stream.reset(mark)
     if stream.accept_phrase("unless", "you", "return"):
         counted = parse_counted_subject(stream)
         if counted is not None and stream.accept_word("to"):

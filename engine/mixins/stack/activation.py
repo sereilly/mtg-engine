@@ -873,6 +873,30 @@ class AbilityActivationMixin:
         # the ability unactivatable rather than free. Checked here with the
         # other costs and paid below with them, so a refusal further down does
         # not leave a library already shorter.
+        # "Exile the top creature card of your graveyard" (Necratog, Zombie
+        # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same
+        # CR 118.3 reading as the library cost below, over a pile that is
+        # *scanned* rather than counted: a graveyard with no creature card in it
+        # cannot pay Necratog at all, and CR 601.2h ("unpayable costs can't be
+        # paid", reached through CR 602.2b) then makes the ability
+        # unactivatable rather than free. Checked here with the other costs and
+        # paid below with them, so a refusal further down does not leave a
+        # graveyard already shorter.
+        if ability.cost.exile_graveyard_position is not None:
+            from ...graveyard_order import positions_named
+
+            if not positions_named(
+                controller.graveyard, ability.cost.exile_graveyard_position
+            ):
+                details = (
+                    f"{permanent.card.name}: {controller.name}'s graveyard has "
+                    f"nothing its cost can exile"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+
         if ability.cost.exile_top_of_library > len(controller.library):
             details = (
                 f"{permanent.card.name}: {controller.name} has "
@@ -1726,6 +1750,32 @@ class AbilityActivationMixin:
         # asks and takes the *first* card off the top, with the whole payment
         # beside it under ``exiled_set_for_cost`` — the same pairing the chosen
         # exile above keeps, rather than a third shape for one channel.
+        # The graveyard twin of the payment below, paid at the same moment
+        # (CR 602.2b puts every cost at one) and recorded on the same two
+        # channels. Removed **highest index first**: the positions were found
+        # against the pile as it stands, and deleting a lower one renumbers
+        # every position above it — which for "the top two creature cards" is
+        # the difference between exiling the two the card named and exiling one
+        # of them plus whatever slid into the slot.
+        if ability.cost.exile_graveyard_position is not None:
+            from ...graveyard_order import positions_named
+
+            spec = ability.cost.exile_graveyard_position
+            taken = positions_named(controller.graveyard, spec)
+            from_graveyard = [controller.graveyard[index] for index in taken]
+            for index in sorted(taken, reverse=True):
+                del controller.graveyard[index]
+            controller.exile.extend(from_graveyard)
+            exiled_set_for_cost = [*exiled_set_for_cost, *from_graveyard]
+            if exiled_for_cost is None and from_graveyard:
+                exiled_for_cost = from_graveyard[0]
+            self.log.append(
+                f"{controller.name} exiled "
+                + ", ".join(card.name for card in from_graveyard)
+                + f" from the {spec.get('position', 'top')} of their graveyard "
+                f"to activate {permanent.card.name}"
+            )
+
         if ability.cost.exile_top_of_library:
             from_library = [
                 controller.library.pop(0)

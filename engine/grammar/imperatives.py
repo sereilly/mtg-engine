@@ -84,6 +84,7 @@ from .effects import (
     _parse_exchange_control,
     _parse_exile_graveyard,
     _parse_coin_flip_stakes_loop,
+    _parse_exile_graveyard_position,
     _parse_exile_top_of_library,
     _parse_extra_turn,
     _parse_flip_coin,
@@ -462,6 +463,15 @@ def parse_imperative(
         from_library = _parse_exile_top_of_library(stream)
         if from_library is not None:
             return from_library
+        # "Exile the bottom card of target player's graveyard" (Phyrexian
+        # Furnace) names cards by position in an *ordered* zone (CR 404.1,
+        # CR 404.2), so
+        # the recipient parser below refuses "the bottom" the same way it
+        # refuses "the top" — tried here for that reason and beside the library
+        # form it mirrors.
+        from_graveyard = _parse_exile_graveyard_position(stream)
+        if from_graveyard is not None:
+            return from_graveyard
         # "Exile target player's graveyard" is a whole zone, which the
         # recipient parser below would read as the player alone and then
         # choke on the possessive.

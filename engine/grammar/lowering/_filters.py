@@ -472,6 +472,64 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
     return card_only_filter(payload)
 
 
+#: Whose graveyard a printed position may name, by the seat kind the possessive
+#: reads. A set rather than a fall-through for ``_GRAVEYARD_PILE_SEATS``' reason
+#: one module over: the payment path and the handler resolve exactly these, and
+#: a seat neither can name would be dropped and the cards taken out of whichever
+#: pile the resolution happened to be carrying.
+GRAVEYARD_POSITION_SEATS = frozenset({"you", "target_player"})
+
+
+def graveyard_position_payload(
+    position: "ast.GraveyardPosition", *, seats: frozenset[str] | None = None
+) -> dict | None:
+    """The payload "the top <n> <described> cards of <whose> graveyard" means,
+    or None to refuse it.
+
+    The one gate every reader of that phrase runs through — the grammar's cost
+    parser, ``engine/oracle.py``'s charger, the effect lowering and the
+    alternative/additional cost tables — for ``chargeable_card_filter``'s stated
+    reason directly above: two readers of one printed phrase drift, and the
+    direction a *cost* drifts in is a price charged more widely, or not at all,
+    than the card prints.
+
+    The narrowing goes through that same function, because a card in a graveyard
+    is what ``_card_matches_filter`` answers about (CR 613.1 leaves a card in a
+    zone with nothing computed) — so a key it cannot test refuses the phrase
+    here rather than being dropped where it is tested.
+
+    *seats* is the set of possessives the **caller** can resolve, defaulting to
+    every one this engine reads. An activation cost passes ``{"you"}``: a cost
+    paid out of somebody else's graveyard is a shape the payment path has no
+    seat for, and reading it as the payer's own would take a card from the wrong
+    pile.
+    """
+    allowed = GRAVEYARD_POSITION_SEATS if seats is None else seats
+    if position.owner.kind not in allowed:
+        return None
+    if position.position not in ("top", "bottom"):
+        return None
+    count = position.count
+    # A printed number only. CR 118.3 has the resources counted against the pile
+    # *before* the ability is activated, and an X or a board-derived amount is
+    # not known then — a variable count admitted here would be read as some
+    # other number by the charger, and a cost read as the wrong number is one
+    # nobody pays in full.
+    if not isinstance(count, ast.Fixed) or count.value <= 0:
+        return None
+    payload: dict = {
+        "count": count.value,
+        "position": position.position,
+        "owner": position.owner.kind,
+    }
+    if position.filter is not None:
+        described = chargeable_card_filter(position.filter)
+        if described is None:
+            return None
+        payload["filter"] = described
+    return payload
+
+
 def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
     """The payload a "Tap N <noun phrase>" cost charges, or None to refuse it.
 

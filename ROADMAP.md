@@ -978,6 +978,134 @@ lesson nobody has yet tested.
 group's family lands in it predictably. If it crosses, the split is the
 integrator's.
 
+### Wave 1, W1G1 — the top of a graveyard as a cost and as a resource
+
+Ten cards, one referent: **an ordered position in a graveyard**. The sentence
+census scattered them across four refusal sites, and the fragment census is what
+showed they were one family — "exile the top" on 7 cards, "the top creature card
+of" on 5, "card of your graveyard" on 6.
+
+**Round 1 — the referent, and the activation cost (4 cards).** Alms, Nature's
+Kiss, Necratog and Zombie Scavengers print "Exile the top [creature] card of your
+graveyard" in front of a colon. That phrase is **not** an `ObjectFilter` with a
+`zone`, and the whole family turns on the difference: a filter is asked of one
+card at a time and cannot say "the topmost", so a phrase read as one would let
+*any* matching card in the pile pay — strictly cheaper than the card prints,
+which is the one direction a cost must never be wrong in. So it is
+`ast.GraveyardPosition`, in `ast/_core.py` because three families build a node out
+of it and the AST forbids them importing each other: the cost
+(`ExileGraveyardPositionCost`), the effect (`ExileGraveyardPosition`) and the
+"unless you …" offer the board family decomposes into a `May`.
+
+One production reads it — `phrases.accept_graveyard_position`, in `phrases`
+because three `effects/` families and the cost parser need it — and one gate turns
+it into a payload, `lowering/_filters.graveyard_position_payload`, run by **both**
+halves of the cost: `grammar/costs.py` admits the line and
+`oracle.parse_activated_ability_cost` charges it, through
+`grammar.graveyard_position_payload_for`. The possessive comes out of
+`zones.accept_zone_possessive`, extracted from `accept_zone_scope` so "whose pile"
+keeps one reader; the extraction moved 0 of 2,515 compiled programs.
+
+`graveyard_order.positions_named` is the scan, and the scan is what makes the
+narrowing positional: "the top creature card" is the creature card **nearest the
+top**, not "the top card, if it happens to be a creature". Read the other way,
+Necratog is unactivatable with a Mountain on top of a graveyard full of
+creatures — a strictly worse card than the one printed. All or nothing (CR
+118.3), so a pile holding fewer matching cards than the count pays nothing at all.
+
+**Round 2 — the same referent as an effect, and as an unless-price (2 cards).**
+Phyrexian Furnace's `{T}: Exile the bottom card of target player's graveyard` was
+**supported and compiled to nothing** — a hollow line, an unclaimed
+parse-coverage sentence and a `picker_sweep` finding on one ability, all three of
+this repo's instruments pointing at the same card. Barrow Ghoul prints the same
+referent as the price of a CR 118.8 offer, and it decomposes to the `May` the
+board family already builds for "unless you sacrifice / tap / return" — so the
+offer, the penalty and the "your graveyard holds no creature card" case all came
+from machinery that works, the last through one new `_action_is_takeable` entry.
+
+The picker asks for a **player** and not a card: the pile is chosen (CR 115.1),
+the card in it is not.
+
+**Round 3 — the alternative cost and the additional cost (2 cards).** Spinning
+Darkness (CR 118.9) is one clause row in `alternative_costs.py` plus a gate and a
+payment; its phrase is delimited by the row and *read* by the same production the
+activation cost runs, so three readings of one sentence cannot name different
+cards. Haunting Misery is the one card of the ten that is **not** positional —
+"exile X creature cards from your graveyard" is a chosen set — and it needed its
+own field pair for `exile_filter`'s stated reason one zone over: that one
+enumerates the caster's battlefield and this one their graveyard, and a card in a
+graveyard answers a strictly different matcher (CR 613.1).
+
+Its X lives **only** in that cost (printed mana cost `{1}{B}{B}`, no `{X}`), so
+`cast_announces_x` and `_additional_cost_x_ceiling` both gained it — without the
+ceiling the browser would offer an unbounded X for a spell whose whole price is a
+graveyard. Haunting Misery is now the third card in
+`test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named`. The payer does
+not yet choose *which* X creature cards leave (CR 601.2b lets them); there is no
+graveyard picker on the cast path, and the deterministic top-down default is the
+floor until there is one.
+
+**What the round cost.** `lowering/exile.py` reached exactly 1,000 lines, so the
+new lowering went to `lowering/zones.py` instead — where its
+`ZONE_INSTRUCTION_CATEGORIES` row already lived and where its parse half
+(`effects/zones.py`) mirrors. No cap raised; `exile.py` is back to 971.
+
+**What the round exposed, and it is a citation rather than a card.** The brief and
+`engine/graveyard_order.py` both cited **CR 404.3** for "a graveyard is an ordered
+zone". CR 404.3 is the *simultaneous-arrival* tie-break — two or more cards
+entering at once, which the owner may then arrange. The ordering rules are **CR
+404.1** (an arriving card goes on **top** of its owner's graveyard) and **CR
+404.2** (each graveyard is one face-up pile whose order a player "normally can't
+change"). Twelve pre-existing sites copied the wrong number from the module that
+defines the reading. This is VIS wave 4's finding recurring in a section the
+701-heading guard cannot see, and it is the argument for widening that guard: **a
+CR citation rots by subject, and only the 701 block is checked.**
+
+**Declined, as named parts rather than as difficulty.**
+
+*Circling Vultures*: "You may discard this card any time you could cast an
+instant." **CR 116.2e names this card**, in those words, as one of the twelve
+special actions — so `card_hooks.py`'s entry bar ("no second card, real or
+plausibly printable, shares the shape") is met by the Comprehensive Rules itself.
+What is missing is somewhere to hang it: (1) a special-action seam on `Game` —
+this engine implements exactly one of CR 116's twelve (the land drop) and not
+through any shared seam; (2) a text-keyed table of the printed sentence, read by
+the support gate and the grammar's parse claim, so the line cannot be admitted
+with nothing behind it; (3) an `ActionKind` and a `web/actions.py` branch; (4) a
+client affordance for a hand card outside a prompt — `web/static/app.js` can
+select a hand card only while a prompt is open. Parts 1–3 are small; part 4 is
+what makes it a round rather than an hour, and it is shared frontend work a
+parallel wave should not do.
+
+*Bösium Strip*: `{3}, {T}: Until end of turn, you may cast instant and sorcery
+spells from the top of your graveyard. If a spell cast this way would be put into
+a graveyard, exile it instead.` Three of its four parts already exist —
+`cast_permissions.CastPermission` carries `zone="graveyard"`, a `card_types`
+narrowing, an `end_of_turn` duration and the `exile_instead` rider, and the
+grammar's `_parse_cast_permission` already reads a leading "Until end of turn,".
+What is missing: (1) a fourth `what` on `ast.CastPermission` — a **blanket** grant,
+where the three existing forms are `exiled_this_way`, `spells_from_hand` and a
+single `target_card`; (2) a **position** narrowing in `cast_permissions._covers`,
+which today matches any card in the named zone and would open the whole graveyard
+where the card opens one card; (3) a cross-type union noun phrase ("instant **and**
+sorcery spells") in that production, which reads one `parse_target_spec`; (4)
+reading the second printed sentence onto the same grant's existing `exile_instead`
+flag, which is spelled differently there ("If **that spell** would be put into
+**your** graveyard"). Note also that `_covers` tests `card.primary_type`, which
+collapses a multi-type line (CR 205.2a) — see the defects below.
+
+**Live defects found in already-supported cards.** Both are "safe by which cards
+exist" rather than live today, and both are the same reader:
+`reanimate_creature`'s `from_top` scan (Shallow Grave, Mistmoon Griffin) and
+`cast_permissions._covers` test `CardDefinition.primary_type`, which returns the
+**first** of `land, creature, artifact, …` found in the type line. So a *land
+creature* card in a graveyard is invisible to "the top creature card of your
+graveyard", and an artifact creature is not an "artifact" to a permission naming
+one. No card in the pool prints either shape, which is why nothing is red;
+`graveyard_order._is_type` and `handlers/_common._card_matches_filter` both read
+`printed_shape` instead, which is CR 205.2a's answer — so two readers of "is this
+a creature card in a graveyard" now disagree in principle.
+
 ## Visions (VIS) — shipped (167/167, manifest index 14)
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the

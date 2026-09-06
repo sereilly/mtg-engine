@@ -777,6 +777,16 @@ class LegalityMixin:
                 bounds.append(len(self._additional_cost_candidates(
                     caster_index, cost, giving_up="return",
                 )))
+            # "…exile **X** creature cards from your graveyard" (Haunting
+            # Misery). The third resource, and the third enumeration read here
+            # rather than re-derived: the picker offers exactly what
+            # ``_unpayable_additional_cost`` accepts because both count through
+            # ``_graveyard_exile_candidates``. Left out, the browser would offer
+            # an unbounded X for a spell whose whole price is a graveyard.
+            if cost.exile_graveyard_count_x:
+                bounds.append(
+                    len(self._graveyard_exile_candidates(caster_index, cost))
+                )
         return min(bounds) if bounds else None
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------

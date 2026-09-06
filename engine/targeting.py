@@ -710,6 +710,13 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "recolor_self_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
+    # Phyrexian Furnace: "{T}: Exile the bottom card of **target player's**
+    # graveyard." The pile is chosen (CR 115.1) and the card in it is not —
+    # CR 404.1/404.2 order the zone, so "the bottom card" has exactly one answer
+    # once the seat is known. So the picker asks for a player and nothing
+    # else; a card picker here would offer a choice the sentence does not
+    # make.
+    "exile_graveyard_position": {"kind": "player"},
     "reorder_target_library_top": {"kind": "player"},
     # "…can be the target of spells and abilities controlled by **target
     # player** as though it didn't have shroud" (Autumn Willow). The ability

@@ -403,6 +403,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability.cost.exile_top_of_library:
             continue
 
+        # "Exile the top creature card of your graveyard" (Necratog, Zombie
+        # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same floor
+        # one zone over, with a second reason the library cost does not have:
+        # the cost **scans** the pile, so an activation the policy proposes
+        # against a graveyard holding no matching card is refused with nothing
+        # spent — and the policy would propose it again next turn, and every
+        # turn after, which is the "a seat doing nothing all game" shape a
+        # refused action makes. Derived from the compiled cost, so it names no
+        # card.
+        if ability.cost.exile_graveyard_position is not None:
+            continue
+
         # CR 602.1a and its exceptions: a permanent whose printed permission
         # closes its ability to *its own controller* — "Only your opponents may
         # activate this ability" (Clergy of the Holy Nimbus), "Only the

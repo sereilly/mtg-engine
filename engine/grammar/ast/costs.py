@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from ._core import Amount, Fixed, ObjectFilter
+from ._core import Amount, Fixed, GraveyardPosition, ObjectFilter
 
 
 @dataclass(frozen=True)
@@ -312,6 +312,34 @@ class ExileTopOfLibraryCost:
 
 
 @dataclass(frozen=True)
+class ExileGraveyardPositionCost:
+    """"Exile the top card of your graveyard" (Alms, Nature's Kiss) / "Exile the
+    top creature card of your graveyard" (Necratog, Zombie Scavengers) in front
+    of a colon.
+
+    Its own node rather than an :class:`ExileCost` whose filter names a
+    graveyard, for :class:`ExileTopOfLibraryCost`'s reason one zone over:
+    **nothing is chosen**. CR 404.1/404.2 order the pile, so the phrase is a definite
+    description with one answer, and an :class:`ObjectFilter` — asked of one
+    card at a time — would let *any* matching card in the graveyard pay. That is
+    strictly cheaper than the card prints, which is the direction a cost must
+    never be wrong in.
+
+    It is a distinct node from :class:`ExileTopOfLibraryCost` for the opposite
+    reason: a library payment is unnarrowed and counted off the top blind, and
+    this one **scans** for the printed characteristic ("the top *creature*
+    card"). A shared node would have to carry a filter the library form must
+    never have, and a charger reading the library form's absent filter as "no
+    narrowing" is one word away from reading this one's as the same.
+
+    CR 118.3 makes it unpayable when the scan finds fewer than *count* cards, so
+    a graveyard with no creature card in it cannot activate Necratog at all
+    rather than activating it for free.
+    """
+    position: GraveyardPosition
+
+
+@dataclass(frozen=True)
 class RemoveCounterCost:
     counter: str = "+1/+1"
     count: Amount = field(default_factory=lambda: Fixed(1))
@@ -319,6 +347,7 @@ class RemoveCounterCost:
 
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
-    ExileCost, ExileTopOfLibraryCost, RemoveCounterCost, PayAttachedManaCost,
+    ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
+    RemoveCounterCost, PayAttachedManaCost,
     ReturnSelfToHandCost
 ]

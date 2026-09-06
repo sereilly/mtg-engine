@@ -1540,11 +1540,16 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
     # "Return **the top** creature card of your graveyard to the
-    # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard ordered and
-    # CR 404.1 appends what arrives, so the *top* card is the last entry —
-    # the most recently added — and "the top creature card" is the last one
-    # of them. Nobody chooses, so any index the wire happened to carry is
-    # not this effect's: it is overwritten rather than preferred.
+    # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on *top* of
+    # its owner's graveyard and CR 404.2 keeps the pile in that order, and this
+    # engine appends — so the top card is the last entry, the most recently
+    # added, and "the top creature card" is the last one of them. Nobody
+    # chooses, so any index the wire happened to carry is not this effect's: it
+    # is overwritten rather than preferred.
+    #
+    # (CR 404.3 is the *simultaneous-arrival* tie-break and is not this rule;
+    # ``engine/graveyard_order.py`` records the correction and the W1G1 report
+    # lists the sites that copied it.)
     if instruction.payload.get("from_top"):
         idx = next(
             (
@@ -2974,6 +2979,56 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
             f"{context.card.name} exiled {victim.name}'s graveyard "
             f"({len(exiled)} card(s))"
         )
+    return True, "resolved"
+
+
+@effect_handler("exile_graveyard_position")
+def exile_graveyard_position(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile the bottom card of target player's graveyard." (Phyrexian
+    Furnace.) The same handler runs the price of Barrow Ghoul's and Circling
+    Vultures' "unless you exile the top creature card of your graveyard",
+    which the board family decomposes into a ``May`` around this instruction.
+
+    Which cards is ``graveyard_order.positions_named`` — the one scan, shared
+    with the activation-cost payment path, so a phrase read as a cost and the
+    same phrase read as an effect cannot name different cards. It answers with
+    *indices* rather than cards because two copies of one card in one graveyard
+    are the same Python object, and an identity filter over the list would take
+    both.
+
+    A pile with nothing the phrase names exiles nothing and still resolves:
+    CR 608.2 finishes what it can, and an effect is not a cost. The **cost**
+    reading of the same phrase refuses instead, which is CR 118.3 and lives at
+    the payment site.
+    """
+    from ..graveyard_order import positions_named
+
+    owner = instruction.payload.get("owner", "you")
+    victim = (
+        context.caster if owner == "you"
+        else (context.target if context.target is not None else context.caster)
+    )
+    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    exiled = [victim.graveyard[index] for index in taken]
+    # Highest index first: the positions were found against the pile as it
+    # stands, and removing a lower one renumbers every position above it.
+    for index in sorted(taken, reverse=True):
+        del victim.graveyard[index]
+    # A graveyard is its owner's and so is the exile zone (CR 404.1, CR 406.1),
+    # so the cards go from one to the other with no CR 400.3 lookup.
+    victim.exile.extend(exiled)
+    if exiled:
+        game.log.append(
+            f"{context.card.name} exiled "
+            + ", ".join(card.name for card in exiled)
+            + f" from the {instruction.payload.get('position', 'top')} of "
+            f"{victim.name}'s graveyard"
+        )
+    else:
+        game.log.append(
+            f"{victim.name}'s graveyard has nothing {context.card.name} can exile"
+        )
+    context.results["exiled_cards"] = exiled
     return True, "resolved"
 
 

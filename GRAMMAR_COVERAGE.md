@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 68.7% | 63.1% | 43.0% | 98 |
+| WTH *(measured)* | 167 | 249 | 71.5% | 65.9% | 45.8% | 104 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 340 | 150 | expected a subject |  |
 | 107 | 51 | unrecognized effect verb |  |
-| 97 | 51 | unconsumed text |  |
+| 95 | 50 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -66,11 +66,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 1 | expected a keyword ability |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
-| 4 | 4 | expected what to exile as a cost |  |
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
@@ -174,6 +174,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **All Hallow's Eve**
   - `Exile All Hallow's Eve with two scream counters on it.`
   - `At the beginning of your upkeep, if this card is exiled with a scream counter on it, remove a scream counter from it. If there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield.`
+- **Alms**
+  - `{1}, Exile the top card of your graveyard: Prevent the next 1 damage that would be dealt to target creature this turn.`
 - **Alpine Houndmaster**
   - `When this creature enters, you may search your library for a card named Alpine Watchdog and/or a card named Igneous Cur, reveal them, put them into your hand, then shuffle.`
   - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
@@ -441,6 +443,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barrin, Tolarian Archmage**
   - `When Barrin enters, return up to one other target creature or planeswalker to its owner's hand.`
   - `At the beginning of your end step, if a permanent was put into your hand from the battlefield this turn, draw a card.`
+- **Barrow Ghoul**
+  - `At the beginning of your upkeep, sacrifice this creature unless you exile the top creature card of your graveyard.`
 - **Basal Thrull**
   - `{T}, Sacrifice this creature: Add {B}{B}.`
 - **Basalt Golem**
@@ -883,6 +887,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circling Vultures**
+  - `At the beginning of your upkeep, sacrifice this creature unless you exile the top creature card of your graveyard.`
 - **Citanul Druid**
   - `Whenever an opponent casts an artifact spell, put a +1/+1 counter on this creature.`
 - **City of Brass**
@@ -3384,6 +3390,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nature's Chosen**
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `Tap enchanted creature: Untap target artifact, creature, or land. Activate only if enchanted creature is white and untapped and only once each turn.`
+- **Nature's Kiss**
+  - `{1}, Exile the top card of your graveyard: Enchanted creature gets +1/+1 until end of turn.`
 - **Nature's Lore**
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
@@ -3393,6 +3401,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player puts a Swamp or black permanent onto the battlefield, that player sacrifices a Swamp or black permanent of their choice.`
 - **Nebuchadnezzar**
   - `{X}, {T}: Choose a card name. Target opponent reveals X cards at random from their hand. Then that player discards all cards with that name revealed this way. Activate only during your turn.`
+- **Necratog**
+  - `Exile the top creature card of your graveyard: this creature gets +2/+2 until end of turn.`
 - **Necrite**
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, destroy target creature defending player controls. It can't be regenerated.`
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, destroy target creature defending player controls. It can't be regenerated.`
@@ -3662,6 +3672,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Phyrexian Dreadnought**
   - `When this creature enters, sacrifice it unless you sacrifice any number of creatures with total power 12 or greater.`
 - **Phyrexian Furnace**
+  - `{T}: Exile the bottom card of target player's graveyard.`
   - `{1}, Sacrifice this artifact: Exile target card from a graveyard. Draw a card.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
@@ -5702,6 +5713,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Other Zombies have "{B}: Regenerate this permanent."`
 - **Zombie Mob**
   - `When this creature enters, exile all creature cards from your graveyard.`
+- **Zombie Scavengers**
+  - `Exile the top creature card of your graveyard: Regenerate this creature.`
 - **Zuberi, Golden Feather**
   - `Other Griffin creatures get +1/+1.`
 - **Zuran Enchanter**

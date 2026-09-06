@@ -1935,8 +1935,33 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         else:
             number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
             exile_top_of_library = number if number >= 2 else 0
+    # "Exile **the top card of your graveyard**" (Alms, Nature's Kiss), "...the
+    # top **creature** card..." (Necratog, Zombie Scavengers). The library
+    # form's twin one zone over, read the same way and in the same position:
+    # the cards are named by position (CR 404.3), so the chosen-object patterns
+    # below would find nothing at all and charge the cost as none.
+    #
+    # The regex only **delimits** the phrase to the end of its comma-separated
+    # cost segment; what it names is read by the grammar's own production
+    # (``phrases.accept_graveyard_position``, through
+    # ``grammar.graveyard_position_payload_for``), because a regex approximating
+    # it is a second reader of one clause and the direction those drift in is a
+    # cost charged more widely than the card prints. ``seats={"you"}`` is the
+    # same narrowing ``grammar/costs.py`` applies: an activation cost paid out
+    # of somebody else's graveyard is a shape no payment path has a seat for.
+    exile_graveyard_position = None
+    if not exile_self and not exile_top_of_library:
+        from .grammar import graveyard_position_payload_for
+
+        graveyard_exile = re.search(
+            r"\bexile (the (?:top|bottom) [^,:]+?)\s*(?=,|$)", cost_lower
+        )
+        if graveyard_exile is not None:
+            exile_graveyard_position = graveyard_position_payload_for(
+                graveyard_exile.group(1), seats=frozenset({"you"})
+            )
     chosen_exile = (
-        None if exile_self or exile_top_of_library
+        None if exile_self or exile_top_of_library or exile_graveyard_position
         else re.search(r"\bexile ((?:another|an?) [^,:]+?)\s*(?=,|$)", cost_lower)
     )
     exile_filter = (
@@ -1971,7 +1996,12 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # rewritten to the phrase the noun parser already reads ("a graveyard") so
     # there is one reader of a zone tail; the second has no filter to live on
     # and is recorded beside the count.
-    if exile_filter is None and not exile_self and not exile_top_of_library:
+    if (
+        exile_filter is None
+        and not exile_self
+        and not exile_top_of_library
+        and exile_graveyard_position is None
+    ):
         counted_exile = re.search(
             r"\bexile (\w+) ([^,:]+?)\s*(?=,|$)", cost_lower
         )
@@ -2301,6 +2331,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         tap_attached=_taps_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,
+        exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
     )
 
