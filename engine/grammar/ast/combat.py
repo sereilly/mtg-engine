@@ -328,9 +328,21 @@ class AttacksThisTurnIfAble:
     for as long as the permanent is on the battlefield, and this is a one-shot
     effect a trigger or a spell creates, which ends with the turn (CR 611.2a).
     A card can print both, and folding them would make the pair unspellable.
+
+    ``destroy_if_absent`` is the trailing sentence Maddening Imp prints behind
+    the requirement — "At the beginning of the next end step, destroy each of
+    **those creatures** that didn't attack this turn." A field rather than a
+    second statement, and for the reason
+    :class:`ForceChosenCreatureToAttack` is one node for three sentences: the
+    tail has no subject of its own to compose over ("those creatures" names the
+    set this sentence described) and is conditional on what that set did about
+    *this* requirement, so two instructions would need a scratchpad key to carry
+    the set and a second to remember the requirement — a fused instruction with
+    extra steps.
     """
 
     subject: Recipient
+    destroy_if_absent: bool = False
 
 
 @dataclass(frozen=True)

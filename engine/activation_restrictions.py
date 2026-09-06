@@ -629,6 +629,27 @@ def _opponents_turn_before_attackers(game: "Game", controller_index: int, source
     return _before_attackers_are_declared(game, controller_index, source)
 
 
+def _before_combat(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only during an opponent's turn and **only before combat**."
+    (Maddening Imp.) This is the second conjunct; the first is the
+    opponent's-turn row `_not_your_turn` already answers.
+
+    A **wider** window than "before attackers are declared" above, and its own
+    predicate for that reason rather than an alias of it: attackers are declared
+    in the declare-attackers step (CR 508.1), so the beginning-of-combat step is
+    still before *them* — and it is not before *combat*, because CR 506.1's
+    phase has begun by then. Reading the two windows as one would let this
+    ability be activated one priority later than the card allows, with the
+    declaration about to happen, which is the moment the clause exists to
+    exclude.
+
+    So the window is the two phases in front of the combat phase (CR 500.1:
+    beginning, then precombat main) and nothing after it — the postcombat main
+    and ending phases are after combat, not before.
+    """
+    return game.current_turn_phase in ("beginning", "precombat_main")
+
+
 def _printed_hand_count(match: "re.Match[str]") -> int | None:
     """The hand size the clause names, or None when the word is not a number.
 
@@ -1521,6 +1542,27 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         ),
         _opponents_turn_before_attackers,
         "only during an opponent's turn, before attackers are declared",
+    ),
+    # "Activate only during an opponent's turn and only before combat."
+    # (Maddening Imp.) **Two rows, not one**, because `_conjuncts` splits the
+    # printed sentence at "and only" before this table ever sees it — which is
+    # the whole point of that splitter: the pairing is not a clause, and a row
+    # per pairing is quadratic in the clauses that exist. So the seat half is
+    # the row below and the window half is the row after it.
+    ActivationRestriction(
+        # The positive spelling of Ghost Town's negation, on the same predicate
+        # for the reason `_not_your_turn`'s own docstring gives: CR 500.1 gives
+        # every turn an active player, so "during an opponent's turn" and "if
+        # it's not your turn" are the same set of turns and two predicates would
+        # be two answers.
+        re.compile(r"^activate only during an opponent's turn$"),
+        _not_your_turn,
+        "only during an opponent's turn",
+    ),
+    ActivationRestriction(
+        re.compile(r"^activate only before combat$"),
+        _before_combat,
+        "only before combat",
     ),
     # "Activate only before attackers are declared." (Norritt.) The same window
     # without the seat, and the reason it is a row here rather than an optional

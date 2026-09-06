@@ -1289,7 +1289,7 @@ def test_w1g5_a_bare_becomes_blocked_trigger_refuses_the_tuck():
     first.
     """
     from engine.grammar import parse_line
-    from engine.grammar.errors import LoweringError
+    from engine.grammar.errors import GrammarError, LoweringError
     from engine.grammar.lower import lower_ability
     import pytest as _pytest
 
@@ -2264,3 +2264,253 @@ def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
 ])
 def test_w2g2_creatures_are_supported(set_pool, name):
     assert compile_card_oracle(set_pool("TMP")[name]).supported
+
+
+# --- W3G1: the attack requirement over a described set (CR 508.1a) ---
+
+import dataclasses as _w3g1_dataclasses
+
+import pytest
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.subject_filters import subject_matches
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w3g1_board(p0_cards, p1_cards):
+    """Two battlefields, no summoning sickness, mana enforcement off."""
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    for card in p0_cards:
+        p0.battlefield.append(_nosick(Permanent(card=card)))
+    for card in p1_cards:
+        p1.battlefield.append(_nosick(Permanent(card=card)))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p0, p1
+
+
+def _w3g1_wall(name="Wally"):
+    return _w3g1_dataclasses.replace(
+        _mk_creature_card(name, 0, 4), type_line="Creature - Wall"
+    )
+
+
+def _w3g1_imp_activated(set_pool, p0_cards):
+    """P1's Maddening Imp, activated in P0's precombat main phase."""
+    game, p0, p1 = _w3g1_board(p0_cards, [set_pool("TMP")["Maddening Imp"]])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.activate_permanent_ability(
+        1, "Maddening Imp", ability_index=0
+    ).supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    return game, p0, p1
+
+
+def test_w3g1_maddening_imp_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Maddening Imp"]).supported
+
+
+def test_w3g1_maddening_imp_compels_the_non_walls_and_spares_the_walls(set_pool):
+    """The requirement and its delayed destruction, over one described set.
+
+    The Wall assertion is the one a dropped narrowing fails, and it is dropped
+    in the direction nothing else can see: a Wall marked to attack cannot attack
+    (CR 702.3b), so the requirement half looks fine either way - and then the
+    end step destroys it for not attacking.
+    """
+    game, p0, _ = _w3g1_imp_activated(
+        set_pool, [_mk_creature_card("Bear", 2, 2), _w3g1_wall()]
+    )
+    bear, wall = p0.battlefield
+    assert bear.metadata.get("must_attack_until_eot")
+    assert bear.metadata.get("destroy_if_did_not_attack_eot")
+    assert not wall.metadata.get("must_attack_until_eot")
+    assert not wall.metadata.get("destroy_if_did_not_attack_eot")
+
+
+def test_w3g1_maddening_imp_marks_only_the_active_players_creatures(set_pool):
+    """``controller: "active_player"`` (CR 102.1) is a filter word now, and the
+    Imp's own controller is the one seat it must not reach: the ability is
+    activated on somebody else's turn, so "the active player" is never the
+    activator."""
+    game, p0, p1 = _w3g1_imp_activated(set_pool, [_mk_creature_card("Bear", 2, 2)])
+    p1.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Ally", 1, 1))))
+    game._sync_control()
+    assert p0.battlefield[0].metadata.get("must_attack_until_eot")
+    ally = [p for p in p1.battlefield if p.card.name == "Ally"][0]
+    assert not ally.metadata.get("must_attack_until_eot")
+
+
+def test_w3g1_maddening_imp_refuses_the_attackerless_declaration(set_pool):
+    """The mark reaches ``declare_attackers``: the requirement is enforced by
+    the step that already reads it, not by anything this round added."""
+    game, p0, _ = _w3g1_imp_activated(set_pool, [_mk_creature_card("Bear", 2, 2)])
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [], 1) == (False, "Bear must attack if able")
+    assert game.declare_attackers(0, [0], 1)[0]
+
+
+def test_w3g1_maddening_imp_destroys_the_creature_that_stayed_home(set_pool):
+    """The end step's own sweep, reached through the mark the second sentence
+    arms. The creature is tapped, so the requirement is met as far as it is able
+    (CR 508.1a) and the declaration is legal with nobody attacking - which is
+    exactly the case the destruction is printed for."""
+    game, p0, _ = _w3g1_imp_activated(set_pool, [_mk_creature_card("Bear", 2, 2)])
+    p0.battlefield[0].tapped = True
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [], 1)[0]
+    game.resolve_end_step(0)
+    game.check_state_based_actions()
+    assert [p.card.name for p in p0.battlefield] == []
+
+
+def test_w3g1_maddening_imp_spares_the_creature_that_attacked(set_pool):
+    game, p0, _ = _w3g1_imp_activated(set_pool, [_mk_creature_card("Bear", 2, 2)])
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], 1)[0]
+    game.resolve_end_step(0)
+    game.check_state_based_actions()
+    assert [p.card.name for p in p0.battlefield] == ["Bear"]
+
+
+@pytest.mark.parametrize("combat_steps, expected", [
+    (0, True),                 # the opponent's precombat main
+    (1, False),                # ...and one step later, combat has begun
+])
+def test_w3g1_only_before_combat_is_narrower_than_before_attackers(
+    set_pool, combat_steps, expected,
+):
+    """"Activate only during an opponent's turn and only before combat."
+
+    Two conjuncts, split by ``activation_restrictions._conjuncts`` before the
+    table sees them, which is why this is two rows and not one. The
+    beginning-of-combat step is still *before attackers are declared* and is not
+    before *combat* (CR 506.1), so a row reusing Nettling Imp's window would
+    pass the first case and fail the second.
+    """
+    game, _, _ = _w3g1_board([_mk_creature_card("Bear", 2, 2)],
+                             [set_pool("TMP")["Maddening Imp"]])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    for _ in range(combat_steps):
+        game.advance_combat_phase()
+    assert game.activate_permanent_ability(
+        1, "Maddening Imp", ability_index=0
+    ).supported is expected
+
+
+def test_w3g1_the_imp_cannot_be_activated_on_its_own_controllers_turn(set_pool):
+    game, _, _ = _w3g1_board([_mk_creature_card("Bear", 2, 2)],
+                             [set_pool("TMP")["Maddening Imp"]])
+    game.start_turn(1)
+    game._close_current_priority_step()
+    assert not game.activate_permanent_ability(
+        1, "Maddening Imp", ability_index=0
+    ).supported
+
+
+def test_w3g1_a_named_seat_no_longer_swallows_the_rest_of_the_phrase():
+    """``subject_matches`` used to **return** the answer for four named seats,
+    skipping every key tested after them.
+
+    Total War ("except for creatures the player hasn't controlled continuously
+    since the beginning of the turn") and Mudslide ("tapped creatures without
+    flying they control") both carried the dropped key in their payload the
+    whole way, which is why no census could see it: the narrowing was compiled,
+    shipped and then not asked.
+    """
+    game, p0, _ = _w3g1_board([], [])
+    game.start_turn(0)
+    fresh = Permanent(card=_mk_creature_card("Newcomer", 1, 1))
+    fresh.metadata["summoning_sickness_turn"] = game.turn
+    veteran = _nosick(Permanent(card=_mk_creature_card("Veteran", 1, 1)))
+    p0.battlefield += [fresh, veteran]
+    game._sync_control()
+    described = {
+        "type_filter": "creature", "controller": "that_player",
+        "controlled_since_turn_start": True,
+    }
+    assert not subject_matches(
+        game, fresh, described, observer=1, that_player=p0
+    ), "Total War's own exemption"
+    assert subject_matches(game, veteran, described, observer=1, that_player=p0)
+
+
+def test_w3g1_sirens_call_kept_every_word_when_two_lines_left_its_hook():
+    """The card whose hook this round shrank.
+
+    Its requirement reaches every creature the active player controls; its
+    destruction reaches only the non-Walls it has controlled since the turn
+    began. Two different sets from one card, which is why the description
+    travels in the payload rather than being inherited from the requirement
+    beside it.
+    """
+    call = {c.name: c for c in load_cards(manifest_set_path("LEA"))}["Siren's Call"]
+    game, p0, p1 = _w3g1_board(
+        [_mk_creature_card("Bear", 2, 2), _w3g1_wall()], []
+    )
+    p1.hand.append(call)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    arrived = Permanent(card=_mk_creature_card("Newcomer", 1, 1))
+    arrived.metadata["summoning_sickness_turn"] = game.turn
+    p0.battlefield.append(arrived)
+    game._sync_control()
+    assert game.cast_from_hand(1, "Siren's Call").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    bear, wall, newcomer = p0.battlefield
+    assert bear.metadata.get("must_attack_until_eot")
+    assert wall.metadata.get("must_attack_until_eot"), "every creature attacks"
+    assert newcomer.metadata.get("must_attack_until_eot")
+    assert bear.metadata.get("destroy_if_did_not_attack_eot")
+    assert not wall.metadata.get("destroy_if_did_not_attack_eot"), "non-Wall only"
+    assert not newcomer.metadata.get("destroy_if_did_not_attack_eot"), (
+        "ignored for a creature the player hasn't controlled since the turn began"
+    )
+
+
+def test_w3g1_both_combat_roles_resolve_or_both_refuse():
+    """"Destroy the attacking creature." used to compile to ``destroy_self`` and
+    "Destroy the blocking creature." refused to parse.
+
+    Two halves of one pair-role vocabulary, one of them answering, and answering
+    with the **ability's own source**. No card printed the pair, so nothing
+    failed; No Quarter prints both on an enchantment that is in no combat at
+    all, and would have destroyed itself.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    for line in ("Destroy the attacking creature.", "Destroy the blocking creature."):
+        with pytest.raises((GrammarError, LoweringError)):
+            lower_ability(parse_line(line))
+
+
+def test_w3g1_farrels_mantle_still_names_the_creature_it_enchants():
+    """The one shipped card printing a combat role. Its trigger is about the
+    enchanted creature attacking, so the role *is* the event's subject - which
+    is the only context ``rebind_combat_role_to_event_subject`` resolves one
+    in."""
+    mantle = {
+        c.name: c for c in load_cards(manifest_set_path("FEM"))
+    }["Farrel's Mantle"]
+    program = compile_card_oracle(mantle)
+    assert program.supported
+    marks = [
+        step for trigger in program.triggered_abilities
+        for step in (trigger.instruction.payload.get("then") or ())
+        if step.kind == "assign_no_combat_damage_until_eot"
+    ]
+    assert [step.payload.get("subject") for step in marks] == ["attached"]

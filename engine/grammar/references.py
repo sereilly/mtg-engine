@@ -33,7 +33,7 @@ from .amounts import parse_amount
 # the same effect rather than a choice a player makes. Re-exported under the
 # names this module used, so `phrases` and every effect family that reads one
 # is untouched, exactly as `phrases` re-exports them one layer up.
-from .back_references import (COMBAT_ROLES, PAIR_ORDINALS,  # noqa: F401
+from .back_references import (PAIR_ORDINALS,  # noqa: F401
                               accept_combat_role,
                               _parse_that_object, parse_bound_subject,
                               parse_pair_ordinal_subject)

@@ -726,6 +726,17 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same CR 508.1a requirement on a creature the caster chose rather
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
+    # "**Non-Wall creatures the active player controls** attack this turn if
+    # able." (Maddening Imp.) The same CR 508.1a requirement over every creature
+    # a printed noun phrase describes — the mirror of the block twin two rows
+    # down, which is why they carry the same category and the same name shape.
+    "force_subject_to_attack_until_eot": "combat_restrictions",
+    # The delayed half of that requirement — "At the beginning of the next end
+    # step, destroy each of those creatures that didn't attack this turn."
+    # (Maddening Imp, Siren's Call.) A `destruction` kind rather than a combat
+    # one: what it arms is the end step's destroy sweep, and the combat is only
+    # the condition.
+    "destroy_subject_at_end_step_if_it_didnt_attack": "destruction",
     "force_target_to_block_until_eot": "combat_restrictions",
     "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",

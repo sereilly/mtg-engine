@@ -877,6 +877,66 @@ def force_subject_to_block_until_eot(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("force_subject_to_attack_until_eot")
+def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Non-Wall creatures the active player controls attack this turn if able.
+    At the beginning of the next end step, destroy each of those creatures that
+    didn't attack this turn." (Maddening Imp.)
+
+    The unnarrowed twin of ``force_target_to_attack_until_eot`` and the exact
+    mirror of ``force_subject_to_block_until_eot`` beside it: every creature the
+    printed noun phrase describes, on every battlefield, rather than one the
+    caster chose. Same ``must_attack_until_eot`` mark the declare-attackers step
+    already reads, so nothing new decides what "if able" means.
+
+    Over ``all_permanents`` rather than one seat's battlefield, because the
+    phrase scopes itself: "the active player controls" is a filter word
+    (CR 102.1) that ``subject_matches`` answers, and reading the seat here as
+    well would be a second opinion about which creatures the card names. That
+    second opinion is what this replaces: ``force_active_player_creatures_to_attack``
+    had ``active_player_index`` written into it and was reachable only by
+    Siren's Call's name, so Maddening Imp — printing the identical sentence
+    with one extra narrowing — got nothing from it.
+
+    ``destroy_if_absent`` is the printed tail, and it is the same
+    ``destroy_if_did_not_attack_eot`` mark Nettling Imp's fused handler sets and
+    the end step already sweeps (``engine/phases/end_step.py``). Set at
+    resolution rather than looked up at the end step, which is what makes
+    "those creatures" mean the set that was marked and not whatever the noun
+    phrase would describe a turn later.
+    """
+    from ..subject_filters import subject_matches
+
+    described = instruction.payload.get("subject") or {}
+    destroy = bool(instruction.payload.get("destroy_if_absent"))
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    marked: list[str] = []
+    for perm in list(game.all_permanents()):
+        if not perm.is_creature:
+            continue
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        perm.metadata["must_attack_until_eot"] = True
+        if destroy:
+            perm.metadata["destroy_if_did_not_attack_eot"] = True
+        marked.append(perm.card.name)
+    if marked:
+        game.log.append(
+            f"{context.card.name} forces {', '.join(marked)} to attack this turn"
+        )
+    else:
+        game.log.append(
+            f"{context.card.name} resolved with no creatures to force into combat"
+        )
+    return True, "resolved"
+
+
 @effect_handler("force_self_to_attack_until_eot")
 def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…this creature deals 3 damage to you **and attacks this turn if able**."
@@ -904,24 +964,60 @@ def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
-@effect_handler("force_active_player_creatures_to_attack")
-def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+@effect_handler("destroy_subject_at_end_step_if_it_didnt_attack")
+def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of the next end step, destroy each of those creatures
+    that didn't attack this turn." (Maddening Imp.) "…destroy all non-Wall
+    creatures that player controls that didn't attack this turn. Ignore this
+    effect for each creature the player didn't control continuously since the
+    beginning of the turn." (Siren's Call.)
+
+    The delayed half of the attack requirement, over the set a printed noun
+    phrase describes. It arms the ``destroy_if_did_not_attack_eot`` mark the end
+    step already sweeps (``engine/phases/end_step.py``) — the same mark Nettling
+    Imp's fused handler sets for one creature — so nothing new decides when the
+    destruction happens or whether regeneration is offered.
+
+    **Marked now, swept later**, which is what makes the words mean what they
+    say: "those creatures" is the set as it stood when the ability resolved, and
+    a creature that arrives afterwards is not one of them however well it
+    matches the phrase. Re-reading the noun phrase at the end step would be a
+    second, later answer to a question CR 608.2 asked once.
+
+    The two cards' sets differ from their own requirements' and from each
+    other's — Siren's Call compels *every* creature the active player controls
+    and destroys only the non-Walls it has controlled since the turn began — so
+    the description travels in the payload rather than being inherited from the
+    requirement beside it.
+    """
+    from ..subject_filters import subject_matches
+
+    described = instruction.payload.get("subject") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
     marked: list[str] = []
-    for permanent in game.controlled_by(game.active_player_index):
-        if not permanent.is_creature:
+    for perm in list(game.all_permanents()):
+        if not perm.is_creature:
             continue
-        permanent.metadata["must_attack_until_eot"] = True
-        is_wall = permanent.has_type("wall")
-        # "Ignore this effect for each creature the player didn't control
-        # continuously since the beginning of the turn."
-        entered_this_turn = permanent.metadata.get("summoning_sickness_turn") == game.turn
-        if not is_wall and not entered_this_turn:
-            permanent.metadata["destroy_if_did_not_attack_eot"] = True
-        marked.append(permanent.card.name)
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        perm.metadata["destroy_if_did_not_attack_eot"] = True
+        marked.append(perm.card.name)
     if marked:
-        game.log.append(f"{context.card.name} forces {', '.join(marked)} to attack this turn")
+        game.log.append(
+            f"{context.card.name}: {', '.join(marked)} will be destroyed at end "
+            "step if they didn't attack"
+        )
     else:
-        game.log.append(f"{context.card.name} resolved with no creatures to force into combat")
+        game.log.append(
+            f"{context.card.name} resolved with no creatures to mark for the "
+            "end-step destruction"
+        )
     return True, "resolved"
 
 
