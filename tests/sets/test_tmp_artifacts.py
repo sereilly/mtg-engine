@@ -169,3 +169,86 @@ def test_w1g5_cold_storage_returns_only_the_creature_cards_it_exiled(set_pool):
     assert [entry["card"].name for entry in linked_entries(storage)] == ["Relic"], (
         "the artifact the sentence does not name stays exiled with the pile"
     )
+
+
+# --- W2G2: Magnetic Web's blocking requirement (CR 509.1c) ---
+
+from engine import Game, PlayerState
+from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
+from engine.models import Permanent
+from engine.named_counters import add_counters
+from engine.oracle import compile_card_oracle
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w2g2_web_board(web):
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.battlefield.append(_nosick(Permanent(card=web)))
+    p0.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Magnetized Ogre", 3, 3)))
+    )
+    p1.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Magnetized Wall", 0, 4)))
+    )
+    p1.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Free Wall", 0, 4))))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    add_counters(p0.battlefield[1], "magnet", 1)
+    add_counters(p1.battlefield[0], "magnet", 1)
+    return game, p0, p1
+
+
+def test_w2g2_magnetic_web_compels_the_magnetized_creatures_to_block(set_pool):
+    """``Whenever a creature with a magnet counter on it attacks, all creatures
+    with magnet counters on them block that creature this turn if able.``
+
+    A sentence that was **claimed by nothing** while the card reported itself
+    supported — ``parse_coverage`` was the only instrument that could see it.
+    Three pieces behind it: a counter-defined noun phrase
+    (``ObjectFilter.with_counter``), an unnarrowed block requirement over the
+    set it describes, and "that creature" as the attacker the trigger's event
+    froze.
+    """
+    game, p0, p1 = _w2g2_web_board(set_pool("TMP")["Magnetic Web"])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [1], 1)[0]
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    ogre_id = p0.battlefield[1].permanent_id
+    assert p1.battlefield[0].metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] == [ogre_id]
+    assert p1.battlefield[1].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
+
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {}) == (
+        False, "Magnetized Wall must block Magnetized Ogre this turn if able"
+    )
+    assert game.declare_blockers(1, {1: 1})[0] is False, "the free Wall is not compelled"
+    assert game.declare_blockers(1, {0: 1})[0], game.log
+
+
+def test_w2g2_magnetic_web_stays_quiet_for_an_unmagnetized_attacker(set_pool):
+    """The trigger's own narrowing. Read too widely it would compel a block on
+    every attack in the game, which is the direction a dropped filter always
+    takes."""
+    game, p0, p1 = _w2g2_web_board(set_pool("TMP")["Magnetic Web"])
+    p0.battlefield[1].metadata.pop("magnet_counters", None)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [1], 1)[0]
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.battlefield[0].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0], game.log
+
+
+def test_w2g2_magnetic_web_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Magnetic Web"]).supported

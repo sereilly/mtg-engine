@@ -247,7 +247,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.AttackAsThough: _lower_attack_as_though,
     ast.AssignsNoCombatDamage: _lower_assigns_no_combat_damage,
     ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
-    ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
     ast.AttackingDoesntTap: _lower_attacking_doesnt_tap,
     ast.ChooseTarget: _lower_choose_target,
     ast.WaiveShroud: _lower_waive_shroud,
@@ -278,6 +277,12 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: whichever was consulted first, which is not a fact anyone should have to look
 #: up.
 _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
+    # "…all creatures with magnet counters on them block **that creature** this
+    # turn if able" (Magnetic Web). The attacker the requirement names may be
+    # the object the firing event was about, so the lowering has to know which
+    # event fired — and refuses the pronoun under one that records no attacker
+    # rather than compiling a requirement aimed at nothing.
+    ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
     # "…**that player** exiles all cards from their library" (Thought Lash),
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site

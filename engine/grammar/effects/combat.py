@@ -10,6 +10,7 @@ at all.
 from .. import ast
 from ..lexer import MANA
 from ..nouns import parse_object_filter
+from ..back_references import parse_bound_subject
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..phrases import (_accept_number, _parse_duration, parse_subject_filter_at)
@@ -745,6 +746,15 @@ def _parse_blocks_this_turn_if_able(
     if not stream.accept_word("blocks", "block"):
         return None
     attacker = parse_recipient(stream)
+    if attacker is None:
+        # "…block **that creature** this turn if able" (Magnetic Web). A
+        # back-reference to the object the trigger's event was about, which
+        # `parse_recipient` does not read — its pronouns are "it" and "itself",
+        # and a demonstrative with a noun behind it is the bound subject
+        # `parse_bound_subject` reads. Tried second so the pronoun spellings
+        # keep their own reading, and refused by every lowering that has not
+        # said otherwise, which is what makes reading it here safe.
+        attacker = parse_bound_subject(stream)
     if attacker is None:
         stream.reset(mark)
         return None

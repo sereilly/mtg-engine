@@ -650,3 +650,74 @@ def test_w1g5_interdict_offers_a_picker_over_the_four_printed_types(set_pool):
         "stack_ability_kinds": ["activated"],
         "stack_ability_source_types": ["artifact", "creature", "enchantment", "land"],
     }
+
+
+# --- W2G2: Respite, and the per-each life gain's fold (CR 107.3) ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def test_w2g2_respite_gains_one_life_per_attacker_and_fogs(set_pool):
+    """``Prevent all combat damage that would be dealt this turn. You gain 1
+    life for each attacking creature.``
+
+    The count is the round's point. CR 508.1a puts every attacker on the
+    **active** player's battlefield, so the seat casting the fog controls none
+    of them — the hand-built battlefield branch this fold removed scanned
+    ``controlled_by(gainer)`` and would have answered zero.
+    """
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    for name in ("Bear A", "Bear B", "Bear C"):
+        p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card(name, 2, 2))))
+    p1.hand.append(set_pool("TMP")["Respite"])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1, 2], 1)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+
+    before = p1.life
+    assert game.cast_from_hand(1, "Respite").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.life == before + 3, game.log
+    game.advance_combat_phase()
+    assert p1.life == before + 3, "the fog is the other half of the same card"
+
+
+def test_w2g2_aven_gagglemaster_still_counts_its_fliers(catalog_by_name):
+    """The card the fold had to keep working. Its ``with_keywords`` narrowing
+    was the one thing the general counter refused — ``evaluate_count`` asked
+    the *pure* matcher, which cannot answer layer 6 — so the battlefield scan
+    now goes through ``subject_matches`` like every other reader of a printed
+    noun phrase. Two fliers on the board: the Hawk and the Gagglemaster."""
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.hand.append(catalog_by_name["Aven Gagglemaster"])
+    p0.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Hawk", 1, 1, "Flying")))
+    )
+    p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Ox", 2, 2))))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    before = p0.life
+    assert game.cast_from_hand(0, "Aven Gagglemaster").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p0.life == before + 4, game.log
+
+
+def test_w2g2_respite_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Respite"]).supported

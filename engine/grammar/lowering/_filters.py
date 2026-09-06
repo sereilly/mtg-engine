@@ -126,7 +126,15 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # unhonoured field while its negation went through.
     "nontoken", "token_only",
     "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter", "supertypes", "excluded_supertypes",
+    "colored", "with_plus1_counter",
+    # "…**with a bounty counter on it**" (Bounty Hunter), "…**with magnet
+    # counters on them**" (Magnetic Web). ``to_payload`` emits it as
+    # ``with_counter`` and ``permanent_matches_filter`` tests it off the
+    # counter store, so it is honoured in exactly the sense
+    # ``with_plus1_counter`` beside it is — the kind being data rather than
+    # part of the key's name changes nothing about who answers it.
+    "with_counter",
+    "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
     # "…tapped this turn to pay for its abilities" (Vodalian War Machine).

@@ -722,6 +722,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
     "force_target_to_block_until_eot": "combat_restrictions",
+    "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

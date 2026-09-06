@@ -817,6 +817,66 @@ def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("force_subject_to_block_until_eot")
+def force_subject_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…all creatures with magnet counters on them block **that creature** this
+    turn if able." (Magnetic Web.)
+
+    The unnarrowed twin of the requirement above: every creature the printed
+    noun phrase describes, on every battlefield, rather than one the caster
+    chose. Same record and same enforcement — the attacker's ``permanent_id``
+    on each compelled creature — so nothing new decides what "if able" means.
+
+    ``attacker: "bound"`` is the creature the trigger's event was about, read
+    out of the frozen trigger context by id (CR 400.7). The lowering refuses
+    the pronoun under an event that records no attacker, so a missing id here
+    is an attacker that has already left rather than a sentence nobody read.
+
+    Through ``subject_matches`` with the ability's controller as CR 109.5's
+    "you", the one reader of a printed noun phrase — and over
+    ``all_permanents``, because the sentence scopes to no seat: a Magnetic Web
+    attacker is on the *active* player's battlefield and the creatures compelled
+    to block it are on everybody else's.
+    """
+    from ..subject_filters import subject_matches
+
+    if instruction.payload.get("attacker") == "bound":
+        bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+        attacker = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    else:
+        attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: the attacker has left, so nothing is "
+            "compelled to block"
+        )
+        return True, "resolved"
+    described = instruction.payload.get("subject") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    compelled = 0
+    for perm in game.all_permanents():
+        if perm is attacker or not perm.is_creature:
+            continue
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        owed = list(perm.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+        if attacker.permanent_id not in owed:
+            owed.append(attacker.permanent_id)
+        perm.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+        compelled += 1
+    game.log.append(
+        f"{compelled} creature(s) block {attacker.card.name} this turn if able "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("force_self_to_attack_until_eot")
 def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…this creature deals 3 damage to you **and attacks this turn if able**."
