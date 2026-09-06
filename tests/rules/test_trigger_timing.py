@@ -731,16 +731,28 @@ def test_603_3d_a_seat_the_firing_event_named_is_not_asked_for():
     assert game.pending_choices == []
 
 
-@_w4g3_pytest.mark.cr("601.2c", "115.4")
-def test_601_2c_a_kind_table_default_never_widens_the_printed_phrase():
+@_w4g3_pytest.mark.cr("603.3d", "102.2")
+def test_603_3d_a_kind_table_default_never_widens_the_printed_phrase():
     """"Whenever you gain life, **target opponent** loses that much life."
     (Vito, Thorn of the Dusk Rose.)
 
-    The same gate from the other side. Vito's lowering keeps no target
-    description, so the spec is the kind table's ``{"kind": "player"}`` - every
-    seat, the caster's own included. Announcing on that spec would have offered
-    Vito's controller as a legal target for a phrase that says "opponent", so
-    the printed evidence is required and Vito keeps the standing seat.
+    The same gate from the other side, and **the gate is no longer where the
+    answer comes from**. This test used to assert the symptom: Vito's lowering
+    kept no target description, so ``derive_instruction_spec`` answered the kind
+    table's bare ``{"kind": "player"}`` - every seat, the caster's own included
+    - and the printed-evidence gate (``_prints_a_target``) declined to announce
+    rather than offer a phrase-widening picker, leaving the standing opponent.
+
+    That was a workaround for a missing fact. ``lowering/life._lower_lose_life``
+    now records the description the phrase states, so the spec carries
+    ``opponents_only`` and the announcement can happen: the controller chooses
+    **which** opponent (CR 603.3d), out of a list that never contains their own
+    seat, because a player is not their own opponent (CR 102.2/102.3).
+
+    The gate itself is unchanged and still covers the cards it was written for -
+    Abyssal Specter's "that player", Anvil of Bogardan's "that player" - which
+    the test above this one holds. What moved is that Vito is no longer one of
+    them.
     """
     from engine.targeting import derive_instruction_spec
 
@@ -749,8 +761,14 @@ def test_601_2c_a_kind_table_default_never_widens_the_printed_phrase():
     ability = _w4g3_fire(game, vito, index=0)
 
     spec = derive_instruction_spec([ability.instruction])
-    assert spec == {"kind": "player"}, "the widened spec this gate exists for"
-    assert game.pending_choices == []
+    assert spec == {"kind": "player", "opponents_only": True}, (
+        "the printed narrowing, recorded where the picker reads it"
+    )
+    (offer,) = game.pending_choices
+    assert offer.kind == "trigger_target" and offer.player_index == 0
+    assert [target["seat"] for target in offer.data["targets"]] == [1, 2], (
+        "a player is never their own opponent"
+    )
 
 
 @_w4g3_pytest.mark.cr("115.4", "601.2c")

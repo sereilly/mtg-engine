@@ -562,6 +562,10 @@ def _lower_lose_life(
             "owner": (filt.zone_owner.kind if filt.zone_owner else "owner"),
             "card_types": list(filt.card_types),
         }
+        # The narrowing, for the reason the plain branch below records it: the
+        # gate above admits only "target opponent", so a bare `player` spec
+        # offered the ability's own controller (CR 115.4).
+        _describe_targets(payload, node.player)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "**That player**" after an event that was *about an object*: the object's
     # controller. Massacre Wurm's dead creature is in a graveyard by the time
@@ -590,6 +594,20 @@ def _lower_lose_life(
         payload["recipient"] = EVENT_SUBJECT_PLAYER
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
+        # **The printed narrowing, recorded.** "Target **opponent** loses 1
+        # life" (Ebony Charm, Forbidden Ritual, Vito) reached the picker as a
+        # bare instruction kind, and `targeting._KIND_SPECS` answers
+        # ``{"kind": "player"}`` for `target_loses_life` — which offers the
+        # caster their own face, a live two-player bug (CR 115.4). The
+        # description is what every other player picker in the engine reads,
+        # and it is `_targets_payload`'s answer rather than a flag invented
+        # here, so "target opponent" narrows the same way whichever sentence
+        # prints it.
+        #
+        # "That player" gets no entry, and that is the same function's answer
+        # rather than a branch here: the seat was frozen by the firing event
+        # and nobody chooses it (CR 115.10b).
+        _describe_targets(payload, node.player)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "Destroy target creature. Its controller loses 2 life." (Liliana, Death
     # Mage's −3.) The controller of the previous step's target — recorded by
@@ -666,11 +684,24 @@ def _lower_exchange_life_totals(
             f"{node.player.kind!r}",
             node=node,
         )
-    return (
-        OracleInstruction(
-            "exchange_life_totals", "", {"recipient": "target"}
-        ),
-    )
+    payload: dict[str, object] = {"recipient": "target"}
+    if node.player.kind == "target_opponent":
+        # The printed narrowing, carried the way every other player picker in
+        # the engine reads it. `targeting`'s kind table answers a flat
+        # ``{"kind": "player"}`` for this kind — right for "target player" and
+        # wrong for "target opponent", whose seat can never be the chooser's
+        # own (CR 102.2/102.3), so Mirror Universe offered its controller their
+        # own life total to swap with themselves.
+        #
+        # **The opponent spelling only**, and that is not caution: "exchange
+        # life totals with **that player**" (Psychic Transfer) reaches this
+        # function as ``target_player`` too, because the pronoun is rebound to
+        # the seat the *condition* already targeted. Describing that would
+        # announce a second target for a seat the spell has already chosen.
+        # The narrowing is the thing that was missing; the bare description was
+        # not.
+        _describe_targets(payload, node.player)
+    return (OracleInstruction("exchange_life_totals", "", payload),)
 
 def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ...]:
     """"That player's life total becomes 20." (Rebirth.)

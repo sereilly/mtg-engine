@@ -1633,3 +1633,94 @@ def test_118_3c_the_life_rider_refuses_a_currency_nothing_charges():
     # read as always paid.
     with _w2g1_pytest.raises(_W2G1GrammarError):
         _w2g1_parse("Counter target spell unless its controller pays 1 life.")
+
+
+# --- W1G5: "target opponent" is never the caster's own seat ---
+import pytest as _w1g5_pytest
+
+from engine.card_loader import load_cards as _w1g5_load, manifest_set_paths as _w1g5_paths
+from engine.oracle import compile_card_oracle as _w1g5_compile
+from engine.targeting import derive_activation_spec as _w1g5_activation_spec
+from engine.targeting import derive_cast_spec as _w1g5_cast_spec
+
+
+def _w1g5_pool():
+    """Every card in both manifest roles, by name."""
+    pool = {}
+    for path in _w1g5_paths(include_measured=True):
+        for card in _w1g5_load(path):
+            pool.setdefault(card.name, card)
+    return pool
+
+
+def _w1g5_widened(spec) -> bool:
+    """Whether *spec* offers a player picker with no "opponent" narrowing."""
+    return (
+        isinstance(spec, dict)
+        and spec.get("kind") in ("player", "player_or_planeswalker")
+        and not spec.get("opponents_only")
+    )
+
+
+@_w1g5_pytest.mark.cr("115.1", "102.2")
+def test_115_1_no_card_printing_target_opponent_offers_its_own_controller():
+    """A player is not their own opponent (CR 102.2/102.3), so the seat a
+    printed "target **opponent**" describes (CR 115.1) can never be the seat
+    choosing it.
+
+    The picker is what enforces that, and it enforces what the *spec* says —
+    so a lowering that records no target description leaves the kind table's
+    bare ``{"kind": "player"}`` standing, which offers every seat. That was
+    live on five cards across the cast and activation paths: Ebony Charm,
+    Forbidden Ritual and Necromentia sent to the caster's own face, Liliana,
+    Death Mage's −7 and Mirror Universe the same one path over.
+
+    A sweep rather than five cases, because the failure is a *missing* record:
+    it cannot be found by testing the cards that have one, and the sixth card
+    to print the phrase would arrive with the same hole.
+    """
+    widened = []
+    for name, card in sorted(_w1g5_pool().items()):
+        program = _w1g5_compile(card)
+        if "target opponent" in (card.oracle_text or "").lower():
+            if _w1g5_widened(_w1g5_cast_spec(card, program)):
+                widened.append((name, "cast"))
+        for ability in program.activated_abilities:
+            if "target opponent" not in (ability.source_line or "").lower():
+                continue
+            if _w1g5_widened(_w1g5_activation_spec(ability)):
+                widened.append((name, "activation"))
+    assert widened == [], (
+        "cards whose picker offers the caster for a printed "
+        f"'target opponent': {widened}"
+    )
+
+
+@_w1g5_pytest.mark.cr("115.1", "102.2")
+def test_115_1_the_picker_offers_only_opponents_for_target_opponent():
+    """The other half: the narrowing on the spec has to reach the enumerator.
+
+    A flag recorded and never read is the dropped rider this whole family
+    exists to prevent, so the list is asked for rather than the spec inspected
+    — and a plain "target player" beside it still offers every seat, which is
+    what says the narrowing is the phrase's rather than the picker's.
+    """
+    pool = _w1g5_pool()
+    game = Game(players=[PlayerState(name=f"P{i + 1}") for i in range(3)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    def offered(name):
+        card = pool[name]
+        spec = _w1g5_cast_spec(card, _w1g5_compile(card))
+        assert spec is not None, f"{name} derives no cast spec"
+        return [
+            candidate.get("seat")
+            for candidate in game._enumerate_targets(0, card, spec, for_cast=True)
+        ]
+
+    for name in ("Ebony Charm", "Forbidden Ritual", "Necromentia"):
+        assert offered(name) == [1, 2], name
+    # "Target **player** loses 5 life" (Kaervek's Spite) names every seat, the
+    # caster's own included.
+    assert offered("Kaervek's Spite") == [0, 1, 2]
