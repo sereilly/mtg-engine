@@ -1057,6 +1057,73 @@ the third reader of the same phrase. Two of those four modules were **owned by a
 different group than the one that crossed them**, which is the shared-module
 case restated: ownership predicts who splits it, not who reaches it.
 
+### Wave 2 closed: 275 -> 317 of 335, and two of the three exit numbers are zero
+
+Five worktree groups again, merged serially (G5, G1, G3, G4, G2). **Supported
+275 -> 317.** `--hollow-lines` **1 -> 0** and `parse_coverage --set TMP`
+**3 cards -> 0**: every printed sentence of every supported card in the set is
+now claimed by a named consumer. `picker_sweep` is at 1 (Mindwhip Sliver, a
+granted quoted ability whose picker the derivation cannot see). Zero hooks
+added, for the second wave running.
+
+**Phase 0 cost five pre-splits and they were the right five.** `references.py`,
+`lowering/_amounts.py`, `lowering/exile.py`, `lowering/zones.py` and
+`lowering/_events.py` were each within 12 lines of the cap and each reached by
+three or more groups, so none could be assigned an owner. All five cut along a
+seam the module's own docstring had already written down, and all five together
+moved **0 of 2,824** compiled programs. Two groups then crossed a cap in round
+and split it themselves; **one crossed at integration and was the integrator's**
+(below).
+
+**A fifth scan exists and nothing in this playbook named it.** The pre-split
+broke `tests/engine/test_cr_citation_subjects.py` in *both directions at once*,
+because its review exemptions are keyed by **file path**: the new file's
+citation had no excuse and the old file's excuse had no citation. Dead imports,
+missing names and duplicate definitions are all clean in that state. Anything
+keyed on the path a line used to live at is exposed to a split.
+
+**Eleven shipped cards were mis-playing, and one class of them is a rules
+break.** A spell whose *second* printed sentence makes its program a `sequence`
+reaches **no arm** of `_validate_cast_targets`, so CR 601.2c was enforced only
+through the derived cast spec — and that spec carried a hand-written handful of
+narrowings while the rest rode the payload. **Vertigo** ("target creature with
+flying") killed a Grizzly Bears; **Spinning Darkness** ("target nonblack
+creature") killed a Bog Wraith and gained the life. Both wrong in the caster's
+favour and silent. Seven more (Exile, Jabari's Influence, Ashes to Ashes, Secure
+the Scene, Energy Tap, Alarum, Broken Visage) accepted an illegal announcement
+and then affected nothing. Beside them: **Fellwar Stone** read CR 106.7 off
+Scryfall's `produced_mana`, so an opponent's lone Reflecting Pool made it tap
+for any colour; **Pursued Whale's Pirate token** (M21) obliged nobody to attack,
+in a corpus — *text a card grants a token* — that no census walks; and
+**Damping Field + Ornithopter** was a live 400 in the browser, three readers of
+"what type is this?" with the narrowest one enforcing.
+
+**Two groups built the same thing twice, in two different ways, and both are
+instructive.** They added one filter key for "with a `<kind>` counter on it"
+under two names, which **merges clean** rather than conflicting — two fields,
+two payload keys, two matcher branches, suite green. W2G2 caught it on its own
+branch and renamed to W2G5's spelling. What was left at integration was one
+genuine difference: W2G5's singular reader went through `accept_counter_kind`
+(which handles a P/T token where a bare `peek_word` does not) and W2G2's added
+the **plural** spelling Magnetic Web needs. Neither is a side to take. Folded
+into **one production reading both**, which is what took `postmodifiers.py` back
+under the cap it had crossed at 1,005 on nobody's branch.
+
+And they built the **per-each life gain** twice: W2G3 kept the hand-built
+battlefield branch and routed its narrowings through `subject_matches`, W2G2
+folded the branch into the general `count_spec`/`count_from_payload` pair and
+deleted the handler's second scan. The fold subsumes the other — whole-phrase
+reading *and* one scan instead of two — so it is the side that survived, and the
+other group's tests for Aven Gagglemaster, Orim's Prayer and Respite are what
+proved it. **Take the derivation, not the list**, restated as: when two branches
+solve one problem at two altitudes, the general one wins and the local one's
+tests are the check.
+
+**Respite landed with nobody working on it.** W2G2 had it and W2G3's Orim's
+Prayer work cleared it first — the third interlock in two waves, and the second
+where a decline written as a list of parts was finished by a group that never
+read the card.
+
 ## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 
 **Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the
