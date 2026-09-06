@@ -1762,8 +1762,9 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
     attachment. A pre-symbol templating of the same payment, so nothing else
     can pay it — there is no picker and no filter, only the attachment record.
 
-    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
-    words are read: an Equipment printing the clause charges the same cost.
+    CR 303.4m reads "enchanted [object]" as whatever the permanent is attached
+    to and CR 301.5f reads "equipped" the same way, so both words are read: an
+    Equipment printing the clause charges the same cost.
     """
     return any(
         _TAP_ATTACHED_COST_RE.match(segment.strip())
@@ -1825,8 +1826,8 @@ def _pays_the_attached_permanents_mana_cost(cost_lower: str) -> bool:
     the activator has to produce the mana — so the activation path builds the
     symbols from the host rather than reading a fixed dict.
 
-    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
-    words are read.
+    CR 303.4m reads "enchanted [object]" as whatever the permanent is attached
+    to and CR 301.5f reads "equipped" the same way, so both words are read.
     """
     return any(
         _PAY_ATTACHED_MANA_COST_RE.match(segment.strip())
