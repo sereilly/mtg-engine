@@ -83,6 +83,7 @@ ActionKind = Literal[
     "bid_life_confirm",
     "bid_life_pass",
     "draw_up_to_confirm",
+    "pay_any_amount_confirm",
     "confirm_mana_payment",
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",

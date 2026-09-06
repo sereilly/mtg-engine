@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import (MILLED_THIS_WAY, PER_OBJECT_SEAT_RECORDS,
+from ..oracle_types import (MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+                            PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
@@ -1744,6 +1745,47 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # library" — Rebirth). The loop is the last thing this handler does, which
     # is the other half of that rule.
     run_resumable(game, seats, offer)
+    return True, "resolved"
+
+
+@effect_handler("each_player_pays_any_mana")
+def each_player_pays_any_mana(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Each player may pay any amount of mana." (Liege of the Hollows.)
+
+    One ``pay_any_amount`` prompt per seat in turn order (CR 101.4), the shape
+    ``each_player_discards_up_to_cards`` and ``each_player_draws_up_to_cards``
+    already have one zone each over — and here for their reason: the "may" and
+    the amount are one decision, since zero is a legal answer to "any amount",
+    and the sentence behind the offer reads every seat's answer.
+
+    Every seat is recorded, including one that pays nothing, because "the amount
+    of mana **they** paid this way" is a number for every player and a seat the
+    record never mentions has to read as zero rather than as a missing key. The
+    scratchpad rides the prompt, so what is written is what the seat actually
+    paid rather than what its board could have covered.
+    """
+    caster_index = game.players.index(context.caster)
+    if instruction.payload.get("actor") == "each_opponent":
+        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    else:
+        # CR 101.4: the active player first, then the rest in turn order.
+        count = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % count, i),
+        )
+    context.results.setdefault(MANA_PAID_BY_SEAT, {})
+    for seat in seats:
+        context.results[MANA_PAID_BY_SEAT][seat] = 0
+        game.arm_pending_choice(
+            "pay_any_amount", seat,
+            card_name=context.card.name if context.card is not None else "",
+            _results=context.results,
+        )
+        game.log.append(f"{game.players[seat].name} may pay any amount of mana")
     return True, "resolved"
 
 

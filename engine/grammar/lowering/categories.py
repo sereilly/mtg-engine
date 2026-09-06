@@ -796,6 +796,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Optional actions. Parsed and lowered, not switched on — see
     # `control_flow.WRAPPER_KINDS`.
     "may": "optional",
+    # "Each player may pay any amount of mana." (Liege of the Hollows.) The
+    # collapsed form of a ``may`` made to a set of seats, so it keeps that
+    # category: what the sentence is about is an offer, and the payment is what
+    # taking it costs.
+    "each_player_pays_any_mana": "optional",
     # "Unless an opponent pays {2}, …" (Scarwood Bandits) — the same family
     # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
     # who is offered the cost and which branch the effect sits on.

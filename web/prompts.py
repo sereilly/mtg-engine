@@ -951,6 +951,47 @@ def _draw_up_to(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("pay_any_amount")
+def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
+    """Liege of the Hollows: how much mana this seat may pay, and what it can.
+
+    "Any amount" prints no ceiling at all, so unlike every other numbered
+    prompt here the range comes from the **board**: the seat's floating mana
+    plus its untapped mana lands, which is what
+    ``mana_payment.plan_payment`` will accept when the answer comes back. Asked
+    of the same reader the resolver uses — an offer the engine would refuse is
+    not an offer.
+    """
+    from engine.mana_payment import generic_cost, plan_payment, untapped_mana_lands
+
+    choice = choices[0]
+    seat = choice.player_index
+    player = ctx.game.players[seat]
+    lands = untapped_mana_lands(ctx.game.controlled_by(seat))
+    affordable = 0
+    # Walk up rather than compute: `plan_payment` is the one answer to "can
+    # this be paid", and a second arithmetic here is a second answer. The
+    # ceiling is bounded by the pool plus the lands, so the loop is short.
+    limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + len(lands)
+    for amount in range(1, limit + 1):
+        if plan_payment(
+            player.mana_pool, lands, generic_cost(amount),
+            produces=ctx.game._land_payment_colors,
+        ) is None:
+            break
+        affordable = amount
+    return {
+        "player_seat": seat,
+        "card_name": choice.data.get("card_name", ""),
+        "minimum": 0,
+        "maximum": affordable,
+        "options": list(range(0, affordable + 1)),
+        # The printed "may": paying nothing is the answer that changes least,
+        # and it is what a seat nobody asks takes.
+        "default": 0,
+    }
+
+
 @prompt_renderer("bid_life")
 def _bid_life(ctx: PromptContext, choices: list) -> dict:
     """Illicit Auction: what the standing bid is and what this seat may say.

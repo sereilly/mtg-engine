@@ -28,7 +28,7 @@ Do not edit by hand — re-run the script instead.
 | 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Complete (335/335 supported) |
 | 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Complete (167/167 supported) |
 | 16 | Fifth Edition | 5ED | 1997-03-24 | 434 | 0 | Complete (434/434 supported) |
-| 17 | Weatherlight | WTH | 1997-06-09 | 167 | 161 | Measured (100/167 supported, not shipped) |
+| 17 | Weatherlight | WTH | 1997-06-09 | 167 | 161 | Measured (107/167 supported, not shipped) |
 | 18 | Tempest | TMP | 1997-10-14 | 335 | 299 | Not Implemented |
 | 19 | Stronghold | STH | 1998-03-02 | 143 | 137 | Not Implemented |
 | 20 | Exodus | EXO | 1998-06-15 | 143 | 138 | Not Implemented |

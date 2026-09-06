@@ -690,6 +690,17 @@ def parse_imperative(
     # imperative like the draw and discard above, and non-consuming on refusal
     # so "pay {R}{R}" and the unless-pay templates keep their readings.
     if stream.at_word("pay"):
+        # "**pay any amount of mana**" (Liege of the Hollows, and Power Leak's
+        # and Errant Minion's upkeep paragraphs, which read their own whole
+        # text). A cost with no printed number: the payer names it, which is
+        # why it is a statement rather than a `ManaCost` — nothing about the
+        # sentence says how much, and the sentence behind it reads the answer.
+        # Before the life reader, which would refuse "any" and take the line
+        # with it.
+        mark_any = stream.mark()
+        if stream.accept_phrase("pay", "any", "amount", "of", "mana"):
+            return ast.PayAnyAmountOfMana(ast.PlayerRef("you"))
+        stream.reset(mark_any)
         paid = _parse_pay_life(stream)
         if paid is not None:
             return paid

@@ -31,6 +31,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
                              COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
+                             MANA_PAID_BY_SEAT,
                              DREW_BY_SEAT,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
@@ -209,6 +210,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many cards" (Flux) had no per-seat producer to demand and the looped
     # draw would have read one seat's answer for everybody.
     "each_player_discards_up_to_cards": ("discarded_count", DISCARDED_BY_SEAT),
+    # "Each player may pay any amount of mana. Then each player creates …
+    # tokens equal to **the amount of mana they paid this way**." (Liege of the
+    # Hollows.) The per-seat map, written as each prompt is answered — the
+    # only place the number exists, since how much a seat pays is a decision it
+    # has not made when the instruction returns.
+    "each_player_pays_any_mana": MANA_PAID_BY_SEAT,
     # "Each player may draw up to two cards. **For each card less than two a
     # player draws this way**, that player gains 2 life." (Truce.) The draw's
     # per-seat tally, written as each prompt is answered — the only place it

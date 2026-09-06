@@ -141,6 +141,25 @@ class Ante:
 
 
 @dataclass(frozen=True)
+class PayAnyAmountOfMana:
+    """``pay any amount of mana`` (Liege of the Hollows).
+
+    A payment whose size the *payer* names, which is what makes it different
+    from every other cost in this grammar: there is no printed number, so
+    nothing about the sentence says how much, and the answer is the whole of
+    what the sentence behind it reads ("… equal to the amount of mana they paid
+    this way").
+
+    The "may" a card prints in front of it collapses into this rather than
+    wrapping it, exactly as Mind Bomb's ceiling collapses the offer above its
+    discard: zero is already a legal answer, so the offer adds no answer the
+    prompt does not have.
+    """
+
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class CreateToken:
     count: Amount
     # None for a **noncreature** token (a Treasure): CR 208.1 gives P/T only to

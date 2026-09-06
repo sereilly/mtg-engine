@@ -284,7 +284,20 @@ def _parse_create_token(
     else:
         stream.reset(mark_leading)
 
-    count = parse_amount(stream)
+    # "creates **a number of** 1/1 green Squirrel creature tokens **equal to**
+    # the amount of mana they paid this way" (Liege of the Hollows). The
+    # quantity is printed on both sides of the token spec, which is the word
+    # order `_parse_draw`'s "draw cards equal to …" already reads one family
+    # over. Marked here and read at the end, because what sits between is the
+    # ordinary token spec and a second reader of it would be a second token
+    # grammar.
+    mark_number_of = stream.mark()
+    counted_after = bool(
+        stream.accept_word("a") and stream.accept_phrase("number", "of")
+    )
+    if not counted_after:
+        stream.reset(mark_number_of)
+    count = parse_amount(stream) if not counted_after else ast.Fixed(1)
 
     # "Create a **Treasure** token." (Gadrak.) A token Magic prints by name
     # alone: its characteristics belong to the token and live in
@@ -337,7 +350,8 @@ def _parse_create_token(
         # with no P/T keeps the refusal it has always had rather than compiling
         # to a 0/0 nothing printed.
         return _finish_create_token(
-            stream, count, leading_name, supertypes, None, None, None
+            stream, count, leading_name, supertypes, None, None, None,
+            counted_after,
         )
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     if power_negative or toughness_negative:
@@ -357,7 +371,8 @@ def _parse_create_token(
         counted_pt = power
         power = toughness = None
     return _finish_create_token(
-        stream, count, leading_name, supertypes, power, toughness, counted_pt
+        stream, count, leading_name, supertypes, power, toughness, counted_pt,
+        counted_after,
     )
 
 
@@ -369,6 +384,7 @@ def _finish_create_token(
     power,
     toughness,
     counted_pt,
+    counted_after: bool = False,
 ) -> ast.Statement:
     """Everything a token spec states *after* its power and toughness.
 
@@ -526,6 +542,19 @@ def _finish_create_token(
         stream.reset(mark_tail)
 
     granted_lines += _parse_token_trigger_sentences(stream)
+
+    if counted_after:
+        # The other half of the split quantity ``_parse_create_token`` read at
+        # the top. Required rather than optional: "a number of … tokens" with
+        # no "equal to" behind it names no number at all, and defaulting it to
+        # one would be a card making a single Squirrel however much its
+        # controller paid.
+        counted = parse_equal_to(stream)
+        if counted is None:
+            raise stream.error(
+                "expected 'equal to …' after a number of tokens"
+            )
+        count = counted
 
     return ast.CreateToken(
         count=count,

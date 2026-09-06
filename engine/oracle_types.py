@@ -40,6 +40,16 @@ X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
 # fills it in, and a second spelling is how those three come apart.
 DISCARDED_BY_SEAT = "discarded_by_seat"
 
+# "Each player may pay any amount of mana. Then each player creates … tokens
+# equal to **the amount of mana they paid this way**." (Liege of the Hollows.)
+# ``{seat: mana paid}``, per seat for ``DISCARDED_BY_SEAT``'s reason and one
+# step further: there is no scalar twin at all, because no sentence in the pool
+# asks about the total. The number exists nowhere until each seat has answered
+# its own prompt, so the handler seeds a zero per seat and each answer fills
+# one in — a seat the map never mentioned would otherwise read as the last
+# answer given.
+MANA_PAID_BY_SEAT = "mana_paid_by_seat"
+
 # Its twin one zone over: ``{seat: cards drawn}`` for "Each player may draw up
 # to two cards", read by the sentence that is sized from the *shortfall* ("For
 # each card less than two a player draws this way, that player gains 2 life",

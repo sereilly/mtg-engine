@@ -33,14 +33,24 @@ def _w1g5c_game(interactive=()):
 
 
 def _w1g5c_kill(game, perm, lea):
-    """Bolt *perm* and let its dies-trigger resolve, draining every prompt."""
-    game.players[0].hand = [lea["Lightning Bolt"]]
-    game.cast_from_hand(
-        0, "Lightning Bolt", target_player_index=0,
-        target_permanent_index=game.battlefield_index_of(perm),
-    )
-    game.resolve_stack()
-    game._settle()
+    """Bolt *perm* until it dies and let its dies-trigger resolve.
+
+    A loop rather than one Bolt, because the three creatures this block tests
+    are 1/1, 2/2 and 3/4 — sized to the toughness by asking the board rather
+    than by a number written here, which is the same reason nothing else in
+    this repo addresses a permanent by a count it kept itself.
+    """
+    for _ in range(4):
+        if not game.is_on_battlefield(perm):
+            break
+        game.players[0].hand = [lea["Lightning Bolt"]]
+        game.cast_from_hand(
+            0, "Lightning Bolt", target_player_index=0,
+            target_permanent_index=game.battlefield_index_of(perm),
+        )
+        game.resolve_stack()
+        game._settle()
+    assert not game.is_on_battlefield(perm), game.log
     game.resolve_stack()
 
 
@@ -132,3 +142,94 @@ def test_noble_benefactor_shuffles_only_the_seats_that_searched(set_pool):
     assert [c.name for c in game.players[1].library] == [
         c.name for c in ordered
     ], game.log
+
+
+def test_liege_of_the_hollows_gives_each_seat_a_squirrel_per_mana_it_paid(set_pool):
+    """"When this creature dies, each player may pay any amount of mana. Then
+    each player creates a number of 1/1 green Squirrel creature tokens equal to
+    the amount of mana they paid this way."
+
+    Both halves are per seat and the second reads the first. "Any amount"
+    prints no ceiling, so the range comes from the *board* — pool plus untapped
+    lands, through `mana_payment.plan_payment`, the same reader every other
+    "you may pay" goes through because an effect that says "may pay" gives its
+    player no priority window in which to tap. An answer the board cannot cover
+    is rejected rather than clamped.
+
+    The "may" collapses into the prompt, exactly as Mind Bomb's ceiling
+    collapses the offer above its discard: zero is already a legal answer, and
+    the sentence behind the offer has to run after every seat has answered
+    (CR 608.2), which an `optional_pay` offer would not wait for.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w1g5c_compile(wth["Liege of the Hollows"])
+    assert program.supported, program.reason
+    sequence = program.triggered_abilities[0].instruction
+    offer, tokens = sequence.payload["steps"]
+    assert offer.kind == "each_player_pays_any_mana"
+    assert offer.payload == {"actor": "each_player"}
+    assert tokens.kind == "create_token"
+    assert tokens.payload["recipient_players"] == "each_player"
+    assert tokens.payload["count"] == {"seat_record": "mana_paid_by_seat"}
+
+    game = _w1g5c_game(interactive={0, 1})
+    game.active_player_index = 0
+    liege = _W1G5Permanent(card=wth["Liege of the Hollows"])
+    game.players[0].battlefield.append(liege)
+    forests = [_W1G5Permanent(card=lea["Forest"]) for _ in range(4)]
+    game.players[0].battlefield.extend(forests)
+    mountains = [_W1G5Permanent(card=lea["Mountain"]) for _ in range(2)]
+    game.players[1].battlefield.extend(mountains)
+    game._sync_control()
+
+    _w1g5c_kill(game, liege, lea)
+
+    # Every seat is asked at once, and the token sentence has not run.
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("pay_any_amount", 0), ("pay_any_amount", 1),
+    ]
+    assert not any(
+        p.card.name == "Squirrel Token"
+        for p in game.players[0].battlefield + game.players[1].battlefield
+    )
+
+    assert game.confirm_pay_any_amount(0, 3), game.log
+    # Two untapped Mountains cannot cover five: a rejection, not a clamp.
+    assert not game.confirm_pay_any_amount(1, 5)
+    assert game.confirm_pay_any_amount(1, 2), game.log
+
+    squirrels = lambda seat: sum(
+        1 for p in game.players[seat].battlefield if p.card.name == "Squirrel Token"
+    )
+    assert squirrels(0) == 3, game.log
+    assert squirrels(1) == 2, game.log
+    # The mana really came off the board.
+    assert sum(1 for land in forests if land.tapped) == 3
+    assert sum(1 for land in mountains if land.tapped) == 2
+    assert game.stack == [] and game.resume_stack == []
+
+
+def test_liege_of_the_hollows_makes_nothing_for_a_seat_that_pays_nothing(set_pool):
+    """A seat nobody asks pays nothing — the printed "may", and the only answer
+    a default can take honestly. The record is a zero for every seat rather
+    than a missing key, so no player reads another's answer."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w1g5c_game()
+    game.active_player_index = 0
+    liege = _W1G5Permanent(card=wth["Liege of the Hollows"])
+    game.players[0].battlefield.append(liege)
+    game.players[0].battlefield.extend(
+        _W1G5Permanent(card=lea["Forest"]) for _ in range(4)
+    )
+    game._sync_control()
+
+    _w1g5c_kill(game, liege, lea)
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert not any(
+        p.card.name == "Squirrel Token"
+        for p in game.players[0].battlefield + game.players[1].battlefield
+    ), game.log
+    assert all(not p.tapped for p in game.players[0].battlefield), game.log

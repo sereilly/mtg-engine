@@ -33,6 +33,7 @@ from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
 from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
+                             MANA_PAID_BY_SEAT,
                              EXILED_THIS_WAY_OBJECTS)
 from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
@@ -2439,6 +2440,77 @@ class PendingChoicesMixin:
         return self._resolve_draw_up_to(
             choice, min(int(choice.data.get("amount", 0)), len(player.library))
         )
+
+    # -- "Each player may pay any amount of mana" -----------------------------
+
+    def confirm_pay_any_amount(self, player_index: int, amount: int) -> bool:
+        """Answer "you may pay any amount of mana" with how much (Liege of the
+        Hollows)."""
+        return self.resolve_pending_choice(
+            "pay_any_amount", player_index, amount=amount
+        )
+
+    def _resolve_pay_any_amount(self, choice: PendingChoice, amount) -> bool:
+        """Spend *amount* generic mana for the seat that was offered any amount.
+
+        **The ceiling is the board, not the card**, which is what makes this
+        prompt different from every other numbered one here: "any amount" prints
+        no number at all, so what a legal answer is comes from
+        ``mana_payment.plan_payment`` over the seat's pool *and* its untapped
+        lands — the same reader every other "you may pay" goes through, because
+        an effect that says "may pay" gives its player no priority window in
+        which to tap for mana. An answer the board cannot cover is a
+        **rejection**, not a clamp, for ``_resolve_number_choice``'s reason: a
+        silently repaired answer would let a client ask for eight Squirrels off
+        four lands and be told it worked.
+
+        The payment goes through ``_spend_payment_plan``, the one writer, so the
+        pool and the lands are charged together.
+        """
+        try:
+            value = int(amount)
+        except (TypeError, ValueError):
+            return False
+        if value < 0:
+            return False
+        seat = choice.player_index
+        player = self.players[seat]
+        plan = (
+            plan_payment(
+                player.mana_pool,
+                untapped_mana_lands(self.controlled_by(seat)),
+                generic_cost(value),
+                produces=self._land_payment_colors,
+            )
+            if value else None
+        )
+        if value and plan is None:
+            return False
+        if plan is not None:
+            self._spend_payment_plan(player, plan)
+        self.log.append(
+            f"{player.name} paid {value} mana" if value
+            else f"{player.name} paid no mana"
+        )
+        results = choice.data.get("_results")
+        if results is not None:
+            # The per-seat record the sentence behind this one reads ("… equal
+            # to the amount of mana **they** paid this way"). Written even for a
+            # seat that paid nothing, because a seat the map never mentions
+            # would read as whatever the last answer was.
+            results.setdefault(MANA_PAID_BY_SEAT, {})[seat] = value
+        return True
+
+    def _default_pay_any_amount(self, choice: PendingChoice) -> bool:
+        """A seat nobody asks pays **nothing**.
+
+        "May" makes declining a real answer, and it is the only one a default
+        can take honestly here — the same reading ``_default_bid_life`` states:
+        how much a Squirrel is worth is a valuation, and spending a board's mana
+        on it is a judgement nobody made. It also keeps the mana where the seat
+        left it, which is the answer that changes least.
+        """
+        return self._resolve_pay_any_amount(choice, 0)
 
     # -- "Choose a number between N and M" -----------------------------------
 
@@ -7806,6 +7878,28 @@ register_choice(
     # resolution may run until the last of them is given — the same reason the
     # discard prompt beside it suspends (CR 608.2).
     suspends=True,
+)
+
+register_choice(
+    "pay_any_amount",
+    resolve=lambda game, choice, r: game._resolve_pay_any_amount(choice, r["amount"]),
+    default=lambda game, choice: game._default_pay_any_amount(choice),
+    action="pay_any_amount_confirm",
+    prompt_key="pay_any_amount",
+    blocked_detail="say how much mana you pay before other actions",
+    # Every seat is offered at once and the sentence behind the offer reads all
+    # of their answers, so the board must not move under any of them (CR 608.2).
+    blocks_every_seat=True,
+    # How much each player paid is public: the mana leaves visible pools and
+    # taps visible lands.
+    spectator_visible=True,
+    # "… equal to the amount of mana **they paid this way**" is a later step of
+    # the same resolution, so it may not run before the last answer exists
+    # (CR 608.2, CR 117.3b).
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default (pay nothing) is taken where the offer stands.
+    default_at_arm=True,
 )
 
 register_choice(
