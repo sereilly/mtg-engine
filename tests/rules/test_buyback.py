@@ -25,8 +25,11 @@ from engine import Game
 from engine.cast_costs import (additional_costs, buyback_cost, buyback_paid,
                                expand_buyback_line, is_buyback_line,
                                unread_cost_sentence)
+from engine.card_loader import load_catalog
 from engine.models import CardDefinition, PlayerState
 from engine.oracle import compile_card_oracle, expand_card_lines
+
+_CATALOG_FOR_BUYBACK = {card.name: card for card in load_catalog()}
 
 
 def _mk(name: str, mana_cost: str, buyback: str, effect: str) -> CardDefinition:
@@ -191,3 +194,34 @@ def test_the_read_back_is_keyed_to_the_cost_this_card_prints():
     assert buyback_paid(bought, {"additional_costs_paid": {"{2}": 1}})
     assert not buyback_paid(bought, {"additional_costs_paid": {"{3}": 1}})
     assert not buyback_paid(plain, {"additional_costs_paid": {"{2}": 1}})
+
+
+@pytest.mark.cr("702.27a", "701.6a")
+def test_a_bought_back_spell_that_is_countered_goes_to_the_graveyard():
+    """"…as it **resolves**." A countered spell does not resolve, so CR 702.27a's
+    replacement never applies and CR 701.6a's graveyard stands — even though the
+    buyback cost was paid and nothing is refunded (CR 701.6b).
+
+    Right here by construction rather than by a check: only the resolution site
+    passes ``hand_instead`` to ``_bin_spell_card``, and the two countering call
+    sites share that seam without it. The test is what makes that a decision
+    rather than an accident, because taking the parameter out of the signature
+    and asking the question inside would pass every other test in this file.
+    """
+    card = _mk("Probe Recall", "{U}", "{2}", "Draw a card.")
+    caster = PlayerState(name="A", hand=[card], library=[card])
+    counterer = PlayerState(
+        name="B", hand=[_CATALOG_FOR_BUYBACK["Counterspell"]]
+    )
+    game = Game(players=[caster, counterer])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(0, "Probe Recall", optional_cost_payments={"{2}": 1})
+    game.queue_from_hand(1, "Counterspell", target_player_index=0)
+    game.resolve_stack()
+
+    assert [c.name for c in caster.graveyard] == ["Probe Recall"]
+    assert caster.hand == [], (
+        "the buyback cost was paid, and CR 702.27a still does not apply to a "
+        "spell that never resolved"
+    )

@@ -39,7 +39,7 @@ from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
                                state_holds)
 from .models import CardDefinition, Permanent
 from .alternative_costs import alternative_costs
-from .cast_costs import cast_announces_x, costs_charged_from
+from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
 from .cast_restrictions import timing_fixed_seat
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
@@ -706,6 +706,17 @@ class LegalityMixin:
         pool = dict(caster.mana_pool)
         lands = untapped_mana_lands(self.controlled_by(caster_index))
         printed = mana_cost_from_symbols(card.mana_cost or "") or {}
+        # Which of these offers is the card's **buyback** (CR 702.27a), so the
+        # prompt can name the price rather than showing a bare "{3}". The
+        # keyword is a rewrite (``cast_costs.expand_buyback_lines``), which is
+        # what makes it an ordinary offer everywhere else — and the one place
+        # the word still has to survive is the sentence a player reads before
+        # deciding. Worthy Cause is why: it prints a buyback *and* a mandatory
+        # sacrifice, and "Pay {2}" beside "sacrifice a creature" says nothing
+        # about which price buys the card back. Asked of the same reader the
+        # rewrite and the resolution use, so a card whose keyword this engine
+        # cannot read is never labelled as having one.
+        buyback = buyback_cost(card.oracle_text or "")
         for offer in every_offer:
             one = offer.cost
             # What the rest of the announcement has already claimed, so the
@@ -737,7 +748,14 @@ class LegalityMixin:
                 # the browser sends and what ``cost_target_count`` counts are the
                 # same string, however the card printed it.
                 "symbols": offer.symbols,
-                "label": offer.symbols,
+                # The keyword's name when this offer is one, else the symbols —
+                # which is what every offer carried before buyback existed, so
+                # the three cards that print an ordinary "you may pay …" send a
+                # byte-identical payload.
+                "label": (
+                    "buyback" if buyback and offer.symbols == buyback
+                    else offer.symbols
+                ),
                 "repeatable": offer.repeatable,
                 "max_times": payable,
                 "times": answered.get(offer.symbols, 0),

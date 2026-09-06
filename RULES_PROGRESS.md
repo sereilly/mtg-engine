@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**360 / 613 tracked rules covered (58%)** — 2119 tests, 0 unannotated.
+**360 / 613 tracked rules covered (58%)** — 2120 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -848,7 +848,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(5 tests, subrules ab)*
+- [x] **701.6** Counter *(6 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(4 tests, subrules ab)*
 - [x] **701.9** Discard *(4 tests, subrules ac)*
@@ -891,7 +891,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.24** Cumulative Upkeep *(28 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(16 tests, subrules adfgim)*
-- [x] **702.27** Buyback *(6 tests, subrules a)*
+- [x] **702.27** Buyback *(7 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(4 tests, subrules ab)*
