@@ -1188,6 +1188,92 @@ Duplicate-definition sweep against the wave base: **31 duplicated top-level
 names before, 31 after, none new**. Missing-name scan: five findings, all five
 the documented `from __future__ import annotations` false positive.
 
+### Wave 2 closed: 137 → 166 of 167, and three of the four exit numbers hit zero
+
+Five worktree groups again, 38 cards claimed and 37 landed, one declined with
+its parts named (Desperate Gambit). Zero new name-keyed hooks, for the second
+wave running — 82 cards across two waves and not one name added.
+
+**The exit numbers, which is what Phase 3 is actually measured by:**
+
+| Instrument | At ingest | After wave 1 | After wave 2 |
+| --- | --: | --: | --: |
+| `support_report --set WTH` | 100/167 | 137/167 | **166/167** |
+| `--hollow-lines` | 6 cards | 3 | **0** |
+| `parse_coverage --set WTH` unclaimed | 14 sentences / 13 cards | 5 / 4 | **0** |
+| `picker_sweep --set WTH` | 5 findings | 4 | **0** |
+
+Mirage reached 335/335 with thirteen unimplemented sentences behind it because
+`parse_coverage` is advisory for a measured set and nobody was made to read it
+until the promotion. Read from the first round instead, it closed with the
+supported count rather than after it.
+
+**Twelve more already-supported cards were found mis-playing, all shipped**, and
+the pattern from wave 1 held exactly: every one produced *something*, so no
+census could see any of them.
+
+- **Five Auras were never charged their activation cost** — Briar Shield,
+  Carapace, Fire Whip, Phantom Wings, Thrull Retainer. "Sacrifice this **Aura**"
+  matched no self-cost regex, so each was a free, repeatable ability with the
+  Aura still on the battlefield. Fire Whip pinged three times for nothing in a
+  driven game. `Aura` and `Equipment` are *subtypes* (CR 205.3h), which is
+  exactly why a list of card types looked complete.
+- **Every divided spell hit the wrong creature.** The announced target list was
+  index-keyed and three handlers resolved the index *at resolution*, where
+  anything leaving renumbers. Pyrotechnics divided 1/3, the 1-target left in
+  response, and the survivor took 1 where its announcement said 3 — no fizzle,
+  no log, the bounds check satisfied by the wrong permanent. Fireball, Meteor
+  Shower, Fire Covenant, Rolling Thunder, Remedy and Bounty of the Hunt shared
+  it. Ids are now stamped at the last moment index and board agree.
+- **Ten cards' destroy narrowings were unenforced**, not four as the brief
+  guessed: `_destroy_target_legal` asked `permanent_matches_filter`, the *pure*
+  half of the matcher, so Merfolk Assassin's "target creature with islandwalk"
+  destroyed a vanilla Bear. Despotic Scepter, Feline Sovereign, Floral Spuzzem,
+  Goblin Vandal, Necrite, Pit Trap, Rambunctious Mutt, Urborg Panther and Wall
+  of Corpses read the same way. The fix cost two cards immediately and CR 608.2b
+  says why — Wall of Corpses and Urborg Panther are sacrificed to pay for their
+  own ability, so the combat maps have let the block go by the re-check, and the
+  relation is last known information.
+- **Infernal Contract halved the *opponent's* life and subtracted it from its
+  own controller.** At 7 against an opponent at 20 it cost 10 and killed the
+  caster. Invisible because the two readings agree whenever the life totals do.
+- **The AI announced no X for a card whose X is not in its mana cost** — Fire
+  Covenant, Infernal Harvest and Haunting Misery were cast at CR 107.3b's
+  default of 0 and resolved doing nothing. Legal, and invisible to *both* of the
+  simulator's honesty checks: not refused, and it interacts.
+
+**Two branches fixed the same bug two different ways**, which is the
+duplicate-idea hazard arriving as a textual conflict for once. W2G2 added "aura"
+to the hand-written self-cost alternation; W2G3 derived the whole set from the
+grammar's `_SELF_NOUNS`. The derived one survived the merge, because the
+alternation *was* the bug — a second copy of a list `oracle.py` already owns.
+W2G2's Goblin Bomb addition rode across onto the derived set rather than being
+dropped with its list.
+
+**And the merge produced its own hazards, each the documented one.** Two
+branches added an arm to the same `if` in `subject_filters.py` — W2G5 replaced
+an inner `return False` with a last-known-information fallback and W2G3 added a
+whole new `blocking_attached_host` branch after it, so taking either side drops
+a card. Two branches appended a different new handler at the same spot in
+`handlers/life_and_game.py`. Three new duplicate top-level names appeared
+(`_card_divided_target_count`, `expire_end_of_turn`,
+`forbid_nonmana_activations_this_turn`) and **all three are alias-imported at
+every call site**, so none shadows — which is the check, not the count.
+
+**Two caps crossed at integration, on the two modules two groups shared** —
+`lowering/zones.py` (1,003) and `lowering/_events.py` (1,001). Both groups had
+been told to keep their additions small and both did; the sum crossed anyway,
+which is wave 1's finding restated from the other side: **a module one group
+owns can be briefed, and a module two groups share cannot.** The splits are
+`lowering/ownership.py` and `lowering/_delays.py`.
+
+**A file split moved two cards, and there is exactly one way that can happen.**
+Giving the moved table a new category name to match its new module left
+`"ownership"` out of `GRAMMAR_CATEGORIES`, which has no fallback underneath it —
+so Timmerian Fiends and Tempest Efreet went unsupported and eleven guards went
+red. A category names the migration family a *kind* belongs to, never the module
+its lowering lives in.
+
 ## Visions (VIS) — shipped (167/167, manifest index 14)
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
