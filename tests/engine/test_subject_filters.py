@@ -87,6 +87,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("power", {"power": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
+    # "target creature **with a bounty counter on it**" (Bounty Hunter). A
+    # counter the card invented (CR 122.1) and so one no bear carries; a
+    # matcher that ignored the key would let Bounty Hunter destroy any creature
+    # on the table, which is the whole of what the counter is for. The positive
+    # half is demonstrated below, on a permanent carrying one.
+    ("with_counter", {"with_counter": "bounty"}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
     # The negative twin (Moat's "creatures without flying"). Air Elemental
     # prints the keyword, so a matcher that ignored the key — or one that read
@@ -150,6 +156,33 @@ def test_a_counter_bound_matches_once_there_are_enough_counters(pool):
     assert not subject_matches(game, perm, described)
     add_counters(perm, "rust", 1)
     assert subject_matches(game, perm, described)
+
+
+def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
+    """The positive half of ``with_counter``: Bounty Hunter destroys a creature
+    once *its own* first ability has put a bounty counter on one.
+
+    The rejection row above is passed by a matcher that always answers False, so
+    the direction that makes the key useful is demonstrated here — and through
+    ``named_counters.add_counters``, the one writer, so the reader and the
+    writer cannot come to disagree about which store a printed kind names.
+    """
+    from engine.named_counters import add_counters
+
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "with_counter": "bounty"}
+
+    assert not subject_matches(game, perm, described)
+    add_counters(perm, "bounty", 1)
+    assert subject_matches(game, perm, described)
+    # …and a *different* kind is a different question: one counter does not
+    # answer for every word a card could print.
+    assert not subject_matches(
+        game, perm, {"type_filter": "creature", "with_counter": "magnet"}
+    )
 
 
 def test_a_class_union_matches_on_either_axis(pool):

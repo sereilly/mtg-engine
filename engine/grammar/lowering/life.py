@@ -444,46 +444,30 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
-        if node.player.kind == "you" and filt.zone != "battlefield":
-            # "For each artifact or creature card in target opponent's
-            # graveyard, … you gain 1 life." (Spoils of Evil.)
-            # "You gain 2 life **for each card in your hand**." (Gerrard's
-            # Wisdom.) A count out of a zone rather than off a board, evaluated
-            # by `count_from_payload` — the same reader the mana half of Spoils
-            # of Evil's sentence uses one instruction over, because the two
-            # halves are one count and two readings of it are two answers.
-            #
-            # Through `count_spec`, which is the one place that decides what a
-            # count of a zone may test: a card outside the battlefield has no
-            # computed characteristics at all (CR 613.1), and that rule was
-            # spelled here a second time as a `card_only_filter` over
-            # `to_payload` minus the zone keys. Two spellings of one rule, and
-            # the local one was also a second spelling of *which zones* — it
-            # named the graveyard, so the identical sentence about a hand
-            # refused while the card reported itself unsupported for the wrong
-            # reason. The spec `count_spec` builds is byte-identical for Spoils
-            # of Evil, which is why this is a fold rather than a widening.
-            payload["per_each"] = count_spec(filt, node)
-            return (OracleInstruction("target_gains_life", "", payload),)
-        if node.player.kind != "you" or filt.zone != "battlefield":
+        if node.player.kind != "you":
             raise LoweringError(
                 "the per-each life gain counts the gainer's own battlefield", node=node
             )
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "controller", "with_keywords"})
-        )
-        if leftover:
-            raise LoweringError(
-                "the per-each life gain cannot count this restriction: "
-                + ", ".join(leftover),
-                node=node,
-            )
-        payload["per_each"] = {
-            "zone": "battlefield",
-            "controller": filt.controller or "you",
-            "card_types": list(filt.card_types),
-            "with_keywords": list(filt.with_keywords),
-        }
+        # "For each artifact or creature card in target opponent's graveyard, …
+        # you gain 1 life." (Spoils of Evil.) "You gain 2 life **for each card
+        # in your hand**." (Gerrard's Wisdom.) "You gain 1 life **for each
+        # attacking creature**." (Respite.) One count, one reader — the same
+        # `count_spec` / `count_from_payload` pair the mana half of Spoils of
+        # Evil's sentence goes through one instruction over, because the two
+        # halves are one count and two readings of it are two answers.
+        #
+        # **The battlefield branch used to be hand-built here**, and that is
+        # what this fold removes: three payload keys named one at a time
+        # (`controller`, `card_types`, `with_keywords`), a `_restrictions_beyond`
+        # allow-list of exactly those three, and a second battlefield scan in
+        # the handler that re-read them. So every other printed narrowing —
+        # "each **attacking** creature" among them — refused, on a card whose
+        # sentence the general counter has read since Spoils of Evil.
+        # `count_spec` also answers the question the local list could not: an
+        # unscoped combat role is counted across **every** seat (CR 508.1a puts
+        # the attackers on the active player's battlefield), where
+        # `controller: "you"` answered zero for the seat casting the fog.
+        payload["per_each"] = count_spec(filt, node)
         return (OracleInstruction("target_gains_life", "", payload),)
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)

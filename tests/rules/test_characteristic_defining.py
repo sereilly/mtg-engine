@@ -362,10 +362,15 @@ def test_604_3_a_counted_cda_refuses_a_noun_phrase_it_cannot_count():
         "x's power and toughness are each equal to 1 plus the number of "
         "creatures an opponent controls"
     ) is None
-    # Read, but a keyword is CR 613 layer 6 — only the game can answer it, and
-    # the count asks the pure matcher, which would drop the adjective and count
-    # every creature.
-    assert dynamic_pt_for(
+    # A keyword is CR 613 layer 6, and this used to be the third refusal here:
+    # the count asked ``permanent_matches_filter``, the pure half, which would
+    # have dropped the adjective and counted every creature. The battlefield
+    # scan asks ``subject_matches`` now, so the narrowing is *answered* rather
+    # than refused — and the assertion that keeps this honest is that the word
+    # survives into the spec, not that the sentence is rejected.
+    keyworded = dynamic_pt_for(
         "x's power and toughness are each equal to 1 plus the number of "
         "creatures with flying you control"
-    ) is None
+    )
+    assert keyworded is not None
+    assert keyworded.payload["count_spec"]["filter"]["with_keywords"] == ["flying"]

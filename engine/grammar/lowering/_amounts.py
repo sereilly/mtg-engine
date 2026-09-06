@@ -55,16 +55,21 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 # larger than the card printed.
 _CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
 
-#: Narrowings a count cannot apply even on the battlefield. ``evaluate_count``
-#: asks ``permanent_matches_filter`` — the *pure* half of the matcher — and a
-#: keyword is CR 613 layer 6, which needs the game, so only ``subject_matches``
-#: answers these two. Handed to the pure matcher they are keys nothing reads,
-#: and a count that ignores its adjective is larger than the card printed.
+#: Narrowings a count cannot apply even on the battlefield.
 #:
-#: No card in the pool counts a keyword-narrowed set today, which is exactly why
-#: this is here: the first one to print "the number of creatures with flying you
-#: control" would otherwise count every creature and report itself supported.
-_UNCOUNTABLE_FILTER_KEYS = frozenset({"with_keywords", "without_keywords"})
+#: It held ``with_keywords`` and ``without_keywords`` while ``evaluate_count``
+#: asked ``permanent_matches_filter`` — the *pure* half of the matcher, which
+#: cannot answer a keyword (CR 613 layer 6 needs the game). The battlefield
+#: scan asks ``subject_matches`` now, so both are answered where they used to
+#: be dropped, and the one card that counted a keyword-narrowed set
+#: (Aven Gagglemaster) stopped needing a hand-built payload of its own.
+#:
+#: Empty rather than deleted: it is the place a key goes when the matcher
+#: behind the count cannot test it, and a count that ignores its adjective is
+#: larger than the card printed. The non-battlefield zones have their own,
+#: stricter list (``_CARD_ZONE_KEYS``) — a card in a graveyard has no computed
+#: characteristics at all.
+_UNCOUNTABLE_FILTER_KEYS: frozenset[str] = frozenset()
 
 
 def count_spec(

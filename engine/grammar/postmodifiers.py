@@ -514,10 +514,15 @@ def _parse_postmodifiers(
             if stream.accept_phrase("a", "single", "target"):
                 d.target_count = 1
                 continue
-            # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
-            # kind is accepted: the counters the engine records under another
-            # name have no matcher, so a phrase naming one fails the line
-            # loudly rather than matching every creature.
+            # "with a +1/+1 counter on it" (Tempered Veteran).
+            #
+            # The refusal that used to stand here — "only the +1/+1 kind is
+            # accepted: the counters the engine records under another name have
+            # no matcher" — has **expired**. ``ObjectFilter.with_counter`` is
+            # that matcher, answered off the candidate through
+            # ``named_counters.counters_on``, so a named kind is read below
+            # rather than failing the line. The +1/+1 branch stays its own
+            # because its key is a bool every consumer already tests as one.
             if stream.at_word("a", "an"):
                 counter_probe = stream.mark()
                 stream.advance()
@@ -532,6 +537,38 @@ def _parse_postmodifiers(
                         d.with_plus1_counter = True
                         continue
                 stream.reset(counter_probe)
+                # "with **a bounty counter** on it" (Bounty Hunter). The kind is
+                # one printed word and is payload, for the reason every other
+                # printed word in a filter is: a card naming a magnet, a spore
+                # or a fade counter is the same restriction, and spelling one
+                # into the production would make each printed kind a new
+                # branch. Read after the +1/+1 probe above, whose article it
+                # shares.
+                stream.advance()
+                kind = stream.peek_word()
+                if kind is not None and stream.peek_word(1) == "counter":
+                    stream.advance(2)
+                    if stream.accept_phrase("on", "it") or stream.accept_phrase(
+                        "on", "them"
+                    ):
+                        d.with_counter = kind
+                        continue
+                stream.reset(counter_probe)
+            # "with **magnet counters** on them" (Magnetic Web). The plural of
+            # the phrase above, with the article the plural drops — one counter
+            # is still one counter, so it sets the same field: "creatures with
+            # magnet counters on them" describes each creature carrying at
+            # least one, not a board carrying several.
+            plural_probe = stream.mark()
+            kind = stream.peek_word()
+            if kind is not None and stream.peek_word(1) == "counters":
+                stream.advance(2)
+                if stream.accept_phrase("on", "them") or stream.accept_phrase(
+                    "on", "it"
+                ):
+                    d.with_counter = kind
+                    continue
+            stream.reset(plural_probe)
             # "with mana value X" (Spell Blast). Two words, so it is tried
             # before the keyword list — "mana" alone is not a keyword, but
             # leaving the phrase unmatched would strand "value X" and fail the

@@ -576,24 +576,21 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             0 if holder is None
             else counters_on(holder, str(per_each["counters_on_source"]))
         )
-    if per_each is not None and per_each.get("zone") not in (None, "battlefield"):
+    if per_each is not None and per_each.get("zone") is not None:
         # "For each artifact or creature card in **target opponent's**
-        # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a zone
-        # rather than off a battlefield, answered by `count_from_payload` — the
-        # same reader `add_mana_from_text`'s per-each uses, and the same reader
-        # the mana half of this very sentence goes through one instruction over.
-        # Two readings of one count would be two answers on one card.
+        # graveyard, … you gain 1 life." (Spoils of Evil.) "…for each creature
+        # you control with flying" (Aven Gagglemaster). "…for each attacking
+        # creature" (Respite). Every count of a zone, the battlefield included,
+        # answered by `count_from_payload` — the same reader
+        # `add_mana_from_text`'s per-each uses, and the same reader the mana
+        # half of Spoils of Evil's sentence goes through one instruction over.
+        #
+        # The battlefield used to have its own scan right here, reading three
+        # payload keys the lowering wrote by hand. Two readings of one count are
+        # two answers on one card, and this one was also the *narrower* answer:
+        # it scanned `game.controlled_by(gainer)` and so could never see an
+        # attacker on the active player's battlefield.
         life_gain *= count_from_payload(game, context, per_each)
-    if per_each is not None and per_each.get("zone") == "battlefield":
-        wanted_types = tuple(per_each.get("card_types") or ())
-        wanted_keywords = tuple(per_each.get("with_keywords") or ())
-        life_gain *= sum(
-            1
-            for perm in game.controlled_by(gainer)
-            if (not wanted_types or ("creature" in wanted_types and perm.is_creature)
-                or any(perm.has_type(t) for t in wanted_types if t != "creature"))
-            and all(game._has_keyword(perm, kw) for kw in wanted_keywords)
-        )
     life_gain = _capped_life_gain(context, instruction, life_gain)
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"

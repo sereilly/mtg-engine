@@ -819,9 +819,22 @@ def evaluate_count(
         # refuses the unresolved key so a caller with no source counts nothing.
         filt = _resolve_chosen_subtype(filt, source)
         scanned = game.all_permanents() if every_seat else game.controlled_by(seat)
+        # Through ``subject_matches`` rather than the pure half, because the
+        # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
+        # the game): "you gain 1 life for each creature you control with
+        # flying" (Aven Gagglemaster) was countable only by a hand-built
+        # payload in `lowering/life.py` that named the key on its own. This is
+        # the one place a count decides what a printed noun phrase means, so it
+        # asks the one function that answers all of it — the seat scoping the
+        # scan is the same seat CR 109.5's "you" names, and it is handed over
+        # so a phrase that carries a controller word means what it would mean
+        # anywhere else.
+        from ..subject_filters import subject_matches
+
         matched = [
             perm for perm in scanned
-            if perm is not skip and permanent_matches_filter(perm, filt)
+            if perm is not skip
+            and subject_matches(game, perm, filt, observer=seat, source=source)
         ]
         if aggregate == "greatest_power":
             return _scaled(max((perm.effective_power for perm in matched), default=0), spec)
@@ -1589,6 +1602,19 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
+    # "target creature **with a bounty counter on it**" (Bounty Hunter). The
+    # same question as the key above with the kind as data rather than as the
+    # key's name, through ``named_counters.counters_on`` — the one reader that
+    # knows whether a word means the P/T channel or a store the card invented
+    # (CR 122.1a). Spelling the metadata key here would answer zero for every
+    # counter that also has rules meaning, silently, because a missing key is a
+    # legal zero.
+    with_counter = payload.get("with_counter")
+    if with_counter is not None:
+        from ..named_counters import counters_on
+
+        if counters_on(perm, str(with_counter)) <= 0:
+            return False
     # "an **untapped** creature" (Enthralling Hold). The twin of ``tapped_only``
     # and a separate key for the reason stated on ``to_payload``.
     if payload.get("untapped_only") and perm.tapped:

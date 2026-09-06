@@ -209,6 +209,18 @@ class ObjectFilter:
     # least one +1/+1 counter, read off the ``plus_counters`` record the
     # placing handlers keep (CR 122).
     with_plus1_counter: bool = False
+    # "target creature **with a bounty counter on it**" (Bounty Hunter), "all
+    # creatures **with magnet counters on them**" (Magnetic Web). A counter the
+    # card invented (CR 122.1), which has no rules meaning of its own — the
+    # object simply carries at least one, read through ``named_counters``'
+    # single reader so a kind that also has a P/T store answers off the store
+    # the placement filled.
+    #
+    # Its own field rather than a value on ``with_plus1_counter``: that one is
+    # a *bool* and every consumer tests it as one, so a kind name arriving
+    # there would read as "has a +1/+1 counter" on every card that printed any
+    # other word.
+    with_counter: str | None = None
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False
@@ -873,6 +885,10 @@ class ObjectFilter:
         # byte-identical.
         if self.with_plus1_counter:
             payload["with_plus1_counter"] = True
+        # "with a bounty counter on it" (Bounty Hunter). Emitted only when set,
+        # for the key above's reason.
+        if self.with_counter:
+            payload["with_counter"] = self.with_counter
         # "a **legendary** card" (Niambi), "target **legendary** creature". A
         # supertype is a restriction like any other and rides the payload like
         # any other; until this key existed it rode nothing at all, and
