@@ -136,6 +136,19 @@ into a new module and left one of their imports in the old header. It fails
 loudly — 132 collection errors — so the fix is cheap; sweep every module you
 moved code out of before running the suite.
 
+**A split needs five scans, and three of them fail nothing at import time.**
+Tempest added the fourth and fifth. The fourth is **anything keyed on a file
+path**: `tests/engine/test_cr_citation_subjects.py`'s `REVIEWED` set is keyed by
+path *and* number, so a moved block breaks it in both directions at once — the
+new file's citation has no excuse and the old file's excuse has no citation —
+with nothing undefined, unused or duplicated. The fifth is **execution order for
+module-level code**: a name imported by a *later* block satisfies a
+"is it imported anywhere" check and still raises at import or collection. A
+per-set test file split failed exactly this way, with `import pytest` at line 746
+and a module-level `@pytest.mark.parametrize` at line 281. The block convention
+makes each block self-contained *in isolation*; it does not survive a split that
+changes which block comes **first**.
+
 **A split needs three scans, and only one of them is documented anywhere else.**
 A **dead-import** sweep asks "what does this module import and no longer use";
 a **missing-name** scan asks "what does it use and never import *or define*";
@@ -263,6 +276,14 @@ base: assert both sides start with the base byte for byte, then base +
 ours-tail + theirs-tail. The assertion is the point — a branch that edited the
 shared prefix cannot be reconstructed this way, and that is the case worth
 failing on rather than guessing through.
+
+**The reconstruction's premise is that only groups append, and the integrator
+breaks it.** Its assertion — both sides start with the merge base byte for byte —
+fired correctly at Tempest on a file whose `main` copy no longer did, because
+*the integrator* had edited an earlier group's block mid-wave when a decline
+expired. Keep the assertion; it is right. The fallback when it fires for that
+reason is a union at the **hunk** rather than at the file, with the same
+per-line survival check afterwards.
 
 **Alliances hit that failure mode for real, and taught the follow-up: after
 resolving one, sweep *every* block in *every* per-set file the wave touched.**
@@ -613,6 +634,57 @@ whose keyword moved. The rest of the corrections — 609.3 for 608.2d, 706.2 for
 707.2, the 121/122 and 118/119/120 confusions — are prose headings that no
 guard can match. **A CR edition bump owes a re-read, not just a green suite.**
 
+**Added at TMP's Phase 4: a multi-slot target's picker offers one list for
+every slot.** Phyrexian Splicer prints "target creature **with the chosen
+ability** … and another target creature", and the derived spec is one
+`{"kind": "creature", "max_targets": 2}` over two slots whose payload filters
+differ — `filters[0]` carries the chosen keyword and `filters[1]` does not. So
+`_enumerate_targets` offers every creature for slot 1, the gate reads the same
+list and admits it, the cost is paid, and the handler drops slot 1 at resolution
+while slot 2 still gains the ability. CR 601.2c makes that an illegal
+announcement. **No instrument here can see it**: the card compiles, has no
+hollow line, claims every sentence, and `picker_sweep` asks whether a picker is
+*derived*, not whether its list is right per slot. Narrowing the single shared
+list breaks the card the other way — you could no longer give the ability to a
+creature that lacks it, which is the whole card. **The fix is per-slot
+enumeration through the `ROLES_TARGET_KIND` machinery**, and it is one round
+whose blast radius is every multi-target spell in the pool, so it does not
+travel with a card wave. The picker sweep's own question stops one level above
+this and should say so.
+
+**Added at TMP's Phase 4: `unless_player_pays` is labelled with an effect family
+rather than a shape.** It is a **wrapper** carrying `activated_control`, which is
+the borrowing `test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket` exists to
+forbid; it passes today only because no *leaf* shares that bucket. It constrained
+Jinxed Idol's row at the promotion (a new bucket had to be invented rather than
+reused). Its only card is Scarwood Bandits, so the first control **leaf** filed
+there fires the guard. **And that guard has a structural blind spot**: it skips
+kinds not already in `ACTIVATED_LABELS`, so a *defaulting* wrapper sitting on a
+leaf bucket is invisible until somebody adds its row — which is exactly how
+Grindstone sat on `activated_zones`. Fixing the label re-buckets a shipped card,
+so it wants a round with an `oracle_diff` rather than a promotion's tail.
+
+**Added at TMP's Phase 4: the bare noun `spell` is dropped pool-wide.**
+`parse_object_filter` records `zone="stack"` only after a *type union*, so
+`target spell` and `target permanent` produce byte-identical `ObjectFilter`s.
+The live consequence is **Ersatz Gnomes** (Mirage, shipped): `{T}: Target spell
+becomes colorless.` is offered the `spell_or_permanent` picker — the same spec
+Chaoslace's "target spell **or** permanent" gets — so the ability can be aimed
+at a permanent the card does not allow. Measured rather than guessed: setting
+`zone="stack"` for the bare head noun takes **Deflection, Mountain Titan and
+Reflecting Mirror** unsupported, because their lowerings refuse a `zone`
+narrowing they do not honour. Four pieces: the noun change, those two lowerings
+honouring the narrowing, the `you_cast_spell` delayed-trigger subject filter
+honouring one, and a `targets` payload on `recolor_target_from_text` so the spec
+stops coming from a shared kind.
+
+**Added at TMP's Phase 5: `tests/engine/test_layer_reads.py` scans `engine/`
+only.** `web/serialization.py` asked "is this a creature" of
+`perm.card.type_line` — the printed type, the exact second answer that guard
+exists to catch — and no guard could see it because `web/` is outside the scan.
+Fixed at the one site found; the scope is not. Widening it means reading every
+type/colour/P/T question in `web/` against the layer accessors, which is a round.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -649,6 +721,21 @@ instruments current.
    census, note which modules each *group's* family lands in, and pre-split any
    that two groups will both reach. A module one group owns can be briefed; a
    module two groups share cannot, because neither will cross it.
+
+   **Tempest ran the rule four times and it held four times, at a cost worth
+   knowing: three pre-splits and three integrator splits.** Every wave's Phase 0
+   split moved **0 of 2,824** compiled programs, and every module that crossed a
+   cap at integration was one two groups had both reached. The prediction is now
+   cheap enough to make mechanically: take the census, note which modules each
+   group's family lands in, pre-split the shared ones, brief the owned ones.
+
+   **And read the seam you inherit as a lead, not a fact.** Tempest's third
+   pre-split was briefed with a seam a previous group had reported; the agent
+   checked it, found the docstring never says it and the *code* contradicts it
+   (both halves read the same table and called the same sub-production), and cut
+   one sentence earlier where the code agreed. A cut on the reported line would
+   have bought 42 lines out of 940. **A split's seam gets the same treatment as a
+   refusal site.**
 
    **Weatherlight tested that sentence in both directions and it held exactly.**
    Wave 1 gave each of the seven tight modules a **single owning group**, named
@@ -966,6 +1053,17 @@ measured set so per-card tests can land as the cards do. **Exit:**
    seven. When a round builds machinery near an old decline, re-probe the
    decline.
 
+   **A decline ages in the direction of becoming free, and Tempest is the
+   evidence.** Its last eighteen cards were each declined once or twice with
+   their parts enumerated, and re-probing those lists found the machinery
+   usually already built: Ertai's Meddling's five parts came back
+   three-already-built, Coffin Queen's three came back two-expired, and
+   Excavator's "an activation cost that records what it sacrificed" was answered
+   by a channel written at both of `activation.py`'s sacrifice-cost sites and
+   read by three handlers — the previous group had read the absence of the
+   *wrong* channel as the absence of the mechanism. **Budget a decline's
+   re-probe as cheaper than its estimate, and always re-probe.**
+
    **A decline that names the exact missing piece is a mechanism, not an
    absence.** Infinite Authority was declined by seven rounds and landed
    without a round of its own: each decline listed its gaps, and other cards
@@ -1215,7 +1313,16 @@ review directly shrinks this phase.
    the deduped catalog, so its cards arrive carrying whatever result they
    already had, and this step is *derivably* empty rather than skipped.
 2. Smoke the set where a player meets it: the web app serves it, its cards
-   are deckable, one human-vs-AI pass via the `run-magic` skill. **For a
+   are deckable, one human-vs-AI pass via the `run-magic` skill. **This step has
+   its own failure class and Tempest found it: a display list nothing derives.**
+   `web/serialization._DISPLAY_KEYWORDS` is hand-ordered, and Soltari Priest went
+   onto a real battlefield reporting only its protection — the shadow deciding
+   whether it could block or be blocked was enforced by the engine and never sent
+   to the client, on all 25 of the set's shadow creatures. Phasing had been
+   missing the same way since Mirage. **No engine instrument can see this**: the
+   card compiles, claims every sentence, has no hollow line and plays correctly.
+   Read what the *wire* carries for one card of the set's headline mechanic, not
+   only what the engine computes. **For a
    reprint set this is the only step that shows what promotion bought**, and
    what it buys is the set as a deckbuilding constraint: the deck editor's set
    filter gains the code, and every card under it renders that set's own art.
@@ -1852,3 +1959,41 @@ path nobody had looked at). *Two added*: `control_flow.may` firing its `then`
 branch on an action that did nothing, invisible to `oracle_diff` because no
 program moves; and the half of the `primary_type`/`printed_shape` disagreement
 that stayed open one zone over in `cast_permissions`.
+
+### TMP — 2026-09-06
+
+*The caps rule ran four times and held four times.* Three Phase 0 pre-splits and
+three integrator splits, every pre-split moving **0 of 2,824** compiled programs,
+and every cap crossed at integration on a module two groups had both reached.
+Phase 0's text now says the prediction is mechanical, and adds the sharper half:
+**a split's seam is a lead, not a fact** — the third pre-split was briefed with a
+seam a previous group reported, checked it, found the code contradicted the prose
+and cut a sentence earlier. The reported cut would have bought 42 lines of 940.
+
+*Two post-split scans added, making five.* Anything **keyed on a file path**
+(`test_cr_citation_subjects.REVIEWED` broke in both directions at once, with
+nothing undefined, unused or duplicated), and **execution order for module-level
+code** (a name imported by a later block passes a presence check and still
+raises at collection — the block convention is self-contained in isolation and
+does not survive a split that changes which block is first).
+
+*The per-set reconstruction gained its counter-example.* Its base-prefix
+assertion fired correctly on a file the **integrator** had edited mid-wave when a
+decline expired. Keep the assertion; union at the hunk when it fires that way.
+
+*Phase 3 gained the finding this set is the evidence for:* **a decline ages in
+the direction of becoming free.** Eighteen cards declined with enumerated parts
+came back three-of-five, two-of-three and one-of-three already built, twice
+because a group had read the absence of the *wrong* channel as the absence of
+the mechanism.
+
+*Phase 5 gained a failure class of its own.* Smoking the set found a **display
+list nothing derives**: 25 shadow creatures reported no shadow to the client,
+phasing had been missing since Mirage, and no engine instrument can see any of
+it — the cards compile, claim every sentence and play correctly. Read what the
+**wire** carries for the set's headline mechanic.
+
+*Four items added to Known gaps* (a multi-slot picker offering one list for every
+slot; `unless_player_pays` labelled with a family rather than a shape, plus its
+guard's blind spot; the bare `spell` noun dropped pool-wide, with Ersatz Gnomes
+live; `test_layer_reads` scanning `engine/` only). *Nothing drained.*
