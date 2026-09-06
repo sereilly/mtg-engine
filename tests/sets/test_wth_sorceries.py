@@ -833,3 +833,82 @@ def test_doomsday_empties_both_zones_even_when_nothing_is_found(set_pool):
         "Forest", "Island", "Island", "Island",
     ]
     assert game.players[0].life == 3
+
+
+# --- W3G2: an X-sized graveyard return (Shattered Crypt) -------------------
+
+from engine import Game, PlayerState
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
+
+
+def _w3g2_crypt_board(set_pool, graveyard):
+    pool = set_pool("WTH")
+    lea = set_pool("LEA")
+
+    def card(name):
+        return pool[name] if name in pool else lea[name]
+
+    p0 = PlayerState(
+        name="P0", life=20,
+        hand=[pool["Shattered Crypt"]],
+        graveyard=[card(name) for name in graveyard],
+        library=[lea["Swamp"]] * 6,
+    )
+    p1 = PlayerState(name="P1", life=20, library=[lea["Forest"]] * 6)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game
+
+
+def test_w3g2_shattered_crypt_returns_x_cards_not_one(set_pool):
+    """`Return X target creature cards from your graveyard to your hand. You
+    lose X life.`
+
+    A shipped card that reported supported and returned **one** card however
+    large X was, while paying the full X in life. Three readers of one number
+    disagreed: the lowering wrote a literal 0 for the announced X, the handler
+    took the several-slot branch only for an ``int`` greater than 1, and the
+    picker offered a single card because its maximum was likewise an ``int``
+    test.
+    """
+    game = _w3g2_crypt_board(
+        set_pool, ["Grizzly Bears", "Hill Giant", "Black Lotus"],
+    )
+    assert game.cast_from_hand(
+        0, "Shattered Crypt", x_value=2, target_permanent_index=[0, 1],
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Black Lotus", "Shattered Crypt",
+    ]
+    assert game.players[0].life == 18
+
+
+def test_w3g2_shattered_crypt_announces_x_targets(set_pool):
+    """The picker's half of the same number: the spell's cast spec says the
+    announcement is sized by X rather than capped at one, which is the flag
+    "X target creatures" has used on the battlefield since Winter Blast."""
+    card = set_pool("WTH")["Shattered Crypt"]
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+    assert spec["kind"] == "graveyard_creature"
+    assert spec.get("x_targets") is True
+    assert "max_targets" not in spec, "X is not a printed maximum"
+
+
+def test_w3g2_the_x_sized_graveyard_return_carries_x_not_a_literal(set_pool):
+    """The lowering's half. `count: 0` is what the several-slot branch and the
+    picker both read as "no targets", so the number had to survive lowering as
+    the announced X."""
+    program = compile_card_oracle(set_pool("WTH")["Shattered Crypt"])
+    (sequence,) = program.instructions
+    ret = sequence.payload["steps"][0]
+    assert ret.kind == "return_creature_from_graveyard_to_hand"
+    assert ret.payload["targets"]["count"] == "x"

@@ -2440,6 +2440,16 @@ class AbilityActivationMixin:
         ability_index: int = 0,
         graveyard_index: int | None = None,
         cost_permanent_id: int | None = None,
+        # What the ability aims at (CR 602.2b: an activated ability's targets
+        # are chosen as it is activated, not when it resolves). Carrionette is
+        # the first card here that needs them — "Exile this card and **target
+        # creature** unless that creature's controller pays {2}" — and without
+        # them the ability went on the stack with no target and exiled itself
+        # for nothing. The same three keys the permanent path takes, spelled
+        # the same way, because they end up in the same ``StackItem``.
+        target_player_index: int | None = None,
+        target_permanent_index: int | None = None,
+        target_permanent_ids: "list[int | None] | None" = None,
     ) -> SimulationResult:
         """Activate an ability of a card **in a graveyard** (Ashen Ghoul,
         Whiteout).
@@ -2508,6 +2518,23 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)
 
+        # CR 602.2b sends an activation through CR 601.2c, so the target is
+        # checked **before** any cost is paid and against the same
+        # ``_enumerate_targets`` list the picker is handed. Read here for the
+        # reason the permanent path reads it there: an ability with a mandatory
+        # object target it cannot fill is refused with nothing spent, rather
+        # than activated to no effect — and on this card "nothing spent" also
+        # means the card is not exiled out of the graveyard for free.
+        target_refusal = self.activation_target_refusal(
+            controller_index, card, ability,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+        )
+        if target_refusal is not None:
+            self.log.append(target_refusal)
+            return SimulationResult(card.name, False, "unsupported", target_refusal)
+
         cost = ability.cost
         unchargeable = _graveyard_cost_refusal(cost)
         if unchargeable is not None:
@@ -2564,8 +2591,9 @@ class AbilityActivationMixin:
             item=StackItem(
                 card=card,
                 caster_index=controller_index,
-                target_player_index=None,
-                target_permanent_index=None,
+                target_player_index=target_player_index,
+                target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_ids,
                 x_value=None,
                 ability_instruction=ability.instruction,
                 ability_effect_kind=ability.effect_kind,

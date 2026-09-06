@@ -98,6 +98,21 @@ class ActivationRestriction:
     #: mode pointed the other way. A row that declares one is unmatched where it
     #: says no, so its card is unsupported naming the sentence.
     payload_readable: "Callable[[re.Match[str]], bool] | None" = None
+    #: The zone this clause *states* the ability functions in (CR 113.6b:
+    #: "an ability that states which zones it functions in functions only from
+    #: those zones"). Almost every row leaves it None — "only during your
+    #: upkeep" says when, not where — and exactly one says where.
+    #:
+    #: Declared on the row rather than derived by a second regex somewhere
+    #: else, for this file's standing reason: the clause has one reading, and a
+    #: module that re-read the sentence to answer "which zone" would be free to
+    #: disagree with the module that enforces it. The key it produces is the
+    #: same ``functions_from`` ``lowering/_bound_returns.py`` stamps from a
+    #: printed "from your graveyard" and ``lower.py`` stamps from an
+    #: intervening-if, because the graveyard scan in ``engine/events.py`` and
+    #: the activation path in ``mixins/stack/activation.py`` ask one question
+    #: of one key.
+    functions_from: str | None = None
 
 
 def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
@@ -1347,6 +1362,35 @@ def _enough_cards_above_in_graveyard(
     return False
 
 
+def _source_card_is_in_your_graveyard(
+    game: "Game", controller_index: int, source
+) -> bool:
+    """"Activate only if this card is in your graveyard." (Carrionette.)
+
+    CR 113.6m's statement made explicit by the card: the ability functions only
+    from the graveyard, so the clause is both a restriction and — through
+    :attr:`ActivationRestriction.functions_from` — the thing that tells the
+    activation path which zone to look in.
+
+    *source* is the card itself, as it is for the "cards above this card" row
+    beside this one: there is no permanent, and CR 400.3 makes "your graveyard"
+    the pile of the player activating. A permanent reaching here answers False,
+    which is the honest reading — a card on the battlefield is not in anybody's
+    graveyard.
+
+    By **identity**, never by name or value: two copies of one card in a
+    graveyard are the same immutable ``CardDefinition``, and a name match would
+    say yes for a copy the activator does not hold.
+    """
+    if source is None or hasattr(source, "permanent_id"):
+        return False
+    if not 0 <= controller_index < len(game.players):
+        return False
+    return any(
+        held is source for held in game.players[controller_index].graveyard
+    )
+
+
 #: Matched whole, and no pattern is a prefix of another -- held by
 #: `tests/rules/test_activation_restrictions.py`.
 ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
@@ -1736,6 +1780,25 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         reads_payload=True,
         payload_readable=_readable_cards_above,
     ),
+    # "Activate only if this card is in your graveyard." (Carrionette.) The
+    # second clause in the pool about a card in the pile rather than a
+    # permanent on the battlefield, and the only one that states its zone
+    # outright — which is why it is the one row carrying `functions_from`.
+    #
+    # The noun is "card" and not `this [a-z]+`, deliberately: every other
+    # self-referring row here matches the generic noun because which word a
+    # card calls itself by says nothing about the rule, and this is the one
+    # place it does. "This creature is in your graveyard" is not a sentence
+    # Magic prints — a creature is a permanent (CR 110.1) and a permanent is on
+    # the battlefield — so the word is the clause's own claim about where the
+    # object is, and reading it loosely would let the key be stamped from a
+    # sentence that never made the claim.
+    ActivationRestriction(
+        re.compile(r"^activate only if this card is in your graveyard$"),
+        _source_card_is_in_your_graveyard,
+        "it is not in your graveyard",
+        functions_from="graveyard",
+    ),
 )
 
 
@@ -1903,6 +1966,34 @@ def activation_restriction_line(sentence: str, card_name: str | None = None) -> 
     )
 
 
+def restriction_functions_from(
+    text: str, card_name: str | None = None
+) -> str | None:
+    """The zone the "Activate only ..." clauses in *text* state the ability
+    functions in (CR 113.6b), or None when none of them says.
+
+    Read once, by the compiler, and stamped onto the ability's instruction —
+    the same key and the same claim ``lowering/_bound_returns.py`` derives from
+    a printed "from your graveyard" and ``lower.py`` derives from an
+    intervening-if. Carrionette is why it is needed here as well: its effect
+    prints no zone at all ("Exile this card and target creature ..."), so the
+    restriction is the only place on the card the zone is stated, and without
+    this the ability would compile fine and be activatable from nowhere.
+
+    Every clause is read rather than the first, and a card stating **two**
+    different zones returns None: that is not a card anybody has printed, and
+    guessing which half to believe is how an ability comes to function from a
+    zone its own sentence denies.
+    """
+    zones = {
+        entry.functions_from
+        for clause in _clauses(text, card_name)
+        for entry, _match in [_matching_entry(clause) or (None, None)]
+        if entry is not None and entry.functions_from
+    }
+    return zones.pop() if len(zones) == 1 else None
+
+
 #: "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) A constraint on the
 #: value chosen for X as the ability is activated (CR 601.2b), which is why it
 #: is not one of the ``ACTIVATION_RESTRICTIONS`` rows above: every one of those
@@ -2047,6 +2138,7 @@ __all__ = [
     "ActivationRestriction",
     "activation_denial",
     "activation_restriction_line",
+    "restriction_functions_from",
     "x_zero_restriction_line",
     "activations_ever",
     "already_activated_ever",

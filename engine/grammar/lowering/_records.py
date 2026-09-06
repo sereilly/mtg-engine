@@ -34,6 +34,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
                              MANA_PAID_BY_SEAT,
                              DREW_BY_SEAT,
+                             EXILED_BY_SEAT,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              MILLED_THIS_WAY,
@@ -176,6 +177,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # exile? Written when the prompt is answered, which is why the offer's
     # ``then`` branch has to wait for it — the choice spec says ``suspends``.
     "exile_cards_from_graveyard": EXILED_THIS_WAY,
+    # "Each player exiles all creature cards from their graveyard, then … then
+    # puts all cards **they** exiled this way onto the battlefield." (Living
+    # Death.) The per-seat record rather than the flat one beside it, and the
+    # pronoun in the sentence behind it is why: "they" asks the question once
+    # per player, and a flat list answering it would hand each of them the
+    # whole table's graveyards. The sweep writes one entry per seat, including
+    # the empty ones — a seat the map never mentioned reads as somebody else's
+    # pile the moment a later step iterates it.
+    "exile_graveyard_cards": EXILED_BY_SEAT,
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

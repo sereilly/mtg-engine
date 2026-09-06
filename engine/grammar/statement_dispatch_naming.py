@@ -35,6 +35,7 @@ from .lowering._events import CHOSEN_PLAYER, chooser_payload as _chooser_payload
 from .lowering import (
     _amount_payload,
     _lower_put_exiled_card_into_zone,
+    _lower_put_exiled_this_way,
     _lower_reveal_top_sorting_by_chosen_name,
     _lower_reveal_until,
     _targets_payload,
@@ -117,6 +118,13 @@ def lower_naming_statement(
 
     if isinstance(statement, ast.PutExiledCardIntoZone):
         return _lower_put_exiled_card_into_zone(statement, produced)
+
+    if isinstance(statement, ast.PutExiledThisWay):
+        # Beside its singular sibling above, and dispatched here rather than
+        # from `by_node` for that one's reason: both read the resolution's own
+        # record, so both need the producer set, which `by_node`'s rows do not
+        # carry.
+        return _lower_put_exiled_this_way(statement, produced)
 
     if isinstance(statement, ast.ExileBoundCard):
         # "Whenever a nontoken creature is put into your graveyard from the

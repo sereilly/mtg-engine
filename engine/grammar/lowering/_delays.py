@@ -44,6 +44,12 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # Merieke Ri Berit: watches its own source, destroys **that creature** —
     # the same two-object shape War Barge prints, with the wider event.
     "bound_permanent_leaves_or_untaps",
+    # Coffin Queen: watches its own source, exiles **that creature** — the row
+    # above's shape with the other pairing of events. Both halves of it name
+    # the source and the sentence behind it names the creature the ability's
+    # own reanimation put onto the battlefield, so the entry is bound to one
+    # object and watches another, exactly as War Barge's is.
+    "bound_permanent_untaps_or_control_lost",
     # "…at the beginning of each of your draw steps, put a -1/-1 counter on
     # **that creature**." (Giant Oyster.) A *step* event that names an object,
     # exactly as the two rows above it are: the step says when, and the sentence

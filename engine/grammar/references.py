@@ -378,7 +378,20 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         token = stream.peek()
         if token is not None and (token.kind == NUMBER or token.kind == WORD):
             amount = parse_amount(stream)
-            count = amount.value if isinstance(amount, ast.Fixed) else 1
+            if isinstance(amount, ast.Fixed):
+                count = amount.value
+            else:
+                # "Return **up to X** target cards from your graveyard to your
+                # hand." (Reap.) There is no number here until the spell is
+                # cast (CR 601.2b), exactly as there is none for the "X target
+                # lands" branch below — so the count is carried as the flag and
+                # resolved where every other announced X is.
+                #
+                # It used to read 1. That is the quiet direction of wrong: the
+                # line parsed, the card compiled supported, and the spell
+                # returned one card of however many X allowed with nothing
+                # anywhere saying so.
+                count, exactly_x = 0, True
         if stream.at_word("other") and stream.peek_word(1) == "target":
             stream.advance()
             other_before_target = True

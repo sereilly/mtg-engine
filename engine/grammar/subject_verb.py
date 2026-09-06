@@ -69,6 +69,8 @@ from .effects import (
     _parse_doesnt_untap_next_step,
     _parse_draw,
     _parse_exile_entire_library,
+    _parse_player_exiles_graveyard,
+    _parse_put_exiled_this_way,
     _parse_extra_turn,
     parse_exile_random_card_from_hand,
     _parse_fight,
@@ -394,6 +396,17 @@ def parse_subject_verb(
             at_random = parse_exile_random_card_from_hand(stream, source_spec)
             if at_random is not None:
                 return at_random
+            # "**Each player** exiles all creature cards from their graveyard."
+            # (Living Death.) The third of the family, and last of the three
+            # because it is the one whose object is an ordinary noun phrase:
+            # the two above it name a whole library and a card at random, and
+            # each refuses on the words right after the verb. Declines without
+            # consuming, so a printed exile this cannot read still fails as an
+            # unrecognized verb rather than inside a production that never had
+            # its sentence.
+            from_graveyard = _parse_player_exiles_graveyard(stream, source_spec)
+            if from_graveyard is not None:
+                return from_graveyard
         # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
         # the rules — CR 701.26a turns a permanent sideways and says nothing
         # about who does it — so the printed subject is read and then dropped
@@ -527,6 +540,15 @@ def parse_subject_verb(
             whole_hand = _parse_player_puts_whole_hand_on_library(stream, source_spec)
             if whole_hand is not None:
                 return whole_hand
+            # "…then **puts all cards they exiled this way** onto the
+            # battlefield." (Living Death.) A back-reference to a step of the
+            # same sentence, so it is read here rather than by the noun parser:
+            # "exiled this way" names a record and not a characteristic, and a
+            # filter carrying the words would lower through every line that
+            # printed them. Declines without consuming.
+            exiled_pile = _parse_put_exiled_this_way(stream, source_spec)
+            if exiled_pile is not None:
+                return exiled_pile
             # "…and **you put** a cube counter on this artifact" (Delif's Cube).
             # The imperative with its subject spelled out, which CR 608.2c makes
             # the same sentence — so it is handed back to this function with the

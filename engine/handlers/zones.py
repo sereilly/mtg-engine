@@ -26,6 +26,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
+                            EXILED_BY_SEAT,
                             MILLED_THIS_WAY,
                            LAST_TARGET_CONTROLLER,
                             REVEALED_HAND_CARDS,
@@ -1578,13 +1579,22 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # (Sanguine Indulgence.) The several-targets description says a list was
     # collected, so every chosen slot is honoured rather than only the first.
     targets_desc = instruction.payload.get("targets") or {}
-    if (
-        isinstance(targets_desc, dict)
-        and isinstance(targets_desc.get("count"), int)
-        and targets_desc["count"] > 1
-    ):
+    printed_count = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    if printed_count == "x":
+        # "Return **X** target creature cards from your graveyard to your hand."
+        # (Shattered Crypt.) The announced X (CR 601.2b), which is not a number
+        # until the spell is on the stack — so the several-slot branch reads it
+        # here rather than being told a literal by the lowering.
+        #
+        # Gated on the string rather than left to ``isinstance(int)``, which is
+        # what this branch used to ask: the Crypt's count arrived as ``'x'``,
+        # failed that test, fell through to the single-card path and returned
+        # **one** card of however many X paid for — while the card lost X life
+        # and reported itself supported.
+        printed_count = int(context.x_value or 0)
+    if isinstance(printed_count, int) and printed_count > 1:
         picked = _resolve_graveyard_slots(
-            caster, context, targets_desc["count"], _eligible
+            caster, context, printed_count, _eligible
         )
         for returned_card in picked:
             game.put_card_into_hand(caster, returned_card)
@@ -2893,19 +2903,6 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
 
     source = context.source_permanent
     if source is None or not game.is_on_battlefield(source):
-        # **A spell exiling itself** (Experimental Overload's "Exile Experimental
-        # Overload."). There is no permanent — the object is the spell on the
-        # stack — so this is CR 608.2n's "where the card goes" rather than a
-        # zone change of something in play, and it routes through the same flag
-        # the "if that spell would be put into your graveyard, exile it instead"
-        # rider uses. Set rather than performed: the card is still resolving,
-        # and the resolution tail is the one place that bins it.
-        if source is None and context.card is not None:
-            game.exile_resolving_spell = True
-            context.results["exiled_self"] = True
-            game.log.append(f"{context.card.name} will be exiled as it resolves")
-            _register(game.players.index(context.caster), context.card)
-            return True, "resolved"
         # "When this creature dies, **exile it** if it had a death counter on
         # it." (Bogardan Phoenix.) A dies-trigger's source is in a graveyard by
         # the time the ability resolves (CR 603.3 puts the trigger on the stack
@@ -2919,8 +2916,34 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
         # By identity through the hand/graveyard seam's own reasoning: two
         # copies of a card in a deck are the same immutable ``CardDefinition``,
         # so a name match would take whichever entry came first.
-        if source is not None and context.card is not None:
-            for player in game.players:
+        # …and **an ability activated from a graveyard** (Carrionette's
+        # "Exile this card and target creature", CR 113.6m). There is no
+        # permanent at all there, so the branch below would read the sentence
+        # as a spell exiling itself and set the resolving-spell flag on an
+        # ability — which bins nothing and leaves the card in the pile, exactly
+        # the failure the Phoenix note above describes.
+        #
+        # ``ability_text`` is the discriminator and it is the only sound one:
+        # it is set for an activated ability and None for a spell, where the
+        # zone is not. A graveyard scan run for a *spell* would find another
+        # copy of the same card in the pile — two copies of a card in a deck
+        # are the same object — and exile that one instead of the spell.
+        #
+        # Hoisted above the resolving-spell branch for that same reason: the
+        # two are told apart by the discriminator rather than by which one is
+        # tried first.
+        if context.card is not None and (
+            source is not None or context.ability_text is not None
+        ):
+            # The resolving seat's own pile first. Two copies of one card in
+            # two graveyards are the *same* ``CardDefinition`` object, so a
+            # scan in seat order would take an opponent's copy whenever they
+            # sit earlier — and for a graveyard-activated ability CR 113.6m
+            # names one pile in particular, the activator's.
+            piles = [context.caster] + [
+                player for player in game.players if player is not context.caster
+            ]
+            for player in piles:
                 for index, held in enumerate(player.graveyard):
                     if held is context.card:
                         player.graveyard.pop(index)
@@ -2932,6 +2955,19 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
                             f"{player.name}'s graveyard"
                         )
                         return True, "resolved"
+        # **A spell exiling itself** (Experimental Overload's "Exile Experimental
+        # Overload."). There is no permanent — the object is the spell on the
+        # stack — so this is CR 608.2n's "where the card goes" rather than a
+        # zone change of something in play, and it routes through the same flag
+        # the "if that spell would be put into your graveyard, exile it instead"
+        # rider uses. Set rather than performed: the card is still resolving,
+        # and the resolution tail is the one place that bins it.
+        if source is None and context.card is not None:
+            game.exile_resolving_spell = True
+            context.results["exiled_self"] = True
+            game.log.append(f"{context.card.name} will be exiled as it resolves")
+            _register(game.players.index(context.caster), context.card)
+            return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
     owner_index = game.owner_index_of(source)
@@ -3541,29 +3577,105 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
     survivors are rebuilt by *slot* rather than by value (idiom 11).
     """
     payload = instruction.payload
-    if payload.get("graveyard_owner") != "you":
+    who = str(payload.get("graveyard_owner") or "")
+    if who == "each_player":
+        seats = list(range(len(game.players)))
+    elif who == "you":
+        seats = [game.players.index(context.caster)]
+    else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
-    owner = context.caster
     described = dict(payload.get("filter") or {})
-    taken_slots = [
-        index for index, card in enumerate(owner.graveyard)
-        if _card_matches_filter(card, described, game=game, owner=owner)
-    ]
-    if not taken_slots:
+    # One entry per seat, **including the empty ones**, and seeded before
+    # anything moves. The sentence behind this one is read once per player
+    # ("puts all cards *they* exiled this way onto the battlefield"), so a seat
+    # the map never mentioned would fall through to whatever a `.get` default
+    # is — and the honest default for "what did this player exile" is an empty
+    # pile, not somebody else's.
+    by_seat = context.results.setdefault(EXILED_BY_SEAT, {})
+    for seat in seats:
+        by_seat.setdefault(seat, [])
+    exiled = 0
+    for seat in seats:
+        owner = game.players[seat]
+        taken_slots = [
+            index for index, card in enumerate(owner.graveyard)
+            if _card_matches_filter(card, described, game=game, owner=owner)
+        ]
+        if not taken_slots:
+            continue
+        taken = [owner.graveyard[index] for index in taken_slots]
+        kept = [
+            card for index, card in enumerate(owner.graveyard)
+            if index not in set(taken_slots)
+        ]
+        owner.graveyard[:] = kept
+        owner.exile.extend(taken)
+        by_seat[seat].extend(taken)
+        exiled += len(taken)
+        game.log.append(
+            f"{context.card.name} exiled {len(taken)} card(s) from "
+            f"{owner.name}'s graveyard"
+        )
+    if not exiled:
         game.log.append(f"{context.card.name}: no card in that graveyard to exile")
+    return True, "resolved"
+
+
+@effect_handler("put_exiled_this_way")
+def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player … puts all cards **they** exiled this way onto the
+    battlefield." (Living Death.)
+
+    The per-seat pile an earlier step of this same resolution recorded, given
+    back one seat at a time. Every card enters under the control of the player
+    who put it there (CR 110.2a) — which is what the printed subject says and
+    what makes this a mass reanimation rather than a theft.
+
+    Read out of ``EXILED_BY_SEAT`` and not off the exile zone: a player's exile
+    holds cards this effect never touched, and CR 400.7's "no memory of its
+    previous existence" is exactly why the pile has to be the record rather
+    than a re-scan. It is also why the entries are consumed **positionally** —
+    two copies of one card in a graveyard are the same ``CardDefinition``
+    object, so a match by value would take the same card twice and leave the
+    other in exile.
+
+    A card that is no longer in that seat's exile by the time this runs is
+    skipped and said so: something else moved it, and CR 608.2 does as much of
+    the instruction as it can.
+    """
+    payload = instruction.payload
+    zone = str(payload.get("zone") or "battlefield")
+    if zone != "battlefield":
+        game.log.append(f"{context.card.name}: no handler puts a pile in the {zone}")
         return True, "resolved"
-    taken = [owner.graveyard[index] for index in taken_slots]
-    kept = [
-        card for index, card in enumerate(owner.graveyard)
-        if index not in set(taken_slots)
-    ]
-    owner.graveyard[:] = kept
-    owner.exile.extend(taken)
-    game.log.append(
-        f"{context.card.name} exiled {len(taken)} card(s) from "
-        f"{owner.name}'s graveyard"
-    )
+    who = str(payload.get("who", "you"))
+    by_seat = dict(context.results.get(EXILED_BY_SEAT) or {})
+    if who == "each_player":
+        seats = list(range(len(game.players)))
+    else:
+        seats = [game.players.index(context.caster)]
+    described = dict(payload.get("filter") or {})
+    returned = 0
+    for seat in seats:
+        player = game.players[seat]
+        for card in list(by_seat.get(seat) or ()):
+            if described and not _card_matches_filter(
+                card, described, game=game, owner=player
+            ):
+                continue
+            if not game.take_card_from_exile(player, card):
+                game.log.append(
+                    f"{context.card.name}: {card.name} is no longer exiled"
+                )
+                continue
+            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+            game.log.append(
+                f"{player.name} put {card.name} onto the battlefield from exile"
+            )
+            returned += 1
+    if not returned:
+        game.log.append(f"{context.card.name}: no exiled cards to put back")
     return True, "resolved"
 
 

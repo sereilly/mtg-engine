@@ -3626,6 +3626,7 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
     # print.
     if COST_TAPPED_REFERENT in effect_text and not cost.tap_attached:
         instruction, effect_kind = None, "unsupported"
+    instruction = _with_stated_zone(instruction, line, card_name)
     supported = instruction is not None
     return ParsedActivatedAbility(
         source_line=line,
@@ -3634,6 +3635,52 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
         cost=cost,
         effect_kind=effect_kind,
         instruction=instruction,
+    )
+
+
+def _with_stated_zone(
+    instruction: OracleInstruction | None,
+    line: str,
+    card_name: str | None,
+) -> OracleInstruction | None:
+    """*instruction* carrying the zone its own "Activate only ..." clause states
+    (CR 113.6b), if one does.
+
+    "Activate only if this card is in your graveyard" (Carrionette) is a
+    restriction *and* a statement of where the ability functions, and it is the
+    only place that card says so: the effect behind it — "Exile this card and
+    target creature ..." — names no zone at all, so the two derivations that
+    already produce ``functions_from`` cannot see it. ``lowering/_bound_returns``
+    reads a printed "from your graveyard" in the effect and ``lower.py`` reads
+    an intervening-if; this reads the CR 602.5 clause, and all three write the
+    same key, because ``activate_from_graveyard`` and ``engine/events.py`` ask
+    one question of it.
+
+    Here rather than in the grammar for the reason the grammar hands the clause
+    back untouched: the restriction is consumed by a production that lowers to
+    nothing and is *enforced* off the raw line, so this is the one place both
+    the compiled instruction and the printed sentence are in hand.
+
+    An instruction that already carries the key is left alone — a card whose
+    effect names its zone has said so once and does not need it said twice, and
+    overwriting would let a restriction contradict the effect it is a tail of.
+    """
+    # Both imported inside the function: ``engine/events.py`` imports
+    # ``trigger_utils``, which imports this module, so naming the key at
+    # module scope is a cycle. The *spelling* is still the one this engine
+    # has — the constant is imported rather than repeated, which is the
+    # whole of what one spelling means here.
+    from .activation_restrictions import restriction_functions_from
+    from .events import FUNCTIONS_FROM
+
+    if instruction is None or instruction.payload.get(FUNCTIONS_FROM):
+        return instruction
+    zone = restriction_functions_from(line, card_name)
+    if not zone:
+        return instruction
+    return OracleInstruction(
+        instruction.kind, instruction.value,
+        {**instruction.payload, FUNCTIONS_FROM: zone},
     )
 
 

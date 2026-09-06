@@ -130,6 +130,23 @@ DELAYED_EVENTS: dict[str, str] = {
     # for an exile what this event does for an effect the grammar lowers.
     "bound_permanent_leaves_or_untaps":
         "the leaves-the-battlefield transition and become_untapped",
+    # "When this creature becomes untapped **or you lose control of this
+    # creature**, exile that creature." (Coffin Queen.) The row above's sibling
+    # with the second half swapped, and a separate key rather than a wider
+    # spelling of it: CR 603.10d's losing control is a change of *hands* with
+    # the permanent still on the battlefield, which the leave transition never
+    # sees and which Merieke's ability is not about. An entry armed under one
+    # name must not be woken by the other's.
+    #
+    # Three sites, because "you lose control of it" has no single one and
+    # neither does the pairing: ``become_untapped`` is the first half,
+    # ``_sync_control``'s hand-over is the second, and the leaves-the-
+    # battlefield transition is the second again — a permanent that leaves is
+    # its controller losing control of it (CR 400.7), which is the same reading
+    # the printed ``lose_control_of_source`` trigger already takes from both
+    # places.
+    "bound_permanent_untaps_or_control_lost":
+        "become_untapped, _sync_control and the leaves-the-battlefield transition",
     # "Whenever that creature is dealt damage by an attacking creature this
     # turn, …" (Glyph of Life). Repeating: CR 603.7b's "unless it
     # has a stated duration", and "this turn" is that duration.

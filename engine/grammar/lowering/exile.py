@@ -23,6 +23,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, EXILED_THIS_WAY,
                       EXILED_THIS_WAY_OBJECTS)
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets,
     _describe_targets, _filter_payload, _is_created_token, _is_source,
@@ -193,6 +194,23 @@ def _lower_exile_card_from_hand(
     return OracleInstruction("exile_chosen_card_from_hand", "", payload)
 
 
+def _is_graveyard_pile_exile(subject) -> bool:
+    """Whether *subject* is the printed noun phrase "all <cards> from a
+    graveyard" — the one exile shape that reads a **subject**.
+
+    Beside ``_is_hand_pile_exile`` and for its reason: the branch that performs
+    this shape is a long way down the function, and the rider check that has to
+    agree with it is at the top. One predicate so the two cannot come apart.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("each", "all")
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+    )
+
+
 def _lower_exile(
     node: ast.Exile,
     produced: frozenset[str] = frozenset(),
@@ -242,6 +260,14 @@ def _lower_exile(
         raise LoweringError(
             "only the hand exile carries a face-down rider", node=node
         )
+    # The printed subject is read by exactly one branch below — the graveyard
+    # sweep, the only shape in the pool that prints one — and refused up here
+    # everywhere else, for the rider above's reason exactly. A dropped actor is
+    # not a cosmetic loss: every other exile in this file resolves for the
+    # ability's own controller, so "each player exiles …" read without its
+    # subject would empty one graveyard where the card empties the table's.
+    if node.actor is not None and not _is_graveyard_pile_exile(node.subject):
+        raise LoweringError("no exile handler names a subject", node=node)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         subject = node.subject
         if (
@@ -262,6 +288,51 @@ def _lower_exile(
         )
 
     subject = node.subject
+    # "…**exile that creature**." (Coffin Queen, inside the delay its activated
+    # ability creates.) The object the delayed ability was armed about
+    # (CR 603.7c), addressed by id out of the trigger's context — the same
+    # reading `destroy_bound_permanent` takes of the same two words one family
+    # over, and its own kind for that handler's reason: routed through the
+    # targeted exile it would ask for a choice the card never offered and then
+    # exile whichever permanent the resolution context happened to carry.
+    #
+    # Gated on the *event*, like every other reading of "that <noun>" in this
+    # grammar. Under an event that freezes no object the words name nothing at
+    # all, and a refusal is the honest answer rather than a handler that finds
+    # nothing while the card compiles supported.
+    #
+    # Narrowed to the **restated noun phrase**, which is what tells this apart
+    # from the other three references that carry the same quantifier: "the
+    # token" (Stangg, Dance of Many) and "that card" name objects with no card
+    # type printed on them, and each has its own branch below. Reading them
+    # here refused two long-supported cards on a gate that was never about
+    # them.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and subject.filter.card_types
+        and not subject.filter.created_with_source
+    ):
+        if node.counters or node.face_down or node.same_zone:
+            raise LoweringError(
+                "the bound-object exile carries no rider", node=node
+            )
+        if event not in _BOUND_OBJECT_DELAYED_EVENTS:
+            raise LoweringError(
+                "\"that\" names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        # The **same kind and the same empty payload** the "exile it" branch
+        # below already emits (Zirilan of the Claw, Shallow Grave): the two
+        # sentences name one object two ways, and the id the arming handler
+        # froze is what says which. The noun is read and not carried, for
+        # ``destroy_event_subject``'s stated reason — the phrase re-states what
+        # the ability was already aimed at, and asking again at resolution
+        # would let a creature that stopped being one escape an exile the rules
+        # have already aimed at it.
+        return (OracleInstruction("exile_bound_permanent", "", {}),)
     # "Exile **all** / **any number of** cards from your hand face down."
     # (Duplicity, Scroll Rack.) A pile out of a *hidden* zone, read before both
     # sweep branches below — they are about permanents on a battlefield, and
@@ -288,9 +359,27 @@ def _lower_exile(
         # target already share — a narrowing it cannot answer refuses the line
         # rather than exiling a wider set than the card names.
         if filt.zone == "graveyard" and filt.is_card:
-            if filt.zone_owner is None or filt.zone_owner.kind != "you":
+            # Who empties the pile and whose pile it is are **one claim said
+            # twice** ("each player … from *their* graveyard"), so they are
+            # checked against each other rather than either being read alone —
+            # the pairing `_bound_returns`' sweep reanimation already makes of
+            # the same two words. A pairing this cannot resolve refuses instead
+            # of picking a half: "each player exiles all creature cards from
+            # your graveyard" is one graveyard and every player, and there is
+            # no such card.
+            actor = node.actor.kind if node.actor is not None else None
+            owner = (
+                filt.zone_owner.kind if filt.zone_owner is not None else None
+            )
+            if actor is None and owner == "you":
+                graveyard_owner = "you"
+            elif actor == "each_player" and owner in ("owner", "each_player"):
+                graveyard_owner = "each_player"
+            else:
                 raise LoweringError(
-                    "the graveyard exile sweep reads your own pile", node=node
+                    "the graveyard exile sweep reads your own pile or "
+                    "\"each player … their graveyard\"",
+                    node=node,
                 )
             if node.counters:
                 raise LoweringError(
@@ -311,7 +400,7 @@ def _lower_exile(
             return (
                 OracleInstruction(
                     "exile_graveyard_cards", "",
-                    {"graveyard_owner": "you", "filter": described},
+                    {"graveyard_owner": graveyard_owner, "filter": described},
                 ),
             )
         if filt.zone != "battlefield" or filt.is_card:

@@ -18,9 +18,11 @@ names the exile zone, and the two shared no production.
 nodes sit perfectly well beside the other card nodes.
 """
 
+import dataclasses
+
 from .. import ast
 from ..phrases import _accept_self_reference, _parse_zone
-from ..references import parse_player_ref
+from ..references import parse_player_ref, parse_recipient
 from ..vocabulary import CARD_TYPES
 from ..stream import TokenStream
 
@@ -482,3 +484,134 @@ def parse_put_exiled_pile_on_library(
         stream.reset(mark)
         return None
     return ast.PutExiledPileOnLibrary(position=position)
+
+
+def _matching_possessive(player: "ast.PlayerRef | None") -> str:
+    """The pronoun a sentence uses for **its own subject**.
+
+    "your" when the subject is the resolving player and "their" for anybody
+    else — the agreement ``_parse_exile_entire_library`` already enforces one
+    module over, and for its stated reason: reading either for either lets
+    "each player exiles all creature cards from **your** graveyard" through,
+    which is one graveyard and every player, and no card in Magic.
+    """
+    return "your" if player is None or player.kind == "you" else "their"
+
+
+def _parse_player_exiles_graveyard(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.Exile | None":
+    """``exiles all creature cards from their graveyard`` (Living Death) — the
+    verb and everything after it, with the subject already read by the caller.
+
+    The bare imperative ("Exile all creature cards from your graveyard", Zombie
+    Mob) has had a production since Mirage and lowers to the same instruction;
+    what this adds is the **printed subject**, which CR 608.2c makes the same
+    sentence read from the other end. It is not decoration on this shape: the
+    subject says whose graveyard is emptied, and — through the per-seat record
+    the step writes — whose cards the sentence behind it hands back.
+
+    Narrow on purpose, and the narrowness is the safety. Only a *graveyard card
+    sweep* builds an :class:`ast.Exile` carrying an actor, so every other exile
+    in the pool keeps a node whose actor is ``None`` and cannot have one
+    dropped. The lowering refuses a non-``None`` actor anywhere else in any
+    case, which is the second lock on the same door.
+
+    Returns None with the cursor unmoved for anything else, so the two exile
+    productions beside it in ``subject_verb`` keep their own sentences and the
+    line keeps its own refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if not isinstance(subject, ast.TargetSpec):
+        stream.reset(mark)
+        return None
+    filt = subject.filter
+    # A pile of *cards* in a graveyard and nothing else. The noun parser reads
+    # "from their graveyard" onto the filter as ``zone``/``zone_owner``, so a
+    # phrase that named the battlefield — or a hand, or a library — comes back
+    # here as a different zone and is put back rather than lowered onto a sweep
+    # that would read the wrong pile.
+    if not (filt.is_card and filt.zone == "graveyard"):
+        stream.reset(mark)
+        return None
+    # The possessive agrees with the subject, exactly as the library exile one
+    # module over demands. "each player … from **their** graveyard" is one
+    # claim said twice; the lowering checks the pair against each other rather
+    # than trusting either half alone, and this is where the half it checks is
+    # read.
+    owner = filt.zone_owner
+    if owner is None:
+        stream.reset(mark)
+        return None
+    if not subject.quantifier in ("all", "each"):
+        stream.reset(mark)
+        return None
+    if subject.targeted:
+        stream.reset(mark)
+        return None
+    return ast.Exile(subject, actor=player)
+
+
+def _parse_put_exiled_this_way(
+    stream: TokenStream, player: "ast.PlayerRef | None" = None
+) -> "ast.PutExiledThisWay | None":
+    """``puts all cards they exiled this way onto the battlefield`` (Living
+    Death) — the verb and everything after it.
+
+    The back-reference is read here rather than by the shared noun parser for
+    the reason every other one in this grammar is: "exiled this way" is not a
+    characteristic of a card, it names a *record*, and a filter carrying the
+    words would lower through every line that printed them.
+
+    The pronoun in front of the verb's object has to agree with the subject —
+    "they" for a named seat, "you" for the unnamed one — because that word is
+    the whole of what makes the record per-seat. "Each player … puts all cards
+    **you** exiled this way" would be every player handing one seat's pile
+    back, once per player.
+
+    Returns None with the cursor unmoved for anything else, so an ordinary
+    "puts …" keeps its own reading and its own refusal.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("puts", "put"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if not isinstance(subject, ast.TargetSpec):
+        stream.reset(mark)
+        return None
+    if subject.quantifier not in ("all", "each") or subject.targeted:
+        stream.reset(mark)
+        return None
+    if not subject.filter.is_card:
+        stream.reset(mark)
+        return None
+    pronoun = "you" if player is None or player.kind == "you" else "they"
+    if not stream.accept_word(pronoun):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("exiled", "this", "way"):
+        stream.reset(mark)
+        return None
+    # "**onto** the battlefield" and "**into** their hand" are one preposition
+    # to the rules (CR 400.1 moves an object to a zone); which word is printed
+    # is which zone follows it. Both are read so a printing that gave the pile
+    # back to a hand is this production rather than a second one, and the
+    # lowering decides which destinations a handler implements.
+    if not stream.accept_word("onto", "into", "to"):
+        stream.reset(mark)
+        return None
+    zone = _parse_zone(stream, self_possessive=_matching_possessive(player))
+    # The zone the noun phrase carried is the *source* pile, which for this
+    # sentence is always exile and is never printed — the record answers it.
+    # Stripped before the filter is handed on so the lowering's card gate sees
+    # a phrase about characteristics alone.
+    default = ast.ObjectFilter()
+    described = dataclasses.replace(
+        subject.filter, zone=default.zone, zone_owner=default.zone_owner,
+    )
+    return ast.PutExiledThisWay(zone, described, player)
