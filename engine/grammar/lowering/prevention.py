@@ -277,6 +277,64 @@ def _lower_prevent_damage(
                         payload_for_target,
                     ),
                 )
+            # "Sacrifice this Aura: The next time a source of your choice would
+            # deal damage to **enchanted creature** this turn, prevent that
+            # damage." (Kithkin Armor.) CR 615.1's shield goes around a player
+            # *or* a permanent, and the counted pool one function down has read
+            # this very recipient since Fylgja — the whole-instance shield had
+            # simply never been printed with it, so "a chosen-source shield only
+            # protects its controller" was a fact about the pool written as a
+            # rule about the engine.
+            #
+            # Its recipient rides the same ``recipient`` key Circle of Despair's
+            # "any target" does, because it is the same question of the same
+            # instruction: *which object does this shield go around*. It is
+            # deliberately not the counted shield's ``to_attached`` boolean —
+            # that kind carries three booleans because it grew one recipient at
+            # a time, and a fourth spelling of one key on a second kind is how
+            # the two come to disagree.
+            #
+            # Read **before** the "you" check below rather than as a branch
+            # inside it: the sentence names no controller at all, so the check
+            # it would otherwise fail is asking the wrong question.
+            if _is_enchanted(recipient):
+                leftover = _restrictions_beyond(
+                    recipient.filter, frozenset({"card_types", "is_enchanted"})
+                )
+                if leftover:
+                    # ``attached_host`` answers *which* permanent, never which
+                    # kind of one, so a narrowing past the enchant relation
+                    # would be dropped and the shield armed on a host the phrase
+                    # excludes. The same refusal the counted shield makes of the
+                    # same phrase, in the same words.
+                    raise LoweringError(
+                        "a shield on the enchanted permanent cannot narrow by: "
+                        + ", ".join(leftover),
+                        node=node,
+                    )
+                if node.to_others or node.prevented_rider is not None:
+                    # Both riders in the pool gain their *controller* something,
+                    # and this shield hangs on a permanent that may be an
+                    # opponent's by the time it is spent — borrowing either
+                    # would pay the wrong seat, which is the any-target branch's
+                    # reason one screen up.
+                    raise LoweringError(
+                        "no shield on the enchanted permanent carries an "
+                        "effect after the prevention",
+                        node=node,
+                    )
+                if not isinstance(node.amount, ast.Fixed) or node.amount.value != 1:
+                    raise LoweringError(
+                        "an unnarrowed chosen-source shield prevents the whole "
+                        "instance, not a counted amount",
+                        node=node,
+                    )
+                return (
+                    OracleInstruction(
+                        "grant_whole_prevention_shield", "",
+                        {"recipient": "attached"},
+                    ),
+                )
             if not _is_you(recipient):
                 raise LoweringError(
                     "a chosen-source shield only protects its controller", node=node

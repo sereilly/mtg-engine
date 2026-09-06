@@ -628,6 +628,31 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
             "would deal them"
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "attached":
+        # "Sacrifice this Aura: The next time a source of your choice would deal
+        # damage to **enchanted creature** this turn, prevent that damage."
+        # (Kithkin Armor.) The shield goes around the permanent this ability's
+        # source is attached to, found through ``attached_host`` — the one
+        # accessor for that relation, and the reason the cost being "sacrifice
+        # this Aura" does not lose the host: CR 603.10's last-known information
+        # is what that reader falls back to, and the Aura is already in a
+        # graveyard by the time this line runs.
+        #
+        # The **target channel stays free for the source**, unlike Circle of
+        # Despair below: this ability targets nothing, so "a source of your
+        # choice" arrives exactly where Pentagram of the Ages' does.
+        host = attached_host(game, context.source_permanent)
+        if host is None:
+            game.log.append(f"{granted_by}: nothing is enchanted to protect")
+            return True, "resolved"
+        return _arm_chosen_source_shield(
+            game, context,
+            lambda chosen, by: (
+                make_whole_source(chosen, by) if chosen is not None
+                else make_whole_charge(by)
+            ),
+            recipient=host,
+        )
     if instruction.payload.get("recipient") == "target":
         # "…would deal damage to **any target** this turn, prevent that
         # damage." (Circle of Despair.) The shield goes around what the ability

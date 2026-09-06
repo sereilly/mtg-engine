@@ -681,6 +681,24 @@ def _parse_postmodifiers(
                 if stream.accept_phrase("this", "turn"):
                     d.was_dealt_damage_this_turn = True
                     continue
+            # "…that **was dealt damage this turn**" (Fatal Blow). The same
+            # agentless passive one branch up in the simple past — one printed
+            # fact in two English tenses, so it sets the same field rather than
+            # earning one of its own: a second field would be a second answer to
+            # "was this creature damaged", and the two would drift the moment a
+            # matcher was taught only one of them.
+            #
+            # A branch rather than a word bolted onto the phrase above, because
+            # the two spellings share no token: "has been dealt" and "was dealt"
+            # differ in length as well as in words, and `accept_phrase` matches a
+            # fixed run. The plural "were" is deliberately absent — the pool
+            # prints it only in Suffocation's cast restriction, which is a fact about
+            # a *player* and is read by `engine/cast_restrictions.py`, so
+            # admitting it here would be a reading nothing tests.
+            elif stream.accept_phrase("was", "dealt", "damage"):
+                if stream.accept_phrase("this", "turn"):
+                    d.was_dealt_damage_this_turn = True
+                    continue
             stream.reset(probe)
             break
         # "…**blocking or [being] blocked by this creature**" (Sentinel, the

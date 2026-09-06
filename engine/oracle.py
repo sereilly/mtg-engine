@@ -2027,9 +2027,25 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
+    #
+    # **"Aura" is one of the words a card prints for its own type**, and it was
+    # missing from this list for as long as the list existed. Scryfall's oracle
+    # text for an Aura says "Sacrifice this **Aura**" and never "this
+    # enchantment", so five shipped cards — Briar Shield, Carapace, Fire Whip,
+    # Phantom Wings and Thrull Retainer — carried an activation cost nothing
+    # charged: the ability was repeatable at will and the Aura never left the
+    # battlefield. Nothing failed, because a cost this reader cannot see is not
+    # a missing feature but a *cheaper card*, which is the direction
+    # ``engine/cast_costs.py`` exists to refuse one announcement step earlier.
+    #
+    # A subtype among card types because those are the two vocabularies a
+    # permanent uses to name itself (CR 205.3g, CR 301.5), and only "aura"
+    # because only "aura" is printed: the pool has no "sacrifice this
+    # Equipment", and a word nothing prints is a claim nothing tests.
     sacrifice_self = bool(
         re.search(
-            r"\bsacrifice this (artifact|creature|enchantment|permanent|land|token)\b",
+            r"\bsacrifice this "
+            r"(artifact|aura|creature|enchantment|permanent|land|token)\b",
             cost_lower,
         )
     )
@@ -2039,7 +2055,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # cost has.
     return_self_to_hand = bool(
         re.search(
-            r"\breturn this (artifact|creature|enchantment|permanent|land|token)"
+            r"\breturn this "
+            r"(artifact|aura|creature|enchantment|permanent|land|token)"
             r" to its owner's hand\b",
             cost_lower,
         )
