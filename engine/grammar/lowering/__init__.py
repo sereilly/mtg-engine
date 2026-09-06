@@ -144,7 +144,8 @@ from .counter_removal import _lower_move_counter, _lower_remove_counter
 from ._counter_stores import _lower_player_gets_counters
 from .counters import _lower_put_counter
 from .sequences import (_fused_cost_repeated_destroys,
-                        _fused_tap_enchanted_then_counters)
+                        _fused_tap_enchanted_then_counters,
+                        _fused_tap_then_bite)
 from .loops import (
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,
@@ -339,14 +340,15 @@ from .delayed import (
     _lower_waive_shroud,
 )
 from .prohibitions import _lower_cant_be
+from .requirements import (_lower_attacks_this_turn_if_able,
+                           _lower_blocks_this_turn_if_able,
+                           _lower_force_chosen_creature_to_attack)
 from .combat import (
     _lower_combat_restriction,
     lower_block_count_grant,
     _lower_attack_as_though,
     _lower_assigns_no_combat_damage,
-    _lower_attacks_this_turn_if_able,
     _lower_attacking_doesnt_tap,
-    _lower_force_chosen_creature_to_attack,
     _lower_choose_blocks_for_defenders,
     _lower_reassign_blockers_between_attackers,
     _lower_become_blocked,
@@ -469,6 +471,7 @@ __all__ = [
     "_lower_lose_keyword",
     "_lower_player_gets_counters",
     "_fused_tap_enchanted_then_counters",
+    "_fused_tap_then_bite",
     "_lower_put_counter",
     "_PER_DEATH_COUNTERS",
     "_PER_DEATH_SUBJECT",
@@ -626,6 +629,7 @@ __all__ = [
     "_lower_modal_head",
     "_lower_combat_restriction",
     "lower_block_count_grant",
+    "_lower_blocks_this_turn_if_able",
     "_lower_cant_be",
     "_lower_attack_as_though",
     "_lower_assigns_no_combat_damage",

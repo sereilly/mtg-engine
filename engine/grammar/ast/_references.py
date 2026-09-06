@@ -209,10 +209,11 @@ class ObjectFilter:
     # least one +1/+1 counter, read off the ``plus_counters`` record the
     # placing handlers keep (CR 122).
     with_plus1_counter: bool = False
-    # "with a **bounty** counter on it" (Bounty Hunter) — the object carries at
-    # least one counter of the kind the card names, read off
-    # ``engine/named_counters.py``'s open key space (CR 122.1: a counter's kind
-    # is whatever word the card invents, and nothing in the rules reacts to it).
+    # "target creature **with a bounty counter on it**" (Bounty Hunter), "all
+    # creatures **with magnet counters on them**" (Magnetic Web). A counter
+    # kind out of ``engine/named_counters.py``'s open key space (CR 122.1: a
+    # counter's kind is whatever word the card invents, and nothing in the
+    # rules reacts to it).
     #
     # A **separate field from ``with_plus1_counter`` above**, not a widening of
     # it. CR 122.1a's +1/+1 counter has rules meaning — it is layer 7d and it

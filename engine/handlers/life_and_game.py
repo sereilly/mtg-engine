@@ -591,39 +591,21 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             0 if holder is None
             else counters_on(holder, str(per_each["counters_on_source"]))
         )
-    if per_each is not None and per_each.get("zone") not in (None, "battlefield"):
+    if per_each is not None and per_each.get("zone") is not None:
         # "For each artifact or creature card in **target opponent's**
-        # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a zone
-        # rather than off a battlefield, answered by `count_from_payload` — the
-        # same reader `add_mana_from_text`'s per-each uses, and the same reader
-        # the mana half of this very sentence goes through one instruction over.
-        # Two readings of one count would be two answers on one card.
-        life_gain *= count_from_payload(game, context, per_each)
-    if per_each is not None and per_each.get("zone") == "battlefield":
-        # "…for each creature you control with flying" (Aven Gagglemaster),
-        # "…for each attacking creature" (Orim's Prayer, Respite). One scan over
-        # every battlefield, narrowed by the printed noun phrase through
-        # ``subject_matches`` — the one reader of what a printed noun phrase
-        # means, which asks layer 6 for a keyword and CR 109.5's observer for
-        # "you control".
+        # graveyard, … you gain 1 life." (Spoils of Evil.) "…for each creature
+        # you control with flying" (Aven Gagglemaster). "…for each attacking
+        # creature" (Respite). Every count of a zone, the battlefield included,
+        # answered by `count_from_payload` — the same reader
+        # `add_mana_from_text`'s per-each uses, and the same reader the mana
+        # half of Spoils of Evil's sentence goes through one instruction over.
         #
-        # It was a scan of the gainer's own board with a hand-rolled type and
-        # keyword test, and the ``controller`` key the lowering wrote beside
-        # them was never read. That is right for every phrase naming the
-        # gainer's own permanents and wrong for one naming anybody else's, and
-        # an attacking creature is on the attacking player's battlefield.
-        from ..subject_filters import subject_matches
-
-        described = per_each.get("filter") or {}
-        seat = game.players.index(gainer)
-        source = source_object(context)
-        life_gain *= sum(
-            1
-            for perm in game.all_permanents()
-            if subject_matches(
-                game, perm, described, observer=seat, source=source
-            )
-        )
+        # The battlefield used to have its own scan right here, reading three
+        # payload keys the lowering wrote by hand. Two readings of one count are
+        # two answers on one card, and this one was also the *narrower* answer:
+        # it scanned `game.controlled_by(gainer)` and so could never see an
+        # attacker on the active player's battlefield.
+        life_gain *= count_from_payload(game, context, per_each)
     life_gain = _capped_life_gain(context, instruction, life_gain)
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"

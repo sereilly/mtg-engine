@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 87.0% | 86.0% | 60.0% | 248 |
+| TMP *(measured)* | 335 | 478 | 87.7% | 87.4% | 61.5% | 254 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 360 | 159 | expected a subject |  |
-| 113 | 55 | unrecognized effect verb |  |
+| 359 | 158 | expected a subject |  |
+| 111 | 53 | unrecognized effect verb |  |
 | 93 | 45 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -1278,6 +1278,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dazzling Beauty**
   - `Target unblocked attacking creature becomes blocked. (This spell works on creatures that can't be blocked.)`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Deadshot**
+  - `Tap target creature. It deals damage equal to its power to another target creature.`
 - **Death Pits of Rath**
   - `Whenever a creature is dealt damage, destroy it. It can't be regenerated.`
 - **Death Spark**
@@ -1988,6 +1990,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, you may destroy target artifact defending player controls. If you do, this creature assigns no combat damage this turn.`
 - **Flowstone Giant**
   - `{R}: This creature gets +2/-2 until end of turn.`
+- **Flowstone Salamander**
+  - `{R}: This creature deals 1 damage to target creature blocking it.`
 - **Flowstone Sculpture**
   - `{2}, Discard a card: Put a +1/+1 counter on this creature or this creature gains flying, first strike, or trample. (This effect lasts indefinitely.)`
 - **Flowstone Wyvern**
@@ -3364,6 +3368,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
 - **Magnetic Web**
+  - `Whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able.`
   - `{1}, {T}: Put a magnet counter on target creature.`
 - **Magus of the Unseen**
   - `{1}{U}, {T}: Untap target artifact an opponent controls and gain control of it until end of turn. It gains haste until end of turn. When you lose control of the artifact, tap it.`
@@ -3658,6 +3663,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {G}.`
 - **Mountain Valley**
   - `{T}, Sacrifice this land: Search your library for a Mountain or Forest card, put it onto the battlefield, then shuffle.`
+- **Mounted Archers**
+  - `{W}: This creature can block an additional creature this turn.`
 - **Mox Emerald**
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
@@ -4430,6 +4437,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Reparations**
   - `Whenever an opponent casts a spell that targets you or a creature you control, you may draw a card.`
+- **Repentance**
+  - `Target creature deals damage to itself equal to its power.`
 - **Reprisal**
   - `Destroy target creature with power 4 or greater. It can't be regenerated.`
 - **Reset**
@@ -5759,6 +5768,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Trufflesnout**
   - `• Put a +1/+1 counter on this creature.`
   - `• You gain 4 life.`
+- **Trumpeting Armodon**
+  - `{1}{G}: Target creature blocks this creature this turn if able.`
 - **Tsunami**
   - `Destroy all Islands.`
   - `Destroy all Islands.`
@@ -6122,6 +6133,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wasteland**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Destroy target nonbasic land.`
+- **Watchdog**
+  - `As long as this creature is untapped, all creatures attacking you get -1/-0.`
 - **Watcher of the Spheres**
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Water Wurm**

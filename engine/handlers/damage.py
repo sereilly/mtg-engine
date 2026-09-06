@@ -1713,24 +1713,107 @@ def target_fights_target(game, instruction, context):
     return True, "resolved"
 
 
+@effect_handler("target_bites_itself")
+def target_bites_itself(game, instruction, context):
+    """"Target creature deals damage to itself equal to its power."
+    (Repentance.)
+
+    CR 119.3: the damage is dealt **by the creature**, so the source is the
+    permanent itself and not the sorcery — which is what makes a creature with
+    protection from its own colour, or one whose damage lifelinks, answer the
+    way the card reads. The amount is ``effective_power``, CR 613's computed
+    value read at resolution rather than the printed number.
+
+    The printed noun phrase is re-asked here, not only at announcement: a target
+    that stopped being a creature between the two is no longer the thing the
+    card names (CR 608.2b), which is the same discipline every targeted bite
+    above follows.
+
+    A zero-power creature takes nothing, and the handler still reports resolved
+    — CR 120.8: damage of 0 is not dealt at all, so nothing is marked and no
+    damage trigger fires.
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    biter = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: perm.is_creature and subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if biter is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    amount = max(0, int(biter.effective_power))
+    if amount <= 0:
+        game.log.append(
+            f"{biter.card.name} has no power to deal damage with"
+        )
+        return True, "resolved"
+    apply_damage_to_creature(
+        game, biter, amount, biter,
+        log_message=lambda dealt: (
+            f"{biter.card.name} deals {dealt} damage to itself"
+        ),
+        asks=True,
+    )
+    return True, "resolved"
+
+
 @effect_handler("target_bites_target")
 def target_bites_target(game, instruction, context):
     """"Target creature you control deals damage equal to its power to another
     target creature." (Garruk, Savage Herald's -2.) Two chosen targets resolved
     positionally: the biter first, the bitten second. Both are resolved by id
-    without an owner constraint - the biter must be the caster's, the bitten
-    anyone's, and the two must differ (the printed "another")."""
+    without an owner constraint - the two must differ (the printed "another").
+
+    **Each slot is tested against its own printed noun phrase**, read out of
+    ``targets.filters``, rather than against a "you control" this handler used
+    to spell out. That word is Garruk's, not the kind's: "Tap target creature.
+    It deals damage equal to its power to another target creature" (Deadshot)
+    names anybody's creature as the biter, and a hardcoded seat would have made
+    the spell refuse every legal target it has. Through ``subject_matches``,
+    the one reader of a printed noun phrase, with the resolving controller as
+    CR 109.5's "you" — and re-asked here rather than only at announcement,
+    because a target that stopped matching is no longer the thing the card
+    names (CR 608.2b)."""
+    from ..subject_filters import subject_matches
+
     ids = context.target_permanent_id
     if not isinstance(ids, list):
         ids = [ids, None]
     resolved = [game.permanent_by_id(pid) if isinstance(pid, int) else None for pid in ids]
     biter = resolved[0] if resolved else None
     bitten = resolved[1] if len(resolved) > 1 else None
-    caster_index = game.players.index(context.caster)
-    if biter is None or not biter.is_creature or not game.controls(caster_index, biter):
-        game.log.append(f"{context.card.name}: no creature you control to deal the damage")
+    described = instruction.payload.get("targets") or {}
+    slot_filters = described.get("filters") or []
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+
+    def _slot_matches(perm, index: int) -> bool:
+        if index >= len(slot_filters):
+            return True
+        return subject_matches(
+            game, perm, slot_filters[index] or {},
+            observer=observer, source=context.source_permanent,
+        )
+
+    if biter is None or not biter.is_creature or not _slot_matches(biter, 0):
+        game.log.append(f"{context.card.name}: no creature to deal the damage")
         return True, "resolved"
-    if bitten is None or not bitten.is_creature or bitten is biter:
+    if (
+        bitten is None
+        or not bitten.is_creature
+        or bitten is biter
+        or not _slot_matches(bitten, 1)
+    ):
         game.log.append(f"{context.card.name}: no other target creature to damage")
         return True, "resolved"
     amount = biter.effective_power

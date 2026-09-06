@@ -2034,3 +2034,233 @@ def test_wood_sage_naming_nothing_bins_the_whole_pile(set_pool):
 
     assert not game.players[0].hand
     assert len(game.players[0].graveyard) == 4
+
+
+# --- W2G2: combat requirements, the attacker/blocker pair (CR 506-510) ---
+
+import pytest
+
+from engine import Game, PlayerState, ai_policy
+from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
+from engine.models import Permanent
+from engine.named_counters import add_counters
+from engine.oracle import compile_card_oracle
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w2g2_duel(p0_cards, p1_cards):
+    """Two battlefields, no summoning sickness, mana enforcement off."""
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    for card in p0_cards:
+        p0.battlefield.append(_nosick(Permanent(card=card)))
+    for card in p1_cards:
+        p1.battlefield.append(_nosick(Permanent(card=card)))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p0, p1
+
+
+def _w2g2_to_blockers(game, attackers, defender=1):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, attackers, defender)[0], game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+
+
+def test_w2g2_mounted_archers_blocks_an_extra_creature_only_once_activated(set_pool):
+    """``{W}: This creature can block an additional creature this turn.``
+
+    Two assertions, and the *first* one is the round's finding:
+    ``_max_blocks_for`` counted the phrase in the raw oracle text, which cannot
+    tell this activated printing from Two-Headed Giant of Foriys' static one —
+    so the extra block would have been free and permanent.
+    """
+    archers = set_pool("TMP")["Mounted Archers"]
+    game, p0, p1 = _w2g2_duel(
+        [_mk_creature_card("Bear A", 2, 2), _mk_creature_card("Bear B", 2, 2)],
+        [archers],
+    )
+    assert game._max_blocks_for(p1.battlefield[0]) == 1
+    _w2g2_to_blockers(game, [0, 1])
+    assert game.declare_blockers(1, {0: [0, 1]}) == (
+        False, "Mounted Archers cannot block that many creatures"
+    )
+
+    game2, q0, q1 = _w2g2_duel(
+        [_mk_creature_card("Bear A", 2, 2), _mk_creature_card("Bear B", 2, 2)],
+        [archers],
+    )
+    game2.start_turn(0)
+    game2._close_current_priority_step()
+    assert game2.activate_permanent_ability(
+        1, "Mounted Archers", ability_index=0
+    ).supported
+    while game2.stack:
+        game2.resolve_top_of_stack()
+    assert game2._max_blocks_for(q1.battlefield[0]) == 2
+    game2.advance_combat_phase()
+    game2.advance_combat_phase()
+    assert game2.declare_attackers(0, [0, 1], 1)[0]
+    game2.advance_combat_phase()
+    assert game2.declare_blockers(1, {0: [0, 1]})[0], game2.log
+
+
+def test_w2g2_two_headed_giant_keeps_its_printed_extra_block(catalog_by_name):
+    """The other side of the same fix: the *static* printing is counted off the
+    compiled program's static lines, so narrowing the scan did not cost it."""
+    giant = catalog_by_name["Two-Headed Giant of Foriys"]
+    game, p0, p1 = _w2g2_duel(
+        [_mk_creature_card("Bear A", 2, 2), _mk_creature_card("Bear B", 2, 2)],
+        [giant],
+    )
+    assert game._max_blocks_for(p1.battlefield[0]) == 2
+
+
+def test_w2g2_watchdog_must_block_and_shrinks_the_attackers(set_pool):
+    """``This creature blocks each combat if able.`` (CR 509.1c) plus ``As long
+    as this creature is untapped, all creatures attacking you get -1/-0.`` — a
+    conditional anthem over a combat set, whose qualifier is read when P/T is
+    read (CR 611.3a) rather than at the recompute."""
+    dog = set_pool("TMP")["Watchdog"]
+    game, p0, p1 = _w2g2_duel([_mk_creature_card("Bear", 2, 2)], [dog])
+    _w2g2_to_blockers(game, [0])
+    game.check_state_based_actions()
+    bear = p0.battlefield[0]
+    assert (bear.effective_power, bear.effective_toughness) == (1, 2)
+    assert game.declare_blockers(1, {}) == (
+        False, "Watchdog blocks each combat if able"
+    )
+    assert game.declare_blockers(1, {0: 0})[0], game.log
+
+
+def test_w2g2_a_tapped_watchdog_neither_blocks_nor_shrinks(set_pool):
+    """Both halves are conditional on the same word, and each is asked by a
+    different reader — the anthem by the qualifier at P/T-read time, the
+    requirement by "if able", which a tapped creature never is (CR 509.1a)."""
+    dog = set_pool("TMP")["Watchdog"]
+    game, p0, p1 = _w2g2_duel([_mk_creature_card("Bear", 2, 2)], [dog])
+    p1.battlefield[0].tapped = True
+    _w2g2_to_blockers(game, [0])
+    game.check_state_based_actions()
+    bear = p0.battlefield[0]
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert game.declare_blockers(1, {})[0], game.log
+
+
+def test_w2g2_the_ai_obeys_watchdogs_requirement(set_pool):
+    """A requirement the AI does not know about is a declaration the engine
+    refuses every combat, which is a seat doing nothing all game."""
+    dog = set_pool("TMP")["Watchdog"]
+    game, p0, p1 = _w2g2_duel([_mk_creature_card("Bear", 2, 2)], [dog])
+    _w2g2_to_blockers(game, [0])
+    assert ai_policy.choose_combat_blockers(game, 1) == {0: 0}
+
+
+def test_w2g2_trumpeting_armodon_compels_one_named_pair(set_pool):
+    """``{1}{G}: Target creature blocks this creature this turn if able.``
+    The narrowest requirement in the step: it names *both* halves of the pair,
+    so a block of anything else does not satisfy it."""
+    armodon = set_pool("TMP")["Trumpeting Armodon"]
+    game, p0, p1 = _w2g2_duel(
+        [armodon],
+        [_mk_creature_card("Wall A", 0, 4), _mk_creature_card("Wall B", 0, 4)],
+    )
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], 1)[0]
+    assert game.activate_permanent_ability(
+        0, "Trumpeting Armodon", ability_index=0,
+        target_player_index=1, target_permanent_index=1,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.battlefield[1].metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] == [
+        p0.battlefield[0].permanent_id
+    ]
+    assert p1.battlefield[0].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0] is False
+    assert game.declare_blockers(1, {0: 0})[0] is False, "Wall A is not the one named"
+    assert game.declare_blockers(1, {1: 0})[0], game.log
+
+
+def test_w2g2_flowstone_salamander_targets_only_its_own_blocker(set_pool):
+    """``{R}: This creature deals 1 damage to target creature blocking it.``
+
+    The pronoun rewrite that binds "it" to the ability's source walked only
+    fields that were a bare ``TargetSpec``; ``DealDamage`` keeps its targets in
+    a tuple, so this card reached the lowering still carrying the unbound
+    pronoun. The picker spec is the assertion that the rewrite landed."""
+    from engine.targeting import derive_activation_spec
+
+    salamander = set_pool("TMP")["Flowstone Salamander"]
+    program = compile_card_oracle(salamander)
+    assert program.supported
+    assert derive_activation_spec(program.activated_abilities[0]) == {
+        "kind": "creature", "blocking_source": True,
+    }
+
+    game, p0, p1 = _w2g2_duel(
+        [salamander],
+        [_mk_creature_card("Blocker", 1, 1), _mk_creature_card("Bystander", 1, 1)],
+    )
+    _w2g2_to_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0]
+    assert game.activate_permanent_ability(
+        0, "Flowstone Salamander", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+    assert [p.card.name for p in p1.battlefield] == ["Bystander"]
+
+
+def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
+    """``{T}: Destroy target creature with a bounty counter on it.`` — the first
+    card of ``ObjectFilter.with_named_counter``, and the assertion that matters is the
+    *refusal*: the activation gate reads the same filter the picker does, so a
+    creature carrying no bounty counter is not a legal target at all."""
+    hunter = set_pool("TMP")["Bounty Hunter"]
+    game, p0, p1 = _w2g2_duel(
+        [hunter],
+        [_mk_creature_card("Ogre", 3, 3), _mk_creature_card("Bear", 2, 2)],
+    )
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert not game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    p0.battlefield[0].tapped = False
+    add_counters(p1.battlefield[0], "bounty", 1)
+    assert not game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=1,
+    ).supported, "the Bear carries no bounty counter"
+    p0.battlefield[0].tapped = False
+    assert game.activate_permanent_ability(
+        0, "Bounty Hunter", ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+    assert [p.card.name for p in p1.battlefield] == ["Bear"]
+
+
+@pytest.mark.parametrize("name", [
+    "Mounted Archers", "Watchdog", "Trumpeting Armodon", "Flowstone Salamander",
+    "Bounty Hunter",
+])
+def test_w2g2_creatures_are_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("TMP")[name]).supported

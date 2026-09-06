@@ -614,6 +614,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # phrase, and a second switch would let one be gated off without the other.
     "add_loyalty_counters_to_chosen": "counters",
     "target_bites_target": "damage",
+    "target_bites_itself": "damage",
     "source_fights_target": "damage",
     # The same CR 701.14 exchange with **neither** fighter being the ability's
     # source (Triangle of War) — two announcements rather than one, which is a
@@ -725,6 +726,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same CR 508.1a requirement on a creature the caster chose rather
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
+    "force_target_to_block_until_eot": "combat_restrictions",
+    "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

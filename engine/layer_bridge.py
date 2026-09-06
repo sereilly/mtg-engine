@@ -86,16 +86,33 @@ LOST_TYPES = "lost_types"
 #: long as the rebuild keeps putting it back.
 DERIVED_LOST_SUPERTYPES = "derived_lost_supertypes"
 
+#: Each entry takes the permanent **and the seat whose lord contributed the
+#: buff** (CR 109.5's "you"), because one qualifier is a relation to that seat
+#: rather than a state of the creature. Every row takes it so there is one
+#: signature: a table of two arities is a table whose reader has to know which
+#: row it is looking at.
 _QUALIFIER_HOLDS = {
-    "attacking": lambda perm: bool(perm.attacking),
+    "attacking": lambda perm, observer: bool(perm.attacking),
     # CR 508.1a's negative half. Its own row rather than a "not" the reader
     # applies, so the import guard below counts it and a qualifier the table can
     # produce always has something here that checks it.
-    "not attacking": lambda perm: not perm.attacking,
+    "not attacking": lambda perm, observer: not perm.attacking,
+    # "all creatures **attacking you**" (Watchdog). CR 508.1a makes attacking a
+    # state of the creature; *whom* it attacks is the defending player it was
+    # declared against, so this is two questions and answering only the first
+    # would shrink the attackers aimed at somebody else in a multiplayer game.
+    # With no observer there is no "you" for the phrase to be relative to and
+    # the answer is no — the direction that applies the buff to nobody rather
+    # than to the whole board.
+    "attacking you": lambda perm, observer: (
+        bool(perm.attacking)
+        and observer is not None
+        and perm.defending_player_index == observer
+    ),
     # CR 509.1a: a creature is blocking once it has been declared as a blocker.
-    "blocking": lambda perm: perm.blocking_attacker_index is not None,
-    "tapped": lambda perm: bool(perm.tapped),
-    "untapped": lambda perm: not perm.tapped,
+    "blocking": lambda perm, observer: perm.blocking_attacker_index is not None,
+    "tapped": lambda perm, observer: bool(perm.tapped),
+    "untapped": lambda perm, observer: not perm.tapped,
 }
 
 # The derivation table and the code that evaluates it must not be two lists: a
@@ -109,9 +126,16 @@ if set(_QUALIFIER_HOLDS) != set(QUALIFIER_FIELDS):  # pragma: no cover - import 
     )
 
 
-def qualifier_holds(perm: Permanent, qualifier: str) -> bool:
-    """Whether *perm* is currently in the state *qualifier* names."""
-    return _QUALIFIER_HOLDS[qualifier](perm)
+def qualifier_holds(
+    perm: Permanent, qualifier: str, observer: int | None = None
+) -> bool:
+    """Whether *perm* is currently in the state *qualifier* names.
+
+    *observer* is the seat controlling the lord that contributed the buff —
+    CR 109.5's "you" — needed by the one qualifier that names a relation to it
+    ("attacking you") and ignored by the rest.
+    """
+    return _QUALIFIER_HOLDS[qualifier](perm, observer)
 
 
 @lru_cache(maxsize=None)
@@ -380,8 +404,17 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # them has to hold: "each untapped creature … as long as it's not attacking"
     # (Arcades Sabboth) describes one set, not two overlapping ones, so an `all`
     # here is what keeps the buff off a creature meeting half the description.
-    for qualifiers, (power, toughness) in sorted((meta.get(QUALIFIED_BUFFS) or {}).items()):
-        if all(qualifier_holds(perm, qualifier) for qualifier in qualifiers):
+    # The key is ``(qualifiers, observer_seat)``: two lords printing the same
+    # description contribute to the same entry only when they are *also* the
+    # same "you", because "attacking you" means a different set of creatures
+    # for each of them.
+    for (qualifiers, observer), (power, toughness) in sorted(
+        (meta.get(QUALIFIED_BUFFS) or {}).items(),
+        key=lambda item: (item[0][0], -1 if item[0][1] is None else item[0][1]),
+    ):
+        if all(
+            qualifier_holds(perm, qualifier, observer) for qualifier in qualifiers
+        ):
             label = " and ".join(qualifiers)
             modifications.append((int(power), int(toughness), f"lord buff while {label}"))
     for power, toughness, label in modifications:

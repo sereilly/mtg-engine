@@ -6,7 +6,8 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT,
-                                  MUST_BLOCK_ALL_UNTIL_EOT)
+                                  MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..next_damage import NEXT_DAMAGE_KEYS
@@ -50,6 +51,10 @@ _EOT_METADATA_KEYS = (
     # the rest of the game. Found by adding the count above beside them.
     CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
     MUST_BLOCK_ALL_UNTIL_EOT,
+    # "Target creature blocks this creature **this turn** if able."
+    # (Trumpeting Armodon.) The narrowed twin of the mark above it, swept
+    # beside it for the same reason and at the same moment.
+    MUST_BLOCK_ATTACKERS_UNTIL_EOT,
     # "Until end of turn, Autumn Willow can be the target of spells and
     # abilities controlled by target player as though it didn't have shroud."
     # The sweep *is* the duration: the waiver is a list of seats on the

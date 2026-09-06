@@ -33,6 +33,7 @@ from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
                            permanent_matches_enchant_noun)
 from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
+from .combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import cost_target_count, x_spend_colors_from_text
@@ -852,6 +853,76 @@ def choose_combat_blockers(
                     del assignments[blocker_idx]
             elif assigned == attacker_idx:
                 del assignments[blocker_idx]
+
+    # "Target creature blocks **this creature** this turn if able."
+    # (Trumpeting Armodon.) The narrowed requirement: the mark on the blocker
+    # names the attackers it owes a block to, by id. Assigned before the
+    # unnarrowed Watchdog rule below, because obeying this one also obeys that
+    # one — the reverse order would spend the creature on the wrong attacker
+    # and leave the declaration illegal.
+    for blocker_idx in available_blockers:
+        if blocker_idx in assignments:
+            continue
+        blocker = game.permanent_at(defender, blocker_idx)
+        if blocker is None:
+            continue
+        owed = blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ()
+        if not owed:
+            continue
+        for attacker_idx in attackers:
+            attacker = game.permanent_at(attacker_player, attacker_idx)
+            if attacker is None or attacker.permanent_id not in owed:
+                continue
+            if not game._can_block_attacker(blocker, attacker):
+                continue
+            joined = sum(
+                1
+                for assigned in assignments.values()
+                if attacker_idx == assigned
+                or (isinstance(assigned, list) and attacker_idx in assigned)
+            )
+            if joined + 1 < minimum_blockers.get(attacker_idx, 1):
+                continue
+            assignments[blocker_idx] = attacker_idx
+            break
+
+    # "This creature blocks each combat if able." (Watchdog.) CR 509.1c aimed
+    # at the blocker: declare_blockers refuses a declaration that leaves such a
+    # creature out while it could legally block something, so the AI assigns it
+    # the first attacker it can block rather than submitting a declaration that
+    # bounces every combat.
+    #
+    # **After the menace pruning above**, not before it: that loop strips
+    # blocks that under-fill a minimum, and a compelled block stripped there
+    # would leave the declaration illegal for the reason it was added. Which
+    # is also why the minimum is checked here — CR 509.1c asks for the
+    # requirement to be obeyed *without disobeying a restriction*, and joining
+    # a menace attacker alone disobeys one.
+    for blocker_idx in available_blockers:
+        if blocker_idx in assignments:
+            continue
+        blocker = game.permanent_at(defender, blocker_idx)
+        if blocker is None:
+            continue
+        if not any(
+            i.kind == "must_block_each_combat"
+            for i in compile_card_oracle(blocker.effective_card).instructions
+        ):
+            continue
+        for attacker_idx in attackers:
+            attacker = game.permanent_at(attacker_player, attacker_idx)
+            if attacker is None or not game._can_block_attacker(blocker, attacker):
+                continue
+            joined = sum(
+                1
+                for assigned in assignments.values()
+                if attacker_idx == assigned
+                or (isinstance(assigned, list) and attacker_idx in assigned)
+            )
+            if joined + 1 < minimum_blockers.get(attacker_idx, 1):
+                continue
+            assignments[blocker_idx] = attacker_idx
+            break
 
     return assignments
 

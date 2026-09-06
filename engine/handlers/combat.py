@@ -20,6 +20,7 @@ from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
@@ -759,6 +760,123 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("force_target_to_block_until_eot")
+def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature blocks this creature this turn if able." (Trumpeting
+    Armodon.)
+
+    CR 509.1c's requirement for one turn on the creature the caster chose
+    (CR 601.2c), aimed at **one named attacker** — the ability's own source.
+    Recorded on the compelled creature as that attacker's ``permanent_id``,
+    which the declare-blockers step reads and the cleanup sweep clears.
+
+    By id, and appended rather than assigned: two activations name two
+    attackers and the creature owes both blocks as far as the rules allow, and
+    an attacker that leaves and returns is a new object (CR 400.7) whose new id
+    the old requirement no longer names.
+
+    The printed noun phrase is re-asked here, not only at announcement, for the
+    reason the attack twin gives: a target that stopped being a creature
+    between the two is no longer the thing the card names (CR 608.2b).
+
+    With no source on the battlefield there is no attacker for the requirement
+    to be about, so nothing is recorded — a mark with no id in it would be a
+    "block anything" requirement the card never prints.
+    """
+    from ..subject_filters import subject_matches
+
+    attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: its own attacker has left, so nothing is "
+            "compelled to block"
+        )
+        return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=attacker,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    owed = list(chosen.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+    if attacker.permanent_id not in owed:
+        owed.append(attacker.permanent_id)
+    chosen.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+    game.log.append(
+        f"{chosen.card.name} blocks {attacker.card.name} this turn if able"
+    )
+    return True, "resolved"
+
+
+@effect_handler("force_subject_to_block_until_eot")
+def force_subject_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…all creatures with magnet counters on them block **that creature** this
+    turn if able." (Magnetic Web.)
+
+    The unnarrowed twin of the requirement above: every creature the printed
+    noun phrase describes, on every battlefield, rather than one the caster
+    chose. Same record and same enforcement — the attacker's ``permanent_id``
+    on each compelled creature — so nothing new decides what "if able" means.
+
+    ``attacker: "bound"`` is the creature the trigger's event was about, read
+    out of the frozen trigger context by id (CR 400.7). The lowering refuses
+    the pronoun under an event that records no attacker, so a missing id here
+    is an attacker that has already left rather than a sentence nobody read.
+
+    Through ``subject_matches`` with the ability's controller as CR 109.5's
+    "you", the one reader of a printed noun phrase — and over
+    ``all_permanents``, because the sentence scopes to no seat: a Magnetic Web
+    attacker is on the *active* player's battlefield and the creatures compelled
+    to block it are on everybody else's.
+    """
+    from ..subject_filters import subject_matches
+
+    if instruction.payload.get("attacker") == "bound":
+        bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+        attacker = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    else:
+        attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: the attacker has left, so nothing is "
+            "compelled to block"
+        )
+        return True, "resolved"
+    described = instruction.payload.get("subject") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    compelled = 0
+    for perm in game.all_permanents():
+        if perm is attacker or not perm.is_creature:
+            continue
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        owed = list(perm.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+        if attacker.permanent_id not in owed:
+            owed.append(attacker.permanent_id)
+        perm.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+        compelled += 1
+    game.log.append(
+        f"{compelled} creature(s) block {attacker.card.name} this turn if able "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("force_self_to_attack_until_eot")
 def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…this creature deals 3 damage to you **and attacks this turn if able**."
@@ -949,10 +1067,20 @@ def grant_additional_blocks_until_eot(game: Game, instruction: OracleInstruction
     creature that already blocks an additional one by its own printed line
     keeps that too. Assignment rather than addition would have made the second
     copy of the spell do nothing.
+
+    ``subject: "source"`` is the ability's own permanent ("{W}: This creature
+    can block an additional creature this turn.", Mounted Archers). Resolved
+    explicitly rather than through ``resolve_target_permanent``, whose
+    no-target fallback scans the battlefield -- an activated ability names no
+    target, so the fallback would grant the permission to whichever creature
+    the scan reached first.
     """
-    blocker = resolve_target_permanent(
-        game, context, predicate=lambda p: p.is_creature
-    )
+    if instruction.payload.get("subject") == "source":
+        blocker = context.source_permanent
+    else:
+        blocker = resolve_target_permanent(
+            game, context, predicate=lambda p: p.is_creature
+        )
     if blocker is None:
         game.log.append(
             f"{context.card.name}: no creature to grant extra blocks to"

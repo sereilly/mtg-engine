@@ -1217,3 +1217,109 @@ def test_508_1c_a_noun_the_reader_refuses_leaves_the_card_unsupported():
         normalize_creature_line(unreadable.oracle_text)
     ) is None
     assert not compile_card_oracle(unreadable).supported
+
+
+# --- W2G2: requirements printed about a *set* (CR 508.1d, CR 509.1c) ---
+
+import pytest
+
+from engine import Game, PlayerState, ai_policy
+from engine.combat_restrictions import combat_restriction_for
+from engine.models import Permanent
+from engine.tokens import make_token_card
+from tests.helpers import _mk_creature_card, _nosick
+
+_W2G2_PIRATE_TEXT = (
+    "This token can't block\n"
+    "Creatures you control attack each combat if able"
+)
+
+
+def _w2g2_pirate_board():
+    """Pursued Whale's Pirate token, plus a plain creature beside it."""
+    token = make_token_card(
+        name="Pirate Token", power=1, toughness=1,
+        type_line="Creature - Pirate", colors=("R",),
+        oracle_text=_W2G2_PIRATE_TEXT,
+    )
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.battlefield.append(_nosick(Permanent(card=token)))
+    p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Bear", 2, 2))))
+    p1.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Opposing Bear", 2, 2)))
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game, p0, p1
+
+
+@pytest.mark.cr("508.1d", "109.5")
+def test_a_requirement_printed_about_a_set_reaches_the_carriers_own_seat():
+    """"Creatures you control attack each combat if able." (Pursued Whale's
+    Pirate token.)
+
+    CR 508.1d's requirement printed on one permanent about a *set* of others,
+    which is a board scan rather than a read of the attacker's own program —
+    the exact arrangement `creatures_cant_attack` already had for the
+    restriction that says the opposite. Until it existed the line compiled to a
+    bare `static_line` and obliged nobody: the token could not block, which is
+    enforced, and was under no obligation to attack, which was not.
+
+    CR 109.5 is the other half: "you" is the seat controlling the permanent
+    whose ability this is, so the opponent's creature is outside the set.
+    """
+    game, p0, p1 = _w2g2_pirate_board()
+    assert game._must_attack_if_able(p0.battlefield[0])
+    assert game._must_attack_if_able(p0.battlefield[1])
+    assert not game._must_attack_if_able(p1.battlefield[0])
+
+    assert game.declare_attackers(0, [], 1) == (
+        False, "Pirate Token, Bear must attack if able"
+    )
+    assert game.declare_attackers(0, [1], 1) == (
+        False, "Pirate Token must attack if able"
+    )
+    assert game.declare_attackers(0, [0, 1], 1)[0], game.log
+
+
+@pytest.mark.cr("508.1d")
+def test_the_ai_declares_the_attackers_a_set_requirement_compels():
+    """A requirement the AI does not read is a declaration the engine refuses
+    every combat — the seat attacks with nobody all game rather than with
+    everybody."""
+    game, p0, p1 = _w2g2_pirate_board()
+    assert sorted(ai_policy.choose_attackers(game, 0)) == [0, 1]
+
+
+@pytest.mark.cr("508.1d")
+def test_a_set_requirement_refuses_a_noun_phrase_the_matcher_cannot_test():
+    """The row ends in a catch-all, so it has to read the tail itself. A phrase
+    admitted unread would be a requirement over *every* creature on the table,
+    which for a requirement is the direction that forces attacks nobody
+    printed."""
+    assert combat_restriction_for(
+        "creatures you control attack each combat if able"
+    ).kind == "creatures_must_attack"
+    assert combat_restriction_for(
+        "creatures with three heads attack each combat if able"
+    ) is None
+
+
+@pytest.mark.cr("509.1c")
+def test_the_blocking_requirement_is_its_own_kind_from_the_attacking_one():
+    """"This creature blocks each combat if able." (Watchdog.) The mirror of
+    "attacks each combat if able", and a separate kind rather than a payload on
+    it: the two are checked at different steps by different predicates, and one
+    kind read at both sites would have to be told which half it meant."""
+    assert combat_restriction_for(
+        "this creature blocks each combat if able"
+    ).kind == "must_block_each_combat"
+    assert combat_restriction_for(
+        "this creature attacks each combat if able"
+    ).kind == "must_attack_each_combat"

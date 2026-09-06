@@ -708,3 +708,137 @@ def test_phyrexian_grimoire_over_one_card_still_moves_it(set_pool):
 
     assert [c.name for c in game.players[0].exile] == ["Only"]
     assert not game.players[0].hand
+
+
+# --- W2G2: Magnetic Web's blocking requirement (CR 509.1c) ---
+
+from engine import Game, PlayerState, ai_policy
+from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
+from engine.models import Permanent
+from engine.named_counters import add_counters
+from engine.oracle import compile_card_oracle
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w2g2_web_board(web):
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.battlefield.append(_nosick(Permanent(card=web)))
+    p0.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Magnetized Ogre", 3, 3)))
+    )
+    p1.battlefield.append(
+        _nosick(Permanent(card=_mk_creature_card("Magnetized Wall", 0, 4)))
+    )
+    p1.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Free Wall", 0, 4))))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    add_counters(p0.battlefield[1], "magnet", 1)
+    add_counters(p1.battlefield[0], "magnet", 1)
+    return game, p0, p1
+
+
+def test_w2g2_magnetic_web_compels_the_magnetized_creatures_to_block(set_pool):
+    """``Whenever a creature with a magnet counter on it attacks, all creatures
+    with magnet counters on them block that creature this turn if able.``
+
+    A sentence that was **claimed by nothing** while the card reported itself
+    supported — ``parse_coverage`` was the only instrument that could see it.
+    Three pieces behind it: a counter-defined noun phrase
+    (``ObjectFilter.with_named_counter``), an unnarrowed block requirement over the
+    set it describes, and "that creature" as the attacker the trigger's event
+    froze.
+    """
+    game, p0, p1 = _w2g2_web_board(set_pool("TMP")["Magnetic Web"])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [1], 1)[0]
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    ogre_id = p0.battlefield[1].permanent_id
+    assert p1.battlefield[0].metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] == [ogre_id]
+    assert p1.battlefield[1].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
+
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {}) == (
+        False, "Magnetized Wall must block Magnetized Ogre this turn if able"
+    )
+    assert game.declare_blockers(1, {1: 1})[0] is False, "the free Wall is not compelled"
+    assert game.declare_blockers(1, {0: 1})[0], game.log
+
+
+def test_w2g2_magnetic_web_stays_quiet_for_an_unmagnetized_attacker(set_pool):
+    """The trigger's own narrowing. Read too widely it would compel a block on
+    every attack in the game, which is the direction a dropped filter always
+    takes."""
+    game, p0, p1 = _w2g2_web_board(set_pool("TMP")["Magnetic Web"])
+    p0.battlefield[1].metadata.pop("magnet_counters", None)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [1], 1)[0]
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.battlefield[0].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0], game.log
+
+
+def test_w2g2_magnetic_web_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Magnetic Web"]).supported
+
+
+def _w2g2_magnet_attack_board(web):
+    """One Web, two magnetized creatures and one without, against a Wall."""
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    p0.battlefield.append(_nosick(Permanent(card=web)))
+    p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Magnet A", 2, 2))))
+    p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Magnet B", 2, 2))))
+    p0.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Free Bear", 2, 2))))
+    p1.battlefield.append(_nosick(Permanent(card=_mk_creature_card("Wall", 0, 4))))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    add_counters(p0.battlefield[1], "magnet", 1)
+    add_counters(p0.battlefield[2], "magnet", 1)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game, p0, p1
+
+
+def test_w2g2_magnetic_web_drags_the_other_magnets_into_the_attack(set_pool):
+    """``If a creature with a magnet counter on it attacks, all creatures with
+    magnet counters on them attack if able.``
+
+    Ekundu Cyclops' sentence with both halves widened from "this creature" to a
+    set — CR 508.1d's requirement with a condition about the *declaration being
+    made* rather than about the board, which is why it is checked where the
+    declaration is in hand rather than by the per-creature predicate.
+
+    The identity check is what keeps it from being self-satisfying: a lone
+    magnetized attacker is the creature its own condition names, so without it
+    the requirement would demand a creature attack because it is attacking.
+    """
+    game, p0, p1 = _w2g2_magnet_attack_board(set_pool("TMP")["Magnetic Web"])
+    assert game.declare_attackers(0, [], 1)[0], "the condition is false"
+    assert game.declare_attackers(0, [3], 1)[0], "the free Bear triggers nothing"
+    assert game.declare_attackers(0, [1], 1) == (
+        False, "Magnet B must attack if able"
+    )
+    assert game.declare_attackers(0, [1, 2], 1)[0], game.log
+
+
+def test_w2g2_the_ai_declares_a_legal_magnet_attack(set_pool):
+    """The AI reads the same predicate the declaration does, so it never
+    proposes the half-attack the engine would bounce."""
+    game, p0, p1 = _w2g2_magnet_attack_board(set_pool("TMP")["Magnetic Web"])
+    chosen = sorted(ai_policy.choose_attackers(game, 0))
+    assert game.declare_attackers(0, chosen, 1)[0], (chosen, game.log)

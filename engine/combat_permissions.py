@@ -43,3 +43,16 @@ ADDITIONAL_BLOCKS_UNTIL_EOT = "additional_blocks_until_eot"
 #: to block every attacker, and obliged to, for the rest of the game.
 CAN_BLOCK_ANY_NUMBER_UNTIL_EOT = "can_block_any_number_until_eot"
 MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"
+
+#: "Target creature blocks this creature this turn if able." (Trumpeting
+#: Armodon.) CR 509.1c's requirement for one turn, aimed at **one named
+#: attacker**: a list of that attacker's ``permanent_id``s on the compelled
+#: creature, read by the declare-blockers step and swept with the turn.
+#:
+#: A list of ids rather than a flag, for the reason ``ADDITIONAL_BLOCKS`` is a
+#: count: two activations name two attackers and the creature owes both blocks
+#: as far as the rules allow, so a flag would make the second activation do
+#: nothing. By **id** rather than by index, because an index is renumbered by
+#: anything leaving the battlefield and a returning permanent is a new object
+#: (CR 400.7) that must not inherit a requirement aimed at its earlier self.
+MUST_BLOCK_ATTACKERS_UNTIL_EOT = "must_block_attackers_until_eot"

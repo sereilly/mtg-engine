@@ -2802,7 +2802,9 @@ class PermanentStateMixin:
             # granted words, the removed words and the granted printed lines.
             clear_derived_grants(perm)
 
-        def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
+        def _add_static_buff(
+            perm: Permanent, buff: LordBuff, observer: "int | None"
+        ) -> None:
             if not (buff.power or buff.toughness):
                 return
             qualifiers = buff.filter.qualifiers
@@ -2821,9 +2823,14 @@ class PermanentStateMixin:
             # together only when they answer to the same description. Keying by
             # one word would merge "untapped" with "untapped and not attacking"
             # and apply the stricter buff on the looser test.
+            # Keyed by the states **and the contributing lord's seat**: one
+            # qualifier ("attacking you") is a relation to CR 109.5's "you",
+            # so two opposing Watchdogs describe two different sets and their
+            # contributions must not be summed into one entry.
             qualified = perm.metadata.setdefault(QUALIFIED_BUFFS, {})
-            power, toughness = qualified.get(qualifiers, (0, 0))
-            qualified[qualifiers] = (power + buff.power, toughness + buff.toughness)
+            key = (qualifiers, observer)
+            power, toughness = qualified.get(key, (0, 0))
+            qualified[key] = (power + buff.power, toughness + buff.toughness)
 
 
         # A copy uses the copied creature's copiable card (types + abilities), so
@@ -2923,8 +2930,9 @@ class PermanentStateMixin:
         # Pass 2b — layer 7c (CR 613.4c), over a board whose layer 6 is
         # complete.
         for source_perm, buff in gathered:
+            observer = self.controller_index_of(source_perm)
             for target_perm in _reached_by(source_perm, buff):
-                _add_static_buff(target_perm, buff)
+                _add_static_buff(target_perm, buff, observer)
 
         # Step 3: conditional self-grants — the keyword half of "…as long as
         # <condition>" (Sigiled Contender's lifelink, Gnarled Sage's

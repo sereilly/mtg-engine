@@ -15,7 +15,6 @@ from ._common import (
     _describe_several_targets, _describe_targets, _filter_payload,
     _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
     _names_several_targets, _restrictions_beyond, refuse_untestable,
-    testable_filter_payload,
 )
 from ._events import (
     _TAPPED_PERMANENTS,
@@ -34,15 +33,18 @@ from ._events import (
 _BLOCKED_SUBJECT_EVENTS = frozenset({"creature_blocks"})
 
 
+
+
 def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruction, ...]:
     """"That creature can block up to two additional creatures this turn."
     (Yare.)
 
-    CR 509.1b's ceiling raised for one turn, on one chosen creature. Targeted
-    only: the printed sentence names a creature the spell chose, and a plural
-    subject would be a board-wide permission no card in this pool prints -- so
-    it refuses rather than reaching every creature the noun phrase describes,
-    which is the direction that lets the whole defending team multi-block.
+    CR 509.1b's ceiling raised for one turn, on **one named creature**: the
+    spell's target, the object an earlier sentence bound, or the ability's own
+    source ("{W}: This creature can block an additional creature this turn.",
+    Mounted Archers). A plural subject is still refused -- a board-wide
+    permission no card in this pool prints, and refusing is the direction that
+    does not let the whole defending team multi-block.
 
     The count travels as payload for the reason every printed number in this
     family does, and the duration is checked here rather than trusted: a
@@ -54,9 +56,12 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
             "static ability",
             node=node,
         )
-    if (
-        not isinstance(node.subject, ast.TargetSpec)
-        or node.subject.quantifier not in ("target", "that")
+    if not isinstance(node.subject, ast.TargetSpec) or (
+        node.subject.quantifier not in ("target", "that")
+        # "this" qualifies on being the ability's own source and not merely on
+        # the word: the payload key below says *source*, so a "this" that is
+        # anything else would be described by a key the handler reads as one.
+        and not _is_source(node.subject)
     ):
         raise LoweringError(
             "no handler grants extra blocks to an untargeted subject", node=node
@@ -64,6 +69,14 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
     payload: dict[str, object] = {"count": node.count}
     if node.subject.quantifier == "target":
         _describe_targets(payload, node.subject)
+    # "**This creature** can block an additional creature this turn." (Mounted
+    # Archers.) The ability's own source, named by the payload key every other
+    # handler in this family reads for it -- so the handler resolves the
+    # permanent whose line this is rather than falling through to
+    # ``resolve_target_permanent``, whose no-target fallback scans the
+    # battlefield and would hand the permission to somebody else's creature.
+    elif _is_source(node.subject):
+        payload["subject"] = "source"
     # "**That creature** can block up to two additional creatures this turn."
     # (Yare's second sentence.) The bound object the sentence in front of it
     # already targeted, not a second choice — so no ``targets`` description is
@@ -703,50 +716,6 @@ def _lower_assigns_no_combat_damage(
     return (OracleInstruction("assign_no_combat_damage_until_eot", "", payload),)
 
 
-def _lower_force_chosen_creature_to_attack(
-    node: ast.ForceChosenCreatureToAttack,
-) -> tuple[OracleInstruction, ...]:
-    """Nettling Imp / Norritt's three sentences, as the one instruction the
-    engine already had a handler, a target spec and a legality rule for.
-
-    Fused rather than composed into a ``sequence``, and this is the shape the
-    composition rule asks for rather than an exception to it: the second and
-    third sentences have no subject of their own to compose over — both name
-    the creature the first one chose — and the third is conditional on what
-    that creature did about the second. Three instructions would need a
-    scratchpad key to pass the chosen creature between them and a fourth to
-    remember the requirement, which is a fused instruction with extra steps.
-
-    Arcum's Whistle puts a price on it — "That player may pay {X}, where X is
-    that creature's mana value. **If they don't pay**, …" — and that half *is*
-    composed, through the ordinary offer: the requirement is the offer's
-    declined branch and nothing else about it changes. ``that_player`` is the
-    seat the ability's own target names (the creature's controller, which this
-    template's noun phrase already fixes as the active player), and the price is
-    the one computed amount every other offer carries.
-    """
-    requirement = OracleInstruction("mark_non_wall_target_to_attack", "", {})
-    if not node.unless_controller_pays_mana_value:
-        return (requirement,)
-    return (
-        OracleInstruction("may", "", {
-            "actor": "that_player",
-            "cost": {"generic": "x"},
-            "x_from_count": {
-                "object_characteristic": {
-                    "object": "target", "characteristic": "mana_value",
-                    "offset": 0,
-                },
-            },
-            # The **declined** branch, which is where the target lives:
-            # `targeting._from_instructions` reads an offer's `otherwise` last
-            # and for exactly this reason — CR 601.2c picks the creature as the
-            # ability is activated, before anyone is offered the payment.
-            "otherwise": (requirement,),
-        }),
-    )
-
-
 def _lower_choose_blocks_for_defenders(
     node: ast.ChooseBlocksForDefenders,
 ) -> tuple[OracleInstruction, ...]:
@@ -817,64 +786,3 @@ def _lower_reassign_blockers_between_attackers(
         OracleInstruction("reassign_blockers_between_attackers", "", payload),
     )
 
-
-def _lower_attacks_this_turn_if_able(
-    node: ast.AttacksThisTurnIfAble,
-) -> tuple[OracleInstruction, ...]:
-    """CR 508.1a's requirement for one turn, on the source or on a chosen
-    creature.
-
-    "…this creature deals 3 damage to you **and attacks this turn if able**"
-    (Kookus) names its own source and needs no picker. "**Target creature**
-    attacks this turn if able." (Boiling Blood) names one the caster chose, and
-    the note that used to stand here — "a targeted spelling would need a
-    picker" — was the work item rather than the reason: the picker falls out of
-    the ``targets`` description, because ``targeting._from_targets_payload``
-    reads a description into a spec for any kind that carries one.
-
-    Two kinds rather than one with an optional target, because the two answer
-    "which permanent?" in different places: the source is on the context and a
-    chosen creature is a target CR 601.2c fixed at announcement, and a single
-    kind would have to guess which it was handed.
-
-    Not the printed static ``engine/combat_restrictions.py`` reads for "attacks
-    **each combat** if able": that one holds for as long as the permanent is on
-    the battlefield and this ends with the turn (CR 611.2a). The production in
-    front of this one refuses the "each combat" spelling in the *parse*, which
-    is what leaves the table its line.
-    """
-    if _is_source(node.subject):
-        return (OracleInstruction("force_self_to_attack_until_eot", "", {}),)
-    if isinstance(node.subject, ast.TargetSpec) and node.subject.targeted:
-        if _names_several_targets(node.subject):
-            raise LoweringError(
-                "the attack requirement marks one creature; nothing here "
-                "collects several",
-                node=node,
-            )
-        described = testable_filter_payload(
-            node.subject.filter,
-            refusal=(
-                "the attack requirement is enforced against the chosen "
-                "creature, so a narrowing the matcher cannot test would be "
-                "dropped and the picker would offer creatures the card "
-                "never names"
-            ),
-            node=node,
-            require_narrowing=False,
-        )
-        payload: dict[str, object] = {}
-        _describe_targets(payload, node.subject)
-        if described.get("type_filter") != "creature":
-            # CR 508.1a is about creatures; a noun phrase this lowering cannot
-            # confirm names one would put the mark on a permanent that can
-            # never meet the requirement.
-            raise LoweringError(
-                "an attack requirement names a creature", node=node
-            )
-        return (
-            OracleInstruction("force_target_to_attack_until_eot", "", payload),
-        )
-    raise LoweringError(
-        "no handler makes that subject attack this turn", node=node
-    )

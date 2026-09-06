@@ -552,3 +552,94 @@ def _fused_cost_repeated_destroys(
         "distinct": True,
     }
     return (OracleInstruction("destroy_target_permanent", "", payload), *riders)
+
+
+def _fused_tap_then_bite(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Tap target creature. **It** deals damage equal to its power to another
+    target creature." (Deadshot.) One sentence pair, two chosen creatures.
+
+    A fuser rather than two ordinary steps for ``_fused_two_target_pump``'s
+    reason exactly: the second clause prints "**another** target", so the two
+    clauses name two different permanents, and every one-target handler
+    resolves through ``_one_choice`` — which reads the *first* entry of the
+    list. Lowered plainly, Deadshot would tap a creature and then have it bite
+    itself, on a card compiling supported.
+
+    The slot-per-clause shape is what the fusion buys, and it is spelled with
+    the two payloads the engine already has rather than a new kind: the tap step
+    carries **no** ``targets`` description at all — so it resolves through
+    ``_one_choice`` onto slot 0, which is the creature the sentence tapped — and
+    the bite step carries the two-slot description ``target_bites_target``
+    already reads (biter first, bitten second). One picker, announced by the
+    bite step, and ``targeting._from_instructions`` finds it because the tap
+    step describes nothing.
+
+    "It" is the tapped creature: the first clause is the only prior choice in
+    the sentence, so the pronoun has exactly one referent. Gated on the
+    *pronoun* rather than on a repeated noun phrase, because a second printed
+    "target creature" would be a second announcement (CR 601.2c) and a
+    different card.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not isinstance(first, ast.Tap) or not isinstance(second, ast.DealDamage):
+        return None
+    if not _is_target(first.subject):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        # "Tap **another** target creature" opening a sentence has no prior
+        # choice to differ from.
+        return None
+    if first.matching_tapped_land_mana:
+        # "Tap target land. Add mana of that land's type." — a different
+        # sentence with a rider this fusion carries nowhere.
+        return None
+    if not (
+        isinstance(second.amount, ast.ThatMuch)
+        and second.amount.source == "its_power"
+        and not second.amount.bonus
+    ):
+        return None
+    if second.riders != ast.DamageRiders():
+        return None
+    source = second.source
+    if not (
+        isinstance(source, ast.TargetSpec)
+        and source.quantifier == "it"
+        and source.filter.is_source
+    ):
+        return None
+    if len(second.recipients) != 1:
+        return None
+    bitten = second.recipients[0]
+    if not isinstance(bitten, ast.TargetSpec) or not bitten.targeted:
+        return None
+    if not bitten.distinct_from_prior:
+        # Without the printed "another", CR 601.2c lets the two instances of
+        # "target" name the same permanent — which is a card that taps a
+        # creature and has it bite itself, and not this one. Refusing here
+        # leaves the sentence to `_refuse_unfused_distinctness`, whose message
+        # names the real gap.
+        return None
+    biter_filter = _filter_payload(first.subject.filter)
+    return (
+        OracleInstruction("sequence", "", {"steps": (
+            OracleInstruction("tap_target_permanent", "", dict(biter_filter)),
+            OracleInstruction("target_bites_target", "", {
+                "targets": {
+                    "quantifier": "target",
+                    "kind": "object",
+                    "filter": biter_filter,
+                    "filters": [
+                        biter_filter,
+                        _filter_payload(bitten.filter),
+                    ],
+                    "count": 2,
+                },
+            }),
+        )}),
+    )

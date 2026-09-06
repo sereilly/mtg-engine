@@ -118,24 +118,45 @@ def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
     * Only from an activated ability. A spell's own source is a card on the
       stack, which blocks nothing, and a trigger's event may itself bind the
       object the pronoun names.
+
+    **A recipient list is walked too, not only a bare field.** ``DealDamage``
+    carries its targets as a *tuple* (``recipients``), because one sentence may
+    name several — so the field scan below saw no ``TargetSpec`` at all and
+    "{R}: This creature deals 1 damage to target creature blocking **it**"
+    (Flowstone Salamander) reached the lowering still carrying the pronoun,
+    where it refused. The three narrowings above are unchanged: every element
+    is tested on its own, and an element the rewrite does not claim is left
+    exactly as it was.
     """
     if isinstance(statement, (ast.Sequence, ast.Conjunction)):
         return statement
-    changed = False
-    updates: dict[str, object] = {}
-    for field in dataclasses.fields(statement):
-        spec = getattr(statement, field.name, None)
+
+    def _rebound(spec: object) -> object:
         if not isinstance(spec, ast.TargetSpec) or not spec.targeted:
-            continue
+            return None
         if not spec.filter.blocking_bound_target:
-            continue
-        updates[field.name] = dataclasses.replace(
+            return None
+        return dataclasses.replace(
             spec,
             filter=dataclasses.replace(
                 spec.filter, blocking_bound_target=False, blocking_source=True
             ),
         )
-        changed = True
+
+    changed = False
+    updates: dict[str, object] = {}
+    for field in dataclasses.fields(statement):
+        value = getattr(statement, field.name, None)
+        if isinstance(value, tuple):
+            rebound = tuple(_rebound(item) or item for item in value)
+            if rebound != value:
+                updates[field.name] = rebound
+                changed = True
+            continue
+        replacement = _rebound(value)
+        if replacement is not None:
+            updates[field.name] = replacement
+            changed = True
     return dataclasses.replace(statement, **updates) if changed else statement
 
 

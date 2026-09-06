@@ -269,6 +269,17 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue
+        # "all creatures **attacking you**" (Watchdog). The participle spelling
+        # of the relative clause above, setting the same field: two printings
+        # of one relation, and a second field would be a second thing every
+        # matcher has to remember to test. Only the "you" form is read here --
+        # a bare trailing "attacking" is already the *leading* adjective the
+        # noun parser takes ("attacking creature"), and reading it in both
+        # positions would let a noun phrase swallow the participle of a verb
+        # the sentence still needs.
+        if stream.accept_phrase("attacking", "you"):
+            d.attacking_you = True
+            continue
         # "target nonartifact, nonblack creature **that attacked you this
         # turn**" (Jabari's Influence). The past tense of the clause above and
         # a different question: that one reads the live combat relation, this
@@ -503,46 +514,53 @@ def _parse_postmodifiers(
             if stream.accept_phrase("a", "single", "target"):
                 d.target_count = 1
                 continue
-            # "with a +1/+1 counter on it" (Tempered Veteran), and "with a
-            # **bounty** counter on it" (Bounty Hunter) beside it.
+            # "with a +1/+1 counter on it" (Tempered Veteran), "with a
+            # **bounty** counter on it" (Bounty Hunter), "with **magnet
+            # counters** on them" (Magnetic Web).
             #
-            # Two fields, one production. CR 122.1a's +1/+1 counter has rules
-            # meaning — layer 7d, ``engine/pt.py``'s channel, the
-            # ``plus_counters`` record — while every other kind CR 122.1 admits
-            # is an inert marker in ``engine/named_counters.py``'s open store.
-            # The *sentence* is one sentence, so it is read once; where the
-            # answer is looked up is the matcher's business and not the parser's.
+            # **One production, three printings, and two of them arrived in one
+            # wave from two groups.** The singular and the plural are the same
+            # restriction — "creatures with magnet counters on them" describes
+            # each creature carrying at least one, not a board carrying several
+            # — so reading them in two branches would be two readers of one
+            # phrase, which is the fork this file has already been split for
+            # once. The article is the only other difference and the plural
+            # simply drops it.
             #
-            # The comment this replaced said only the +1/+1 kind was accepted
-            # "because the counters the engine records under another name have
-            # no matcher, so a phrase naming one fails the line loudly rather
-            # than matching every creature". That was the right refusal and it
-            # has expired: ``with_named_counter`` is now in
-            # ``TESTABLE_SUBJECT_FILTER_KEYS`` with ``counters_on`` behind it.
-            # Loudly is still what happens to a kind nothing can answer — the
-            # key check refuses the payload, one layer down.
-            if stream.at_word("a", "an"):
-                counter_probe = stream.mark()
+            # Two *fields*, though: CR 122.1a's +1/+1 counter has rules meaning
+            # (layer 7d, ``engine/pt.py``'s channel, the ``plus_counters``
+            # record) where every other kind CR 122.1 admits is an inert marker
+            # in ``engine/named_counters.py``'s open store. Where the answer is
+            # looked up is the matcher's business, not the parser's.
+            #
+            # This branch used to accept the +1/+1 kind alone, "because the
+            # counters the engine records under another name have no matcher".
+            # That refusal has expired — ``with_named_counter`` is in
+            # ``TESTABLE_SUBJECT_FILTER_KEYS`` with ``counters_on`` behind it —
+            # and a kind nothing can answer still fails loudly, one layer down
+            # at the key check.
+            counter_probe = stream.mark()
+            stream.accept_word("a", "an")
+            token = stream.peek()
+            if token is not None and token.kind == PT and token.text == "+1/+1":
                 stream.advance()
-                token = stream.peek()
-                if (
-                    token is not None
-                    and token.kind == PT
-                    and token.text == "+1/+1"
+                if stream.accept_word("counter", "counters") and (
+                    stream.accept_phrase("on", "it")
+                    or stream.accept_phrase("on", "them")
                 ):
-                    stream.advance()
-                    if stream.accept_word("counter") and stream.accept_phrase("on", "it"):
-                        d.with_plus1_counter = True
-                        continue
-                    stream.reset(counter_probe)
-                else:
-                    kind = accept_counter_kind(stream)
-                    if kind is not None and stream.accept_word(
-                        "counter"
-                    ) and stream.accept_phrase("on", "it"):
-                        d.with_named_counter = kind.text
-                        continue
-                    stream.reset(counter_probe)
+                    d.with_plus1_counter = True
+                    continue
+            else:
+                kind = accept_counter_kind(stream)
+                if kind is not None and stream.accept_word(
+                    "counter", "counters"
+                ) and (
+                    stream.accept_phrase("on", "it")
+                    or stream.accept_phrase("on", "them")
+                ):
+                    d.with_named_counter = kind.text
+                    continue
+            stream.reset(counter_probe)
             # "with mana value X" (Spell Blast). Two words, so it is tried
             # before the keyword list — "mana" alone is not a keyword, but
             # leaving the phrase unmatched would strand "value X" and fail the

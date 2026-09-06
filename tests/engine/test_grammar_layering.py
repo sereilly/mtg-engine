@@ -698,6 +698,18 @@ LOWERING_FAMILIES = [
      # carried on the parse side since Alpha's ante cards, so the mirror
      # re-forms rather than forking.
      "ownership",
+     # `requirements` split off `lowering/combat.py` at Tempest's second wave,
+     # the **second** time that module crossed the guard and the second time
+     # the line was already drawn — `prohibitions` left on the printed voice,
+     # this leaves on CR 506.3's own pair of words. A restriction says a
+     # creature *can't* and a requirement says it *must*, and CR 509.1c makes
+     # the pair asked in a fixed order ("obeyed to the maximum possible number
+     # without disobeying any restrictions"), so neither is the negation of the
+     # other. It completes `permissions`/`prohibitions` into the trio the rules
+     # use. Asymmetric like `zones`, `library` and `mana`: the parse side keeps
+     # both productions in `effects/combat.py`, where each is one branch of a
+     # verb table, and the guard fired on the lowerings.
+     "requirements",
      # `phasing` split off `lowering/board.py` at Visions' third wave, when two
      # groups' additions summed past the guard at **integration** — on nobody's
      # branch, for the third time in this one set. The line is CR 702.26's own: a

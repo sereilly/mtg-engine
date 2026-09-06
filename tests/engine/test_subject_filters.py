@@ -158,6 +158,33 @@ def test_a_counter_bound_matches_once_there_are_enough_counters(pool):
     assert subject_matches(game, perm, described)
 
 
+def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
+    """The positive half of ``with_named_counter``: Bounty Hunter destroys a creature
+    once *its own* first ability has put a bounty counter on one.
+
+    The rejection row above is passed by a matcher that always answers False, so
+    the direction that makes the key useful is demonstrated here — and through
+    ``named_counters.add_counters``, the one writer, so the reader and the
+    writer cannot come to disagree about which store a printed kind names.
+    """
+    from engine.named_counters import add_counters
+
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "with_named_counter": "bounty"}
+
+    assert not subject_matches(game, perm, described)
+    add_counters(perm, "bounty", 1)
+    assert subject_matches(game, perm, described)
+    # …and a *different* kind is a different question: one counter does not
+    # answer for every word a card could print.
+    assert not subject_matches(
+        game, perm, {"type_filter": "creature", "with_named_counter": "magnet"}
+    )
+
+
 def test_a_class_union_matches_on_either_axis(pool):
     """The positive half of ``any_classes``: "a black **or** artifact creature"
     is satisfied by a black creature that is no artifact **and** by an artifact

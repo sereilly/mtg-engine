@@ -87,6 +87,13 @@ class CombatRestriction:
 #   cant_block                      phases/declare_blockers_step
 #   creatures_cant_block            phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
+#   creatures_must_attack           phases/declare_attackers_step._must_attack_if_able
+#                                   (a board scan)
+#   creatures_must_attack_if_partner_attacks
+#                                   phases/declare_attackers_step._must_attack_beside
+#                                   (a board scan over the declaration)
+#   must_block_each_combat          phases/declare_blockers_step.declare_blockers
+#                                   (the declaration, CR 509.1c)
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
@@ -459,6 +466,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
+    # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
+    # requirement, the mirror of the attack one above and a *separate kind*
+    # rather than a payload on it: the two are checked at different steps by
+    # different predicates, and one kind read at both would have to be told
+    # which half it meant at every site.
+    #
+    # It is the weakest blocking requirement in this file. "Must be blocked"
+    # (Canopy Stalker) compels somebody to block *this attacker*; Lure compels
+    # everybody able; this compels *this creature* to block **something** — any
+    # one attacker it can legally block. Folding it into either of those would
+    # take away a legal declaration the card does not touch.
+    (
+        re.compile(r"^this creature blocks each combat if able$"),
+        "must_block_each_combat",
+    ),
     # "**If a creature you control attacks**, this creature also attacks if
     # able." (Ekundu Cyclops.) CR 508.1d's requirement with a condition, and
     # the condition is about the *declaration being made* rather than about the
@@ -657,6 +679,65 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     # blockers step and must not be folded together — "all able" on a card
     # printed "must be blocked" would forbid the defender keeping a blocker
     # back, which is a legal declaration.
+    (
+        # "**If a creature with a magnet counter on it attacks**, all creatures
+        # with magnet counters on them attack if able." (Magnetic Web.)
+        # Ekundu Cyclops' sentence with both halves widened from "this
+        # creature" to a set: CR 508.1d's requirement with a condition about
+        # the *declaration being made* rather than about the board, which is
+        # why it cannot ride the unconditional row below it — that one is
+        # answered by a per-creature predicate with no way to see who else was
+        # named.
+        #
+        # Two noun phrases and two payload keys, because the sentence really
+        # does name two sets: who has to be attacking, and who is then
+        # compelled. They are the same phrase on this card and there is no
+        # reason a card could not print them different.
+        #
+        # Its own kind rather than `must_attack_if_partner_attacks` with a
+        # subject, for `creatures_must_attack`'s reason one row up: that one is
+        # read off the attacker's own program and this has to be found on
+        # somebody else's permanent, which is a second scan.
+        # The article on each half is consumed by the pattern rather than by
+        # the noun parser: `_printed_noun` reads a bare noun phrase and refuses
+        # a quantifier, so "**all** creatures with magnet counters on them"
+        # comes back None and the whole line refuses — the row's own words
+        # taking its card away, which is a false negative rather than a silent
+        # widening but a refusal all the same.
+        re.compile(
+            r"^if an? (?P<attack_condition>.+) attacks, "
+            r"(?:all |each )?(?P<must_attack_subject>.+) attack if able$"
+        ),
+        "creatures_must_attack_if_partner_attacks",
+    ),
+    (
+        # "**Creatures you control** attack each combat if able." (the Pirate
+        # token Pursued Whale gives each opponent.) CR 508.1d's requirement
+        # printed on one permanent about a *set* of others, so it is enforced
+        # by a board scan in `_must_attack_if_able` rather than read off the
+        # attacker's own program — the exact arrangement `creatures_cant_attack`
+        # beside it already has for the restriction that says the opposite.
+        #
+        # Its own kind rather than `must_attack_each_combat` with a subject:
+        # that one is read off the attacker itself and this one has to be found
+        # on somebody else's permanent, which is two different scans, and one
+        # kind read at both sites would have to be told which it meant.
+        #
+        # The plural verb is what keeps the two apart. "This creature
+        # **attacks** each combat if able" is the row below; a set **attack**.
+        # The noun phrase is payload like every other in this file, so a card
+        # printed about Goblins or about creatures with flying needs no row.
+        #
+        # Until this existed the line compiled to a bare `static_line`: the
+        # token reported supported, could not block (its first line *is*
+        # enforced), and was under no obligation to attack at all — a granted
+        # ability that does nothing, which is the failure only a line-by-line
+        # read of a compiled program finds.
+        re.compile(
+            r"^(?:all |each )?(?P<must_attack_subject>.+) attack each combat if able$"
+        ),
+        "creatures_must_attack",
+    ),
     (re.compile(r"^this creature must be blocked if able$"), "must_be_blocked"),
     (
         # "All Walls able to block this creature do so." (Marble Priest) /
@@ -1182,6 +1263,29 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["subject"] = described
+        # "**Creatures you control** attack each combat if able." (Pursued
+        # Whale's Pirate token.) The set the requirement reaches, read here for
+        # the reason every other noun on this page is: the regex ends in `.+`,
+        # and a phrase admitted unread would be a requirement over *every*
+        # creature on the table — which for a requirement is the direction that
+        # forces attacks nobody printed.
+        must_attack_subject = payload.pop("must_attack_subject", None)
+        if must_attack_subject is not None:
+            described = _printed_noun(must_attack_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "**If a creature with a magnet counter on it attacks**, …" (Magnetic
+        # Web.) The other half of the same sentence: who has to be attacking
+        # for the requirement to apply. Read here beside the set it compels,
+        # and refused unread for that key's reason — a condition nobody checks
+        # is a requirement that applies always.
+        attack_condition = payload.pop("attack_condition", None)
+        if attack_condition is not None:
+            described = _printed_noun(attack_condition)
+            if described is None:
+                return None
+            payload["condition_subject"] = described
         # "…unless you've cast **a creature spell** this turn." (Mogg
         # Conscripts.) Read here for the reason every other noun on this page is
         # read here — the regex ends in `.+`, and a phrase admitted unread would

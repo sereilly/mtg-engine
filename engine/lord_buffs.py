@@ -71,6 +71,14 @@ LORD_BUFF_KIND = "lord_buff"
 QUALIFIER_FIELDS: dict[str, tuple[str, bool]] = {
     "attacking": ("attacking", True),
     "not attacking": ("attacking", False),
+    # "all creatures **attacking you** get -1/-0" (Watchdog). A qualifier
+    # rather than a filter field for the reason the row above it is one: whom a
+    # creature attacks is settled at the declare-attackers step and undone at
+    # end of combat, both of them between recomputes, so it has to be asked
+    # when P/T is read (CR 611.3a). It is the only *relative* qualifier — CR
+    # 109.5's "you" is the seat controlling the lord — which is why the
+    # contribution carries that seat and ``qualifier_holds`` takes an observer.
+    "attacking you": ("attacking_you", True),
     "blocking": ("blocking", True),
     "tapped": ("tapped", True),
     "untapped": ("tapped", False),

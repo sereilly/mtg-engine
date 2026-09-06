@@ -45,6 +45,7 @@ from .phrases import (
 from .effects import (
     parse_graveyard_top_opponent_chooses,
     _parse_attacks_this_turn_if_able,
+    _parse_blocks_this_turn_if_able,
     parse_block_count_grant,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
@@ -732,6 +733,20 @@ def parse_subject_verb(
         # (CLAUDE.md: parsed-but-unlowered is still parsed).
         if token.text in ("attacks", "attack"):
             requirement = _parse_attacks_this_turn_if_able(stream, source_spec)
+            if requirement is not None:
+                return requirement
+        # "**Target creature** blocks this creature this turn if able."
+        # (Trumpeting Armodon.) The blocking twin of the requirement above,
+        # beside it rather than inside it because the two share the duration and
+        # the escape and nothing else: a block names *two* creatures and an
+        # attack names one.
+        #
+        # Non-consuming on refusal for the same load-bearing reason: "blocks
+        # **each combat** if able" is a printed static
+        # `engine/combat_restrictions.py` reads as a table (Watchdog), and a
+        # production that consumed the verb would take the table's line away.
+        if token.text in ("blocks", "block"):
+            requirement = _parse_blocks_this_turn_if_able(stream, source_spec)
             if requirement is not None:
                 return requirement
         if token.text in ("becomes", "become"):

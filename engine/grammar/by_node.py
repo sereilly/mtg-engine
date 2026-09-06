@@ -34,6 +34,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_gain_type, _lower_attack_as_though,
                        _lower_assigns_no_combat_damage, _lower_attacking_doesnt_tap,
                        _lower_attacks_this_turn_if_able,
+    _lower_blocks_this_turn_if_able,
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
                        _lower_put_graveyard_position_onto_battlefield,
                        _lower_waive_shroud, _lower_change_target, _lower_counter_spell,
@@ -295,6 +296,12 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: whichever was consulted first, which is not a fact anyone should have to look
 #: up.
 _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
+    # "…all creatures with magnet counters on them block **that creature** this
+    # turn if able" (Magnetic Web). The attacker the requirement names may be
+    # the object the firing event was about, so the lowering has to know which
+    # event fired — and refuses the pronoun under one that records no attacker
+    # rather than compiling a requirement aimed at nothing.
+    ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
     # "…**that player** exiles all cards from their library" (Thought Lash),
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site

@@ -819,9 +819,22 @@ def evaluate_count(
         # refuses the unresolved key so a caller with no source counts nothing.
         filt = _resolve_chosen_subtype(filt, source)
         scanned = game.all_permanents() if every_seat else game.controlled_by(seat)
+        # Through ``subject_matches`` rather than the pure half, because the
+        # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
+        # the game): "you gain 1 life for each creature you control with
+        # flying" (Aven Gagglemaster) was countable only by a hand-built
+        # payload in `lowering/life.py` that named the key on its own. This is
+        # the one place a count decides what a printed noun phrase means, so it
+        # asks the one function that answers all of it — the seat scoping the
+        # scan is the same seat CR 109.5's "you" names, and it is handed over
+        # so a phrase that carries a controller word means what it would mean
+        # anywhere else.
+        from ..subject_filters import subject_matches
+
         matched = [
             perm for perm in scanned
-            if perm is not skip and permanent_matches_filter(perm, filt)
+            if perm is not skip
+            and subject_matches(game, perm, filt, observer=seat, source=source)
         ]
         if aggregate == "greatest_power":
             return _scaled(max((perm.effective_power for perm in matched), default=0), spec)

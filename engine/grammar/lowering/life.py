@@ -29,9 +29,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
-    dropped_narrowings,
 )
-from ...subject_filters import untestable_filter_keys
 from ._deaths import DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS
 from ._events import (
     _DEFENDING_PLAYER_EVENTS,
@@ -446,63 +444,30 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
-        if node.player.kind == "you" and filt.zone != "battlefield":
-            # "For each artifact or creature card in target opponent's
-            # graveyard, … you gain 1 life." (Spoils of Evil.)
-            # "You gain 2 life **for each card in your hand**." (Gerrard's
-            # Wisdom.) A count out of a zone rather than off a board, evaluated
-            # by `count_from_payload` — the same reader the mana half of Spoils
-            # of Evil's sentence uses one instruction over, because the two
-            # halves are one count and two readings of it are two answers.
-            #
-            # Through `count_spec`, which is the one place that decides what a
-            # count of a zone may test: a card outside the battlefield has no
-            # computed characteristics at all (CR 613.1), and that rule was
-            # spelled here a second time as a `card_only_filter` over
-            # `to_payload` minus the zone keys. Two spellings of one rule, and
-            # the local one was also a second spelling of *which zones* — it
-            # named the graveyard, so the identical sentence about a hand
-            # refused while the card reported itself unsupported for the wrong
-            # reason. The spec `count_spec` builds is byte-identical for Spoils
-            # of Evil, which is why this is a fold rather than a widening.
-            payload["per_each"] = count_spec(filt, node)
-            return (OracleInstruction("target_gains_life", "", payload),)
-        if node.player.kind != "you" or filt.zone != "battlefield":
+        if node.player.kind != "you":
             raise LoweringError(
                 "the per-each life gain counts the gainer's own battlefield", node=node
             )
-        # The noun phrase as ``subject_matches`` reads it, rather than the two
-        # keys this branch used to pick out by hand.
+        # "For each artifact or creature card in target opponent's graveyard, …
+        # you gain 1 life." (Spoils of Evil.) "You gain 2 life **for each card
+        # in your hand**." (Gerrard's Wisdom.) "You gain 1 life **for each
+        # attacking creature**." (Respite.) One count, one reader — the same
+        # `count_spec` / `count_from_payload` pair the mana half of Spoils of
+        # Evil's sentence goes through one instruction over, because the two
+        # halves are one count and two readings of it are two answers.
         #
-        # Those two were ``card_types`` and ``with_keywords``, and ``controller``
-        # was admitted beside them, written into the payload and **never read**:
-        # the handler scanned the gainer's own battlefield whatever the phrase
-        # said. Only Aven Gagglemaster ("creature you control with flying") had
-        # ever printed one, so the key happened to agree — and "for each
-        # attacking creature" (Orim's Prayer, Respite) is the sentence that does
-        # not, because attackers are on somebody else's board.
-        #
-        # So the whole phrase travels and the whole phrase is tested. A key the
-        # matcher cannot answer refuses the line, which is the same gate every
-        # other consumer of a printed noun phrase puts in front of itself — a
-        # narrowing carried and ignored is a count that is too large, which is a
-        # life gain the card never authorised.
-        described = filt.to_payload()
-        dropped = dropped_narrowings(filt, described)
-        if dropped:
-            raise LoweringError(
-                "the per-each life gain cannot count this restriction: "
-                + ", ".join(dropped),
-                node=node,
-            )
-        untestable = untestable_filter_keys(described)
-        if untestable:
-            raise LoweringError(
-                "the per-each life gain cannot count this restriction: "
-                + ", ".join(sorted(untestable)),
-                node=node,
-            )
-        payload["per_each"] = {"zone": "battlefield", "filter": described}
+        # **The battlefield branch used to be hand-built here**, and that is
+        # what this fold removes: three payload keys named one at a time
+        # (`controller`, `card_types`, `with_keywords`), a `_restrictions_beyond`
+        # allow-list of exactly those three, and a second battlefield scan in
+        # the handler that re-read them. So every other printed narrowing —
+        # "each **attacking** creature" among them — refused, on a card whose
+        # sentence the general counter has read since Spoils of Evil.
+        # `count_spec` also answers the question the local list could not: an
+        # unscoped combat role is counted across **every** seat (CR 508.1a puts
+        # the attackers on the active player's battlefield), where
+        # `controller: "you"` answered zero for the seat casting the fog.
+        payload["per_each"] = count_spec(filt, node)
         return (OracleInstruction("target_gains_life", "", payload),)
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)
