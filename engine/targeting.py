@@ -1252,6 +1252,14 @@ def _graveyard_return_spec(payload: dict) -> dict:
     count = (payload.get("targets") or {}).get("count")
     if isinstance(count, int) and count > 1:
         spec["max_targets"] = count
+    elif count == "x":
+        # "Return **X** target creature cards from your graveyard to your
+        # hand." (Shattered Crypt.) There is no number here — it is the
+        # announced X (CR 601.2b) — so the flag the permanent-shaped picker
+        # already uses for "X target creatures" is what the maximum becomes.
+        # Left off, the spec fell back to its one-target default and the
+        # browser offered one card for a spell paid for X of them.
+        spec["x_targets"] = True
     if payload.get("card_types"):
         # "target instant or sorcery card" (Shipwreck Dowser) — the union the
         # round-19 graveyard picker already tests by primary type.

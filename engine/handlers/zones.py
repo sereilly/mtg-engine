@@ -1549,13 +1549,22 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # (Sanguine Indulgence.) The several-targets description says a list was
     # collected, so every chosen slot is honoured rather than only the first.
     targets_desc = instruction.payload.get("targets") or {}
-    if (
-        isinstance(targets_desc, dict)
-        and isinstance(targets_desc.get("count"), int)
-        and targets_desc["count"] > 1
-    ):
+    printed_count = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    if printed_count == "x":
+        # "Return **X** target creature cards from your graveyard to your hand."
+        # (Shattered Crypt.) The announced X (CR 601.2b), which is not a number
+        # until the spell is on the stack — so the several-slot branch reads it
+        # here rather than being told a literal by the lowering.
+        #
+        # Gated on the string rather than left to ``isinstance(int)``, which is
+        # what this branch used to ask: the Crypt's count arrived as ``'x'``,
+        # failed that test, fell through to the single-card path and returned
+        # **one** card of however many X paid for — while the card lost X life
+        # and reported itself supported.
+        printed_count = int(context.x_value or 0)
+    if isinstance(printed_count, int) and printed_count > 1:
         picked = _resolve_graveyard_slots(
-            caster, context, targets_desc["count"], _eligible
+            caster, context, printed_count, _eligible
         )
         for returned_card in picked:
             game.put_card_into_hand(caster, returned_card)
