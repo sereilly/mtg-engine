@@ -23,6 +23,7 @@ from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._events import _back_reference_payload
+from ._record_keys import _RECORDED_PERMANENTS
 from ._amounts import count_spec
 from ._common import (
     _amount_payload, _describe_targets, _restrictions_beyond,
@@ -36,7 +37,7 @@ def _title(words: str) -> str:
 
 
 def _lower_create_copy_token(
-    node: ast.CreateCopyToken,
+    node: ast.CreateCopyToken, produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Create a token that's a copy of target creature you control."
     (Sublime Epiphany.)
@@ -46,7 +47,52 @@ def _lower_create_copy_token(
     better spell. Checked against what the resolver can test, the same gate
     every targeted effect goes through — a phrase the matcher cannot answer
     would be a restriction the handler silently ignores.
+
+    "Create a token that's a copy of **that creature**." (Echo Chamber.) The
+    permanent an earlier step of this same resolution chose, read through the
+    ``permanents_from`` channel every other back-reference to a recorded
+    permanent goes through — the ability targets nothing this sentence could
+    mean, because the seat that picked was an opponent and the pick is made at
+    resolution.
+
+    ``produced`` is the whole gate, exactly as it is for "exile that token" one
+    family over: with no step in front of it that recorded a permanent the
+    words name nothing, and a copy of whatever creature happened to answer is
+    not a smaller version of this effect.
     """
+    if node.subject.quantifier == "that":
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if not recorded:
+            raise LoweringError(
+                "\"that creature\" with nothing in this effect that chose one",
+                node=node,
+            )
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"that creature\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        # A bound object carries no narrowing to honour: the noun restates what
+        # the step in front of it already picked, and a type re-tested at
+        # resolution would be a second reading of one choice — the same reading
+        # ``lowering/keywords.py`` gives its own bound subject.
+        leftover = _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "subtypes"})
+        )
+        if leftover:
+            raise LoweringError(
+                "a bound copy token copies the permanent an earlier step "
+                "recorded and nothing narrower", node=node,
+            )
+        return (
+            OracleInstruction(
+                "create_copy_token", "",
+                {
+                    "count": _amount_payload(node.count),
+                    "permanents_from": recorded[0],
+                },
+            ),
+        )
     if node.subject.quantifier != "target":
         raise LoweringError("the copy token copies a chosen permanent", node=node)
     payload: dict[str, object] = {"count": _amount_payload(node.count)}

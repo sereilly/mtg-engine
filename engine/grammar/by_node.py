@@ -191,7 +191,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.Scry: _lower_scry,
     ast.ProducesManaInstead: _lower_produces_mana_instead,
     ast.SpendManaAsThough: _lower_spend_mana_as_though,
-    ast.CreateCopyToken: _lower_create_copy_token,
     ast.CreateEmblem: _lower_create_emblem,
     ast.DestroyEachUnlessPaid: _lower_destroy_each_unless_paid,
     ast.BecomeCreature: _lower_become_creature,
@@ -396,4 +395,9 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # of this same effect countered, and with no such record the words name
     # nothing.
     ast.BoundPermanentActivationBan: _lower_bound_permanent_activation_ban,
+    # "Create a token that's a copy of **that creature**." (Echo Chamber.) It
+    # left the name-only table above for ``ast.Attach``'s reason, word for
+    # word: a pronoun is only a pronoun relative to what came before it, and
+    # with no record the same words mean something else — here, nothing at all.
+    ast.CreateCopyToken: _lower_create_copy_token,
 }

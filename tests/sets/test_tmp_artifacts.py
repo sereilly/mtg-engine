@@ -842,3 +842,101 @@ def test_w2g2_the_ai_declares_a_legal_magnet_attack(set_pool):
     game, p0, p1 = _w2g2_magnet_attack_board(set_pool("TMP")["Magnetic Web"])
     chosen = sorted(ai_policy.choose_attackers(game, 0))
     assert game.declare_attackers(0, chosen, 1)[0], (chosen, game.log)
+
+
+# --- W3G3: Echo Chamber's opponent-made pick and the token behind it ---
+
+from engine import Game, PlayerState
+from engine.delayed_triggers import fire_delayed_triggers
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+from tests.helpers import _mk_creature_card, _nosick
+
+
+def _w3g3_game(p0_permanents, p1_permanents, *, interactive=(0, 1)):
+    seats = [
+        PlayerState(name="P0", battlefield=list(p0_permanents)),
+        PlayerState(name="P1", battlefield=list(p1_permanents)),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def test_echo_chamber_copies_the_creature_the_opponent_picked(set_pool):
+    """`{4}, {T}: An opponent chooses target creature they control. Create a
+    token that's a copy of that creature. That token gains haste until end of
+    turn. Exile the token at the beginning of the next end step.`
+
+    Four sentences and four instructions, which is the whole shape of the card:
+    the pick belongs to another seat, so it is the ordinary ``choose_permanent``
+    prompt; the copy reads what that prompt recorded; the haste grant reads what
+    the copy recorded; and the delayed exile reads the token the *permanent*
+    made. Nothing here is fused, and nothing here is name-keyed.
+    """
+    chamber = Permanent(card=set_pool("TMP")["Echo Chamber"])
+    theirs = Permanent(card=_mk_creature_card("Bear", 2, 2))
+    decoy = Permanent(card=_mk_creature_card("Decoy", 1, 1))
+    game = _w3g3_game([chamber], [theirs, decoy])
+    _nosick(chamber)
+
+    result = game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    # The *opponent* is asked, out of their own battlefield — "they control".
+    prompt = next(iter(game.pending_choices_of("permanent_choice")))
+    assert prompt.player_index == 1
+    offered = {perm.card.name for perm in game.live_permanent_choices(prompt)}
+    assert offered == {"Bear", "Decoy"}
+
+    assert game.confirm_permanent_choice(1, game.permanent_id_of(theirs))
+
+    # The token is the caster's, is a copy of what the opponent chose, and has
+    # haste — which is the only reason the card is worth activating.
+    tokens = [
+        perm for perm in game.controlled_by(0)
+        if perm.metadata.get("is_token")
+    ]
+    assert [perm.card.name for perm in tokens] == ["Bear"]
+    assert game._has_keyword(tokens[0], "haste")
+
+
+def test_echo_chamber_offers_no_target_picker(set_pool):
+    """The printed word is "target" and the seat that picks is not the ability's
+    controller, which CR 601.2c has no room for — so the pick is made at
+    resolution, exactly as ``lowering/control_changes.py`` records for Preacher.
+
+    The consequence is asserted rather than assumed: an activation spec here
+    would make the *controller* announce the creature, which is the one seat the
+    card says must not choose.
+    """
+    program = compile_card_oracle(set_pool("TMP")["Echo Chamber"])
+    ability = program.activated_abilities[0]
+    assert derive_activation_spec(ability) is None
+
+
+def test_echo_chamber_exiles_its_token_at_the_next_end_step(set_pool):
+    """"Exile the token at the beginning of the next end step" names the token
+    this *permanent* made (``created_with_source``), so the delay survives the
+    resolution that armed it."""
+    chamber = Permanent(card=set_pool("TMP")["Echo Chamber"])
+    theirs = Permanent(card=_mk_creature_card("Bear", 2, 2))
+    game = _w3g3_game([chamber], [theirs])
+    _nosick(chamber)
+
+    game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+    game.resolve_top_of_stack()
+    game.confirm_permanent_choice(1, game.permanent_id_of(theirs))
+    assert any(
+        perm.metadata.get("is_token") for perm in game.controlled_by(0)
+    )
+
+    fire_delayed_triggers(game, "next_end_step")
+    game.resolve_stack()
+    assert not [
+        perm for perm in game.controlled_by(0) if perm.metadata.get("is_token")
+    ], "the token is exiled at the beginning of the next end step"

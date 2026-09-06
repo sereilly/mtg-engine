@@ -24,8 +24,10 @@ from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
 from ._events import (_EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS,
                       binds_block_pair)
+from ._record_keys import CREATED_TOKEN
 from ._common import (_describe_several_targets, _describe_targets, _filter_payload,
-                      _durationless_reason, _restrictions_beyond, _is_enchanted,
+                      _durationless_reason, _is_created_token,
+                      _restrictions_beyond, _is_enchanted,
                       _is_source, _is_target, _names_several_targets)
 
 _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
@@ -375,6 +377,45 @@ def _lower_gain_keyword(
             OracleInstruction(
                 "grant_enchanted_keyword_until_eot", "",
                 {"keywords": tuple(node.keywords), "duration": duration},
+            ),
+        )
+    # "…**That token** gains haste until end of turn." (Echo Chamber.) The
+    # token an earlier step of this same resolution made, which is neither the
+    # source nor a target: the ability targets nothing this sentence could
+    # mean, and the token did not exist when it was activated (CR 400.7).
+    #
+    # Its own arm rather than a member of ``_RECORDED_PERMANENTS`` above,
+    # because the phrase is spelled by the *noun* rather than by the
+    # quantifier: ``references`` reads "that token" into a filter flag and
+    # "that creature" into a card type, and the reader that answers one cannot
+    # answer the other. ``lowering/exile.py`` draws the same line for the same
+    # two words.
+    #
+    # Read **before** the recorded-permanent arm below, and that ordering is
+    # load-bearing rather than tidy: "that token" carries the ``that``
+    # quantifier too, so that arm would claim the phrase and then refuse it
+    # for carrying a narrowing (``is_created_token``) it has no answer for.
+    #
+    # ``produced`` is the whole gate, exactly as it is there: with no token
+    # maker in front of it the words name nothing, and a grant that silently
+    # found nothing would be a card reporting itself supported and doing
+    # nothing.
+    if _is_created_token(node.subject):
+        if CREATED_TOKEN not in produced:
+            raise LoweringError(
+                "back-reference to a created token with no token maker in "
+                "this effect",
+                node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        return (
+            OracleInstruction(
+                "grant_target_keyword_until_eot", "",
+                {
+                    "keywords": tuple(node.keywords), "duration": duration,
+                    "permanents_from": CREATED_TOKEN,
+                },
             ),
         )
     # "…**That creature** gains haste until end of turn." (Shallow Grave;

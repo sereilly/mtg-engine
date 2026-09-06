@@ -21,6 +21,7 @@ from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, bound_permanent, evaluate_count,
+                      one_recorded_permanent_id,
                       per_recipient_amount,
                       permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
@@ -1313,16 +1314,33 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
             observer=controller_index, source=context.source_permanent,
         )
 
-    # No ``fallback_players``: a scan for *some* legal creature is what makes an
-    # illegal choice quietly succeed, and CR 608.2b says an illegal target makes
-    # that part of the spell do nothing. Copying a different creature is not a
-    # smaller version of this effect.
-    source = resolve_target_permanent(
-        game, context, fallback_on_invalid_choice=False, predicate=_legal,
-    )
-    if source is None:
-        game.log.append(f"{context.card.name}: no legal creature to copy")
-        return True, "resolved"
+    # "An opponent chooses target creature they control. Create a token that's
+    # a copy of **that creature**." (Echo Chamber.) The permanent an earlier
+    # step of this same resolution recorded, read through the one channel every
+    # ``permanents_from`` reader goes through — the pick was made by another
+    # seat as this ability resolved, so there is no target on the stack to
+    # resolve and no legality to re-check (CR 608.2b is about targets).
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        found = one_recorded_permanent_id(context, recorded_key)
+        source = game.permanent_by_id(found) if found is not None else None
+        if source is None or not game.is_on_battlefield(source):
+            # The chosen creature has left. CR 608.2 does as much as it can,
+            # which here is nothing — a copy of some other creature is a
+            # different effect.
+            game.log.append(f"{context.card.name}: the chosen creature is gone")
+            return True, "resolved"
+    else:
+        # No ``fallback_players``: a scan for *some* legal creature is what makes
+        # an illegal choice quietly succeed, and CR 608.2b says an illegal target
+        # makes that part of the spell do nothing. Copying a different creature
+        # is not a smaller version of this effect.
+        source = resolve_target_permanent(
+            game, context, fallback_on_invalid_choice=False, predicate=_legal,
+        )
+        if source is None:
+            game.log.append(f"{context.card.name}: no legal creature to copy")
+            return True, "resolved"
 
     count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
     for _ in range(max(0, count)):
@@ -1337,6 +1355,15 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
             token.metadata[CREATED_WITH_PERMANENT_ID] = (
                 context.source_permanent.permanent_id
             )
+        # "…**That token** gains haste until end of turn." (Echo Chamber.) The
+        # permanent this step made, for the sentences behind it in the same
+        # resolution — written under the key ``create_token`` beside this one
+        # has written since Stangg, and for that handler's stated reason: a
+        # token is a new object with a fresh id (CR 400.7), so nothing about it
+        # can be looked up afterwards. The last one when several are made, which
+        # is the same reading, and the lowering admits the singular phrase only
+        # behind a maker.
+        context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
         game.log.append(
             f"{context.card.name} created a token copy of {source.card.name}"
         )

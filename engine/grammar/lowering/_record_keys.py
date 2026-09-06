@@ -315,6 +315,14 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     # the step created, and a reader that knew only one of them would refuse
     # the other for no reason a card could see.
     SEARCHED_PERMANENTS,
+    # The permanent a ``choose_permanent`` prompt was answered with (Echo
+    # Chamber: "An opponent chooses target creature they control. Create a
+    # token that's a copy of **that creature**."). The same entry's reason
+    # again, and the omission was only ever invisible because no card had yet
+    # printed a sentence *behind* such a pick that named it as an object —
+    # Takklemaggot's does, and reads the key by name through the attach
+    # channel rather than through this set.
+    CHOSEN_PERMANENT,
 })
 
 #: The subset of :data:`_RECORDED_PERMANENTS` whose producer *made* the

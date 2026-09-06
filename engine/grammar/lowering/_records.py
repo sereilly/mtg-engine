@@ -316,6 +316,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # object with a fresh id (CR 400.7), so there is nothing about it to look
     # up by.
     "create_token": CREATED_TOKEN,
+    # "Create a token that's a copy of that creature. **That token** gains
+    # haste until end of turn." (Echo Chamber.) The copy maker records what it
+    # made under the same key the token maker above it does, and for that
+    # entry's reason word for word — which token a sentence names is one
+    # question however the token was built, and two keys would be two readers
+    # of the same two printed words.
+    "create_copy_token": CREATED_TOKEN,
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
