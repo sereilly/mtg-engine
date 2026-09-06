@@ -234,6 +234,15 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # same combat record, and the same thing needed beyond the object: the
     # ability's own source, which this function takes.
     "blocking_source",
+    # "all non-Wall creatures **blocking enchanted creature**" (Coils of the
+    # Medusa). ``blocking_source`` with the blocked object one hop away: the
+    # ability's source is an Aura, which is never in combat, so the relation is
+    # about what that Aura enchants. Testable here on exactly that key's
+    # footing — the source is what this function already takes, and the
+    # attachment record hangs off it. A caller with no source, or an Aura
+    # attached to nothing, answers no, which is the direction that cannot widen
+    # a sweep.
+    "blocking_attached_host",
     # "…all creatures **that blocked this creature this turn**" (Joven's
     # Ferrets). The block *history* rather than the live relation: the record
     # lives on the candidate — a blocker names the attackers it blocked — so
@@ -242,6 +251,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # caller with neither answers no, which is the direction that cannot widen
     # a sweep.
     "blocked_source_this_turn",
+    # "each creature **that blocked or was blocked this turn**" (Heat
+    # Stroke). The same records as the key above with neither end named, and
+    # that is what moves it to the *pure* half: the question is whether the
+    # permanent has an entry on either list, which needs no source, no seat
+    # and no second object. So it stays in ``OBJECT_ONLY_FILTER_KEYS`` below
+    # where every other block relation is dropped from it.
+    "blocked_or_was_blocked_this_turn",
     "attacking_you",
     # "…creature **that attacked you this turn**" (Jabari's Influence). The
     # *record* behind the live relation above, and testable on the same
@@ -820,6 +836,18 @@ def subject_matches(
         if source is None:
             return False
         if not any(blocker is obj for blocker in game.creatures_blocking(source)):
+            return False
+    # "…creatures **blocking enchanted creature**" — the same reader, asked
+    # about the source's attachment rather than about the source. An Aura is
+    # never in combat itself, so with no host (CR 704.5m has already put such an
+    # Aura in a graveyard) there is no relation to test and the answer is no.
+    if described.get("blocking_attached_host"):
+        from .handlers._common import attached_host
+
+        host = attached_host(game, source) if source is not None else None
+        if host is None:
+            return False
+        if not any(blocker is obj for blocker in game.creatures_blocking(host)):
             return False
     # "…all creatures **that blocked this creature this turn**" (Joven's
     # Ferrets). The same relation as a *history* rather than as a live combat

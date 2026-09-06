@@ -96,6 +96,22 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "attacked", "this", "turn"):
             d.attacked_this_turn = True
             continue
+        # "destroy each creature **that blocked or was blocked this turn**"
+        # (Heat Stroke). CR 509.1a's relation with *neither* end named — the
+        # sentence asks whether the creature was on either side of a block,
+        # not which creature it was paired with — so it is a narrowing of
+        # the noun phrase like the attack records above it rather than one
+        # of the `blocking_*` relations further down, every one of which
+        # needs a second object to be about.
+        #
+        # "This turn", not this combat: the card fires at end of combat and
+        # a turn may hold two of them, so the window is the pair records the
+        # declare-blockers step keeps and the cleanup step sweeps.
+        if stream.accept_phrase(
+            "that", "blocked", "or", "was", "blocked", "this", "turn"
+        ):
+            d.blocked_or_was_blocked_this_turn = True
+            continue
         # "target creature **you cast this turn**" (Cycle of Life). A narrowing
         # of the noun phrase like the combat records above it, off a different
         # record: CR 701.5a's cast, stamped as the permanent entered. Not "you
@@ -285,6 +301,24 @@ def _parse_postmodifiers(
                     stream.advance()
                     d.blocking_source = True
                     continue
+            # "blocking **enchanted creature**" (Coils of the Medusa). The
+            # Aura's own attachment, which is neither the source nor anything
+            # this sentence chooses: the source *is* the Aura, and an Aura is
+            # not in combat, so reading these words as `blocking_source` would
+            # make the set empty on every board.
+            #
+            # Read before the "target" branch below rather than folded into it
+            # for `blocking_source`'s reason one branch up: an attachment is
+            # named by a record, not by a noun phrase, and there is nothing to
+            # recurse into.
+            if stream.accept_word("enchanted"):
+                noun = stream.peek_word()
+                if noun is not None:
+                    stream.advance()
+                    d.blocking_attached_host = True
+                    continue
+                stream.reset(probe)
+                break
             # "blocking **target** <noun phrase>": chosen as this spell is cast
             # (CR 601.2c), so the phrase is read whole by recursing here — which
             # is what makes it a description rather than a second vocabulary.

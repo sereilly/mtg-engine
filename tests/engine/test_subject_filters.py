@@ -601,6 +601,8 @@ _COVERED_ELSEWHERE = {
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
     "blocking_source": "test_blocking_source_names_only_the_source_s_blockers",
+    "blocking_attached_host":
+        "test_blocking_attached_host_reads_the_relation_one_hop_from_the_source",
     "blocked_source_this_turn":
         "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
@@ -868,6 +870,50 @@ def test_blocking_source_names_only_the_source_s_blockers(pool):
     described = {"blocking_source": True}
     assert subject_matches(game, blocker, described, source=attacker)
     assert not subject_matches(game, elsewhere, described, source=attacker)
+    assert not subject_matches(game, blocker, described)
+
+
+def test_blocking_attached_host_reads_the_relation_one_hop_from_the_source(pool):
+    """"all non-Wall creatures **blocking enchanted creature**" (Coils of the
+    Medusa).
+
+    ``blocking_source`` with the blocked object one hop away, and the hop is the
+    whole point: the ability's source is an **Aura**, which is never in combat,
+    so reading these words as the source's own blockers would give an empty set
+    on every board — a card that resolves, logs, and destroys nothing.
+
+    Three rejections, one per way the phrase can be widened. A creature blocking
+    a *different* attacker is not in the set; an Aura attached to nothing has no
+    relation to test (CR 704.5m has already binned such an Aura, so this is the
+    resolution finding the world moved); and with no source at all the answer is
+    no, which refuses the sweep rather than handing it every blocker on the
+    board.
+    """
+    from engine.auras import attach_aura
+
+    host = Permanent(card=pool["Grizzly Bears"])
+    other_attacker = Permanent(card=pool["Grizzly Bears"])
+    aura = Permanent(card=pool["Holy Strength"])
+    loose = Permanent(card=pool["Holy Strength"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    elsewhere = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[host, other_attacker, aura, loose])
+    p2 = PlayerState(name="P2", battlefield=[blocker, elsewhere])
+    game = Game(players=[p1, p2])
+    attach_aura(aura, host)
+    game._recompute_continuous_effects()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+
+    described = {"blocking_attached_host": True}
+    assert subject_matches(game, blocker, described, source=aura)
+    assert not subject_matches(game, elsewhere, described, source=aura)
+    assert not subject_matches(game, blocker, described, source=loose)
     assert not subject_matches(game, blocker, described)
 
 

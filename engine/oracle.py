@@ -70,8 +70,29 @@ from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .grammar.lowering._events import OPPONENT_CHOSE_MODE
 from .grammar.postmodifiers import COST_TAPPED_REFERENT
+from .grammar.readers import _SELF_NOUNS
 from .grammar.vocabulary import (IMPLEMENTED_KEYWORDS,
                                  TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES)
+
+#: The nouns a card uses for **itself** in a cost - "sacrifice this
+#: **Aura**", "exile this **artifact**", "return this **enchantment** to
+#: its owner's hand".
+#:
+#: Derived from the grammar's one list rather than spelled again. It *was*
+#: spelled again, three times, as a shorter hand-written alternation
+#: carrying only card types - so "Sacrifice this **Aura**" matched nothing
+#: and the cost was never charged. That is the quiet direction: nothing
+#: crashed, nothing read as unsupported, and Thrull Retainer and Carapace
+#: regenerated the creature they enchant every turn for free, for as long
+#: as the game lasted. ``Aura`` and ``Equipment`` are *subtypes*
+#: (CR 205.3h), which is exactly why a list of card types looked complete.
+#:
+#: ``card`` and ``spell`` are dropped: neither is a permanent, so neither
+#: can be sacrificed, exiled from the battlefield or returned to a hand as
+#: *this object* - and a cost regex admitting them would read "exile this
+#: card" on a line about somebody else's graveyard.
+_SELF_COST_NOUNS = "|".join(sorted(_SELF_NOUNS - {"card", "spell"}))
+
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -1919,7 +1940,9 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # as a cost.
     cost_lower = cost_part.lower()
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
-    exile_self = bool(re.search(r"\bexile this (artifact|creature|enchantment|permanent|land)\b", cost_lower))
+    exile_self = bool(
+        re.search(rf"\bexile this ({_SELF_COST_NOUNS})\b", cost_lower)
+    )
     # "Exile a creature you control" (City of Shadows) / "Exile a creature
     # card from your graveyard" (Necropolis) - a *chosen* object rather than
     # the source. The regex only **delimits** the noun phrase to the end of
@@ -2043,10 +2066,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
     sacrifice_self = bool(
-        re.search(
-            r"\bsacrifice this (artifact|creature|enchantment|permanent|land|token)\b",
-            cost_lower,
-        )
+        re.search(rf"\bsacrifice this ({_SELF_COST_NOUNS})\b", cost_lower)
     )
     # "Return this enchantment to its owner's hand" (Cycle of Life) — the same
     # shape one zone over, anchored the same way and admitting the same nouns,
@@ -2054,8 +2074,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # cost has.
     return_self_to_hand = bool(
         re.search(
-            r"\breturn this (artifact|creature|enchantment|permanent|land|token)"
-            r" to its owner's hand\b",
+            rf"\breturn this ({_SELF_COST_NOUNS}) to its owner's hand\b",
             cost_lower,
         )
     )

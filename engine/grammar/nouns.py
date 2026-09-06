@@ -194,6 +194,8 @@ class _FilterDraft:
     blocked: bool | None = None
     any_states: tuple[str, ...] = field(default_factory=tuple)
     blocking_source: bool = False
+    blocking_attached_host: bool = False
+    blocked_or_was_blocked_this_turn: bool = False
     blocking_target: ast.ObjectFilter | None = None
     blocking_bound_target: bool = False
     blocked_by_bound_object: bool = False
@@ -865,6 +867,8 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         blocking=d.blocking,
         any_states=d.any_states,
         blocking_source=d.blocking_source,
+        blocking_attached_host=d.blocking_attached_host,
+        blocked_or_was_blocked_this_turn=d.blocked_or_was_blocked_this_turn,
         blocking_target=d.blocking_target,
         blocking_bound_target=d.blocking_bound_target,
         blocked_by_bound_object=d.blocked_by_bound_object,

@@ -1322,6 +1322,23 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         "could_attack_this_turn"
     ):
         return False
+    # "each creature **that blocked or was blocked this turn**" (Heat
+    # Stroke). Both sides of CR 509.1a from the pair records the
+    # declare-blockers step writes, which is what makes this the *pure*
+    # half: neither list needs another object resolved, only the presence
+    # of an entry — and a creature whose partner has since left still
+    # blocked. Read here rather than through ``block_partners_this_turn``
+    # for exactly that reason: that reader drops ids it cannot resolve,
+    # which would let a creature whose blocker died escape the sweep.
+    if payload.get("blocked_or_was_blocked_this_turn"):
+        from ..turn_state import (BLOCKED_ATTACKER_IDS_KEY,
+                                  BLOCKED_BY_BLOCKER_IDS_KEY)
+
+        if not any(
+            perm.metadata.get(key)
+            for key in (BLOCKED_ATTACKER_IDS_KEY, BLOCKED_BY_BLOCKER_IDS_KEY)
+        ):
+            return False
     type_filter = payload.get("type_filter")
     subtype_filter = payload.get("subtype_filter")
     color_filter = payload.get("color_filter")
