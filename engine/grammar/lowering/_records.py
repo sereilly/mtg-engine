@@ -321,6 +321,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_top_of_library": "exiled_cards",
     # …and Ice Cauldron's hand exile, written when its prompt is answered.
     "exile_chosen_card_from_hand": "exiled_cards",
+    # "Exile all / any number of cards from your hand face down." (Duplicity,
+    # Scroll Rack.) **Two** records for one step, and neither is the other:
+    # ``exiled_cards`` is what a *count* behind it reads ("put that many cards
+    # from the top of your library into your hand"), and ``exiled_entries`` is
+    # what an *exclusion* behind it reads ("put all **other** cards … into your
+    # hand"). Only the entries can answer the second — the pile may already
+    # hold another copy of the same card, and a hand repeats one immutable
+    # ``CardDefinition`` per copy, so the cards themselves are not distinct.
+    "exile_hand_pile": ("exiled_cards", "exiled_entries", "exiled_count"),
     # "That player exiles a card at random from their hand." (Elkin Lair.) The
     # pile is one card and the seat is not the caster, neither of which the
     # back-references behind it care about: "that card" names what this step

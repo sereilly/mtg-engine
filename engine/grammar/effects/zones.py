@@ -411,3 +411,38 @@ def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:
             stream.reset(mark)
             return None
     return ast.ShuffleLibrary(player)
+
+
+def parse_put_library_top_into_hand(
+    stream: TokenStream,
+) -> "ast.PutLibraryTopIntoHand | None":
+    """``Put <amount> cards from the top of your library into your hand.``
+    (Scroll Rack.)
+
+    Not a draw and deliberately not spelled as one — see
+    :class:`ast.PutLibraryTopIntoHand`. Every word after the count is required:
+    "from the top of your library" is where the cards come from and "into your
+    hand" is where they go, and a production that shrugged at either would be
+    reading a sentence this card does not print.
+
+    Refuses without consuming, so every other "Put …" keeps its own reading and
+    the counter production behind them all keeps its own refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("put"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("cards", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "from", "the", "top", "of", "your", "library", "into", "your", "hand",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.PutLibraryTopIntoHand(count)

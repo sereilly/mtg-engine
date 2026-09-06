@@ -1155,6 +1155,30 @@ def _repeat_process(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("exile_hand_pile_choice")
+def _exile_hand_pile(ctx: PromptContext, choices: list) -> dict:
+    """Scroll Rack: which cards in this seat's hand go under the artifact.
+
+    The candidates come from the engine's own rule, for the reason the single
+    pick below gives: the list the seat is shown and the list its answer is
+    checked against have to be one list.
+
+    No Decline, and that is the sentence rather than an omission: "exile **any
+    number of** cards" is answered with a set, and the empty set is one of the
+    answers — a Decline button would be a second spelling of it.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_exile_hand_pile_choices(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
 @prompt_renderer("exile_from_hand_choice")
 def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Ice Cauldron: which card in this seat's hand is exiled under the artifact.

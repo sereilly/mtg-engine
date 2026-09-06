@@ -658,10 +658,14 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # rather than left in, because a family list that named a module nobody wrote
 # would fail the "families do not import each other" test on a missing file
 # and say nothing true about the package.
-# `reveal` joins `text_changes` in having no twin on the lowering side, for the
-# reason recorded at `EFFECT_FAMILIES` above: every reveal node lowers in
-# `lowering/library.py`, beside the look-at lowerings, because the words are
-# where a reveal's work is.
+# `reveal` left that exclusion the same day it entered it, which is `search`'s
+# history at Visions compressed into one wave. The note at `EFFECT_FAMILIES`
+# above predicted the lowering side would stay put, "because a reveal lowers to
+# one instruction however elaborately its sentence is printed" — a claim about a
+# *size*, and Wood Sage's sorted reveal, Phyrexian Grimoire's graveyard pick and
+# Scroll Rack's library-to-hand took `lowering/library.py` to 1,001 lines before
+# the wave was over. `lowering/reveal.py` reuses the name the parse side had
+# carried for an hour, so the mirror formed rather than forked.
 # `text_changes` joins `search` in having no twin on the lowering side: the
 # instruction one produces (`mark_text_modified`) lowers in
 # `lowering/characteristics.py` beside the colour and P/T changes it sits
@@ -677,7 +681,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # nobody may see, so what it has to carry is which cards the phrase admits and
 # where each find lands.
 LOWERING_FAMILIES = [
-    f for f in EFFECT_FAMILIES if f not in ("text_changes", "reveal")
+    f for f in EFFECT_FAMILIES if f not in ("text_changes",)
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
 # guard a second time and split along the same CR 613.4b line — so it now
@@ -897,11 +901,14 @@ AST_FAMILIES = [
         "attachments", "returns",
         # `reveal` is `library`'s and `search`'s reason a third time, in the
         # same package: `RevealTop`, `RevealTopToHandOrBottom`,
-        # `RevealTopOpponentChooses` and `RevealUntil` are four nodes that sit
-        # perfectly well in `ast/cards.py` beside the look-at ones, because what
-        # a reveal *is* — a pile, a filter and the fate of what was turned up —
-        # is the same inventory a look is. The guard that made `reveal` a parse
-        # family fired on the productions.
+        # `RevealTopOpponentChooses`, `RevealUntil` and the rest sit perfectly
+        # well in `ast/library.py` beside the look-at ones, because what a
+        # reveal *is* — a pile, a filter and the fate of what was turned up —
+        # is the same inventory a look is. The guards that made `reveal` a parse
+        # and a lowering family both fired on functions; the inventory never
+        # crossed anything. (`ast/cards.py` did, in the same wave, and what
+        # left it was two nodes going to `ast/library.py` where the rest of the
+        # reveals already were.)
         "reveal",
         # `redirection` is the fourth of `types`' shape: `RedirectDamage`,
         # `DoubleCombatDamage` and `DamageBecomesCounterRemoval` are all facts

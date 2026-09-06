@@ -72,6 +72,8 @@ from .lowering import (
     _lower_exile,
     _lower_repeat_for_types,
     _lower_repeat_optional_process,
+    _lower_put_exiled_with_source,
+    _lower_put_library_top_into_hand,
     _lower_repeat_process,
     _lower_repeat_process_while,
     _lower_for_each_destroyed,
@@ -643,6 +645,17 @@ def lower_statement(
     # The fourth, and the only one whose clause is a *condition* — so it takes
     # the condition lowering back as an argument too, for the same reason it
     # takes the statement one: both live below this dispatcher.
+    if isinstance(statement, ast.PutLibraryTopIntoHand):
+        # Takes ``produced``: Scroll Rack prints "put **that many** cards",
+        # which is a back-reference to the exile a step earlier.
+        return _lower_put_library_top_into_hand(statement, produced)
+    if isinstance(statement, ast.PutExiledWithSource):
+        # Left ``by_node`` when Duplicity's "put **all other** cards you own
+        # exiled with this enchantment into your hand" gave it a
+        # back-reference: "other" names the cards a step of this same effect
+        # exiled, so the lowering reads ``produced`` and the row stopped being
+        # one that needs nothing but its node.
+        return _lower_put_exiled_with_source(statement, produced)
     if isinstance(statement, ast.RepeatProcessWhile):
         return _lower_repeat_process_while(
             statement, lower_statement, _lower_condition, produced, event,

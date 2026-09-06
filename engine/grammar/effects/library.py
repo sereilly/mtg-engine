@@ -354,11 +354,21 @@ def _parse_look_other_library_tail(
     # fresh reference — parsed apart it would have to guess a seat, which is
     # this production's whole reason for reading the tail at all.
     bottomed = stream.mark()
-    if stream.accept_punct(".") and stream.accept_phrase(
-        "you", "may", "put", "that", "card", "on", "the", "bottom", "of",
-        "that", "player", "'s", "library",
-    ):
-        return ast.LookAtLibraryTop(count, owner, may_bottom=True)
+    if stream.accept_punct("."):
+        # "…library. **If you do,** you may put that card on the bottom…"
+        # (Precognition.) The join the *optional* printing needs and Coral
+        # Fighters' mandatory one does not: there the look always happens, so
+        # there is no condition for the offer to hang on. Consumed and dropped
+        # rather than modelled, because it states exactly what the enclosing
+        # "you may look" already means — the offer behind a look nobody took is
+        # an offer over no card, which is what the handler finds anyway.
+        if stream.accept_phrase("if", "you", "do"):
+            stream.accept_punct(",")
+        if stream.accept_phrase(
+            "you", "may", "put", "that", "card", "on", "the", "bottom", "of",
+            "that", "player", "'s", "library",
+        ):
+            return ast.LookAtLibraryTop(count, owner, may_bottom=True)
     stream.reset(bottomed)
     # "**Exile one of those cards and put the rest back on top of that player's
     # library in any order.**" (Sealed Fate.) The look-and-pick template over

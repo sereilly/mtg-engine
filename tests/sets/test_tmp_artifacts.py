@@ -355,6 +355,13 @@ def test_grindstone_repeats_while_the_two_milled_cards_share_a_colour(set_pool):
 
     assert len(game.players[1].graveyard) == 6
     assert len(game.players[1].library) == 4
+    # And the picker knows the ability targets. A new control-flow wrapper is
+    # invisible to `targeting.py`'s unwrap list until somebody adds it, and the
+    # failure is the Roots class: the client sends a bare activation and the
+    # ability mills whoever the resolution happened to be holding.
+    program = compile_card_oracle(set_pool("TMP")["Grindstone"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec is not None and spec.get("kind") == "player"
 
 
 def test_grindstone_stops_on_two_colourless_cards(set_pool):
@@ -394,3 +401,138 @@ def test_grindstone_empties_a_library_of_one_colour_and_terminates(set_pool):
 
     assert not game.players[1].library
     assert len(game.players[1].graveyard) == 9
+
+
+def test_scroll_rack_swaps_the_exiled_pile_for_the_same_number_off_the_top(set_pool):
+    """`{1}, {T}: Exile any number of cards from your hand face down. Put that
+    many cards from the top of your library into your hand. Then look at the
+    exiled cards and put them on top of your library in any order.`
+
+    Three steps and one resolution. The count of the second is the answer to
+    the first, so the exile prompt suspends the resolution; the third drains
+    the pile back onto the library and hands the order to the same seat.
+    """
+    from engine.linked_exile import linked_entries
+
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    hand = [_w2g4_card(f"Hand{i}", "Instant") for i in range(3)]
+    library = [_w2g4_card(f"Deck{i}", "Instant") for i in range(5)]
+    game = _w2g4_game([rack], p0_hand=hand)
+    game.players[0].library = list(library)
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("exile_hand_pile_choice")))
+    assert [c["name"] for c in
+            [{"name": game.players[0].hand[i].name}
+             for i in game.live_exile_hand_pile_choices(prompt)]] == [
+        "Hand0", "Hand1", "Hand2",
+    ]
+    assert game.confirm_exile_hand_pile(0, [0, 2])
+
+    # Two exiled, two off the top of the library into the hand.
+    assert sorted(c.name for c in game.players[0].hand) == ["Deck0", "Deck1", "Hand1"]
+    # The pile went back on top of the library, so the reorder prompt is open
+    # over exactly those two.
+    assert not linked_entries(rack), "the pile is drained when it goes back"
+    reorder = next(iter(game.pending_choices_of("reorder_library")))
+    assert reorder.data["top_count"] == 2
+    assert [c.name for c in game.players[0].library[:2]] == ["Hand0", "Hand2"]
+    assert game.confirm_reorder_library(0, new_order=[1, 0], shuffle=False)
+    assert [c.name for c in game.players[0].library] == [
+        "Hand2", "Hand0", "Deck2", "Deck3", "Deck4",
+    ]
+
+
+def test_scroll_rack_exiling_none_is_a_legal_answer_that_draws_none(set_pool):
+    """"Any number" includes zero, and it is an *answer* rather than a decline:
+    the sentence behind it puts that many cards into the hand, so an activation
+    that exiles nothing legally does nothing."""
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    hand = [_w2g4_card("Hand0", "Instant")]
+    game = _w2g4_game([rack], p0_hand=hand)
+    game.players[0].library = [_w2g4_card("Deck0", "Instant")] * 3
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_exile_hand_pile(0, [])
+
+    assert [c.name for c in game.players[0].hand] == ["Hand0"]
+    assert len(game.players[0].library) == 3
+    assert not game.players[0].exile
+
+
+def test_scroll_rack_puts_cards_into_hand_without_drawing_them(set_pool):
+    """CR 121.3: an effect that says "put the top card of your library into
+    your hand" is **not** a draw. The engine's own record of what was drawn
+    this turn is the check — a card routed through the draw seam would appear
+    in it, and every "whenever you draw" on the board would have fired.
+    """
+    rack = Permanent(card=set_pool("TMP")["Scroll Rack"])
+    game = _w2g4_game([rack], p0_hand=[_w2g4_card("Hand0", "Instant")])
+    game.players[0].library = [_w2g4_card("Deck0", "Instant")] * 3
+
+    game.activate_permanent_ability(0, "Scroll Rack", ability_index=0)
+    game.resolve_top_of_stack()
+    assert game.confirm_exile_hand_pile(0, [0])
+
+    assert [c.name for c in game.players[0].hand] == ["Deck0"]
+    assert not game.players[0].cards_drawn_this_turn, (
+        "putting a card into a hand is not drawing it"
+    )
+
+
+def test_phyrexian_grimoire_lets_the_opponent_pick_which_card_is_lost(set_pool):
+    """`{4}, {T}: Target opponent chooses one of the top two cards of your
+    graveyard. Exile that card and put the other one into your hand.`
+
+    CR 404.2 keeps a graveyard in the order cards reached it, newest on top, so
+    "the top two" are the *last* two of the pile — the opposite end from a
+    library. No reveal happens: CR 400.2 makes a graveyard public and there is
+    nothing to show anybody.
+    """
+    grimoire = Permanent(card=set_pool("TMP")["Phyrexian Grimoire"])
+    # The *opponent* chooses, and this prompt takes its default at arm for a
+    # non-interactive seat — so seat 1 has to be one for the answer to be asked.
+    game = _w2g4_game([grimoire], interactive=(0, 1))
+    game.players[0].graveyard = [
+        _w2g4_card("Bottom", "Instant"),
+        _w2g4_card("Second", "Instant"),
+        _w2g4_card("Top", "Instant"),
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Grimoire", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert prompt.player_index == 1, "the *opponent* chooses"
+    assert prompt.data["cards"] == ["Top", "Second"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+
+    assert [c.name for c in game.players[0].exile] == ["Top"]
+    assert [c.name for c in game.players[0].hand] == ["Second"]
+    assert [c.name for c in game.players[0].graveyard] == ["Bottom"]
+
+
+def test_phyrexian_grimoire_over_one_card_still_moves_it(set_pool):
+    """Fewer cards than the printed number is an ordinary board: the pick is
+    made from what is there, and with nothing left over the "other one" clause
+    moves nothing rather than reaching further down the pile."""
+    grimoire = Permanent(card=set_pool("TMP")["Phyrexian Grimoire"])
+    game = _w2g4_game([grimoire], interactive=(0, 1))
+    game.players[0].graveyard = [_w2g4_card("Only", "Instant")]
+
+    game.activate_permanent_ability(
+        0, "Phyrexian Grimoire", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+    prompt = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert prompt.data["cards"] == ["Only"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+
+    assert [c.name for c in game.players[0].exile] == ["Only"]
+    assert not game.players[0].hand

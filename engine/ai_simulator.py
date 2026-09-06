@@ -88,6 +88,12 @@ _SIMULATED_CHOICES = (
     # suspends, so a seat left owing it would wedge every later resumable loop.
     # A simulated HML deck really can arm it, and on *every* seat at once.
     "draw_up_to",
+    # "Exile any number of cards from your hand face down." (Scroll Rack.)
+    # Appended for the reason every entry above it is — the position cannot
+    # change an existing seed — and it suspends, because the sentence behind it
+    # puts *that many* cards from the library into the hand. A simulated TMP
+    # deck really can arm it.
+    "exile_hand_pile_choice",
 )
 
 

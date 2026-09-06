@@ -2062,18 +2062,78 @@ class PendingChoicesMixin:
             return False
         card = cards[index]
         revealer = self.players[int(choice.data.get("revealer_index", 0))]
-        for slot, held in enumerate(revealer.library):
+        from_zone = str(choice.data.get("from_zone", "library"))
+        fate = str(choice.data.get("fate", "graveyard"))
+        other_fate = choice.data.get("other_fate")
+        chooser = self.players[choice.player_index].name
+        # "Exile that card and **put the other one into your hand**."
+        # (Phyrexian Grimoire.) The pick and what it left behind are one answer,
+        # so both halves move here — the pile is only nameable while this prompt
+        # is holding it. Absent for every library printing, where CR 701.20b
+        # leaves the rest where they were.
+        for shown in cards:
+            if shown is card:
+                target_zone = fate
+            elif other_fate:
+                target_zone = str(other_fate)
+            else:
+                continue
+            if not self._move_picked_pile_card(
+                revealer, shown, from_zone, target_zone
+            ):
+                self.log.append(f"{shown.name} has already moved")
+                continue
+            self.log.append(
+                f"{chooser} chose {card.name}; {shown.name} goes to the "
+                f"{target_zone}"
+                if shown is card
+                else f"{shown.name} goes to the {target_zone}"
+            )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _move_picked_pile_card(self, owner, card, from_zone: str, to_zone: str) -> bool:
+        """Move *card* out of *owner*'s *from_zone* into *to_zone*, by identity.
+
+        By identity and not by value, for the reason every pile read in this
+        file gives: two copies of a card in a deck are literally one immutable
+        ``CardDefinition``, so ``list.remove`` takes whichever entry comes
+        first. A card that has already left is left alone, which is CR 608.2
+        doing as much as it can — the False this returns.
+
+        The destinations go through the seams that own them
+        (``put_card_into_graveyard``, ``put_card_into_hand``) rather than
+        appending to a list, so the graveyard watchers and CR 903.9b both see
+        the move.
+        """
+        pile = getattr(owner, from_zone, None)
+        if pile is None:
+            return False
+        for slot, held in enumerate(pile):
             if held is card:
-                revealer.library.pop(slot)
-                self.put_card_into_graveyard(revealer, card, from_zone="library")
-                self.log.append(
-                    f"{self.players[choice.player_index].name} chose {card.name}; "
-                    f"it goes into {revealer.name}'s graveyard"
-                )
+                pile.pop(slot)
                 break
         else:
-            self.log.append(f"{card.name} has already moved")
-        self.discard_pending_choice(choice)
+            return False
+        # ``from_zone`` is a *library* or a *graveyard* and never an exile — the
+        # lowering that writes it offers exactly those two (Thran Tome's reveal
+        # and Phyrexian Grimoire's graveyard pick) — so the pop above is not a
+        # departure from exile and needs no ``take_card_from_exile``. Listed in
+        # `tests/engine/test_exile_removal_seam._COMPUTED_ATTRIBUTE_WRITES`
+        # saying so, because a computed attribute name is one the ban cannot
+        # read for itself.
+        if to_zone == "graveyard":
+            self.put_card_into_graveyard(owner, card, from_zone=from_zone)
+        elif to_zone == "hand":
+            self.put_card_into_hand(owner, card)
+        elif to_zone == "exile":
+            owner.exile.append(card)
+        else:
+            # A destination nobody implements: put it back rather than losing
+            # the card. The lowering's closed list is what stops this being
+            # reachable, and this is the belt behind it.
+            pile.insert(0, card)
+            return False
         return True
 
     def _default_opponent_picks_revealed(self, choice: PendingChoice) -> None:
@@ -4307,6 +4367,71 @@ class PendingChoicesMixin:
         return exile_from_hand_candidates(
             self, choice.data.get("_payload") or {}, self.players[choice.player_index]
         )
+
+    def live_exile_hand_pile_choices(self, choice: PendingChoice) -> list[int]:
+        """The hand slots the "any number of cards" pick may name.
+
+        Re-run rather than stored, for ``live_exile_from_hand_choices``'
+        reason one prompt over: the list the seat is offered and the list its
+        answer is checked against have to be one list.
+        """
+        from ...handlers.zones import exile_from_hand_candidates
+
+        return exile_from_hand_candidates(
+            self, choice.data.get("_payload") or {},
+            self.players[choice.player_index],
+        )
+
+    def confirm_exile_hand_pile(self, player_index: int, hand_indices) -> bool:
+        """Answer Scroll Rack's "exile **any number of** cards from your hand".
+
+        "Any number" includes **zero**, which is a real answer and not a
+        decline: the sentence behind it puts *that many* cards from the library
+        into the hand, so answering none is an activation that legally does
+        nothing.
+        """
+        return self.resolve_pending_choice(
+            "exile_hand_pile_choice", player_index, hand_indices=hand_indices
+        )
+
+    def _resolve_exile_hand_pile(self, choice: PendingChoice, hand_indices) -> bool:
+        """Exile the named slots as one linked pile.
+
+        Every pick is validated **before** anything moves, the rule the exile
+        search states: one bad slot rejects the whole answer and leaves the
+        prompt queued, so a malformed request cannot exile half a selection.
+        A repeat is rejected rather than deduplicated — a seat naming one card
+        twice has not said what it means.
+        """
+        live = set(self.live_exile_hand_pile_choices(choice))
+        cleaned: list[int] = []
+        for index in hand_indices or []:
+            if not isinstance(index, int) or index not in live or index in cleaned:
+                return False
+            cleaned.append(index)
+        self.exile_hand_slots(
+            choice.data.get("_context"),
+            choice.data.get("_source_permanent"),
+            choice.player_index,
+            cleaned,
+            face_down=bool((choice.data.get("_payload") or {}).get("face_down")),
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_exile_hand_pile(self, choice: PendingChoice) -> None:
+        """The stated policy: **every** eligible card.
+
+        The same reading ``_default_search_exile`` gives an unbounded "any
+        number": each card comes straight back — Scroll Rack replaces them one
+        for one off the library and Duplicity hands the previous pile over — so
+        the maximum is the only default that leaves nothing on the table. A
+        seat that took none would activate the artifact and do nothing at all.
+        """
+        if not self._resolve_exile_hand_pile(
+            choice, self.live_exile_hand_pile_choices(choice)
+        ):
+            self.discard_pending_choice(choice)
 
     def confirm_exile_from_hand_choice(self, player_index: int, hand_index) -> bool:
         """Answer the pending pick. ``hand_index`` of None declines, which is an
@@ -8383,6 +8508,23 @@ register_choice(
     # is the same reason `cast_choice` and `pay_life_to_save` take their default
     # where the offer stands.
     default_at_arm=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "exile_hand_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_hand_pile(
+        choice, r.get("hand_indices") or []
+    ),
+    default=lambda game, choice: game._default_exile_hand_pile(choice),
+    action="exile_hand_pile_confirm",
+    prompt_key="exile_hand_pile_choice",
+    blocked_detail="choose which cards to exile before other actions",
+    # "Put **that many** cards from the top of your library into your hand" is
+    # the next step of the same resolution and reads what this exiled, so
+    # nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
     # A hand is hidden (CR 400.2), so the options are the chooser's alone.
     hidden_for_ai=False,
 )

@@ -196,6 +196,7 @@ from .linked_exile import (
     _lower_exile_top_of_library,
     _lower_exile_entire_library,
     _lower_put_exiled_card_into_zone,
+    _lower_put_exiled_pile_on_library,
     _lower_put_exiled_with_source,
     _lower_search_and_exile,
     _lower_transmute_by_sacrifice,
@@ -286,8 +287,6 @@ from .mana import (
     _lower_spend_mana_as_though,
 )
 from .library import (
-    _lower_reveal_top,
-    _lower_reveal_until,
     _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_exile_graveyard,
@@ -298,16 +297,25 @@ from .library import (
     _lower_reveal_random_from_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
-    _lower_bin_revealed_card,
-    _lower_reveal_top_opponent_chooses,
-    _lower_reveal_top_sorting_by_chosen_name,
-    _lower_put_revealed_card_onto_battlefield,
+    _lower_put_library_top_into_hand,
     _lower_graveyard_top_to_library,
     _lower_look_at_library_top,
     _lower_look_top_cycle_for_life,
     _lower_separate_library_top_into_piles,
     _lower_graveyard_pick_onto_battlefield,
     _lower_put_graveyard_position_onto_battlefield,
+)
+# CR 701.20a's public half of the look, split off `library` when Tempest's
+# second wave took that module past the size guard — see that module's
+# docstring for the line.
+from .reveal import (
+    _lower_bin_revealed_card,
+    _lower_graveyard_top_opponent_chooses,
+    _lower_put_revealed_card_onto_battlefield,
+    _lower_reveal_top,
+    _lower_reveal_top_opponent_chooses,
+    _lower_reveal_top_sorting_by_chosen_name,
+    _lower_reveal_until,
 )
 from .search import (
     _SEARCH_HONOURED_FILTER_FIELDS,
@@ -569,7 +577,10 @@ __all__ = [
     "_lower_reveal_hand_and_choose",
     "_lower_look_at_hand",
     "_lower_bin_revealed_card",
+    "_lower_graveyard_top_opponent_chooses",
     "_lower_reveal_top_opponent_chooses",
+    "_lower_put_library_top_into_hand",
+    "_lower_put_exiled_pile_on_library",
     "_lower_reveal_top_sorting_by_chosen_name",
     "_lower_put_revealed_card_onto_battlefield",
     "_lower_graveyard_top_to_library",

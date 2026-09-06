@@ -269,6 +269,8 @@ from .mana import (
     SpendManaAsThough,
 )
 from .library import (
+    PutExiledPileOnLibrary,
+    RevealUntil,
     LookAtHand,
     BinRevealedCard,
     GraveyardTopToLibrary,
@@ -276,6 +278,8 @@ from .library import (
     LookTopCycleForLife,
     LookTopExileRandom,
     RevealTopOpponentChooses,
+    GraveyardTopOpponentChooses,
+    PutLibraryTopIntoHand,
     RevealTopSortingByChosenName,
     LookTopPickToHand,
     RevealTop,
@@ -324,7 +328,6 @@ from .cards import (
     NameAndRandomReveal,
     NameAndStrip,
     NameThenRevealTop,
-    RevealUntil,
 )
 from .stack import (
     ChangeTarget,
@@ -659,6 +662,8 @@ __all__ = [
     "PutExiledWithSource",
     "LookTopExileRandom",
     "RevealTopOpponentChooses",
+    "GraveyardTopOpponentChooses",
+    "PutLibraryTopIntoHand",
     "RevealTopSortingByChosenName",
     "LookTopPickToHand",
     "AnteOfferOwnershipExchange",
@@ -668,6 +673,7 @@ __all__ = [
     "PutExiledCardIntoZone",
     "RepeatedGraveyardPick",
     "NameThenConsult",
+    "PutExiledPileOnLibrary",
     "PutExiledPileTopIntoHand",
     "SearchAndExile",
     "TransmuteBySacrifice",

@@ -66,6 +66,83 @@ def _is_hand_card_exile(subject: "ast.Recipient") -> bool:
     )
 
 
+#: The quantifiers a *pile* out of a hand may be printed with, and what each
+#: one means to the handler. "All" (Duplicity) chooses nothing and takes the
+#: whole hand; "any number of" (Scroll Rack) is a pick, and zero of them is a
+#: legal answer. Two words, one instruction: what the exile does to the pile is
+#: identical, and a second kind would be a second place to remember that a pile
+#: out of a hand has to be recorded on the exiling permanent.
+_HAND_PILE_QUANTIFIERS: dict[str, str] = {"all": "all", "any_number": "any_number"}
+
+
+def _is_hand_pile_exile(subject: "ast.Recipient") -> bool:
+    """Whether *subject* is the "**all** / **any number of** cards from your
+    hand" noun phrase — a pile rather than the single card above.
+
+    Beside :func:`_is_hand_card_exile` and read in the same two places, for
+    that function's reason: the face-down guard and the dispatch branch cannot
+    be allowed to disagree about which sentence CR 406.3's rider is legal on.
+    Widening that guard is the whole of what Duplicity needed from this file —
+    it had been written when the *only* face-down exile out of a hand was a
+    single chosen card.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in _HAND_PILE_QUANTIFIERS
+        and not subject.targeted
+        and subject.filter.zone == "hand"
+        and subject.filter.is_card
+    )
+
+
+def _lower_exile_hand_pile(
+    node: ast.Exile, subject: ast.TargetSpec
+) -> OracleInstruction:
+    """"Exile **all** cards from your hand face down." (Duplicity.)
+    "Exile **any number of** cards from your hand face down." (Scroll Rack.)
+
+    One instruction for both quantifiers, because what the exile *does* is the
+    same: a run of cards leaves a hand and is recorded on the exiling permanent
+    (CR 610.3), which is the only place a face-down exile can be recorded at
+    all — two copies of one card in a deck are the same ``CardDefinition``
+    object, so nothing on the card can say which of them is hidden.
+
+    The narrowing goes through the same ``card_only_filter`` gate the single
+    hand pick uses, for its reason: a *card* phrase is answered by a different
+    matcher from a permanent phrase, and a key that matcher cannot test would
+    be dropped where it is tested — a sweep wider than the card prints.
+    """
+    filt = subject.filter
+    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        raise LoweringError("the hand exile reads your own hand", node=node)
+    if node.duration.kind is not None or node.counters:
+        raise LoweringError(
+            "a hand exile carries no duration or counters yet", node=node
+        )
+    leftover = _restrictions_beyond(
+        filt,
+        _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
+    )
+    if leftover:
+        raise LoweringError(
+            f"the hand exile does not honour {leftover[0]!r}", node=node
+        )
+    payload_filter = filt.to_payload()
+    payload_filter.pop("zone", None)
+    payload_filter.pop("zone_owner", None)
+    described = card_only_filter(payload_filter)
+    if described is None:
+        raise LoweringError("no hand sweep can test this narrowing", node=node)
+    payload: dict[str, object] = {
+        "quantifier": _HAND_PILE_QUANTIFIERS[subject.quantifier],
+    }
+    if described:
+        payload["card_filter"] = described
+    if node.face_down:
+        payload["face_down"] = True
+    return OracleInstruction("exile_hand_pile", "", payload)
+
+
 def _lower_exile_card_from_hand(
     node: ast.Exile, subject: ast.TargetSpec
 ) -> OracleInstruction:
@@ -159,7 +236,9 @@ def _lower_exile(
     # it. Refused up here rather than dropped where it is unread: an exile that
     # silently happened face *up* is the loudest kind of quiet wrong, since
     # every player would then be reading a card the card says nobody may see.
-    if node.face_down and not _is_hand_card_exile(node.subject):
+    if node.face_down and not (
+        _is_hand_card_exile(node.subject) or _is_hand_pile_exile(node.subject)
+    ):
         raise LoweringError(
             "only the hand exile carries a face-down rider", node=node
         )
@@ -183,6 +262,12 @@ def _lower_exile(
         )
 
     subject = node.subject
+    # "Exile **all** / **any number of** cards from your hand face down."
+    # (Duplicity, Scroll Rack.) A pile out of a *hidden* zone, read before both
+    # sweep branches below — they are about permanents on a battlefield, and
+    # each of them refuses a hand outright, which is where these two lines died.
+    if _is_hand_pile_exile(subject):
+        return (_lower_exile_hand_pile(node, subject),)
     if isinstance(subject, ast.TargetSpec) and subject.quantifier in ("each", "all"):
         # "Exile each permanent with mana value X or less that's one or more
         # colors." (Ugin, the Spirit Dragon's −X.) The payload is hand-rolled:

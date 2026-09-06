@@ -240,6 +240,14 @@ SELF_PAYMENT_KINDS = frozenset({
     "pay_life",
     "ante_top_card",
     "exile_chosen_card_from_hand",
+    # "You may **exile all cards from your hand** face down." (Duplicity.) The
+    # pile spelling of the row above, and a price for exactly its reason: the
+    # cards come out of the offered seat's own hand. Without it the offer read
+    # as free — the cost is lowered *into* the offered action, where the
+    # affordability test cannot find it — and a headless seat would exile its
+    # whole hand every upkeep, which is the failure this set is written to
+    # catch.
+    "exile_hand_pile",
     "exile_any_number_of_own_tokens",
 })
 

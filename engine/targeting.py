@@ -1871,7 +1871,16 @@ def _from_instructions(instructions) -> dict | None:
         # plain sequence's are. Left out, the spell derived no spec at all,
         # which is the value the client tests to decide whether to ask for a
         # target: the Roots class, through the door this round opened.
-        if instruction.kind in ("sequence", "repeat_optional_process"):
+        # "**Target player** mills two cards. If two cards that share a color
+        # were milled this way, repeat this process." (Grindstone.) The third
+        # wrapper and the same reading for the same reason: the target is
+        # announced once as the ability is activated (CR 602.2b) and every
+        # round uses the seat the announcement chose. `picker_sweep` caught it
+        # the round the kind was invented, which is the Roots class arriving
+        # through the door a new wrapper opens.
+        if instruction.kind in (
+            "sequence", "repeat_optional_process", "repeat_process_while",
+        ):
             nested = _from_instructions(instruction.payload.get("steps") or ())
             if nested is not None:
                 return nested

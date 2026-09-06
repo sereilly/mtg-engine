@@ -152,6 +152,13 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_entire_library": "zones",
     "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",
+    # The pile spelling of the row above (Duplicity, Scroll Rack): the same
+    # hidden zone, a quantifier up.
+    "exile_hand_pile": "zones",
+    # Scroll Rack's other two sentences: cards off a library into a hand
+    # (not a draw — CR 121.3) and the linked pile back on top of it.
+    "put_library_top_into_hand": "zones",
+    "put_exiled_pile_on_library": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",

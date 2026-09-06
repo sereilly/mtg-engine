@@ -375,3 +375,84 @@ def parse_bin_revealed_card(stream: TokenStream) -> "ast.Statement | None":
         stream.reset(mark)
         return None
     return ast.BinRevealedCard(owner)
+
+
+#: Where each half of a graveyard pick may be printed to go. Two closed lists
+#: for `_SORTED_MATCH_ZONES`' reason: the chosen card and the rest go different
+#: ways, and a word outside these refuses the line rather than lowering onto a
+#: fate nothing carries out.
+_PICKED_CARD_FATES: dict[str, str] = {"exile": "exile"}
+_OTHER_CARD_FATES: dict[str, str] = {"hand": "hand", "graveyard": "graveyard"}
+
+
+def parse_graveyard_top_opponent_chooses(
+    stream: TokenStream, chooser: "ast.PlayerRef",
+) -> "ast.GraveyardTopOpponentChooses | None":
+    """``chooses one of the top <N> cards of your graveyard. Exile that card and
+    put the other one into your hand.`` at the cursor, with the subject already
+    read — or None with the cursor where it was. (Phyrexian Grimoire.)
+
+    Both sentences, for :class:`ast.GraveyardTopOpponentChooses`' reason: "that
+    card" is the pick and "the other one" is the rest of the same pile, and
+    apart they name nothing.
+
+    **No reveal**, and that is CR 400.2 rather than an omission: a graveyard is
+    a public zone, so there is nothing to show anybody before the choice is
+    made. The library version of this paragraph (Thran Tome) opens with one.
+
+    "**your** graveyard" is required as printed: the pile is the ability's
+    controller's, and a wording naming the chooser's own graveyard would be a
+    different card — the opponent would be picking out of their own pile and
+    the sentence behind it would put one of their cards in this seat's hand.
+
+    Refuses without consuming, so every other "…chooses…" keeps its own reading
+    and its own refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("one", "of", "the", "top"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "graveyard"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    verb = stream.peek_word()
+    if verb not in _PICKED_CARD_FATES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("that", "card", "and", "put", "the", "other"):
+        stream.reset(mark)
+        return None
+    # "the other **one**" / "the other **card**" — one referent, two printed
+    # spellings, and neither adds anything the pile has not already said.
+    if not stream.accept_word("one", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("into"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("your", "their")
+    other = stream.peek_word()
+    if other not in _OTHER_CARD_FATES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.GraveyardTopOpponentChooses(
+        count, chooser,
+        chosen_fate=_PICKED_CARD_FATES[verb],
+        other_fate=_OTHER_CARD_FATES[other],
+    )

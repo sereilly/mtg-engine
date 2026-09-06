@@ -376,6 +376,12 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
         "CR 704.5d's token sweep over graveyard/hand/exile. The exile pass "
         "calls take_card_from_exile per token; this rebuilds the other two."
     ),
+    "engine/mixins/stack/choices.py::_move_picked_pile_card": (
+        "the pile a revealed/graveyard pick came out of, and the lowering that "
+        "writes the name offers exactly 'library' (Thran Tome) or 'graveyard' "
+        "(Phyrexian Grimoire) — exile cannot reach it. Where the card *goes* "
+        "is a named zone and goes through its own seam."
+    ),
     "engine/mixins/stack/choices.py::_resolve_name_and_random_reveal": (
         "the zone Nebuchadnezzar's paragraph names, and the production accepts "
         "only 'hand' or 'library' (paragraphs._RANDOM_REVEAL_ZONES) — exile "

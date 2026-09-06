@@ -43,6 +43,7 @@ from .phrases import (
     parse_bound_subject,
 )
 from .effects import (
+    parse_graveyard_top_opponent_chooses,
     _parse_attacks_this_turn_if_able,
     parse_block_count_grant,
     parse_cant_activate_nonmana_abilities,
@@ -491,6 +492,14 @@ def parse_subject_verb(
             repeated = _parse_repeated_graveyard_pick(stream, source_spec)
             if repeated is not None:
                 return repeated
+            # "Target opponent **chooses one of the top two cards of your
+            # graveyard**. …" (Phyrexian Grimoire.) Same reason as every arm
+            # above: it declines without consuming, where the paragraph below
+            # expects "a card name" from its second word and would fail the
+            # line on "one".
+            top_of_pile = parse_graveyard_top_opponent_chooses(stream, source_spec)
+            if top_of_pile is not None:
+                return top_of_pile
             return _parse_name_then_reveal_top(stream, source_spec)
         # "Each opponent sacrifices a creature" (Goremand). The AST node has
         # carried its player since it was written; only the *bare* imperative
