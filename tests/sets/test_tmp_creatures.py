@@ -1299,3 +1299,224 @@ def test_w1g5_a_bare_becomes_blocked_trigger_refuses_the_tuck():
     )
     with _pytest.raises(LoweringError):
         lower_ability(node)
+
+
+# --- W2G1: the Licid cycle, and the two Rootwater merfolk -------------------
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1Player
+from engine.auras import attach_aura as _w2g1_attach, detach_aura as _w2g1_detach
+from engine.card_loader import load_cards as _w2g1_load
+from engine.card_loader import manifest_set_path as _w2g1_path
+from engine.cast_timing import casts_at_instant_speed as _w2g1_flash
+from engine.models import Permanent as _W2G1Perm
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.special_actions import (
+    available_permanent_special_actions as _w2g1_offers,
+    take_permanent_special_action as _w2g1_take,
+)
+
+_W2G1_LEA = {c.name: c for c in _w2g1_load(_w2g1_path("LEA"))}
+
+
+def _w2g1_perm(card):
+    permanent = _W2G1Perm(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1_duel(mine, theirs=(), pool=None):
+    p0 = _W2G1Player(name="P0", battlefield=list(mine), life=20,
+                     mana_pool=dict(pool or {}))
+    p1 = _W2G1Player(name="P1", battlefield=list(theirs), life=20)
+    game = _W2G1Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.priority_player_index = 0
+    game._sync_control()
+    game._refresh_dynamic_creatures()
+    return game, p0, p1
+
+
+def _w2g1_licid_attached(set_pool, name, host="Trained Armodon"):
+    """*name* activated onto a fresh *host*, with the stack emptied."""
+    tmp = set_pool("TMP")
+    licid, bear = _w2g1_perm(tmp[name]), _w2g1_perm(tmp[host])
+    game, p0, p1 = _w2g1_duel(
+        [licid, bear], pool={"W": 3, "U": 3, "B": 3, "R": 3, "G": 3}
+    )
+    game.activate_permanent_ability(
+        0, name, ability_index=0,
+        target_permanent_index=1, target_player_index=0,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+    game.priority_player_index = 0
+    return game, licid, bear, p0, p1
+
+
+@pytest.mark.parametrize("name", [
+    "Enraging Licid", "Leeching Licid", "Nurturing Licid",
+    "Quickening Licid", "Stinging Licid",
+])
+def test_w2g1_every_licid_becomes_an_attached_aura_enchantment(set_pool, name):
+    """The cycle's one printed line, on all five.
+
+    22 of the top 40 shared fragments in the ingest census were these five
+    cards, which is what makes this a production rather than five hooks: the
+    parse, the type change and the attach are the same code for every one of
+    them, and the only thing that differs between the cards is the mana symbol.
+    """
+    game, licid, bear, _p0, _p1 = _w2g1_licid_attached(set_pool, name)
+
+    assert not licid.is_creature
+    assert licid.has_type("aura") and licid.has_type("enchantment")
+    assert not licid.has_type("licid"), "CR 205.1a: the creature types go too"
+    assert licid.metadata.get("attached_to") is bear
+    assert "loses this ability" not in (licid.effective_card.oracle_text or "")
+
+
+def test_w2g1_enraging_licid_grants_its_host_haste_only_while_attached(set_pool):
+    """"Enchanted creature has haste."
+
+    Printed on a **creature**, which is why the support gate had to learn it:
+    CR 303.4m says an ability referring to the "enchanted [object]" refers to
+    whatever the permanent is attached to *even if it isn't an Aura*, and a
+    Licid is a creature until its own ability has run. The grant is derived
+    from the attachment on every recompute, so ending the effect takes it away
+    with nothing to undo.
+    """
+    tmp = set_pool("TMP")
+    licid, bear = _w2g1_perm(tmp["Enraging Licid"]), _w2g1_perm(tmp["Trained Armodon"])
+    game, _p0, _p1 = _w2g1_duel([licid, bear], pool={"R": 2})
+    assert not game._has_keyword(bear, "haste")
+
+    game.activate_permanent_ability(
+        0, "Enraging Licid", ability_index=0,
+        target_permanent_index=1, target_player_index=0,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game._has_keyword(bear, "haste")
+
+    game.priority_player_index = 0
+    assert _w2g1_take(game, 0, licid, "end_own_continuous_effect") is None
+    assert not game._has_keyword(bear, "haste")
+    assert licid.is_creature
+
+
+def test_w2g1_a_licid_aura_carries_its_own_activated_ability(set_pool):
+    """Nurturing Licid's "{G}: Regenerate enchanted creature." is the Aura's
+    ability, activated after the type change — which is only possible because
+    the ability it *loses* is the one that ran, named by
+    ``context.ability_text`` rather than matched against the card's text."""
+    game, licid, bear, _p0, _p1 = _w2g1_licid_attached(set_pool, "Nurturing Licid")
+
+    program = _w2g1_compile(licid.effective_card)
+    assert [a.source_line for a in program.activated_abilities] == [
+        "{G}: Regenerate enchanted creature."
+    ]
+    result = game.activate_permanent_ability(0, "Nurturing Licid", ability_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert result.supported, result.details
+
+
+def test_w2g1_stinging_licid_watches_the_creature_it_enchants(set_pool):
+    """"Whenever enchanted creature becomes tapped, this creature deals 2
+    damage to that creature's controller." — the trigger belongs to the Aura,
+    so it is announced by the tap seam through the attachment rather than by
+    the host's own scan."""
+    game, _licid, bear, p0, _p1 = _w2g1_licid_attached(set_pool, "Stinging Licid")
+
+    before = p0.life
+    game.become_tapped(bear)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert p0.life == before - 2
+
+
+def test_w2g1_a_licid_dies_with_the_creature_it_enchants(set_pool):
+    """CR 704.5m: an Aura attached to nothing is put into its owner's graveyard.
+
+    The Licid is a real Aura by then — not a creature carrying an attachment
+    record — so the sweep that has always policed Auras finds it with no branch
+    of its own.
+    """
+    game, licid, bear, p0, _p1 = _w2g1_licid_attached(set_pool, "Enraging Licid")
+
+    game.remove_from_battlefield(bear)
+    game._permanent_to_graveyard(p0, bear)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(licid)
+    assert "Enraging Licid" in [c.name for c in p0.graveyard]
+
+
+def test_w2g1_rootwater_matriarch_holds_a_creature_only_while_it_is_enchanted(set_pool):
+    """"{T}: Gain control of target creature for as long as that creature is
+    enchanted." CR 611.2b, with the condition about the **stolen** permanent
+    rather than about the source — the first such row in
+    ``control.LINKED_CONTROL_CONDITIONS``, and the reason the sweep asks it of
+    the permanent it is already holding."""
+    tmp, lea = set_pool("TMP"), _W2G1_LEA
+    matriarch = _w2g1_perm(tmp["Rootwater Matriarch"])
+    bear = _w2g1_perm(tmp["Trained Armodon"])
+    strength = _w2g1_perm(lea["Holy Strength"])
+    game, _p0, _p1 = _w2g1_duel([matriarch], [bear, strength])
+    _w2g1_attach(strength, bear)
+    game._refresh_dynamic_creatures()
+    assert game.controller_index_of(bear) == 1
+
+    game.activate_permanent_ability(
+        0, "Rootwater Matriarch", ability_index=0,
+        target_permanent_index=0, target_player_index=1,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.check_state_based_actions()
+    assert game.controller_index_of(bear) == 0
+
+    _w2g1_detach(strength, bear)
+    game.check_state_based_actions()
+    assert game.controller_index_of(bear) == 1
+
+
+def test_w2g1_rootwater_matriarch_never_starts_on_an_unenchanted_creature(set_pool):
+    """CR 611.2b's other half: "If the 'for as long as' duration never starts,
+    the effect does nothing." A creature nobody has enchanted is a legal target
+    the ability simply does nothing to — not one it steals for the instant
+    before the state-based sweep hands it back."""
+    tmp = set_pool("TMP")
+    matriarch = _w2g1_perm(tmp["Rootwater Matriarch"])
+    bear = _w2g1_perm(tmp["Trained Armodon"])
+    game, _p0, _p1 = _w2g1_duel([matriarch], [bear])
+
+    game.activate_permanent_ability(
+        0, "Rootwater Matriarch", ability_index=0,
+        target_permanent_index=0, target_player_index=1,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert game.controller_index_of(bear) == 1
+    assert any("is not enchanted" in line for line in game.log)
+
+
+def test_w2g1_rootwater_shaman_flashes_in_creature_auras_for_its_controller(set_pool):
+    """"You may cast Aura spells with enchant creature as though they had
+    flash." CR 611.1's continuous effect over CR 702.8a's timing, derived from
+    the permanent's own text at the one seam both timing gates ask.
+
+    Three narrowings, each of which would be an ability wider than the card:
+    the Aura's enchant clause, the card type, and "**you** may cast" (CR 109.5).
+    """
+    tmp, lea = set_pool("TMP"), _W2G1_LEA
+    shaman = _w2g1_perm(tmp["Rootwater Shaman"])
+    game, _p0, _p1 = _w2g1_duel([shaman])
+
+    assert _w2g1_flash(lea["Holy Strength"], game, 0), "enchant creature"
+    assert not _w2g1_flash(lea["Psychic Venom"], game, 0), "enchant land"
+    assert not _w2g1_flash(tmp["Trained Armodon"], game, 0), "not an Aura"
+    assert not _w2g1_flash(lea["Holy Strength"], game, 1), "the opponent's spell"
