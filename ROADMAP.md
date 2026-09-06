@@ -914,7 +914,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Tempest (TMP) — measured (227/335 at ingest, manifest index 17)
+## Tempest (TMP) — shipped (335/335, manifest index 17)
 
 **Ingest census: 227/335 supported (67.8%), 309 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-05 at release date 1997-10-14, which
@@ -1189,6 +1189,76 @@ block comes **first**.
 whose `main` copy no longer did, because the **integrator** had edited an earlier
 group's block when a decline expired mid-wave. The assertion is right and worth
 keeping; the fallback is a union at the *hunk* rather than at the file.
+
+### Where the set landed
+
+**Tempest ships at 335/335, manifest index 17**, between Weatherlight
+(1997-06-09) and Core Set 2021. The pool goes 2,515 -> **2,824** unique cards
+over nineteen sets, and printings 4,252 -> **4,587**.
+
+| | at ingest | shipped |
+| --- | --: | --: |
+| supported | 227 (67.8%) | **335 (100%)** |
+| instruction-less ability parts | 9 | **0** |
+| cards with an unclaimed sentence | 26 | **0** |
+| picker findings | 5 | **0** |
+| name-keyed hooks | 1 | **1** (Power Sink, inherited with the reprint) |
+
+**Four waves, eighteen group agents, four pre-split agents and two promotion
+agents.** 227 -> 275 -> 317 -> 332 -> 335. The waves cost roughly one
+integrator-hour per wave-hour, which is the ratio Ice Age recorded and this set
+did not improve on; what changed is *where* it went — almost none of it on
+cards, and most on the three splits no branch caused.
+
+**Zero hooks added across 335 cards, and reliance fell while the pool grew 12%**
+— 2.3% -> 2.1% of supported cards. That is the fourth set to reach 100% with
+none added and by far the largest; the instruction in every brief did the work,
+not the reviewer.
+
+**The set's own machinery was two keywords and a cycle.** Shadow (CR 702.28)
+took 25 cards, buyback (CR 702.27) twelve, and the five Licids one production
+that rewrites a creature into an Aura. Everything else was text.
+
+### What the waves found that Tempest did not print
+
+**Around twenty already-shipped cards were mis-playing**, none of them in
+Tempest, and **not one was visible to any census this repo has**. They are worth
+listing because the population is the argument for the Rock Hydra step:
+
+* **Vertigo** and **Spinning Darkness** killed creatures their printed
+  narrowings exclude — a spell whose *second* sentence makes its program a
+  `sequence` reached no arm of the cast-target validator, so CR 601.2c was
+  enforced only through a spec carrying a hand-written handful of narrowings.
+  Seven more spells accepted an illegal announcement and then did nothing.
+* **Zombie Master**'s granted regeneration was reachable only by a Zombie with
+  no ability of its own — eleven shipped Zombies could never use it.
+* **Titania's Song** removed two of the four kinds of ability.
+* **The Tabernacle at Pendrell Vale** asked its upkeep toll twice per creature.
+* **Total War** destroyed the creatures its own sentence exempts and **Mudslide**
+  let players untap creatures *with* flying — one matcher returning early past
+  every key tested after its controller block.
+* Six cards printing "destroy" got CR 701.8's **sacrifice** from the end-step
+  sweep (Nettling Imp, Norritt, Arcum's Whistle, Siren's Call, Berserk, Dragon
+  Whelp).
+* **Shattered Crypt** returned the wrong card for X=1 and **Jester's Cap** /
+  **Jester's Mask** let a searcher find fewer cards than CR 701.23d requires —
+  with an Ice Age test asserting the under-find as correct.
+* **Ugin, the Spirit Dragon** exiled the colourless permanents its sentence
+  excludes, because a parsed narrowing was assigned to a bare local instead of
+  the filter field. The guard written for exactly that class **passed**: it
+  compares *declared* draft fields against the builder, and a bare local is not
+  a field.
+* **Fellwar Stone** read CR 106.7 off Scryfall's `produced_mana`, so an
+  opponent's lone Reflecting Pool made it tap for any colour.
+* **Pursued Whale**'s Pirate token obliged nobody to attack — in a corpus no
+  census walks, *text a card grants a token*.
+* **Damping Field + Ornithopter** was a live 400 in the browser: three readers
+  of "what type is this?", the narrowest one enforcing.
+
+And at the promotion gate, four **triggered** abilities announced themselves on
+the stack as **spells**, because their effect label fell through to a
+grammar-family default with no `triggered_` prefix and `web/serialization.py`
+derives `is_triggered` from exactly that prefix.
 
 ## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 

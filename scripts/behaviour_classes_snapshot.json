@@ -19,6 +19,7 @@
     "Grizzly Bears",
     "Headless Horseman",
     "Hill Giant",
+    "Horned Turtle",
     "Hurloon Minotaur",
     "Ironroot Treefolk",
     "Jasmine Boreal",
@@ -28,6 +29,7 @@
     "Keepers of the Faith",
     "Kobolds of Kher Keep",
     "Lady Orca",
+    "Lowland Giant",
     "Merfolk of the Pearl Trident",
     "Mons's Goblin Raiders",
     "Moss Monster",
@@ -49,6 +51,7 @@
     "Tobias Andrion",
     "Tor Giant",
     "Torsten Von Ursus",
+    "Trained Armodon",
     "Viashino Warrior",
     "Vodalian Soldiers",
     "Walking Corpse",
@@ -57,15 +60,18 @@
   ],
   [
     "Air Elemental",
+    "Armored Pegasus",
     "Azure Drake",
     "Bird Maiden",
     "Concordia Pegasus",
     "Feral Shadow",
+    "Fighting Drake",
     "Flying Men",
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites",
-    "Willow Faerie"
+    "Willow Faerie",
+    "Wind Drake"
   ],
   [
     "Abbey Gargoyles",
@@ -102,6 +108,14 @@
     "Moor Fiend",
     "Pygmy Allosaurus",
     "Warthog"
+  ],
+  [
+    "Divine Transformation",
+    "Feast of the Unicorn",
+    "Giant Strength",
+    "Hero's Resolve",
+    "Holy Strength",
+    "Unholy Strength"
   ],
   [
     "Elvish Archers",
@@ -168,18 +182,18 @@
     "Scalebane's Elite"
   ],
   [
-    "Divine Transformation",
-    "Feast of the Unicorn",
-    "Giant Strength",
-    "Holy Strength",
-    "Unholy Strength"
-  ],
-  [
     "Dwarven Song",
     "Heaven's Gate",
     "Sea Kings' Blessing",
     "Sylvan Paradise",
     "Touch of Darkness"
+  ],
+  [
+    "Emerald Medallion",
+    "Jet Medallion",
+    "Pearl Medallion",
+    "Ruby Medallion",
+    "Sapphire Medallion"
   ],
   [
     "Hematite Talisman",
@@ -189,16 +203,47 @@
     "Onyx Talisman"
   ],
   [
+    "Ice Storm",
+    "Rain of Tears",
+    "Sinkhole",
+    "Stone Rain",
+    "Winter's Grasp"
+  ],
+  [
     "Archangel",
     "Bay Falcon",
     "Tempest Drake",
     "Zephyr Falcon"
   ],
   [
+    "Benthic Behemoth",
+    "Devouring Deep",
+    "Pale Bears",
+    "Segovian Leviathan"
+  ],
+  [
+    "Clergy en-Vec",
+    "Femeref Healer",
+    "Orim, Samite Healer",
+    "Samite Healer"
+  ],
+  [
     "Deathlace",
     "Lifelace",
     "Purelace",
     "Thoughtlace"
+  ],
+  [
+    "Firefly",
+    "Granite Gargoyle",
+    "Hellkite Punisher",
+    "Shivan Dragon"
+  ],
+  [
+    "Metallic Sliver",
+    "Obsianus Golem",
+    "Phyrexian Hulk",
+    "Phyrexian Walker"
   ],
   [
     "Bog Imp",
@@ -216,14 +261,29 @@
     "Warrior's Honor"
   ],
   [
+    "Canopy Spider",
+    "Giant Mantis",
+    "Giant Spider"
+  ],
+  [
+    "Cat Warriors",
+    "Heartwood Treefolk",
+    "Shanodin Dryads"
+  ],
+  [
+    "Colossal Dreadmaw",
+    "Rootbreaker Wurm",
+    "Wildwood Patrol"
+  ],
+  [
     "Darkness",
     "Fog",
     "Holy Day"
   ],
   [
-    "Devouring Deep",
-    "Pale Bears",
-    "Segovian Leviathan"
+    "Dauthi Marauder",
+    "Soltari Foot Soldier",
+    "Thalakos Sentry"
   ],
   [
     "Drowned",
@@ -231,19 +291,19 @@
     "Walking Dead"
   ],
   [
+    "Ekundu Griffin",
+    "Sky Spirit",
+    "Thunder Spirit"
+  ],
+  [
     "Fetid Horror",
     "Frozen Shade",
     "Hoar Shade"
   ],
   [
-    "Granite Gargoyle",
-    "Hellkite Punisher",
-    "Shivan Dragon"
-  ],
-  [
-    "Ice Storm",
-    "Sinkhole",
-    "Stone Rain"
+    "Prodigal Sorcerer",
+    "Rootwater Hunter",
+    "Zuran Spellcaster"
   ],
   [
     "Spirit Shield",
@@ -265,6 +325,10 @@
   [
     "Anaba Bodyguard",
     "Tundra Wolves"
+  ],
+  [
+    "Armor Sliver",
+    "Barbed Sliver"
   ],
   [
     "Armor of Faith",
@@ -295,16 +359,20 @@
     "Counterspell"
   ],
   [
+    "Canyon Wildcat",
+    "Mountain Goat"
+  ],
+  [
     "Carapace",
     "Thrull Retainer"
   ],
   [
-    "Cat Warriors",
-    "Shanodin Dryads"
-  ],
-  [
     "Cemetery Gate",
     "Wall of Light"
+  ],
+  [
+    "Charging Rhino",
+    "Stalking Tiger"
   ],
   [
     "Clay Statue",
@@ -315,10 +383,6 @@
     "Cloud Elemental"
   ],
   [
-    "Colossal Dreadmaw",
-    "Wildwood Patrol"
-  ],
-  [
     "D'Avenant Archer",
     "Heavy Ballista"
   ],
@@ -327,12 +391,12 @@
     "Sea Serpent"
   ],
   [
-    "Dwarven Nomad",
-    "Dwarven Warriors"
+    "Deadly Insect",
+    "Pincher Beetles"
   ],
   [
-    "Ekundu Griffin",
-    "Thunder Spirit"
+    "Dwarven Nomad",
+    "Dwarven Warriors"
   ],
   [
     "El-Hajj\u00e2j",
@@ -345,10 +409,6 @@
   [
     "Essence Flare",
     "Unstable Mutation"
-  ],
-  [
-    "Femeref Healer",
-    "Samite Healer"
   ],
   [
     "Feral Instinct",
@@ -383,12 +443,12 @@
     "Titanic Growth"
   ],
   [
-    "Giant Mantis",
-    "Giant Spider"
-  ],
-  [
     "Goblin Mutant",
     "Orgg"
+  ],
+  [
+    "Gorilla Chieftain",
+    "Skyshroud Troll"
   ],
   [
     "Grasp of Darkness",
@@ -439,6 +499,10 @@
     "Ritual of Steel"
   ],
   [
+    "Living Plane",
+    "Nature's Revolt"
+  ],
+  [
     "Mesa Falcon",
     "Pearl Dragon"
   ],
@@ -463,10 +527,6 @@
     "Southern Paladin"
   ],
   [
-    "Obsianus Golem",
-    "Phyrexian Walker"
-  ],
-  [
     "Orcish Artillery",
     "Orcish Cannoneers"
   ],
@@ -487,10 +547,6 @@
     "Snow-Covered Plains"
   ],
   [
-    "Prodigal Sorcerer",
-    "Zuran Spellcaster"
-  ],
-  [
     "Resurrection",
     "Rise Again"
   ],
@@ -499,12 +555,20 @@
     "Thicket Basilisk"
   ],
   [
+    "Shatter",
+    "Verdigris"
+  ],
+  [
     "Sisay's Ring",
     "Sol Ring"
   ],
   [
     "Snow-Covered Swamp",
     "Swamp"
+  ],
+  [
+    "Soltari Monk",
+    "Soltari Priest"
   ],
   [
     "Wall of Fire",

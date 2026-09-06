@@ -21,6 +21,13 @@
   ]
  },
  {
+  "card": "Aftershock",
+  "clause": "destroy target artifact, creature, or land. aftershock deals 3 damage to you",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Aku Djinn",
   "clause": "put a +1/+1 counter on each creature each opponent controls",
   "ignored": [
@@ -83,6 +90,13 @@
   "clause": "that player draws an additional card, then discards a card",
   "ignored": [
    "additional"
+  ]
+ },
+ {
+  "card": "Apocalypse",
+  "clause": "exile all permanents. you discard your hand",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -181,6 +195,13 @@
   "clause": "you gain life equal to the number of creature cards in your graveyard",
   "ignored": [
    "cards"
+  ]
+ },
+ {
+  "card": "Boil",
+  "clause": "destroy all islands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -384,6 +405,13 @@
   ]
  },
  {
+  "card": "Duplicity",
+  "clause": "you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Dwarven Catapult",
   "clause": "dwarven catapult deals x damage divided evenly, rounded down, among all creatures target opponent controls",
   "ignored": [
@@ -502,6 +530,13 @@
   "ignored": [
    "cards",
    "or"
+  ]
+ },
+ {
+  "card": "Extinction",
+  "clause": "destroy all creatures of the creature type of your choice",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -838,6 +873,13 @@
   ]
  },
  {
+  "card": "Interdict",
+  "clause": "counter target activated ability from an artifact, creature, enchantment, or land. that permanent's activated abilities can't be activated this turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Ivory Charm",
   "clause": "all creatures get -2/-0 until end of turn",
   "ignored": [
@@ -918,6 +960,20 @@
   ]
  },
  {
+  "card": "Legacy's Allure",
+  "clause": "gain control of target creature with power less than or equal to the number of treasure counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Legerdemain",
+  "clause": "exchange control of target artifact or creature and another target permanent that shares one of those types with it",
+  "ignored": [
+   "another"
+  ]
+ },
+ {
   "card": "Lesser Werewolf",
   "clause": "if this creature's power is 1 or more, it gets -1/-0 until end of turn and put a -0/-1 counter on target creature blocking or blocked by this creature",
   "ignored": [
@@ -932,8 +988,31 @@
   ]
  },
  {
+  "card": "Living Death",
+  "clause": "each player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield",
+  "ignored": [
+   "all",
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Llanowar Druid",
   "clause": "untap all forests",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Lobotomy",
+  "clause": "target player reveals their hand, then you choose a card other than a basic land card from it. search that player's graveyard, hand, and library for all cards with the same name as the chosen card and exile them. then that player shuffles",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
+  "card": "Magnetic Web",
+  "clause": "all creatures with magnet counters on them block that creature this turn if able",
   "ignored": [
    "all"
   ]
@@ -1040,6 +1119,13 @@
   ]
  },
  {
+  "card": "Needle Storm",
+  "clause": "needle storm deals 4 damage to each creature with flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Nevinyrral's Disk",
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
@@ -1072,6 +1158,13 @@
   "clause": "regenerate target black or green creature",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Perish",
+  "clause": "destroy all green creatures. they can't be regenerated",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1131,6 +1224,13 @@
   ]
  },
  {
+  "card": "Rats of Rath",
+  "clause": "destroy target artifact, creature, or land you control",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Reality Ripple",
   "clause": "target artifact, creature, or land phases out",
   "ignored": [
@@ -1161,6 +1261,13 @@
    "all",
    "all",
    "all"
+  ]
+ },
+ {
+  "card": "Renegade Warlord",
+  "clause": "each other attacking creature gets +1/+0 until end of turn",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -1304,6 +1411,13 @@
   ]
  },
  {
+  "card": "Shadowstorm",
+  "clause": "shadowstorm deals 2 damage to each creature with shadow",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Shatterstorm",
   "clause": "destroy all artifacts. they can't be regenerated",
   "ignored": [
@@ -1414,6 +1528,13 @@
   "clause": "distribute x +1/+1 counters among any number of target creatures",
   "ignored": [
    "target"
+  ]
+ },
+ {
+  "card": "Spontaneous Combustion",
+  "clause": "spontaneous combustion deals 3 damage to each creature",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -1657,6 +1778,13 @@
   ]
  },
  {
+  "card": "Twitch",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Ugin, the Spirit Dragon",
   "clause": "exile each permanent with mana value x or less that's one or more colors",
   "ignored": [
@@ -1789,6 +1917,13 @@
   "clause": "you may put a faerie permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Winds of Rath",
+  "clause": "destroy all creatures that aren't enchanted. they can't be regenerated",
+  "ignored": [
+   "all"
   ]
  },
  {
