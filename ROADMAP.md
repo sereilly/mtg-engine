@@ -1124,6 +1124,70 @@ Prayer work cleared it first — the third interlock in two waves, and the secon
 where a decline written as a list of parts was finished by a group that never
 read the card.
 
+### Wave 3 closed: 317 -> 332 of 335, and the declines are what bought it
+
+Five groups over the eighteen cards every earlier wave had declined. **Supported
+317 -> 332**, with `--hollow-lines` and `parse_coverage --set TMP` held at
+**zero** throughout — no group made a card supported by admitting a sentence
+nothing implements. Zero hooks added for the third wave running, and **one
+retired**: two of Siren's Call's three lines left its name-keyed entry for the
+grammar when the attack-requirement machinery it had been standing in for
+finally existed.
+
+**Every card in this wave was reachable because its decline had been written as
+a list of individually named parts**, and re-probing those lists is where the
+wave's real finding is: **the piece was usually already built.** Ertai's
+Meddling's five parts came back three-already-built — counters on a card in
+exile (`engine/exiled_records.py`, which All Hallow's Eve ships on), an upkeep
+trigger fired off an exiled record, and a stack copy carrying targets, X and
+modes. Coffin Queen's three came back two-expired: `exile_bound_permanent` has
+had a kind, a lowering *and* a handler since Zirilan of the Claw, and the
+`REANIMATED_PERMANENTS` binding is Necromancy's, from Mirage. Excavator's
+"a cost that records what it sacrificed" was answered by `sacrificed_for_cost`,
+already written at both of `activation.py`'s sacrifice-cost sites and already
+read by three handlers. **A decline ages in the direction of becoming free.**
+
+**Seven more shipped cards were mis-playing**, none in Tempest. `subject_matches`
+returned early for four named controller values, skipping every key tested after
+the controller block: **Total War** destroyed the creatures its own sentence
+exempts and **Mudslide** let a player untap creatures *with* flying, both with
+the dropped key sitting in the compiled payload the whole way. The end step's
+delayed-removal sweep treated a **destruction as a sacrifice**, so Nettling Imp,
+Norritt, Arcum's Whistle, Siren's Call, Berserk and Dragon Whelp all printed
+"destroy" and none of them got CR 701.8's meaning of it. **Shattered Crypt**
+returned one card for any X while charging the full X in life — three readers of
+one number, each defaulting quietly. **Jester's Cap** and **Jester's Mask** let a
+searcher find fewer cards than CR 701.23d requires, and an Ice Age test
+*asserted the under-find as correct*. And **Ugin, the Spirit Dragon**'s
+"that's one or more colors" was parsed into a bare local instead of the filter
+field, so its sweep exiled the colourless permanents the card excludes — found
+by the Phase 0 pre-split, fixed in its own commit because a split may not move a
+compiled program.
+
+**Three splits, and all three were the integrator's.** `postmodifiers.py` was
+pre-split at Phase 0 (the record clauses became `histories.py`);
+`tests/sets/test_tmp_creatures.py` crossed 2,600 and `lowering/keywords.py`
+crossed 1,000 at integration, each by two groups' additions summing with neither
+branch at fault. The keyword split went along that module's own first line —
+"granting one, and taking one away" — with the two helpers both halves shared
+going down to `_common`, where a fragment two families need belongs.
+
+**Two integration hazards this set found that the playbook had not named.**
+
+*A missing-name scan must respect **execution order** for module-level code.*
+The test-file split failed to collect on `NameError: pytest`, with `import
+pytest` present at line 746 and a module-level `@pytest.mark.parametrize` at
+line 281. A scan that asks whether a name is imported *somewhere* answers "yes"
+and the collection still raises. The block convention makes each block
+self-contained in isolation; it does not survive a split that changes which
+block comes **first**.
+
+*The per-set reconstruction's premise is that only groups append.* Its assertion
+— both sides start with the merge base byte for byte — fired correctly on a file
+whose `main` copy no longer did, because the **integrator** had edited an earlier
+group's block when a decline expired mid-wave. The assertion is right and worth
+keeping; the fallback is a union at the *hunk* rather than at the file.
+
 ## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 
 **Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the
