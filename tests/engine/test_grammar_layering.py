@@ -956,7 +956,7 @@ def test_layers_only_import_downward(layers):
         # board, split out at the size guard, and `conditions` reads it because
         # the `Condition` union is the roof over both halves. A floor, not a
         # family — nothing reads back.
-        ("ast", ("_core", "_primitives", "_references", "costs", "records"), ("statements",)),
+        ("ast", ("_core", "_primitives", "_references", "_seats", "costs", "records"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -1209,6 +1209,16 @@ FAMILY_SHARED = {
     # the cost nodes. All three are floors, not families: `_core` re-exports
     # what they define, so no family imports them directly.
     "_primitives", "_references", "costs",
+    # `_seats` split out of `_references` at Weatherlight's wave 2, when that
+    # module reached the guard with four lines of headroom and no owning group.
+    # The line is the one `references.py` one layer up already states: CR 109 is
+    # what an object is, CR 115 is how a spell chooses one, and a player
+    # (CR 102) is not an object at all — so `ObjectFilter` and `TargetSpec` stay
+    # and the two nodes naming *which seats* leave. It reuses the name
+    # `lowering/_seats.py` has carried since it left `_common`, so the mirror
+    # re-forms instead of forking. A floor, not a family: `_references` reads
+    # `PlayerDeed` only as an annotation and `_core` re-exports both names.
+    "_seats",
     # `_amounts` split out of `lowering/damage.py` the next time that module
     # reached the size guard, along CR 107.2/107.3's line: a quantity that is
     # **counted** — off a board, out of the resolution's own scratchpad, or off

@@ -23,8 +23,9 @@ from typing import Union
 # uses for the shared vocabulary, and the 1,000-line split that moved these
 # nodes out must not become 60 edited import lines elsewhere.
 from ._primitives import AnyNumber, Fixed
-from ._references import (Comparison, ObjectFilter, PlayerDeed, PlayerRef,
-                          SourceRelativeComparison, TargetSpec)
+from ._references import (Comparison, ObjectFilter, SourceRelativeComparison,
+                          TargetSpec)
+from ._seats import PlayerDeed, PlayerRef
 
 
 
