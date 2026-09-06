@@ -273,9 +273,23 @@ PARSE_LAYERS = [
     # families that may not import each other, and below `subject_verb`, which
     # hands it the statement it has already parsed.
     "conjuncts",
-    # Delayed triggered abilities, and the opener that binds one. Below
-    # `statements`, which hands it `parse_statement` rather than being
-    # imported back — a delayed trigger contains a whole statement.
+    # Which delayed-trigger event a printed opener names — the table of
+    # "at the beginning of <step>" rows and the productions that read a
+    # "when <object> <verb>" one. Pre-split out of `delayed` at Tempest's
+    # Phase 0, when two of the wave's cards would both have reached that
+    # module and neither could own it. The line is the one its own docstring
+    # already drew — "which event, and what the later sentence is allowed to
+    # refer back to" — and this is the first half, which is also the half that
+    # grows with the pool: a row or a production per new printed wording,
+    # where what stays is a walk over the dataclass fields that covers a new
+    # node by default. **Not** cut between the trailing and leading spellings,
+    # which is where the module's shape invites it: both read the same table
+    # and the same sub-production, so that cut buys no room. Below `delayed`,
+    # which asks these and is never imported back.
+    "delay_openers",
+    # Delayed triggered abilities, and what the sentence one wraps may refer
+    # back to. Below `statements`, which hands it `parse_statement` rather
+    # than being imported back — a delayed trigger contains a whole statement.
     "delayed",
     # ``Choose <something>.`` and the sentence that binds what it chose — the
     # target form, the keyword/land-type form, and the probe both live on.

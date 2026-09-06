@@ -16,9 +16,9 @@ from .errors import GrammarError
 from .paragraphs import (_parse_reassign_blockers_between_attackers,
                          _parse_cast_from_exiled_with)
 from .choices import _parse_choose_target, _parse_choose_then_gain
+from .delay_openers import parse_trailing_delay
 from .delayed import (_parse_create_delayed_trigger, delay_binds_an_object,
-                      fold_flip_stakes, parse_trailing_delay,
-                      resolve_that_turn)
+                      fold_flip_stakes, resolve_that_turn)
 from .references import parse_player_ref
 from .stream import TokenStream
 from .conditions import _parse_condition
