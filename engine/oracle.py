@@ -343,10 +343,28 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # and then fail the comma bound, taking the whole condition down with it.
      # That is exactly what it did — Mangara's Equity's third sentence compiled
      # to nothing at all.
-     r"(?P<damage_recipient_seat>you|an opponent) or"
-     r" (?P<damaged_subject>an? [^,]+)"
-     r"|(?P<damage_recipient>a player or planeswalker|a player"
+     r"(?P<damage_recipient>a player or planeswalker|a player"
      r"|an opponent|a planeswalker|you)"
+     # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
+     # an *object*: none of the fixed words above can say it, because every one
+     # of them names a player or a planeswalker. Delimited as a `damaged_subject`
+     # group, read by the same noun parser every other narrowed condition here
+     # goes through, and tested by `engine/events.py`'s filter against the
+     # permanent that took the damage — which the one damage seam already
+     # freezes (`target_permanent_id`).
+     #
+     # The seat prefix is *optional* on this branch, which is what folds
+     # Mangara's Equity's "to you or a white creature you control" back in: the
+     # union is this same noun phrase with a seat word in front of it, and two
+     # branches would need two group names for one stem.
+     #
+     # **Below** the fixed list, and the ordering is this table's usual rule
+     # read backwards: `an? [^,]+` would happily claim "a player", so the words
+     # that have a seat reading have to be offered theirs first. "you or a …"
+     # still reaches here — the fixed branch matches "you", the comma bound
+     # then fails, and the alternation backtracks into this one.
+     r"|(?:(?P<damage_recipient_seat>you|an opponent) or )?"
+     r"(?P<damaged_subject>an? [^,]+)"
      r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a

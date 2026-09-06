@@ -1030,6 +1030,23 @@ def _damage_dealt_filter(
         )
     test = _DAMAGE_RECIPIENT_TESTS.get(payload.get("damage_recipient"))
     if test is None:
+        # "…deals damage **to a creature**" (Bellowing Fiend). A recipient
+        # described by a noun phrase and by no seat word at all — so it is
+        # neither of the two branches above, and it must not fall through to
+        # "no narrowing printed", which fires on every point of damage the card
+        # narrows away.
+        #
+        # A noun phrase never names a seat: the words that do are the fixed list
+        # this test came from. So a player recipient is simply not in the set the
+        # phrase describes, which is the same answer the damager half gives a
+        # spell it cannot ask about.
+        if "damaged_filter" in payload:
+            if _is_player(recipient):
+                return False
+            return trigger_subject_matches(
+                game, trig, "damaged", recipient,
+                observer=observer, source=permanent,
+            )
         return True
     return bool(test(recipient, seat, observer))
 

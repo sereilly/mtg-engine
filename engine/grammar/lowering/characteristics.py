@@ -26,6 +26,7 @@ from ._amounts import (
     _x_definition_spec,
 )
 from ...oracle_types import MILLED_THIS_WAY
+from ._events import binds_block_pair
 from ._common import (
     chargeable_card_filter,
     _describe_targets,
@@ -176,7 +177,19 @@ def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         }),
     )
 
-def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
+def _lower_pump(
+    node: ast.Pump,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """The printed P/T modification, and which permanent it lands on.
+
+    *event* and *event_subject* are the firing trigger's kind and its printed
+    narrowing, for the one subject that is neither the source, a target, a host
+    nor a class: the other half of a block the trigger bound. They default to
+    None so the static reading in ``statics.py`` — which has no trigger at all
+    — is unchanged, and so is every caller that never had one.
+    """
     if node.per_each_milled is not None:
         return _lower_pump_per_milled(node)
     if node.per_each_tapped_this_way:
@@ -470,6 +483,51 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         )
     if _is_source(node.subject):
         return (OracleInstruction("pump_self", "", {"power": power, "toughness": toughness}),)
+    # "Whenever this creature blocks or becomes blocked by a creature, **that
+    # creature** gets +1/+1 until end of turn." (Flailing Drake.) The other half
+    # of the block the trigger fired on — named by the ids the fire site
+    # recorded rather than by anything the creature carries, which is why the
+    # relation is the whole instruction and nothing is described for a picker.
+    #
+    # ``pump_block_pair`` is the handler ``engine/flanking.py`` already builds by
+    # hand (CR 702.25a); until this branch the *printed* sentence had no road to
+    # it, so a card saying in words what flanking says in a keyword compiled to
+    # nothing.
+    #
+    # ``binds_block_pair`` is what admits it, never the kind alone: CR
+    # 509.3c/509.3d make a *bare* block trigger fire once with several creatures
+    # in hand and no way to say which "that creature" is, so the printed
+    # narrowing is the whole difference. Read **before** the target-shaped
+    # branch below, and that order is the card: on the *blocks* half of the
+    # event the stack item's target is the blocking creature itself (the fire
+    # site puts it there so a self-affecting trigger can find itself), so the
+    # fall-through would pump the Drake and leave the creature it blocked alone.
+    #
+    # "…**the other creature**" is the same referent under a different printed
+    # word, exactly as ``lowering/keywords.py`` and ``lowering/destruction.py``
+    # already read the pair's two spellings as one — and the ordinal is admitted
+    # only here, where a pair is what the trigger bound.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("that", "other")
+        and binds_block_pair(event, event_subject)
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the block-pair pump reads the creature its trigger already "
+                "named and nothing narrower",
+                node=node,
+            )
+        pair_duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+        if pair_duration is None:
+            raise LoweringError(
+                f"no sweep ends a block pair's pump at {node.duration.kind}",
+                node=node,
+            )
+        pair_payload: dict[str, object] = {"power": power, "toughness": toughness}
+        if pair_duration != "end_of_turn":
+            pair_payload["duration"] = pair_duration
+        return (OracleInstruction("pump_block_pair", "", pair_payload),)
     if _is_target(node.subject):
         assert isinstance(node.subject, ast.TargetSpec)
         payload: dict[str, object] = {"power": power, "toughness": toughness}

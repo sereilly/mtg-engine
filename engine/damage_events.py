@@ -492,6 +492,20 @@ def _announce(game, event: dict, dealt: int) -> None:
                 payload["target_player_index"] = seat
         if seat is not None:
             payload["defending_player_index"] = seat
+            # "…deals 3 damage to **that creature's controller**" (Bellowing
+            # Fiend). The seat that controlled the **damaged** permanent, which
+            # is the other end of the event from `event_subject_controller`
+            # beside it — that one is the damager's, and a card whose damager is
+            # its own source can only mean this one.
+            #
+            # Its own key rather than a second reading of `defending_player_index`:
+            # that key means the damaged *player* wherever the recipient is one,
+            # and one name meaning two things is how a phrase comes to resolve
+            # against whichever end the reader happened to assume. Frozen here
+            # (CR 603.10) because the trigger resolves off the stack and lethal
+            # damage puts the creature in a graveyard, where CR 400.7 leaves
+            # nothing with a controller to read.
+            payload["damaged_permanent_controller"] = seat
     if isinstance(recipient, PlayerState) and isinstance(source, Permanent):
         # "…if this creature dealt damage to an opponent this turn" (Whirling
         # Dervish). A *history*, so it has to be recorded as it happens

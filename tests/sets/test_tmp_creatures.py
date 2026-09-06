@@ -80,3 +80,106 @@ def test_kezzerdrix_ignores_creatures_you_control(set_pool):
     ])
 
     assert p1.life == 16
+
+
+# -- Flailing Drake ---------------------------------------------------------
+
+
+def _w1g4_to_blockers(game, attackers):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(0, attackers)
+    assert ok, msg
+    game.advance_combat_phase()   # declare blockers
+
+
+def _w1g4_block(attacker_board, blocker_board):
+    p1 = PlayerState(name="P1", battlefield=list(attacker_board))
+    p2 = PlayerState(name="P2", battlefield=list(blocker_board))
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    _w1g4_to_blockers(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+    return game
+
+
+def test_flailing_drake_pumps_the_creature_that_blocked_it(set_pool):
+    """"Whenever this creature blocks or becomes blocked by a creature, that
+    creature gets +1/+1 until end of turn."
+
+    CR 509.3d: the printed narrowing ("by a creature") is what makes the event
+    bind exactly one creature, so "that creature" names it. The handler this
+    reaches (``pump_block_pair``) is the one ``engine/flanking.py`` builds by
+    hand for CR 702.25a; until this round the printed sentence had no road to
+    it and the card compiled to nothing.
+    """
+    drake = _w1g4_perm(set_pool("TMP")["Flailing Drake"])
+    gargoyle = _w1g4_perm(_w1g4_lea()["Granite Gargoyle"])
+    _w1g4_block([drake], [gargoyle])
+
+    assert (gargoyle.effective_power, gargoyle.effective_toughness) == (3, 3)
+
+
+def test_flailing_drake_pumps_the_creature_it_blocks(set_pool):
+    """The *blocks* half of the same event, and the half a fall-through gets
+    backwards: on that half the stack item's target is the Drake itself, so a
+    reading that took the target would pump the Drake and leave the creature it
+    blocked alone.
+    """
+    gargoyle = _w1g4_perm(_w1g4_lea()["Granite Gargoyle"])
+    drake = _w1g4_perm(set_pool("TMP")["Flailing Drake"])
+    _w1g4_block([gargoyle], [drake])
+
+    assert (gargoyle.effective_power, gargoyle.effective_toughness) == (3, 3)
+    assert (drake.effective_power, drake.effective_toughness) == (2, 3)
+
+
+# -- Bellowing Fiend --------------------------------------------------------
+
+
+def _w1g4_through_combat_damage(game):
+    game._settle()
+    game.advance_combat_phase()   # combat damage
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+def test_bellowing_fiend_burns_the_damaged_creatures_controller(set_pool):
+    """"Whenever this creature deals damage to a creature, this creature deals
+    3 damage to that creature's controller and 3 damage to you."
+
+    Two pieces the pool had neither of: a damage trigger whose *recipient* is a
+    noun phrase rather than a seat word, and a "that creature" naming the
+    **damaged** end of the event. The damager here is spelled "this creature",
+    so the pronoun can only be the other end — read as the damager's (which is
+    what every other card printing the phrase means) the Fiend would burn its
+    own controller twice and leave the opponent untouched.
+    """
+    fiend = _w1g4_perm(set_pool("TMP")["Bellowing Fiend"])
+    gargoyle = _w1g4_perm(_w1g4_lea()["Granite Gargoyle"])
+    game = _w1g4_block([fiend], [gargoyle])
+    _w1g4_through_combat_damage(game)
+
+    assert game.players[1].life == 17
+    assert game.players[0].life == 17
+
+
+def test_bellowing_fiend_is_silent_on_damage_to_a_player(set_pool):
+    """The recipient narrowing, in the direction that matters: "to a creature"
+    is not "to anything". Dropped, an unblocked swing would burn both players
+    for 3 on top of the combat damage.
+    """
+    fiend = _w1g4_perm(set_pool("TMP")["Bellowing Fiend"])
+    p1 = PlayerState(name="P1", battlefield=[fiend])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    _w1g4_to_blockers(game, [0])
+    _w1g4_through_combat_damage(game)
+
+    assert game.players[0].life == 20
+    assert game.players[1].life == 17
