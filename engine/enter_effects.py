@@ -122,6 +122,38 @@ _CHOOSE_COLOR_ON_ENTER_RE = re.compile(
 )
 
 
+#: "As this artifact enters, choose an opponent **and a card name other than a
+#: basic land card name**." (Booby Trap.) The opponent-and-colour pair's sibling
+#: one characteristic over, and a separate reader for that pair's reason: the
+#: mixin branches on *which* second value is asked for, because the prompt it
+#: arms offers a different thing.
+#:
+#: The exclusion is part of the phrase and not a tail this drops. It is the one
+#: restriction CR 201.2 leaves on naming a card, and the resolver enforces it —
+#: a reader that matched without it would claim a line whose restriction nothing
+#: then applied.
+#:
+#: The noun is data (``[a-z]+``) for ``_CHOOSE_OPPONENT_ON_ENTER_RE``'s stated
+#: reason: a creature or an enchantment printing this sentence about itself is
+#: printing the same sentence.
+_CHOOSE_OPPONENT_AND_CARD_NAME_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose an opponent and a card name other than a "
+    r"basic land card name"
+)
+
+
+def chooses_opponent_and_card_name_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for an opponent **and** a card name as
+    the permanent enters.
+
+    A substring probe like the mixin's own, for the reason its two siblings
+    above give: the mixin asks it of the card's whole normalized text, and
+    asking the whole-line question through the same matcher is what keeps what
+    is performed and what is claimed from drifting.
+    """
+    return bool(_CHOOSE_OPPONENT_AND_CARD_NAME_ON_ENTER_RE.search(text or ""))
+
+
 def chooses_color_on_enter(text: str) -> bool:
     """Whether *text* asks its controller for a colour as the permanent enters.
 
@@ -1213,6 +1245,12 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with counted P/T counters"
     if chooses_opponent_on_enter(normalized):
         return "chooses an opponent as it enters"
+    # …and the pair (Booby Trap). Claimed beside the seat-only reading rather
+    # than under it: that one's negative lookahead already declines this
+    # sentence, so neither can take the other's line and the position here is
+    # documentation rather than precedence.
+    if chooses_opponent_and_card_name_on_enter(normalized):
+        return "chooses an opponent and a card name as it enters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
     # "…choose **black or red**" / "…choose **Island or Swamp**". The same
@@ -1262,6 +1300,7 @@ __all__ = [
     "CHOOSE_CARD_NAME_ON_ENTER",
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
     "chooses_opponent_on_enter",
+    "chooses_opponent_and_card_name_on_enter",
     "chooses_color_on_enter",
     "choose_one_of_two_on_enter",
     "chooses_two_land_types_on_enter",

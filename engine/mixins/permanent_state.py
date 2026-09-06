@@ -20,6 +20,7 @@ from ..enter_effects import (
     chooses_two_card_names_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     chooses_opponent_on_enter,
+    chooses_opponent_and_card_name_on_enter,
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
@@ -392,7 +393,15 @@ class PermanentStateMixin:
         # gets a prompt whose confirm_enter_choice overwrites the defaults
         # before anything consults them.
         needs_color = CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
-        if needs_color or chooses_opponent_on_enter(text):
+        # "As this artifact enters, choose an opponent **and a card name other
+        # than a basic land card name**." (Booby Trap.) The same pair one
+        # characteristic over: a seat and a second value, asked in one prompt.
+        # It shares this branch rather than getting one of its own because
+        # everything about the seat half is identical — the default, the
+        # opponent list, the metadata key — and only which second question is
+        # asked differs, which is what the two flags say.
+        needs_name = chooses_opponent_and_card_name_on_enter(text)
+        if needs_color or needs_name or chooses_opponent_on_enter(text):
             opponents = [
                 i for i, p in enumerate(self.players) if i != caster_index and not p.lost
             ]
@@ -410,12 +419,35 @@ class PermanentStateMixin:
                 # Jihad's anthem is conditioned on the stored choices, and the
                 # entry recalculation ran before they were stamped — recompute.
                 self._recalculate_lord_buffs()
-            if needs_color or len(opponents) > 1:
+            default_name = None
+            if needs_name:
+                # The default names a card the chooser can actually see — the
+                # priciest nonland card in the chosen seat's graveyard, else one
+                # of their permanents — for Runed Halo's stated reason: naming
+                # nothing makes the trap inert, which is legal and is not a
+                # choice any player would make (idiom 8).
+                default_name = self._default_named_card(
+                    chosen, exclude=permanent.card.name
+                )
+                permanent.metadata["chosen_card_name"] = default_name or ""
+            if needs_color or needs_name or len(opponents) > 1:
                 self.arm_pending_choice(
                     "enter_choice", caster_index,
                     card_name=permanent.card.name, permanent=permanent,
                     needs_color=needs_color, opponents=opponents,
                     default_seat=chosen, default_color=default_color,
+                    # Absent for every entry written before Booby Trap, so the
+                    # prompt those cards raise is byte-identical.
+                    **(
+                        {
+                            "needs_card_name": True,
+                            "default_card_name": default_name or "",
+                            "choices": self._nameable_cards(
+                                caster_index, exclude=permanent.card.name
+                            ),
+                        }
+                        if needs_name else {}
+                    ),
                 )
 
         # "As this enchantment enters, choose a color." (Psychic Allergy.) The

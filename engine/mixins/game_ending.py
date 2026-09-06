@@ -976,13 +976,25 @@ class GameEndingMixin:
             if drawn <= announced:
                 continue
             self.draws_announced_this_turn[seat] = drawn
-            for _ in range(drawn - announced):
+            for index in range(announced, drawn):
                 # The drawing seat travels twice, under two names and for two
                 # readers: `seat` is what the event filter narrows on ("you" or
                 # "an opponent"), and `event_subject_player` is what a "that
                 # player" in the effect resolves to (CR 603.10 — the trigger
                 # freezes it, because by resolution the turn may have moved on).
-                emit(self, "draws_card", seat=seat, event_subject_player=seat)
+                #
+                # …and so does **which card** it was: "when the chosen player
+                # draws a card **with the chosen name**" (Booby Trap) narrows on
+                # the drawn card, and the record this sweep walks is the only
+                # place that card can be read from — by resolution it is one
+                # card in a hand among many. Carried as the name rather than the
+                # object, because that is the whole of what a name comparison
+                # needs and a card object on an event outlives the zone it was
+                # read in.
+                emit(
+                    self, "draws_card", seat=seat, event_subject_player=seat,
+                    drawn_card_name=player.cards_drawn_this_turn[index].name,
+                )
 
         # "Whenever you lose life" (Oath of Lim-Dûl) — the same sweep off the
         # one record every path already writes: the life total itself.

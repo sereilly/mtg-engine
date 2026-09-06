@@ -1190,8 +1190,32 @@ def _draws_card_filter(
     observer = game.controller_index_of(permanent)
     if observer is None:
         return False
-    if trig.condition.payload.get("drawer") == "an opponent":
+    drawer = trig.condition.payload.get("drawer")
+    if drawer == "an opponent":
         return seat != observer
+    if drawer == "the chosen player":
+        # "When **the chosen player** draws a card **with the chosen name**"
+        # (Booby Trap). Both narrowings are answered off the permanent's own
+        # entry record (CR 614.1c), which is the only place either can be read:
+        # the seat was chosen as the artifact entered and the name with it, and
+        # neither is anything the announcement could carry.
+        #
+        # A permanent that recorded nothing names nobody, which is the honest
+        # reading of a trap that entered with no opponent to choose — and it is
+        # a refusal rather than a fall-back to the controller, who is the one
+        # seat this card cannot be aimed at.
+        chosen = permanent.metadata.get("chosen_player_index")
+        if not isinstance(chosen, int) or chosen != seat:
+            return False
+        if not trig.condition.payload.get("drawn_name"):
+            return True
+        named = str(permanent.metadata.get("chosen_card_name") or "").strip()
+        if not named:
+            # Nothing was named, so no card answers the description. Not "every
+            # card": that would spring the trap on the first draw, which is the
+            # opposite of what an empty choice means.
+            return False
+        return str(event.payload.get("drawn_card_name") or "") == named
     return seat == observer
 
 

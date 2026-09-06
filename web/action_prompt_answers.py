@@ -1082,7 +1082,12 @@ def _action_enter_choice_confirm(session, req, seat_type):
     # CR 201.2 bounds the choice by nothing, so any string is accepted here and
     # the one restriction the card prints (not a basic land card name) is
     # checked by the engine, beside the record it writes.
-    if pending.get("needs_card_name"):
+    #
+    # …and only where no seat is asked for beside it: "choose an opponent **and**
+    # a card name" (Booby Trap) is one prompt with two answers, so it falls
+    # through to the pair below, which sends both. The engine's resolver draws
+    # the same line in the same place and for the same reason.
+    if pending.get("needs_card_name") and not pending.get("opponents"):
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
         if not session.game.confirm_enter_choice(req.seat, card_name=req.card_name):
@@ -1090,7 +1095,11 @@ def _action_enter_choice_confirm(session, req, seat_type):
         return
     if req.target_seat is None:
         raise HTTPException(status_code=400, detail="target_seat is required")
-    if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):
+    if pending.get("needs_card_name") and not req.card_name:
+        raise HTTPException(status_code=400, detail="card_name is required")
+    if not session.game.confirm_enter_choice(
+        req.seat, req.target_seat, req.mana_color, req.card_name,
+    ):
         raise HTTPException(status_code=400, detail="invalid enter choice")
 
 @action_handler("number_choice_confirm")

@@ -46,6 +46,55 @@ def reveals_first_draw_line(line: str) -> bool:
     return _FIRST_DRAW_REVEAL.match(text) is not None
 
 
+#: "The chosen player reveals each card they draw." (Booby Trap.) The sentence
+#: beside the one above and a different rule in three ways, which is why it is a
+#: second entry and not a widening: **every** draw rather than the turn's first,
+#: a seat the *permanent* recorded rather than its controller, and a permanent
+#: anybody may control rather than one this seat does.
+#:
+#: Anchored on the whole sentence for ``_FIRST_DRAW_REVEAL``'s reason: a line
+#: saying more than this is a rule this module does not carry out, and a prefix
+#: match would claim it and enforce only the half it recognised.
+_EVERY_DRAW_REVEAL = re.compile(
+    r"^the chosen player reveals each card they draw$"
+)
+
+
+def reveals_every_draw_line(line: str) -> bool:
+    """Whether one printed line puts a *recorded* seat's every draw in public.
+
+    Normalized exactly as :func:`reveals_first_draw_line` normalizes, and for
+    that function's reason: the printed line and the compiler's already-
+    normalized one have to give the same answer.
+    """
+    text = " ".join((line or "").strip().lower().rstrip(".").split())
+    return _EVERY_DRAW_REVEAL.match(text) is not None
+
+
+def reveals_every_draw(game, player_index: int) -> bool:
+    """Whether *player_index* must reveal every card they draw.
+
+    Derived from the board on every draw, for :func:`reveals_first_draw`'s
+    reason (CR 611.3a: the ability lasts exactly as long as its source is on the
+    battlefield). What differs is **whose** draws: "the chosen player" is the
+    seat the permanent recorded as it entered (CR 614.1c), so the scan is over
+    every permanent in the game rather than over this seat's own — the trap is
+    controlled by the player it is aimed at's *opponent*.
+
+    A permanent whose entry choice recorded nobody names nobody, which is the
+    honest reading of a card that entered with no opponent to choose.
+    """
+    from .oracle import expand_card_lines
+
+    for permanent in game.all_permanents():
+        if permanent.metadata.get("chosen_player_index") != player_index:
+            continue
+        card = permanent.effective_card
+        if any(reveals_every_draw_line(line) for line in expand_card_lines(card)):
+            return True
+    return False
+
+
 def reveals_first_draw(game, player_index: int) -> bool:
     """Whether *player_index* must reveal their first draw of each turn.
 
@@ -72,4 +121,7 @@ def reveals_first_draw(game, player_index: int) -> bool:
     return False
 
 
-__all__ = ["reveals_first_draw", "reveals_first_draw_line"]
+__all__ = [
+    "reveals_every_draw", "reveals_every_draw_line",
+    "reveals_first_draw", "reveals_first_draw_line",
+]

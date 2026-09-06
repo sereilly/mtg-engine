@@ -940,3 +940,136 @@ def test_echo_chamber_exiles_its_token_at_the_next_end_step(set_pool):
     assert not [
         perm for perm in game.controlled_by(0) if perm.metadata.get("is_token")
     ], "the token is exiled at the beginning of the next end step"
+
+
+# --- W3G3: Booby Trap's two-value entry choice, its draw reveals and its trap ---
+
+from engine import Game, PlayerState
+from engine.draw_reveals import reveals_every_draw
+from engine.enter_effects import enter_effect_line
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w3g3_trap_card(name, type_line="Creature — Bear"):
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text="",
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": ""},
+    )
+
+
+def _w3g3_trap_game(trap, victim_library, *, interactive=()):
+    seats = [
+        PlayerState(name="P0", battlefield=[trap]),
+        PlayerState(name="P1", library=list(victim_library)),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    game._initialize_permanent_state(trap, 0, target_player_index=1)
+    return game
+
+
+def test_booby_trap_records_both_halves_of_its_entry_choice(set_pool):
+    """`As this artifact enters, choose an opponent and a card name other than a
+    basic land card name.`
+
+    CR 614.1c: one choice with two answers, so one prompt writes both records —
+    the seat under the key every "the chosen player" reads and the name under
+    the key every "the chosen name" reads.
+    """
+    trap = Permanent(card=set_pool("TMP")["Booby Trap"])
+    game = _w3g3_trap_game(trap, [_w3g3_trap_card("Elf")], interactive=(0,))
+
+    assert trap.metadata.get("chosen_player_index") == 1
+    prompt = next(iter(game.pending_choices_of("enter_choice")))
+    assert prompt.data["needs_card_name"] is True
+    assert prompt.data["opponents"] == [1]
+
+    assert game.confirm_enter_choice(0, opponent_index=1, card_name="Wildfire")
+    assert trap.metadata["chosen_card_name"] == "Wildfire"
+
+
+def test_booby_trap_refuses_a_basic_land_name(set_pool):
+    """"…other than a basic land card name" is the one restriction CR 201.2
+    leaves on the choice, and it is refused rather than repaired — quietly
+    keeping the default would tell the player they had chosen something they
+    had not."""
+    trap = Permanent(card=set_pool("TMP")["Booby Trap"])
+    game = _w3g3_trap_game(trap, [_w3g3_trap_card("Elf")], interactive=(0,))
+
+    assert not game.confirm_enter_choice(0, opponent_index=1, card_name="Island")
+    assert trap.metadata.get("chosen_card_name") != "Island"
+
+
+def test_booby_trap_reveals_the_chosen_players_draws(set_pool):
+    """`The chosen player reveals each card they draw.` — every draw, and the
+    seat is the one the *permanent* recorded, so the scan is over the whole
+    board rather than over the reader's own permanents."""
+    trap = Permanent(card=set_pool("TMP")["Booby Trap"])
+    game = _w3g3_trap_game(trap, [_w3g3_trap_card("Elf")])
+
+    assert reveals_every_draw(game, 1) is True
+    assert reveals_every_draw(game, 0) is False, "the trap's controller draws in private"
+
+    game._draw_with_replacements(game.players[1], 1)
+    assert any("revealed Elf" in line for line in game.log)
+
+
+def test_booby_trap_springs_on_the_chosen_name_and_not_before(set_pool):
+    """`When the chosen player draws a card with the chosen name, sacrifice this
+    artifact. If you do, this artifact deals 10 damage to that player.`
+
+    The Rock Hydra test: the damage is read off a life total, and the *first*
+    draw is asserted not to spring it — a trigger with the narrowing dropped
+    would fire on any draw at all, which is the failure this card's two records
+    exist to prevent.
+    """
+    trap = Permanent(card=set_pool("TMP")["Booby Trap"])
+    game = _w3g3_trap_game(
+        trap,
+        [_w3g3_trap_card("Elf"), _w3g3_trap_card("Wildfire")],
+    )
+    trap.metadata["chosen_card_name"] = "Wildfire"
+
+    game._draw_with_replacements(game.players[1], 1)   # Elf
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert game.players[1].life == 20, "a different card does not spring the trap"
+    assert any(p.card.name == "Booby Trap" for p in game.controlled_by(0))
+
+    game._draw_with_replacements(game.players[1], 1)   # Wildfire
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert game.players[1].life == 10
+    assert not [p for p in game.controlled_by(0) if p.card.name == "Booby Trap"]
+
+
+def test_booby_trap_with_no_name_recorded_never_springs(set_pool):
+    """An empty name matches nothing rather than everything: springing on the
+    first draw is the opposite of what "nothing was named" means."""
+    trap = Permanent(card=set_pool("TMP")["Booby Trap"])
+    game = _w3g3_trap_game(trap, [_w3g3_trap_card("Elf")])
+    trap.metadata["chosen_card_name"] = ""
+
+    game._draw_with_replacements(game.players[1], 1)
+    game.check_state_based_actions()
+    game.resolve_stack()
+    assert game.players[1].life == 20
+    assert any(p.card.name == "Booby Trap" for p in game.controlled_by(0))
+
+
+def test_booby_trap_claims_every_printed_line(set_pool):
+    """Three sentences, three readers: the entry pair, the draw-reveal table and
+    the trigger. A card supported on one of them while another is unread is the
+    debt `parse_coverage` exists to find, and it is checked here per card."""
+    card = set_pool("TMP")["Booby Trap"]
+    program = compile_card_oracle(card)
+    assert program.supported
+    assert enter_effect_line(
+        "As this artifact enters, choose an opponent and a card name other "
+        "than a basic land card name.", card.name,
+    ) == "chooses an opponent and a card name as it enters"
+    assert [t.condition.kind for t in program.triggered_abilities] == ["draws_card"]

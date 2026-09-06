@@ -3694,7 +3694,13 @@ class PendingChoicesMixin:
         # choice is not bounded by what is on a board. An empty answer keeps the
         # default rather than naming nothing, which would make the protection
         # apply to nothing.
-        if choice.data.get("needs_card_name"):
+        # …and only when no seat is asked for beside it. "As this artifact
+        # enters, choose an opponent **and** a card name" (Booby Trap) is one
+        # prompt with two answers, so it falls through to the opponent branch at
+        # the bottom, which writes both — the same early-return rule the colour
+        # branch below follows, and for its reason: this prompt asks one
+        # question in several shapes and only some of them name a seat.
+        if choice.data.get("needs_card_name") and not choice.data["opponents"]:
             from ...cast_restrictions import CHOSEN_CARD_NAMES
 
             permanent = choice.data["permanent"]
@@ -3772,6 +3778,15 @@ class PendingChoicesMixin:
                 return False
             if color is None:
                 return False
+        # "…and a card name **other than a basic land card name**." (Booby
+        # Trap.) The one restriction the sentence prints on CR 201.2's otherwise
+        # unbounded choice, refused rather than repaired for the reason the
+        # card-name branch above gives: quietly keeping the default would tell
+        # the player they had chosen something they had not. An empty answer
+        # keeps the default, which is a choice already recorded.
+        if choice.data.get("needs_card_name") and card_name:
+            if str(card_name).strip().lower() in BASIC_LAND_WORDS:
+                return False
         # The permanent may already be gone (e.g. destroyed at instant speed);
         # the choice then has nothing to apply to, but the prompt still clears.
         if self.is_on_battlefield(permanent):
@@ -3780,6 +3795,9 @@ class PendingChoicesMixin:
             if color is not None:
                 permanent.metadata["chosen_color"] = color
                 chose += f" and {color}"
+            if choice.data.get("needs_card_name") and card_name:
+                permanent.metadata["chosen_card_name"] = card_name
+                chose += f" and {card_name}"
             self.log.append(f"{choice.data['card_name']}: {chose}")
             if color is not None:
                 # Jihad's anthem is conditioned on the chosen color/player.
