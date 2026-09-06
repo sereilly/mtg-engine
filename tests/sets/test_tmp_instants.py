@@ -1145,3 +1145,166 @@ def test_reap_carries_the_cast_time_marker_into_its_compiled_program(set_pool):
         "filter": {"color_filter": "B"},
         "as_cast": True,
     }
+# --- W4G3: Ertai's Meddling (CR 603.7, CR 707.10) ---
+
+from engine import Game, PlayerState
+from engine.exiled_records import live_records
+from engine.game_types import StackItem
+from engine.named_counters import counters_on
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
+
+
+def _w4g3_duel():
+    """Two empty seats with mana costs off — the rig every card test here uses."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, game.players[0], game.players[1]
+
+
+def _w4g3_meddle(game, ertai, victim, *, x, caster=0, victim_seat=1,
+                 target_player_index=0):
+    """P``victim_seat`` casts *victim*; P``caster`` answers with Ertai's for X=*x*."""
+    spell = StackItem(
+        card=victim, caster_index=victim_seat,
+        target_player_index=target_player_index,
+        target_permanent_index=None, x_value=None,
+    )
+    game.stack.append(spell)
+    game._apply_spell_text(
+        game.players[caster], game.players[victim_seat], ertai,
+        stack_target=spell, x_value=x,
+    )
+    game._settle()
+
+
+def test_w4g3_ertais_meddling_exiles_the_spell_with_x_delay_counters(set_pool):
+    """`Target spell's controller exiles it with X delay counters on it.`
+
+    The Rock Hydra test for the first half: the spell is off the stack, its card
+    is in exile rather than a graveyard — CR 701.6a's countering is what this
+    card does *not* do — and the register carries the counters the cast's X
+    named (CR 107.3, CR 121.2).
+    """
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    victim = set_pool("LEA")["Lightning Bolt"]
+    game, _p0, p1 = _w4g3_duel()
+
+    _w4g3_meddle(game, ertai, victim, x=2)
+
+    assert game.stack == [], "the spell left the stack"
+    assert [c.name for c in p1.exile] == ["Lightning Bolt"]
+    assert p1.graveyard == [], "exiled, not countered"
+    record = next(iter(live_records(game)))
+    assert record.card is victim
+    assert counters_on(record, "delay") == 2
+
+
+def test_w4g3_ertais_meddling_counts_the_delay_down_on_that_players_upkeeps(set_pool):
+    """`At the beginning of each of that player's upkeeps, if that card is
+    exiled, remove a delay counter from it.`
+
+    CR 603.7b's repeating half over CR 603.7c's recorded **seat**: the ability
+    belongs to Ertai's controller and fires on the *other* player's upkeeps, so
+    a counter must come off on theirs and none on Ertai's controller's.
+    """
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    victim = set_pool("LEA")["Lightning Bolt"]
+    game, _p0, _p1 = _w4g3_duel()
+    _w4g3_meddle(game, ertai, victim, x=3)
+    record = next(iter(live_records(game)))
+
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game._settle()
+    assert counters_on(record, "delay") == 3, "not the ability controller's upkeep"
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    game._settle()
+    assert counters_on(record, "delay") == 2
+
+    game.resolve_upkeep(1)
+    game._settle()
+    assert counters_on(record, "delay") == 1, "it fires again, and again"
+
+
+def test_w4g3_ertais_meddling_puts_the_card_back_as_a_copy_that_keeps_its_target(set_pool):
+    """`If the card has no delay counters on it, the player puts it onto the
+    stack as a copy of the original spell.`
+
+    CR 707.10: a copy carries the decisions made for the original — here the
+    target, which the register froze when CR 400.7 destroyed the stack object.
+    The card resolves under the seat that put it there and then goes to its
+    owner's graveyard: it is a real card, not a copy with none (CR 608.2n).
+    """
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    victim = set_pool("LEA")["Lightning Bolt"]
+    game, p0, p1 = _w4g3_duel()
+    _w4g3_meddle(game, ertai, victim, x=1)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert p1.exile == [], "the card left exile"
+    assert p0.life == 17, "the copy kept the original's target"
+    assert [c.name for c in p1.graveyard] == ["Lightning Bolt"]
+
+
+def test_w4g3_ertais_meddling_stops_once_the_card_has_left_exile(set_pool):
+    """`…if that card is exiled…` is the gate, and it is load-bearing.
+
+    The delayed ability states no duration (CR 603.7b), so it goes on triggering
+    after the card is gone. With the zone test unenforced the counter count
+    would read zero for ever and the card would be put onto the stack on every
+    one of that player's upkeeps — an ability that works far more often than the
+    card allows.
+    """
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    victim = set_pool("LEA")["Lightning Bolt"]
+    game, p0, p1 = _w4g3_duel()
+    _w4g3_meddle(game, ertai, victim, x=1)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    game._settle()
+    assert p0.life == 17
+
+    for _ in range(3):
+        game.resolve_upkeep(1)
+        game._settle()
+    assert game.stack == [], "nothing goes back onto the stack"
+    assert p0.life == 17, "and nothing is dealt a second time"
+    assert [c.name for c in p1.graveyard] == ["Lightning Bolt"]
+
+
+def test_w4g3_ertais_meddling_asks_for_a_spell_and_never_a_permanent(set_pool):
+    """The Roots class: "target" modifies *spell*, so the announcement chooses an
+    object on the stack (CR 115.1) — a picker offering battlefield permanents
+    would be a card that can never be aimed at what it is about."""
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    spec = derive_cast_spec(ertai, compile_card_oracle(ertai))
+    assert spec is not None and spec.get("kind") == "stack"
+
+
+def test_w4g3_ertais_meddling_arms_nothing_when_the_spell_has_gone(set_pool):
+    """CR 608.2b: with the target no longer on the stack there is nothing to
+    exile — and so nothing for the delayed ability to be about. It must arm no
+    ability rather than one that fires on every upkeep about a card nobody
+    exiled."""
+    ertai = set_pool("TMP")["Ertai's Meddling"]
+    victim = set_pool("LEA")["Lightning Bolt"]
+    game, p0, p1 = _w4g3_duel()
+    gone = StackItem(
+        card=victim, caster_index=1, target_player_index=0,
+        target_permanent_index=None, x_value=None,
+    )
+
+    game._apply_spell_text(p0, p1, ertai, stack_target=gone, x_value=2)
+    game._settle()
+
+    assert p1.exile == []
+    assert list(live_records(game)) == []
+    assert game.delayed_triggers == []

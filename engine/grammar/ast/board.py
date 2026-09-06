@@ -23,6 +23,7 @@ from ._core import (
     PlayerRef,
     Recipient,
     TargetSpec,
+    Var,
     Zone,
 )
 from .costs import ManaCost
@@ -95,7 +96,12 @@ class Exile:
     #: hashable, and the counter word and the number are payload for the same
     #: reason every other parameter in this grammar is — a card printing three
     #: verse counters is this sentence, not a second one.
-    counters: tuple[tuple[str, int], ...] = ()
+    #:
+    #: "How many" is a printed number or the cast's X (``ast.Var``, CR 107.3 —
+    #: "…with **X** delay counters on it", Ertai's Meddling). One slot for the
+    #: two, because a variable count is the same fact the sentence states with
+    #: a different word; the lowering is what turns either into payload.
+    counters: tuple[tuple[str, "int | Var"], ...] = ()
     #: ``…**face down**`` (CR 406.3; Gustha's Scepter). The same rider
     #: :class:`ExileTopOfLibrary` already carries one node over, on the
     #: sentence that exiles out of a *hand* instead of off a library. Recorded

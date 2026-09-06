@@ -753,6 +753,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "force_target_to_block_until_eot": "combat_restrictions",
     "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
+    # "…the player puts it onto the stack as a copy of the original spell."
+    # (Ertai's Meddling.) CR 707.10's copying, which is what `copy_this_spell`
+    # and `copy_top_stack_spell` already carry — the object copied is a card in
+    # exile rather than one still on the stack, which changes where the
+    # decisions are read from and not what the sentence does.
+    "put_exiled_card_onto_stack_as_copy": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack
     # and a retarget leaves it there resolving in full, so filing them together

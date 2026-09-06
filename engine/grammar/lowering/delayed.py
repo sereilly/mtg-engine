@@ -190,6 +190,21 @@ _BOUND_TO_THE_DELAYS_OBJECT = frozenset({
 })
 
 
+#: Which resolution record names the seat a :data:`EVENTS_SEATED_BY_BOUND_PLAYER`
+#: event fires on. The value is what ``handlers/board_misc.create_delayed_trigger``
+#: routes its ``binds_player`` read on, and every event in that set must have a
+#: row here or the lowering refuses — a seat read out of the wrong record is an
+#: ability that fires on nobody's upkeep, silently.
+_SEAT_RECORDS: dict[str, str] = {
+    # Sabertooth Cobra: the player the damage event was about, frozen by
+    # ``damage_events._announce`` into the creating trigger's context.
+    "damaged_players_next_upkeep": "damaged_player",
+    # Ertai's Meddling: the controller of the spell an earlier step of this same
+    # resolution exiled, written to the scratchpad by that step.
+    "bound_players_upkeep": "exiled_spell_controller",
+}
+
+
 def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
@@ -280,15 +295,36 @@ def _lower_create_delayed_trigger(
     ):
         payload["binds_player"] = True
     if node.event in EVENTS_SEATED_BY_BOUND_PLAYER:
-        # "…at the beginning of **their** next upkeep" (Sabertooth Cobra). The
-        # possessive is the whole of what this event *is*: it fires on one
-        # named player's upkeep, and which player is a fact the creating
-        # trigger knows and the upkeep three turns later does not. So the seat
-        # is frozen as the ability is created, exactly as CR 603.7c freezes the
-        # object a delayed ability is about — and the record it is read from is
-        # the damage event's own, named here rather than guessed at the fire
-        # site.
-        payload["binds_player"] = "damaged_player"
+        # "…at the beginning of **their** next upkeep" (Sabertooth Cobra),
+        # "…at the beginning of **each of that player's** upkeeps" (Ertai's
+        # Meddling). The possessive is the whole of what these events *are*:
+        # each fires on one named player's upkeep, and which player is a fact
+        # the creating effect knows and the upkeep three turns later does not.
+        # So the seat is frozen as the ability is created, exactly as CR 603.7c
+        # freezes the object a delayed ability is about.
+        #
+        # *Which* record it is read from is per event, because the two seats are
+        # written down by different steps: the Cobra's is the damage event's
+        # frozen recipient and Ertai's is the exiled spell's controller. Read as
+        # each other, neither finds anything and the arming handler refuses —
+        # an ability the card prints and nothing creates. A table rather than a
+        # branch for :data:`_DELAYED_OPENERS`' reason: the difference between
+        # the rows is one string.
+        binds = _SEAT_RECORDS.get(node.event)
+        if binds is None:
+            raise LoweringError(
+                f"no record says which seat {node.event!r} is about", node=node
+            )
+        # No ``produced`` gate on the exile row, and the reason is
+        # ``exile_created_token``'s in ``lowering/exile.py``: the step that
+        # writes the record is a **different printed line** of the same card
+        # (Ertai's Meddling prints the exile and the delay one under the other),
+        # and this lowering only ever sees one line. The card's two lines do
+        # share one resolution — a spell's instructions are run as one sequence
+        # against one scratchpad — so the record is there at run time; what
+        # answers the absent case is ``create_delayed_trigger``, which arms
+        # **nothing** and says so when ``binds_player`` finds no seat.
+        payload["binds_player"] = binds
     # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
     # the battlefield". Which object the ability watches, when the opener names
     # one the effect already holds rather than one it targeted — the arming

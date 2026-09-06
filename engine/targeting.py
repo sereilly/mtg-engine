@@ -741,6 +741,13 @@ _KIND_TO_SPEC: dict[str, dict] = {
     },
     "mark_text_modified": {"kind": "permanent"},
     "counter_top_stack_spell": {"kind": "stack"},
+    # "Target spell's controller exiles it …" (Ertai's Meddling). The same
+    # picker and for the same reason: what the announcement chooses is an object
+    # on the stack (CR 115.1). The seat in the printed possessive is read off
+    # that object at resolution and is not a second target — "target" modifies
+    # *spell*, so a row naming a player would put a seat picker in front of a
+    # spell the caster never gets to choose.
+    "exile_target_spell": {"kind": "stack"},
     "berserk_pump": {"kind": "creature"},
     # "Target creature **defending player controls** can block any number of
     # creatures this turn." (Blaze of Glory.) The seat was missing from this

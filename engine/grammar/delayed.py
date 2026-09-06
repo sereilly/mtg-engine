@@ -351,6 +351,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         return None
     effect = resolve_that_turn(effect) or effect
     effect = fold_flip_stakes(stream, effect, parse_statement)
+    effect = fold_counter_countdown(stream, effect, parse_statement)
     if target is not None:
         # CR 603.7c: the ability is about the object its opener chose, so the
         # pronouns behind the comma name that object rather than the ability's
@@ -442,6 +443,99 @@ def fold_flip_stakes(stream: TokenStream, effect, parse_statement):
     # about its own body, and for the same reason: a prefix accepted here would
     # leave the rest to be performed immediately or to fail the line somewhere
     # that says nothing about what happened.
+    if not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.reset(mark)
+        return effect
+    return ast.Sequence((effect, ast.Conditional(condition, consequence)))
+
+
+def _counters_taken_off_the_source(node) -> frozenset[str]:
+    """Every counter word a step of *node* takes off the ability's own source.
+
+    A walk over the dataclass rather than a check on the top-level node, for
+    :func:`_contains_flip`'s reason exactly: the removal may be one step of a
+    sequence or the body of a conditional, and a shape added later is covered by
+    default instead of silently answering "none".
+    """
+    if isinstance(node, ast.RemoveCounter):
+        subject = node.subject
+        if isinstance(subject, ast.TargetSpec) and subject.filter.is_source:
+            return frozenset({node.counter})
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        found: frozenset[str] = frozenset()
+        for field in dataclasses.fields(node):
+            found |= _counters_taken_off_the_source(getattr(node, field.name))
+        return found
+    if isinstance(node, (tuple, list)):
+        found = frozenset()
+        for item in node:
+            found |= _counters_taken_off_the_source(item)
+        return found
+    return frozenset()
+
+
+def fold_counter_countdown(stream: TokenStream, effect, parse_statement):
+    """Fold ``If <the source> has no <k> counters on it, <effect>.`` into the
+    delayed sentence in front of it.
+
+    "At the beginning of each of that player's upkeeps, if that card is exiled,
+    remove a delay counter from it. **If the card has no delay counters on it,
+    the player puts it onto the stack as a copy of the original spell.**"
+    (Ertai's Meddling.)
+
+    The two printed sentences are one delayed triggered ability, and the second
+    is the *payoff* of the first: the count it tests is the one the removal in
+    front of it just changed. Left as a sibling step it would be performed
+    **now**, as the spell resolves — the count would be the one the exile had
+    just written, and the card would come straight back onto the stack for X=0
+    or do nothing at all for any other X, either way never firing again.
+
+    :func:`fold_flip_stakes` is the same fold under the same rule, and this is
+    that rule's second instance: the marker is that the following sentence
+    back-references a value **only the delayed effect produces**. A removal of a
+    named counter from the ability's own source inside the delay, and a count of
+    *that same counter* on that same source behind it, is that relation spelled
+    out; the counter word is what ties them, so a card whose delay removes verse
+    counters and whose next sentence counts fade counters is left alone.
+
+    All Hallow's Eve prints the identical pair without needing this, and the
+    difference says why the fold is safe: its two sentences are one **triggered**
+    line, split into condition and effect by ``engine/oracle.py`` and parsed as
+    one statement — where these two are behind a *delay*, and the delay
+    production stops at the first sentence end (see the guard above it, which is
+    there so a prefix is never accepted).
+
+    Returns *effect* unchanged, cursor untouched, when the sentence behind it is
+    anything else, so every other delayed ability keeps the reading it has.
+    """
+    counters = _counters_taken_off_the_source(effect)
+    if not counters:
+        return effect
+    mark = stream.mark()
+    if not (stream.accept_punct(".") and stream.accept_word("if")):
+        stream.reset(mark)
+        return effect
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return effect
+    if (
+        not isinstance(condition, ast.SourceCounterCount)
+        or condition.counter not in counters
+        or not stream.accept_punct(",")
+    ):
+        stream.reset(mark)
+        return effect
+    try:
+        consequence = parse_statement(stream, top_level=False)
+    except GrammarError:
+        stream.reset(mark)
+        return effect
+    # The condition governs its whole sentence, the same guard
+    # :func:`fold_flip_stakes` states about its own and for the same reason: a
+    # prefix accepted here would leave the rest to be performed immediately or
+    # to fail the line somewhere that says nothing about what happened.
     if not stream.exhausted and not stream.at_punct(".", ";"):
         stream.reset(mark)
         return effect

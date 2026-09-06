@@ -70,6 +70,8 @@ from .effects import (
     _parse_draw,
     _parse_exile_entire_library,
     _parse_player_exiles_graveyard,
+    _parse_player_exiles_target_spell,
+    _parse_put_exiled_card_on_stack_as_copy,
     _parse_put_exiled_this_way,
     _parse_extra_turn,
     parse_exile_random_card_from_hand,
@@ -407,6 +409,16 @@ def parse_subject_verb(
             from_graveyard = _parse_player_exiles_graveyard(stream, source_spec)
             if from_graveyard is not None:
                 return from_graveyard
+            # "**Target spell's controller** exiles it with X delay counters on
+            # it." (Ertai's Meddling.) The fourth of the family and the only one
+            # whose object was printed *in front of* the verb — the seat is read
+            # off the spell the announcement chose, so "it" names that spell.
+            # Gated on that referent inside the production, so every other
+            # player-subject exile keeps its own reading; last, because it is
+            # the narrowest.
+            targeted_spell = _parse_player_exiles_target_spell(stream, source_spec)
+            if targeted_spell is not None:
+                return targeted_spell
         # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
         # the rules — CR 701.26a turns a permanent sideways and says nothing
         # about who does it — so the printed subject is read and then dropped
@@ -549,6 +561,13 @@ def parse_subject_verb(
             exiled_pile = _parse_put_exiled_this_way(stream, source_spec)
             if exiled_pile is not None:
                 return exiled_pile
+            # "…**the player puts it onto the stack as a copy of the original
+            # spell**." (Ertai's Meddling.) The card an earlier step of the same
+            # effect exiled, going back where it came from as CR 707.10's copy.
+            # Declines without consuming, like every arm around it.
+            as_copy = _parse_put_exiled_card_on_stack_as_copy(stream, source_spec)
+            if as_copy is not None:
+                return as_copy
             # "…and **you put** a cube counter on this artifact" (Delif's Cube).
             # The imperative with its subject spelled out, which CR 608.2c makes
             # the same sentence — so it is handed back to this function with the

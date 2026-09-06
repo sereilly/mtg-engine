@@ -294,6 +294,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a second switch would let one of the two be gated off without the other.
     "exile_target_permanent": "zones",
     "exile_self": "zones",
+    # "Target spell's controller exiles it with X delay counters on it."
+    # (Ertai's Meddling.) A zone change by this module's own line — the object
+    # leaves the **stack** and arrives in exile — rather than a counterspell:
+    # CR 701.6a counters a spell, and this one is never countered, it is moved.
+    "exile_target_spell": "zones",
     # "Exile that token" (Stangg) — the token this same effect created, by the
     # id the token maker recorded. A zone change like the two beside it.
     "exile_created_token": "zones",

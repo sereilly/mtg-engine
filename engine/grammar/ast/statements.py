@@ -202,6 +202,7 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     ModalNode,
+    PutExiledCardOnStackAsCopy,
     WaiveShroud,
 )
 from .combat import (
@@ -275,7 +276,7 @@ Effect = Union[
     ExchangeGreatestManaValue,
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,
-    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, PutExiledCardOnStackAsCopy, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, PutGraveyardPositionOntoBattlefield,
     RevealTopToHandOrBottom, CreateEmblem, SkipStep,

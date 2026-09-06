@@ -344,6 +344,29 @@ class SourceExiledWithCounter:
 
 
 @dataclass(frozen=True)
+class SourceExiled:
+    """"…**if that card is exiled**, remove a delay counter from it."
+    (Ertai's Meddling.) CR 603.4's intervening-if over an object in exile, with
+    no counter clause behind it.
+
+    :class:`SourceExiledWithCounter`'s first half on its own, and a node rather
+    than that one with an optional counter word, because the two are different
+    questions and a card printing one never means the other: All Hallow's Eve
+    stops when its last scream counter comes off, and this one keeps asking
+    until the card leaves exile — which is precisely the upkeep on which it puts
+    the card back. Folded into one node with the counter left None, the zero
+    case would have to be spelled as an absence, and the safe reading of an
+    absence differs between the two cards.
+
+    Load-bearing rather than decorative. The ability that reads it is created by
+    a spell and outlives the card it is about (CR 603.7b: no stated duration, so
+    it keeps triggering); without the zone test it would go on asking how many
+    counters a departed record carries, find none, and put the card onto the
+    stack again every upkeep for the rest of the game.
+    """
+
+
+@dataclass(frozen=True)
 class AttachedCounterCount:
     """``if that creature has three or more +1/+0 counters on it`` (Consuming
     Ferocity).
@@ -508,6 +531,7 @@ Condition = Union[
     SelfInGraveyardWithCardsAbove,
     AttachedCounterCount,
     SourceCounterCount,
+    SourceExiled,
     SomeOf,
     SourceExiledWithCounter,
     SubjectCharacteristicIs,

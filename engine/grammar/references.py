@@ -92,6 +92,22 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("target_player")
     if stream.accept_phrase("target", "opponent"):
         return ast.PlayerRef("target_opponent")
+    # "**Target spell's controller** exiles it …" (Ertai's Meddling). The seat
+    # is not what the sentence targets: "target" modifies *spell*, so the
+    # announcement chooses an object on the stack (CR 115.1) and the player is
+    # read off it (CR 109.5). That is what makes it a referent of its own rather
+    # than a spelling of `target_player` — a picker handed `target_player` would
+    # offer the seats and the spell would never be chosen at all.
+    #
+    # Only "spell", and the narrowness is the point: a spell on the stack is the
+    # one object whose controller this engine can name from the announcement
+    # (the chosen stack item's caster). "Target creature's controller" is a
+    # different lookup with a different picker, and reading it here would hand
+    # every lowering a seat it cannot resolve.
+    mark_spells_controller = stream.mark()
+    if stream.accept_phrase("target", "spell", "'s", "controller"):
+        return ast.PlayerRef("target_spells_controller")
+    stream.reset(mark_spells_controller)
     if stream.accept_phrase("that", "player"):
         # "…**that player or that permanent's controller** may pay {R}{R}."
         # (Chain Lightning.) One referent printed as a disjunction, because the

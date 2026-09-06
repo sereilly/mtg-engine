@@ -918,6 +918,22 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         frozen = (context.trigger_context or {}).get("dead_counters") or {}
         return int(frozen.get(str(payload.get("counter", "")), 0) or 0) > 0
 
+    if kind == "source_exiled":
+        # "…**if that card is exiled**, remove a delay counter from it."
+        # (Ertai's Meddling.) The zone half of the clause below on its own,
+        # asked of the register for that clause's reason: an ability on the
+        # stack is independent of its source (CR 608.2), so between the upkeep
+        # that fired it and this resolution anything at all could have taken the
+        # card out of exile.
+        #
+        # And the ability outlives the card here, which is what makes the gate
+        # the whole card: it has no stated duration (CR 603.7b), so it goes on
+        # triggering after the card has left — and a resolution that skipped
+        # this would put a card that is no longer in exile onto the stack every
+        # upkeep for the rest of the game.
+        record = record_in_context(context)
+        return record is not None and is_live(game, record)
+
     if kind == "source_exiled_with_counter":
         # "if this card is exiled with a scream counter on it" (All Hallow's
         # Eve). Both halves of the sentence, in the order it prints them: the

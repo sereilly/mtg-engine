@@ -667,3 +667,35 @@ def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:
             node=node,
         )
     return ()
+
+
+#: The seats "the player puts it onto the stack" may name. CR 707.10 makes
+#: whoever puts the copy there its controller, so this is a claim about who
+#: gets the spell — and the handler resolves exactly these. A referent outside
+#: the set refuses rather than defaulting to the ability's own controller,
+#: which for the one card that prints the sentence is always the wrong player.
+_COPY_PUTTERS = frozenset({"that_player", "controller"})
+
+
+def _lower_put_exiled_card_on_stack_as_copy(
+    node: "ast.PutExiledCardOnStackAsCopy",
+) -> tuple[OracleInstruction, ...]:
+    """"…the player puts it onto the stack as a copy of the original spell."
+    (Ertai's Meddling.)
+
+    The card comes out of exile carrying CR 707.10's copied decisions, which the
+    exile register froze when the spell left the stack — so the handler needs no
+    payload naming them and this lowering carries only *who*.
+
+    "The player" is the definite back-reference the shared reader already
+    answers with ``that_player``: the seat the sentence in front of it named,
+    which for this card is the exiled spell's controller and reaches the
+    resolution as the delayed ability's bound seat.
+    """
+    if node.player.kind not in _COPY_PUTTERS:
+        raise LoweringError(
+            f"no seat is named by {node.player.kind!r} here", node=node
+        )
+    return (
+        OracleInstruction("put_exiled_card_onto_stack_as_copy", "", {}),
+    )

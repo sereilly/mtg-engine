@@ -5,10 +5,13 @@ from typing import TYPE_CHECKING
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..counter_conditions import spell_cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
+from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
+                              StackAnnouncement, is_live, record_exiled_card,
+                              record_in_context)
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER
-from ._common import _card_matches_filter
+from ._common import _card_matches_filter, resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -115,6 +118,198 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         )
     )
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
+    return True, "resolved"
+
+
+# ---------------------------------------------------------------------------
+# CR 406 — a spell that leaves the stack for exile, and the card that comes back
+# ---------------------------------------------------------------------------
+
+
+def _stack_announcement(item: StackItem) -> StackAnnouncement:
+    """CR 707.10's copiable decisions, frozen off *item* while it still exists.
+
+    Read here rather than in ``exiled_records`` so the record's schema does not
+    have to know what a ``StackItem`` is; this module is the one that already
+    does.
+    """
+    return StackAnnouncement(
+        caster_index=item.caster_index,
+        target_player_index=item.target_player_index,
+        target_permanent_index=item.target_permanent_index,
+        target_permanent_id=item.target_permanent_id,
+        target_graveyard_card=item.target_graveyard_card,
+        x_value=item.x_value,
+        chosen_mode_index=item.chosen_mode_index,
+        chosen_modes=item.chosen_modes,
+        target_stack_item=item.target_stack_item,
+        choices=dict(item.choices),
+    )
+
+
+@effect_handler("exile_target_spell")
+def exile_target_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target spell's controller exiles it with X delay counters on it."
+    (Ertai's Meddling.)
+
+    **Not a counter.** CR 701.6a's countering removes a spell from the stack and
+    puts its card into its owner's graveyard; this moves the same object to
+    exile instead, and the difference is the whole card — "can't be countered"
+    does not stop it, and nothing that watches for a countered spell fires.
+    So it is its own kind rather than a destination payload on
+    ``counter_top_stack_spell``, whose every step (the "unless its controller
+    pays" offer, the counter hooks, the countered-spell records) is about the
+    rule this one does not use.
+
+    The card is registered in ``engine/exiled_records.py`` with the counters the
+    sentence names, and with CR 707.10's **announcement** — the decisions a copy
+    of the spell has to inherit, frozen now because CR 400.7 destroys the stack
+    object the moment the card leaves. Both go into the resolution scratchpad,
+    where the delayed ability the next sentence creates freezes them
+    (CR 608.2h).
+
+    A copy has no card to exile, so it ceases to exist instead — CR 707.10a,
+    the same answer the countering path gives one function up.
+    """
+    target = context.stack_target
+    if target is None or not any(item is target for item in game.stack):
+        # CR 608.2b: the spell is no longer there to be exiled. Nothing is
+        # recorded, so the delayed ability the next sentence creates binds no
+        # record and arms nothing — the loud direction rather than an ability
+        # that fires every upkeep about a card nobody exiled.
+        game.log.append(f"{context.card.name}: that spell is no longer on the stack")
+        return True, "resolved"
+    for index, item in enumerate(game.stack):
+        # By identity: ``StackItem`` compares by value, so two copies of one
+        # spell aimed at one player are equal and ``list.remove`` would take the
+        # wrong one — the look-alike this engine keeps finding.
+        if item is target:
+            del game.stack[index]
+            break
+    if target.is_copy:
+        # CR 707.10a: a copy of a spell in any zone other than the stack ceases
+        # to exist. There is no card to exile, no record to keep and nothing for
+        # the delay to be about.
+        game.log.append(
+            f"{context.card.name} removed {target.card.name} (copy) from the "
+            "stack, and it ceases to exist"
+        )
+        return True, "resolved"
+    # CR 400.3/406.1: the card goes to its **owner's** exile. The caster's seat
+    # is what the stack object carries and is every other leave-the-stack site's
+    # existing approximation of the owner in this pool;
+    # ``_redirect_countered_card`` states the same caveat about the same field.
+    owner_index = target.caster_index
+    owner = game.players[owner_index]
+    counters = {
+        str(name): resolve_amount(count, context.x_value)
+        for name, count in (instruction.payload.get("counters") or {}).items()
+    }
+    game._bin_spell_card(
+        owner, target.card, exile_instead=True,
+        verb=f"was exiled by {context.card.name}",
+    )
+    record = record_exiled_card(
+        game, target.card, owner_index,
+        # CR 108.4 gives a card in exile no controller, so its abilities belong
+        # to its owner — and here the two are the same seat, the one the printed
+        # possessive names ("**that player's** upkeeps").
+        controller_index=owner_index,
+        counters=counters,
+        announcement=_stack_announcement(target),
+    )
+    # The record goes into the resolution scratchpad under the key
+    # ``record_in_context`` reads: ``create_delayed_trigger`` freezes the whole
+    # scratchpad into the entry's ``captured`` and
+    # ``DelayedTrigger.trigger_event`` merges that into the trigger context, so
+    # "remove a delay counter from **it**" reaches the card in exile with no
+    # second channel (CR 608.2h).
+    context.results[EXILE_RECORD_KEY] = record
+    context.results[EXILED_SPELL_CONTROLLER_KEY] = owner_index
+    if counters:
+        game.log.append(
+            f"{target.card.name} was exiled with "
+            + ", ".join(
+                f"{count} {name} counter" + ("s" if count != 1 else "")
+                for name, count in counters.items()
+            )
+        )
+    return True, "resolved"
+
+
+@effect_handler("put_exiled_card_onto_stack_as_copy")
+def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…the player puts it onto the stack as a copy of the original spell."
+    (Ertai's Meddling.)
+
+    The card comes out of exile and goes onto the stack carrying CR 707.10's
+    copied decisions — the modes, the targets and the value of X the original
+    was announced with, read off the :class:`StackAnnouncement` the exiling step
+    froze. There is nowhere else they could come from: CR 400.7 destroyed the
+    original stack object, and the card in exile is a bare ``CardDefinition``.
+
+    ``is_copy`` is **not** set, and that is the rule rather than an oversight.
+    The flag means "a copy with no card of its own", which resolves and ceases
+    to exist (CR 707.10a) — but here the physical card is the object on the
+    stack, so CR 608.2n's owner's graveyard is where it goes when it resolves.
+    Setting the flag would delete a real card from the game.
+
+    Nothing is *cast* (CR 707.10), so this goes straight onto the stack rather
+    than through the cast path: no cast trigger fires and no cost is paid, and
+    the targets are already chosen.
+    """
+    record = record_in_context(context)
+    if record is None or not is_live(game, record):
+        # CR 608.2b's shape one zone over: the card the ability is about is not
+        # in exile any more, so there is nothing to put anywhere. The gate the
+        # printed sentence states ("if that card is exiled") answers this too;
+        # asked again here because an ability on the stack is independent of the
+        # object it is about (CR 608.2), and between the two the card can move.
+        game.log.append(f"{context.card.name}: that card is no longer exiled")
+        return True, "resolved"
+    announcement = record.announcement
+    if announcement is None:
+        # A record with no announcement speaks for a card that was never a
+        # spell on the stack — there are no copiable decisions, and guessing at
+        # targets nobody chose is the widening every bound payload in this
+        # engine refuses.
+        game.log.append(
+            f"{context.card.name}: nothing was announced for {record.card.name}"
+        )
+        return True, "resolved"
+    # CR 707.10: "a copy of a spell is controlled by the player under whose
+    # control it was put on the stack" — the player the sentence names, which
+    # for a delayed ability is the seat its creating effect bound.
+    seat = announcement.caster_index
+    chosen = context.target
+    if chosen is not None and any(seat_player is chosen for seat_player in game.players):
+        seat = game.players.index(chosen)
+    game.take_card_from_exile(
+        game.players[record.owner_index], record.card, record=record
+    )
+    copy = StackItem(
+        card=record.card,
+        caster_index=seat,
+        target_player_index=announcement.target_player_index,
+        target_permanent_index=announcement.target_permanent_index,
+        target_permanent_id=announcement.target_permanent_id,
+        target_graveyard_card=announcement.target_graveyard_card,
+        x_value=announcement.x_value,
+        choices=dict(announcement.choices),
+        chosen_mode_index=announcement.chosen_mode_index,
+        chosen_modes=announcement.chosen_modes,
+        target_stack_item=announcement.target_stack_item,
+        # ``cast_from_zone`` is deliberately left at its default. CR 707.10: "a
+        # copy of a spell isn't cast" — so the honest answer to "was this spell
+        # cast from somewhere other than your hand" is *no*, and that is what
+        # the default gives. Stamping "exile" because the card came from there
+        # would answer *yes* to a question about a casting that never happened.
+    )
+    game._stack_push(item=copy, targets_already_chosen=True)
+    game.log.append(
+        f"{game.players[seat].name} put {record.card.name} onto the stack as a "
+        "copy of the original spell"
+    )
     return True, "resolved"
 
 

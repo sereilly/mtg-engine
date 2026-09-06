@@ -30,6 +30,9 @@ the line — "three tables, three keys, three questions".
 
 from __future__ import annotations
 
+from ...exiled_records import (EXILE_RECORD_KEY,
+                               EXILED_SPELL_CONTROLLER_KEY)
+
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,  # noqa: F401
                              LAST_TARGET_CONTROLLER,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS)
@@ -774,3 +777,14 @@ def chooser_payload(statement, event: str | None, what: str) -> dict[str, object
             node=statement,
         )
     return {"chooser": EVENT_SUBJECT_PLAYER}
+
+
+#: What ``handlers/stack.exile_target_spell`` writes to the resolution
+#: scratchpad: the :class:`~engine.exiled_records.ExiledRecord` for the spell it
+#: moved to exile, and the seat that spell's controller was. Imported from
+#: ``engine/exiled_records.py`` rather than spelled again, because that module
+#: is where the *reader* lives and it imports nothing from the engine — so the
+#: handler layer and this package can both name the key without either importing
+#: the other, which is the second-copy failure every key here exists to avoid.
+EXILED_SPELL_RECORD = EXILE_RECORD_KEY
+EXILED_SPELL_CONTROLLER = EXILED_SPELL_CONTROLLER_KEY
