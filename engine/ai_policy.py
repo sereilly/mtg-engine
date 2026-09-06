@@ -20,6 +20,7 @@ from .ai_valuation import (
 )
 from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
+from .cast_costs import cast_announces_x
 from .cast_restrictions import global_cast_ban
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
@@ -182,7 +183,7 @@ def _cast_candidate(
     # X first: an X-draw spell's target choice depends on how many cards it
     # would draw (a spell that empties your own library is aimed elsewhere),
     # so the value has to exist before the target is picked.
-    x_value = _pick_x_value(game, player, card, extra_generic)
+    x_value = _pick_x_value(game, player, card, extra_generic, hand_index=hand_index)
     if x_value == 0:
         return None
 
@@ -1466,6 +1467,19 @@ def choose_divided_targets(
         # opponent graveyard defines X as 0). Either way there is no lawful
         # announcement, and CR 601.2e would return the game to before the cast.
         return ()
+    # "…to **each of X targets**" (Firestorm) / "…and 3 damage to **a third
+    # target**" (Cone of Flame). The card prints how many, so an announcement of
+    # any other length is refused at the cast (CR 601.2c) — and a policy that
+    # proposed one anyway would spend every turn on a cast the engine rejects,
+    # which is exactly what ``refused_casts`` is the honesty check for. A board
+    # too small to fill the count is no legal announcement at all, which is what
+    # `()` means here.
+    exact = _card_divided_target_count(spec, x_value)
+    if exact is not None:
+        return (
+            [] if len(wanted) < exact
+            else [(entry["seat"], entry.get("index")) for entry in wanted[:exact]]
+        )
     if shape.whole_board:
         chosen = wanted
     elif shape.thresholded:
@@ -1484,6 +1498,26 @@ def choose_divided_targets(
         else (entry["seat"], entry.get("index"), share)
         for entry, share in zip(chosen, shares)
     ]
+
+
+def _card_divided_target_count(spec: dict, x_value: int | None) -> int | None:
+    """How many targets a card-dictated division prints, or None.
+
+    None for every divided spell whose count the caster chooses, which is every
+    one in the pool before Weatherlight — so the caller may ask unconditionally.
+
+    The two spellings the description carries: a printed number, and the string
+    ``"x"`` for a count announced under CR 107.3a. The policy has just chosen
+    that X, so it is the value passed in — the same number
+    ``casting._card_divided_target_count`` will read off the announcement, which
+    is what keeps the proposal and the gate counting the same thing.
+    """
+    printed = spec.get("divided_target_count")
+    if isinstance(printed, bool) or printed is None:
+        return None
+    if isinstance(printed, int):
+        return printed
+    return max(0, int(x_value or 0)) if printed == "x" else None
 
 
 def _divided_candidate_seat(entry) -> int | None:
@@ -2080,10 +2114,43 @@ def _cost_for(
 
 
 def _pick_x_value(
-    game: Game, player: PlayerState, card: CardDefinition, extra_generic: int = 0
+    game: Game, player: PlayerState, card: CardDefinition,
+    extra_generic: int = 0, hand_index: int | None = None,
 ) -> int | None:
+    """The X this seat announces for *card* (CR 107.3a), or None where the card
+    asks for none.
+
+    **The mana cost is only one of the four places CR 107.3a names**, and this
+    asked only that one. Fire Covenant ({1}{B}{R}, "pay X life"), Infernal
+    Harvest ({1}{B}, "return X Swamps") and Haunting Misery ({1}{B}{B}, "exile
+    X creature cards") print no {X} anywhere, so the AI announced nothing, the
+    cast took CR 107.3b's default of 0, and all three shipped spells resolved
+    doing precisely nothing — legal, since 0 is a choice, and invisible to both
+    honesty checks: the cast is not refused and it does interact. This is the
+    same one-place-short reading ``cast_announces_x`` was written for on the
+    browser's side of the question, so it is the same reader that answers it.
+
+    The ceiling is not the mana pool for those: it is a life total or a board or
+    a hand, and ``_additional_cost_x_ceiling`` is what
+    ``_unpayable_additional_cost`` will measure the announcement against — asked
+    here so the policy announces exactly what the cast will accept.
+
+    *hand_index* is which copy is being cast, and it matters to the ceiling: the
+    spell is on the stack before its costs are paid (CR 601.2a), so it cannot be
+    one of the cards discarded for Firestorm's "discard X cards". Omitted by the
+    two callers that are pricing a card rather than casting one, where an X one
+    too high is a bound and not an announcement.
+    """
     if "{X}" not in card.mana_cost.upper():
-        return None
+        if not cast_announces_x(card):
+            return None
+        seat = next(
+            (i for i, seated in enumerate(game.players) if seated is player), 0
+        )
+        bound = game._additional_cost_x_ceiling(
+            seat, card, from_zone="hand", spell_hand_index=hand_index,
+        )
+        return None if bound is None else bound
 
     max_x = _max_affordable_x(game, player, card, extra_generic)
     return max_x

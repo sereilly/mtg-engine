@@ -44,8 +44,10 @@ from ._sweeps import (
     lower_each_matching_damage,
     refuse_unswept_multiplier,
 )
+from ...divided_damage import EACH
 from ._common import (
     _describe_several_targets, _names_several_targets, _amount_payload,
+    card_divided_target_description,
     _filter_payload, _is_source, _is_you, _targets_payload,
     player_deed_payload, testable_filter_payload
 )
@@ -484,6 +486,31 @@ def _lower_damage_shape(
                 )
             described["filter"] = narrowing
         payload["targets"] = described
+        return (OracleInstruction("deal_damage", "", payload),)
+
+    # "Firestorm deals X damage to **each of X targets**." A cross-seat list of
+    # chosen targets, which is what the branch above announces and the only
+    # channel the engine has for one — so it goes there, with the card's own
+    # count and with the share taken away from the caster (CR 601.2d asks for a
+    # division only where the sentence says "as you choose", and this one does
+    # not divide at all).
+    #
+    # Here rather than in the several-targets branch below, which describes a
+    # list of *permanents*: CR 115.4's "any target" spans both battlefields and
+    # the players' faces, and that description has nowhere to put a face.
+    if (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "any_target"
+        and (recipient.count_from_x or recipient.count > 1)
+    ):
+        if back_reference or bonus:
+            raise LoweringError(
+                "a card-divided damage cannot carry a computed amount", node=node
+            )
+        payload["targets"] = card_divided_target_description(
+            division=EACH,
+            count="x" if recipient.count_from_x else recipient.count,
+        )
         return (OracleInstruction("deal_damage", "", payload),)
 
     # Damage aimed at the source's own controller rather than the spell's

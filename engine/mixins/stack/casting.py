@@ -38,7 +38,8 @@ from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                    cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
 from ...divided_damage import (
-    EVENLY, divided_description, divided_entry, division_refusal,
+    CARD_DIVIDED, EVENLY, card_shares, divided_description, divided_entry,
+    division_refusal, stamp_card_shares,
 )
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
@@ -302,6 +303,31 @@ def _divided_total(payload: dict, x_value: int | None) -> int:
         payload.get("amount_bonus", 0) or 0
     )
 
+
+
+def _card_divided_target_count(targets: dict, x_value: int | None) -> int | None:
+    """How many targets a card-dictated division prints, or None.
+
+    None for every spell whose target count is open — which is every divided
+    spell in the pool before Weatherlight — so the caller may ask
+    unconditionally and treat None as "CR 601.2c prints no number here".
+
+    ``count`` is a literal (Cone of Flame's three) or the string ``"x"``
+    (Firestorm's "each of **X** targets"), the same two spellings
+    ``_describe_several_targets`` already writes into a ``count``. Resolved
+    through the announced X rather than off the card, because CR 107.3a's
+    announcement is the only place that number exists.
+    """
+    from ...handlers._common import resolve_amount
+
+    count = targets.get("count")
+    if count is None or isinstance(count, bool):
+        return None
+    if isinstance(count, int):
+        return count
+    if count == "x":
+        return max(0, int(resolve_amount(count, x_value)))
+    return None
 
 
 def _named_divided_targets(
@@ -1316,20 +1342,45 @@ class SpellCastingMixin:
         # resolution-time answer would already have spent the mana.
         found = divided_description(compile_card_oracle(card).instructions)
         if found is not None:
+            division = found[1].get("division", EVENLY)
+            total = _divided_total(found[0], resolved_x_value)
+            # "…to **each of X targets**" (Firestorm), "…and 3 damage to a third
+            # target" (Cone of Flame). How many targets the card prints, which
+            # for Firestorm is the X the caster has just announced — so it is
+            # resolved here, one step after CR 601.2b and one before the
+            # CR 601.2c check that reads it.
+            exact = (
+                _card_divided_target_count(found[1], resolved_x_value)
+                if division in CARD_DIVIDED else None
+            )
             refusal = division_refusal(
-                _divided_total(found[0], resolved_x_value),
+                total,
                 divided_targets or (),
-                division=found[1].get("division", EVENLY),
+                division=division,
                 max_targets=found[1].get("max_targets"),
                 named_targets=_named_divided_targets(
                     card, from_zone, target_player_index,
                     target_permanent_index, target_permanent_ids,
                 ),
+                exact_targets=exact,
             )
             if refusal is not None:
                 self.log.append(f"{card.name}: {refusal}")
                 return SimulationResult(
                     card.name, False, classification.effect_kind, refusal,
+                )
+            # The card's own shares, written onto the announcement now that it
+            # is known to be legal. Here rather than at resolution because the
+            # share has to ride its target: a target that has left is dropped
+            # from the list (CR 608.2b), and a share read by position after that
+            # would slide Cone of Flame's 3 onto the creature it assigned 2.
+            if division in CARD_DIVIDED and divided_targets:
+                divided_targets = stamp_card_shares(
+                    divided_targets,
+                    card_shares(
+                        total, len(divided_targets),
+                        division=division, shares=found[1].get("shares"),
+                    ),
                 )
 
         # The printed additional costs, checked now: CR 601.2h says an unpayable
@@ -1859,7 +1910,14 @@ class SpellCastingMixin:
                         spell_hand_index if from_zone == "hand" else None
                     ),
                 )
-                if len(payable) < cost.discard_cards:
+                # "…, discard **X** cards." (Firestorm.) Gated on the
+                # *announced* count (CR 107.3a) for the reason the return and
+                # the graveyard exile above are: a hand of two is no payment
+                # for an announced three, and a gate that asked only whether one
+                # card existed would admit the cast and then discard what it
+                # found — a spell cast for less than the caster announced, with
+                # its damage still sized by the announcement.
+                if len(payable) < cost.discarded_count(x_value):
                     shortfall = (
                         "no card in hand answers this cost"
                         if cost.discard_filters
@@ -2478,7 +2536,7 @@ class SpellCastingMixin:
                     f"({len(emptied)} card(s)) to cast {card.name}"
                 )
             if cost.discard_cards:
-                for _ in range(cost.discard_cards):
+                for _ in range(cost.discarded_count(x_value)):
                     if not caster.hand:
                         break
                     # The chosen card was resolved before the spell left the

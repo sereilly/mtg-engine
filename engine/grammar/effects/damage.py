@@ -21,8 +21,9 @@ from ..readers import accept_source_reference_spec
 from ..nouns import parse_object_filter
 from ..records import accept_player_deed
 from ..references import parse_player_ref, parse_recipient
-from ..lexer import WORD
+from ..lexer import NUMBER, WORD
 from ..stream import TokenStream
+from ..vocabulary import NUMBER_WORDS
 from ..where_x import _parse_where_x_is
 from ..phrases import (
     _accept_mana_alternatives, _accept_per_counter_multiplier,
@@ -37,11 +38,88 @@ from ..phrases import (
 # ---------------------------------------------------------------------------
 
 
+#: The two spellings of CR 115.4's "any target" a sentence uses for its
+#: **second and third** one: "…1 damage to any target, 2 damage to **another
+#: target**, and 3 damage to **a third target**" (Cone of Flame). The words are
+#: the printed way of saying "and not one you have already named", which is
+#: exactly ``TargetSpec.distinct_from_prior``; the ordinal says which clause it
+#: was printed in and nothing about the object, so it is read and dropped.
+_FURTHER_ANY_TARGET = (("another", "target"), ("a", "third", "target"))
+
+
+def _at_bare_words(stream: TokenStream, words: tuple[str, ...]) -> bool:
+    """Whether the cursor is at *words* with **no further word after them**.
+
+    "another target" ends Cone of Flame's second clause and "another target
+    creature" opens Garruk's, and the only thing that tells them apart is
+    whether a noun follows. Looked ahead rather than tried-and-rewound, because
+    the shorter reading succeeds on a prefix of the longer one and would take
+    it — the same reason ``references._at_counted_target`` looks ahead.
+    """
+    if any(stream.peek_word(i) != word for i, word in enumerate(words)):
+        return False
+    after = stream.peek(len(words))
+    return after is None or after.kind != WORD
+
+
+def _accept_several_any_targets(stream: TokenStream) -> "ast.TargetSpec | None":
+    """``[each of] <count> targets`` — CR 115.4's phrase in the **plural**.
+
+    "Firestorm deals X damage to **each of X targets**." One announcement of a
+    cross-seat list, which is what ``divided_targets`` is, so the lowering
+    hands it to that channel; here it is read as an ordinary ``any_target``
+    carrying a count, because that is what the words say.
+
+    Read in the damage family rather than beside ``any target`` in
+    ``references`` for that production's own stated reason: only damage prints
+    this phrase, and a plural "any target" admitted everywhere would hand a
+    two-target picker to the dozens of lowerings that resolve exactly one.
+
+    The count may be a printed number or the announced X (CR 107.3a) — the two
+    spellings ``_describe_several_targets`` already carries — and nothing else:
+    a phrase with no count is the ordinary singular one screen up.
+    """
+    mark = stream.mark()
+    stream.accept_phrase("each", "of")
+    token = stream.peek()
+    word = stream.peek_word()
+    counted = token is not None and (
+        token.kind == NUMBER or word in NUMBER_WORDS or word == "x"
+    )
+    if not counted or stream.peek_word(1) != "targets":
+        stream.reset(mark)
+        return None
+    amount = parse_amount(stream)
+    stream.expect_word("targets")
+    fixed = isinstance(amount, ast.Fixed)
+    return ast.TargetSpec(
+        "any_target",
+        count=amount.value if fixed else 0,
+        count_from_x=not fixed,
+        targeted=True,
+    )
+
+
 def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     """A damage recipient, plus the one union only damage prints: "target
     player or planeswalker" (Chandra's Magmutt). Read here rather than in
     ``parse_player_ref`` so the flag exists only where the damage lowering —
-    the one consumer that honours it — can receive it."""
+    the one consumer that honours it — can receive it.
+
+    The two plural/ordinal spellings of "any target" are read here for that
+    same reason, and they are probed **first**: "a third target" would
+    otherwise be taken by the article quantifier and refused on the missing
+    noun, and the rewind that follows is invisible to the caller either way.
+    """
+    for opener in _FURTHER_ANY_TARGET:
+        if _at_bare_words(stream, opener):
+            stream.advance(len(opener))
+            return ast.TargetSpec(
+                "any_target", targeted=True, distinct_from_prior=True
+            )
+    several = _accept_several_any_targets(stream)
+    if several is not None:
+        return several
     recipient = parse_recipient(stream)
     # "target player **or planeswalker**" (Chandra's Magmutt). Two words behind
     # the noun phrase, read by ``phrases`` because prevention prints them too

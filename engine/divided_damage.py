@@ -1,6 +1,11 @@
 """How much of a divided effect each of its targets gets (CR 601.2d).
 
-Two printed sentences, two divisions:
+Four printed sentences, four divisions — and only the first two are divisions
+in the ordinary sense. What all four share is the thing this module is really
+about: a spell whose targets are a **cross-seat list**, chosen in one
+announcement, with a number attached to each. ``divided_targets`` is the
+engine's only channel for such a list, so a sentence that names several targets
+of mixed kinds arrives here whether or not it divides anything.
 
 * "Fireball deals X damage **divided evenly, rounded down**, among any number of
   targets." Nobody chooses; the game divides.
@@ -9,8 +14,17 @@ Two printed sentences, two divisions:
   announcing the spell — before targets are checked and before costs are paid,
   and locked in from then on (CR 608.2: the division is not re-chosen at
   resolution).
+* "Cone of Flame deals 1 damage to any target, 2 damage to another target, and
+  3 damage to **a third target**." Three targets and three printed shares
+  (:data:`FIXED`).
+* "Firestorm deals X damage to **each of X targets**." X targets and no
+  division at all — each one takes the whole amount (:data:`EACH`).
 
-The engine did the first one for both. ``DamageRiders.divided_evenly`` was set
+The last two are :data:`CARD_DIVIDED`: the caster announces the targets and the
+card announces the shares, so nothing is asked and the numbers are stamped onto
+the announcement.
+
+The engine did the first one for both of the first two. ``DamageRiders.divided_evenly`` was set
 by the parser, copied by the rider merger, asserted by one grammar test — and
 read by no lowering, no handler and no payload, so Pyrotechnics, Meteor Shower,
 Fiery Justice and Fire Covenant were all played as ``damage // len(targets)``.
@@ -40,6 +54,28 @@ DIVIDED_TARGETS = "divided_targets"
 #: existed carries no key, and the even split is what it meant.
 EVENLY = "evenly"
 CHOSEN = "chosen"
+#: "Cone of Flame deals 1 damage to any target, 2 damage to another target, and
+#: 3 damage to a third target." Three targets and three **printed** shares,
+#: paired by the order the caster announces the targets in — CR 601.2c settles
+#: every target in one announcement, and the printed order is the only thing
+#: that tells the 1 from the 3.
+FIXED = "fixed"
+#: "Firestorm deals X damage to **each of X targets**." Not a division at all:
+#: every target takes the whole amount, and X of them must be named. It lives
+#: in this family for the one thing it does share with the others — a
+#: cross-seat list of chosen targets, which is what ``divided_targets`` is and
+#: the engine's only channel for one.
+EACH = "each"
+
+#: The divisions the **card** dictates rather than the caster. CR 601.2d asks
+#: the caster for a division only where the sentence says "as you choose"; both
+#: members here print their own, so the shares are stamped onto the
+#: announcement (:func:`card_shares`) instead of being asked for.
+#:
+#: One name because three readers ask the question — the cast gate stamps, the
+#: handler honours what was stamped, and the picker must not raise a division
+#: prompt — and three spellings of a set membership is how they come apart.
+CARD_DIVIDED = frozenset({FIXED, EACH})
 
 
 def divided_entry(entry) -> tuple[int, int | None, int | None]:
@@ -68,9 +104,48 @@ def announced_division(entries) -> list[int] | None:
     return [int(amount) for amount in amounts]
 
 
+def card_shares(total: int, count: int, *, division: str, shares) -> list[int]:
+    """What each of *count* targets takes when the **card** sets the shares.
+
+    The one arithmetic for both members of :data:`CARD_DIVIDED`, because the
+    two differ only in where the numbers come from: :data:`FIXED` reads them off
+    the printed sentence in order, and :data:`EACH` hands every target the whole
+    amount. Neither divides *total* — that is the whole of what makes them not a
+    division — so ``total`` is read only by ``EACH``, where it is the printed
+    amount each target is dealt.
+
+    Short lists are padded with 0 rather than raising: an announcement of the
+    wrong length is refused by :func:`division_refusal` before this runs, and a
+    handler re-entering after a target has left (CR 608.2b) must still be able
+    to size what it has.
+    """
+    printed = [int(share) for share in (shares or ())]
+    if division == EACH:
+        return [int(total)] * count
+    return (printed + [0] * count)[:count]
+
+
+def stamp_card_shares(entries, amounts) -> list[tuple]:
+    """*entries* with *amounts* attached positionally, as three-tuples.
+
+    The announcement step for a :data:`CARD_DIVIDED` spell. The share has to
+    ride the entry rather than be re-derived at resolution, for the reason the
+    module docstring gives about parallel lists — and here for a second one that
+    is specific to :data:`FIXED`: a target that has left is dropped from the
+    list at resolution (CR 608.2b), so a share read by *position* after that
+    would slide Cone of Flame's 3 onto the creature the card assigned 2.
+    """
+    return [
+        (seat, index, int(amount))
+        for (seat, index, _announced), amount in zip(
+            (divided_entry(entry) for entry in entries), amounts
+        )
+    ]
+
+
 def division_refusal(
     total: int, entries, *, division: str, max_targets: int | None = None,
-    named_targets: int = 0,
+    named_targets: int = 0, exact_targets: int | None = None,
 ) -> str | None:
     """Why *entries*' announced division is illegal, or None (CR 601.2d).
 
@@ -107,6 +182,27 @@ def division_refusal(
     lawful division — one target taking the whole amount — so it is counted
     rather than refused; naming nothing at all is what this rejects.
     """
+    # "…to **each of X targets**" (Firestorm), "…to any target, 2 damage to
+    # another target, and 3 damage to a third target" (Cone of Flame). The card
+    # prints *how many* targets, so a list of any other length is an illegal
+    # proposal under CR 601.2c and CR 601.2e returns the game to before it.
+    #
+    # Checked first and outside the "no entries is excused" rule below: that
+    # rule exists because a caller may announce one target through the engine's
+    # older single-target channel, which is a lawful announcement for a spell
+    # whose target count is open. For a spell that prints its count, one target
+    # is a lawful announcement only when the count is one — so the older channel
+    # is *counted* here rather than excused.
+    if exact_targets is not None:
+        named = len(entries) or named_targets
+        if named != exact_targets:
+            return (
+                f"this spell has exactly {exact_targets} target"
+                f"{'' if exact_targets == 1 else 's'} "
+                f"({named} named, CR 601.2c)"
+            )
+        if not entries:
+            return None
     if not entries:
         return None if named_targets else (
             "a divided spell must have at least one target (CR 601.2d)"
@@ -119,6 +215,13 @@ def division_refusal(
     amounts = announced_division(entries)
     if amounts is None:
         return None
+    if division in CARD_DIVIDED:
+        # The shares are printed on the card, and `stamp_card_shares` writes
+        # them onto the announcement after this gate. A caster who sent their
+        # own is refused rather than overwritten: an overwrite would accept an
+        # announcement the rules do not allow and then silently play a different
+        # one, which is the direction this whole gate exists to refuse.
+        return "this spell's shares are printed, not announced (CR 601.2d)"
     if division != CHOSEN:
         return "this spell's damage is divided evenly, not as you choose"
     if any(amount < 1 for amount in amounts):
@@ -135,10 +238,18 @@ def divide(total: int, entries, *, division: str) -> list[tuple[int, int | None,
     printed word asks for — "divided evenly, **rounded down**", which is what
     ``//`` is and why a remainder simply disappears (Fireball for 5 among two
     targets deals 2 and 2).
+
+    A :data:`CARD_DIVIDED` spell reaches here with its shares already on the
+    entries (``stamp_card_shares``, at the announcement), so it takes the same
+    branch a caster's announcement does: the numbers are read off the entries
+    either way, and only *who chose them* differs. Reading them positionally
+    here instead would be wrong for exactly the reason they are stamped —
+    a target that has left is dropped from the list first (CR 608.2b), and every
+    later share would slide up one.
     """
     normalized = [divided_entry(entry) for entry in entries]
     amounts = announced_division(entries)
-    if amounts is None or division != CHOSEN:
+    if amounts is None or (division != CHOSEN and division not in CARD_DIVIDED):
         share = total // len(normalized) if normalized else 0
         amounts = [share] * len(normalized)
     return [
@@ -186,7 +297,8 @@ def divided_description(instructions) -> tuple[dict, dict] | None:
 
 
 __all__ = [
-    "CHOSEN", "DIVIDED_TARGETS", "EVENLY", "announced_division", "divide",
-    "divided_description", "divided_entry", "divided_instruction",
-    "division_refusal",
+    "CARD_DIVIDED", "CHOSEN", "DIVIDED_TARGETS", "EACH", "EVENLY", "FIXED",
+    "announced_division", "card_shares", "divide", "divided_description",
+    "divided_entry", "divided_instruction", "division_refusal",
+    "stamp_card_shares",
 ]

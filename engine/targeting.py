@@ -2275,6 +2275,22 @@ def _from_targets_payload(targets) -> dict | None:
         # omission invisible: no card had printed a divided target with a
         # narrowing the flags carry until now.
         spec.update(_narrowing_flags(narrowing))
+        # "…to **each of X targets**" (Firestorm) / "…and 3 damage to **a third
+        # target**" (Cone of Flame). How many targets the *card* prints, where
+        # every other divided spell leaves the number to the caster. Carried as
+        # the raw description value — a number, or the string "x" for a count
+        # the caster announces (CR 107.3a) — because the picker, the AI and the
+        # cast gate each resolve it against a different thing they know: the
+        # browser against the X box, the policy against the X it chose, the gate
+        # against the X that was announced.
+        #
+        # A separate key from ``max_targets`` above, which is a *ceiling* on a
+        # count the caster still chooses (Contagion's "one or two"). Folding the
+        # two together would let a Firestorm announced with one target past a
+        # gate that only ever asked "not too many".
+        printed_count = targets.get("count")
+        if printed_count is not None and not isinstance(printed_count, bool):
+            spec["divided_target_count"] = printed_count
         bound = targets.get("max_targets")
         if isinstance(bound, int):
             # "…among **one or two** target creatures" (Contagion). A divided

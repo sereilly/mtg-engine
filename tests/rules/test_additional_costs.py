@@ -612,6 +612,13 @@ def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
     Haunting Misery (Weatherlight) is the third, and it arrived exactly the way
     the list is written to catch: its {1}{B}{B} prints no {X} at all, and the X
     lives only in "exile X creature cards from your graveyard".
+
+    **Firestorm is the fourth, and it arrived the same way one wave later.** Its
+    printed mana cost is {R}; the X is announced in "discard X cards" and then
+    spent twice over by the damage line, which deals X to each of X targets. It
+    is the first card in the pool whose *target count* is the announcement this
+    census is about, so a picker that did not ask for the X would not merely
+    resolve for nothing -- it would refuse the cast outright (CR 601.2c).
     """
     from engine.cast_costs import cast_announces_x
 
@@ -621,7 +628,7 @@ def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
         if cast_announces_x(card) and "{X}" not in (card.mana_cost or "").upper()
     )
     assert outside == [
-        "Fire Covenant", "Haunting Misery", "Infernal Harvest",
+        "Fire Covenant", "Firestorm", "Haunting Misery", "Infernal Harvest",
     ], outside
 
 

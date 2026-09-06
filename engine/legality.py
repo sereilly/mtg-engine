@@ -556,7 +556,10 @@ class LegalityMixin:
             # `_unpayable_additional_cost` refuses above, so the picker offers
             # exactly what the cast would accept.
             bound = self._additional_cost_x_ceiling(
-                caster_index, card, from_zone=from_zone
+                caster_index, card, from_zone=from_zone,
+                spell_hand_index=(
+                    spell_hand_index if from_zone == "hand" else None
+                ),
             )
             if bound is not None:
                 spec["max_x"] = (
@@ -743,6 +746,7 @@ class LegalityMixin:
 
     def _additional_cost_x_ceiling(
         self, caster_index: int, card: CardDefinition, *, from_zone: str,
+        spell_hand_index: int | None = None,
     ) -> int | None:
         """The largest X the printed additional costs of *card* leave payable,
         or None when no printed cost names one.
@@ -787,6 +791,17 @@ class LegalityMixin:
                 bounds.append(
                     len(self._graveyard_exile_candidates(caster_index, cost))
                 )
+            # "…, discard **X** cards." (Firestorm.) The fourth resource, and
+            # the fourth enumeration read rather than re-derived: the picker
+            # offers exactly what ``_unpayable_additional_cost`` accepts because
+            # both count through ``_discard_cost_payers``. The spell itself is
+            # excluded there (CR 601.2a puts it on the stack before its costs
+            # are paid), so a hand of one card holding only Firestorm bounds X
+            # at 0 rather than at 1.
+            if cost.discard_count_x:
+                bounds.append(len(self._discard_cost_payers(
+                    caster_index, cost, spell_hand_index=spell_hand_index,
+                )))
         return min(bounds) if bounds else None
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------

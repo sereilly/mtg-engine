@@ -181,6 +181,14 @@ class AdditionalCost:
     #: that field is arithmetic and a string in it would be charged as garbage.
     exile_graveyard_count_x: bool = False
     discard_cards: int = 0
+    #: "As an additional cost to cast this spell, discard **X** cards."
+    #: (Firestorm.) CR 107.3a's fourth place an X can live, and for this card
+    #: the *only* one: its printed mana cost is {R}, so the discard clause is
+    #: where X is announced and the damage line spends what the announcement
+    #: bought. A separate flag rather than a sentinel in the count above, for
+    #: ``pay_life_x``'s reason: every reader of that field is arithmetic and a
+    #: string in it would be charged as garbage.
+    discard_count_x: bool = False
     #: "…, discard **a red or green card**." (Surge of Strength.) Which cards in
     #: hand may pay the discard above, as the alternatives the payer chooses
     #: between — the same tuple-of-payloads shape
@@ -269,6 +277,21 @@ class AdditionalCost:
             return max(0, int(x_value or 0))
         return self.exile_graveyard_count
 
+    def discarded_count(self, x_value: int | None) -> int:
+        """How many cards this cost discards, given the announced X.
+
+        One reader for the gate and the payment, for :meth:`life_charged`'s
+        reason: CR 601.2h refuses the cast when the answer is more cards than
+        the hand holds, and CR 107.3a's announcement is what makes the answer
+        knowable at all. A cost that read X and charged the printed 1 would be
+        a spell cast for a fraction of its price -- and for Firestorm, whose X
+        *is* this cost, it would also make the spell's damage and its price
+        disagree, since the same X sizes both.
+        """
+        if self.discard_count_x:
+            return max(0, int(x_value or 0))
+        return self.discard_cards
+
     def describe(self) -> str:
         parts = []
         for offer in self.optional_mana:
@@ -316,7 +339,8 @@ class AdditionalCost:
             parts.append(f"pay {self.pay_life} life")
         if self.discard_cards:
             named = filter_head_noun(self.discard_filters[0]) if self.discard_filters else "card"
-            parts.append(f"discard {self.discard_cards} {named}(s)")
+            how_many = "X" if self.discard_count_x else str(self.discard_cards)
+            parts.append(f"discard {how_many} {named}(s)")
         return " and ".join(parts) or "no additional cost"
 
 
@@ -402,6 +426,19 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # claim these words -- the order is what keeps the two from ever being one
     # question, not what resolves a fight between them.
     (re.compile(r"^(?:discard|discarding) your hand$"), "discard_whole_hand"),
+    # "…, discard **X** cards." (Firestorm.) CR 107.3a's X in an additional
+    # cost, the same shape the return and the graveyard exile above already
+    # carry -- and, as for both of those, the *only* place this card's X lives:
+    # its printed mana cost is {R}. Read **before** the singular row below,
+    # whose noun must open with an article and so cannot claim these words; the
+    # order is what keeps the two from ever being one question.
+    #
+    # Only an X, deliberately. A printed "discard two cards" is admitted
+    # nowhere, which is the note the singular row already carries: a counted
+    # discard the payment cannot collect would describe a payment that never
+    # happens. Here the count is not printed at all -- it is announced, and the
+    # payment collects exactly what was announced.
+    (re.compile(r"^(?:discard|discarding) x (?P<noun>.+)$"), "discard_x"),
     (re.compile(r"^(?:discard|discarding) (?P<noun>(?:a|an|one) .+)$"), "discard"),
     # The **noun phrase is read, not spelled out**. This row was
     # ``sacrifice a creature`` as a literal, so Goblin Grenade's "sacrifice a
@@ -643,7 +680,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     """
     fields: dict = {
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
-        "discard_filters": (),
+        "discard_filters": (), "discard_count_x": False,
         "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
         "exile_graveyard_filter": None, "exile_graveyard_count": 1,
         "exile_graveyard_count_x": False,
@@ -674,7 +711,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 fields["pay_life_x"] = True
             elif field == "pay_life":
                 fields["pay_life"] += int(found.group(1))
-            elif field == "discard":
+            elif field in ("discard", "discard_x"):
                 from .oracle import _chargeable_discard_filters
 
                 if fields["discard_cards"]:
@@ -687,8 +724,16 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 narrowed = _chargeable_discard_filters(found.group("noun"))
                 if narrowed is None:
                     return None
+                # ``discard_cards`` stays the printed *count* — 1 for the
+                # singular clause, and 1 here too, because an announced X of
+                # zero is still a cost this card prints and every "is there a
+                # discard on this cast?" reader is a truth test on this field.
+                # How many cards are actually charged is
+                # ``discarded_count(x_value)``, which is the one reader the gate
+                # and the payment share.
                 fields["discard_cards"] += 1
                 fields["discard_filters"] = narrowed
+                fields["discard_count_x"] = field == "discard_x"
             elif field == "return":
                 if fields["return_filter"] is not None:
                     # Two return clauses would need two filters and one field
@@ -942,6 +987,7 @@ def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
         return True
     return any(
         cost.pay_life_x or cost.return_count_x or cost.exile_graveyard_count_x
+        or cost.discard_count_x
         for cost in costs_charged_from(card, from_zone)
     )
 

@@ -71,14 +71,52 @@ def divided_target_description(
     card prints "any number of" — an absent key is the unbounded sentence, so a
     reader written before the bound existed keeps meaning what it meant.
     """
+    from ...divided_damage import CHOSEN
+
     described: dict[str, object] = {
         "quantifier": "divided",
         "kind": "divided",
-        "division": "chosen",
+        "division": CHOSEN,
         "filter": {"type_filter": type_filter},
     }
     if max_targets is not None:
         described["max_targets"] = max_targets
+    return described
+
+
+def card_divided_target_description(
+    *, division: str, count: "int | str", shares: "tuple[int, ...] | None" = None,
+) -> dict[str, object]:
+    """The ``targets`` description for a list of targets the **card** sizes and
+    shares out (CR 601.2c, and CR 601.2d only in the sense that it is not asked).
+
+    "Firestorm deals X damage to each of X targets" and "Cone of Flame deals 1
+    damage to any target, 2 damage to another target, and 3 damage to a third
+    target" are one shape with two fillings: a cross-seat list of chosen
+    targets, a printed number of them, and a printed amount for each. That is
+    the ``divided`` channel — the engine's only announcement of a target list
+    spanning both battlefields and the players' faces — with the two things a
+    caster normally supplies taken away from them.
+
+    Beside :func:`divided_target_description` for its stated reason, which
+    applies here twice over: the casting path's announcement gate, the picker,
+    ``divided_damage.divided_description`` and the handler all read these keys,
+    and now so does the share stamping in between.
+
+    ``count`` is the printed number or the string ``"x"`` — the two spellings
+    ``_describe_several_targets`` already writes — because Firestorm's is the X
+    announced under CR 107.3a and does not exist until the cast. ``shares`` is
+    omitted for :data:`~engine.divided_damage.EACH`, where every target takes
+    the whole amount and a list would be a second copy of one number.
+    """
+    described: dict[str, object] = {
+        "quantifier": "divided",
+        "kind": "divided",
+        "division": division,
+        "count": count,
+    }
+    if shares is not None:
+        described["shares"] = list(shares)
     return described
 
 
