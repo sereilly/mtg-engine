@@ -79,6 +79,16 @@ class ActivationRestriction:
     #: that -- a use budget spent on one acquired ability says nothing about an
     #: identically worded one -- and the clause alone cannot tell them apart.
     reads_line: bool = False
+    #: A denial written from the clause's own printed words, for a row whose
+    #: parameters are what the player needs to hear. "You don't have that many
+    #: cards in hand" is true of every count and tells nobody which one the card
+    #: asks for; "only with exactly seven cards in hand" is the sentence.
+    #:
+    #: Its own field rather than a format string on :attr:`denial`, because a
+    #: row's parameters are not always words that read well in a message — the
+    #: board-condition row's capture is a whole noun phrase — and a template
+    #: nobody could fill would be a message that renders a regex.
+    denial_from_payload: "Callable[[re.Match[str]], str] | None" = None
     #: Whether the clause's *payload* is one this file can act on, asked of the
     #: match alone. A row whose capture ends in `.+` matches more sentences than
     #: it implements -- "controls a snow land" and "controls the highest life
@@ -619,9 +629,43 @@ def _opponents_turn_before_attackers(game: "Game", controller_index: int, source
     return _before_attackers_are_declared(game, controller_index, source)
 
 
-def _exactly_seven_cards_in_hand(game: "Game", controller_index: int, source) -> bool:
-    """Library of Alexandria's draw ability."""
-    return len(game.players[controller_index].hand) == 7
+def _printed_hand_count(match: "re.Match[str]") -> int | None:
+    """The hand size the clause names, or None when the word is not a number.
+
+    "**no** cards in hand" (Fool's Tome) and "exactly **seven** cards in hand"
+    (Library of Alexandria) are one sentence with the number changed, so they
+    are one row and the number is payload — the shape every other parameterised
+    row in this table has. Written as its own reader because both the predicate
+    and :attr:`ActivationRestriction.payload_readable` ask it, and a row that
+    admitted a count word it could not turn into a number would refuse every
+    activation, silently.
+    """
+    from .oracle_types import _NUMBER_WORDS
+
+    word = match.group("count")
+    if word == "no":
+        return 0
+    word = word.split(" ", 1)[1] if " " in word else word
+    return int(word) if word.isdigit() else _NUMBER_WORDS.get(word)
+
+
+def _readable_hand_count(match: "re.Match[str]") -> bool:
+    return _printed_hand_count(match) is not None
+
+
+def _exact_cards_in_hand(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"Activate only if you have <N> cards in hand." (Fool's Tome, Library of
+    Alexandria.)
+
+    Both printed spellings state an **exact** size rather than a bound, so one
+    comparison answers both. A card printing "or more" / "or fewer" would be a
+    different sentence and would want its own row; this pattern does not admit
+    one, which is what keeps that from being read as this.
+    """
+    wanted = _printed_hand_count(match)
+    return wanted is not None and len(game.players[controller_index].hand) == wanted
 
 
 def _controlled_since_your_last_turn(game: "Game", controller_index: int, source) -> bool:
@@ -1498,10 +1542,27 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _before_blockers_are_declared,
         "only before blockers are declared",
     ),
+    # "Activate only if you have **no** cards in hand" (Fool's Tome) and
+    # "…**exactly seven** cards in hand" (Library of Alexandria). One row: the
+    # sentence is the same rule with the number changed, and the number is
+    # payload for the reason every parameterised row here gives — the next card
+    # to print it about another count costs nothing.
     ActivationRestriction(
-        re.compile(r"^activate only if you have exactly seven cards in hand$"),
-        _exactly_seven_cards_in_hand,
-        "only with exactly seven cards in hand",
+        re.compile(
+            r"^activate only if you have (?P<count>no|exactly \w+) "
+            r"cards? in hand$"
+        ),
+        _exact_cards_in_hand,
+        "you don't have that many cards in hand",
+        reads_payload=True,
+        payload_readable=_readable_hand_count,
+        # The printed number, because "that many" tells the player nothing —
+        # and because the row this generalised said "only with exactly seven
+        # cards in hand", which is what a message about Library of Alexandria
+        # should still say.
+        denial_from_payload=lambda match: (
+            f"only with {match.group('count')} cards in hand"
+        ),
     ),
     ActivationRestriction(
         re.compile(
@@ -1863,6 +1924,8 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
         else:
             legal = entry.is_legal(game, controller_index, source)
         if not legal:
+            if entry.denial_from_payload is not None:
+                return entry.denial_from_payload(match)
             return entry.denial
     return None
 

@@ -1058,6 +1058,64 @@ _GLOBAL_PLAY_TIMING = re.compile(
 #: ``global_activation_ban`` records one file over.
 GLOBAL_PLAY_TIMING_CLAIM = "global_play_timing"
 
+#: "**During combat**, players can't cast instant spells or activate abilities
+#: that aren't mana abilities." (Hand to Hand.)
+#:
+#: The row above with a *phase* in place of a turn, and the same two gates read
+#: it for the same reason: one printed sentence stating one rule about both
+#: ways of acting, so claiming the casting half alone would ship an enchantment
+#: that stops a combat trick and lets an Icy Manipulator through.
+#:
+#: The spell type is payload, like every other printed word in this table. The
+#: mana-ability exception is **not** optional: CR 605.1a's exception is
+#: something a card prints rather than a rule about prohibitions in general
+#: (``_GLOBAL_PLAY_TIMING`` above names none and so stops mana abilities too),
+#: so a sentence without those words is a different, stricter card and must not
+#: be read as this one.
+_COMBAT_PLAY_BAN = re.compile(
+    rf"^during combat, players can't cast (?P<type>{_BANNABLE_SPELL_TYPES}) "
+    r"spells or activate abilities that aren't mana abilities$"
+)
+
+#: The claim name for the row above, its own for
+#: :data:`GLOBAL_PLAY_TIMING_CLAIM`'s reason.
+COMBAT_PLAY_BAN_CLAIM = "combat_play_ban"
+
+
+@lru_cache(maxsize=None)
+def combat_play_ban_line(line: str) -> str | None:
+    """The spell type *line* forbids during combat, or None.
+
+    One reader, three callers, exactly as :func:`global_play_timing_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and the casting and activation gates ask it so the line is *enforced*.
+    """
+    match = _COMBAT_PLAY_BAN.match(line.strip().lower().rstrip("."))
+    return match.group("type") if match is not None else None
+
+
+def combat_play_ban(game: "Game") -> tuple[str, str] | None:
+    """``(the permanent's name, the spell type it stops)`` while combat is on,
+    or None.
+
+    Every battlefield and no seat comparison, for :func:`global_play_timing`'s
+    reason: the sentence names nobody, so it binds its own controller as
+    thoroughly as anybody (CR 601.3a).
+
+    "During combat" is CR 506.1's phase — every step of it, from the beginning
+    of combat through end of combat — which is what ``current_turn_phase``
+    answers. Asked of the *phase* rather than of a step, because a card naming
+    a step would say so.
+    """
+    if getattr(game, "current_turn_phase", None) != "combat":
+        return None
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            banned = combat_play_ban_line(raw_line)
+            if banned is not None:
+                return permanent.card.name, banned
+    return None
+
 
 @lru_cache(maxsize=None)
 def global_play_timing_line(line: str) -> bool:

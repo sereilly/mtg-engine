@@ -129,6 +129,22 @@ class AddMana:
     #: do, and the lowering refuses it on any ability whose cost does not make
     #: one.
     any_type_from: str | None = None
+    #: "Add one mana of any **type that a land you control** could produce."
+    #: (Reflecting Pool.) The fourth cell of the two-axis table the two fields
+    #: above draw: a **type** (CR 106.1b's six, so a land tapping for {C}
+    #: answers it) read off a **board** (a described set, not a back-reference
+    #: to what this ability's cost paid).
+    #:
+    #: Its own field rather than a value of ``any_type_from``, whose values name
+    #: a *cost record* and whose lowering refuses an ability that makes no such
+    #: payment — a board is not a payment and would have to be exempted from the
+    #: one check that field exists to make. Its own field rather than a value of
+    #: ``any_color_from`` for that field's own stated reason: colourless is a
+    #: type and not a colour, and the handler narrows to a different set.
+    #:
+    #: The value names the board ("controlled_lands"), so a card printing the
+    #: same sentence about somebody else's lands is one more value.
+    any_type_from_lands: str | None = None
     # "**an additional** {B}" (the Mana Batteries). Recorded rather than
     # consumed and dropped: the word says this clause adds on top of the one
     # before it, which is what makes the printed sentence two statements rather

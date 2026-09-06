@@ -521,10 +521,6 @@ EXTRA_PLUS1_COUNTER_TEXT = (
     "if one or more +1/+1 counters would be put on a creature you control, "
     "that many plus one +1/+1 counters are put on that creature instead"
 )
-TRIPLE_DAMAGE_TEXT = (
-    "if a source you control would deal damage to a permanent or player, "
-    "it deals triple that damage to that permanent or player instead"
-)
 DOUBLE_DRAW_TEXT = (
     "if you would draw a card except the first one you draw in each of your "
     "draw steps, draw two cards instead"
@@ -1478,33 +1474,77 @@ def _damage_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+#: The damage-multiplier sentence, with **two** words as payload: the factor
+#: and whether the source is narrowed to the reader's own. It replaced a
+#: ``TRIPLE_DAMAGE_TEXT`` constant, which was one card's printing of it and
+#: which nothing reads any more. Fiery Emancipation prints "a source
+#: **you control** ... **triple**"; Furnace of Rath prints "a source ...
+#: **double**" and so applies to every source in the game, its controller's
+#: opponents' included. A second constant would have been a second card's worth
+#: of one sentence - and, worse, would have kept the narrowing implicit, where
+#: the whole difference between the two cards is that Furnace has none.
+_DAMAGE_MULTIPLIER_RE = re.compile(
+    r"^if a source(?P<yours> you control)? would deal damage to a permanent or "
+    r"player, it deals (?P<factor>double|triple) that damage to that permanent "
+    r"or player instead$"
+)
+
+#: The printed multiplier words. A factor this table cannot read leaves the line
+#: unclaimed rather than admitted with the damage unchanged.
+_MULTIPLIER_WORDS = {"double": 2, "triple": 3}
+
+
+def damage_multiplier_line(line: str) -> tuple[int, bool] | None:
+    """``(factor, only sources its controller controls)`` for *line*, or None.
+
+    One reader for the support gate, the parse claim and the interceptor, so
+    what is claimed and what fires cannot drift - the pairing every text-keyed
+    table in this engine keeps.
+    """
+    match = _DAMAGE_MULTIPLIER_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    return _MULTIPLIER_WORDS[match.group("factor")], match.group("yours") is not None
+
+
 def _damage_multiplier(game, payload: dict) -> int:
     """How much this event's damage is multiplied by, or 1 for not at all.
 
-    Read off the seat that controls the *source* (CR 109.5), which is the whole
-    reason a damage event carries one — the payload's ``source`` is a bare
-    ``CardDefinition`` for a spell, so a Permanent-only reading would triple a
-    creature's damage and silently not a burn spell's.
+    A **narrowed** multiplier is read off the seat that controls the *source*
+    (CR 109.5), which is the whole reason a damage event carries one — the
+    payload's ``source`` is a bare ``CardDefinition`` for a spell, so a
+    Permanent-only reading would triple a creature's damage and silently not a
+    burn spell's. An unnarrowed one (Furnace of Rath) names no seat at all and
+    so applies to every source there is — including one no seat can be derived
+    for, which is why the ``seat is None`` early return moved inside the
+    narrowing test rather than staying above it.
 
-    **One candidate stands in for every copy.** CR 616.1 would apply two Fiery
-    Emancipations one at a time, and the affected player would choose where the
-    shields go among them — but every copy is the same effect at the same order,
-    so applying them together is exactly the sequence the default choice
-    produces. Registering one interceptor and counting the sources is therefore
-    the same game, where returning ``3`` and being asked once would be a
-    different one: an effect applies once per event
-    (``engine/effect_ordering.py``), so the second Emancipation would be
-    dropped rather than deferred.
+    **One candidate stands in for every copy — and for every card.** CR 616.1
+    would apply two Fiery Emancipations one at a time, and the affected player
+    would choose where the shields go among them; but every copy is the same
+    effect at the same order, so applying them together is exactly the sequence
+    the default choice produces. Registering one interceptor and taking the
+    **product** of what the board says is therefore the same game, where
+    returning one card's factor and being asked once would be a different one:
+    an effect applies once per event (``engine/effect_ordering.py``), so the
+    second multiplier would be dropped rather than deferred. A Furnace of Rath
+    beside a Fiery Emancipation is 6, in either order (CR 616.1 leaves the order
+    to the affected player and multiplication does not care).
     """
     seat = payload.get("source_seat")
-    if payload["amount"] <= 0 or seat is None:
+    if payload["amount"] <= 0:
         return 1
-    sources = sum(
-        1
-        for perm in game.controlled_by(seat)
-        if TRIPLE_DAMAGE_TEXT in (perm.effective_card.oracle_text or "").lower()
-    )
-    return 3 ** sources
+    product = 1
+    for source_seat, perm in game.permanents_with_controller():
+        for line in (perm.effective_card.oracle_text or "").splitlines():
+            read = damage_multiplier_line(line)
+            if read is None:
+                continue
+            factor, only_yours = read
+            if only_yours and (seat is None or source_seat != seat):
+                continue
+            product *= factor
+    return product
 
 
 def _applies_damage_multiplier(game, payload: dict) -> bool:
@@ -1518,9 +1558,10 @@ def _applies_damage_multiplier(game, payload: dict) -> bool:
     "damage_to_player", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier
 )
 def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
-    """Fiery Emancipation: "If a source you control would deal damage to a
-    permanent or player, it deals triple that damage to that permanent or player
-    instead."
+    """Fiery Emancipation: "If a source **you control** would deal damage to a
+    permanent or player, it deals **triple** that damage to that permanent or
+    player instead." Furnace of Rath: the same sentence with no narrowing and
+    **double**.
 
     A CR 120.4b effect, so the bigger number is the damage *dealt*: lifelink
     gains it (CR 120.3f), a "deals damage to a player" trigger sees it, and
@@ -1530,9 +1571,7 @@ def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     """
     multiplier = _damage_multiplier(game, payload)
     amount = payload["amount"]
-    game.log.append(
-        f"{amount} damage becomes {amount * multiplier} (Fiery Emancipation)"
-    )
+    game.log.append(f"{amount} damage becomes {amount * multiplier}")
     return ReplacementOutcome(new_amount=amount * multiplier)
 
 
@@ -3389,10 +3428,6 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # _one_more_plus1_counter (Conclave Mentor): the phrase is the whole line,
     # matched against the counter-placing seam in mixins/effects.py.
     (EXTRA_PLUS1_COUNTER_TEXT, ""),
-    # _multiply_damage_dealt (Fiery Emancipation): the phrase is the whole line,
-    # and this is the entry that made the support gate's omission visible — the
-    # card prints nothing else.
-    (TRIPLE_DAMAGE_TEXT, ""),
     # _draw_two_cards_instead (Teferi's Ageless Insight): the phrase is the whole
     # line, rider included — the exemption is implemented, not ignored, so the
     # claim covers the words that state it.
@@ -3468,6 +3503,14 @@ def replacement_claims_line(line: str) -> bool:
     # it cannot answer leaves the line unclaimed rather than admitted with the
     # redirect silently not firing.
     if redirect_to_self_source_class(normalized) is not None:
+        return True
+    # "If a source [you control] would deal damage to a permanent or player, it
+    # deals double/triple that damage to that permanent or player instead."
+    # (Furnace of Rath, Fiery Emancipation.) Matched by shape rather than listed
+    # as a constant, because the factor and the narrowing are payload — and this
+    # is the entry that made the support gate's omission of this whole table
+    # visible, since Fiery Emancipation prints nothing else.
+    if damage_multiplier_line(normalized) is not None:
         return True
     # "If a permanent with a wind counter on it would untap during its
     # controller's untap step, remove all wind counters from it instead."

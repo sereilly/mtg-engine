@@ -843,3 +843,476 @@ def test_w2g1_volraths_curse_can_be_bought_off_for_one_turn(set_pool):
     game.resolve_cleanup_step(1)
     assert curse.metadata.get(_W2G1_IGNORED) is None
     assert _w2g1e_restricted(victim, "cant_attack"), "CR 514.2 ends it"
+
+
+# --- W2G3: board-wide statics, replacements and prohibitions ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.replacements import damage_multiplier_line
+
+
+def _w2g3e_game(*battlefields):
+    seats = [
+        PlayerState(name=f"P{index + 1}", battlefield=list(permanents))
+        for index, permanents in enumerate(battlefields)
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_root_maze_taps_artifacts_and_lands_on_every_battlefield(set_pool, catalog_by_name):
+    """"Artifacts and lands enter tapped." (CR 614.1d.)
+
+    ``engine/enter_tapped_statics.py`` named Root Maze in its own docstring and
+    then refused it: a phrase naming no controller was declined on the stated
+    ground that nobody had printed one. Tempest is the set that had. Nothing
+    about the reading needed inventing — ``subject_matches`` with no
+    ``controller`` key asks about the type alone, which is what the sentence
+    says.
+    """
+    maze = Permanent(card=set_pool("TMP")["Root Maze"])
+    game = _w2g3e_game([maze], [])
+    game.players[0].hand = [catalog_by_name["Mox Pearl"], catalog_by_name["Forest"]]
+    game.players[1].hand = [catalog_by_name["Black Lotus"], catalog_by_name["Island"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Mox Pearl")
+    game._settle()
+    game.cast_from_hand(0, "Forest")
+
+    tapped = {p.card.name: p.tapped for p in game.players[0].battlefield}
+    assert tapped["Mox Pearl"] is True
+    assert tapped["Forest"] is True
+    assert tapped["Root Maze"] is False, "the Maze is neither an artifact nor a land"
+
+    game.start_turn(1)
+    game.cast_from_hand(1, "Black Lotus")
+    game._settle()
+    game.cast_from_hand(1, "Island")
+
+    theirs = {p.card.name: p.tapped for p in game.players[1].battlefield}
+    assert theirs == {"Black Lotus": True, "Island": True}, (
+        "the sentence names no controller, so it is everyone's"
+    )
+
+
+def test_root_maze_leaves_a_creature_alone(set_pool, catalog_by_name):
+    """The narrowing that *is* printed. A filter admitted with its type list
+    dropped would tap everything, which is the direction an entry static must
+    never take."""
+    maze = Permanent(card=set_pool("TMP")["Root Maze"])
+    game = _w2g3e_game([maze], [])
+    game.players[0].hand = [catalog_by_name["Grizzly Bears"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Grizzly Bears")
+    game._settle()
+
+    bear = next(p for p in game.players[0].battlefield if p.card.name == "Grizzly Bears")
+    assert not bear.tapped
+
+
+def test_furnace_of_rath_doubles_an_opponents_spell(set_pool, catalog_by_name):
+    """"If **a source** would deal damage to a permanent or player, it deals
+    **double** that damage to that permanent or player instead."
+
+    The whole difference from Fiery Emancipation is the narrowing Furnace does
+    not have: the Emancipation says "a source **you control**" and this says
+    nothing, so it doubles the damage its own controller is dealt. A reading
+    that carried the seat over from the card already implemented would have got
+    every board with one player on it right and this one wrong.
+    """
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    game = _w2g3e_game([furnace], [])
+    game.players[1].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game._settle()
+
+    assert game.players[0].life == 14, game.log
+
+
+def test_furnace_of_rath_doubles_its_controllers_own_spell(set_pool, catalog_by_name):
+    """And the other half of "a source": the symmetry is the card."""
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    game = _w2g3e_game([furnace], [])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+
+    assert game.players[1].life == 14, game.log
+
+
+def test_two_multipliers_compose(set_pool, catalog_by_name):
+    """A Furnace beside a Fiery Emancipation is ×6. CR 616.1 applies them one
+    at a time and lets the affected player choose the order; multiplication
+    does not care, so one interceptor taking the product is the same game —
+    and one that returned a single card's factor would drop the other, because
+    an effect applies once per event."""
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    emancipation = Permanent(card=set_pool("M21")["Fiery Emancipation"])
+    game = _w2g3e_game([furnace, emancipation], [])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+
+    assert game.players[1].life == 2, game.log
+
+
+def test_the_emancipations_narrowing_survives_the_generalisation(set_pool, catalog_by_name):
+    """The regression the shape reader could have caused: read as one sentence
+    with two payload words, "a source you control" must still mean one seat.
+    P2 casts; P1 holds the Emancipation and nothing else."""
+    emancipation = Permanent(card=set_pool("M21")["Fiery Emancipation"])
+    game = _w2g3e_game([emancipation], [])
+    game.players[1].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game._settle()
+
+    assert game.players[0].life == 17, "untouched: the source is not P1's"
+
+
+def test_the_multiplier_line_is_read_as_a_shape(set_pool):
+    """Both printings through the one reader the interceptor and the support
+    gate ask, so what is claimed and what fires cannot drift."""
+    assert damage_multiplier_line(
+        "If a source would deal damage to a permanent or player, it deals "
+        "double that damage to that permanent or player instead."
+    ) == (2, False)
+    assert damage_multiplier_line(
+        "If a source you control would deal damage to a permanent or player, "
+        "it deals triple that damage to that permanent or player instead."
+    ) == (3, True)
+    assert damage_multiplier_line("If a source would deal damage, prevent it.") is None
+    assert compile_card_oracle(set_pool("TMP")["Furnace of Rath"]).supported
+
+
+# --- W2G3: the declaration read from the defending side, and each player's
+# --- first main phase ---
+
+def _w2g3e_attack_board(set_pool, catalog_by_name, attackers, prayer_seat=1):
+    """*attackers* Grizzly Bears on seat 0, Orim's Prayer on *prayer_seat*."""
+    bears = [Permanent(card=catalog_by_name["Grizzly Bears"]) for _ in range(attackers)]
+    seats = [
+        PlayerState(name="P1", battlefield=list(bears)),
+        PlayerState(name="P2", battlefield=[]),
+    ]
+    seats[prayer_seat].battlefield.append(
+        Permanent(card=set_pool("TMP")["Orim's Prayer"])
+    )
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    for bear in bears:
+        bear.summoning_sick = False
+    while game.current_step != "declare_attackers":
+        game.advance_combat_phase()
+    return game, bears
+
+
+def test_orims_prayer_gains_one_life_per_attacker_and_fires_once(
+    set_pool, catalog_by_name
+):
+    """"Whenever **one or more creatures** attack you, you gain 1 life for each
+    attacking creature."
+
+    The quantifier is the card. Read as the per-creature announcement — which
+    *does* read "attacks you" — this ability would fire once for each attacker
+    and gain 1 life for each of them, so three attackers would be nine life.
+    CR 509.1 makes the declaration one event, and this is a card that can tell
+    the difference: three attackers, one trigger, three life.
+    """
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 3)
+
+    game.declare_attackers(0, [0, 1, 2])
+    game._settle()
+
+    assert game.players[1].life == 23, game.log
+    assert sum(
+        "gained 3 life from Orim's Prayer" in line for line in game.log
+    ) == 1, "one trigger, not one per attacker"
+
+
+def test_orims_prayer_is_silent_when_its_own_controller_attacks(
+    set_pool, catalog_by_name
+):
+    """"attack **you**" — CR 506.2's defending player, which is the trigger's
+    controller. Every other reading of this announcement narrows by the
+    *attacking* seat, so the marker turns that test round rather than dropping
+    it: without the narrowing the Prayer would pay its controller for their own
+    alpha strike."""
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 3, prayer_seat=0)
+
+    game.declare_attackers(0, [0, 1, 2])
+    game._settle()
+
+    assert game.players[0].life == 20, game.log
+
+
+def test_orims_prayer_counts_one_attacker(set_pool, catalog_by_name):
+    """The threshold is the printed "one or more", so a lone attacker fires it.
+    Worth pinning beside the three-attacker case because that is the board on
+    which the wrong reading and the right one agree."""
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 1)
+
+    game.declare_attackers(0, [0])
+    game._settle()
+
+    assert game.players[1].life == 21, game.log
+
+
+def test_eladamris_vineyard_pays_whoever_is_taking_the_turn(set_pool):
+    """"At the beginning of **each player's** first main phase, **that player**
+    adds {G}{G}."
+
+    Two halves and both are the card. The condition fires on every turn rather
+    than on its controller's (CR 505.1a's precombat main phase, asked of every
+    seat), and the mana goes to the seat the firing named rather than to the
+    ability's controller — an enchantment that fed only its own controller
+    would be strictly better than the one printed, and right on every board
+    where it happens to be their turn.
+    """
+    vineyard = Permanent(card=set_pool("TMP")["Eladamri's Vineyard"])
+    game = _w2g3e_game([vineyard], [])
+
+    def _open_main(seat):
+        for player in game.players:
+            for symbol in list(player.mana_pool):
+                player.mana_pool[symbol] = 0
+        game.start_turn(seat)
+        while game.current_turn_phase != "precombat_main":
+            game.advance_phase()
+        game._settle()
+        return [
+            {sym: n for sym, n in player.mana_pool.items() if n}
+            for player in game.players
+        ]
+
+    assert _open_main(0) == [{"G": 2}, {}], game.log
+    assert _open_main(1) == [{}, {"G": 2}], "the opponent's own first main phase"
+    assert _open_main(0) == [{"G": 2}, {}], "and every turn after"
+
+
+def test_eladamris_vineyard_compiles_to_one_trigger_on_the_frozen_seat(set_pool):
+    """The two payload keys the card turns on, pinned so a later reading cannot
+    quietly drop either: the condition's scope word, and the mana instruction
+    that resolves for the seat the firing froze rather than for the caster."""
+    program = compile_card_oracle(set_pool("TMP")["Eladamri's Vineyard"])
+
+    assert program.supported, program.reason
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "main_phase_first_each"
+    assert trigger.condition.payload["main_phase_scope"] == "player"
+    assert trigger.instruction.kind == "frozen_seat_adds_mana"
+    assert trigger.instruction.payload == {"pips": (("G", 2),)}
+
+
+# --- W2G3: Hand to Hand, one sentence and two gates ---
+
+def _w2g3e_combat_board(set_pool, catalog_by_name, *, with_ban=True):
+    mine = [
+        Permanent(card=catalog_by_name["Mox Ruby"]),
+        Permanent(card=catalog_by_name["Icy Manipulator"]),
+    ]
+    if with_ban:
+        mine.append(Permanent(card=set_pool("TMP")["Hand to Hand"]))
+    game = _w2g3e_game(mine, [Permanent(card=catalog_by_name["Grizzly Bears"])])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.start_turn(0)
+    for permanent in mine:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def test_hand_to_hand_stops_an_instant_during_combat(set_pool, catalog_by_name):
+    """"During combat, players can't cast instant spells or activate abilities
+    that aren't mana abilities."
+
+    City of Solitude's sentence with a *phase* in place of a turn, so it is one
+    row read by the same two gates. Claiming the casting half alone would ship
+    an enchantment that stops a combat trick and lets an Icy Manipulator
+    through, which is not the card.
+    """
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+    game.enter_turn_phase("combat")
+
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert not result.supported
+    assert "Hand to Hand" in result.details
+    assert game.players[1].life == 20
+
+
+def test_hand_to_hand_stops_a_nonmana_ability_during_combat(set_pool, catalog_by_name):
+    """The activation half, and the printed exception beside it."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+    game.enter_turn_phase("combat")
+
+    tapper = game.activate_permanent_ability(
+        0, "Icy Manipulator", permanent_index=1,
+        target_permanent_index=0, target_player_index=1,
+    )
+    mox = game.activate_permanent_ability(0, "Mox Ruby", permanent_index=0)
+
+    assert not tapper.supported
+    assert "Hand to Hand" in tapper.details
+    assert mox.supported, "a mana ability is the exception the card prints"
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_hand_to_hand_leaves_the_main_phase_alone(set_pool, catalog_by_name):
+    """"**During combat**" — CR 506.1's phase, and nothing else. A gate that
+    forgot the window would be an enchantment nobody could play around."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name)
+
+    assert game.current_turn_phase == "precombat_main"
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert result.supported, result.details
+    assert game.players[1].life == 17
+
+
+def test_without_the_enchantment_combat_is_open(set_pool, catalog_by_name):
+    """The control. Every refusal above has to be this enchantment's and not
+    some other rule about casting in combat."""
+    game = _w2g3e_combat_board(set_pool, catalog_by_name, with_ban=False)
+    game.enter_turn_phase("combat")
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    assert game.activate_permanent_ability(
+        0, "Icy Manipulator", permanent_index=1,
+        target_permanent_index=0, target_player_index=1,
+    ).supported
+
+
+def test_hand_to_hand_binds_its_own_controller_too(set_pool, catalog_by_name):
+    """"Players" names nobody, so it binds the seat that played it (CR 601.3a)
+    — which is the whole of what makes it symmetrical, and the half a seat
+    comparison would have quietly dropped. Here the enchantment is the
+    *opponent's* and the caster is still stopped."""
+    game = _w2g3e_game([], [Permanent(card=set_pool("TMP")["Hand to Hand"])])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.start_turn(0)
+    game.enter_turn_phase("combat")
+
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert not result.supported
+    assert compile_card_oracle(set_pool("TMP")["Hand to Hand"]).supported
+
+
+# --- W2G3: Aluren, three permissions in one sentence ---
+
+from engine.cast_permissions import board_free_cast_line, permission_for
+from engine.cast_timing import casts_at_instant_speed
+
+
+def _w2g3e_aluren_game(catalog_by_name, set_pool, *, with_aluren=True):
+    """Aluren on seat 0's battlefield; seat 1 holds a Bear and a Dragon and has
+    no mana at all. Mana costs **enforced** — the point of the card is that the
+    cost is not paid."""
+    mine = [Permanent(card=set_pool("TMP")["Aluren"])] if with_aluren else []
+    game = _w2g3e_game(mine, [])
+    game.enforce_mana_costs = True
+    game.players[1].hand = [
+        catalog_by_name["Grizzly Bears"], catalog_by_name["Shivan Dragon"],
+    ]
+    game.start_turn(0)
+    return game
+
+
+def test_aluren_lets_an_opponent_cast_a_cheap_creature_for_nothing(
+    set_pool, catalog_by_name
+):
+    """"**Any player** may cast creature spells with mana value 3 or less
+    **without paying their mana costs** …"
+
+    Two of the sentence's three permissions at once, and the first is the one a
+    controller check would silently drop: the enchantment is seat 0's and it is
+    seat 1 who gets the creature.
+    """
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    result = game.cast_from_hand(1, "Grizzly Bears")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+
+
+def test_aluren_reads_the_printed_mana_value(set_pool, catalog_by_name):
+    """"…with mana value **3 or less**". A six-drop is not one, and a
+    restriction admitted and then ignored would make this enchantment read
+    "any creature spell", which is a strictly different card."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    assert not game.cast_from_hand(1, "Shivan Dragon").supported
+
+
+def test_without_aluren_the_same_cast_is_refused(set_pool, catalog_by_name):
+    """The control: nothing else on this board makes a Bear free."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool, with_aluren=False)
+
+    assert not game.cast_from_hand(1, "Grizzly Bears").supported
+
+
+def test_aluren_grants_flash_timing_to_exactly_what_it_names(
+    set_pool, catalog_by_name
+):
+    """"…and **as though they had flash**." (CR 113.6b.)
+
+    The third permission, and the one that is not about cost at all — so it is
+    asked of ``casts_at_instant_speed``, the one question both timing gates
+    ask, off the same reader the waiver uses. Two readers of this sentence
+    would be a spell castable in the picker and refused by the action.
+    """
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    assert casts_at_instant_speed(catalog_by_name["Grizzly Bears"], game, 1)
+    assert not casts_at_instant_speed(catalog_by_name["Shivan Dragon"], game, 1)
+    assert not casts_at_instant_speed(catalog_by_name["Black Lotus"], game, 1), (
+        "an artifact is not a creature spell"
+    )
+
+    without = _w2g3e_aluren_game(catalog_by_name, set_pool, with_aluren=False)
+    assert not casts_at_instant_speed(catalog_by_name["Grizzly Bears"], without, 1)
+
+
+def test_alurens_permission_is_the_hand_and_is_free(set_pool, catalog_by_name):
+    """What the permission seam reports, so the browser's own reading of it and
+    the cast path's agree: the hand, waived, and derived rather than stored —
+    it ends with the enchantment (CR 611.3a) and there is nothing to expire."""
+    game = _w2g3e_aluren_game(catalog_by_name, set_pool)
+
+    grant = permission_for(game, 1, catalog_by_name["Grizzly Bears"], "hand")
+
+    assert grant is not None
+    assert grant.free is True
+    assert grant.duration is None
+    assert grant.source_name == "Aluren"
+
+
+def test_the_free_cast_line_reads_its_two_printed_parameters(set_pool):
+    """The type and the number are payload, so a card printing "artifact spells
+    with mana value 2 or less" is the same sentence and needs no second row."""
+    assert board_free_cast_line(
+        "Any player may cast creature spells with mana value 3 or less "
+        "without paying their mana costs and as though they had flash."
+    ) == {"card_type": "creature", "mana_value": 3}
+    # The cost waiver alone is a different card and this row must not read it:
+    # the claim is honest only because all three permissions are carried out.
+    assert board_free_cast_line(
+        "Any player may cast creature spells with mana value 3 or less "
+        "without paying their mana costs."
+    ) is None
+    assert compile_card_oracle(set_pool("TMP")["Aluren"]).supported

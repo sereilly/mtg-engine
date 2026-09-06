@@ -33,7 +33,11 @@ class UntapRestriction:
     what it names is a printed noun phrase.
 
     scope      -- what a count limit applies to: "all" | "land" | "creature"
-                  | "artifact"; "block" for the second family
+                  | "artifact" | "permanent"; "block" for the second family.
+                  "permanent" is CR 110.1's word rather than a card type
+                  (Static Orb): every object on the battlefield answers to it,
+                  which is why :func:`permanent_in_limited_scope` exists and
+                  ``Permanent.has_type`` cannot be asked it.
     limit      -- max permanents of that scope the active player may untap
                   (0 with scope="all" skips the untap step entirely; None
                   means no count limit)
@@ -68,6 +72,31 @@ _WHILE_UNTAPPED = re.compile(
 
 _COUNT_WORD = "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
 _COLOR_WORD = "|".join(sorted(_COLOR_WORD_TO_SYMBOL, key=len, reverse=True))
+
+#: The scope word that names no card type. "Players can't untap more than two
+#: **permanents** during their untap steps" (Static Orb) caps the whole step
+#: rather than one type of it, and CR 110.1 makes every battlefield object one —
+#: so ``Permanent.has_type`` has nothing to answer with, and the count-limit
+#: readers ask :func:`permanent_in_limited_scope` instead.
+ANY_PERMANENT_SCOPE = "permanent"
+
+#: The scopes a "can't untap more than N" row may name, in one place. The untap
+#: step asks each separately and the web layer splits the player's selection by
+#: the same words, so a card printed with any of them needs code in neither.
+LIMITED_SCOPES = ("land", "creature", "artifact", ANY_PERMANENT_SCOPE)
+
+
+def permanent_in_limited_scope(permanent, scope: str) -> bool:
+    """Whether *permanent* is counted against a limit whose scope is *scope*.
+
+    ``has_type`` for a card type, so an Ornithopter is under Damping Field's
+    artifact cap *and* Smoke's creature cap through CR 613 layer 4 — and an
+    unconditional ``True`` for :data:`ANY_PERMANENT_SCOPE`, which is not a type
+    at all. One predicate, because the engine's untap step and the web layer's
+    selection split both have to answer it and a second spelling is how the
+    prompt comes to offer a permanent the resolver then refuses.
+    """
+    return scope == ANY_PERMANENT_SCOPE or permanent.has_type(scope)
 
 
 def _skip_untap_step(match: re.Match) -> UntapRestriction:
@@ -141,7 +170,7 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
     (
         re.compile(
             rf"^players can't untap more than (?P<count>{_COUNT_WORD}) "
-            r"(?P<type>land|creature|artifact)s? during their untap steps$"
+            rf"(?P<type>{'|'.join(LIMITED_SCOPES)})s? during their untap steps$"
         ),
         _limit_per_type,
     ),

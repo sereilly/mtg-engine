@@ -30,8 +30,10 @@ from ...auras import controller_cast_ban
 # one import shadowing the other, silently, with the surviving reader answering
 # the wrong question for both cards.
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
+                                  combat_play_ban,
                                   global_play_timing,
                                   global_cast_ban, own_cast_ban)
+from ...search_filters import card_has_type
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
@@ -924,6 +926,24 @@ class SpellCastingMixin:
         if wrong_turn is not None:
             details = (
                 f"can't cast {card.name} on another player's turn ({wrong_turn})"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "During combat, players can't cast instant spells or activate
+        # abilities that aren't mana abilities." (Hand to Hand.) The casting
+        # half of the one sentence `mixins/stack/activation.py` reads for its
+        # activation half — the same arrangement City of Solitude's line has one
+        # gate up, and asked through the same reader so a card that stops a
+        # combat trick cannot come to let an Icy Manipulator through.
+        #
+        # ``card_has_type``, not ``primary_type``: CR 205.2a gives a card every
+        # type its line names, so an instant that is also something else is
+        # still an instant spell.
+        combat_ban = combat_play_ban(self)
+        if combat_ban is not None and card_has_type(card, combat_ban[1]):
+            details = (
+                f"can't cast {card.name} during combat ({combat_ban[0]})"
             )
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)

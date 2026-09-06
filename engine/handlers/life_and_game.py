@@ -600,14 +600,29 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         # Two readings of one count would be two answers on one card.
         life_gain *= count_from_payload(game, context, per_each)
     if per_each is not None and per_each.get("zone") == "battlefield":
-        wanted_types = tuple(per_each.get("card_types") or ())
-        wanted_keywords = tuple(per_each.get("with_keywords") or ())
+        # "…for each creature you control with flying" (Aven Gagglemaster),
+        # "…for each attacking creature" (Orim's Prayer, Respite). One scan over
+        # every battlefield, narrowed by the printed noun phrase through
+        # ``subject_matches`` — the one reader of what a printed noun phrase
+        # means, which asks layer 6 for a keyword and CR 109.5's observer for
+        # "you control".
+        #
+        # It was a scan of the gainer's own board with a hand-rolled type and
+        # keyword test, and the ``controller`` key the lowering wrote beside
+        # them was never read. That is right for every phrase naming the
+        # gainer's own permanents and wrong for one naming anybody else's, and
+        # an attacking creature is on the attacking player's battlefield.
+        from ..subject_filters import subject_matches
+
+        described = per_each.get("filter") or {}
+        seat = game.players.index(gainer)
+        source = source_object(context)
         life_gain *= sum(
             1
-            for perm in game.controlled_by(gainer)
-            if (not wanted_types or ("creature" in wanted_types and perm.is_creature)
-                or any(perm.has_type(t) for t in wanted_types if t != "creature"))
-            and all(game._has_keyword(perm, kw) for kw in wanted_keywords)
+            for perm in game.all_permanents()
+            if subject_matches(
+                game, perm, described, observer=seat, source=source
+            )
         )
     life_gain = _capped_life_gain(context, instruction, life_gain)
     game._gain_life(gainer, life_gain, card.name)
@@ -702,16 +717,28 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 
 @effect_handler("grant_extra_turn")
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    caster_index = game.players.index(caster)
+    # Who takes the turn. "Target player takes an extra turn after this one."
+    # (Time Warp) names a seat; every other printing in this pool names none
+    # and means the effect's controller (CR 109.5). The payload key is the
+    # same ``recipient`` every other seat-affecting kind carries, so
+    # ``targeting.py`` derives the picker from it rather than from the kind —
+    # a flat "this kind targets a player" row would have put a prompt in front
+    # of Time Walk.
+    taker = (
+        context.target
+        if instruction.payload.get("recipient") == "target"
+        and context.target is not None
+        else context.caster
+    )
+    taker_index = game.players.index(taker)
     # "Take two extra turns after this one." (Teferi, Master of Time) — each
     # queued turn is its own CR 500.7 insertion.
     count = int(instruction.payload.get("count", 1))
     for _ in range(count):
-        game.add_extra_turn(caster_index)
+        game.add_extra_turn(taker_index)
     game.log.append(
-        f"{caster.name} gained an extra turn" if count == 1
-        else f"{caster.name} gained {count} extra turns"
+        f"{taker.name} gained an extra turn" if count == 1
+        else f"{taker.name} gained {count} extra turns"
     )
     # "…At the beginning of **that turn's** end step, you lose the game."
     # (Final Fortune.) The sentence behind this one refers back to the turn

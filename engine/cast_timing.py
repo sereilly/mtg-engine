@@ -309,11 +309,24 @@ def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = 
         return True
     if game is None or seat is None:
         return False
-    # Three sources with a board, not two: a resolved grant (Winding Canyons)
-    # and a **static** one derived from a permanent's own text (Rootwater
-    # Shaman). Asked here rather than at each gate, because this function is
-    # the one question both timing gates ask and a fifth source added at one
-    # of them would be invisible to the other.
+    # **Four** sources with a board, not two, and two waves added one each: a
+    # resolved grant (Winding Canyons), a **static** permission derived from a
+    # permanent's own text (Rootwater Shaman), and Aluren's, which is one of the
+    # three permissions its single printed sentence states. Asked here rather
+    # than at each gate, because this function is the one question both timing
+    # gates ask and a source added at one of them would be invisible to the
+    # other — which is why two independent groups could each add one here
+    # without either noticing the other.
+    #
+    # Aluren's is asked of ``cast_permissions.board_free_cast``'s own reader
+    # rather than matched again: a second copy of the phrase would be free to
+    # drift, and the direction it drifts is a spell castable for free in a
+    # window the card never opened, or one the card opened and this gate
+    # refuses.
+    from .cast_permissions import board_free_cast
+
+    if board_free_cast(game, card) is not None:
+        return True
     return granted_flash_timing(game, seat, card) or board_flash_timing(
         game, seat, card
     )

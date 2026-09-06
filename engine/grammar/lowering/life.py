@@ -29,7 +29,9 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    dropped_narrowings,
 )
+from ...subject_filters import untestable_filter_keys
 from ._deaths import DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS
 from ._events import (
     _DEFENDING_PLAYER_EVENTS,
@@ -469,21 +471,38 @@ def _lower_gain_life(
             raise LoweringError(
                 "the per-each life gain counts the gainer's own battlefield", node=node
             )
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "controller", "with_keywords"})
-        )
-        if leftover:
+        # The noun phrase as ``subject_matches`` reads it, rather than the two
+        # keys this branch used to pick out by hand.
+        #
+        # Those two were ``card_types`` and ``with_keywords``, and ``controller``
+        # was admitted beside them, written into the payload and **never read**:
+        # the handler scanned the gainer's own battlefield whatever the phrase
+        # said. Only Aven Gagglemaster ("creature you control with flying") had
+        # ever printed one, so the key happened to agree — and "for each
+        # attacking creature" (Orim's Prayer, Respite) is the sentence that does
+        # not, because attackers are on somebody else's board.
+        #
+        # So the whole phrase travels and the whole phrase is tested. A key the
+        # matcher cannot answer refuses the line, which is the same gate every
+        # other consumer of a printed noun phrase puts in front of itself — a
+        # narrowing carried and ignored is a count that is too large, which is a
+        # life gain the card never authorised.
+        described = filt.to_payload()
+        dropped = dropped_narrowings(filt, described)
+        if dropped:
             raise LoweringError(
                 "the per-each life gain cannot count this restriction: "
-                + ", ".join(leftover),
+                + ", ".join(dropped),
                 node=node,
             )
-        payload["per_each"] = {
-            "zone": "battlefield",
-            "controller": filt.controller or "you",
-            "card_types": list(filt.card_types),
-            "with_keywords": list(filt.with_keywords),
-        }
+        untestable = untestable_filter_keys(described)
+        if untestable:
+            raise LoweringError(
+                "the per-each life gain cannot count this restriction: "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        payload["per_each"] = {"zone": "battlefield", "filter": described}
         return (OracleInstruction("target_gains_life", "", payload),)
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)

@@ -1286,9 +1286,20 @@ class DeclareAttackersStepMixin:
         ``combat_attackers`` at the filter: the trigger is about the declaration
         as it was announced, and a later removal renumbers that map.
         """
+        # CR 506.2's defending player, one per attacker and in the same order.
+        # Computed here rather than at the filter because a trigger is about
+        # the declaration *as announced*: an attacker that leaves renumbers the
+        # combat maps `_defender_seat_of` reads, and the sibling announcement
+        # below has always frozen its own count for exactly that reason.
+        defenders = [self._defender_seat_of(attacker) for attacker in declared]
         emit(
             self, "attackers_declared",
             seat=controller_index, attackers=list(declared),
+            # "Whenever one or more creatures attack **you**" (Orim's Prayer)
+            # is the same declaration read from the other side, so the seat
+            # each attacker is aimed at rides the payload beside the attackers
+            # themselves.
+            defenders=list(defenders),
             # Who attacked, under the key every "that player" in this engine
             # reads (`lowering/_events.EVENT_SUBJECT_PLAYER`). "Whenever a
             # player attacks …, destroy all creatures **that player** controls"
@@ -1305,8 +1316,7 @@ class DeclareAttackersStepMixin:
         # asks about the declaration and a recount at resolution would see a
         # combat that had moved on.
         aimed: dict[int, int] = {}
-        for attacker in declared:
-            defender = self._defender_seat_of(attacker)
+        for defender in defenders:
             if defender is not None:
                 aimed[defender] = aimed.get(defender, 0) + 1
         emit(

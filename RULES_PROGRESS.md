@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**362 / 614 tracked rules covered (58%)** — 2140 tests, 0 unannotated.
+**364 / 614 tracked rules covered (59%)** — 2151 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -15,11 +15,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
 | [105. Colors](#105-colors) | 2/5 | 40% |
-| [106. Mana](#106-mana) | 6/13 | 46% |
+| [106. Mana](#106-mana) | 7/13 | 53% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 5/18 | 27% |
 | [108. Cards](#108-cards) | 2/6 | 33% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
-| [110. Permanents](#110-permanents) | 1/5 | 20% |
+| [110. Permanents](#110-permanents) | 2/5 | 40% |
 | [111. Tokens](#111-tokens) | 5/13 | 38% |
 | [112. Spells](#112-spells) | 0/4 | 0% |
 | [113. Abilities](#113-abilities) | 3/12 | 25% |
@@ -160,7 +160,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(6 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
 - [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(5 tests)*
-- [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
+- [x] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod... *(6 tests)*
 - [ ] **106.8** If an effect would add mana represented by a hybrid mana symbol to a player’s mana pool, that pla...
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
@@ -208,7 +208,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 110. Permanents
 
-- [ ] **110.1** A permanent is a card or token on the battlefield. A permanent remains on the battlefield indefin...
+- [x] **110.1** A permanent is a card or token on the battlefield. A permanent remains on the battlefield indefin... *(1 tests)*
 - [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(1 tests)*
 - [ ] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ...
 - [ ] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I...
@@ -380,7 +380,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 205. Type Line
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(8 tests, subrules ab)*
-- [x] **205.2** Card Types *(10 tests, subrules ab)*
+- [x] **205.2** Card Types *(11 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
@@ -576,7 +576,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(23 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(26 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(2 tests)*
 
 ### 503. Upkeep Step
@@ -786,7 +786,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(40 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(41 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -822,7 +822,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(35 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(36 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General

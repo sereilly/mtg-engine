@@ -42,6 +42,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
                        _lower_put_source_into_zone,
                        _lower_return_self_instead_of_untapping, _lower_extra_turn,
+                       _lower_become_copy,
                        _lower_extra_phases,
                        _lower_choose_cards_in_hand, _lower_put_iterated_card_on_library,
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
@@ -280,6 +281,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site
     # froze. All three were branches of the chain saying exactly this.
+    # "…this creature becomes a copy of **that creature**" (Unstable
+    # Shapeshifter). The object copied is the one the firing event froze, so
+    # the lowering has to know which event fired — and refuses under one that
+    # freezes none rather than copying whatever the resolution is holding.
+    ast.BecomeCopy: _lower_become_copy,
     ast.Discard: _lower_discard,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):

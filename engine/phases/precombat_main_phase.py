@@ -47,17 +47,45 @@ class PrecombatMainPhaseMixin:
         the stack, and a trigger with no instruction is not a trigger this
         engine can run.
 
-        Scoped to the active player: "your" is the turn's controller, and a
-        permanent's controller only has a first main phase on their own turn.
+        Two conditions, two scopes. "**Your** first main phase" is the turn's
+        controller, so the scan is that seat's own permanents — a permanent's
+        controller only has a first main phase on their own turn. "**Each
+        player's** first main phase" (Eladamri's Vineyard) is every permanent on
+        every battlefield, on every turn, and the seat it names is the active
+        player — frozen onto the trigger's context under the key every "that
+        player" in this engine reads, because which seat it is varies per firing
+        and by resolution the only one still readable off the board is the
+        source's controller.
+
+        The narrowing inside that second condition is payload
+        (``main_phase_scope``), the way ``upkeep_scope`` is one step of the turn
+        earlier: "each **opponent's**" is the same event asked of a narrower set
+        of seats, and whose opponents is CR 109.5's answer — the source's
+        controller — so its own turn is not one of them.
         """
+        active = self.active_player_index
         events = [
             make_trigger_event(controller_index, permanent, trig)
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
                 condition_kinds={"main_phase_first"},
-                players=[self.players[self.active_player_index]],
+                players=[self.players[active]],
             )
             if trig.supported and trig.instruction is not None
+        ]
+        events += [
+            make_trigger_event(
+                controller_index, permanent, trig,
+                trigger_context={"event_subject_player": active},
+            )
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self, condition_kinds={"main_phase_first_each"}
+            )
+            if trig.supported and trig.instruction is not None
+            and not (
+                trig.condition.payload.get("main_phase_scope") == "opponent"
+                and controller_index == active
+            )
         ]
         if events:
             self._enqueue_triggered_batch(events)

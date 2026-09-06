@@ -214,6 +214,85 @@ def self_permission_zone(card) -> str | None:
     return None
 
 
+#: "Any player may cast creature spells with mana value 3 or less without
+#: paying their mana costs and as though they had flash." (Aluren.)
+#:
+#: **Three permissions in one sentence**, and each is a different rule: *who*
+#: may cast (any player, CR 601.3a — including on somebody else's turn), *for
+#: what* (CR 118.9's cost waiver) and *when* (CR 113.6b's flash timing). All
+#: three are read from this one pattern, and the line is claimed only because
+#: all three are carried out — a claim for the first two would ship an
+#: enchantment that gives its cheap creatures away for free and cannot flash
+#: them in, which is not the card.
+#:
+#: Derived from the board rather than granted, exactly as
+#: :func:`self_permission_zone` below and ``library_top.top_castable`` are:
+#: there is nothing to expire, because the permission ends with the permanent
+#: (CR 611.3a).
+#:
+#: The card type and the mana value are payload for this file's own reason: a
+#: card printing "artifact spells with mana value 2 or less" is the same
+#: sentence and must need no second row.
+_BOARD_FREE_CAST = re.compile(
+    r"^any player may cast (?P<type>artifact|creature|enchantment|instant"
+    r"|sorcery|planeswalker|battle) spells with mana value (?P<mana_value>\d+) "
+    r"or less without paying their mana costs and as though they had flash$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, for ``cast_restrictions.GLOBAL_PLAY_TIMING_CLAIM``'s
+#: reason: it says what this *permanent* does for everybody, not when the card
+#: printing it may be cast.
+BOARD_FREE_CAST_CLAIM = "board_free_cast"
+
+
+def board_free_cast_line(line: str) -> dict | None:
+    """``{"card_type": …, "mana_value": …}`` for *line*, or None.
+
+    One reader, four callers — the parse claim, the support gate,
+    :func:`permission_for` (the cost waiver and the zone) and
+    ``cast_timing.casts_at_instant_speed`` (the timing). A second copy of the
+    phrase in the timing module would be free to drift from this one, and the
+    direction it drifts is a permission granted with half the sentence behind
+    it.
+    """
+    match = _BOARD_FREE_CAST.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    return {
+        "card_type": match.group("type"),
+        "mana_value": int(match.group("mana_value")),
+    }
+
+
+def board_free_cast(game, card) -> str | None:
+    """The name of a permanent on any battlefield making *card* free, or None.
+
+    Every battlefield and no seat comparison: "**any** player" names nobody, so
+    the permission is everyone's — which is the whole of what makes Aluren the
+    card it is, and the half a controller check would have silently dropped.
+
+    ``effective_card`` rather than the printed face, for
+    ``cast_restrictions.global_cast_ban``'s reason: what a permanent says is
+    what layers 1 and 3 have made of it (CR 707.2, CR 612.1).
+
+    ``card_has_type``, not ``primary_type``: CR 205.2a gives a card every type
+    its line names, so an artifact creature is a creature spell. The mana value
+    is the card's own printed one (CR 202.3) — a cost tax changes what is paid
+    and not what the card's mana value is, and this sentence asks the latter.
+    """
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            described = board_free_cast_line(raw_line)
+            if described is None:
+                continue
+            if not card_has_type(card, described["card_type"]):
+                continue
+            if float(getattr(card, "cmc", 0) or 0) <= described["mana_value"]:
+                return permanent.card.name
+    return None
+
+
 def permission_for(
     game, player_index: int, card, zone: str, *, as_land: bool = False
 ) -> CastPermission | None:
@@ -240,6 +319,19 @@ def permission_for(
                 cards=[card], duration=None, source_name="top of library",
             )
         return None
+    # "Any player may cast creature spells with mana value 3 or less without
+    # paying their mana costs …" (Aluren.) A *board* permission rather than one
+    # this seat was granted, so it is derived on demand for the reason the
+    # Snoop's is: a stored grant would have to be taken away when the
+    # enchantment leaves. The hand is the zone it opens — the ordinary
+    # permission to cast from hand is a rule, and what this adds is the waiver.
+    if zone == "hand" and not as_land:
+        source = board_free_cast(game, card)
+        if source is not None:
+            return CastPermission(
+                player_index=player_index, zone="hand", mode="cast",
+                cards=[card], free=True, duration=None, source_name=source,
+            )
     # The card's own static permission, asked last: a granted one may waive a
     # cost or open a wider zone, and answering with this first would hide it.
     # Only for a card actually in that zone and actually this player's, which is

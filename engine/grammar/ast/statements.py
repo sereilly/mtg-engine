@@ -54,6 +54,7 @@ from .damage import (
 )
 from .characteristics import (
     BecomeColor,
+    BecomeCopy,
     ChangeLandType,
     LandTypeSwap,
     ChangeSupertype,
@@ -302,7 +303,7 @@ Effect = Union[
     DiscardRevealedMatchingUnlessPayLife,
     DiscardRevealedUnlessPayLife,
     Shuffle, ExtraTurn, ExtraLandPlays, CantPlayLands,
-    CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, ChooseColor, ChooseCardType, ChooseCardName, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
+    CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, ChooseColor, ChooseCardType, ChooseCardName, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCopy, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,

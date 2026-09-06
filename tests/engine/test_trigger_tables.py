@@ -320,6 +320,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "at the beginning of your first main phase",
         "at the beginning of your precombat main phase",
     ),
+    # The scope narrowing beside it, its own kind for the reason the upkeep and
+    # draw-step pairs above are two kinds each: the dispatch reads the
+    # difference. All three printed spellings, because both tables carry all
+    # three — "each opponent's" is the same kind with `main_phase_scope` set.
+    "main_phase_first_each": (
+        "at the beginning of each player's first main phase",
+        "at the beginning of each player's precombat main phase",
+        "at the beginning of each opponent's first main phase",
+    ),
     "combat_your_turn": "at the beginning of combat on your turn",
     "combat": "at the beginning of combat",
     # CR 511.1 — the end of combat step (The Wretched).

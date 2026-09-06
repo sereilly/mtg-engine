@@ -91,3 +91,120 @@ def test_w1g5_stalking_stones_animation_outlives_the_cleanup_step(set_pool):
 
     assert stones.is_creature, "an indefinite animation is not swept at cleanup"
     assert (stones.effective_power, stones.effective_toughness) == (3, 3)
+
+
+# --- W2G3: Reflecting Pool and CR 106.7's "could produce" ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _w2g3l_game(mine, theirs=()):
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=c) for c in mine])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=c) for c in theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1, p2
+
+
+def _tap_the_pool(game, player, index=0):
+    for permanent in player.battlefield:
+        permanent.tapped = False
+    result = game.activate_permanent_ability(
+        0, "Reflecting Pool", permanent_index=index
+    )
+    game._settle()
+    return result, {sym: n for sym, n in player.mana_pool.items() if n}
+
+
+def test_reflecting_pool_alone_produces_nothing(set_pool):
+    """"{T}: Add one mana of any type that a land you control could produce."
+
+    The trap, and it is in the ingested data rather than in the sentence:
+    Scryfall records Reflecting Pool's own ``produced_mana`` as all five
+    colours, so the obvious union over "lands you control" reads the Pool
+    itself and taps for anything. CR 106.7 says the opposite — "if that
+    permanent wouldn't produce any mana under these conditions, or no type of
+    mana can be defined this way, there's no type of mana it could produce" —
+    and the rule's own example is a board of nothing but these cards.
+    """
+    game, p1, _ = _w2g3l_game([set_pool("TMP")["Reflecting Pool"]])
+
+    result, pool = _tap_the_pool(game, p1)
+
+    assert result.supported, result.details
+    assert pool == {}, game.log
+
+
+def test_two_reflecting_pools_still_produce_nothing(set_pool):
+    """CR 106.7's example spelled with the card this pool actually has: two
+    derived producers reading each other define no type."""
+    pools = [set_pool("TMP")["Reflecting Pool"]] * 2
+    game, p1, _ = _w2g3l_game(pools)
+
+    _, produced = _tap_the_pool(game, p1)
+
+    assert produced == {}
+
+
+def test_reflecting_pool_copies_a_land_you_control(set_pool, catalog_by_name):
+    """One Forest is the whole of what it can offer."""
+    game, p1, _ = _w2g3l_game(
+        [set_pool("TMP")["Reflecting Pool"], catalog_by_name["Forest"]]
+    )
+
+    _, produced = _tap_the_pool(game, p1)
+
+    assert produced == {"G": 1}, game.log
+
+
+def test_reflecting_pool_ignores_an_opponents_lands(set_pool, catalog_by_name):
+    """"a land **you control**" — the narrowing, and the direction it must not
+    be dropped in: read as any land, the Pool would tap for whatever the board
+    across the table can make."""
+    game, p1, _ = _w2g3l_game(
+        [set_pool("TMP")["Reflecting Pool"]], [catalog_by_name["Forest"]]
+    )
+
+    _, produced = _tap_the_pool(game, p1)
+
+    assert produced == {}, game.log
+
+
+def test_fellwar_stone_stops_reading_a_reflecting_pool_as_five_colours(
+    set_pool, catalog_by_name
+):
+    """The already-supported card this one silently broke.
+
+    Fellwar Stone asks the same CR 106.7 question of the other board, and it
+    answered it by scanning Scryfall's ``produced_mana`` — right for every land
+    that says what it makes, wrong for one that derives it. Reflecting Pool is
+    the first such land in this pool, so an opponent's lone Pool would have made
+    the Stone tap for any colour. Both cards read one implementation of the rule
+    now.
+    """
+    game, p1, _ = _w2g3l_game(
+        [catalog_by_name["Fellwar Stone"]], [set_pool("TMP")["Reflecting Pool"]]
+    )
+    for permanent in p1.battlefield:
+        permanent.tapped = False
+
+    game.activate_permanent_ability(0, "Fellwar Stone", permanent_index=0)
+    game._settle()
+
+    assert {sym: n for sym, n in p1.mana_pool.items() if n} == {}, game.log
+
+
+def test_fellwar_stone_still_copies_an_ordinary_land(catalog_by_name):
+    """And the regression control: the Stone's own card, unchanged."""
+    game, p1, _ = _w2g3l_game(
+        [catalog_by_name["Fellwar Stone"]], [catalog_by_name["Forest"]]
+    )
+    for permanent in p1.battlefield:
+        permanent.tapped = False
+
+    game.activate_permanent_ability(0, "Fellwar Stone", permanent_index=0)
+    game._settle()
+
+    assert {sym: n for sym, n in p1.mana_pool.items() if n} == {"G": 1}, game.log

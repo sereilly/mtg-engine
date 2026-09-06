@@ -20,7 +20,8 @@ from ._common import (
     _filter_payload,
     _targets_payload,
 )
-from ._events import _DEFENDING_PLAYER_EVENTS, _RECORDED_PERMANENTS
+from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      _RECORDED_PERMANENTS)
 from ._records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
@@ -354,6 +355,14 @@ def _lower_add_mana(
         # of the ability are in hand.
         payload["any_type_from"] = node.any_type_from
         return (OracleInstruction("add_mana_from_text", "", payload),)
+    if node.any_type_from_lands is not None:
+        # "…of any type **that a land you control** could produce" (Reflecting
+        # Pool). A board rather than a cost payment, so there is nothing to gate
+        # on — an ability naming a board is answerable on any board, including
+        # an empty one, where CR 106.7 says it produces no mana at all. Which
+        # board is payload for the reason every printed word in this family is.
+        payload["any_type_from_lands"] = node.any_type_from_lands
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.any_color_from is not None:
         # "…that a land an opponent controls could produce" (Fellwar Stone).
         # Which board narrows the choice, carried so the handler and the colour
@@ -408,6 +417,32 @@ def _lower_add_mana_for_tapped_land(
     clause unclaimed and visible instead.
     """
     if event != "land_tapped_for_mana":
+        # "At the beginning of each player's first main phase, **that player**
+        # adds {G}{G}." (Eladamri's Vineyard.) The other half of what this node
+        # can mean: "that player" is bound by any event that *freezes a seat*
+        # (``_EVENT_SUBJECT_PLAYERS``), and only "that land" needs the tap.
+        #
+        # So the pips-only spelling under such an event is a different
+        # instruction — one that resolves on the stack for a seat the firing
+        # named, rather than inline at the tap seam for the seat that tapped.
+        # Every other key on this node is bound by the tap ("any type **that
+        # land** produced", the snow alternative, the additional flag) and is
+        # refused below with the tap itself.
+        if (
+            node.recipient.kind == "that_player"
+            and event in _EVENT_SUBJECT_PLAYERS
+            and node.pips
+            and not node.of_type_produced
+            and not node.additional
+            and not node.optional
+            and not node.alt_supertype
+            and not node.spend_only
+        ):
+            return (
+                OracleInstruction(
+                    "frozen_seat_adds_mana", "", {"pips": node.pips}
+                ),
+            )
         raise LoweringError(
             "'that land'/'that player' are bound by a land_tapped_for_mana "
             f"trigger; {event!r} binds neither",

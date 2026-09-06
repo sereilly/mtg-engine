@@ -376,6 +376,35 @@ CHOSEN_LAND_TYPE = "chosen_land_type"
 
 
 @dataclass(frozen=True)
+class BecomeCopy:
+    """"…this creature becomes a copy of that creature, except it has this
+    ability." (Unstable Shapeshifter, CR 707.2.)
+
+    A **layer 1** effect, which is what separates it from every other branch of
+    the ``becomes`` production beside it: those change a characteristic over the
+    object's copiable values, and this one *replaces* the copiable values every
+    later layer starts from (CR 613.2c). So it lowers onto
+    ``engine/copies.py``'s recorded contribution rather than onto a continuous
+    effect, and nothing it does is a stamp.
+
+    ``of`` is the object copied. Today it is always a back-reference to what the
+    firing event was about ("that creature"), which the lowering requires: an
+    unbound reading would copy whatever the resolution happened to be holding.
+
+    ``keeps_own_ability`` is CR 707.9a's "except it has this ability" — the copy
+    is granted the printed line this node came from, which is what makes the
+    Shapeshifter copy again next time. Its own field rather than a value of the
+    exception vocabulary in ``copies.copy_exceptions``: that table reads
+    exceptions off the *copier's* text at the copy, and this is a clause of the
+    sentence being lowered.
+    """
+
+    subject: Recipient
+    of: Recipient
+    keeps_own_ability: bool = False
+
+
+@dataclass(frozen=True)
 class BecomeColor:
     """"Target spell or permanent becomes red." (the Lace cycle, CR 105.)
 

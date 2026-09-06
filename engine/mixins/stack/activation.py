@@ -32,7 +32,7 @@ from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
-from ...cast_restrictions import global_play_timing
+from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...targeting import derive_activation_spec
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
@@ -669,6 +669,23 @@ class AbilityActivationMixin:
             details = (
                 f"{permanent.card.name}'s abilities can't be activated on "
                 f"another player's turn ({wrong_turn})"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
+
+        # "During combat, players can't cast instant spells or **activate
+        # abilities that aren't mana abilities**." (Hand to Hand.) The
+        # activation half of the sentence the cast path reads for its casting
+        # half. The exception is printed, so it is asked: `is_mana_ability` is
+        # the same reader the turn-scoped prohibition three gates up uses, so
+        # what counts as a mana ability cannot mean two things in one file.
+        combat_ban = combat_play_ban(self)
+        if combat_ban is not None and not is_mana_ability(ability):
+            details = (
+                f"{permanent.card.name}'s ability can't be activated during "
+                f"combat ({combat_ban[0]})"
             )
             self.log.append(details)
             return SimulationResult(

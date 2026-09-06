@@ -1738,3 +1738,141 @@ def test_w2g1_rootwater_shaman_flashes_in_creature_auras_for_its_controller(set_
     assert not _w2g1_flash(lea["Psychic Venom"], game, 0), "enchant land"
     assert not _w2g1_flash(tmp["Trained Armodon"], game, 0), "not an Aura"
     assert not _w2g1_flash(lea["Holy Strength"], game, 1), "the opponent's spell"
+
+
+# --- W2G3: Unstable Shapeshifter, CR 707.2 off a trigger ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g3c_game(*battlefields):
+    seats = [
+        PlayerState(name=f"P{index + 1}", battlefield=list(permanents))
+        for index, permanents in enumerate(battlefields)
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_unstable_shapeshifter_copies_each_creature_that_enters(
+    set_pool, catalog_by_name
+):
+    """"Whenever another creature enters, this creature becomes a copy of that
+    creature, **except it has this ability**."
+
+    Two things at once, and the second is what makes the card a card. Without
+    CR 707.9a's granted ability the Shapeshifter copies once and is a Grizzly
+    Bears for the rest of the game; with it, it becomes each new arrival in
+    turn.
+    """
+    shifter = Permanent(card=set_pool("TMP")["Unstable Shapeshifter"])
+    game = _w2g3c_game([shifter], [])
+    game.players[0].hand = [
+        catalog_by_name["Grizzly Bears"], catalog_by_name["Shivan Dragon"],
+    ]
+    game.start_turn(0)
+
+    assert shifter.effective_card.name == "Unstable Shapeshifter"
+
+    game.cast_from_hand(0, "Grizzly Bears")
+    game._settle()
+    assert shifter.effective_card.name == "Grizzly Bears"
+    assert (shifter.effective_power, shifter.effective_toughness) == (2, 2)
+
+    game.cast_from_hand(0, "Shivan Dragon")
+    game._settle()
+    assert shifter.effective_card.name == "Shivan Dragon"
+    assert (shifter.effective_power, shifter.effective_toughness) == (5, 5)
+    assert game._has_keyword(shifter, "flying")
+
+
+def test_the_granted_ability_rides_the_copied_text(set_pool, catalog_by_name):
+    """CR 707.9a: the ability is *in addition to* the copiable values, so it is
+    appended to the copied card's text — and appended once, however many times
+    the Shapeshifter has copied. Anything else and the trigger fires twice per
+    arrival."""
+    shifter = Permanent(card=set_pool("TMP")["Unstable Shapeshifter"])
+    game = _w2g3c_game([shifter], [])
+    game.players[0].hand = [
+        catalog_by_name["Grizzly Bears"], catalog_by_name["Shivan Dragon"],
+    ]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Grizzly Bears")
+    game._settle()
+    game.cast_from_hand(0, "Shivan Dragon")
+    game._settle()
+
+    text = shifter.effective_card.oracle_text
+    granted = "Whenever another creature enters, this creature becomes a copy"
+    assert text.count(granted) == 1, text
+    assert "Flying" in text, "the copied card's own text is still there"
+
+
+def test_unstable_shapeshifter_copies_an_opponents_creature(
+    set_pool, catalog_by_name
+):
+    """"another creature" names no controller, so an arrival on the other
+    battlefield is one of them."""
+    shifter = Permanent(card=set_pool("TMP")["Unstable Shapeshifter"])
+    game = _w2g3c_game([shifter], [])
+    game.players[1].hand = [catalog_by_name["Shivan Dragon"]]
+    game.start_turn(1)
+
+    game.cast_from_hand(1, "Shivan Dragon")
+    game._settle()
+
+    assert shifter.effective_card.name == "Shivan Dragon"
+
+
+def test_a_noncreature_arrival_leaves_it_alone(set_pool, catalog_by_name):
+    """The narrowing the trigger prints. A copy effect that fired on every
+    permanent would make the Shapeshifter a Mox."""
+    shifter = Permanent(card=set_pool("TMP")["Unstable Shapeshifter"])
+    game = _w2g3c_game([shifter], [])
+    game.players[0].hand = [catalog_by_name["Mox Pearl"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Mox Pearl")
+    game._settle()
+
+    assert shifter.effective_card.name == "Unstable Shapeshifter"
+
+
+def test_the_copy_is_layer_one_and_not_a_stamp(set_pool, catalog_by_name):
+    """CR 707.2's boundary, which is the whole reason this lowers onto
+    ``engine/copies.py``: what is copied is the *copiable* values, so a +1/+1
+    counter on the creature that entered is not."""
+    from engine.pt import add_pt_counters
+
+    shifter = Permanent(card=set_pool("TMP")["Unstable Shapeshifter"])
+    game = _w2g3c_game([shifter], [])
+    game.players[0].hand = [catalog_by_name["Grizzly Bears"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Grizzly Bears")
+    bear = next(
+        p for p in game.players[0].battlefield if p.card.name == "Grizzly Bears"
+    )
+    add_pt_counters(bear, "+1/+1", 2)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+    assert (shifter.effective_power, shifter.effective_toughness) == (2, 2)
+
+
+def test_unstable_shapeshifter_compiles_to_one_bound_copy_instruction(set_pool):
+    """The payload's two keys, pinned so a later reading cannot drop either:
+    the noun phrase the handler re-checks, and CR 707.9a's clause."""
+    program = compile_card_oracle(set_pool("TMP")["Unstable Shapeshifter"])
+
+    assert program.supported, program.reason
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "matching_permanent_enters"
+    assert trigger.instruction.kind == "become_copy_of_bound_permanent"
+    assert trigger.instruction.payload == {
+        "filter": {"type_filter": "creature"}, "keeps_own_ability": True,
+    }

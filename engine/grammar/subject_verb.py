@@ -67,6 +67,7 @@ from .effects import (
     _parse_doesnt_untap_next_step,
     _parse_draw,
     _parse_exile_entire_library,
+    _parse_extra_turn,
     parse_exile_random_card_from_hand,
     _parse_fight,
     _parse_gains,
@@ -528,6 +529,15 @@ def parse_subject_verb(
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)
+        # "**Target player** takes an extra turn after this one." (Time Warp.)
+        # The bare imperative ("Take an extra turn after this one", Time Walk)
+        # is routed from `imperatives.py`; this is the same production with its
+        # subject printed, which CR 608.2c makes the same sentence. Dispatched
+        # on the verb like every other player action here, and handed the
+        # subject rather than defaulting it — the whole of what Time Warp adds
+        # to Time Walk is which seat gets the turn.
+        if token.text in ("takes", "take") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_extra_turn(stream, source_spec)
         # "Each player antes the top card of their library." (Demonic
         # Attorney.) The subject is who antes (CR 407.4: a card is anted by
         # its owner), so it is handed to the production rather than read back

@@ -127,6 +127,7 @@ from .characteristics import (
 from .types import (
     _lower_land_type_swap,
     _lower_become_color,
+    _lower_become_copy,
     _lower_become_creature,
     _lower_change_land_type,
     _lower_change_supertype,
@@ -466,6 +467,7 @@ __all__ = [
     "_lower_remove_counter",
     "_lower_for_each",
     "_lower_become_color",
+    "_lower_become_copy",
     "_lower_change_land_type",
     "_lower_change_supertype",
     "_lower_become_aura",

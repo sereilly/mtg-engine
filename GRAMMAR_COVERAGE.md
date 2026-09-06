@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 82.4% | 81.2% | 56.1% | 230 |
+| TMP *(measured)* | 335 | 478 | 84.7% | 83.7% | 57.7% | 238 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 369 | 168 | expected a subject |  |
-| 116 | 58 | unrecognized effect verb |  |
+| 363 | 162 | expected a subject |  |
+| 113 | 55 | unrecognized effect verb |  |
 | 94 | 46 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -1636,6 +1636,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage, you gain that much life.`
   - `Whenever this creature deals damage, you gain that much life.`
   - `Whenever this creature deals damage, you gain that much life.`
+- **Eladamri's Vineyard**
+  - `At the beginning of each player's first main phase, that player adds {G}{G}.`
 - **Eladamri, Lord of Leaves**
   - `Other Elf creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
 - **Elder Druid**
@@ -2007,6 +2009,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks, it gets +2/+0 until end of turn.`
 - **Folk of the Pines**
   - `{1}{G}: This creature gets +1/+0 until end of turn.`
+- **Fool's Tome**
+  - `{2}, {T}: Draw a card. Activate only if you have no cards in hand.`
 - **Foratog**
   - `{G}, Sacrifice a Forest: This creature gets +2/+2 until end of turn.`
 - **Forbidden Ritual**
@@ -3898,6 +3902,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't block creatures with power 3 or greater.`
   - `This creature can't attack if defending player controls an untapped creature with power 3 or greater.`
   - `This creature can't block creatures with power 3 or greater.`
+- **Orim's Prayer**
+  - `Whenever one or more creatures attack you, you gain 1 life for each attacking creature.`
 - **Orim, Samite Healer**
   - `{T}: Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Ornery Dilophosaur**
@@ -4361,6 +4367,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `The next time a source of your choice would deal damage this turn, that damage is dealt to that source's controller instead.`
 - **Reflecting Mirror**
   - `{X}, {T}: Change the target of target spell with a single target if that target is you. The new target must be a player. X is twice the mana value of that spell.`
+- **Reflecting Pool**
+  - `{T}: Add one mana of any type that a land you control could produce.`
 - **Regeneration**
   - `{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
@@ -4415,6 +4423,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Untap all lands you control.`
 - **Resistance Fighter**
   - `Sacrifice this creature: Prevent all combat damage target creature would deal this turn.`
+- **Respite**
+  - `Prevent all combat damage that would be dealt this turn. You gain 1 life for each attacking creature.`
 - **Restless Dead**
   - `{B}: Regenerate this creature.`
 - **Resurrection**
@@ -4528,6 +4538,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Rolling Thunder deals X damage divided as you choose among any number of targets.`
 - **Rookie Mistake**
   - `Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.`
+- **Root Maze**
+  - `Artifacts and lands enter tapped.`
 - **Root Spider**
   - `Whenever this creature blocks, it gets +1/+0 and gains first strike until end of turn.`
 - **Roots**
@@ -5604,6 +5616,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
+- **Time Warp**
+  - `Target player takes an extra turn after this one.`
 - **Time and Tide**
   - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
 - **Timid Drake**
@@ -5792,6 +5806,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.`
   - `At the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.`
   - `At the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.`
+- **Unstable Shapeshifter**
+  - `Whenever another creature enters, this creature becomes a copy of that creature, except it has this ability.`
 - **Unsubstantiate**
   - `Return target spell or creature to its owner's hand.`
 - **Unsummon**

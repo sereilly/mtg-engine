@@ -456,6 +456,19 @@ def _parse_matched_event(
                 "attackers_declared", word, subject=subject
             )
     stream.reset(mark)
+    # "Whenever **one or more creatures attack you**." (Orim's Prayer.) The
+    # declaration read from CR 506.2's defending side, and the third printed
+    # word order for it: the count comes first, the noun phrase second and the
+    # verb last. "you" is required — without it the sentence is a declaration
+    # nobody in particular is defending against, which is a different trigger,
+    # and leaving the word unread is the silent widening this table's
+    # neighbours already document.
+    count = _accept_number(stream)
+    if count is not None and stream.accept_phrase("or", "more"):
+        subject = parse_subject_filter_at(stream, plural=True)
+        if subject is not None and stream.accept_phrase("attack", "you"):
+            return ast.TriggerEvent("attackers_declared", word, subject=subject)
+    stream.reset(mark)
     if stream.accept_phrase("this", "creature", "and", "at", "least"):
         count = _accept_number(stream)
         if count is not None and stream.accept_phrase("other", "creatures", "attack"):

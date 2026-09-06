@@ -305,6 +305,16 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the card supported and fires it on the wrong event (round 7).
     ("main_phase_first", ("the", "beginning", "of", "your", "first", "main", "phase")),
     ("main_phase_first", ("the", "beginning", "of", "your", "precombat", "main", "phase")),
+    # "each player's" beside "your", the same pair as the upkeep and draw-step
+    # rows above and for their reason: the scope is what the dispatcher reads,
+    # and a narrowing present on one side of the pipeline and absent on the
+    # other compiles the card supported and fires it on the wrong event.
+    ("main_phase_first_each",
+     ("the", "beginning", "of", "each", "player", "'s", "first", "main", "phase")),
+    ("main_phase_first_each",
+     ("the", "beginning", "of", "each", "player", "'s", "precombat", "main", "phase")),
+    ("main_phase_first_each",
+     ("the", "beginning", "of", "each", "opponent", "'s", "first", "main", "phase")),
     # "Your" is a scope narrowing and so a separate kind, the same pair the
     # oracle regex table carries: a condition narrowed on one side of the
     # pipeline and not the other compiles the card supported and fires it on the

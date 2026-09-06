@@ -28,7 +28,9 @@ instruction, the entry goes with it.
 from __future__ import annotations
 
 from ..auras import aura_continuous_claim
-from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
+from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
+                                 cast_absence_line,
+                                 combat_play_ban_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
@@ -39,6 +41,7 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
                                  global_cast_ban_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
+from ..cast_permissions import BOARD_FREE_CAST_CLAIM, board_free_cast_line
 from ..cost_modifiers import cost_modifier_claims_line
 from ..counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
@@ -166,6 +169,24 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # so the claim cannot outlive either half.
     if global_play_timing_line(normalized):
         return GLOBAL_PLAY_TIMING_CLAIM
+
+    # engine/cast_restrictions.py — the same two gates over a *phase* instead of
+    # a turn: "During combat, players can't cast instant spells or activate
+    # abilities that aren't mana abilities." (Hand to Hand.) One printed
+    # sentence, two gates, one reader — claimed through the reader both of them
+    # enforce with, so the claim cannot outlive either half.
+    if combat_play_ban_line(normalized) is not None:
+        return COMBAT_PLAY_BAN_CLAIM
+
+    # engine/cast_permissions.py — CR 601.3a's permission read the other way
+    # round: "Any player may cast creature spells with mana value 3 or less
+    # without paying their mana costs and as though they had flash." (Aluren.)
+    # Three permissions in one sentence, all three carried out off the board's
+    # own text at every cast, so there is nothing to lower — and claimed through
+    # the reader all three enforcement sites ask, so the claim cannot outlive
+    # any of them.
+    if board_free_cast_line(normalized) is not None:
+        return BOARD_FREE_CAST_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)
