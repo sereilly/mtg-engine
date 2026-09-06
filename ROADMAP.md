@@ -988,6 +988,75 @@ is the half of Weatherlight's rule that held.
 | W1G4 | Triggered abilities the engine has never fired | `triggers.py`, `lowering/_events.py`, `references.py` (986/14), `lowering/_amounts.py` (986/14), `lowering/damage.py` (983/17) | 19 |
 | W1G5 | Supported and inert: the hollow lines and the unclaimed sentences | `effects/library.py` (987/13), `lowering/exile.py` (971/29) | 13 |
 
+### Wave 1 closed: 227 -> 275 of 335, and the count is the least of it
+
+Five worktree groups, integrated serially in the order they finished
+(G1, G3, G4, G2, G5). **Supported 227 -> 275.** The other three numbers moved
+further: `--hollow-lines` **9 -> 1**, `parse_coverage --set TMP` **26 cards ->
+3**, `picker_sweep` **5 findings -> 1**. Zero name-keyed hooks added across all
+five groups, under the standing instruction that a hook is the last resort;
+reliance stays 2.3%.
+
+**Twenty-six of the cards the wave fixed already reported supported.** Twelve
+buyback spells cast at their printed cost, offered the player nothing and never
+came back; Shadow Rift and Reality Anchor each compiled to "draw a card" and
+dropped their whole shadow sentence; Spirit Mirror and Sarcomancy compiled
+upkeep triggers with no instruction; Essence Bottle and Torture Chamber were
+activatable **for free, forever**, because `Remove all <kind> counters` was
+parsed and dropped. The supported count could not see one of them, which is why
+Phase 1 now runs all five instruments and Phase 3 reads three numbers a round.
+
+**Nine shipped cards were mis-playing, none of them in Tempest.** The wave found
+them as a side effect, which is the ratio Alliances recorded and this set
+repeats: **Zombie Master**'s granted regeneration was reachable only by a Zombie
+with no ability of its own, so eleven shipped Zombies could never use it;
+**Titania's Song**'s ability removal reached layer 6 and the activation gate and
+neither triggered nor static abilities; **The Tabernacle at Pendrell Vale**
+(with Pendrell Mists and Breath of Dreams) asked its upkeep payment twice per
+creature the moment the lord table widened; **Sorceress Queen**, **Jolrael**,
+**Mwonvuli Recluse** and **Cycle of Life** broke on a base-P/T arm written
+before its sibling; **Howling Mine** carried one of the shipped pool's only two
+hollow lines; and `remove_target_keyword_until_eot` read **no printed noun
+phrase at all**, so ten shipped cards — Radjan Spirit, Shelkin Brownie,
+Hammerheim, Tolaria, Urborg, Scarwood Hag, Vertigo, Burning Palm Efreet,
+Downdraft, Soul Sear — stripped a keyword from whatever they liked. Every one of
+these was found by driving a game, not by a census.
+
+**The sharpest finding is about the keyword registry itself.** `has_keyword`
+reads the *ingested* keyword field, so shadow was fully **testable** and
+completely **unenforced**: Shadowstorm and Maze of Shadows had been hitting
+exactly the right creatures for a whole set while all seventeen shadow creatures
+blocked and were blocked as vanilla. A census of cards *mentioning* the keyword
+showed two of them green. `test_keyword_registry`'s "add the word alone and
+nothing happens" is half the story — filters keyed on the word already work.
+
+**Two group interlocks paid, and one of them is the mechanism the playbook asks
+for.** W1G1 declined Thalakos Mistfolk naming exactly one missing piece; W1G5
+built that piece for two *other* cards; the card fell out at integration with
+nobody working on it twice, and the decline's own test is what failed to say so.
+W1G4 built the narrowed-death trigger and recorded that "the keyword was never
+the gap", so Dauthi Ghoul landed the moment shadow did.
+
+**Integration cost one deliberate resolution and one interlock fix.** Both G1
+and G4 added the **same row** to `engine/oracle.py`'s trigger table for the same
+card — one fact, two spellings, invisible to a duplicate-*definition* sweep
+because there is one definition per module. Two test files needed a union rather
+than a side: G1 had replaced `shadow` with `ward` as the canonical unimplemented
+keyword while G3 rewrote the same rows for its own reason, and taking either
+side alone would have reasserted that layer 6 carries no shadow. Every other
+conflict was a two-append region in a per-set test file, resolved by the
+convention's own reconstruction (base + ours-tail + theirs-tail, with the shared
+prefix asserted byte-identical).
+
+**Zero caps crossed at integration.** Four crossed *in round*, each split by the
+group that crossed it: `effects/characteristics.py` -> `effects/base_pt.py`,
+`lowering/damage.py` -> `lowering/_conjuncts.py`, `lowering/_amounts.py` (paid
+for by factoring a triplicated twenty-line tail, no split needed) and
+`postmodifiers.py` -> its counter-bound readers folded into `amounts.py` beside
+the third reader of the same phrase. Two of those four modules were **owned by a
+different group than the one that crossed them**, which is the shared-module
+case restated: ownership predicts who splits it, not who reaches it.
+
 ## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 
 **Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the
