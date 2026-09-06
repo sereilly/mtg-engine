@@ -632,7 +632,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # ability" would consume the shorter reading and drop the rest.
     ("self_becomes_target",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
-     r"the target of (?P<targeted_by>a spell or ability|a spell|an ability)"
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to

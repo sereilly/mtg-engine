@@ -2488,6 +2488,13 @@ class GameHelpersMixin:
                 subject=targeted,
                 source_seat=item.caster_index,
                 targeted_by="an ability" if item.is_ability else "a spell",
+                # "…the target of **an Aura spell**" (Fugitive Druid). Which
+                # class of spell, which the word above cannot say: the split it
+                # draws is the one the client is shown, and a narrowing on the
+                # spell's own subtype has to read the card. Carried rather than
+                # re-derived at resolution, because by then the spell has left
+                # the stack (CR 603.10).
+                targeted_by_card=item.card,
                 event_subject_player=item.caster_index,
             )
 

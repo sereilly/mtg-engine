@@ -40,6 +40,14 @@ _DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
 #: ability" and strand the rest of it.
 _BECOMES_TARGET_OBJECTS: tuple[tuple[str, ...], ...] = (
     ("a", "spell", "or", "ability"),
+    # "…becomes the target of **an Aura spell**" (Fugitive Druid). A narrower
+    # class than "a spell", and an *axis entry* rather than a fourth condition
+    # for the reason this table is generated at all: the three axes multiply,
+    # so a card printing this phrase about an artifact, or about a spell an
+    # opponent controls, is already read. The filter in `engine/events.py` is
+    # what enforces it — dropped, the Druid would draw a card for any spell at
+    # all.
+    ("an", "aura", "spell"),
     ("a", "spell"),
     ("an", "ability"),
 )

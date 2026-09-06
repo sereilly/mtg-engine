@@ -763,6 +763,23 @@ def _self_becomes_target_filter(
     if wanted in ("a spell", "an ability"):
         if event.payload.get("targeted_by") != wanted:
             return False
+    if wanted == "an aura spell":
+        # "…the target of **an Aura spell**" (Fugitive Druid). A spell, and a
+        # narrower class of one: an activated ability is out by the first test
+        # and everything else by the subtype. Read through `printed_shape`, the
+        # same reader a cast trigger's `cast_subtype` narrowing goes through —
+        # a spell on the stack is not a permanent, so the layer system has no
+        # answer and the printed face is the whole of what is testable.
+        if event.payload.get("targeted_by") != "a spell":
+            return False
+        from .layer_bridge import printed_shape
+
+        card = event.payload.get("targeted_by_card")
+        if card is None:
+            return False
+        _, subtypes = printed_shape(card)
+        if "aura" not in subtypes:
+            return False
     scope = _TARGETING_CONTROLLER_SCOPES.get(
         trig.condition.payload.get("targeting_controller")
     )

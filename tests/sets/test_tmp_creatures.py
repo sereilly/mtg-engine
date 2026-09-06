@@ -297,3 +297,49 @@ def test_mongrel_pack_makes_no_dogs_for_a_death_outside_combat(set_pool):
     game._settle()
 
     assert _w1g4_dogs(p1) == 0
+
+
+# -- Fugitive Druid ---------------------------------------------------------
+
+
+def _w1g4_target_druid(set_pool, spell_name):
+    lea = _w1g4_lea()
+    druid = _w1g4_perm(set_pool("TMP")["Fugitive Druid"])
+    p1 = PlayerState(name="P1", battlefield=[druid], library=[lea["Forest"]] * 10)
+    p2 = PlayerState(name="P2", hand=[lea[spell_name]], library=[lea["Forest"]] * 10)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(1)
+    game._settle()
+    game.cast_from_hand(
+        1, spell_name, target_player_index=0, target_permanent_index=0,
+    )
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+    return p1
+
+
+def test_fugitive_druid_draws_for_an_aura_spell(set_pool):
+    """"Whenever this creature becomes the target of an Aura spell, you draw a
+    card."
+
+    CR 603.2's targeting announcement, narrowed by the *class* of spell — an
+    axis the becomes-target table already had two entries on ("a spell", "an
+    ability"). What it could not say was which kind of spell, so the card had
+    no reading at all rather than a wrong one.
+    """
+    p1 = _w1g4_target_druid(set_pool, "Firebreathing")
+
+    assert len(p1.hand) == 1
+
+
+def test_fugitive_druid_is_silent_for_a_non_aura_spell(set_pool):
+    """The narrowing, enforced against the spell's own printed subtype — a
+    spell on the stack is not a permanent, so the layer system has no answer
+    and the printed face is the whole of what is testable. Dropped, the Druid
+    draws for every spell aimed at it.
+    """
+    p1 = _w1g4_target_druid(set_pool, "Lightning Bolt")
+
+    assert len(p1.hand) == 0
