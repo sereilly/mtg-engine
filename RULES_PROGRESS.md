@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**363 / 614 tracked rules covered (59%)** — 2142 tests, 0 unannotated.
+**363 / 614 tracked rules covered (59%)** — 2143 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -380,7 +380,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 205. Type Line
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(7 tests, subrules ab)*
-- [x] **205.2** Card Types *(10 tests, subrules ab)*
+- [x] **205.2** Card Types *(11 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
@@ -576,7 +576,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(25 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(26 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(2 tests)*
 
 ### 503. Upkeep Step

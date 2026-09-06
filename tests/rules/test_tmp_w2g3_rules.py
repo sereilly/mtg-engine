@@ -191,6 +191,39 @@ def test_the_active_player_chooses_which_permanents_untap_under_a_cap():
     assert game.resolve_untap_step(0) == 2
 
 
+@pytest.mark.cr("502.3", "205.2a")
+def test_an_artifact_creature_may_be_chosen_under_an_artifact_cap():
+    """CR 205.2a gives a card **every** type its line names, so an Ornithopter
+    is under Damping Field's artifact cap — and the step's own offer says so,
+    because ``_tapped_indices_of_type`` asks ``has_type``.
+
+    The resolver was asking a *third* reader of the same question,
+    ``card.primary_type``, which collapses a multi-type line to one word: it
+    answered "creature" for the Ornithopter and refused the very permanent the
+    prompt had just offered. One shared predicate now answers for the offer,
+    the resolver and the web layer's split.
+    """
+    field = _card(
+        "Field", "Artifact",
+        "Players can't untap more than one artifact during their untap steps.",
+    )
+    game = _game([field, _card("Thopter", "Artifact Creature — Thopter"),
+                  _card("Rock", "Artifact")])
+    for permanent in list(game.players[0].battlefield)[1:]:
+        permanent.tapped = True
+
+    offered = game.get_untap_land_selection_options(0)
+    assert offered["candidate_indices"] == [1, 2], "the artifact creature is offered"
+
+    untapped = game.resolve_untap_step(
+        0, selected_indices_by_type={"artifact": [1]}
+    )
+
+    assert untapped == 1
+    assert not game.players[0].battlefield[1].tapped
+    assert game.players[0].battlefield[2].tapped
+
+
 # ---------------------------------------------------------------------------
 # CR 614.1 / CR 616.1 — a damage multiplier
 # ---------------------------------------------------------------------------
