@@ -369,6 +369,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # control", Reset; "tap all legendary creatures", Arena of the Ancients).
     "tap_enchanted_creature": "tapping",
     "tap_all_matching": "tapping",
+    # "…tap all lands that player controls that could produce any type of
+    # mana that land could produce." (Mana Web.) The sweep above with a
+    # comparison against the land the trigger watched, dispatched by the
+    # tap-for-mana seam because nothing else holds both lands at once.
+    "tap_lands_sharing_produced_mana": "tapping",
     # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
     # over a set named by a combat relation to the spell's own target.
     "tap_creatures_blocking_target": "tapping",
