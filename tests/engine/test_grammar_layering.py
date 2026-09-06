@@ -113,6 +113,24 @@ PARSE_LAYERS = [
     # attacking creature" nests a whole phrase.
     "postmodifiers",
     "nouns",
+    # The object an *earlier step of the same effect* already chose — "that
+    # creature", "those creatures", "the other creature", "that Wall". Split
+    # out of `references` at Tempest's Phase 0, when that module sat four lines
+    # from the guard with three of the wave's five groups reaching it and no
+    # one of them owning it. The line is the one `references`' own docstring
+    # drew when the block arrived: these answer CR 115's question with an
+    # earlier step as the referent, where everything left up there reads a
+    # phrase a **player** answers as the spell resolves. It is also the half
+    # that grows — a set adds a spelling of a restated noun far more often than
+    # it adds a quantifier or a player form.
+    #
+    # Above `nouns`, whose object parser the "that non-Wall creature" branch
+    # reads, and below `references`, which re-exports every name so `phrases`
+    # and the effect families that read one are untouched. No mirror name to
+    # reuse: the `that`/`those` quantifiers are read by eighteen lowering
+    # modules and owned by none, and `rebinding` further up is the other
+    # question — which object a bare "it" names, answered by an AST walk.
+    "back_references",
     "references",
     # Whole printed *paragraphs* that are one effect (Necromentia, Idol of
     # Endurance, Tawnos's Coffin, Transmute Artifact). Below `statements`
