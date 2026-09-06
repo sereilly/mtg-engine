@@ -1072,6 +1072,21 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # alone, with this table quietly naming a different event.
     ("attached_creature_leaves_battlefield",
      r"when(?:ever)? (?:equipped|enchanted) creature leaves(?: the battlefield)?"),
+    # "When this creature **phases out or leaves the battlefield**, mill three
+    # cards." (Ertai's Familiar.) CR 603.1's one ability with two trigger
+    # events, exactly as `creature_attacks_or_blocks` is — one kind read at
+    # both fire sites, never two entries, because the ability is one ability
+    # and each of two would be waiting for its own half.
+    #
+    # Above the generic row for `created_token_leaves_battlefield`'s reason and
+    # a sharper one: that row's `.+` swallows "this creature phases out or" and
+    # reports the ability as watching the *departure alone*. Ertai's Familiar
+    # has phasing, so it phases out every other untap step and never leaves the
+    # battlefield at all — the card would have compiled supported and milled
+    # nothing for the whole game.
+    ("phases_out_or_leaves_battlefield",
+     r"when this (?:creature|artifact|enchantment|land|permanent) phases out "
+     r"or leaves(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     # "**When you lose control of this artifact**, put all cards exiled with
     # this artifact into their owner's graveyard." (Gustha's Scepter.) A CR

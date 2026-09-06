@@ -1109,3 +1109,119 @@ def test_tolarian_entrancer_takes_the_blocker_after_damage(set_pool):
     # permanent entered under is untouched and the Wall would revert if the
     # contribution ever ended. An untimed steal has no end, which is CR 611.2a.
     assert wall.metadata.get("base_controller_index", 1) == 1
+
+
+def _w2g3c_familiar(set_pool, set_cards):
+    """Ertai's Familiar on an empty board, both seats with a library to mill."""
+    mountain = set_pool("LEA")["Mountain"]
+    fam = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Ertai's Familiar"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[fam], library=[mountain] * 20),
+        PlayerState(name="P2", library=[mountain] * 20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, fam
+
+
+def _w2g3c_turn(game: Game, seat: int) -> None:
+    game.start_turn(seat)
+    game._close_current_priority_step()
+    _w2g3c_resolve(game)
+
+
+def test_ertais_familiar_reads_one_ability_with_two_trigger_events(set_pool):
+    """"When this creature **phases out or leaves the battlefield**, mill three
+    cards." (CR 603.1b.)
+
+    One condition kind, not two entries and not the bare leave. The generic
+    leaves-the-battlefield row in `oracle.py` matches `when (?:this|.+)
+    leaves…`, whose `.+` swallows "this creature phases out or" — so without a
+    longer row above it this card would have compiled supported while watching
+    only a departure it almost never makes.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Ertai's Familiar"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "phases_out_or_leaves_battlefield"
+    assert trig.instruction.kind == "mill_target_player"
+    assert trig.instruction.payload["amount"] == 3
+
+
+def test_ertais_familiar_mills_when_its_own_phasing_takes_it_out(set_pool):
+    """The phase-out half, fired by CR 702.26a's alternation.
+
+    The Familiar has phasing, so this is the event it actually meets — and it
+    is *not* a zone change (CR 702.26d), which is why the leave half cannot
+    stand in for it. Exactly three cards: one announcement, not one per half.
+    """
+    game, _fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)
+
+    assert [p.card.name for p in game.players[0].phased_out] == [
+        "Ertai's Familiar"
+    ], game.log
+    assert len(game.players[0].graveyard) == 3, game.log
+
+
+def test_ertais_familiar_mills_when_it_leaves_the_battlefield(set_pool):
+    """The other half of the same ability, from the removal transition.
+
+    Run to a turn where the Familiar has phased back in, so the departure is a
+    real one — a permanent already phased out is on no battlefield to leave.
+    """
+    game, fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)          # phases out, mills 3
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # phases in
+    assert fam in game.players[0].battlefield
+
+    before = len(game.players[0].graveyard)
+    game.remove_from_battlefield(fam)
+    _w2g3c_resolve(game)
+
+    assert len(game.players[0].graveyard) - before == 3, game.log
+
+
+def test_ertais_familiar_lock_stops_the_next_untap_steps_phase_out(set_pool):
+    """"{U}: Until your next upkeep, this creature can't phase out."
+    (CR 702.26a's alternation, refused.)
+
+    The whole of the card's value is that the phase-out **does not happen**, so
+    the assertion is an absence plus the mill that would have come with it. A
+    restriction nothing enforces is an ability that works more often than the
+    card allows, and this one would be silent: the Familiar would phase out on
+    schedule and mill three, exactly as it does without the ability.
+
+    The window ends at the controller's *upkeep*, which is one step after the
+    untap step it protects — so the creature survives that turn's alternation
+    and phases out on the next one.
+    """
+    game, fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)          # phases out
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # phases in
+    result = game.activate_permanent_ability(0, "Ertai's Familiar")
+    assert result.supported, result
+    _w2g3c_resolve(game)
+    assert fam.metadata["cant_phase_out"] == [
+        {"duration": "your_next_upkeep", "seat": 0}
+    ]
+    milled = len(game.players[0].graveyard)
+
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # the protected untap step
+
+    assert game.players[0].phased_out == [], game.log
+    assert fam in game.players[0].battlefield
+    assert len(game.players[0].graveyard) == milled, game.log
+    # The upkeep of that same turn is what ends it (CR 611.2's stated duration).
+    assert "cant_phase_out" not in fam.metadata
+
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)
+
+    assert [p.card.name for p in game.players[0].phased_out] == [
+        "Ertai's Familiar"
+    ], game.log
+    assert len(game.players[0].graveyard) - milled == 3

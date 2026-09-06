@@ -1390,3 +1390,59 @@ def test_605_1a_an_effect_that_targets_is_not_a_mana_ability_at_any_depth():
 
     assert is_mana_ability(adds) is True
     assert is_mana_ability(fused) is False
+
+
+# --- W2G3: phasing and end of combat ---
+
+
+@pytest.mark.cr("603.1b", "702.26d")
+def test_603_1b_one_ability_with_two_trigger_conditions_answers_to_each_once():
+    """"A triggered ability may have more than one trigger condition."
+
+    Ertai's Familiar's shape, tested as the rule rather than as the card: one
+    ability, two events, and the two things that can go wrong are opposite.
+
+    Announced from one site only, half the printed sentence never happens — and
+    for this pair the half that never happens is the one the card actually
+    meets, because a permanent with phasing phases out every other untap step
+    and rarely leaves at all. Announced from both sites *for one event*, the
+    ability fires twice: CR 702.26d says a phase-out is not a zone change, so
+    the leaving scan must stay silent for it.
+
+    Written with an invented card so the subject is the rule. The effect is a
+    life gain because a trigger nobody can take back has to be read off what it
+    did (the reading `test_702_26d_a_leaves_the_battlefield_ability_does_not_trigger_on_a_phase_out`
+    takes one file over), and a counted life total tells "twice" from "once".
+    """
+    watcher = _mk_card(
+        "Watcher", "Creature — Test",
+        "Phasing\n"
+        "When this creature phases out or leaves the battlefield, "
+        "you gain 3 life.",
+    )
+    program = compile_card_oracle(watcher)
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "phases_out_or_leaves_battlefield"
+
+    perm = Permanent(card=watcher)
+    p1 = PlayerState(name="P1", battlefield=[perm], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.interactive_seats = set()
+
+    game.phase_out_permanent(perm)
+    game._settle()
+
+    assert perm in p1.phased_out
+    assert p1.life == 23, "one firing for one event, not two and not none"
+
+    # The other half, from the transition a phase-out deliberately does not
+    # take: bring it back and remove it for real.
+    game.phase_in_for(0)
+    game._settle()
+    assert game.is_on_battlefield(perm)
+
+    game.remove_from_battlefield(perm)
+    game._settle()
+
+    assert p1.life == 26

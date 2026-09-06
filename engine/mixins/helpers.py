@@ -667,6 +667,23 @@ class GameHelpersMixin:
         self._recompute_continuous_effects()
         self._announce_phasing("phases_in", returning)
 
+    #: The joined kind a phasing announcement makes **beside** its own. "When
+    #: this creature **phases out or leaves the battlefield**, mill three cards"
+    #: (Ertai's Familiar) is CR 603.1's one ability with two trigger events, and
+    #: the engine's answer to that shape is one condition kind read at both fire
+    #: sites — the arrangement `creature_attacks_or_blocks` already has, where
+    #: the two declaration steps each name it in their scan.
+    #:
+    #: A second announcement rather than a second row in a scan, because this
+    #: half goes through `emit`, and `collect` gathers exactly one kind. A table
+    #: rather than a branch, so the phase-*in* half cannot be given a joined
+    #: kind nothing announces by somebody editing the wrong line: there is no
+    #: printed "phases in or leaves the battlefield", and a card leaving the
+    #: battlefield has not phased in.
+    _JOINED_PHASING_KINDS: dict[str, str] = {
+        "phases_out": "phases_out_or_leaves_battlefield",
+    }
+
     def _announce_phasing(self, kind: str, permanents: list[Permanent]) -> None:
         """CR 603.2's "whenever this permanent phases in / out" triggers.
 
@@ -689,6 +706,9 @@ class GameHelpersMixin:
             if seat is None:
                 seat = perm.metadata.get("base_controller_index")
             emit(self, kind, subject=perm, source_seat=seat)
+            joined = self._JOINED_PHASING_KINDS.get(kind)
+            if joined is not None:
+                emit(self, joined, subject=perm, source_seat=seat)
 
     # -- the two zones CR 903.9b intercepts ---------------------------------
     #
@@ -1732,7 +1752,13 @@ class GameHelpersMixin:
             # is a change of hands, and that fires from `_sync_control`.
             for trig in matching_triggers(
                 perm.effective_card,
-                condition_kinds={"leaves_battlefield", "lose_control_of_source"},
+                condition_kinds={
+                    "leaves_battlefield", "lose_control_of_source",
+                    # The other half of Ertai's Familiar's joined event, named
+                    # here for `creature_attacks_or_blocks`' reason: one
+                    # ability, two events, so both sites read the one kind.
+                    "phases_out_or_leaves_battlefield",
+                },
             ):
                 leaving.append((perm, make_trigger_event(seat, perm, trig)))
             # "When enchanted creature leaves the battlefield, its controller

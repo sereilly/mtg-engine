@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2076 tests, 0 unannotated.
+**359 / 612 tracked rules covered (58%)** — 2077 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -679,7 +679,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 603. Handling Triggered Abilities
 
-- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
+- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(22 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(41 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
@@ -890,7 +890,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(28 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
-- [x] **702.26** Phasing *(15 tests, subrules adfgim)*
+- [x] **702.26** Phasing *(16 tests, subrules adfgim)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(4 tests, subrules ab)*
