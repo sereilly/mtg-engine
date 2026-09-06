@@ -1769,3 +1769,92 @@ def test_601_2c_the_colour_exclusion_gap_was_live_on_a_shipped_card(set_pool):
     assert not refused.supported, "Bog Wraith is black"
     assert p1.life == 20, "no life was gained for damage nothing was dealt"
     assert len(p2.battlefield) == 2
+
+
+@pytest.mark.cr("601.2c", "115.4")
+def test_601_2c_every_object_only_narrowing_reaches_the_announcement_gate(set_pool):
+    """The class the colour exclusion above turned out to be one of.
+
+    A spell whose second printed sentence makes its program a ``sequence``
+    reaches no arm of ``_validate_cast_targets``, so CR 601.2c is enforced only
+    through the derived cast **spec** — and the spec carried a hand-written
+    handful of narrowings. Five keys were riding the instruction payload and
+    reaching neither the picker nor the gate. Four of them were the harmless
+    direction (the announcement was accepted and the resolution then affected
+    nothing, so the spell was spent for no effect); one was not.
+
+    **Vertigo is the one that was not.** "Vertigo deals 2 damage to target
+    creature **with flying**. That creature loses flying until end of turn."
+    Cast at a Grizzly Bears it dealt the 2 damage and killed it — an instant
+    working more often than it reads, which is the one direction a target gate
+    must never fail in.
+
+    Every key carried is in ``OBJECT_ONLY_FILTER_KEYS``: the enumerator asks
+    ``subject_matches`` with no observer and no source, so a seat-relative
+    narrowing would be *refused* there and the picker would offer nothing —
+    which is why the seats keep their own spec flags instead.
+    """
+    bears = set_pool("LEA")["Grizzly Bears"]
+    flyer = set_pool("LEA")["Air Elemental"]
+    p1 = PlayerState(name="P1", hand=[set_pool("ICE")["Vertigo"]], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        battlefield=[Permanent(card=bears), Permanent(card=flyer)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    refused = game.cast_from_hand(
+        0, "Vertigo", target_player_index=1, target_permanent_index=0,
+    )
+    assert not refused.supported, "a Grizzly Bears has no flying"
+    assert len(p2.battlefield) == 2, "and it took no damage"
+
+    allowed = game.cast_from_hand(
+        0, "Vertigo", target_player_index=1, target_permanent_index=1,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert allowed.supported, allowed.details
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_type_exclusion_reaches_the_announcement_gate(set_pool):
+    """The same gap on the other axis, and the harmless-direction half of it.
+
+    "Exile two target **nonartifact** creatures. Ashes to Ashes deals 5 damage
+    to you." Naming an Ornithopter was accepted; the exile then skipped it and
+    the caster took the full 5 life for exiling one creature instead of two.
+    CR 601.2c makes that an illegal announcement, refused before anything is
+    paid — not an ineffective spell.
+    """
+    ashes = set_pool("DRK")["Ashes to Ashes"]
+    thopter = set_pool("ATQ")["Ornithopter"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    giant = set_pool("LEA")["Hill Giant"]
+    p1 = PlayerState(name="P1", hand=[ashes, ashes], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        battlefield=[
+            Permanent(card=thopter), Permanent(card=bears), Permanent(card=giant),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    refused = game.cast_from_hand(
+        0, "Ashes to Ashes", target_player_index=1, target_permanent_index=[0, 1],
+    )
+    assert not refused.supported, "an Ornithopter is an artifact creature"
+    assert p1.life == 20, "and the 5 life is not paid for a refused announcement"
+
+    allowed = game.cast_from_hand(
+        0, "Ashes to Ashes", target_player_index=1, target_permanent_index=[1, 2],
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert allowed.supported, allowed.details
+    assert [p.card.name for p in p2.battlefield] == ["Ornithopter"]
+    assert p1.life == 15

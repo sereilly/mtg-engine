@@ -663,9 +663,48 @@ def _narrowing_flags(source: dict) -> dict:
     # ``filter`` would be one printed word with two readers -- the fork this
     # module's own comments keep naming. The negative had no root form at all,
     # which is why it needed one here rather than a second one.
-    excluded_colors = source.get("exclude_colors")
-    if excluded_colors:
-        narrowed["exclude_colors"] = list(excluded_colors)
+    # …and every other narrowing a candidate can be asked about **on its own**.
+    # ``OBJECT_ONLY_FILTER_KEYS`` is the exact boundary: the enumerator's loop
+    # calls ``subject_matches(perm, spec["filter"], defending=…)`` with no
+    # observer and no source, so a seat-relative key here would be *refused*
+    # and the picker would offer nothing at all. That is why the seats have
+    # their own spec flags (``own_only``, ``opponent_only``,
+    # ``that_player_only``) and are not carried here.
+    #
+    # Five keys, and a card behind each. Every one was riding the instruction
+    # payload and reaching neither the picker nor CR 601.2c's gate, because
+    # ``primary`` on these cards is the ``sequence`` their second printed
+    # sentence makes and so no arm of ``_validate_cast_targets`` ever saw them:
+    #
+    #   exclude_types     Ashes to Ashes ("two target **nonartifact**
+    #                     creatures"), Secure the Scene, Broken Visage,
+    #                     Jabari's Influence
+    #   with_keywords     Vertigo ("target creature **with flying**") — the one
+    #                     of the five that was wrong in the *player's* favour:
+    #                     the spell dealt its 2 damage to a vanilla Bear and
+    #                     killed it
+    #   untapped_only     Energy Tap ("target **untapped** creature you
+    #                     control")
+    #   not_attacking     Alarum ("target **nonattacking** creature")
+    #
+    # The other four were the harmless direction — the announcement was
+    # accepted and the resolution then affected nothing, so the spell was spent
+    # for no effect. CR 601.2c makes that an *illegal announcement*, refused
+    # before mana is paid, rather than an ineffective spell.
+    # ``without_keywords`` is deliberately absent, ``color_filter``'s reason
+    # exactly: it already rides the spec **root** and
+    # ``_permanent_matches_target_kind`` tests it there (Rock Slide, Pit Trap,
+    # Ice Floe), so a copy under ``filter`` would be one printed word with two
+    # readers. ``with_keywords`` had no root form at all, which is why it needs
+    # one here rather than a second one. ``any_states`` is absent for the same
+    # reason as ``without_keywords``.
+    for key in (
+        "exclude_colors", "exclude_types", "with_keywords",
+        "untapped_only", "not_attacking",
+    ):
+        value = source.get(key)
+        if value:
+            narrowed[key] = list(value) if isinstance(value, (list, tuple)) else value
     if narrowed:
         flags["filter"] = narrowed
     return flags
