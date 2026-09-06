@@ -32,7 +32,7 @@ A family in the layer order's sense — it imports only the floors (`_common`,
 from ...oracle_types import OracleInstruction, PER_OBJECT_SEAT_RECORDS
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import _damaged_player_is
+from ._counted_damage import _damaged_player_is
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (
     _amount_payload,

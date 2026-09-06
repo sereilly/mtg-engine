@@ -25,7 +25,7 @@ from ...subject_filters import card_only_filter, untestable_filter_keys
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              LAST_DAMAGER_CONTROLLER,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
-from ._amounts import (
+from ._counted_damage import (
     _LOOPED_PLAYER_RECIPIENTS,
     _lower_board_count_damage,
     _lower_chosen_cast_damage,

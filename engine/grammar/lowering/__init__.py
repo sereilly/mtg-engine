@@ -74,6 +74,10 @@ from ._common import (
 from ._amounts import (
     _mentions_x,
     _stamp_x_from_count,
+    count_spec,
+    halved_count_spec,
+)
+from ._counted_damage import (
     _READABLE_COST_SACRIFICE_CHARACTERISTICS,
     _lower_cost_tap_damage,
     _SWAMPS_THEY_CONTROL,
@@ -82,8 +86,6 @@ from ._amounts import (
     _lower_cost_sacrifice_damage,
     _lower_counted_damage,
     _lower_board_count_damage,
-    count_spec,
-    halved_count_spec,
 )
 from .damage import (
     _lower_damage,

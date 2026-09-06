@@ -995,7 +995,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1284,6 +1284,22 @@ FAMILY_SHARED = {
     # rather than a family for `_primitives`' reason exactly: `damage.py` reads
     # it, and inside a package a module a family imports cannot itself be one.
     "_amounts",
+    # `_counted_damage` split back out of `_amounts` at Tempest's Phase 0, when
+    # that module sat four lines from the guard with three of the wave's five
+    # groups reaching it and none of them owning it. The line is the second half
+    # of the sentence `_amounts` was itself cut on: a printed quantity that is
+    # counted, "**against the sentence that spends it**". Every sentence in
+    # there that *spent* a count was a damage sentence — the three cost
+    # channels, the difference, the named board count, the per-seat record, the
+    # chosen cast — so those left and the counting stayed, which is what the
+    # older module's name has said since the first cut. It is also the half that
+    # grows: a set adds a printed shape of counted damage far oftener than it
+    # teaches `count_spec` a new zone. A floor for `_amounts`' reason exactly —
+    # `damage` reads it, `upkeep` its one predicate, `where_x` its one
+    # characteristic set, and it reads none of the three back. It reads
+    # `_amounts` for `count_spec`, which is a floor reading a floor, the
+    # arrangement `_amounts` already has with `_common`.
+    "_counted_damage",
     # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
     # next time that module reached the guard below. The line is the one the
     # branches had already drawn: everything left in `damage` computes a
