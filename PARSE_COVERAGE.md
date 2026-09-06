@@ -25,13 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**4 unclaimed sentence(s) across 3 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
 - **Duplicity**
   - `at the beginning of your upkeep, you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand`
-- **Magnetic Web**
-  - `if a creature with a magnet counter on it attacks, all creatures with magnet counters on them attack if able`
-  - `whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able`
 - **Volrath's Curse**
   - `that creature's controller may sacrifice a permanent of their choice for that player to ignore this effect until end of turn`
 
