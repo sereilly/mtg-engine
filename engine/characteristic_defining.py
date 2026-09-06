@@ -250,6 +250,45 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     return payload
 
 
+#: "twice"/"three times" in front of a count, as the multiplier ``_scaled``
+#: already applies. English rather than a general reader for
+#: ``combat_restrictions._NUMBER_WORDS``' reason, and closed: a word this does
+#: not list leaves the pattern unmatched and refuses the line, rather than
+#: silently counting once.
+_MULTIPLIER_WORDS: dict[str, int] = {"twice": 2, "three times": 3}
+
+
+def _source_counter_count(match: re.Match) -> dict[str, object] | None:
+    """"Mwonvuli Ooze's power and toughness are each equal to **1 plus twice
+    the number of age counters on it**." (CR 604.3 over CR 122.1's counters.)
+
+    Not a count of a set on any battlefield — a counter is not an object — so
+    it travels the ``source_counters`` spec ``evaluate_count`` answers off the
+    permanent it is refreshing, which is the same spec Revered Unicorn's life
+    gain and Primordial Ooze's where-clause write. One evaluator, so the
+    printed word orders cannot count differently.
+
+    Both numbers are payload. The multiplier is ``_scaled``'s, and the printed
+    constant rides ``plus`` rather than ``offset``, because "1 plus twice the
+    number" is 2N+1 and ``offset`` is applied *before* the multiplier — a
+    constant put there would make the Ooze a 2N+2.
+    """
+    kind = (match.group("counter") or "").strip()
+    if not kind:
+        return None
+    spec: dict[str, object] = {"source_counters": kind}
+    word = match.group("times")
+    if word:
+        spec["multiplier"] = _MULTIPLIER_WORDS[word]
+    if match.group("plus"):
+        spec["plus"] = int(match.group("plus"))
+    payload: dict[str, object] = {"count_spec": spec}
+    half = _DEFINED_HALF[match.group("half")]
+    if half is not None:
+        payload["defines"] = half
+    return payload
+
+
 def _chosen_number(match: re.Match) -> dict[str, object]:
     """Shapeshifter. The only CDA in the pool that counts nothing: its value is
     a number a player chose (CR 614.1c as it enters, and again each upkeep).
@@ -502,6 +541,19 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"its toughness is equal to (?P<total>\d+) minus that number$"
         ),
         _chosen_number,
+    ),
+    (
+        # Mwonvuli Ooze. Read **before** the general row below, whose ``.+$``
+        # tail would take "age counters on it" to the noun parser — which
+        # refuses it, because a counter is not an object, and would then leave
+        # the whole card unsupported rather than reaching this row.
+        re.compile(
+            rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
+            r"toughness is) equal to (?:(?P<plus>\d+) plus )?"
+            r"(?:(?P<times>twice|three times) )?the number of "
+            r"(?P<counter>[a-z0-9+/-]+) counters on it$"
+        ),
+        _source_counter_count,
     ),
     (
         # "**An-Havva Constable's toughness is equal to 1 plus the number of

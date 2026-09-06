@@ -193,14 +193,6 @@ def count_from_payload(
     if spec.get("cost_sacrifices_power"):
         sacrificed = (context.choices or {}).get("sacrificed_set_for_cost") or ()
         return max(0, sum(max(0, perm.effective_power) for perm in sacrificed))
-    counters = spec.get("source_counters")
-    if counters is not None:
-        source = context.source_permanent
-        if source is None:
-            return 0
-        from ..named_counters import counters_on
-
-        return counters_on(source, str(counters))
     # "…where X is 3 plus the amount of damage dealt to this creature this turn
     # by other sources named ~" (Blazing Effigy). A *history* rather than
     # anything on a board: `evaluate_count` scans zones, and the creature this
@@ -469,13 +461,31 @@ def _scaled(total: int, spec: dict) -> int:
     total = total * multiplier
     rounding = spec.get("half")
     if rounding is None:
-        return total
+        return _plus(total, spec)
     # "a third of their life" (Pox) is the same arithmetic with a different
     # denominator, so it is the same key with a number beside it rather than a
     # second rounding channel. Absent means 2, which keeps every spec written
     # before fractions existed byte-identical.
     divisor = max(1, int(spec.get("divide_by", 2) or 2))
-    return -(-total // divisor) if rounding == "up" else total // divisor
+    return _plus(-(-total // divisor) if rounding == "up" else total // divisor, spec)
+
+
+def _plus(total: int, spec: dict) -> int:
+    """*total* with the constant a clause printed **after** its multiplier.
+
+    "1 plus twice the number of age counters on it" (Mwonvuli Ooze) and "twice
+    the number of age counters on this enchantment minus 2" (Heart of Bogardan)
+    are 2N+1 and 2N-2, and neither is expressible as ``offset``: that key is
+    applied *before* the multiplier, because the phrase it implements ("beyond
+    the first", CR 702.23a) narrows the set being counted rather than shifting
+    the product. One number cannot mean both, so this is a second key rather
+    than a reinterpretation of the first.
+
+    Not floored here. The floor belongs to whatever spends the number — damage
+    and a P/T both clamp, and doing it twice would hide a spec that came out
+    negative for the wrong reason.
+    """
+    return total + int(spec.get("plus", 0) or 0)
 
 
 def _resolve_chosen_color(filt: dict, source) -> dict:
@@ -646,6 +656,27 @@ def evaluate_count(
     board_count = spec.get("board_count")
     if board_count is not None:
         return _scaled(int(owner.life) if board_count == "their_life" else 0, spec)
+    # "…the number of **age counters on it**" (Malignant Growth's draw,
+    # Primordial Ooze's where-clause, Revered Unicorn's leave trigger, Mwonvuli
+    # Ooze's characteristic-defining P/T). Counters sitting on the ability's own
+    # source: not a set of objects in any zone, so there is nothing below to
+    # scan for it. The kind is data, and ``counters_on`` is the one reader that
+    # knows whether it means the P/T channel or a store the card invented
+    # (CR 122.1).
+    #
+    # Answered **here** rather than in ``count_from_payload`` above, where it
+    # used to be: a CR 604.3 recompute reaches this function directly with the
+    # permanent it is refreshing as *source* and never passes through a
+    # resolution context at all, so a branch up there was unreachable for the
+    # one caller that has no context. One evaluator, so the four printed word
+    # orders cannot count differently.
+    counters = spec.get("source_counters")
+    if counters is not None:
+        if source is None:
+            return 0
+        from ..named_counters import counters_on
+
+        return max(0, _scaled(counters_on(source, str(counters)), spec))
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")

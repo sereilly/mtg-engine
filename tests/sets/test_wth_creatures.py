@@ -89,3 +89,103 @@ def test_aboroth_compiles_its_keyword_into_one_upkeep_trigger(set_pool):
         (trig.condition.kind, trig.instruction.kind)
         for trig in program.triggered_abilities
     ] == [("upkeep_self", "cumulative_upkeep")]
+
+
+def _w1g3_settle(game):
+    """Run the stack down, answering the announcement it now stops for.
+
+    Never a bare ``while game.stack`` loop: a pay-or-sacrifice upkeep owes an
+    interactive seat a prompt, and while one is owed the game waits (CR 608.2,
+    CR 117.3b) — so the bare loop spins. Drained with the registry's own
+    defaults.
+    """
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices(kinds=("trigger_target",))
+        game._settle()
+
+
+def test_revered_unicorn_gains_life_for_every_age_counter_it_had(set_pool, cards):
+    """"When this creature leaves the battlefield, you gain life equal to the
+    number of age counters on it."
+
+    The counter is placed *before* the payment is offered (CR 702.24a), so the
+    upkeep that kills the Unicorn is also the one that puts its fourth counter
+    down — and the number the trigger reads is last-known information
+    (CR 603.10), taken off a permanent already in the graveyard.
+    """
+    unicorn = Permanent(card=set_pool("WTH")["Revered Unicorn"])
+    lands = [Permanent(card=cards["Plains"]) for _ in range(8)]
+    p1 = PlayerState(name="P1", battlefield=[unicorn] + lands, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.interactive_seats = {0}
+
+    for _ in range(3):
+        game.resolve_upkeep(0, human_choices={"Revered Unicorn": True})
+        _w1g3_settle(game)
+        for land in lands:
+            land.tapped = False
+    assert counters_on(unicorn, "age") == 3 and p1.life == 20
+
+    game.resolve_upkeep(0, human_choices={"Revered Unicorn": False})
+    _w1g3_settle(game)
+
+    assert unicorn not in p1.battlefield
+    assert p1.life == 24, "four age counters when it left, not three"
+
+
+def test_revered_unicorns_leave_trigger_counts_through_the_shared_evaluator(set_pool):
+    """The amount is the ``source_counters`` spec Malignant Growth's draw and
+    Primordial Ooze's where-clause already write — one evaluator, so the three
+    printed word orders cannot count differently."""
+    program = compile_card_oracle(set_pool("WTH")["Revered Unicorn"])
+    leave = next(
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "leaves_battlefield"
+    )
+
+    assert leave.supported
+    assert leave.instruction.payload["x_from_count"] == {"source_counters": "age"}
+
+
+def test_mwonvuli_ooze_is_one_plus_twice_its_age_counters(set_pool, cards):
+    """"Mwonvuli Ooze's power and toughness are each equal to 1 plus twice the
+    number of age counters on it." (CR 604.3 over CR 122.1's counters.)
+
+    Three upkeeps, because the arithmetic is what is being checked: a dropped
+    "twice" is a 1/1 that grows by one and a constant applied on the wrong side
+    of the multiplier is a 2/2 that grows by two, and both look right for
+    exactly one turn.
+    """
+    ooze = Permanent(card=set_pool("WTH")["Mwonvuli Ooze"])
+    lands = [Permanent(card=cards["Forest"]) for _ in range(12)]
+    p1 = PlayerState(name="P1", battlefield=[ooze] + lands, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.interactive_seats = {0}
+
+    assert (ooze.effective_power, ooze.effective_toughness) == (1, 1)
+    sizes = []
+    for _ in range(3):
+        game.resolve_upkeep(0, human_choices={"Mwonvuli Ooze": True})
+        _w1g3_settle(game)
+        for land in lands:
+            land.tapped = False
+        sizes.append((ooze.effective_power, ooze.effective_toughness))
+
+    assert sizes == [(3, 3), (5, 5), (7, 7)]
+    assert counters_on(ooze, "age") == 3
+
+
+def test_mwonvuli_ooze_counts_through_the_one_evaluator(set_pool):
+    """The count is the ``source_counters`` spec every other reading of "the
+    number of <kind> counters on it" writes — not a second counter in the
+    characteristic-defining table, which is what a per-card row would have
+    been."""
+    program = compile_card_oracle(set_pool("WTH")["Mwonvuli Ooze"])
+    cda = next(i for i in program.instructions if i.kind == "dynamic_pt_count")
+
+    assert cda.payload == {
+        "count_spec": {"source_counters": "age", "multiplier": 2, "plus": 1}
+    }
