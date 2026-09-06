@@ -36,6 +36,7 @@
     "Pearled Unicorn",
     "Python",
     "Raging Bull",
+    "Redwood Treefolk",
     "Savannah Lions",
     "Scaled Wurm",
     "Scarwood Goblins",
@@ -69,11 +70,21 @@
   [
     "Abbey Gargoyles",
     "Cerulean Wyvern",
+    "Duskrider Falcon",
     "Freewind Falcon",
     "Hazerider Drake",
     "Melesse Spirit",
     "Sea Sprite",
     "Windreaper Falcon"
+  ],
+  [
+    "Benalish Hero",
+    "Benalish Infantry",
+    "Icatian Phalanx",
+    "Kjeldoran Escort",
+    "Kjeldoran Warrior",
+    "Shield Bearer",
+    "Timber Wolves"
   ],
   [
     "Blistering Barrier",
@@ -83,14 +94,6 @@
     "Wall of Ice",
     "Wall of Stone",
     "Wall of Wood"
-  ],
-  [
-    "Benalish Hero",
-    "Icatian Phalanx",
-    "Kjeldoran Escort",
-    "Kjeldoran Warrior",
-    "Shield Bearer",
-    "Timber Wolves"
   ],
   [
     "Bog Wraith",
@@ -203,6 +206,11 @@
     "Storm Crow"
   ],
   [
+    "Breezekeeper",
+    "Teferi's Drake",
+    "Tolarian Drake"
+  ],
+  [
     "Burn Bright",
     "Shield Wall",
     "Warrior's Honor"
@@ -283,10 +291,6 @@
     "Ironclaw Orcs"
   ],
   [
-    "Breezekeeper",
-    "Teferi's Drake"
-  ],
-  [
     "Cancel",
     "Counterspell"
   ],
@@ -307,8 +311,16 @@
     "Diabolic Machine"
   ],
   [
+    "Cloud Djinn",
+    "Cloud Elemental"
+  ],
+  [
     "Colossal Dreadmaw",
     "Wildwood Patrol"
+  ],
+  [
+    "D'Avenant Archer",
+    "Heavy Ballista"
   ],
   [
     "Dand\u00e2n",
@@ -349,6 +361,10 @@
   [
     "Flame Spirit",
     "Storm Shaman"
+  ],
+  [
+    "Fledgling Djinn",
+    "Serendib Efreet"
   ],
   [
     "Flooded Woodlands",
@@ -435,8 +451,16 @@
     "Snow-Covered Mountain"
   ],
   [
+    "Mtenda Herder",
+    "Shadow Rider"
+  ],
+  [
     "Noble Elephant",
     "War Elephant"
+  ],
+  [
+    "Northern Paladin",
+    "Southern Paladin"
   ],
   [
     "Obsianus Golem",

@@ -475,6 +475,30 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Phantasmal Fiend's switch is a P/T change, which is the bucket every other
     # P/T kind reports; pinned for the same reason.
     "switch_self_pt_until_eot": "activated_pump",
+    # --- Weatherlight, at its promotion -------------------------------------
+    # Four kinds whose label was falling through to ``activated_{grammar
+    # family}``, all four surfaced the moment `load_catalog()` widened. Settled
+    # against a shipped neighbour rather than against the family the lowering
+    # happens to sit in, which is the whole reason this table exists.
+    #
+    # Vodalian Illusionist phases out somebody else. ``phase_out_self`` and
+    # ``phase_out_enchanted`` above both read `activated_recursion` — a
+    # permanent leaving and coming back — and which permanent is not the
+    # question the bucket answers.
+    "phase_out_target": "activated_recursion",
+    # Ertai's Familiar stops **itself** phasing out. ``forbid_phase_out`` above
+    # is the same sentence aimed at another permanent and takes
+    # `activated_restriction`; whose phasing is denied is not the question
+    # either.
+    "forbid_source_phase_out": "activated_restriction",
+    # Llanowar Druid untaps a described set. ``tap_target_permanent`` and
+    # ``skip_next_untap`` are both `activated_tapping`, and a sweep is not a
+    # different act from a single tap — how many permanents is not the question.
+    "untap_all_matching": "activated_tapping",
+    # Dwarven Thaumaturgist switches somebody else's power and toughness.
+    # ``switch_self_pt_until_eot`` directly above is the same act on its own
+    # source and reads `activated_pump`, for the reason that entry states.
+    "switch_target_pt_until_eot": "activated_pump",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -774,6 +798,32 @@ TRIGGERED_LABELS: dict[str, str] = {
     # bucket the vocabulary already has for a trigger that only exists
     # inside a declare-attackers step.
     "grant_team_keyword_until_eot": "triggered_combat",
+    # --- Weatherlight, at its promotion -------------------------------------
+    # Six triggered kinds that fell back to the `spell_pattern` marker the
+    # moment `load_catalog()` widened. Each takes the word its own **activated**
+    # twin already carries in the table above, which is this file's settled rule:
+    # the bucket names what the ability does, and whether a player activated it
+    # or an event announced it is not part of that question.
+    #
+    # Abduction untapping what it enchants -- `untap_enchanted_creature` is
+    # `activated_untap`.
+    "untap_enchanted_creature": "triggered_untap",
+    # Ancestral Knowledge shuffling its owner's library -- `shuffle_library` is
+    # `activated_library`: the library is the object.
+    "shuffle_library": "triggered_library",
+    # Festering Evil on its own upkeep -- `deal_damage_each_creature_and_player`
+    # is `activated_damage`, and a sweep is still damage.
+    "deal_damage_each_creature_and_player": "triggered_damage",
+    # Gaea's Blessing, from its owner's *library* (CR 113.6k) --
+    # `shuffle_graveyard_into_library` is `activated_recursion`: cards come back.
+    "shuffle_graveyard_into_library": "triggered_recursion",
+    # Jangling Automaton untapping a described set on an attack --
+    # `untap_all_matching` is `activated_tapping`, added directly above for
+    # Llanowar Druid, and how many permanents is not the question.
+    "untap_all_matching": "triggered_tapping",
+    # Mana Web tapping the lands that could pay for what was just tapped. A tap
+    # sweep like the row above it, and the same word for the same reason.
+    "tap_lands_sharing_produced_mana": "triggered_tapping",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

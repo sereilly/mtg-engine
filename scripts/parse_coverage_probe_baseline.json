@@ -65,6 +65,13 @@
   ]
  },
  {
+  "card": "Ancestral Knowledge",
+  "clause": "look at the top ten cards of your library, then exile any number of them and put the rest back on top of your library in any order",
+  "ignored": [
+   "back"
+  ]
+ },
+ {
   "card": "Animal Sanctuary",
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
@@ -90,6 +97,13 @@
   "clause": "tap all legendary creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Argivian Find",
+  "clause": "return target artifact or enchantment card from your graveyard to your hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -163,6 +177,13 @@
   ]
  },
  {
+  "card": "Blossoming Wreath",
+  "clause": "you gain life equal to the number of creature cards in your graveyard",
+  "ignored": [
+   "cards"
+  ]
+ },
+ {
   "card": "Bone Flute",
   "clause": "all creatures get -1/-0 until end of turn",
   "ignored": [
@@ -192,6 +213,13 @@
   ]
  },
  {
+  "card": "Call of the Wild",
+  "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
   "card": "Chandra, Flame's Catalyst",
   "clause": "you may cast target red instant or sorcery card from your graveyard. if that spell would be put into your graveyard, exile it instead",
   "ignored": [
@@ -214,6 +242,13 @@
   ]
  },
  {
+  "card": "Cinder Giant",
+  "clause": "this creature deals 2 damage to each other creature you control",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Cleanse",
   "clause": "destroy all black creatures",
   "ignored": [
@@ -225,6 +260,13 @@
   "clause": "you may have it assign no combat damage this turn. if you do, defending player discards a card at random",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Coils of the Medusa",
+  "clause": "destroy all non-wall creatures blocking enchanted creature",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -289,6 +331,13 @@
   "clause": "you may put a minotaur permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Downdraft",
+  "clause": "it deals 2 damage to each creature with flying",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -542,10 +591,24 @@
   ]
  },
  {
+  "card": "Gaea's Blessing",
+  "clause": "target player shuffles up to three target cards from their graveyard into their library",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Gauntlets of Chaos",
   "clause": "exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. if those permanents are exchanged this way, destroy all auras attached to them",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Gemstone Mine",
+  "clause": "add one mana of any color. if there are no mining counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
   ]
  },
  {
@@ -663,6 +726,20 @@
   ]
  },
  {
+  "card": "Heart of Bogardan",
+  "clause": "this enchantment deals x damage to target player or planeswalker and each creature that player or that planeswalker's controller controls, where x is twice the number of age counters on this enchantment minus 2",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Heat Stroke",
+  "clause": "destroy each creature that blocked or was blocked this turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Hell Swarm",
   "clause": "all creatures get -1/-0 until end of turn",
   "ignored": [
@@ -742,6 +819,13 @@
  {
   "card": "Ivory Charm",
   "clause": "all creatures get -2/-0 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Jangling Automaton",
+  "clause": "untap all creatures defending player controls",
   "ignored": [
    "all"
   ]
@@ -827,6 +911,13 @@
   ]
  },
  {
+  "card": "Llanowar Druid",
+  "clause": "untap all forests",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Malignant Growth",
   "clause": "that player draws an additional card for each growth counter on this enchantment, then this enchantment deals damage to the player equal to the number of cards they drew this way",
   "ignored": [
@@ -846,6 +937,13 @@
   "clause": "if this artifact is tapped, it deals 1 damage to you",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Mana Web",
+  "clause": "tap all lands that player controls that could produce any type of mana that land could produce",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -911,6 +1009,13 @@
   "clause": "untap target artifact, creature, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Nature's Resurgence",
+  "clause": "each player draws a card for each creature card in their graveyard",
+  "ignored": [
+   "card"
   ]
  },
  {
@@ -1007,6 +1112,13 @@
  {
   "card": "Reality Ripple",
   "clause": "target artifact, creature, or land phases out",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Relearn",
+  "clause": "return target instant or sorcery card from your graveyard to your hand",
   "ignored": [
    "or"
   ]
@@ -1152,6 +1264,13 @@
  {
   "card": "Serene Heart",
   "clause": "destroy all auras",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Serenity",
+  "clause": "destroy all artifacts and enchantments. they can't be regenerated",
   "ignored": [
    "all"
   ]
@@ -1322,6 +1441,14 @@
   ]
  },
  {
+  "card": "Sylvan Hierophant",
+  "clause": "exile it, then return another target creature card from your graveyard to your hand",
+  "ignored": [
+   "another",
+   "target"
+  ]
+ },
+ {
   "card": "Sylvan Library",
   "clause": "you may draw two additional cards. if you do, choose two cards in your hand drawn this turn. for each of those cards, pay 4 life or put the card on top of your library",
   "ignored": [
@@ -1353,6 +1480,13 @@
  {
   "card": "The Wretched",
   "clause": "gain control of all creatures blocking this creature for as long as you control this creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Thundermare",
+  "clause": "tap all other creatures",
   "ignored": [
    "all"
   ]
@@ -1432,6 +1566,13 @@
  {
   "card": "Tranquil Domain",
   "clause": "destroy all non-aura enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tranquil Grove",
+  "clause": "destroy all other enchantments",
   "ignored": [
    "all"
   ]
@@ -1537,6 +1678,13 @@
   ]
  },
  {
+  "card": "Vitalize",
+  "clause": "untap all creatures you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Vodalian War Machine",
   "clause": "destroy all merfolk tapped this turn to pay for its abilities",
   "ignored": [
@@ -1584,6 +1732,14 @@
   "clause": "prevent the next 1 damage that would be dealt to target cleric or wizard creature this turn",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Wave of Terror",
+  "clause": "destroy each creature with mana value equal to the number of age counters on this enchantment. they can't be regenerated",
+  "ignored": [
+   "each",
+   "enchantment."
   ]
  },
  {

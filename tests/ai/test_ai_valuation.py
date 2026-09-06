@@ -379,6 +379,17 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # never what the card is for. The category now answers, for all 57
         # cards in the pool that print a prevention effect.
         "Remedy",
+        # Reviewed at Weatherlight's promotion. Both aim at "opponent" off the
+        # `damage` category like every burn spell above them, and both are new
+        # *shapes* rather than new sides -- which is why they are worth naming
+        # here rather than just counting.
+        #
+        # Cone of Flame is the pool's first division whose shares the **card**
+        # dictates: 1, 2 and 3 to three distinct targets, where every other
+        # entry here lets the caster split a total. Firestorm is the first whose
+        # *number of targets* is the announced X (CR 107.3a), so the count and
+        # the cost are one number.
+        "Cone of Flame", "Firestorm",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

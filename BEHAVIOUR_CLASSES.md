@@ -4,18 +4,18 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **2348**
-- Distinct behaviours: **2131**
-- Cards sharing a behaviour with another: **307** in **90** classes
-- Unverified cards covered by a verified peer: **108**
+- Cards in the catalog: **2515**
+- Distinct behaviours: **2289**
+- Cards sharing a behaviour with another: **321** in **95** classes
+- Unverified cards covered by a verified peer: **112**
 
 | Size | Cards |
 | --- | --- |
-| 53 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
+| 54 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
 | 10 | **Air Elemental**, Azure Drake, **Bird Maiden**, Concordia Pegasus, Feral Shadow, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Willow Faerie |
-| 7 | Abbey Gargoyles, Cerulean Wyvern, Freewind Falcon, Hazerider Drake, Melesse Spirit, Sea Sprite, Windreaper Falcon |
+| 8 | Abbey Gargoyles, Cerulean Wyvern, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Sea Sprite, Windreaper Falcon |
+| 7 | **Benalish Hero**, Benalish Infantry, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 7 | Blistering Barrier, Glacial Wall, Wall of Earth, Wall of Heat, **Wall of Ice**, **Wall of Stone**, **Wall of Wood** |
-| 6 | **Benalish Hero**, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 6 | **Bog Wraith**, Lost Soul, Marsh Goblins, Moor Fiend, Pygmy Allosaurus, Warthog |
 | 6 | **Elvish Archers**, Hornet Cobra, Land Leeches, Ramirez DePietro, Sabretooth Tiger, **Stone-Throwing Devils** |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
@@ -32,6 +32,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 4 | Archangel, Bay Falcon, Tempest Drake, Zephyr Falcon |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
 | 3 | Bog Imp, **Mahamoti Djinn**, Storm Crow |
+| 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Burn Bright, Shield Wall, Warrior's Honor |
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Devouring Deep, Pale Bears, Segovian Leviathan |
@@ -50,13 +51,14 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Black Knight**, **White Knight** |
 | 2 | **Blue Elemental Blast**, **Red Elemental Blast** |
 | 2 | Brassclaw Orcs, **Ironclaw Orcs** |
-| 2 | Breezekeeper, Teferi's Drake |
 | 2 | Cancel, **Counterspell** |
 | 2 | Carapace, Thrull Retainer |
 | 2 | Cat Warriors, **Shanodin Dryads** |
 | 2 | Cemetery Gate, Wall of Light |
 | 2 | Clay Statue, Diabolic Machine |
+| 2 | Cloud Djinn, Cloud Elemental |
 | 2 | Colossal Dreadmaw, Wildwood Patrol |
+| 2 | D'Avenant Archer, Heavy Ballista |
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | Dwarven Nomad, **Dwarven Warriors** |
 | 2 | Ekundu Griffin, Thunder Spirit |
@@ -67,6 +69,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Feral Instinct, Fevered Strength |
 | 2 | Fire Drake, Spitting Drake |
 | 2 | Flame Spirit, Storm Shaman |
+| 2 | Fledgling Djinn, **Serendib Efreet** |
 | 2 | Flooded Woodlands, Reclamation |
 | 2 | **Forest**, Snow-Covered Forest |
 | 2 | Fyndhorn Elves, **Llanowar Elves** |
@@ -88,7 +91,9 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Mesa Falcon, Pearl Dragon |
 | 2 | **Mesa Pegasus**, Teremko Griffin |
 | 2 | **Mountain**, Snow-Covered Mountain |
+| 2 | Mtenda Herder, Shadow Rider |
 | 2 | Noble Elephant, **War Elephant** |
+| 2 | **Northern Paladin**, Southern Paladin |
 | 2 | **Obsianus Golem**, Phyrexian Walker |
 | 2 | **Orcish Artillery**, Orcish Cannoneers |
 | 2 | Order of Leitbur, Order of the White Shield |
