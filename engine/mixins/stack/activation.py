@@ -456,19 +456,13 @@ class AbilityActivationMixin:
             ) or next(iter(usable), None)
 
         if ability is None or ability.instruction is None:
-            # Zombie Master grants other Zombies '{B}: Regenerate this permanent.'
-            # The granted ability still costs {B} to activate.
-            if permanent.metadata.get("granted_regen_ability"):
-                if self.enforce_mana_costs and not self._pay_mana_cost(
-                    controller, self._parse_mana_cost("{B}", x_value=0),
-                    purpose=PaymentPurpose(ACTIVATE, source=permanent),
-                ):
-                    details = f"insufficient mana to activate {permanent.card.name}"
-                    self.log.append(details)
-                    return SimulationResult(permanent.card.name, False, "unsupported", details)
-                permanent.regeneration_shield += 1
-                self.log.append(f"{permanent.card.name} regenerates (ability granted by lord)")
-                return SimulationResult(permanent.card.name, True, "activated_regenerate", "resolved")
+            # A lord's quoted grant used to arrive *here*, as a metadata flag
+            # this branch turned back into a hand-written {B} payment and a
+            # regeneration shield — reachable only when the permanent had no
+            # ability of its own, so a Zombie with a printed activated ability
+            # could never use the one Zombie Master gave it. It is now a line on
+            # the derived grant channel, folded into `effective_card` by
+            # `playable_card_of` above, so it is in `usable` like any other.
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 

@@ -39,8 +39,8 @@ from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
 from ..tokens import make_token_card
-from ..keywords import (add_derived_grant, add_derived_removal,
-                        clear_derived_grants)
+from ..keywords import (add_derived_ability_line, add_derived_grant,
+                        add_derived_removal, clear_derived_grants)
 from ..enter_tapped_statics import (
     ENTER_TAPPED_STATIC_KIND,
     enter_tapped_filter_from_payload,
@@ -67,7 +67,6 @@ from ..layer_bridge import (
     types_before_timestamp,
 )
 from ..lord_buffs import (
-    GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
     LordBuff,
     lord_buff_from_payload,
@@ -2758,9 +2757,9 @@ class PermanentStateMixin:
             perm.metadata.pop("static_buff_power", None)
             perm.metadata.pop("static_buff_toughness", None)
             perm.metadata.pop(QUALIFIED_BUFFS, None)
+            # Clears the *three* layer-6 derived channels together — the
+            # granted words, the removed words and the granted printed lines.
             clear_derived_grants(perm)
-            for flag in perm.metadata.pop("_lord_granted_flags", None) or ():
-                perm.metadata.pop(flag, None)
 
         def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
             if not (buff.power or buff.toughness):
@@ -2785,11 +2784,6 @@ class PermanentStateMixin:
             power, toughness = qualified.get(qualifiers, (0, 0))
             qualified[qualifiers] = (power + buff.power, toughness + buff.toughness)
 
-        def _grant_ability(perm: Permanent, flag: str) -> None:
-            perm.metadata[flag] = True
-            tracked = perm.metadata.setdefault("_lord_granted_flags", [])
-            if flag not in tracked:
-                tracked.append(flag)
 
         # A copy uses the copied creature's copiable card (types + abilities), so
         # lord static abilities and subtype checks resolve against it (CR 707.2).
@@ -2851,12 +2845,7 @@ class PermanentStateMixin:
                     buff = replace(
                         buff, power=buff.power * scale, toughness=buff.toughness * scale
                     )
-                flag = (
-                    GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
-                    if buff.granted_ability
-                    else None
-                )
-                gathered.append((source_perm, buff, flag))
+                gathered.append((source_perm, buff))
 
         def _reached_by(source_perm, buff):
             # Every permanent on every battlefield, because "creatures you
@@ -2872,22 +2861,29 @@ class PermanentStateMixin:
         # Pass 2a — layer 6 (CR 613.3): every ability this board's lords grant
         # or take away ("Other Goblins … have mountainwalk", Gravity Sphere's
         # "All creatures lose flying").
-        for source_perm, buff, _flag in gathered:
-            if not (buff.keywords or buff.lost_keywords):
+        for source_perm, buff in gathered:
+            if not (buff.keywords or buff.lost_keywords or buff.granted_ability):
                 continue
             for target_perm in _reached_by(source_perm, buff):
                 for keyword in buff.keywords:
                     add_derived_grant(target_perm, keyword)
                 for keyword in buff.lost_keywords:
                     add_derived_removal(target_perm, keyword)
+                # …and the sentence half of the same layer (CR 113.3): a quoted
+                # ability is granted here rather than in pass 2b because it is
+                # layer 6 like the words beside it, and because a granted
+                # ability can *be* one of the words a 7c filter asks about —
+                # '"Sliver creatures have \"...\"" gets +1/+1' is not printed
+                # today, and putting the grant in the later pass would be the
+                # ordering bug the two passes exist to prevent, waiting.
+                if buff.granted_ability:
+                    add_derived_ability_line(target_perm, buff.granted_ability)
 
-        # Pass 2b — layer 7c (CR 613.4c) and the granted activated ability,
-        # over a board whose layer 6 is complete.
-        for source_perm, buff, flag in gathered:
+        # Pass 2b — layer 7c (CR 613.4c), over a board whose layer 6 is
+        # complete.
+        for source_perm, buff in gathered:
             for target_perm in _reached_by(source_perm, buff):
                 _add_static_buff(target_perm, buff)
-                if flag is not None:
-                    _grant_ability(target_perm, flag)
 
         # Step 3: conditional self-grants — the keyword half of "…as long as
         # <condition>" (Sigiled Contender's lifelink, Gnarled Sage's

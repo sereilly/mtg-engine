@@ -485,9 +485,17 @@ class Permanent:
         # Appended after the board-wide ones so the fold order matches the order
         # the two were recorded in — a static applies from the board, a grant
         # from the moment it resolved.
-        from .keywords import granted_ability_lines, removed_ability_lines
+        from .keywords import (derived_ability_lines, granted_ability_lines,
+                               removed_ability_lines)
 
         granted.extend(granted_ability_lines(self))
+        # …and an ability a **lord on the battlefield** grants its tribe in
+        # quotes ('All Slivers have "{2}: Regenerate this permanent."'). Same
+        # channel and the same reason as the two above; the difference is only
+        # that `_recalculate_lord_buffs` clears and rebuilds it from the board
+        # on every recompute, so the lord leaving takes the sentence with it
+        # (CR 611.3b) with nothing here to undo.
+        granted.extend(derived_ability_lines(self))
         # …and an ability an **Aura attached to this permanent** grants
         # ('Enchanted land has "{T}: Counter target spell …"', Equinox). Derived
         # from the attachments on every read rather than recorded when the Aura
