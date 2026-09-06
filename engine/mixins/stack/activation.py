@@ -632,7 +632,25 @@ class AbilityActivationMixin:
         # rebinds the name for the whole function, it silently broke Faith's
         # Fetters two hundred lines below. Two names for one question, which is
         # the hazard SET_PLAYBOOK.md names and the suite caught.
-        from ...spell_prohibitions import nonmana_activations_forbidden
+        from ...spell_prohibitions import (nonmana_activations_forbidden,
+                                            permanent_activations_forbidden)
+
+        # "**That permanent's** activated abilities can't be activated this
+        # turn." (Interdict, CR 602.5c.) Asked beside the seat-wide ban below
+        # and before it, because it is the narrower question and the two are
+        # independent: a player free to activate abilities may still control a
+        # permanent whose abilities are shut off. **No mana-ability exception**
+        # — Interdict prints none, where Abeyance prints one, and a card's
+        # exception is not a rule to be shared.
+        if permanent_activations_forbidden(self, permanent):
+            details = (
+                f"{permanent.card.name}'s activated abilities can't be "
+                "activated this turn"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
 
         if nonmana_activations_forbidden(
             self, controller_index

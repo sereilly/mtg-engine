@@ -806,7 +806,16 @@ def _lower_put_exiled_with_source(
     # the handler's default, which is the card's *owner*: the two coincide for
     # every printing of this sentence in the pool and would silently diverge
     # the moment one did not.
-    under_controller = node.chosen and zone.name == "battlefield" and owner_kind is None
+    under_controller = (
+        # "…to the battlefield **under your control**" (Cold Storage): the
+        # printed clause, on a sweep. Read before the inference below it, and
+        # not folded into it: that one reads an *absent* possessive on a chosen
+        # card (Purgatory), and Safe Haven prints "under its owner's control"
+        # onto the same sweep — so on this shape the seat has to come from the
+        # words rather than from their absence.
+        node.under_your_control
+        or (node.chosen and zone.name == "battlefield" and owner_kind is None)
+    )
     if not under_controller and owner_kind != "owner" and not (
         node.chosen and owner_kind == "you"
     ):
@@ -814,6 +823,18 @@ def _lower_put_exiled_with_source(
             "a linked exile goes to each card's own owner's zone", node=node
         )
     payload: dict[str, object] = {"zone": zone.name}
+    # "Return **each creature card** exiled with this artifact…" (Cold Storage).
+    # The printed narrowing, carried onto the instruction rather than dropped:
+    # the pile is whatever the linked twin put there, and a card whose types
+    # changed while it was exiled is exactly where "creature card" stops being
+    # a description of the whole pile.
+    if node.card_type is not None:
+        payload["card_type"] = node.card_type
+    if node.under_your_control and not node.chosen:
+        # The sweep's seat (CR 110.2a). The chosen form ships the same fact
+        # under `under_control_of` below; both spell it the same way for the
+        # handler, which asks one question.
+        payload["under_control_of"] = "chooser"
     if node.chosen:
         payload["one_of"] = True
         # "…a card **you own**…" (Gustha's Scepter) narrows the pile to the

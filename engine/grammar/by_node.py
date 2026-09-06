@@ -91,6 +91,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
                        _lower_skip_turn,
+                       _lower_bound_permanent_activation_ban,
                        _lower_targeting_ban,
                        _lower_extra_land_plays,
                        _lower_cant_activate_nonmana_abilities,
@@ -359,4 +360,10 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # reason, word for word: a pronoun is only a pronoun relative to what came
     # before it, and with no record the same words mean something else.
     ast.PutSourceIntoZone: _lower_put_source_into_zone,
+    # "**That permanent's** activated abilities can't be activated this turn."
+    # (Interdict.) Here rather than in the name-only table for the two rows
+    # above's reason: the pronoun names the source of an ability an earlier step
+    # of this same effect countered, and with no such record the words name
+    # nothing.
+    ast.BoundPermanentActivationBan: _lower_bound_permanent_activation_ban,
 }

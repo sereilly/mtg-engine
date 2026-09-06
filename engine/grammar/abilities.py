@@ -70,7 +70,31 @@ def _accept_ability_source(stream: TokenStream) -> tuple[str, ...]:
         stream.reset(mark)
         return ()
     stream.advance()
-    if not stream.accept_word("source"):
+    types = [singular(word)]
+    # "…from an **artifact, creature, enchantment, or land**" (Interdict). A
+    # list of the types the source may have, and the list is what ends the
+    # phrase: Interdict prints no "source" after it, where the one-type
+    # spelling (Rust, Brown Ouphe) always does. Read as an alternation rather
+    # than as four productions because the permanent is one permanent and the
+    # types are alternatives about it — the payload is already a tuple the
+    # handler asks `any` of.
+    while True:
+        item = stream.mark()
+        if not (stream.accept_punct(",") or stream.at_word("or")):
+            break
+        stream.accept_word("or")
+        stream.accept_word("a", "an")
+        following = stream.peek_word()
+        if following is None or singular(following) not in CARD_TYPES:
+            stream.reset(item)
+            break
+        stream.advance()
+        types.append(singular(following))
+    # The trailing noun is required of the **one-type** spelling and only of it.
+    # A bare "from an artifact" with nothing after it is a phrase this reader
+    # cannot tell from the opening of a longer clause, so it keeps refusing;
+    # a list of two or more has already said where it ends.
+    if not stream.accept_word("source") and len(types) < 2:
         stream.reset(mark)
         return ()
-    return (singular(word),)
+    return tuple(types)

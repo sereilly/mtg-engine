@@ -5065,13 +5065,42 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             _source_permanent=source,
         )
         return True, "resolved"
+    # "Return **each creature card** exiled with this artifact…" (Cold Storage).
+    # The printed narrowing, applied *before* the drain: a card the sentence
+    # does not name is still exiled with this permanent afterwards, so taking
+    # the whole pile and putting part of it back would be two zone changes where
+    # the card describes none for it. Absent on every other printing, where the
+    # sentence names the pile whole.
+    wanted_type = instruction.payload.get("card_type")
     entries = take_linked_entries(source)
+    if wanted_type is not None:
+        from ..linked_exile import link_exiled_card
+
+        # Through the one card-in-a-zone matcher (_card_matches_filter),
+        # never primary_type: CR 205.2a gives a card every type printed on
+        # it, and an "Artifact Creature" collapsed to one word is a creature
+        # this sentence would leave in exile.
+        described = {"type_filter": str(wanted_type)}
+        kept = [e for e in entries if not _card_matches_filter(e["card"], described)]
+        entries = [e for e in entries if _card_matches_filter(e["card"], described)]
+        for entry in kept:
+            link_exiled_card(
+                source, entry["card"], int(entry["owner_index"]),
+                ends_on=tuple(entry.get("ends_on") or ()),
+            )
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
         return True, "resolved"
     moved: list[str] = []
     onto_battlefield = False
+    # CR 110.2a: "under **your** control" names the seat the effect instructed,
+    # which is not the owner. Absent means the owner, which is what every
+    # automatic return and every "into their owner's <zone>" spelling means.
+    controller_index = (
+        game.players.index(context.caster)
+        if instruction.payload.get("under_control_of") == "chooser" else None
+    )
     for entry in entries:
         owner = game.players[int(entry["owner_index"])]
         if entry["card"] not in owner.exile:
@@ -5080,10 +5109,18 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             continue
         # The one placement, shared with the automatic return: a hand or a
         # library goes through the CR 903.9b seam rather than being appended.
-        onto_battlefield |= game.leave_linked_exile(entry, zone) is not None
+        onto_battlefield |= game.leave_linked_exile(
+            entry, zone, controller_index=controller_index
+        ) is not None
         moved.append(entry["card"].name)
     if moved:
-        game.log.append(f"{', '.join(moved)} go to their owner's {zone}")
+        # "…under **your** control" is not the owner's zone, so the line has to
+        # say whose it is or the log describes a different effect.
+        whose = (
+            game.players[controller_index].name if controller_index is not None
+            else "their owner"
+        )
+        game.log.append(f"{', '.join(moved)} go to {whose}'s {zone}")
         if onto_battlefield:
             game._recompute_continuous_effects()
     return True, "resolved"

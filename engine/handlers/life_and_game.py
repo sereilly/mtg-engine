@@ -7,7 +7,8 @@ from ._common import (bound_permanent, count_from_payload, evaluate_count,
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
-from ..oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
+from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
+                            COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
@@ -967,6 +968,33 @@ def forbid_nonmana_activations_this_turn(game: Game, instruction: OracleInstruct
     game.log.append(
         f"{victim.name} can't activate non-mana abilities this turn "
         f"({context.card.name})"    )
+    return True, "resolved"
+
+
+@effect_handler("forbid_bound_permanent_activations_this_turn")
+def forbid_bound_permanent_activations_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**That permanent's** activated abilities can't be activated this turn."
+    (Interdict, CR 602.5c.)
+
+    The permanent is the source of the ability the sentence in front of this
+    one countered, read out of the resolution's own scratchpad rather than
+    described again: the spell targeted the *ability*, and by now that object is
+    off the stack with no card to ask (CR 113.7a). The lowering refuses without
+    the producer, so an empty record here means the counter found nothing to
+    counter — CR 608.2 does as much as it can and the ban simply has no
+    subject, which is not a failure of this handler.
+    """
+    from ..spell_prohibitions import forbid_permanent_activations_this_turn as record
+
+    victim = (context.results or {}).get(COUNTERED_ABILITY_SOURCE)
+    if victim is None:
+        game.log.append(f"{context.card.name}: no ability was countered")
+        return True, "resolved"
+    record(game, victim)
+    game.log.append(
+        f"{victim.card.name}'s activated abilities can't be activated this "
+        f"turn ({context.card.name})"
+    )
     return True, "resolved"
 
 

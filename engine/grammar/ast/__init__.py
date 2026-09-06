@@ -379,6 +379,7 @@ from .game import (
     SkipStep,
     SkipTurn,
     ExtraPhases,
+    BoundPermanentActivationBan,
     TargetingBan,
 )
 from .statements import (
@@ -615,6 +616,7 @@ __all__ = [
     "SkipStep",
     "SkipTurn",
     "ExtraPhases",
+    "BoundPermanentActivationBan",
     "TargetingBan",
     "DestroyUnlessPay",
     "DestroyEachUnlessPaid",

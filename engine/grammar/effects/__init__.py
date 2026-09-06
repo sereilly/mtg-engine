@@ -227,6 +227,7 @@ from .game import (
     _parse_extra_turn,
     parse_extra_phases,
     _parse_skip_step,
+    _parse_bound_permanent_activation_ban,
     _parse_targeting_ban,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
@@ -236,6 +237,7 @@ from .game import (
 )
 
 __all__ = [
+    "_parse_bound_permanent_activation_ban",
     "_parse_targeting_ban",
     "_parse_damage",
     "_parse_damage_unless_pay",

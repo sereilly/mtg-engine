@@ -128,6 +128,13 @@ class Game(
         default_factory=dict
     )
     nonmana_activations_forbidden_this_turn: set[int] = field(default_factory=set)
+    # "**That permanent's** activated abilities can't be activated this turn."
+    # (Interdict.) The third of the same family and the only one keyed by an
+    # object rather than a seat, which is why it is its own set: CR 602.5c bans
+    # one permanent's abilities and leaves every other permanent that player
+    # controls alone. By ``permanent_id``, so CR 400.7's returning permanent —
+    # a new object with a new id — is not still banned.
+    permanent_activations_forbidden_this_turn: set[int] = field(default_factory=set)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     # CR 701.20: cards revealed to all players, as a structured record beside

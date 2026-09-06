@@ -239,6 +239,7 @@ from .game import (
     SkipStep,
     SkipTurn,
     ExtraPhases,
+    BoundPermanentActivationBan,
     TargetingBan,
 )
 
@@ -269,6 +270,7 @@ Effect = Union[
     RevealTopToHandOrBottom, CreateEmblem, SkipStep,
     SkipTurn,
     ExtraPhases,
+    BoundPermanentActivationBan,
     TargetingBan,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,

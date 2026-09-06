@@ -497,6 +497,22 @@ class PutExiledWithSource:
     zone: Zone
     chosen: bool = False
     owned_by_you: bool = False
+    #: "Return **each creature card** exiled with this artifact…" (Cold
+    #: Storage). The printed card type narrowing the pile, as a card-type word.
+    #: Carried rather than consumed for the reason ``owned_by_you`` is: the pile
+    #: a linked ability names is whatever its twin put there, and Cold Storage's
+    #: twin exiles only creatures — but "only" is a fact about *today's* board,
+    #: not about the sentence, and a permanent whose types were changed while
+    #: exiled would make a dropped narrowing visible. Empty means the sentence
+    #: printed none and the whole pile moves.
+    card_type: str | None = None
+    #: "…to the battlefield **under your control**" (Cold Storage). CR 110.2a's
+    #: seat spelled out on the sweep, where ``chosen``'s battlefield form infers
+    #: it from the absent possessive. Its own field rather than that inference,
+    #: because Safe Haven prints "under **its owner's** control" onto the same
+    #: sweep and the two are different seats — inferring would hand Cold
+    #: Storage's creatures to whoever owned them.
+    under_your_control: bool = False
 
 
 @dataclass(frozen=True)

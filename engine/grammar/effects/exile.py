@@ -21,6 +21,7 @@ nodes sit perfectly well beside the other card nodes.
 from .. import ast
 from ..phrases import _accept_self_reference, _parse_zone
 from ..references import parse_player_ref
+from ..vocabulary import CARD_TYPES
 from ..stream import TokenStream
 
 
@@ -332,9 +333,27 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     names_source = True
     chosen = False
     owned_by_you = False
+    card_type: str | None = None
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
+        preposition = "to"
+    elif stream.accept_phrase("return", "each"):
+        # "Return **each creature card** exiled with this artifact to the
+        # battlefield under your control." (Cold Storage.) The sweep above with
+        # a card type printed on it, read here rather than as an optional word
+        # inside that branch so the unnarrowed spelling keeps its exact reading
+        # and this one refuses whole: a noun the vocabulary does not know leaves
+        # the line unparsed rather than sweeping a pile the card never named.
+        noun = stream.peek_word()
+        if noun is None or noun not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        if not stream.accept_phrase("card", "exiled", "with"):
+            stream.reset(mark)
+            return None
+        card_type = noun
         preposition = "to"
     elif stream.accept_phrase("return", "a", "card", "you", "own", "exiled", "with"):
         # "…**a card you own** exiled with this artifact to your hand."
@@ -388,4 +407,15 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         or stream.accept_phrase("under", "their", "owner", "'s", "control")
     ):
         zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
-    return ast.PutExiledWithSource(zone, chosen=chosen, owned_by_you=owned_by_you)
+    # "…to the battlefield **under your control**" (Cold Storage). CR 110.2a's
+    # other seat, read beside the owner spelling above and recorded rather than
+    # dropped for that clause's reason: the two name different players, and a
+    # sweep that lost the word would hand the cards back to whoever owned them.
+    under_your_control = bool(
+        zone.owner is None and zone.name == "battlefield"
+        and stream.accept_phrase("under", "your", "control")
+    )
+    return ast.PutExiledWithSource(
+        zone, chosen=chosen, owned_by_you=owned_by_you,
+        card_type=card_type, under_your_control=under_your_control,
+    )

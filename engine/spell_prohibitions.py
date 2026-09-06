@@ -85,6 +85,30 @@ def nonmana_activations_forbidden(game: "Game", seat: int) -> bool:
     return int(seat) in game.nonmana_activations_forbidden_this_turn
 
 
+def forbid_permanent_activations_this_turn(game: "Game", permanent) -> None:
+    """*permanent*'s activated abilities can't be activated this turn
+    (CR 602.5c, Interdict).
+
+    Keyed by ``permanent_id`` rather than by the object, and that is the whole
+    care this record needs: CR 400.7 stamps a fresh id on anything that returns,
+    so a permanent that leaves and comes back is a new object the ban does not
+    follow — which is the rule rather than a limitation. Storing the object
+    itself would keep the ban on it across that boundary.
+
+    A *permanent* record beside the seat one above rather than a second
+    mechanism: both are turn-scoped prohibitions read by one gate and dropped by
+    the one reset below, so neither can be forgotten on its own.
+    """
+    game.permanent_activations_forbidden_this_turn.add(int(permanent.permanent_id))
+
+
+def permanent_activations_forbidden(game: "Game", permanent) -> bool:
+    """Whether an effect has taken *permanent*'s activations for this turn."""
+    return int(
+        getattr(permanent, "permanent_id", -1)
+    ) in game.permanent_activations_forbidden_this_turn
+
+
 def clear_turn_spell_prohibitions(game: "Game") -> None:
     """Drop both records at the turn boundary.
 
@@ -96,6 +120,7 @@ def clear_turn_spell_prohibitions(game: "Game") -> None:
     """
     game.spell_types_forbidden_this_turn = {}
     game.nonmana_activations_forbidden_this_turn = set()
+    game.permanent_activations_forbidden_this_turn = set()
 
 
 __all__ = [
@@ -103,5 +128,7 @@ __all__ = [
     "clear_turn_spell_prohibitions",
     "forbid_casting_this_turn",
     "forbid_nonmana_activations_this_turn",
+    "forbid_permanent_activations_this_turn",
     "nonmana_activations_forbidden",
+    "permanent_activations_forbidden",
 ]

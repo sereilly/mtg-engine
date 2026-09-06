@@ -542,6 +542,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # turn, beside the land-play prohibition they are modelled on.
     "forbid_casting_types_this_turn": "turns",
     "forbid_nonmana_activations_this_turn": "turns",
+    # "That permanent's activated abilities can't be activated this turn."
+    # (Interdict.) The row above with a *permanent* in place of the seat, so the
+    # same category: what both change is what may be done for the rest of this
+    # turn, which is what `turns` is about — not `targeting`, whose subject is
+    # which objects CR 115.1 offers, and this ban offers and refuses nothing.
+    "forbid_bound_permanent_activations_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the

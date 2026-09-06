@@ -51,6 +51,16 @@ _CHOSEN_PLAYER_LIMIT = re.compile(
 )
 
 
+#: "Your maximum hand size is two." (Recycle.) The Rack's sentence with the
+#: controller in place of the chosen player, and its own pattern rather than an
+#: alternation inside that one because the two name **different seats**: a
+#: reader that admitted either and answered with the number alone would apply
+#: Recycle's limit to whoever the permanent had chosen, and the Rack's to its
+#: controller. The number is payload, so a card printing another needs no code.
+_CONTROLLER_LIMIT = re.compile(
+    rf"^your maximum hand size is (?P<size>{'|'.join(_NUMBER_WORDS)}|\d+)$"
+)
+
 #: "Players have no maximum hand size." (Anvil of Bogardan) / "You have no
 #: maximum hand size." (Library of Leng, Reflecting Mirror). One sentence whose
 #: scope is the printed subject, so the subject is payload and not a second
@@ -97,10 +107,26 @@ def chosen_player_hand_size(line: str) -> int | None:
     return int(size) if size.isdigit() else _NUMBER_WORDS[size]
 
 
+def controller_hand_size(line: str) -> int | None:
+    """The limit *line* sets on the permanent's own controller, or None.
+
+    :func:`chosen_player_hand_size` one seat over. Kept apart from it all the
+    way down — pattern, reader and the branch in :func:`maximum_hand_size` —
+    because the seat is the whole content of the difference: fold them and
+    Recycle limits whoever Cursed Rack pointed at.
+    """
+    match = _CONTROLLER_LIMIT.match(_normalized(line))
+    if match is None:
+        return None
+    size = match.group("size")
+    return int(size) if size.isdigit() else _NUMBER_WORDS[size]
+
+
 def hand_size_line(line: str) -> bool:
     """Whether one printed line is a hand-size rule this module carries out."""
     return (
         chosen_player_hand_size(line) is not None
+        or controller_hand_size(line) is not None
         or no_maximum_hand_size_scope(line) is not None
     )
 
@@ -131,6 +157,18 @@ def maximum_hand_size(game, player_index: int) -> int | None:
                     controlled = game.controller_index_of(permanent) == player_index
                 if controlled:
                     return None
+            # "**Your** maximum hand size is two." (Recycle.) The controller's
+            # own limit, so it is read off the same lazily-computed seat the
+            # no-maximum branch above uses rather than off `chosen`: the two
+            # sentences point at different players and a permanent may print
+            # either.
+            size = controller_hand_size(line)
+            if size is not None:
+                if controlled is None:
+                    controlled = game.controller_index_of(permanent) == player_index
+                if controlled:
+                    limit = min(limit, size)
+                continue
             if not chosen:
                 continue
             size = chosen_player_hand_size(line)
@@ -144,6 +182,7 @@ __all__ = [
     "CONTROLLER",
     "DEFAULT_MAXIMUM_HAND_SIZE",
     "chosen_player_hand_size",
+    "controller_hand_size",
     "hand_size_line",
     "maximum_hand_size",
     "no_maximum_hand_size_scope",
