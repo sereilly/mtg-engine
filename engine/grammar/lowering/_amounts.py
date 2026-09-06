@@ -139,34 +139,26 @@ _READABLE_COST_SACRIFICE_CHARACTERISTICS = frozenset(
 _READABLE_COST_TAP_CHARACTERISTICS = frozenset({"mana_value", "power", "toughness"})
 
 
-def _lower_cost_tap_damage(
-    node: ast.DealDamage,
+def _payment_channel_damage(
+    node: ast.DealDamage, count: dict[str, object]
 ) -> tuple[OracleInstruction, ...]:
-    """"This artifact deals damage equal to **the tapped creature's power** to
-    target attacking or blocking creature with flying." (Unerring Sling.)
+    """A counted damage whose number is *count*, aimed at the sentence's one
+    recipient.
 
-    :func:`_lower_cost_sacrifice_damage` with the payment one verb over, and the
-    same three refusals for the same reasons — a characteristic the evaluator
-    cannot answer, a rider no counted damage carries, and more than one
-    recipient. The number travels on the one ``x_from_count`` channel every
-    other computed amount already uses.
+    The shared tail of the three payment-channel lowerings below — what the
+    ability's own cost sacrificed, tapped, or removed in counters. Each carried
+    a verbatim copy of this block with one dict literal changed, which is one
+    refusal to forget per channel: a rider dropped here is a damage carrying a
+    printed clause nobody performs, and a recipient admitted here is a damage
+    aimed at whatever permanent the resolution context happened to hold — which
+    is also why the seat is recorded (`_lower_counted_damage`'s reason).
     """
-    assert isinstance(node.amount, ast.TappedForCost)
-    characteristic = node.amount.characteristic
-    if characteristic not in _READABLE_COST_TAP_CHARACTERISTICS:
-        raise LoweringError(
-            f"no handler reads the tapped permanent's {characteristic!r}",
-            node=node,
-        )
     if node.riders != ast.DamageRiders():
         raise LoweringError("a counted damage carries no riders yet", node=node)
     if len(node.recipients) != 1:
         raise LoweringError("a counted damage reaches one recipient", node=node)
     recipient = node.recipients[0]
-    payload: dict[str, object] = {
-        "amount": "x",
-        X_FROM_COUNT: {"cost_tap_characteristic": characteristic},
-    }
+    payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: count}
     if isinstance(recipient, ast.PlayerRef):
         if recipient.kind not in ("target_player", "target_opponent", "you"):
             raise LoweringError("no handler aims this counted damage", node=node)
@@ -179,6 +171,45 @@ def _lower_cost_tap_damage(
         raise LoweringError("no handler aims this counted damage", node=node)
     _describe_targets(payload, recipient)
     return (OracleInstruction("deal_damage", "", payload),)
+
+
+def _lower_cost_tap_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"This artifact deals damage equal to **the tapped creature's power** to
+    target attacking or blocking creature with flying." (Unerring Sling.)
+
+    :func:`_lower_cost_sacrifice_damage` with the payment one verb over. Its own
+    refusal is the characteristic the evaluator cannot answer; the rider and
+    recipient refusals are :func:`_payment_channel_damage`'s.
+    """
+    assert isinstance(node.amount, ast.TappedForCost)
+    characteristic = node.amount.characteristic
+    if characteristic not in _READABLE_COST_TAP_CHARACTERISTICS:
+        raise LoweringError(
+            f"no handler reads the tapped permanent's {characteristic!r}",
+            node=node,
+        )
+    return _payment_channel_damage(
+        node, {"cost_tap_characteristic": characteristic}
+    )
+
+
+def _lower_cost_counters_removed_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"It deals damage to target creature equal to **the number of pain
+    counters removed this way**." (Torture Chamber.)
+
+    :func:`_lower_cost_tap_damage` with the payment one kind over, and no
+    refusal of its own. CR 601.2h is what makes the number a *payment* rather
+    than a board read: the counters came off before the ability reached the
+    stack, and the cost clause is what pins which store they came from.
+    """
+    assert isinstance(node.amount, ast.CountersRemovedForCost)
+    return _payment_channel_damage(
+        node, {"cost_counters_removed": node.amount.counter}
+    )
 
 
 def _lower_cost_sacrifice_damage(
@@ -203,30 +234,9 @@ def _lower_cost_sacrifice_damage(
             f"{characteristic!r}",
             node=node,
         )
-    if node.riders != ast.DamageRiders():
-        raise LoweringError("a counted damage carries no riders yet", node=node)
-    if len(node.recipients) != 1:
-        raise LoweringError("a counted damage reaches one recipient", node=node)
-    recipient = node.recipients[0]
-    payload: dict[str, object] = {
-        "amount": "x",
-        X_FROM_COUNT: {"cost_sacrifice_characteristic": characteristic},
-    }
-    if isinstance(recipient, ast.PlayerRef):
-        # The seat is recorded for `_lower_counted_damage`'s reason: a sentence
-        # about a player with no recipient key would be dealt to whatever
-        # permanent an earlier step left in the context.
-        if recipient.kind not in ("target_player", "target_opponent", "you"):
-            raise LoweringError("no handler aims this counted damage", node=node)
-        payload["recipient"] = "caster" if recipient.kind == "you" else "target_player"
-    elif not (
-        _is_target(recipient)
-        or (isinstance(recipient, ast.TargetSpec)
-            and recipient.quantifier == "any_target")
-    ):
-        raise LoweringError("no handler aims this counted damage", node=node)
-    _describe_targets(payload, recipient)
-    return (OracleInstruction("deal_damage", "", payload),)
+    return _payment_channel_damage(
+        node, {"cost_sacrifice_characteristic": characteristic}
+    )
 
 
 #: How the subtrahend of a printed difference is *scoped*, when the phrase

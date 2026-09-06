@@ -531,6 +531,16 @@ class AbilityActivationMixin:
                 counters_removed_for_cost = (
                     held if x_value is None else max(0, min(held, int(x_value)))
                 )
+            elif wanted == "all":
+                # "Remove **all** elixir counters from this artifact" (Essence
+                # Bottle, Torture Chamber). Every one of them and no choice to
+                # make, which is what separates it from "any number" above: an
+                # announced X narrows that and must not narrow this. Payable
+                # with none on the permanent — removing all of zero counters
+                # removes zero, and CR 601.2h only forbids what cannot be done
+                # — so this half never makes the ability unactivatable, and the
+                # effect behind it reads the zero it really removed.
+                counters_removed_for_cost = held
             else:
                 if held < int(wanted):
                     details = f"{permanent.card.name} has no {kind} counters to remove"

@@ -16,6 +16,7 @@ from .lexer import MANA, NUMBER, PT, WORD
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
 from .records import (accept_damage_dealt_by_chosen_cast,
+                      accept_counters_removed_for_cost,
                       accept_exiled_for_cost, accept_sacrificed_for_cost,
                       accept_tapped_for_cost)
 from .stream import TokenStream
@@ -380,6 +381,16 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     stream.accept_word("the")
 
     if stream.accept_phrase("number", "of"):
+        # "…equal to **the number of pain counters removed this way**"
+        # (Torture Chamber). The two readers below diverge at the tail — "on
+        # this artifact" against "removed this way" — so neither can claim the
+        # other's sentence, and what separates them is the question rather than
+        # the order: this counts what the ability's own cost took off
+        # (CR 601.2h) and the one under it counts what is still there. By
+        # resolution those are complements, and the permanent holds none.
+        removed = accept_counters_removed_for_cost(stream)
+        if removed is not None:
+            return removed
         counters = accept_counters_on_source(stream)
         if counters is not None:
             return counters

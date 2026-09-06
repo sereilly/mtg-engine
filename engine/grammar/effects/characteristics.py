@@ -13,7 +13,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_counters_on_source, accept_fraction_head, accept_life_gain_cap, accept_rounding, expect_pt, parse_amount, parse_equal_to
-from ..records import (_parse_for_each_this_way, accept_plus_per_cost_paid,
+from ..records import (_parse_for_each_this_way, accept_counters_removed_for_cost,
+                      accept_plus_per_cost_paid,
                       parse_for_each_milled_this_way)
 
 from ..errors import GrammarError
@@ -259,6 +260,17 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                         # parser, which refuses a counter word as an unknown
                         # noun and would take the whole line down with it.
                         per_each = accept_counters_on_source(stream)
+                        if per_each is None:
+                            # "You gain 2 life **for each elixir counter
+                            # removed this way**." (Essence Bottle.) The
+                            # counters the ability's own cost took off, which
+                            # after CR 601.2h is the complement of what the
+                            # reader above counts: by resolution the artifact
+                            # holds none, so "on this artifact" would answer
+                            # zero on every activation. One reader for the
+                            # phrase, shared with the damage and mana families
+                            # that print it (`records`).
+                            per_each = accept_counters_removed_for_cost(stream)
                         if per_each is None:
                             try:
                                 per_each = parse_object_filter(stream)

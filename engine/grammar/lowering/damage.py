@@ -30,6 +30,7 @@ from ._amounts import (
     _lower_board_count_damage,
     _lower_chosen_cast_damage,
     _lower_cost_sacrifice_damage,
+    _lower_cost_counters_removed_damage,
     _lower_cost_tap_damage,
     _lower_counted_damage,
     lower_difference_damage,
@@ -278,6 +279,12 @@ def _lower_damage_shape(
     # on a board.
     if isinstance(node.amount, ast.TappedForCost):
         return _lower_cost_tap_damage(node)
+    # "…equal to **the number of pain counters removed this way**" (Torture
+    # Chamber) — the fourth payment channel, beside its three siblings and for
+    # their reason: a quantity the ability's own cost produced rather than a
+    # count of anything on a board.
+    if isinstance(node.amount, ast.CountersRemovedForCost):
+        return _lower_cost_counters_removed_damage(node)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node, produced)
     # A **bite**: one named object deals damage equal to its own power, and

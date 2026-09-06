@@ -551,6 +551,15 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every time an opponent's creature dies.
     if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
         life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
+    if per_each is not None and per_each.get("cost_counters_removed") is not None:
+        # "…**for each elixir counter removed this way**" (Essence Bottle).
+        # The counters this ability's own cost took off, which after CR 601.2h
+        # are gone by now — so this is the record the activation kept, not a
+        # board read, and it goes through `count_from_payload` like every other
+        # computed quantity rather than reaching into `choices` here. Zero is a
+        # real answer: the cost is payable with no counters on the artifact and
+        # gains no life.
+        life_gain *= count_from_payload(game, context, per_each)
     if per_each is not None and per_each.get("counters_on_source"):
         # "…**for each credit counter on this creature**" (Icatian
         # Moneychanger). Through the one counter reader, `counters_on`, which

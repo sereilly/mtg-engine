@@ -2431,6 +2431,27 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             remove_counter = any_number.group(1)
             remove_counter_count = "any"
     if remove_counter is None:
+        # "Remove **all** elixir counters from this artifact" (Essence Bottle,
+        # Torture Chamber). The fourth row this pattern has needed, and the
+        # fourth for one reason: a spelling nothing matched is not a refused
+        # ability, it is a **free** one — both cards were activated without
+        # paying and their effects, which count what the cost removed, had no
+        # number to read. The grammar had already parsed the clause into a
+        # `RemoveCounterCost` with an `AllOf` count; this derivation is the
+        # second reader, and the two disagreed.
+        #
+        # "All" is not "any number": there is no choice to announce, so an
+        # announced X never narrows it. Payable with none on the permanent —
+        # removing all of zero counters removes zero (CR 601.2h has nothing
+        # that cannot be done), which is the printed card: Essence Bottle
+        # activated empty gains no life.
+        all_of = re.search(
+            r"\bremove all ([a-z]+|[+-]\d+/[+-]\d+) counters from ", cost_lower
+        )
+        if all_of is not None:
+            remove_counter = all_of.group(1)
+            remove_counter_count = "all"
+    if remove_counter is None:
         # "Remove **three spore** counters from this creature" (Thallid and the
         # rest of Fallen Empires' Saproling engine), "Remove **two carrion**
         # counters from this creature" (Osai Vultures). A *printed* count, and
