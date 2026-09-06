@@ -153,6 +153,17 @@ _EFFECT_PT = re.compile(
     r"^gets \+(?P<power>\d+)/\+(?P<toughness>\d+)(?: and has (?P<keywords>[a-z ]+))?$"
 )
 _EFFECT_KEYWORDS = re.compile(r"^has (?P<keywords>[a-z ]+)$")
+# "…this creature **has protection from white**" (Escaped Shapeshifter). Read
+# before the keyword form above would see it: "protection from white" is not a
+# word `IMPLEMENTED_KEYWORDS` holds, so `_keyword_list` refuses it and the whole
+# line refused with it — correctly, because a keyword grant of the bare word
+# "protection" is protection from everything.
+#
+# Its own payload key rather than a keyword, and read by
+# ``_protection_qualities`` rather than by the derived-grant channel
+# ``add_derived_grant`` owns: protection carries a **quality**, and the grant
+# channel is one word per grant with nowhere to put it.
+_EFFECT_PROTECTION = re.compile(r"^has protection from (?P<quality>[a-z ]+)$")
 _EFFECT_UNBLOCKABLE = re.compile(r"^can't be blocked$")
 # "can attack as though it didn't have defender" (Drowsing Tyrannodon).
 # CR 609.4: an "as though" permission applies to the stated effect ONLY. The
@@ -227,7 +238,18 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
 #: pointed nowhere, with no test able to notice because both halves are
 #: individually correct. (SET_PLAYBOOK Phase 3: "a refusal can expire without
 #: anything failing".)
-_CONTROLS_NOUN_CONDITION = re.compile(r"^you control (?P<phrase>.+)$")
+#:
+#: **And the seat is read, not assumed.** "as long as **an opponent controls** a
+#: creature with flying" (Escaped Shapeshifter) is the same condition about the
+#: other side of the table, and ``conditional_static_holds`` has answered
+#: ``who="opponent"`` for the ``controls`` payload since the grammar started
+#: producing one — the trailing word order compiles it today. Only this table's
+#: anchor was "you", so the *fronted* order of the very same sentence refused.
+#: That is the two-front-ends failure one file over: an evaluator that answers a
+#: seat and a reader that cannot spell one.
+_CONTROLS_NOUN_CONDITION = re.compile(
+    r"^(?:(?P<you>you) control|an (?P<opponent>opponent) controls) (?P<phrase>.+)$"
+)
 
 
 def _controls_noun_condition(text: str) -> dict[str, object] | None:
@@ -243,6 +265,7 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
     match = _CONTROLS_NOUN_CONDITION.match(text)
     if match is None:
         return None
+    who = "you" if match.group("you") else "opponent"
     from .grammar.errors import GrammarError
     from .grammar.nouns import parse_object_filter
     from .grammar.stream import TokenStream
@@ -268,7 +291,7 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
     payload = described.to_payload()
     if not payload or untestable_filter_keys(payload):
         return None
-    return {"kind": "controls", "who": "you", "filter": payload}
+    return {"kind": "controls", "who": who, "filter": payload}
 
 
 def _parse_effect_text(text: str) -> dict[str, object] | None:
@@ -284,6 +307,12 @@ def _parse_effect_text(text: str) -> dict[str, object] | None:
                 return None
             effect["keywords"] = keywords
         return effect
+    match = _EFFECT_PROTECTION.match(text)
+    if match is not None:
+        qualities = _protection_list(match.group("quality"))
+        if qualities is None:
+            return None
+        return {"protection_from": qualities}
     match = _EFFECT_KEYWORDS.match(text)
     if match is not None:
         keywords = _keyword_list(match.group("keywords"))
@@ -295,6 +324,24 @@ def _parse_effect_text(text: str) -> dict[str, object] | None:
     if _EFFECT_IGNORES_DEFENDER.match(text) is not None:
         return {"ignores_defender": True}
     return None
+
+
+def _protection_list(text: str) -> list[str] | None:
+    """The protection qualities *text* names, or None if one is unmodelled.
+
+    CR 702.16g: "protection from A and from B" is shorthand for two abilities,
+    so the clause is split the way ``_protection_qualities`` splits a printed
+    one. The words are validated through ``keywords.protection_quality`` — the
+    same reader that answers the board — so a quality the shield cannot model
+    refuses the line instead of compiling into a static that protects nobody.
+    """
+    from .keywords import protection_quality
+
+    words = [part.strip() for part in re.split(r",|and from|and", text)]
+    words = [word for word in words if word]
+    if not words or any(protection_quality(word) is None for word in words):
+        return None
+    return words
 
 
 def _keyword_list(text: str) -> list[str] | None:

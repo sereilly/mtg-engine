@@ -34,6 +34,7 @@ from .handlers._common import (CHOSEN_CARD_TYPE, _comparison_holds,
                                _resolve_chosen_card_type, _resolve_chosen_color,
                                _resolve_chosen_subtype,
                                permanent_matches_filter)
+from .search_filters import name_key
 
 if TYPE_CHECKING:
     from .game import Game
@@ -101,6 +102,23 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # control admitting a creature the printed clause excludes.
     "power_at_most_source_counters",
     "nontoken", "named", "supertypes",
+    # "…a creature with flying **not named Escaped Shapeshifter**". Two keys
+    # for one printed phrase, because the two front ends leave the name in two
+    # places: spelled out it is a literal the *pure* matcher compares
+    # (``not_named``), and printed as the card's own name it has already been
+    # collapsed — to a SELF token by the lexer, to "this creature" by
+    # ``oracle._restriction_line`` — so the name is read off the ability's
+    # source and the key is testable here and nowhere else
+    # (``not_named_source``, on ``exclude_self``'s footing and out of
+    # ``OBJECT_ONLY_FILTER_KEYS`` below for its reason).
+    "not_named", "not_named_source",
+    # "…a creature **with protection from white**" (Escaped Shapeshifter). A
+    # layer-6-shaped question like ``with_keywords`` and answered here for the
+    # same reason, but through ``_protection_qualities`` rather than
+    # ``_has_keyword``: "protection" is one keyword covering every quality, so
+    # asking the keyword would admit a creature with protection from *anything*
+    # — the widening this key exists to prevent.
+    "with_protection_from",
     # "…with **a name originally printed in the Homelands expansion**"
     # (Apocalypse Chime). A fact about the card, read off
     # ``original_printing`` (off ``effective_card``, since CR 206.3 states the
@@ -355,6 +373,10 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # Out for ``exclude_self``'s reason: the bound is a characteristic of the
     # ability's *source*, and a caller with none would compare against nothing.
     "characteristic_vs_source",
+    # Out for ``exclude_self``'s reason exactly: the excluded *name* is the
+    # source's, and a caller with no source would compare against nothing and
+    # exclude nobody.
+    "not_named_source",
 }
 
 
@@ -757,6 +779,44 @@ def subject_matches(
             k: v for k, v in described.items() if k != "characteristic_vs_source"
         }
         if source is None or not _source_relative_bound_holds(obj, relative, source):
+            return False
+    # "…a creature with flying **not named Escaped Shapeshifter**". The name
+    # comes off the ability's *source*, which is the only place either front end
+    # still has it: the lexer collapsed the printed name to a SELF token and
+    # ``oracle._restriction_line`` rewrote it to "this creature", so neither
+    # payload carries a string. A *name* comparison, never identity — a second
+    # copy of the card is excluded too (CR 201.2) — and through the effective
+    # card on both sides, so a Clone of the card is excluded and the card
+    # Cloning something else is not.
+    #
+    # With no source there is nothing to be named, and the answer is no. That
+    # refuses the candidate rather than admitting the board, which is the
+    # direction every source-relative key here takes. Stripped before the pure
+    # matcher runs, which **refuses** the key rather than ignoring it — so
+    # leaving it in place matches nothing at all.
+    if described.get("not_named_source"):
+        described = {k: v for k, v in described.items() if k != "not_named_source"}
+        if source is None:
+            return False
+        if name_key(obj.effective_card.name) == name_key(source.effective_card.name):
+            return False
+    # "…a creature **with protection from white**" (Escaped Shapeshifter). A
+    # question the object cannot answer alone: protection is contributed by a
+    # printed line, an attached Aura, a lord's grant and a metadata grant with a
+    # lifetime, and ``_protection_qualities`` is the one reader that gathers all
+    # four. The printed word becomes a quality through the same reader that
+    # admitted it (``keywords.protection_quality``), so the phrase and the
+    # shield cannot come to disagree about what "white" names. Stripped for the
+    # reason above.
+    protection = described.get("with_protection_from")
+    if protection:
+        from .keywords import protection_quality
+
+        described = {
+            k: v for k, v in described.items() if k != "with_protection_from"
+        }
+        quality = protection_quality(str(protection))
+        if quality is None or quality not in game._protection_qualities(obj):
             return False
     described = _resolve_chosen_color(described, source)
     described = _resolve_chosen_subtype(described, source)

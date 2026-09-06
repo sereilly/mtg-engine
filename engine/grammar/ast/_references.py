@@ -165,6 +165,25 @@ class ObjectFilter:
     #: printed, and a general `op` would be five comparisons nothing exercises.
     power_at_most_source_counters: str | None = None
     named: str | None = None
+    #: "…a creature with flying **not named Escaped Shapeshifter**" — the
+    #: negative of ``named``, when the excluded name is spelled out. A name
+    #: rather than an identity, so a second copy of the card is excluded too
+    #: (CR 201.2), which is what ``exclude_self`` cannot say.
+    not_named: str | None = None
+    #: The same exclusion when the name printed is the **card's own** — the
+    #: only spelling any card in the pool prints. Its own field because neither
+    #: front end holds a name at that point: the lexer has collapsed the words
+    #: to a SELF token for the grammar, and ``oracle._restriction_line`` has
+    #: rewritten them to "this creature" for the derivation tables. What the
+    #: matcher compares is still the *name*, read off the ability's source.
+    not_named_source: bool = False
+    #: "…a creature **with protection from white**" (Escaped Shapeshifter). The
+    #: word is a protection *quality* (``engine/keywords.protection_quality``),
+    #: not a keyword: "protection" alone is a keyword the matcher can answer and
+    #: means something strictly wider, so the quality has to ride the key.
+    #: Asked of the game (``_protection_qualities``) rather than of the object,
+    #: because an Aura, a lord and a metadata grant all contribute one.
+    with_protection_from: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
     #: expansion name resolved to, read off ``original_printing`` --
@@ -824,6 +843,16 @@ class ObjectFilter:
         # count over every card in the graveyard.
         if self.named:
             payload["named"] = self.named
+        # The two negatives beside it, each emitted so that every gate asking
+        # "are all this payload's keys testable?" sees the narrowing — a
+        # dropped exclusion on a condition is a static that holds on a board the
+        # card does not name.
+        if self.not_named:
+            payload["not_named"] = self.not_named
+        if self.not_named_source:
+            payload["not_named_source"] = True
+        if self.with_protection_from:
+            payload["with_protection_from"] = self.with_protection_from
         # "of their choice" says *who picks*, which is not a property of the
         # objects picked from — no matcher can test it, and it is deliberately
         # absent from ``TESTABLE_SUBJECT_FILTER_KEYS`` for that reason. Emitting

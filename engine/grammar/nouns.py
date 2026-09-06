@@ -270,6 +270,11 @@ class _FilterDraft:
     # ``ast.ObjectFilter.on_the_battlefield``.
     on_the_battlefield: bool = False
     named: str | None = None
+    #: See ``ast.ObjectFilter.not_named`` / ``not_named_source`` /
+    #: ``with_protection_from``.
+    not_named: str | None = None
+    not_named_source: bool = False
+    with_protection_from: str | None = None
     # "…with a name originally printed in the <Set> expansion" -- see
     # ``ast.ObjectFilter.original_expansion``.
     original_expansion: str | None = None
@@ -917,6 +922,9 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,
+        not_named=d.not_named,
+        not_named_source=d.not_named_source,
+        with_protection_from=d.with_protection_from,
         original_expansion=d.original_expansion,
         other_than_source=d.other_than_source,
         is_source=d.is_source,

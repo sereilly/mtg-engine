@@ -2264,3 +2264,177 @@ def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
 ])
 def test_w2g2_creatures_are_supported(set_pool, name):
     assert compile_card_oracle(set_pool("TMP")[name]).supported
+
+
+# --- W3G4: Escaped Shapeshifter (a keyword chosen by the opponent's board) ---
+
+import pytest as _w3g4_pytest
+
+from engine import Game as _W3G4Game
+from engine import PlayerState as _W3G4PlayerState
+from engine.models import Permanent as _W3G4Permanent
+from engine.oracle import compile_card_oracle as _w3g4_compile
+from engine.oracle import expand_same_is_true_lines as _w3g4_expand
+from tests.helpers import _mk_card as _w3g4_mk_card
+
+
+def _w3g4_board(set_pool, opponent):
+    """Escaped Shapeshifter alone, against the permanents named."""
+    shifter = _W3G4Permanent(card=set_pool("TMP")["Escaped Shapeshifter"])
+    game = _W3G4Game(players=[
+        _W3G4PlayerState(name="P1", battlefield=[shifter]),
+        _W3G4PlayerState(name="P2", battlefield=list(opponent)),
+    ])
+    game._recalculate_lord_buffs()
+    return game, shifter
+
+
+def _w3g4_creature(name, text, colors=()):
+    return _W3G4Permanent(
+        card=_w3g4_mk_card(
+            name=name, mana_cost="{2}", type_line="Creature - Human",
+            oracle_text=text, colors=colors,
+        )
+    )
+
+
+def test_escaped_shapeshifter_expands_into_one_static_per_quality(set_pool):
+    """"The same is true for first strike, trample, and protection from any
+    color" is CR 113.3 shorthand, not a second ability.
+
+    Eight conditional statics, because "protection from any color" is **five**:
+    CR 702.16b makes protection always from a stated quality, and the card gains
+    protection from a colour only while an opponent controls a creature with
+    protection from *that* colour. One "any color" static would hold when none
+    of the five conditions did.
+    """
+    program = _w3g4_compile(set_pool("TMP")["Escaped Shapeshifter"])
+    assert program.supported, program.reason
+    statics = [i for i in program.instructions if i.kind == "conditional_static"]
+    assert len(statics) == 8
+    assert [i.payload.get("keywords") for i in statics[:3]] == [
+        ["flying"], ["first strike"], ["trample"]
+    ]
+    assert [i.payload.get("protection_from") for i in statics[3:]] == [
+        ["white"], ["blue"], ["black"], ["red"], ["green"]
+    ]
+    # Every one of them asks about the *opponent's* board, and every one of them
+    # carries the exclusion — a condition that lost either half would hold on a
+    # board the card does not name.
+    for instruction in statics:
+        condition = instruction.payload["condition"]
+        assert condition["who"] == "opponent"
+        assert condition["filter"]["not_named_source"] is True
+
+
+@_w3g4_pytest.mark.parametrize("keyword", ["flying", "first strike", "trample"])
+def test_escaped_shapeshifter_takes_a_keyword_from_the_opponents_board(
+    set_pool, keyword
+):
+    game, shifter = _w3g4_board(set_pool, [])
+    assert not game._has_keyword(shifter, keyword)
+
+    donor = _w3g4_creature("Donor", keyword.title())
+    game, shifter = _w3g4_board(set_pool, [donor])
+    assert game._has_keyword(shifter, keyword)
+
+
+def test_escaped_shapeshifter_reads_the_opponents_board_and_not_its_own(set_pool):
+    """"As long as **an opponent** controls...". The fronted word order of this
+    sentence used to refuse outright, because ``static_bonuses``' noun-condition
+    anchor spelled "you control" and nothing else — while
+    ``conditional_static_holds`` had answered ``who="opponent"`` all along.
+    """
+    flier = _w3g4_creature("Cloud", "Flying")
+    shifter = _W3G4Permanent(card=set_pool("TMP")["Escaped Shapeshifter"])
+    game = _W3G4Game(players=[
+        _W3G4PlayerState(name="P1", battlefield=[shifter, flier]),
+        _W3G4PlayerState(name="P2"),
+    ])
+    game._recalculate_lord_buffs()
+    assert not game._has_keyword(shifter, "flying")
+
+
+def test_escaped_shapeshifter_ignores_a_creature_of_its_own_name(set_pool):
+    """"...**not named Escaped Shapeshifter**". Excluded by CR 201.2's name, so
+    an opponent's own copy does not feed it — and a second copy would not
+    either, which is what an identity comparison would get wrong."""
+    twin = _W3G4Permanent(
+        card=_w3g4_mk_card(
+            name="Escaped Shapeshifter", mana_cost="{3}{U}{U}",
+            type_line="Creature - Shapeshifter", oracle_text="Flying",
+        )
+    )
+    game, shifter = _w3g4_board(set_pool, [twin])
+    assert not game._has_keyword(shifter, "flying")
+    # ...and the exclusion is only about the name: any other flier still counts.
+    game, shifter = _w3g4_board(set_pool, [twin, _w3g4_creature("Cloud", "Flying")])
+    assert game._has_keyword(shifter, "flying")
+
+
+def test_escaped_shapeshifter_takes_protection_colour_by_colour(set_pool):
+    """The correction three groups took to reach: "protection from any color" is
+    not one quality. An opponent's protection-from-white creature gives the
+    Shapeshifter protection from **white**, and nothing else."""
+    warded = _w3g4_creature("Warded", "Protection from white")
+    game, shifter = _w3g4_board(set_pool, [warded])
+    assert sorted(game._protection_qualities(shifter)) == [("color", "W")]
+
+    second = _w3g4_creature("Warded Too", "Protection from green")
+    game, shifter = _w3g4_board(set_pool, [warded, second])
+    assert sorted(game._protection_qualities(shifter)) == [
+        ("color", "G"), ("color", "W")
+    ]
+
+
+def test_escaped_shapeshifter_protection_ends_when_the_condition_does(set_pool):
+    """A derived grant, never a metadata stamp: the quality is read off the
+    conditional static at every recompute, so it goes when the opponent's
+    creature does — with nothing having to remove it."""
+    warded = _w3g4_creature("Warded", "Protection from white")
+    game, shifter = _w3g4_board(set_pool, [warded])
+    assert game._protection_qualities(shifter)
+
+    game.remove_from_battlefield(warded)
+    game._recalculate_lord_buffs()
+    assert not game._protection_qualities(shifter)
+
+
+def test_escaped_shapeshifter_protection_stops_a_white_spell_targeting_it(set_pool):
+    """The grant reaches the consumers a printed protection line reaches, which
+    is the point of deriving it in ``_protection_qualities`` rather than in the
+    derived-*keyword* channel: that channel is one word per grant and has
+    nowhere to put a quality."""
+    warded = _w3g4_creature("Warded", "Protection from white")
+    game, shifter = _w3g4_board(set_pool, [warded])
+    white_spell = _w3g4_mk_card(
+        name="White Bolt", mana_cost="{W}", type_line="Instant",
+        oracle_text="Destroy target creature.", colors=("W",),
+    )
+    assert not game._can_be_targeted(shifter, white_spell)
+
+    game, shifter = _w3g4_board(set_pool, [])
+    assert game._can_be_targeted(shifter, white_spell)
+
+
+def test_the_same_is_true_rewrite_leaves_every_other_sentence_alone():
+    """The gate, asserted directly. Celestial Dawn (MIR, shipped) prints the
+    same five words about *objects in other zones* rather than about a quality,
+    and a rewrite that took it would have written nonsense onto a card that
+    works.
+
+    The substitution check is the other half: the quality has to appear exactly
+    twice in the first sentence — once in the condition, once in the effect —
+    and a sentence where it does not is left alone rather than guessed at.
+    """
+    dawn = (
+        "Nonland permanents you control are white. The same is true for spells "
+        "you control and nonland cards you own that are not on the battlefield."
+    )
+    assert _w3g4_expand(dawn) == dawn
+
+    once_only = (
+        "As long as an opponent controls a creature with flying, this creature "
+        "has trample. The same is true for first strike."
+    )
+    assert _w3g4_expand(once_only) == once_only

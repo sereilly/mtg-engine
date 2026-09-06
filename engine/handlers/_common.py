@@ -1315,6 +1315,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # nobody could answer it.
     if payload.get("chosen_color"):
         return False
+    # "…**not named this creature**" (Escaped Shapeshifter) and "…**with
+    # protection from white**". Both need something this function does not
+    # have — the first the ability's source, whose *name* is the exclusion, the
+    # second the game, because a quality can come from an Aura, a lord or a
+    # granted metadata key and none of those is readable off the candidate.
+    # Refused rather than ignored, the direction every relative key here takes:
+    # ignoring the first would exclude nobody and ignoring the second would
+    # admit every creature on the board.
+    if payload.get("not_named_source") or payload.get("with_protection_from"):
+        return False
     # "of the chosen type" (An-Zerrin Ruins) — the same recorded choice one
     # characteristic over, refused here for the identical reason: the record
     # lives on the *source*, this function is the pure half, and ignoring the
@@ -1660,6 +1670,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # Clone's name is the name it copied (CR 707.2).
     named = payload.get("named")
     if named and name_key(perm.effective_card.name) != name_key(str(named)):
+        return False
+    # "…**not named <card>**" — the same comparison negated, read the same way
+    # and off the same effective card. The self-referential spelling
+    # ("not named this creature") is ``not_named_source`` and lives in
+    # ``subject_filters``: it needs the ability's source to have a name at all.
+    not_named = payload.get("not_named")
+    if not_named and name_key(perm.effective_card.name) == name_key(str(not_named)):
         return False
     # "…with a name originally printed in the <Set> expansion" (Apocalypse
     # Chime, Golgothian Sylex). ``original_printing`` is ``printings[0]`` -- the

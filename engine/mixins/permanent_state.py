@@ -2522,6 +2522,59 @@ class PermanentStateMixin:
                     quality = self._protection_quality_of(word)
                     if quality is not None:
                         qualities.add(quality)
+        # A **conditional** self-grant: "As long as an opponent controls a
+        # creature with protection from white …, this creature has protection
+        # from white." (Escaped Shapeshifter.) Derived, exactly as the Aura and
+        # lord grants above are, and for the same reason — the condition can
+        # stop holding between recomputes and a grant stamped into the metadata
+        # channel below would be one nothing clears.
+        #
+        # It cannot ride ``add_derived_grant``, which the keyword half of
+        # ``conditional_static`` uses, because that channel is one *word* per
+        # grant and protection carries a quality (CR 702.16). So the payload key
+        # is read here instead, by the one function that gathers every source of
+        # a quality.
+        #
+        # ``_protection_grants_in_progress`` is what keeps this from recursing
+        # without end: the condition may itself ask whether some creature has
+        # protection (this card's does), and two such creatures facing each
+        # other across the table would ask about each other for ever. A
+        # permanent already being asked about contributes nothing to the
+        # question about itself, which is the same fixed point the board
+        # actually has.
+        in_progress = getattr(self, "_protection_grants_in_progress", None)
+        if in_progress is None:
+            in_progress = self._protection_grants_in_progress = set()
+        if permanent.permanent_id not in in_progress:
+            in_progress.add(permanent.permanent_id)
+            try:
+                for grant_seat, granter in self.permanents_with_controller():
+                    for instr in compile_card_oracle(
+                        granter.effective_card
+                    ).instructions:
+                        if instr.kind != "conditional_static":
+                            continue
+                        words = instr.payload.get("protection_from") or ()
+                        if not words:
+                            continue
+                        recipient = granter
+                        if instr.payload.get("subject") == "attached":
+                            recipient = attached_host(
+                                self, granter, last_known=False
+                            )
+                        if recipient is not permanent:
+                            continue
+                        if not conditional_static_holds(
+                            self, grant_seat, granter,
+                            instr.payload.get("condition") or {},
+                        ):
+                            continue
+                        for word in words:
+                            quality = self._protection_quality_of(word)
+                            if quality is not None:
+                                qualities.add(quality)
+            finally:
+                in_progress.discard(permanent.permanent_id)
         # The metadata channel, for protection granted with a lifetime of its own
         # (Feat of Resistance, until end of turn). Any quality, not just a
         # colour: the key is written from the same reader that parses a printed
