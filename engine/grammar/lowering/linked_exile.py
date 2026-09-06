@@ -42,7 +42,7 @@ they read no sibling family back.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import EXILED_BY_SEAT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -370,3 +370,78 @@ def _lower_put_exiled_pile_on_library(
             "put_exiled_pile_on_library", "", {"position": node.position},
         ),
     )
+
+
+#: Where a per-seat pile can be sent. The sibling of
+#: :data:`_LINKED_EXILE_DESTINATIONS` above and deliberately narrower: the one
+#: printing in the pool says "onto the battlefield", and a destination with no
+#: handler behind it would leave the cards in exile while the card compiled
+#: supported.
+_EXILED_THIS_WAY_DESTINATIONS = frozenset({"battlefield"})
+
+
+def _lower_put_exiled_this_way(
+    node: "ast.PutExiledThisWay", produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"Each player … **puts all cards they exiled this way onto the
+    battlefield**." (Living Death.)
+
+    Here rather than in ``exile`` for this module's stated line: the pile is
+    already in exile and the sentence asks whose it is and where it goes, which
+    is every production in this file. What makes it this file's rather than
+    ``_lower_put_exiled_with_source``'s is *which* record answers "whose" — a
+    linked pile is keyed on the exiling permanent (CR 610.3), and this one is
+    keyed on the **seat**, because the exiling step was a sweep a sorcery
+    performed and a sorcery is no permanent to hang a record on.
+
+    The producer gate every back-reference in this grammar makes: "exiled this
+    way" names what a step of *this same effect* exiled, and with no such step
+    the words name nothing — the sentence would put nothing anywhere while the
+    card reported supported, which is the failure this repo's whole
+    back-reference convention exists to make loud.
+
+    The **destination seat is not payload**, and that is the one thing worth
+    saying twice. Each seat puts back its own pile, so CR 110.2a hands each
+    player control of what they put there; ``who`` says the loop runs per seat
+    and the seat that put a card there is the seat it enters under. A single
+    ``under_control_of`` here would be the mass-reanimation card turned into
+    the one-player-takes-everything card, which is a different and much better
+    spell.
+    """
+    zone = node.zone
+    if zone.name not in _EXILED_THIS_WAY_DESTINATIONS:
+        raise LoweringError(
+            f"no handler puts an exiled pile into the {zone.name}", node=node
+        )
+    # A battlefield is nobody's zone (CR 400.1), so a printed possessive on it
+    # would be naming a seat this sentence has already named with its subject.
+    if zone.owner is not None:
+        raise LoweringError(
+            "the battlefield is nobody's zone", node=node
+        )
+    if EXILED_BY_SEAT not in produced:
+        raise LoweringError(
+            "'cards they exiled this way' names an exile this effect did not "
+            "perform",
+            node=node,
+        )
+    actor = node.actor.kind if node.actor is not None else "you"
+    if actor not in ("each_player", "you"):
+        raise LoweringError(
+            f"no handler gives a per-seat exile pile back to {actor!r}",
+            node=node,
+        )
+    # Through the same *card* gate every printed card phrase runs through: the
+    # pile is a list of cards in a zone with no computed characteristics
+    # (CR 613.1), so a narrowing the card matcher cannot answer would be
+    # dropped where it is tested and give back a wider pile than the card
+    # names.
+    described = chargeable_card_filter(node.filter)
+    if described is None:
+        raise LoweringError(
+            "the exiled-pile return cannot read this card phrase", node=node
+        )
+    payload: dict[str, object] = {"zone": zone.name, "who": actor}
+    if described:
+        payload["filter"] = described
+    return (OracleInstruction("put_exiled_this_way", "", payload),)

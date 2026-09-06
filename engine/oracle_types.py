@@ -740,6 +740,29 @@ SEARCHED_PERMANENTS = "searched_permanents"
 EXILED_THIS_WAY = "exiled_this_way"
 EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 
+#: The same step's record **per seat** — ``{seat: [card, …]}`` — for a sentence
+#: whose exile and whose read-back are both distributed over the table: "Each
+#: player exiles all creature cards from their graveyard, then … then puts all
+#: cards **they** exiled this way onto the battlefield." (Living Death.)
+#:
+#: The per-seat twin of ``EXILED_THIS_WAY_OBJECTS``, and the same relation
+#: ``DISCARDED_BY_SEAT`` has to ``discarded_count`` for that key's stated
+#: reason: one flat list answers the wrong question the moment more than one
+#: seat exiles, because the sentence behind it says "they" and a flat list
+#: would hand every player the table's graveyards. Which is not a subtle
+#: mis-play on this card — it is the difference between a mass reanimation and
+#: one player taking everybody's creatures.
+#:
+#: Beside the flat keys rather than replacing them: the single-seat sentences
+#: ("for each creature exiled this way", Martyr's Cry) ask about the whole set
+#: and are right to.
+#:
+#: The cards are ``CardDefinition`` objects and are *not* identities — two
+#: copies of one card in a graveyard are the same object — so a reader must
+#: consume the list positionally rather than matching by value, exactly as the
+#: graveyard sweeps that write it drain by slot.
+EXILED_BY_SEAT = "exiled_by_seat"
+
 #: What "**tapped this way**" names (Raiding Party, Siege Striker's sibling
 #: sentence). The count is ``tapped_this_way`` — the key ``tap_all_matching``
 #: has recorded since Monsoon — and this is the *objects* beside it, for the

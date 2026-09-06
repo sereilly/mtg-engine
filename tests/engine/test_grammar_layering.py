@@ -981,15 +981,6 @@ AST_FAMILIES = [
         # are what a permanent *is*. Splitting them out would put a node in one
         # family and both of its readers in another.
         "types",
-        # `exile` is the same shape as `types`, one package over. The nodes the
-        # five exile productions build — `PutExiledCardIntoZone`,
-        # `ExileBoundCard`, `ExileGraveyard`, `PutExiledWithSource` — are cards
-        # in a zone, and they live in `ast/cards.py` beside every other card
-        # node because that is what they *are*. The guard fired on the readers
-        # (`effects/cards.py` at 1,005), not on the inventory, and splitting the
-        # nodes out to match would put a node in one family with both of its
-        # readers in another — exactly what `types` records.
-        "exile",
         # `hand` is the same shape once more, and the newest: the nodes the
         # hand-to-library productions build are `PutHandCardsOnLibrary` and
         # nothing else, and it lives in `ast/cards.py` beside every other card
@@ -1008,12 +999,13 @@ AST_FAMILIES = [
         # `zones` is the fourth of that shape. The nodes its six productions
         # build — `ShuffleLibrary`, `ShuffleGraveyardIntoLibrary`,
         # `ShuffleHandIntoLibrary`, `ExileTopOfLibrary`, `ExileEntireLibrary`,
-        # `PutIteratedCardOnLibrary` — are cards in a pile, and they already
-        # live in `ast/cards.py` and `ast/library.py` beside every other card
-        # node. The guard fired on the readers (`effects/library.py` at 1,030),
-        # not on the inventory, and splitting the nodes out to match would put a
-        # node in one family with both of its readers in another — exactly what
-        # `types` records.
+        # `PutIteratedCardOnLibrary` — are cards in a pile, and they live in
+        # `ast/cards.py`, `ast/library.py` and (the two exiles, since Tempest's
+        # third wave) `ast/exile.py` beside every other card node. The guard
+        # fired on the readers (`effects/library.py` at 1,030), not on the
+        # inventory, and splitting the nodes out to match would put a node in
+        # one family with both of its readers in another — exactly what `types`
+        # records.
         "zones",
     )
 ]
@@ -1023,7 +1015,17 @@ AST_FAMILIES = [
 # symmetry is for — and that reason expired the moment the inventory grew past
 # the cap: the module is 280 lines, not near-empty, and it is cut on
 # `effects/library.py`'s own line, so a template has one home per side rather
-# than two candidates. The three other exclusions above still hold.
+# than two candidates.
+#
+# `exile` left it at Tempest's third wave, the same way and for the same
+# reason: `ast/cards.py` crossed the guard again — on Living Death's per-seat
+# return — and the exclusion's own words were what expired. It read "the guard
+# fired on the readers, not on the inventory"; this time the inventory is what
+# fired. The fourteen nodes that came out are 300 lines, and the cut is by
+# **subject** rather than by reader, which the note in `ast/exile.py` argues at
+# length: the two reader-side families disagree about four of them and always
+# have, so following either would have split the family down the middle. The
+# other exclusions above still hold.
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:

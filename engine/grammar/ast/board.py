@@ -111,6 +111,17 @@ class Exile:
     #: node. ``ast.ExileCost`` carries the identical field one package over, for
     #: the identical sentence on the cost side.
     same_zone: bool = False
+    #: ``**Each player** exiles all creature cards from their graveyard``
+    #: (Living Death). Who performs the exile, when the sentence prints a
+    #: subject rather than addressing its own controller (CR 608.2c).
+    #:
+    #: Recorded rather than dropped, and the lowering refuses it everywhere but
+    #: the one branch that reads it: the seat is not decoration here, it is
+    #: *whose graveyard* the sweep empties and — through the per-seat record
+    #: that step writes — whose cards the sentence behind it gives back. Read
+    #: with the subject dropped, the card would empty one graveyard and hand
+    #: its owner the table's creatures.
+    actor: PlayerRef | None = None
 
 
 

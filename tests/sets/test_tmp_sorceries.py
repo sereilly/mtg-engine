@@ -572,3 +572,185 @@ def test_w2g2_deadshots_biter_need_not_be_yours(set_pool):
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Ogre"], game.log
     assert p1.battlefield[0].tapped
+
+
+# --- W3G2: the per-seat exile pile a sentence gives back (Living Death) -----
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w3g2_board(set_pool, graveyards, battlefields, spell="Living Death"):
+    """*spell* in seat 0's hand, with each seat's graveyard and board named.
+
+    Cards come from LEA wherever the test only needs "a creature card" — every
+    assertion below is about *whose* pile a card came out of and went back to,
+    and a Tempest name would say nothing extra.
+    """
+    pool = set_pool("TMP")
+    lea = set_pool("LEA")
+
+    def card(name):
+        return pool[name] if name in pool else lea[name]
+
+    players = []
+    for seat, (yard, board) in enumerate(zip(graveyards, battlefields)):
+        players.append(
+            PlayerState(
+                name=f"P{seat}",
+                life=20,
+                hand=[pool[spell]] if seat == 0 else [],
+                graveyard=[card(n) for n in yard],
+                battlefield=[Permanent(card=card(n)) for n in board],
+            )
+        )
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game
+
+
+def test_w3g2_living_death_swaps_every_graveyard_for_every_battlefield(set_pool):
+    """`Each player exiles all creature cards from their graveyard, then
+    sacrifices all creatures they control, then puts all cards they exiled this
+    way onto the battlefield.`
+
+    The Rock Hydra test, read off the board rather than off the compiled
+    program. What makes this card this card and not a mass reanimation is the
+    **order**: the exile happens first, so a creature the middle step
+    sacrifices lands in a graveyard nothing exiled and stays there.
+    """
+    game = _w3g2_board(
+        set_pool,
+        graveyards=(["Grizzly Bears", "Black Lotus"], ["Horned Turtle"]),
+        battlefields=(["Hill Giant"], ["Scathe Zombies"]),
+    )
+    game.cast_from_hand(0, "Living Death")
+    game.resolve_top_of_stack()
+
+    # Each seat's own graveyard came back under its own control (CR 110.2a).
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+    assert [p.card.name for p in game.players[1].battlefield] == ["Horned Turtle"]
+    # The creatures the middle step sacrificed are in their graveyards, not on
+    # the battlefield: they were not in a graveyard when the exile ran.
+    assert "Hill Giant" in [c.name for c in game.players[0].graveyard]
+    assert "Scathe Zombies" in [c.name for c in game.players[1].graveyard]
+    # "all **creature** cards" — the Lotus was never exiled and never left.
+    assert "Black Lotus" in [c.name for c in game.players[0].graveyard]
+    # Nothing is stranded in exile; the third step drained both piles.
+    assert not game.players[0].exile and not game.players[1].exile, game.log
+
+
+def test_w3g2_living_death_gives_each_seat_back_its_own_pile(set_pool):
+    """The per-seat record, tested where a flat one would pass and be wrong.
+
+    Both seats have creature cards in their graveyards and neither may receive
+    the other's. One shared list of "what this effect exiled" would hand every
+    player every card, and this is the test that tells the two records apart.
+    """
+    game = _w3g2_board(
+        set_pool,
+        graveyards=(["Grizzly Bears"], ["Horned Turtle", "Scathe Zombies"]),
+        battlefields=((), ()),
+    )
+    game.cast_from_hand(0, "Living Death")
+    game.resolve_top_of_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+    assert sorted(p.card.name for p in game.players[1].battlefield) == [
+        "Horned Turtle", "Scathe Zombies",
+    ]
+
+
+def test_w3g2_living_death_returns_both_copies_of_one_card(set_pool):
+    """Two copies of a card in one graveyard are the **same**
+    ``CardDefinition`` object, so a pile consumed by value would give one back
+    and leave the other in exile."""
+    game = _w3g2_board(
+        set_pool,
+        graveyards=(["Horned Turtle", "Horned Turtle"], ()),
+        battlefields=((), ()),
+    )
+    game.cast_from_hand(0, "Living Death")
+    game.resolve_top_of_stack()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Horned Turtle", "Horned Turtle",
+    ]
+    assert not game.players[0].exile
+
+
+def test_w3g2_living_death_leaves_a_seat_that_exiled_nothing_alone(set_pool):
+    """A seat with no creature card in its graveyard receives nothing.
+
+    Not a tautology: the sweep seeds an entry for every seat, including the
+    empty ones, because a seat the record never mentioned is one ``.get``
+    default away from reading somebody else's pile.
+    """
+    game = _w3g2_board(
+        set_pool,
+        graveyards=(["Grizzly Bears"], ["Black Lotus"]),
+        battlefields=((), ()),
+    )
+    game.cast_from_hand(0, "Living Death")
+    game.resolve_top_of_stack()
+
+    assert not game.players[1].battlefield
+    assert [c.name for c in game.players[1].graveyard] == ["Black Lotus"]
+
+
+def test_w3g2_the_exiled_pile_return_refuses_without_an_exiling_step():
+    """`put all cards they exiled this way onto the battlefield` with nothing
+    in front of it names a record no step of the effect wrote.
+
+    The producer gate every back-reference in this grammar makes, and the loud
+    direction: admitted, the sentence would compile, report supported and put
+    nothing anywhere.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "Each player puts all cards they exiled this way onto the battlefield."
+    )
+    with pytest.raises(LoweringError) as raised:
+        lower_ability(node)
+    assert "exiled this way" in str(raised.value)
+
+
+def test_w3g2_the_graveyard_exile_sweep_refuses_a_mismatched_possessive():
+    """"Each player exiles all creature cards from **your** graveyard" is one
+    graveyard and every player, and no card in Magic.
+
+    Who empties the pile and whose pile it is are one claim said twice, so the
+    lowering checks them against each other rather than reading either alone.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises((GrammarError, LoweringError)):
+        lower_ability(
+            parse_line(
+                "Each player exiles all creature cards from your graveyard."
+            )
+        )
+
+
+def test_w3g2_living_death_is_supported_with_every_sentence_lowered(set_pool):
+    """Three printed steps, three instructions — rather than a card that
+    compiled on one of its clauses."""
+    program = compile_card_oracle(set_pool("TMP")["Living Death"])
+    assert program.supported
+    (sequence,) = program.instructions
+    assert [step.kind for step in sequence.payload["steps"]] == [
+        "exile_graveyard_cards",
+        "sacrifice_matching_permanent",
+        "put_exiled_this_way",
+    ]
+    assert sequence.payload["steps"][0].payload["graveyard_owner"] == "each_player"
+    assert sequence.payload["steps"][2].payload["who"] == "each_player"

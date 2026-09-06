@@ -159,6 +159,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (not a draw — CR 121.3) and the linked pile back on top of it.
     "put_library_top_into_hand": "zones",
     "put_exiled_pile_on_library": "zones",
+    # Living Death's per-seat pile going back to the battlefield: two zones
+    # named, exile and the battlefield, which is this table's own line.
+    "put_exiled_this_way": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",

@@ -193,6 +193,23 @@ def _lower_exile_card_from_hand(
     return OracleInstruction("exile_chosen_card_from_hand", "", payload)
 
 
+def _is_graveyard_pile_exile(subject) -> bool:
+    """Whether *subject* is the printed noun phrase "all <cards> from a
+    graveyard" — the one exile shape that reads a **subject**.
+
+    Beside ``_is_hand_pile_exile`` and for its reason: the branch that performs
+    this shape is a long way down the function, and the rider check that has to
+    agree with it is at the top. One predicate so the two cannot come apart.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("each", "all")
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+    )
+
+
 def _lower_exile(
     node: ast.Exile,
     produced: frozenset[str] = frozenset(),
@@ -242,6 +259,14 @@ def _lower_exile(
         raise LoweringError(
             "only the hand exile carries a face-down rider", node=node
         )
+    # The printed subject is read by exactly one branch below — the graveyard
+    # sweep, the only shape in the pool that prints one — and refused up here
+    # everywhere else, for the rider above's reason exactly. A dropped actor is
+    # not a cosmetic loss: every other exile in this file resolves for the
+    # ability's own controller, so "each player exiles …" read without its
+    # subject would empty one graveyard where the card empties the table's.
+    if node.actor is not None and not _is_graveyard_pile_exile(node.subject):
+        raise LoweringError("no exile handler names a subject", node=node)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         subject = node.subject
         if (
@@ -288,9 +313,27 @@ def _lower_exile(
         # target already share — a narrowing it cannot answer refuses the line
         # rather than exiling a wider set than the card names.
         if filt.zone == "graveyard" and filt.is_card:
-            if filt.zone_owner is None or filt.zone_owner.kind != "you":
+            # Who empties the pile and whose pile it is are **one claim said
+            # twice** ("each player … from *their* graveyard"), so they are
+            # checked against each other rather than either being read alone —
+            # the pairing `_bound_returns`' sweep reanimation already makes of
+            # the same two words. A pairing this cannot resolve refuses instead
+            # of picking a half: "each player exiles all creature cards from
+            # your graveyard" is one graveyard and every player, and there is
+            # no such card.
+            actor = node.actor.kind if node.actor is not None else None
+            owner = (
+                filt.zone_owner.kind if filt.zone_owner is not None else None
+            )
+            if actor is None and owner == "you":
+                graveyard_owner = "you"
+            elif actor == "each_player" and owner in ("owner", "each_player"):
+                graveyard_owner = "each_player"
+            else:
                 raise LoweringError(
-                    "the graveyard exile sweep reads your own pile", node=node
+                    "the graveyard exile sweep reads your own pile or "
+                    "\"each player … their graveyard\"",
+                    node=node,
                 )
             if node.counters:
                 raise LoweringError(
@@ -311,7 +354,7 @@ def _lower_exile(
             return (
                 OracleInstruction(
                     "exile_graveyard_cards", "",
-                    {"graveyard_owner": "you", "filter": described},
+                    {"graveyard_owner": graveyard_owner, "filter": described},
                 ),
             )
         if filt.zone != "battlefield" or filt.is_card:

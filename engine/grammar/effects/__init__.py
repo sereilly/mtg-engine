@@ -138,6 +138,8 @@ from .exile import (
     _parse_exile_cost_sacrifices,
     _parse_exile_graveyard,
     _parse_put_exiled_with_source,
+    _parse_player_exiles_graveyard,
+    _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,
 )
 from .cards import (
@@ -341,6 +343,8 @@ __all__ = [
     "_parse_exile_top_of_library",
     "_parse_exile_entire_library",
     "_parse_put_exiled_with_source",
+    "_parse_player_exiles_graveyard",
+    "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",
     "parse_put_milled_card_onto_battlefield",
     "_parse_put_hand_cards_on_library",
