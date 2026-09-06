@@ -1787,3 +1787,64 @@ def test_whalebone_glider_only_lifts_a_creature_the_phrase_admits(set_pool):
     assert result.supported, result.details
     assert light.has_keyword("flying")
     assert not heavy.has_keyword("flying")
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from tests.helpers import _mk_card  # noqa: E402
+
+
+def _w2g5_pit_trap_board(set_pool):
+    """Seat 1 holds Pit Trap; seat 0 attacks with a flyer and a ground creature."""
+    trap = Permanent(card=set_pool("ICE")["Pit Trap"])
+    ground = _nosick(Permanent(card=_mk_card("Ground Raider", "Creature - Soldier")))
+    flyer = _nosick(Permanent(card=_mk_card("Air Raider", "Creature - Bird", "Flying")))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[ground, flyer]),
+        PlayerState(name="P2", battlefield=[trap]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    _combat(game, [0, 1])
+    return game, trap, ground, flyer
+
+
+def test_pit_trap_refuses_an_attacking_creature_with_flying(set_pool):
+    """"{2}, {T}: Destroy target attacking creature **without flying**."
+
+    The keyword half of the noun phrase was read by nobody: the target gate
+    asked the pure matcher, which answers no keyword question at all, so Pit
+    Trap shot down an attacking Bird with its cost paid. CR 602.2b via 601.2c
+    refuses the activation instead, and the tap is not spent.
+    """
+    game, trap, _ground, flyer = _w2g5_pit_trap_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        1, "Pit Trap", permanent_index=0,
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(flyer),
+    )
+
+    assert not result.supported
+    assert game.is_on_battlefield(flyer)
+    assert not trap.tapped, "the cost was paid for a refused ability"
+
+
+def test_pit_trap_destroys_an_attacking_creature_without_flying(set_pool):
+    """The positive half, so the refusal above is a narrowing rather than a
+    broken ability."""
+    game, _trap, ground, flyer = _w2g5_pit_trap_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        1, "Pit Trap", permanent_index=0,
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(ground),
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(ground)
+    assert game.is_on_battlefield(flyer)
+
+# --- end W2G5 ---

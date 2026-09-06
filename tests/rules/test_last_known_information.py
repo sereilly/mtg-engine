@@ -298,3 +298,100 @@ def test_a_variable_target_count_taps_only_what_was_announced():
     )
 
     assert [land.tapped for land in lands] == [True, False, True]
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine.card_loader import load_cards, manifest_set_path  # noqa: E402
+from tests.helpers import _mk_card, _nosick  # noqa: E402
+
+
+def _w2g5_mir(name: str) -> CardDefinition:
+    return {c.name: c for c in load_cards([manifest_set_path("MIR")])}[name]
+
+
+@pytest.mark.cr("608.2b", "608.2h", "509.1a")
+def test_a_block_relation_survives_the_blocker_paying_itself_as_the_cost():
+    """"{B}, Sacrifice this creature: Destroy target creature this creature is
+    blocking." (Wall of Corpses.)
+
+    CR 608.2b re-reads the target's legality at resolution and says in as many
+    words that "if the source of an ability has left the zone it was in, its
+    last known information is used during this process". The engine keeps the
+    block relation in combat maps indexed on the battlefield, and the sacrifice
+    that pays for this ability takes the Wall off it — so the live relation is
+    gone by the time the question is asked, and reading only the maps makes
+    every ability of this shape resolve for nothing.
+
+    The narrowing still has to *bite*: the ability names the creature the Wall
+    was blocking, not any creature, which is the same sentence the target gate
+    enforces at announcement.
+    """
+    wall = Permanent(card=_w2g5_mir("Wall of Corpses"))
+    attacker = _nosick(Permanent(card=_mk_card("Raider", "Creature - Soldier")))
+    bystander = _nosick(Permanent(card=_mk_card("Bystander", "Creature - Ogre")))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, bystander]),
+        PlayerState(name="P2", battlefield=[wall]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+
+    result = game.activate_permanent_ability(
+        1, "Wall of Corpses", permanent_index=0,
+        target_player_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(attacker), game.log
+    assert game.is_on_battlefield(bystander), game.log
+
+
+@pytest.mark.cr("601.2c", "602.2b", "509.1a")
+def test_the_bystander_is_not_a_legal_target_for_the_blocked_creature_clause():
+    """The refusal half, written before the gate was trusted.
+
+    A creature that is not in the block relation cannot be named, so the
+    activation is refused with nothing paid — CR 602.2b via 601.2c. Without it
+    "target creature this creature is blocking" is a destroy of any creature at
+    all, which is what the pure matcher answered.
+    """
+    wall = Permanent(card=_w2g5_mir("Wall of Corpses"))
+    attacker = _nosick(Permanent(card=_mk_card("Raider", "Creature - Soldier")))
+    bystander = _nosick(Permanent(card=_mk_card("Bystander", "Creature - Ogre")))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, bystander]),
+        PlayerState(name="P2", battlefield=[wall]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+
+    result = game.activate_permanent_ability(
+        1, "Wall of Corpses", permanent_index=0,
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(bystander),
+    )
+
+    assert not result.supported
+    assert game.is_on_battlefield(wall), "the sacrifice was paid for a refused ability"
+    assert game.is_on_battlefield(bystander)
+
+# --- end W2G5 ---
