@@ -1858,3 +1858,84 @@ def test_601_2c_a_type_exclusion_reaches_the_announcement_gate(set_pool):
     assert allowed.supported, allowed.details
     assert [p.card.name for p in p2.battlefield] == ["Ornithopter"]
     assert p1.life == 15
+
+
+# --- W3G5: the printed *floor* on the announced X ---
+
+@pytest.mark.cr("601.2b", "107.3b")
+def test_601_2b_an_announced_x_may_not_fall_below_a_floor_the_card_prints():
+    """"X can't be 0." (Ertai's Meddling.)
+
+    The mirror of the ceiling above, and the only bound that forbids a
+    *default*: CR 107.3b makes an unannounced X zero, so a floor nothing reads
+    leaves the spell castable for nothing at all — the shape of an unenforced
+    restriction, wrong in the caster's favour and silent.
+
+    The sentence has one reader,
+    ``activation_restrictions.x_zero_restriction_line``, which has read it since
+    Aladdin's Lamp and Helm of Obedience printed it as the tail of an activated
+    ability. This is a second enforcement site on that one reader rather than a
+    second table — and it is reached only by a card printing the clause on a
+    line of its own, which is exactly what separates a spell's restriction from
+    an ability's.
+
+    Driven through a real cast on an invented card, because Ertai's Meddling —
+    the card the sentence is here for — is unsupported for its other two lines,
+    so asserting off the compiled program would prove nothing about the gate.
+    """
+    floored = _mk_card(
+        "Floored Draw", "Sorcery",
+        "X can't be 0.\nDraw X cards.",
+        mana_cost="{X}{U}", colors=("U",), cmc=1.0,
+    )
+    p1 = PlayerState(name="P1", hand=[floored] * 3, library=[floored] * 10, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    refused = game.cast_from_hand(0, "Floored Draw", x_value=0)
+    assert not refused.supported
+    assert "X can't be less than 1" in refused.details
+    assert len(p1.hand) == 3, "nothing was spent"
+
+    allowed = game.cast_from_hand(0, "Floored Draw", x_value=1)
+    assert allowed.supported, allowed.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert len(p1.hand) == 3, "one card drawn, the spell gone"
+
+
+@pytest.mark.cr("601.2b", "107.3b")
+def test_601_2b_a_floor_catches_the_caster_who_announced_nothing():
+    """CR 107.3b's default is the value the sentence forbids, so a cast that
+    names no X at all must be refused too. The assertion above passes on a gate
+    that only reads an explicit 0."""
+    floored = _mk_card(
+        "Floored Draw", "Sorcery",
+        "X can't be 0.\nDraw X cards.",
+        mana_cost="{X}{U}", colors=("U",), cmc=1.0,
+    )
+    p1 = PlayerState(name="P1", hand=[floored], library=[floored] * 10, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = True
+
+    refused = game.cast_from_hand(0, "Floored Draw")
+    assert not refused.supported, refused.details
+    assert [card.name for card in p1.hand] == ["Floored Draw"], "nothing was spent"
+
+
+@pytest.mark.cr("601.2b")
+def test_601_2b_the_floor_is_only_read_from_a_line_of_its_own():
+    """Aladdin's Lamp and Helm of Obedience print the same words as the tail of
+    an activated ability's line, where the activation gate reads them clause by
+    clause. A cast-side reader that matched a substring would take the clause
+    off those two cards' abilities and gate the *card*, which is a restriction
+    applied to the wrong thing."""
+    from engine.cost_x_definitions import cast_x_floor, floors_cast_x
+
+    ability = (
+        "{X}, {T}: Look at the top X cards of your library. X can't be 0."
+    )
+    assert not floors_cast_x(ability)
+    assert cast_x_floor(ability) is None
+    assert floors_cast_x("X can't be 0.\nDraw X cards.")
+    assert cast_x_floor("X can't be 0.\nDraw X cards.") == 1

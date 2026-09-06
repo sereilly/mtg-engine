@@ -50,16 +50,13 @@ W1G1_SHADOW_CREATURES = (
     "Dauthi Horror", "Dauthi Slayer", "Dauthi Ghoul",
 )
 
-#: The two that print shadow **and** a second line this group declined, with
-#: the line each still refuses on. They are listed rather than dropped because
-#: an unsupported program records no static lines at all: a sweep that only
-#: asserted "shadow is a static line" would have to skip them silently, and the
-#: assertion that survives is about *which* line is still refusing.
-W1G1_SHADOW_CREATURES_STILL_REFUSING = {
-    "Soltari Guerrillas":
-        "{0}: The next time this creature would deal combat damage to an "
-        "opponent this turn, it deals that damage to target creature instead.",
-}
+#: The table of shadow creatures still declined for a *second* line. It held two
+#: at wave 1 and is **empty**, which is why it and its sweep are gone rather
+#: than left as an empty parametrize: Thalakos Mistfolk left it at wave 1's
+#: integration and Soltari Guerrillas at wave 3, each by the mechanism the note
+#: below describes. The assertion that replaced each one is a test of its own,
+#: naming both halves — the keyword and the line that was declined — because a
+#: card is supported when any of its lines is and the keyword alone would pass.
 
 #: Thalakos Mistfolk left the table above at wave 1's integration, and the way
 #: it left is the mechanism SET_PLAYBOOK.md asks every decline to be written
@@ -93,25 +90,6 @@ def test_w1g1_every_printed_shadow_creature_records_the_keyword(set_pool, name):
     assert program.supported, f"{name} is still unsupported"
     assert "shadow" in program.static_lines, (
         f"{name} does not record shadow as a keyword line"
-    )
-
-
-@pytest.mark.parametrize(
-    "name,line", sorted(W1G1_SHADOW_CREATURES_STILL_REFUSING.items())
-)
-def test_w1g1_the_declines_no_longer_refuse_on_shadow(set_pool, name, line):
-    """The declines, pinned to the line they are actually declined for.
-
-    Each of these refused on `Shadow` before this round and refuses on its
-    *second* line after it, so the assertion is on the refusal's **subject**:
-    that is what makes the decline a work-list entry another group can pick up,
-    and what fails loudly if a later round makes one of them refuse for a new
-    reason instead of clearing it.
-    """
-    program = compile_card_oracle(set_pool("TMP")[name])
-    assert not program.supported
-    assert line in program.reason, (
-        f"{name} refuses on {program.reason!r}, not on the declined line"
     )
 
 
@@ -2420,5 +2398,17 @@ def test_w3g5_guerrillas_does_not_catch_damage_to_a_blocking_creature(set_pool):
     assert victim.damage_marked == 0, game.log
 
 
-def test_w3g5_guerrillas_is_supported(set_pool):
-    assert compile_card_oracle(set_pool("TMP")["Soltari Guerrillas"]).supported
+def test_w3g5_guerrillas_needed_both_halves_of_the_set(set_pool):
+    """Shadow (W1G1) and the redirect (W3G5), neither sufficient alone — and the
+    card that emptied `W1G1_SHADOW_CREATURES_STILL_REFUSING`.
+
+    Both halves at once, for Thalakos Mistfolk's reason at the top of this file:
+    a card is supported when *any* of its lines is, so asserting `supported`
+    alone would go green on the keyword with the ability still refused.
+    """
+    program = compile_card_oracle(set_pool("TMP")["Soltari Guerrillas"])
+    assert program.supported
+    assert "shadow" in program.static_lines
+    assert [
+        ability.instruction.kind for ability in program.activated_abilities
+    ] == ["redirect_source_damage_to_target_until_eot"]

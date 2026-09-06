@@ -293,6 +293,77 @@ def cast_x_ceiling(game, caster_index: int, oracle_text: str) -> "tuple[int, str
     return None
 
 
+# ---------------------------------------------------------------------------
+# The cast **floor** (CR 601.2b)
+# ---------------------------------------------------------------------------
+#
+# The fourth question and the ceiling's mirror. "X can't be 0." (Ertai's
+# Meddling) leaves CR 601.2b's announcement with the caster exactly as
+# ``cast_x_ceiling`` does and bounds it from below instead of above — and
+# CR 107.3b makes the difference load-bearing rather than cosmetic: a spell cast
+# without announcing X has an X of 0, so a floor is the one bound that forbids
+# the *default*. Unenforced, the card is castable for nothing and does nothing,
+# which is the direction an unenforced restriction always fails in.
+#
+# **The sentence has one reader and it is not here.**
+# ``activation_restrictions.x_zero_restriction_line`` has read it since Aladdin's
+# Lamp and Helm of Obedience printed it as the tail of an activated ability, and
+# those two cards are why this is a second *enforcement site* rather than a
+# second table: the words are identical, and a card printing them on a line of
+# its own is a spell rather than an ability. A second regex here would be two
+# readings of one sentence free to disagree — this file's own standing argument,
+# one table up.
+#
+# Only a whole line, which is exactly what separates the two cards from this
+# one: Aladdin's Lamp prints the clause *after* its ability's effect on the same
+# line, where Ertai's Meddling gives it a line to itself. The activation gate
+# splits an ability line into clauses and asks about each; a spell has no such
+# split, so asking per line is what "the spell's own restriction" means.
+
+
+def cast_x_floor_line(line: str) -> int | None:
+    """The smallest X a spell printing this *whole line* may be cast for, or
+    None when the line is not a floor.
+
+    One today and always one, because the only sentence the reader knows is
+    "X can't be 0" — returned as a number rather than a bool so a card printing
+    "X can't be less than 2" is a row in that reader rather than a second
+    function here.
+    """
+    from .activation_restrictions import x_zero_restriction_line
+
+    return 1 if x_zero_restriction_line(line) else None
+
+
+def floors_cast_x(oracle_text: str) -> bool:
+    """Whether any line of *oracle_text* bounds X from below.
+
+    The gate's half, split from :func:`cast_x_floor` for
+    :func:`caps_cast_x`'s reason: "this card prints no floor" is the answer that
+    lets the caster announce 0, and it must not be reachable by a card that
+    prints one.
+    """
+    return any(
+        cast_x_floor_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    )
+
+
+def cast_x_floor(oracle_text: str) -> int | None:
+    """The smallest X this card may be cast for, or None when it prints no floor.
+
+    Reads the card's text and nothing else — unlike :func:`cast_x_ceiling`,
+    which counts a board and therefore needs the game. A floor that named a
+    board would want that signature; none does, and giving it one now would be a
+    parameter nothing supplies an answer from.
+    """
+    for line in (oracle_text or "").splitlines():
+        floor = cast_x_floor_line(line)
+        if floor is not None:
+            return floor
+    return None
+
+
 def cost_x_definition_readable(sentence: str) -> bool:
     """Whether a row implements this printed "X is ..." sentence.
 
@@ -354,6 +425,9 @@ __all__ = [
     "caps_cast_x",
     "cast_x_ceiling",
     "cast_x_ceiling_line",
+    "cast_x_floor",
+    "cast_x_floor_line",
+    "floors_cast_x",
     "cast_x_definition_line",
     "defines_cast_x",
     "cast_x_value",

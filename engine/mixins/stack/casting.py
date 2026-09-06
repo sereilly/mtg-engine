@@ -36,8 +36,8 @@ from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
 from ...search_filters import card_has_type
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
-from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
-                                   cast_x_value, defines_cast_x)
+from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
+                                   cast_x_value, defines_cast_x, floors_cast_x)
 from ...damage_ledger import record_cast
 from ...divided_damage import (
     CARD_DIVIDED, EVENLY, card_shares, divided_description, divided_entry,
@@ -1381,6 +1381,21 @@ class SpellCastingMixin:
                 refusal = (
                     f"{card.name}: X can't be greater than {allowed}{printed}"
                 )
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+
+        # CR 601.2b's other bound: "X can't be 0." (Ertai's Meddling.) Beside
+        # the ceiling because it is the same rule read the other way, and
+        # **after** the inference above for the same reason — a caster who
+        # announced nothing has announced CR 107.3b's 0, which is exactly the
+        # value this sentence forbids. Refused here, before any cost is paid,
+        # so CR 601.2e returns the game to the moment before the proposal.
+        if floors_cast_x(card.oracle_text):
+            floor = cast_x_floor(card.oracle_text)
+            if floor is None or int(resolved_x_value or 0) < floor:
+                refusal = f"{card.name}: X can't be less than {floor or 1}"
                 self.log.append(refusal)
                 return SimulationResult(
                     card.name, False, classification.effect_kind, refusal,

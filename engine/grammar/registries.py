@@ -44,7 +44,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
 from ..cast_permissions import BOARD_FREE_CAST_CLAIM, board_free_cast_line
 from ..cost_modifiers import cost_modifier_claims_line
 from ..counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
-from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
+from ..cost_x_definitions import (cast_x_ceiling_line, cast_x_definition_line,
+                                  cast_x_floor_line)
 from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
@@ -251,6 +252,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # can read leaves the card unsupported rather than admitted with the caster
     # free to announce past it.
     if cast_x_ceiling_line(line) is not None:
+        return "cost_x_definitions"
+
+    # engine/cost_x_definitions.py — "X can't be 0." (Ertai's Meddling.) The
+    # same rule's other bound, and the one that forbids CR 107.3b's *default*:
+    # a spell cast without announcing X has an X of 0, so a floor nothing read
+    # would leave the card castable for nothing. Claimed here rather than
+    # lowered for the ceiling's reason — the announcement stays the caster's
+    # and there is no effect, only a number the cast path refuses.
+    if cast_x_floor_line(line) is not None:
         return "cost_x_definitions"
 
     # engine/damage_source_colors.py — "Black and/or red permanents and spells

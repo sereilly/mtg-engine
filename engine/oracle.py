@@ -5387,7 +5387,8 @@ def _derived_static_claims(
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cast_timing import cast_permission_line
     from .cost_modifiers import cost_modifier_claims_line
-    from .cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
+    from .cost_x_definitions import (cast_x_ceiling_line,
+                                     cast_x_definition_line, cast_x_floor_line)
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
     from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
@@ -5673,6 +5674,14 @@ def _derived_static_claims(
     # card unsupported rather than leave the announcement unbounded.
     if any(
         cast_x_ceiling_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("cast_x_definitions")
+    # "X can't be 0." (Ertai's Meddling, CR 601.2b.) The floor half, and the
+    # only bound that forbids CR 107.3b's default of 0 — so a card printing it
+    # with nothing reading it is castable for nothing at all.
+    if any(
+        cast_x_floor_line(line) is not None
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("cast_x_definitions")
