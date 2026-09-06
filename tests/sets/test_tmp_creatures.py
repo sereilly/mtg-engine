@@ -1808,6 +1808,7 @@ def test_the_same_is_true_rewrite_leaves_every_other_sentence_alone():
 from engine import Game as _W4G1Game, PlayerState as _W4G1PlayerState
 from engine.models import Permanent as _W4G1Permanent
 from engine.oracle import compile_card_oracle as _w4g1_compile
+from engine.targeting import derive_activation_spec as _w4g1_activation_spec
 from engine.turn_state import (
     DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY as _W4G1_DESTROY_KEY,
     MUST_ATTACK_ON_SEAT_TURN_KEY as _W4G1_MUST_KEY,
@@ -1846,7 +1847,9 @@ def _w4g1_board(set_pool, victim_names=("Horned Turtle", "Trained Armodon",
 
 def _w4g1_activate(game, chosen):
     """Activate the Oracle and answer the opponent's prompt with *chosen*."""
-    result = game.activate_permanent_ability(0, "Oracle en-Vec", ability_index=0)
+    result = game.activate_permanent_ability(
+        0, "Oracle en-Vec", ability_index=0, target_player_index=1,
+    )
     assert result.supported, game.log
     game.resolve_stack()
     assert game.pending_choices, game.log
@@ -1878,7 +1881,19 @@ def test_w4g1_oracle_en_vec_compiles_to_four_windowed_steps(set_pool):
         "destroy_subject_at_end_step_if_it_didnt_attack",
     ]
     assert steps[0].payload["unbounded"] is True
-    assert steps[0].payload["chooser"] == "opponent"
+    # "**Target** opponent": the seat is announced when the ability is
+    # activated (CR 602.2b), so the chooser is the target and the picker is
+    # offered the opponents. Before this round the word was collapsed onto
+    # "whichever opponent there is", which is only right in a duel — and
+    # `picker_sweep` says so: an activated ability that prints "target" and
+    # derives no picker is the Roots class.
+    assert steps[0].payload["chooser"] == "target"
+    assert steps[0].payload["targets"] == {
+        "quantifier": "target", "kind": "player", "opponents_only": True,
+    }
+    # "…creatures **they control**": the picked-from battlefield is the seat the
+    # sentence already named, lifted out of the filter into the key the
+    # candidate rule answers.
     assert steps[0].payload["controlled_by"] == "chooser"
     for step in steps[1:]:
         assert step.payload["window"] == "that_players_next_turn"
@@ -2039,7 +2054,81 @@ def test_w4g1_the_ability_is_refused_on_an_opponents_turn_with_nothing_paid(set_
     game, oracle, _victims = _w4g1_board(set_pool)
     game.start_next_turn()
 
-    refused = game.activate_permanent_ability(0, "Oracle en-Vec", ability_index=0)
+    refused = game.activate_permanent_ability(
+        0, "Oracle en-Vec", ability_index=0, target_player_index=1,
+    )
     assert not refused.supported
     assert not oracle.tapped
     assert not game.pending_choices
+
+
+def test_w4g1_the_ability_offers_a_player_picker_and_strikes_out_the_activator(set_pool):
+    """"**Target** opponent chooses…" — CR 602.2b announces the seat, CR 115.4
+    says which seats are legal answers.
+
+    Both halves, because each was missing on its own footing. The *picker* was
+    missing because the chooser table collapsed "target opponent" onto "an
+    opponent" and answered with the first live one at resolution — right in a
+    duel, and the whole of the choice at three seats; ``picker_sweep`` names
+    that the Roots class. The *gate* was missing because
+    ``activation_target_refusal`` reasoned that a player-targeted ability always
+    has a legal target — true, and not an answer to whether the seat the caller
+    named is one of them.
+    """
+    program = _w4g1_compile(set_pool("TMP")["Oracle en-Vec"])
+    assert _w4g1_activation_spec(program.activated_abilities[0]) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+    game, oracle, _victims = _w4g1_board(set_pool)
+    refused = game.activate_permanent_ability(
+        0, "Oracle en-Vec", ability_index=0, target_player_index=0,
+    )
+    assert not refused.supported
+    assert not oracle.tapped, "nothing is paid for a refused activation"
+
+
+def test_w4g1_that_players_turn_is_the_seat_the_activation_named(set_pool):
+    """"During **that player's** next turn" reads the announcement, not "the
+    first opponent there is".
+
+    Three seats, which is where the two answers come apart: the Oracle names
+    seat 2, and seat 1 — the seat a first-live-opponent reading would have
+    picked — is untouched on its own turn.
+    """
+    pool = set_pool("TMP")
+    oracle = _W4G1Permanent(card=pool["Oracle en-Vec"])
+    oracle.summoning_sick = False
+    oracle.metadata["summoning_sickness_turn"] = -99
+    bystander = _W4G1Permanent(card=pool["Horned Turtle"])
+    victim = _W4G1Permanent(card=pool["Trained Armodon"])
+    for perm in (bystander, victim):
+        perm.summoning_sick = False
+        perm.metadata["summoning_sickness_turn"] = -99
+    # Libraries, because a three-seat game has no CR 103.8a skip: the first
+    # draw step is real and an empty library ends the game before the ability
+    # can be activated.
+    def _library():
+        return [pool["Horned Turtle"] for _ in range(10)]
+
+    game = _W4G1Game(players=[
+        _W4G1PlayerState(name="P1", life=20, battlefield=[oracle],
+                         library=_library()),
+        _W4G1PlayerState(name="P2", life=20, battlefield=[bystander],
+                         library=_library()),
+        _W4G1PlayerState(name="P3", life=20, battlefield=[victim],
+                         library=_library()),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Oracle en-Vec", ability_index=0, target_player_index=2,
+    ).supported, game.log
+    game.resolve_stack()
+
+    game.start_next_turn()          # seat 1 — not the one named
+    assert game.can_attack(bystander, 0)
+    game.start_next_turn()          # seat 2 — the named turn
+    assert game._must_attack_if_able(victim)

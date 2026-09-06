@@ -192,7 +192,8 @@ def _lower_combat_restriction(
         if duration == THAT_PLAYERS_NEXT_TURN:
             if CHOSEN_THIS_WAY_OBJECTS not in produced:
                 raise LoweringError(
-                    "no step of this effect named the player whose turn this is",
+                    "no step of this effect chose the creatures this window "
+                    "spares",
                     node=node,
                 )
             if CHOSEN_PLAYER not in produced:

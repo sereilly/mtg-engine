@@ -340,6 +340,13 @@ def _lower_choose_permanents(
         payload["chooser_seat_record"] = controller_record
     elif node.chooser.kind in _CHOOSER_SEATS and node.chooser.kind != "that_player":
         payload["chooser"] = _CHOOSER_SEATS[node.chooser.kind]
+        announced = _ANNOUNCED_CHOOSERS.get(node.chooser.kind)
+        if announced is not None:
+            # "**Target** opponent chooses…": the seat is announced as the
+            # ability is activated (CR 602.2b), so the picker has to be offered
+            # one — and ``_chooser_seat`` reads it back off the announcement
+            # rather than taking the first opponent there is.
+            payload["targets"] = dict(announced)
     else:
         raise LoweringError(
             f"no prompt asks {node.chooser.kind!r} to choose permanents", node=node
@@ -386,6 +393,11 @@ def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstructio
                 )
             scoped["controlled_by"] = "chooser"
             described = dataclasses.replace(described, controller=None)
+    announced = _ANNOUNCED_CHOOSERS.get(node.chooser.kind)
+    if announced is not None:
+        # The singular's half of the plural's announcement above, and the same
+        # reason: a printed "target" is a seat the caster chooses.
+        scoped["targets"] = dict(announced)
     payload: dict[str, object] = {
         "filter": _filter_payload(described),
         "result_key": _ATTACH_HOST_KEY,
@@ -411,6 +423,19 @@ def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstructio
     return (OracleInstruction("choose_permanent", "", payload),)
 
 
+#: The two chooser words that are *announced* rather than resolved at
+#: resolution, and the picker each one means. A description written here for
+#: the reason every other ``targets`` payload in this package is written where
+#: it is: ``targeting._from_targets_payload`` reads it, and an ability that
+#: names a target and describes none derives no picker at all.
+_ANNOUNCED_CHOOSERS: dict[str, dict] = {
+    "target_player": {"quantifier": "target", "kind": "player"},
+    "target_opponent": {
+        "quantifier": "target", "kind": "player", "opponents_only": True,
+    },
+}
+
+
 #: Which printed subjects a choice prompt can actually be aimed at. "That
 #: creature's controller" is the seat the firing event named, which only an
 #: event that froze one can answer — so the lowering names the word and the
@@ -419,13 +444,25 @@ _CHOOSER_SEATS = {
     "you": "you",
     "that_player": "event_subject_controller",
     "target_player": "target",
-    "target_opponent": "opponent",
+    # "**Target opponent** chooses any number of creatures they control."
+    # (Oracle en-Vec.) The *announced* seat, not "whichever opponent is left":
+    # the word "target" is CR 601.2c/602.2b, and the caster picks which player
+    # is asked as the ability goes on the stack.
+    #
+    # This row read ``"opponent"`` — the same answer the untargeted phrase
+    # below gets — with a note arguing that which of the two a sentence prints
+    # "changes nothing about who is asked". In a duel it does not. At three
+    # seats it is the whole of the choice, and ``picker_sweep`` says so
+    # outright: an activated ability that prints "target" and derives no picker
+    # is the Roots class. Nothing in the pool printed the phrase until now,
+    # which is why the collapse survived.
+    "target_opponent": "target",
     # "**An opponent** chooses target creature they control." (Echo Chamber.)
-    # The untargeted spelling of the row above it, and the same seat to the
-    # handler: ``_chooser_seat`` reads the word "opponent" and answers with the
-    # first live opponent either way. The two printed phrases are kept apart in
-    # the *reference* reader on purpose — "target opponent" is announced when
-    # the ability goes on the stack and "an opponent" is not — but which of them
-    # a sentence prints changes nothing about who is asked.
+    # The *untargeted* spelling, and the one row that really does mean
+    # "whichever opponent there is": nothing is announced, so ``_chooser_seat``
+    # answers with the first live opponent when the ability resolves. That is a
+    # narrowing at three seats — the rules would have the *controller* choose
+    # (CR 601.2c does not apply, so it is an ordinary choice made on
+    # resolution) — and it is this row's, not the targeted row's above.
     "opponent": "opponent",
 }

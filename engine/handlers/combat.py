@@ -1420,9 +1420,12 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
             return True, "resolved"
         entry["on_seat_turn"] = seats_next_turn_window(game, seat)
     # "**Other** creatures can't attack" — other than the set an earlier step of
-    # this resolution chose. By id and frozen now (CR 611.2c), because the entry
-    # outlives the resolution that wrote it and a creature that leaves and
-    # returns is a new object the sentence never named (CR 400.7).
+    # this resolution chose. Frozen now because that is when the choice was made
+    # (CR 608.2), and by id because the entry outlives the resolution that wrote
+    # it and a creature that leaves and returns is a new object the sentence
+    # never named (CR 400.7). The restriction itself is deliberately *not*
+    # frozen: CR 611.2c gives a rules-modifying effect the objects that arrive
+    # later too, which is what the game-level entry is for.
     excepted = payload.get("except_from")
     if excepted:
         entry["except_permanent_ids"] = [

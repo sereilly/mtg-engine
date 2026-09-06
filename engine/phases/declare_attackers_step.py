@@ -977,7 +977,12 @@ class DeclareAttackersStepMixin:
             if window is not None and not stamped_turn_is_now(self, window):
                 continue
             # "**Other** creatures can't attack" — other than the set the
-            # sentence in front of it chose (CR 611.2c fixes it at resolution).
+            # sentence in front of it chose. That set is fixed because the
+            # choice was made as the ability resolved (CR 608.2), which is a
+            # different question from the restriction's own reach: CR 611.2c
+            # gives a rules-modifying continuous effect every object there is,
+            # including one that arrived afterwards, which is exactly why the
+            # entry is state on the game and only the *exclusion* is a list.
             # By ``permanent_id`` rather than by object, because the exclusion
             # outlives the turn the ids were recorded in and a creature that
             # left and returned is a new object the sentence never named

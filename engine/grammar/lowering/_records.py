@@ -715,12 +715,13 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # chooses…" (Raiding Party) the seat comes from a per-object record and
     # changes every iteration, so nothing records one player.
     #
-    # Keyed on the one chooser word the pool prints in front of a window. It
-    # under-declares by construction — the handler writes the record for every
-    # seat it resolves outright — and under-declaring is the safe direction
-    # here: a gate that has not been told about a record refuses the sentence
-    # rather than admitting one that reads nothing.
-    "choose_permanents": ("chooser", "opponent", CHOSEN_PLAYER),
+    # Keyed on the one chooser word the pool prints in front of a window —
+    # ``"target"``, the announced seat. It under-declares by construction: the
+    # handler writes the record for every seat it resolves outright, and
+    # under-declaring is the safe direction here, because a gate that has not
+    # been told about a record refuses the sentence rather than admitting one
+    # that reads nothing.
+    "choose_permanents": ("chooser", "target", CHOSEN_PLAYER),
 }
 
 
