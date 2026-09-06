@@ -41,19 +41,22 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              SACRIFICED_CARDS_BY_SEAT,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
-                      CHOSEN_DAMAGE_SOURCE,
-                      _BASE_PT_SET_PERMANENTS,
-                      PUT_FROM_HAND_PERMANENTS,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       LAST_TARGET_CONTROLLER,
-                      CHOSEN_PERMANENT, CHOSEN_PLAYER,
-                      COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
-                      EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
+                      EXILED_THIS_WAY,
                       _EVENT_SUBJECT_POWER_RECORD,
-                      _EVENT_SUBJECT_TOUGHNESS_RECORD,
-                      _COUNTERS_PLACED_THIS_WAY,
-                      _PERMANENTS_GIVEN_COUNTERS,
-                      _REANIMATED_PERMANENTS, EXTRA_TURN_GRANTED)
+                      _EVENT_SUBJECT_TOUGHNESS_RECORD)
+# The key *names* straight from the floor that owns them. This table says which
+# instruction kind writes which record, so the two modules are the writer and
+# the namer of one string and belong next to each other — until Tempest's
+# Phase 0 these fourteen were read through `_events`, which is neither, and the
+# hop was invisible only because that module re-exported them.
+from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
+                           CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
+                           CREATED_TOKEN, DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
+                           OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
+                           _BASE_PT_SET_PERMANENTS, _COUNTERS_PLACED_THIS_WAY,
+                           _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {

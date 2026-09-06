@@ -1016,7 +1016,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1477,6 +1477,26 @@ FAMILY_SHARED = {
     # family a kind belongs to, never the module its lowering lives in, and
     # renaming one leaves it out of `GRAMMAR_CATEGORIES`, which has no fallback.
     "_zone_categories",
+    # `_record_keys` split out of `_events` at Tempest's Phase 0, when that
+    # module sat twelve lines from the guard as a floor eight lowering families
+    # read. The line is one both neighbouring docstrings had already written
+    # about each other: `_events` is "what a back-reference in a *triggered*
+    # ability names … keyed by **trigger-condition kind**", and `_records` says
+    # the other half outright — "what a step **records** is keyed by
+    # *instruction kind* … three tables, three keys, three questions". Nothing
+    # in `_record_keys` is keyed by a trigger-condition kind and nothing in it
+    # is about a firing event: every name is the spelling of a scratchpad key
+    # one step writes and a later sentence reads back (CR 608.2), which is what
+    # `_records._PRODUCES` writes. It is the half that grows — a key is minted
+    # whenever a step learns to leave something behind, where an event table
+    # gains a row only when a set prints an event the engine already fires.
+    #
+    # A floor **under** a floor, as `_filters` is to `_common`: `_events`
+    # imports every name and re-exports it, so no family import moved and
+    # nothing reads this module directly. It reads `oracle_types`, `tokens` and
+    # `_deaths` and no family at all — and deliberately not `_records`, so the
+    # module that writes these keys and the module that names them cannot cycle.
+    "_record_keys",
 }
 
 
