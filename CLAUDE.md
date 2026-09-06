@@ -904,7 +904,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (533 of the 2,515 catalog cards passing — 391
+manually validated in-game (534 of the 2,515 catalog cards passing — 392
 checked in-game and 142 auto-passed — with 31 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions and Weatherlight, all eleven
@@ -919,7 +919,7 @@ cards, the largest single addition to the untested count since the tracker
 existed, which took it from 708 to 1,020; Fallen Empires added 99 more of its
 102 (two auto-pass and one is `equivalent`), to 1,119; Alliances added 144 new
 cards of which 4 auto-pass; Mirage, Visions and Weatherlight then added 313,
-167 and 167 more, taking the untested count to its high-water mark of 1,951.
+167 and 167 more, taking the untested count to its high-water mark of 1,950.
 **The checked-in-game number has not moved since Alliances**, which is the
 decision SET_PLAYBOOK.md's Known gaps records rather than a slippage: an in-game
 pass is not a required validation step, the tracker is read as a log and never

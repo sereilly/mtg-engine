@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **2515**
-- Passed: **533** (391 checked in-game, 142 auto-passed)
+- Passed: **534** (392 checked in-game, 142 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **31**
-- Untested: **1951**
+- Untested: **1950**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -1919,7 +1919,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Serra Paladin | ⬜ untested |  |
 | Serra's Blessing | ⬜ untested |  |
 | Serrated Arrows | ⬜ untested |  |
-| Serrated Biskelion | ⬜ untested |  |
+| Serrated Biskelion | ✅ pass |  |
 | Setessan Training | ⬜ untested |  |
 | Sewer Rats | ⬜ untested |  |
 | Shacklegeist | ⬜ untested |  |
