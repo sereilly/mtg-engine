@@ -1358,3 +1358,101 @@ def test_the_picker_offers_the_words_the_card_printed(set_pool):
     assert spec["keyword_options"] == [
         "flying", "first strike", "trample", "shadow"
     ]
+
+
+# --- Promotion gate: a refused activation takes its announcement back ---
+
+from engine.handlers._common import CHOSEN_ABILITY as _PROMO_CHOSEN_ABILITY
+
+
+def _promo_splicer_alone(set_pool):
+    """The Splicer on an otherwise empty board — no creature, so its ability has
+    no legal target and cannot be activated at all (CR 602.2b)."""
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+    from tests.helpers import _nosick
+
+    splicer = _nosick(Permanent(card=set_pool("TMP")["Phyrexian Splicer"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[splicer]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, splicer
+
+
+def test_an_activation_refused_for_want_of_a_target_leaves_no_announcement(set_pool):
+    """CR 733.1, reached through CR 601.2 and CR 602.2b: an activation that
+    turns out to be illegal is reversed entire.
+
+    The Splicer is the only card in the pool that writes anything *before* the
+    activation is known to be legal — CR 601.2b's chosen keyword, which has to
+    be announced first because the target gate enumerates "target creature with
+    the chosen ability". Every cost below that gate is checked where it is
+    announced and paid further down, so a refusal has nothing else to give
+    back; this record it kept. A note at the call site argued the record could
+    not go stale because the ability costs {T} and a second announcement needs
+    an untap step in between — true of an activation that happened, and this is
+    the one that did not.
+    """
+    game, splicer = _promo_splicer_alone(set_pool)
+
+    result = game.activate_permanent_ability(0, "Phyrexian Splicer", ability_index=0)
+
+    assert not result.supported
+    assert "no valid target" in result.details
+    assert not splicer.tapped and not game.stack
+    assert _PROMO_CHOSEN_ABILITY not in splicer.metadata
+
+
+def test_a_refusal_below_the_gate_restores_the_word_the_last_one_chose(set_pool):
+    """The other half of the reversal, and the other refusal site.
+
+    A refusal need not come from the target gate: this one comes from the tap
+    cost, further down and equally after the announcement. And what the
+    announcement has to be taken *back to* is not always "nothing" — a Splicer
+    that has already moved trample this turn carries that word, and a refused
+    second announcement must not overwrite it with the word the refusal
+    declined. The ledger records what was there rather than assuming it was
+    empty, which is the difference between reversing an action and clearing a
+    field.
+    """
+    from tests.helpers import _mk_card, _nosick
+    from engine.models import Permanent
+
+    trampler = _nosick(Permanent(card=_mk_card("Stomper", "{2}", "Creature - Beast", "Trample")))
+    other = _nosick(Permanent(card=_mk_card("Bear", "{2}", "Creature - Bear", "")))
+    game, splicer = _promo_splicer_alone(set_pool)
+    game.players[0].battlefield.extend([trampler, other])
+    game._settle()
+
+    assert game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="trample",
+        target_permanent_ids=[trampler.permanent_id, other.permanent_id],
+    ).supported
+    game.resolve_stack()
+    assert splicer.metadata[_PROMO_CHOSEN_ABILITY] == "trample"
+    assert splicer.tapped
+
+    refused = game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="flying",
+        target_permanent_ids=[trampler.permanent_id, other.permanent_id],
+    )
+
+    assert not refused.supported and "already tapped" in refused.details
+    assert splicer.metadata[_PROMO_CHOSEN_ABILITY] == "trample"
+
+
+def test_an_ability_whose_word_is_not_offered_leaves_nothing_behind_either(set_pool):
+    """The other refusal above the gate, for completeness: a word outside the
+    printed list is declined before anything is written, so there is nothing to
+    reverse and the assertion is the same one."""
+    game, splicer = _promo_splicer_alone(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="lifelink",
+    )
+
+    assert not result.supported
+    assert _PROMO_CHOSEN_ABILITY not in splicer.metadata

@@ -2132,3 +2132,106 @@ def test_w4g1_that_players_turn_is_the_seat_the_activation_named(set_pool):
     assert game.can_attack(bystander, 0)
     game.start_next_turn()          # seat 2 — the named turn
     assert game._must_attack_if_able(victim)
+
+
+# --- Promotion gate: two shapes a target probe mistook for a target ---
+
+from engine import Game as _PromoGame, PlayerState as _PromoPlayerState
+from engine.models import Permanent as _PromoPermanent
+from engine.oracle import compile_card_oracle as _promo_compile
+from engine.targeting import (
+    derive_activation_spec as _promo_activation_spec,
+    derive_cast_spec as _promo_cast_spec,
+    usable_activated_abilities as _promo_usable,
+)
+
+
+def _promo_board(*battlefields):
+    from tests.helpers import _nosick
+
+    game = _PromoGame(players=[
+        _PromoPlayerState(name=f"P{i + 1}", battlefield=[_nosick(p) for p in perms])
+        for i, perms in enumerate(battlefields)
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game
+
+
+def test_knight_of_dawn_chooses_a_colour_and_points_at_nothing(set_pool):
+    """"{W}{W}: This creature gains protection from **the color of your
+    choice** until end of turn."
+
+    "Of your choice" is the phrase a target probe watches for, and here it
+    names a **characteristic** rather than an object: CR 608.2d makes the colour
+    part of the resolution and the permanent it applies to is the ability's own
+    source, which nobody chooses. So the derivation answers "nothing to point
+    at" *positively* — the same row Dream Coat's colour ability has — rather
+    than answering None, which is what a guard reads as "the derivation lost its
+    evidence".
+    """
+    knight = _PromoPermanent(card=set_pool("TMP")["Knight of Dawn"])
+    game = _promo_board([knight], [])
+
+    ability = _promo_usable(_promo_compile(knight.card))[0]
+    assert _promo_activation_spec(ability) == {"kind": "none"}
+    assert game.activation_target_spec(0, 0)["requires_target"] is False
+
+
+def test_knight_of_dawn_gains_protection_from_the_colour_the_seat_named(set_pool):
+    """And the choice is a real one, driven through the wire it rides on: the
+    colour arrives as ``mana_color`` like every other CR 608.2d colour, and an
+    unanswered choice would grant nothing at all."""
+    knight = _PromoPermanent(card=set_pool("TMP")["Knight of Dawn"])
+    game = _promo_board([knight], [])
+
+    assert game.activate_permanent_ability(
+        0, "Knight of Dawn", mana_color="B",
+    ).supported
+    game.resolve_stack()
+
+    assert knight.metadata.get("protection_from_black") is True
+    assert not knight.metadata.get("protection_from_red")
+
+
+def test_mindwhip_sliver_is_cast_without_a_prompt(set_pool):
+    """All Slivers have "{2}, Sacrifice this permanent: **Target player**
+    discards a card at random."
+
+    The target is inside a **granted quoted ability**, chosen when *that*
+    ability is activated (CR 602.2b) and never as this creature is cast. The
+    printed line opens "All Slivers have", so it carries no activation cost
+    syntax and ``legality._cast_lines`` keeps it — which left the word "target"
+    sitting in what the cast probe reads. The probe now erases quoted text, for
+    the reason it already erases a "can't be the target of" prohibition.
+    """
+    from engine.legality import _cast_lines
+    from engine.targeting import line_names_a_cast_target
+
+    sliver = set_pool("TMP")["Mindwhip Sliver"]
+
+    assert not any(line_names_a_cast_target(line) for line in _cast_lines(sliver))
+    assert _promo_cast_spec(sliver, _promo_compile(sliver)) is None
+
+
+def test_the_granted_sliver_ability_still_targets_a_player(set_pool):
+    """The other half, which is why the line may not simply be vetoed: the
+    quoted ability is real, it is on every Sliver, and it targets."""
+    pool = set_pool("TMP")
+    lord = _PromoPermanent(card=pool["Mindwhip Sliver"])
+    other = _PromoPermanent(card=pool["Metallic Sliver"])
+    game = _promo_board([lord, other], [])
+    game.current_turn_phase = "precombat_main"
+    game.current_step = "precombat_main"
+    game.players[1].hand.append(pool["Metallic Sliver"])
+
+    spec = game.activation_target_spec(0, 1)
+    assert spec["kind"] == "player" and spec["requires_target"] is True
+
+    assert game.activate_permanent_ability(
+        0, "Metallic Sliver", target_player_index=1,
+    ).supported
+    game.resolve_stack()
+
+    assert not game.players[1].hand
+    assert not game.is_on_battlefield(other)
