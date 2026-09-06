@@ -1050,6 +1050,32 @@ class AbilityActivationMixin:
                     else self.default_sacrifice_pick(candidates)
                 )
 
+        # "**Sacrifice enchanted creature**: …" (Betrothed of Fire). The host,
+        # collected here with every other cost and paid below in one payment
+        # moment (CR 601.2h). Nothing is picked — the attachment record is the
+        # whole answer, exactly as it is for the tap-the-host cost further down
+        # — so the only two ways this can fail are the Aura having no host and
+        # the host having left, and both refuse the activation with nothing
+        # paid (CR 602.2b) rather than sacrificing the Aura instead.
+        #
+        # Its own variable rather than a second writer of
+        # ``sacrifice_cost_permanent``: a card printing both clauses owes two
+        # sacrifices, and sharing the field would pay one and drop the other
+        # silently.
+        sacrifice_attached_permanent = None
+        if ability.cost.sacrifice_attached:
+            host = permanent.metadata.get("attached_to")
+            if host is None or not self.is_on_battlefield(host):
+                details = (
+                    f"{permanent.card.name}: the permanent it is attached to "
+                    "cannot be sacrificed to pay its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+            sacrifice_attached_permanent = host
+
         # "Tap two untapped Spirits you control" (Shacklegeist). Chosen by the
         # payer through `cost_permanent_ids`, and defaulted deterministically for
         # a seat that names none — the same arrangement the sacrifice cost above
@@ -1850,6 +1876,18 @@ class AbilityActivationMixin:
                 f"to activate {permanent.card.name}"
             )
 
+        # …and the host of an Aura that eats what it enchants (Betrothed of
+        # Fire), paid at the same moment as every other cost and before the
+        # source's own sacrifice below, so a card printing both eats the host
+        # while the Aura is still attached to it.
+        if sacrifice_attached_permanent is not None:
+            host_name = sacrifice_attached_permanent.card.name
+            self.sacrifice_permanent(sacrifice_attached_permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {host_name} to activate "
+                f"{permanent.card.name}"
+            )
+
         # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
         # a cost, paid now — the ability still resolves from the graveyard.
         if ability.cost.sacrifice_self:
@@ -2499,6 +2537,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("return_to_hand_count", "a return-other-permanents-to-hand cost"),
         ("untap_filter", "an untap-another-permanent cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),
+        ("sacrifice_attached", "a sacrifice-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
         ("exile_top_of_library", "a library-exile cost"),
         ("pay_life", "a life cost"),

@@ -1521,6 +1521,36 @@ def chargeable_exile_payload(described: dict) -> dict | None:
     return carried
 
 
+def cost_object_is_named(carried: dict | None) -> bool:
+    """Whether a charged cost's *reduced* payload narrows what may pay it.
+
+    The one reader of a question three cost tables were each answering with
+    their own spelling: ``grammar/costs._is_chargeable_sacrifice`` asked
+    ``card_types or subtypes or named``, ``_is_chargeable_exile`` asked
+    ``card_types or subtypes``, and ``cast_costs._chargeable_object`` asked
+    ``type_filter or subtype_filter``. Three answers to one question is the
+    second-copy shape this repo refuses, and here the copies had already
+    drifted: "Sacrifice a token named Wood" (Jungle Patrol) was chargeable as
+    an *activation* cost and would have been refused as an additional one, on
+    a phrase that pins the object harder than any type could.
+
+    The rule is what the refusal was always for: an **unnamed** cost — one
+    whose noun phrase narrows nothing the charger can test — would let the
+    payment eat the cheapest thing the payer owns, a land included. So the
+    test is that the reduction carries *something*, not that it carries a card
+    type. "A **blue** permanent" (Abjure) and "a **nontoken** permanent"
+    (Infernal Tribute) name what may pay them exactly as precisely as "a
+    creature" does, and both were refused for printing the narrowing on an
+    axis the copies happened to spell out.
+
+    It takes the reduction rather than the raw phrase payload deliberately: a
+    key the charger *drops* (``controller``, ``zone``) is not a narrowing the
+    payment can be held to, so a phrase whose only word is one of those is
+    unnamed however much it looks narrowed.
+    """
+    return bool(carried)
+
+
 def _chargeable_exile_filter(phrase: str, *, plural: bool = False) -> dict | None:
     """The filter payload an "Exile <noun phrase>" cost charges, or None when the
     payment path cannot collect it. The two-halves pairing
@@ -1736,6 +1766,38 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
     """
     return any(
         _TAP_ATTACHED_COST_RE.match(segment.strip())
+        for segment in cost_lower.split(",")
+    )
+
+
+#: "**Sacrifice enchanted creature**: Creatures you control get +2/+0 until end
+#: of turn." (Betrothed of Fire.) :data:`_TAP_ATTACHED_COST_RE` one payment
+#: over, anchored per cost segment for that pattern's reason: a rule matching a
+#: prefix would charge a *narrower* cost than the card prints. CR 301.5f puts
+#: "enchanted" and "equipped" on the same footing, so an Equipment printing the
+#: clause charges the same cost with no second row.
+_SACRIFICE_ATTACHED_COST_RE = re.compile(
+    r"^sacrifice (?:enchanted|equipped) \w+$"
+)
+
+
+def _sacrifices_the_attached_permanent(cost_lower: str) -> bool:
+    """Whether a cost clause sacrifices the permanent this Aura is attached to.
+
+    :func:`_taps_the_attached_permanent` one payment over, and the same shape:
+    the host is the whole answer, nothing is picked, and there is no filter to
+    narrow. It needs its own reader because the two fields
+    ``ActivatedAbilityCost`` already had are each wrong here in a direction —
+    ``sacrifice_self`` eats the Aura and ``sacrifice_filter`` eats any matching
+    creature on the board, while the enchanted one lives.
+
+    The grammar's half of the same clause is ``costs._is_chargeable_sacrifice``,
+    which admits the line on ``ObjectFilter.is_enchanted``; the payload that
+    filter produces drops the word entirely, so a reader that went through it
+    would charge "sacrifice a creature" and never know.
+    """
+    return any(
+        _SACRIFICE_ATTACHED_COST_RE.match(segment.strip())
         for segment in cost_lower.split(",")
     )
 
@@ -2329,6 +2391,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         pay_life_per_counter=_life_payment_per_counter(cost_lower),
         alternative_mana=alternative_mana,
         tap_attached=_taps_the_attached_permanent(cost_lower),
+        sacrifice_attached=_sacrifices_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,
         exile_graveyard_position=exile_graveyard_position,
