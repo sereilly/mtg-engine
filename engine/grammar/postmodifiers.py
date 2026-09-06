@@ -487,6 +487,15 @@ def _parse_postmodifiers(
                 if counters is not None:
                     d.mana_value_at_most_counters = counters
                     continue
+                # "…**equal to the number of age counters on this
+                # enchantment**" (Wave of Terror). The same shape read off the
+                # ability's own source instead, and read here for the reason
+                # the one above is: `parse_comparison` opens with an amount and
+                # would fail on "equal".
+                source_counters = _accept_source_counter_bound(stream)
+                if source_counters is not None:
+                    d.mana_value_equals_source_counters = source_counters
+                    continue
                 d.mana_value = parse_comparison(stream)
                 continue
             try:
@@ -867,6 +876,38 @@ def _parse_postmodifiers(
             stream.reset(probe)
             break
         break
+
+
+def _accept_source_counter_bound(stream: TokenStream) -> str | None:
+    """``equal to the number of <kind> counters on <this permanent>``
+    (Wave of Terror).
+
+    The counter's name is what comes back. The referent is the ability's own
+    **source**, and a bare "it" is refused here on purpose: that pronoun names
+    the object being tested, which is the sibling bound below and a different
+    pile entirely. Everything the source can be printed as — "this enchantment",
+    the card's own name — goes through ``accept_source_reference``, so a card
+    calling itself something else needs no code.
+
+    Refuses without consuming, so "with mana value 3 or less" keeps its own
+    reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("equal", "to", "the", "number", "of"):
+        stream.reset(mark)
+        return None
+    kind = stream.peek_word()
+    if kind is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("counters", "on"):
+        stream.reset(mark)
+        return None
+    if stream.at_word("it") or not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    return kind
 
 
 def _accept_counters_on_it_bound(stream: TokenStream) -> str | None:

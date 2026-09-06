@@ -631,6 +631,9 @@ _COVERED_ELSEWHERE = {
         "test_shares_name_with_another_is_a_relation_to_the_rest_of_the_board",
     "exclude_basic_lands":
         "test_exclude_basic_lands_names_the_pair_not_the_supertype",
+    # --- W1G3 ---
+    "mana_value_equals_source_counters":
+        "test_w1g3_a_source_counter_bound_is_read_off_the_ability_s_source",
 }
 
 
@@ -1753,3 +1756,42 @@ def test_an_unreadable_state_word_narrows_to_nothing(pool):
         game, perm, {"type_filter": "creature", "any_states": ["three-headed"]}
     )
 # --- end VIS w1g3 ---
+
+
+# --- W1G3: cumulative upkeep beyond a mana cost ---
+
+
+def test_w1g3_a_source_counter_bound_is_read_off_the_ability_s_source(pool):
+    """"…each creature **with mana value equal to the number of age counters on
+    this enchantment**" (Wave of Terror).
+
+    Both halves are numbers, and only one of them comes off the creature being
+    tested — which is the whole difference from ``mana_value_at_most_counters``
+    beside it, whose two halves are both the candidate's. So the key needs the
+    ability's own source, and all three directions matter: the creature whose
+    mana value the count has reached dies, the ones on either side of it do
+    not, and a caller with no source narrows to **nothing** rather than to
+    everything. That last one is the direction a sweep must never go.
+    """
+    from engine.named_counters import add_counters
+
+    wave = Permanent(card=pool["Grizzly Bears"])   # stands in for the source
+    lions = Permanent(card=pool["Savannah Lions"])   # mana value 1
+    bears = Permanent(card=pool["Grizzly Bears"])    # mana value 2
+    ogre = Permanent(card=pool["Gray Ogre"])         # mana value 3
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wave, lions, bears, ogre]),
+        PlayerState(name="P2"),
+    ])
+    described = {
+        "type_filter": "creature", "mana_value_equals_source_counters": "age",
+    }
+
+    add_counters(wave, "age", 2)
+    assert subject_matches(game, bears, described, source=wave)
+    assert not subject_matches(game, lions, described, source=wave), "below it"
+    assert not subject_matches(game, ogre, described, source=wave), "above it"
+    assert not subject_matches(game, bears, described), (
+        "with no source there is no pile to count, so the phrase narrows to "
+        "nothing rather than to every creature on the table"
+    )
