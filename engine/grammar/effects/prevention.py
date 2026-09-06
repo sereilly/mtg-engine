@@ -712,6 +712,107 @@ def _parse_source_of_choice_effect(
     )
 
 
+def _names_a_next_time_clause(stream: TokenStream) -> bool:
+    """Whether the rest of the line still has a "the next time …" sentence in it.
+
+    The binder probe :func:`_parse_choose_damage_source` needs, and a token scan
+    rather than a parse for the reason ``choices._names_that_player`` gives about
+    its own: what reads the choice back may be several sentences away — Desperate
+    Gambit flips a coin in between — and only the *presence* of the reader is
+    being asked about.
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        first == "next" and second == "time"
+        for first, second in zip(words, words[1:])
+    )
+
+
+def _parse_choose_damage_source(stream: TokenStream) -> "ast.ChooseDamageSource | None":
+    """``Choose a source you control`` (Desperate Gambit) — CR 609.7's source of
+    damage, picked as the spell resolves.
+
+    **Only when a later sentence reads it back.** A sentence whose whole content
+    is a choice performs nothing, and a card that chose something and then did
+    nothing would report itself supported while doing nothing at all — the rule
+    ``grammar/choices.py`` exists to enforce, applied here because the binder is
+    a damage clause rather than a delayed trigger. So the rest of the line has to
+    contain the "the next time …" sentence that names the choice, and without one
+    this declines and the line keeps whatever refusal it had.
+
+    The noun phrase goes through ``parse_recipient``, so "you control" narrows
+    exactly as it narrows anywhere else — but the head word is checked first,
+    because a filter cannot say afterwards which noun it was built from and
+    "choose a creature you control" is a different sentence with no reader here.
+
+    Untargeted on purpose (CR 601.2c announced nothing), which is why this is not
+    ``ChooseTarget``: the pick is made on resolution and belongs to
+    ``choose_permanent``'s prompt, not to a cast-time picker.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    if stream.peek_word() not in ("a", "an") or stream.peek_word(1) != "source":
+        stream.reset(mark)
+        return None
+    try:
+        chosen = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(chosen, ast.TargetSpec) or chosen.targeted:
+        stream.reset(mark)
+        return None
+    if not _names_a_next_time_clause(stream):
+        stream.reset(mark)
+        return None
+    return ast.ChooseDamageSource(chosen.filter)
+
+
+def _parse_chosen_source_next_damage(
+    stream: TokenStream,
+) -> "ast.ChosenSourceNextDamage | None":
+    """``The next time that source would deal damage this turn, it deals double
+    that damage instead.`` / ``…, prevent that damage.`` (Desperate Gambit.)
+
+    :func:`_parse_source_of_choice_effect`'s sentence with the source named by a
+    back-reference instead of chosen inside it, and with **no recipient at all** —
+    the two together are why it is a production of its own rather than a branch
+    of that one. That production requires an article ("a <colour> source of your
+    choice") or a printed source, so it refuses this line without consuming and
+    hands it here unchanged.
+
+    Both pronouns are read, and they mean the same object: the card says "that
+    source" in the first branch and "it" in the second because the antecedent has
+    already been established. Nothing here decides *which* object that is — the
+    lowering refuses unless a step in front of it really recorded one, which is
+    the same producer gate every other back-reference in this grammar passes.
+
+    Every word of the tail is required. "Double" is the whole of the winning
+    branch and "prevent" the whole of the losing one, so a reader that stopped at
+    "that damage" would leave one of the two doing the other's job.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "next", "time"):
+        return None
+    if not (stream.accept_phrase("that", "source") or stream.accept_word("it")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("would", "deal", "damage"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    for printed, modification in (
+        (("it", "deals", "double", "that", "damage", "instead"), "double"),
+        (("prevent", "that", "damage"), "prevent"),
+    ):
+        if stream.accept_phrase(*printed):
+            return ast.ChosenSourceNextDamage(modification, duration)
+    stream.reset(mark)
+    return None
+
+
 def _parse_damage_cant_be_prevented(
     stream: TokenStream,
 ) -> "ast.DamageCantBePreventedOrRedirected | None":

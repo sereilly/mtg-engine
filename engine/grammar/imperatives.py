@@ -119,6 +119,8 @@ from .effects import (
     _parse_scry,
     _parse_search_library,
     _parse_source_of_choice_effect,
+    _parse_choose_damage_source,
+    _parse_chosen_source_next_damage,
     _parse_switch_pt,
     _parse_tap_untap,
 )
@@ -158,6 +160,15 @@ def parse_imperative(
     swap = parse_land_type_swap(stream)
     if swap is not None:
         return swap
+    # "Choose a source you control and flip a coin." (Desperate Gambit.) Beside
+    # Vision Charm above and refused by the same reader for the same reason: the
+    # card-name production claims "Choose a card…" on its first three words and
+    # fails on the noun, which is the "expected 'card'" this card carried too.
+    # Refuses without consuming, and only where a later sentence reads the
+    # choice back.
+    chosen_source = _parse_choose_damage_source(stream)
+    if chosen_source is not None:
+        return chosen_source
     juxtaposition = _parse_exchange_greatest_mana_value(stream)
     if juxtaposition is not None:
         return juxtaposition
@@ -206,6 +217,15 @@ def parse_imperative(
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield
+    # "The next time **that source** would deal damage this turn, it deals
+    # double that damage instead." (Desperate Gambit.) The same eight opening
+    # words with the source named by a back-reference and no recipient at all,
+    # so the production above declines it without consuming and this reads it.
+    # Behind that one because it is the narrower sentence: everything it accepts
+    # after "the next time" is a pronoun, which that reader has already refused.
+    bound_next_damage = _parse_chosen_source_next_damage(stream)
+    if bound_next_damage is not None:
+        return bound_next_damage
     # "All damage that would be dealt to you this turn by target attacking
     # creature is dealt to this creature instead." (Shimian Night Stalker.) A
     # noun phrase in front of the verb, like the one above, and refusing without

@@ -709,3 +709,222 @@ def test_debt_of_loyalty_takes_nothing_if_the_creature_is_never_destroyed(set_po
 
     assert game.controller_index_of(victim) == 1, game.log
     assert victim in game.players[1].battlefield
+
+
+# --- Closer: Desperate Gambit ---
+
+import random as _closer_random
+
+import pytest as _closer_pytest
+
+from engine import Game as _CloserGame, PlayerState as _CloserPlayerState
+from engine.damage_events import deal_damage as _closer_deal_damage
+from engine.models import (CardDefinition as _CloserCardDefinition,
+                           Permanent as _CloserPermanent)
+from engine.next_damage import (DAMAGE_DOUBLED_NEXT as _CLOSER_DOUBLED,
+                                DAMAGE_PREVENTED_NEXT as _CLOSER_PREVENTED)
+from engine.oracle import compile_card_oracle as _closer_compile
+
+
+def _closer_vanilla(name: str, type_line: str = "Creature — Bear"):
+    """A card with no text at all, so nothing but the Gambit is in play."""
+    return _CloserCardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line=type_line, oracle_text="",
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "2", "toughness": "2"},
+    )
+
+
+def _closer_gambit_game(set_pool, sources: int = 1):
+    """The Gambit in hand, *sources* permanents under it, and a creature to aim
+    the damage at. Mana is stocked because the card's cost is not the subject."""
+    mine = [
+        _CloserPermanent(card=_closer_vanilla(f"Pinger{index}"))
+        for index in range(sources)
+    ]
+    for permanent in mine:
+        permanent.metadata["summoning_sick"] = False
+    victim = _CloserPermanent(card=_closer_vanilla("Victim"))
+    game = _CloserGame(players=[
+        _CloserPlayerState(
+            name="P1", hand=[set_pool("WTH")["Desperate Gambit"]],
+            battlefield=list(mine), library=[_closer_vanilla("Filler")] * 5,
+        ),
+        _CloserPlayerState(
+            name="P2", battlefield=[victim],
+            library=[_closer_vanilla("Filler")] * 5,
+        ),
+    ])
+    game.start_turn(0)
+    for symbol in ("W", "U", "B", "R", "G", "C"):
+        game.players[0].mana_pool[symbol] = 5
+    return game, (mine[0] if mine else None), victim
+
+
+def _closer_cast(game, *, win: bool):
+    """Cast the Gambit with the coin forced. CR 705.2: the flipping player wins
+    the flip when their call matches, so a forced coin is a forced branch."""
+    real = _closer_random.random
+    _closer_random.random = lambda: 0.0 if win else 0.99
+    try:
+        result = game.cast_from_hand(0, "Desperate Gambit")
+        assert result.supported, result.details
+        for _ in range(20):
+            if not game.stack:
+                break
+            game.resolve_top_of_stack()
+        game._settle()
+    finally:
+        _closer_random.random = real
+
+
+def test_desperate_gambit_compiles_to_a_choice_a_flip_and_two_branches(set_pool):
+    """The whole printed line, as four steps of one resolution.
+
+    What this pins is that the two branches read the choice the *first* step
+    made rather than each choosing again: both carry the same ``source_from``
+    key, which is the record ``choose_permanent`` writes. Two independent
+    choices would be a card that could double one source's damage and prevent
+    another's off one coin flip.
+    """
+    program = _closer_compile(set_pool("WTH")["Desperate Gambit"])
+    assert program.supported
+    (sequence,) = program.instructions
+    choose, flip, won, lost = sequence.payload["steps"]
+
+    assert choose.kind == "choose_permanent"
+    assert choose.payload["filter"] == {"controller": "you"}
+    assert choose.payload["chooser"] == "you"
+    assert flip.kind == "flip_coin"
+
+    assert won.payload["condition"] == {"kind": "coin_flip", "won": True}
+    (doubled,) = won.payload["then"]
+    assert doubled.kind == "double_next_damage_from_chosen_source"
+
+    assert lost.payload["condition"] == {"kind": "coin_flip", "won": False}
+    (prevented,) = lost.payload["then"]
+    assert prevented.kind == "prevent_next_damage_from_chosen_source"
+
+    assert doubled.payload["source_from"] == choose.payload["result_key"]
+    assert prevented.payload["source_from"] == choose.payload["result_key"]
+
+
+def test_winning_the_flip_doubles_the_chosen_sources_next_damage(set_pool):
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=True)
+
+    assert pinger.metadata[_CLOSER_DOUBLED] == 1
+    outcome = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": pinger,
+        "combat": False,
+    })
+    assert outcome.dealt == 6, game.log
+
+
+def test_only_the_next_damage_is_doubled(set_pool):
+    """"The **next** time" is one event, however many follow it. A rider spent
+    by points rather than by instances would double the whole turn."""
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=True)
+    event = {"recipient": game.players[1], "amount": 3, "source": pinger,
+             "combat": False}
+
+    assert _closer_deal_damage(game, dict(event)).dealt == 6
+    assert _closer_deal_damage(game, dict(event)).dealt == 3
+    assert _CLOSER_DOUBLED not in pinger.metadata
+
+
+def test_losing_the_flip_prevents_the_chosen_sources_next_damage(set_pool):
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=False)
+
+    assert pinger.metadata[_CLOSER_PREVENTED] == 1
+    outcome = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": pinger,
+        "combat": False,
+    })
+    assert outcome.dealt == 0, game.log
+
+
+def test_only_the_next_damage_is_prevented(set_pool):
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=False)
+    event = {"recipient": game.players[1], "amount": 3, "source": pinger,
+             "combat": False}
+
+    assert _closer_deal_damage(game, dict(event)).dealt == 0
+    assert _closer_deal_damage(game, dict(event)).dealt == 3
+    assert _CLOSER_PREVENTED not in pinger.metadata
+
+
+@_closer_pytest.mark.parametrize("win,expected", [(True, 4), (False, 0)])
+def test_the_rider_follows_the_source_and_not_a_recipient(set_pool, win, expected):
+    """Neither branch names anything the damage is dealt *to*, so a creature on
+    the other side of the table is covered exactly as the player is.
+
+    A shield hung on a recipient would leave this event untouched, and the card
+    would read as working for as long as every test aimed at a face.
+    """
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=win)
+
+    outcome = _closer_deal_damage(game, {
+        "recipient": victim, "amount": 2, "source": pinger, "combat": True,
+    })
+    assert outcome.dealt == expected, game.log
+
+
+def test_another_source_is_untouched(set_pool):
+    """"That source" is one object. The rider lives on it, so nothing else in
+    the game — including the opponent's creature dealing damage back — reads it.
+    """
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=True)
+
+    outcome = _closer_deal_damage(game, {
+        "recipient": game.players[0], "amount": 3, "source": victim,
+        "combat": True,
+    })
+    assert outcome.dealt == 3, game.log
+
+
+def test_an_unspent_rider_expires_with_the_turn(set_pool):
+    """CR 615.3's duration, and the CR 614 half beside it: "this turn" is the
+    cleanup sweep, so a source that dealt no damage carries nothing into the
+    next turn."""
+    game, pinger, victim = _closer_gambit_game(set_pool)
+    _closer_cast(game, win=True)
+    assert pinger.metadata[_CLOSER_DOUBLED] == 1
+
+    game.resolve_cleanup_step(0)
+    game.start_turn(1)
+
+    assert _CLOSER_DOUBLED not in pinger.metadata
+    outcome = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": pinger,
+        "combat": False,
+    })
+    assert outcome.dealt == 3, game.log
+
+
+def test_a_controller_with_no_permanents_arms_nothing(set_pool):
+    """CR 608.2's "as much as possible": the flip still happens and the spell
+    still resolves, and the branch has no source to hang its rider on.
+
+    The assertion is that nothing is armed **anywhere** — an implementation that
+    fell back to "any source", as the sourceless prevention charges elsewhere in
+    this engine legitimately do, would here prevent or double the next damage
+    event in the game whoever dealt it.
+    """
+    game, _, victim = _closer_gambit_game(set_pool, sources=0)
+    _closer_cast(game, win=False)
+
+    assert "Desperate Gambit: no source was chosen" in game.log
+    for permanent in game.all_permanents():
+        assert _CLOSER_PREVENTED not in permanent.metadata
+        assert _CLOSER_DOUBLED not in permanent.metadata
+    outcome = _closer_deal_damage(game, {
+        "recipient": game.players[0], "amount": 3, "source": victim,
+        "combat": True,
+    })
+    assert outcome.dealt == 3, game.log

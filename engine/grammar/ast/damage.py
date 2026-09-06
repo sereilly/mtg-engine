@@ -210,6 +210,64 @@ class DoubleCombatDamage:
 
 
 @dataclass(frozen=True)
+class ChooseDamageSource:
+    """``Choose a source you control`` (Desperate Gambit) — CR 609.7's *source
+    of damage*, picked as the spell resolves.
+
+    Not a target, and the difference is the whole reason this is not
+    :class:`ChooseTarget`: nothing was announced when the spell went on the
+    stack (CR 601.2c), so the choice belongs to the resolution (CR 608.2c) and
+    is re-offered to nobody if the chosen permanent later leaves. That is the
+    same reading ``grammar/choices.py`` states for the targeted form and
+    refuses to blur — "an untargeted 'choose' is a *resolution* choice, and
+    reading one as the other would raise a picker for a decision the card makes
+    later".
+
+    Its home is this module rather than ``ast/board.py``'s
+    :class:`~engine.grammar.ast.board.ChoosePermanent` because the word "source"
+    is a damage word: CR 609.7 defines it, both sentences that read this choice
+    back are damage sentences, and the object it names is only ever named as
+    something that *deals* damage.
+
+    **A sentence that only chooses performs nothing**, so this parses only where
+    a later sentence of the same line names what it chose — the rule
+    ``grammar/choices.py`` is built around, applied one node over.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class ChosenSourceNextDamage:
+    """``The next time that source would deal damage this turn, <tail>.``
+    (Desperate Gambit, both branches of its coin flip.)
+
+    One node for two tails because they are one printed clause: eight words that
+    name a damage event — one chosen source's next one, this turn, to anything —
+    and then a predicate that says what happens to it. ``modification`` is which
+    predicate was printed:
+
+    * ``"double"`` — "it deals double that damage instead" (CR 614);
+    * ``"prevent"`` — "prevent that damage" (CR 615).
+
+    A *name* rather than two node classes, and rather than a boolean, for
+    :class:`PreventedRider`'s reason one screen down: the word selects the
+    registered interceptor that carries it out, and the two registries this
+    picks between are not two shades of one effect.
+
+    The source is not a field. Every printing of this clause reads back a choice
+    the *same effect* already made — "that source", then "it" — so what the node
+    would carry is a constant, and the lowering refuses unless a step in front of
+    it really recorded one.
+
+    ``combat_only`` is deliberately absent for :class:`DoubleCombatDamage`'s
+    stated reason: the pool prints one card and it narrows nothing, so a field
+    with no second card behind it would be a claim nothing checks.
+    """
+    modification: str
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class RedirectDamage:
     """"All damage that would be dealt to you this turn by <source> is dealt to
     <recipient> instead." (Shimian Night Stalker, Nova Pentacle — CR 614.9.)

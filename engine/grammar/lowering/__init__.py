@@ -110,6 +110,8 @@ from .prevention import (
     _lower_prevent_damage,
     _lower_prevent_half,
     _lower_damage_cant_be_prevented,
+    _lower_choose_damage_source,
+    _lower_chosen_source_next_damage,
 )
 from .base_pt import _lower_change_base_pt, _lower_set_base_pt
 from .characteristics import (
@@ -430,6 +432,8 @@ __all__ = [
     "_lower_damage_cant_be_prevented",
     "_lower_damage_becomes_counter_removal",
     "_lower_prevent_damage",
+    "_lower_choose_damage_source",
+    "_lower_chosen_source_next_damage",
     "_lower_prevent_half",
     "_lower_double_combat_damage",
     "_lower_redirect_damage",

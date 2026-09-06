@@ -9,6 +9,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
+from ..next_damage import NEXT_DAMAGE_KEYS
 from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
 from ..turn_state import ATTACKED_SEATS_THIS_TURN_KEY
 
@@ -100,6 +101,15 @@ _EOT_METADATA_KEYS = (
     # read and this sweep cannot spell the channel three ways.
     DAMAGE_DENIES_REGENERATION,
     DAMAGE_EXILES_INSTEAD,
+    # "…**the next time** that source would deal damage **this turn**, it deals
+    # double that damage instead / prevent that damage." (Desperate Gambit.)
+    # The third and fourth riders a damager carries, beside the two above and
+    # swept with them for their reason: the window is one turn and this sweep is
+    # what says so. Unspent — the chosen source dealt no damage — they simply
+    # expire, which is the card. Named through `engine/next_damage.py` as a
+    # pair, so a sweep cannot pick up the winning half and leave the losing one
+    # armed for the rest of the game.
+    *NEXT_DAMAGE_KEYS,
     # Sengir Vampire damage-source tracking (cleared each turn)
     "damaged_by_sources_this_turn",
     # "…**if a creature dealt damage by this creature this turn died**"

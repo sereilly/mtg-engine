@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2091 tests, 0 unannotated.
+**359 / 612 tracked rules covered (58%)** — 2094 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -323,7 +323,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr... *(1 tests, subrules a)*
 - [ ] **120.2** Any object can deal damage.
 - [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(7 tests, subrules acf)*
-- [x] **120.4** Damage is processed in a four-part sequence. *(12 tests, subrules bc)*
+- [x] **120.4** Damage is processed in a four-part sequence. *(13 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
@@ -741,7 +741,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(18 tests, subrules b)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
-- [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(3 tests, subrules bc)*
+- [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(5 tests, subrules abc)*
 
 ### 610. One-Shot Effects
 
@@ -786,7 +786,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(39 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(40 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -806,7 +806,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 615. Prevention Effects
 
-- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(20 tests, subrules a)*
+- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(21 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
 - [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(5 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...

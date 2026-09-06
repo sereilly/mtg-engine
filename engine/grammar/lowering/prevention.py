@@ -17,6 +17,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._blankets import _lower_prevent_all
+from ._events import CHOSEN_DAMAGE_SOURCE
 from ._common import (
     _REST_OF_TURN,
     _amount_payload,
@@ -721,3 +722,99 @@ def _lower_damage_cant_be_prevented(
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("the damage lock lasts exactly this turn", node=node)
     return (OracleInstruction("lock_damage_to_target", "", {}),)
+
+
+#: Which instruction each printed tail of "the next time <that source> would
+#: deal damage this turn, …" becomes (Desperate Gambit). A table rather than a
+#: branch, for ``shields.Shield.kind``'s reason: the word the card printed names
+#: the *registry* that carries the clause out — CR 614's amount replacement or
+#: CR 615's prevention — and a third tail is a row plus the interceptor behind
+#: it, refused until both exist.
+_NEXT_DAMAGE_INSTRUCTIONS = {
+    "double": "double_next_damage_from_chosen_source",
+    "prevent": "prevent_next_damage_from_chosen_source",
+}
+
+
+def _lower_choose_damage_source(
+    node: ast.ChooseDamageSource,
+) -> tuple[OracleInstruction, ...]:
+    """"Choose a source you control" (Desperate Gambit) — CR 609.7's source of
+    damage, picked as the spell resolves.
+
+    The same ``choose_permanent`` step Enchantment Alteration's host pick and
+    Takklemaggot's already use, which is the whole of what this sentence needs:
+    a prompt for the effect's controller, a default for a non-interactive seat,
+    and the answer written into the resolution scratchpad by ``permanent_id``.
+    What differs is only where the answer is sent, and that is payload — see
+    ``_records._PRODUCES_FOR_PAYLOAD``, which is what lets the sentences behind
+    this one gate on the record actually being written.
+
+    **Permanents only, and that is a real narrowing.** CR 609.7 lets "a source"
+    be a spell on the stack too, and the record this arms lives on the chosen
+    object's ``metadata`` (``engine/next_damage.py``) — a spell has none of its
+    own, only the printed ``CardDefinition`` it shares with every other copy in
+    every deck, so a marker written there would double the next damage of three
+    other Lightning Bolts. The narrower reading is the one a dropped narrowing
+    cannot make wrong.
+
+    The filter is refused if the matcher cannot test it, exactly as every other
+    lowering that hands a noun phrase to a choice does: a restriction nothing
+    can check is a wider choice than the card prints.
+    """
+    described = testable_filter_payload(
+        node.filter,
+        refusal="the source choice cannot test",
+        node=node,
+        require_narrowing=False,
+    )
+    return (
+        OracleInstruction(
+            "choose_permanent", "",
+            {
+                "filter": described,
+                "result_key": CHOSEN_DAMAGE_SOURCE,
+                "prompt": "Choose a source you control.",
+                "chooser": "you",
+            },
+        ),
+    )
+
+
+def _lower_chosen_source_next_damage(
+    node: ast.ChosenSourceNextDamage, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"The next time that source would deal damage this turn, it deals double
+    that damage instead." / "…, prevent that damage." (Desperate Gambit.)
+
+    Both tails arm a one-shot rider on the source an earlier step of this same
+    resolution chose (``engine/next_damage.py``); which registry carries it out
+    is the table above.
+
+    **Gated on the choice having a producer**, which is idiom 7 and not a
+    formality here: "that source" and "it" name nothing on a board, so without a
+    step that recorded one this sentence would compile cleanly and arm a rider on
+    nobody — a spell reporting itself resolved and doing nothing, which is the
+    failure this grammar refuses loudly.
+
+    The duration must be this turn, because that is exactly what the sweep gives
+    it (``mixins/_constants._EOT_METADATA_KEYS``): a rider printed for longer
+    would expire early and one printed for less would outlive its sentence.
+    """
+    kind = _NEXT_DAMAGE_INSTRUCTIONS.get(node.modification)
+    if kind is None:  # pragma: no cover - the parser reads only the two tails
+        raise LoweringError(
+            f"no instruction carries out {node.modification!r}", node=node
+        )
+    if CHOSEN_DAMAGE_SOURCE not in produced:
+        raise LoweringError(
+            "nothing in front of this sentence chose the source it names",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a one-shot damage rider lasts exactly this turn", node=node
+        )
+    return (
+        OracleInstruction(kind, "", {"source_from": CHOSEN_DAMAGE_SOURCE}),
+    )
