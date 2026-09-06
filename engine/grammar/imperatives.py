@@ -34,6 +34,7 @@ from .paragraphs import (
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
+    _parse_pay_or_sacrifice_greatest_mana_value,
     _parse_rebalance_lands,
     _parse_transmute_by_sacrifice,
 )
@@ -194,6 +195,13 @@ def parse_imperative(
     rebalanced = _parse_rebalance_lands(stream)
     if rebalanced is not None:
         return rebalanced
+    # Tariff's two-sentence paragraph, beside Natural Balance's for its reason
+    # and one word apart from it: both open "Each player …" on a verb whose
+    # ordinary production would read the first sentence and strand the second.
+    # Refuses without consuming.
+    tariff = _parse_pay_or_sacrifice_greatest_mana_value(stream)
+    if tariff is not None:
+        return tariff
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield
@@ -692,6 +700,17 @@ def parse_imperative(
     # imperative like the draw and discard above, and non-consuming on refusal
     # so "pay {R}{R}" and the unless-pay templates keep their readings.
     if stream.at_word("pay"):
+        # "**pay any amount of mana**" (Liege of the Hollows, and Power Leak's
+        # and Errant Minion's upkeep paragraphs, which read their own whole
+        # text). A cost with no printed number: the payer names it, which is
+        # why it is a statement rather than a `ManaCost` — nothing about the
+        # sentence says how much, and the sentence behind it reads the answer.
+        # Before the life reader, which would refuse "any" and take the line
+        # with it.
+        mark_any = stream.mark()
+        if stream.accept_phrase("pay", "any", "amount", "of", "mana"):
+            return ast.PayAnyAmountOfMana(ast.PlayerRef("you"))
+        stream.reset(mark_any)
         paid = _parse_pay_life(stream)
         if paid is not None:
             return paid

@@ -20,6 +20,7 @@ from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, bound_permanent, evaluate_count,
+                      per_recipient_amount,
                       permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
                       resolve_target_permanents, seats_matching_deed)
@@ -1275,6 +1276,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # still holds. Which tally the phrase named is settled at lowering; an
         # unknown one makes no tokens rather than falling back to a wider count.
         count = int(getattr(game, str(raw_count["history"]), 0) or 0)
+    elif isinstance(raw_count, dict) and "seat_record" in raw_count:
+        # "…equal to **the amount of mana they paid this way**" (Liege of the
+        # Hollows). One number per recipient, out of this resolution's own
+        # scratchpad rather than off any board — so it is left to the loop
+        # below, exactly as the per-each board count beside it is, and read
+        # through the one per-recipient reader.
+        count = 0
     elif isinstance(raw_count, dict) and "per_each" in raw_count:
         # "…for each untapped Forest **they** control" (Waiting in the Weeds).
         # A board count rather than a tally, and the one count here that is
@@ -1322,7 +1330,12 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
       # the caster's own board carried. ``per_recipient`` false is the same
       # spec taken on the caster's board every time (nothing prints it yet, and
       # refusing it in the lowering would refuse a sentence this can answer).
-      if isinstance(raw_count, dict) and "per_each" in raw_count:
+      if isinstance(raw_count, dict) and "seat_record" in raw_count:
+          count = per_recipient_amount(
+              game, context, raw_count, game.players[seat],
+              source=context.source_permanent,
+          )
+      elif isinstance(raw_count, dict) and "per_each" in raw_count:
           owner = game.players[seat] if raw_count.get("per_recipient") else caster
           count = evaluate_count(
               game, owner, raw_count["per_each"],

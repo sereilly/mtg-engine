@@ -437,6 +437,14 @@ def lower_statement(
         return _lower_search_player_library(statement, produced)
 
     if isinstance(statement, ast.NameAndStrip):
+        # "Search **target opponent's** graveyard, hand, and library …"
+        # (Necromentia). The searched seat is chosen as the spell is cast
+        # (CR 601.2c) and the production spells the words out, so the
+        # description is emitted here the way its sibling below emits
+        # Nebuchadnezzar's — and for the same reason: the kind table answers a
+        # bare ``{"kind": "player"}`` for `name_and_strip`, which offered the
+        # caster their own graveyard, hand and library (CR 115.4). The picker
+        # offers exactly what this describes.
         return (
             OracleInstruction(
                 "name_and_strip", "",
@@ -448,6 +456,11 @@ def lower_statement(
                         "toughness": statement.token_toughness,
                         "colors": list(statement.token_colors),
                         "subtypes": list(statement.token_subtypes),
+                    },
+                    "targets": {
+                        "quantifier": "target",
+                        "kind": "player",
+                        "opponents_only": True,
                     },
                 },
             ),

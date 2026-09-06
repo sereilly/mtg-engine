@@ -15,6 +15,7 @@ from ._common import (
     return_permanent_to_owners_hand,
     _one_choice,
     evaluate_count,
+    per_recipient_amount,
     frozen_that_player_seat,
     graveyard_card_matches,
     permanent_matches_filter,
@@ -76,10 +77,25 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
                 (i for i, p in enumerate(game.players) if not p.lost),
                 key=lambda i: ((i - active) % total, i),
             )
-        count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        # "…draws a card **for each creature card in their graveyard**."
+        # (Nature's Resurgence.) One number per seat, taken against that seat's
+        # own zone — the same channel and the same evaluator
+        # `each_player_discards_a_card` asks for "a third of the cards in their
+        # hand", because a single ``amount`` here is resolved once and would
+        # give every player the first one's number. Read before ``amount``,
+        # which the lowering removes when it emits this.
+        per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+        count = (
+            None if per_seat is not None
+            else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        )
         for seat in seats:
             drawer = game.players[seat]
-            drawn = game._draw_with_replacements(drawer, count)
+            wanted = (
+                per_recipient_amount(game, context, per_seat, drawer)
+                if per_seat is not None else count
+            )
+            drawn = game._draw_with_replacements(drawer, wanted)
             game.log.append(f"{drawer.name} drew {drawn} cards")
         return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
@@ -4499,6 +4515,10 @@ def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction,
     prompt was armed is not the answer.
     """
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "Each player discards **any number of** cards" (Flux): the ceiling is the
+    # seat's own hand rather than a printed number, and only the resolution
+    # knows how big that is. Sized per seat below, where the hand is in hand.
+    any_number = bool(instruction.payload.get("any_number"))
     caster_index = game.players.index(context.caster)
     if instruction.payload.get("actor") == "each_opponent":
         seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
@@ -4515,7 +4535,7 @@ def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction,
     for seat in seats:
         player = game.players[seat]
         by_seat[seat] = 0
-        actual = min(amount, len(player.hand))
+        actual = len(player.hand) if any_number else min(amount, len(player.hand))
         if actual <= 0:
             game.log.append(f"{player.name} has no cards to discard")
             continue

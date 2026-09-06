@@ -7,7 +7,7 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
-                            PER_OBJECT_SEAT_RECORDS)
+                            OracleInstruction, PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
 from ._common import (one_recorded_permanent_id, 
     frozen_that_player_seat,
@@ -19,7 +19,6 @@ from .registry import effect_handler
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-    from ..oracle import OracleInstruction
 
 
 # "Destroy all <types>" — one sweep, parameterised by the types it names and
@@ -1503,4 +1502,106 @@ def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     game.sacrifice_permanent(victim)
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
+    return True, "resolved"
+
+
+@effect_handler("each_player_pays_or_sacrifices_greatest")
+def each_player_pays_or_sacrifices_greatest(
+    game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"
+) -> tuple[bool, str]:
+    """Tariff's whole paragraph.
+
+    "Each player sacrifices the creature they control with the greatest mana
+    value unless they pay that creature's mana cost. If two or more creatures a
+    player controls are tied for greatest, that player chooses one."
+
+    **Nothing here is a new mechanism**, which is the point. Per seat it runs
+    two ordinary instructions the engine already dispatches:
+
+    * ``choose_permanent`` narrowed to that seat's permanents of the printed
+      type with the greatest mana value, asked ``only_on_tie`` — which is the
+      second printed sentence, and with one candidate no prompt is made because
+      the card names it outright. Juxtapose's two sides are the same three
+      payload keys.
+    * ``may``, with the cost read off what that step recorded (``cost_from``,
+      the key Flash's "unless you pay **its** mana cost" already uses) and
+      ``sacrifice_recorded_permanent`` on the decline (Retribution's).
+
+    What the handler contributes is the **loop**, and it has to be here because
+    "each player" is a number of *pairs* of steps only the resolution knows: a
+    lowering that decomposed this the way Juxtapose's does would have to know
+    the seat count. Each seat's key is its own, so one seat's answer cannot be
+    read as another's.
+
+    The pairs are run through ``run_resumable`` and flat rather than nested —
+    the offer for a seat sits directly behind that seat's choice in one list, so
+    a tie-break prompt that suspends resumes at the offer it was asked for, and
+    the seat behind it after that. CR 101.4's order, active player first: both
+    the choice and the payment are choices made during one resolution, and each
+    seat makes theirs knowing the earlier ones.
+
+    A seat with no creature at all is skipped rather than asked: with nothing to
+    sacrifice there is no toll, which is CR 608.2b doing as much as it can.
+    """
+    card_type = str(instruction.payload.get("card_type", "creature"))
+    total = len(game.players)
+    active = game.active_player_index or 0
+    seats = sorted(
+        (i for i, p in enumerate(game.players) if not p.lost),
+        key=lambda i: ((i - active) % total, i),
+    )
+    described = {"type_filter": card_type}
+    steps: list[OracleInstruction] = []
+    for seat in seats:
+        if not any(
+            permanent_matches_filter(perm, described)
+            for perm in game.controlled_by(seat)
+        ):
+            # A seat with nothing of the printed type is skipped rather than
+            # asked: with nothing to sacrifice there is no toll, which is
+            # CR 608.2b doing as much as it can. Asked anyway it would be an
+            # offer to pay nothing for nothing, shown to a live player.
+            continue
+        # Namespaced per seat *and* per resolution key, so two copies of this
+        # paragraph in one sequence cannot read each other's answers.
+        key = f"greatest_{card_type}_seat_{seat}"
+        steps.append(
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": key,
+                    "filter": {"type_filter": card_type},
+                    "controlled_by": seat,
+                    "chooser": seat,
+                    "greatest_mana_value": True,
+                    "only_on_tie": True,
+                    "prompt": (
+                        f"Choose which {card_type} with the greatest mana value "
+                        "to sacrifice or pay for."
+                    ),
+                },
+            )
+        )
+        steps.append(
+            OracleInstruction(
+                "may", "",
+                {
+                    "actor": seat,
+                    "cost": {"cost_from": key},
+                    "otherwise": (
+                        OracleInstruction(
+                            "sacrifice_recorded_permanent", "",
+                            {"permanents_from": key},
+                        ),
+                    ),
+                },
+            )
+        )
+
+    def run(step) -> None:
+        game._execute_oracle_instruction(step, context)
+
+    # Last thing this function does — ``engine/resumption.py``'s rule for any
+    # loop that can be interrupted, and every step here can be.
+    run_resumable(game, steps, run)
     return True, "resolved"

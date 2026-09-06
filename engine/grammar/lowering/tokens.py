@@ -102,7 +102,7 @@ def _lower_create_token(
         }
         if node.colors:
             payload["colors"] = node.colors
-        _stamp_token_count(payload, node)
+        _stamp_token_count(payload, node, produced)
         return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
@@ -203,7 +203,7 @@ def _lower_create_token(
             payload["targets"] = {
                 "quantifier": "target", "kind": "player", "opponents_only": True,
             }
-    count = _stamp_token_count(payload, node)
+    count = _stamp_token_count(payload, node, produced)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.
     if node.tapped:
@@ -232,7 +232,10 @@ def _lower_create_emblem(node: ast.CreateEmblem) -> tuple[OracleInstruction, ...
     return (OracleInstruction("create_emblem", "", {"text": node.text}),)
 
 
-def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
+def _stamp_token_count(
+    payload: dict, node: "ast.CreateToken",
+    produced: frozenset[str] = frozenset(),
+):
     """Record how many tokens to make, and return it.
 
     Three shapes, and they are three because the *number* comes from three
@@ -328,6 +331,33 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
         payload["count"] = {"per_each": spec, "per_recipient": per_recipient}
         return payload["count"]
     if isinstance(node.count, ast.ThatMuch):
+        # "…**equal to the amount of mana they paid this way**." (Liege of the
+        # Hollows.) A back-reference that *names* its record, and one number
+        # per seat — so it rides the per-recipient channel the branch above
+        # already uses, read by `_common.per_recipient_amount` inside the loop
+        # over recipients rather than once in front of it.
+        #
+        # Read before the bare spelling below, which this used to fall into:
+        # the source was dropped and every named back-reference read
+        # ``trigger_count``, a key only a delayed attack trigger writes. No
+        # card in the pool reached it (the two `trigger_count` payloads are
+        # Basri Ket's and Tetravus', both bare), so it was a hole rather than a
+        # bug — and closed in the direction that refuses.
+        if node.count.source is not None:
+            if node.count.source not in produced:
+                raise LoweringError(
+                    f"back-reference to {node.count.source!r} with no producer "
+                    "in this effect",
+                    node=node,
+                )
+            if node.recipient_players not in ("each_player", "each_opponent"):
+                raise LoweringError(
+                    "a recorded per-seat token count needs a distributed "
+                    "subject to be about",
+                    node=node,
+                )
+            payload["count"] = {"seat_record": node.count.source}
+            return payload["count"]
         # "create that many … tokens" — the count is the firing event's own
         # number (a delayed attack trigger's matching attackers), recorded by
         # the firing site in the resolution scratchpad.

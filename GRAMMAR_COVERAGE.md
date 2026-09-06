@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 74.3% | 69.9% | 47.8% | 107 |
+| WTH *(measured)* | 167 | 249 | 76.7% | 73.1% | 51.0% | 114 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 336 | 146 | expected a subject |  |
-| 107 | 51 | unrecognized effect verb |  |
-| 97 | 50 | unconsumed text |  |
+| 103 | 47 | unrecognized effect verb |  |
+| 95 | 48 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -1796,6 +1796,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Floral Spuzzem**
   - `Whenever this creature attacks and isn't blocked, you may destroy target artifact defending player controls. If you do, this creature assigns no combat damage this turn.`
 - **Flux**
+  - `Each player discards any number of cards, then draws that many cards.`
   - `Draw a card.`
 - **Flying Carpet**
   - `{2}, {T}: Target creature gains flying until end of turn.`
@@ -1969,6 +1970,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove a mining counter from this land: Add one mana of any color. If there are no mining counters on this land, sacrifice it.`
 - **General Jarkeld**
   - `{T}: Choose two target blocked attacking creatures. If each of those creatures could be blocked by all creatures that the other is blocked by, each creature that's blocking exactly one of those attacking creatures stops blocking it and is blocking the other attacking creature. Activate only during the declare blockers step.`
+- **Gerrard's Wisdom**
+  - `You gain 2 life for each card in your hand.`
 - **Ghost Hounds**
   - `Whenever this creature blocks or becomes blocked by a white creature, this creature gains first strike until end of turn.`
 - **Ghost Ship**
@@ -2927,6 +2930,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
 - **Lichenthrope**
   - `At the beginning of your upkeep, remove a -1/-1 counter from this creature.`
+- **Liege of the Hollows**
+  - `When this creature dies, each player may pay any amount of mana. Then each player creates a number of 1/1 green Squirrel creature tokens equal to the amount of mana they paid this way.`
 - **Life Chisel**
   - `Sacrifice a creature: You gain life equal to the sacrificed creature's toughness. Activate only during your upkeep.`
 - **Life Goes On**
@@ -3398,6 +3403,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nature's Lore**
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
+- **Nature's Resurgence**
+  - `Each player draws a card for each creature card in their graveyard.`
 - **Nature's Wrath**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {G}.`
   - `Whenever a player puts an Island or blue permanent onto the battlefield, that player sacrifices an Island or blue permanent of their choice.`
@@ -3453,6 +3460,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
+- **Noble Benefactor**
+  - `When this creature dies, each player may search their library for a card and put that card into their hand. Then each player who searched their library this way shuffles.`
 - **Noble Steeds**
   - `{1}{W}: Target creature gains first strike until end of turn.`
 - **Nocturnal Raid**
@@ -4879,6 +4888,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, all lands you control phase out. (They phase in before you untap during your next untap step.)`
 - **Tar Pit Warrior**
   - `When this creature becomes the target of a spell or ability, sacrifice it.`
+- **Tariff**
+  - `Each player sacrifices the creature they control with the greatest mana value unless they pay that creature's mana cost. If two or more creatures a player controls are tied for greatest, that player chooses one.`
 - **Tarpan**
   - `When this creature dies, you gain 1 life.`
   - `When this creature dies, you gain 1 life.`
@@ -5382,6 +5393,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you cast an enchantment spell, you may draw a card.`
 - **Vertigo**
   - `Vertigo deals 2 damage to target creature with flying. That creature loses flying until end of turn.`
+- **Veteran Explorer**
+  - `When this creature dies, each player may search their library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Veteran's Voice**
   - `Tap enchanted creature: Target creature other than the creature tapped this way gets +2/+1 until end of turn. Activate only if enchanted creature is untapped.`
 - **Vexing Arcanix**
@@ -5561,6 +5574,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your draw step, destroy each creature with mana value equal to the number of age counters on this enchantment. They can't be regenerated.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
+- **Well of Knowledge**
+  - `{2}: Draw a card. Any player may activate this ability but only during their draw step.`
 - **Wellspring**
   - `When this Aura enters, gain control of enchanted land until end of turn.`
   - `At the beginning of your upkeep, untap enchanted land. You gain control of that land until end of turn.`

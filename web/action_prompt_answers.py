@@ -1099,6 +1099,22 @@ def _action_draw_up_to_confirm(session, req, seat_type):
     if not session.game.confirm_draw_up_to(req.seat, req.number):
         raise HTTPException(status_code=400, detail="no draw choice is pending for you")
 
+@action_handler("pay_any_amount_confirm")
+def _action_pay_any_amount_confirm(session, req, seat_type):
+    # Liege of the Hollows: "each player may pay any amount of mana" — the
+    # answer is how much, on the same ``number`` field every other numbered
+    # prompt uses. Zero is a legal answer and is what the printed "may" means,
+    # so an absent number is a missing answer rather than a decline. The engine
+    # re-checks it against the seat's pool and untapped lands and *rejects* an
+    # answer the board cannot cover, so the prompt's ceiling is a hint.
+    if req.number is None:
+        raise HTTPException(status_code=400, detail="number is required")
+    if not session.game.confirm_pay_any_amount(req.seat, req.number):
+        raise HTTPException(
+            status_code=400, detail="no mana payment is pending for you"
+        )
+
+
 @action_handler("body_choice_confirm")
 def _action_body_choice_confirm(session, req, seat_type):
     # Primal Clay: the controller picks which printed body the creature

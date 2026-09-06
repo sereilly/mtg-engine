@@ -31,6 +31,7 @@ from .readers import accept_source_reference
 from .references import parse_player_ref, parse_recipient
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
+from .vocabulary import singular as _singular_type
 
 
 def _parse_coin_flip_damage_loop(stream: TokenStream) -> ast.Statement | None:
@@ -591,6 +592,95 @@ def _parse_name_then_reveal_top(
         else:
             stream.reset(mark_damage)
     return ast.NameThenRevealTop(who, match_zone, miss_zone, miss_damage)
+
+
+def _parse_pay_or_sacrifice_greatest_mana_value(
+    stream: TokenStream,
+) -> ast.Statement | None:
+    """``Each player sacrifices the <type> they control with the greatest mana
+    value unless they pay that <type>'s mana cost. If two or more <type>s a
+    player controls are tied for greatest, that player chooses one.`` (Tariff.)
+
+    Read whole, for this module's standing reason and for the one
+    :func:`_parse_exchange_greatest_mana_value` gives one production down: the
+    toll's cost is "**that** creature's mana cost", which names a permanent the
+    first half chooses and nothing else knows; and the second sentence is about
+    a tie among a set only the first half describes. Sentence by sentence it
+    would be a sacrifice of a superlative with no reader, an offer whose cost
+    has no referent, and a choice among nothing.
+
+    **One noun, read three times and checked.** The printed type appears in the
+    sacrificed noun phrase, in the toll's possessive and in the tie-break
+    sentence, and all three are the same card type on any printing of this
+    paragraph. Checking that rather than storing the first is what stops a
+    printing whose sentences disagreed from being read as one of them.
+
+    Refuses without consuming, so a sentence merely opening "Each player …"
+    keeps its own reading.
+    """
+    mark = stream.mark()
+
+    def _card_type() -> str | None:
+        """The next word if it is a card type, else None with the cursor put
+        back — a paragraph naming a noun the engine has no type for is not this
+        one."""
+        word = stream.peek_word()
+        if word is None:
+            return None
+        singular = _singular_type(word)
+        if singular not in CARD_TYPES:
+            return None
+        stream.advance()
+        return singular
+
+    if not stream.accept_phrase("each", "player", "sacrifices", "the"):
+        stream.reset(mark)
+        return None
+    card_type = _card_type()
+    if card_type is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "they", "control", "with", "the", "greatest", "mana", "value",
+    ):
+        stream.reset(mark)
+        return None
+    # "**unless they pay that creature's mana cost**" — the toll, whose amount
+    # is not printed at all. Every word is required rather than skipped: who
+    # pays, whose cost, and that it is the *mana* cost, each of which names
+    # something the offer behind this does.
+    if not stream.accept_phrase("unless", "they", "pay", "that"):
+        stream.reset(mark)
+        return None
+    if _card_type() != card_type:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("'s", "mana", "cost"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    # "**If two or more creatures a player controls are tied for greatest, that
+    # player chooses one.**" CR 101.4's answer to a superlative that names
+    # several: the seat whose permanents they are picks. Required, because
+    # without it the paragraph would have to pick for them — and a tie broken
+    # by the engine is a strictly different card on every board with two equal
+    # creatures.
+    if not stream.accept_phrase("if", "two", "or", "more"):
+        stream.reset(mark)
+        return None
+    if _card_type() != card_type:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "a", "player", "controls", "are", "tied", "for", "greatest",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("that", "player", "chooses", "one"):
+        stream.reset(mark)
+        return None
+    return ast.PayOrSacrificeGreatestManaValue(card_type)
 
 
 def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | None:

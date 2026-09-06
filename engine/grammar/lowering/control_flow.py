@@ -322,6 +322,7 @@ def _lower_may(
     """
     for collapse in (
         _each_player_optional_discard,
+        _each_player_optional_pay_mana,
         _each_player_optional_draw,
         _each_player_optional_tap,
     ):
@@ -656,6 +657,42 @@ def _each_player_optional_discard(
         OracleInstruction(
             "each_player_discards_up_to_cards", "",
             {"actor": node.actor.kind, "amount": action.count.value},
+        ),
+    )
+
+
+def _each_player_optional_pay_mana(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Each player may pay any amount of mana." (Liege of the Hollows.)
+
+    :func:`_each_player_optional_discard`'s shape one cost over, and collapsed
+    for its two reasons. Zero is already a legal answer to "any amount", so the
+    "may" adds no answer the payment prompt does not have; and the sentence
+    behind it ("… equal to the amount of mana **they paid this way**") has to
+    run after every seat has answered, which a prompt does and an ordinary
+    ``optional_pay`` offer — whose spec does not suspend — does not.
+
+    Deliberately narrow, exactly as the discard's collapse is: an offer with a
+    cost, an if-you-do or an otherwise is a second decision this prompt cannot
+    carry, so the ordinary offer is left in place and refuses by name.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind not in _EACH_SEAT_ACTORS
+        or not isinstance(action, ast.PayAnyAmountOfMana)
+        or action.player.kind != "you"
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "each_player_pays_any_mana", "", {"actor": node.actor.kind},
         ),
     )
 

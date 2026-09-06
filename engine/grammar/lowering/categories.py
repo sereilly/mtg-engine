@@ -321,6 +321,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
     # step recorded, beside the one acting on a permanent a trigger bound.
     "sacrifice_recorded_permanent": "destruction",
+    # Tariff's whole paragraph. In the destruction category because what the
+    # sentence is *about* is a sacrifice; the offer in front of it is the price
+    # of not making one, exactly as `self_damage_unless_pay` sits under the
+    # damage it is a toll against.
+    "each_player_pays_or_sacrifices_greatest": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
@@ -791,6 +796,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Optional actions. Parsed and lowered, not switched on — see
     # `control_flow.WRAPPER_KINDS`.
     "may": "optional",
+    # "Each player may pay any amount of mana." (Liege of the Hollows.) The
+    # collapsed form of a ``may`` made to a set of seats, so it keeps that
+    # category: what the sentence is about is an offer, and the payment is what
+    # taking it costs.
+    "each_player_pays_any_mana": "optional",
     # "Unless an opponent pays {2}, …" (Scarwood Bandits) — the same family
     # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
     # who is offered the cost and which branch the effect sits on.

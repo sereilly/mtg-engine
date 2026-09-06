@@ -283,6 +283,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # it is sized from every seat's answer, so nothing may run until the
         # last of them is given.
         "draw_up_to",
+        # "Each player may pay any amount of mana. Then each player creates a
+        # number of ... tokens equal to **the amount of mana they paid this
+        # way**." (Liege of the Hollows.) The two above one cost over, and for
+        # their reason: every seat's answer sizes the sentence behind the
+        # offer, so nothing may run until the last of them is given.
+        "pay_any_amount",
         "scry",             # arranges the library a later draw reads
         "search_library",   # removes a card from it and shuffles the rest
         "reorder_library",  # same, by permutation

@@ -8,6 +8,7 @@ place here and an unknown quantity word is an error, not a zero.
 
 from __future__ import annotations
 
+from ..oracle_types import MANA_PAID_BY_SEAT
 from . import ast
 from .errors import GrammarError
 from .lexer import MANA, NUMBER, PT, WORD
@@ -435,6 +436,21 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     tapped = accept_tapped_for_cost(stream)
     if tapped is not None:
         return tapped
+
+    # "…equal to **the amount of mana they paid this way**." (Liege of the
+    # Hollows.) A back-reference to a payment an earlier step of this same
+    # effect took, which is why it reads like every other "this way": the
+    # lowering demands the producer, so with no such step the words name
+    # nothing rather than computing a zero. The possessive is read and dropped
+    # — "they" and "you" name whichever seat is performing the sentence, and
+    # which seat that is was settled before this clause was reached.
+    mark_mana = stream.mark()
+    if stream.accept_phrase("amount", "of", "mana"):
+        stream.accept_word("they", "you", "that")
+        stream.accept_word("player")
+        if stream.accept_phrase("paid", "this", "way"):
+            return ast.ThatMuch(MANA_PAID_BY_SEAT)
+    stream.reset(mark_mana)
 
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"

@@ -20,7 +20,6 @@ it, over a body vocabulary those files share, and is nowhere near the cap.
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
                              OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
-from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._records import optional_cost_key
@@ -429,32 +428,26 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
-        zone_owner = filt.zone_owner.kind if filt.zone_owner is not None else None
-        if node.player.kind == "you" and filt.zone == "graveyard" and (
-            zone_owner == "target_opponent"
-        ):
+        if node.player.kind == "you" and filt.zone != "battlefield":
             # "For each artifact or creature card in target opponent's
-            # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a
-            # chosen player's graveyard, evaluated by `count_from_payload` —
-            # the same reader the mana half of this very sentence uses one
-            # instruction over, because the two halves are one count and two
-            # readings of it are two answers.
+            # graveyard, … you gain 1 life." (Spoils of Evil.)
+            # "You gain 2 life **for each card in your hand**." (Gerrard's
+            # Wisdom.) A count out of a zone rather than off a board, evaluated
+            # by `count_from_payload` — the same reader the mana half of Spoils
+            # of Evil's sentence uses one instruction over, because the two
+            # halves are one count and two readings of it are two answers.
             #
-            # Held to what a *card* can be asked: a card in a graveyard has no
-            # computed characteristics at all (CR 613.1), which is what
-            # `card_only_filter` says.
-            carried = card_only_filter({
-                key: value
-                for key, value in filt.to_payload().items()
-                if key not in ("zone", "zone_owner", "is_card")
-            })
-            if carried is None:
-                raise LoweringError(
-                    "the per-each life gain cannot count this restriction", node=node
-                )
-            payload["per_each"] = {
-                "zone": "graveyard", "owner": "target_opponent", "filter": carried,
-            }
+            # Through `count_spec`, which is the one place that decides what a
+            # count of a zone may test: a card outside the battlefield has no
+            # computed characteristics at all (CR 613.1), and that rule was
+            # spelled here a second time as a `card_only_filter` over
+            # `to_payload` minus the zone keys. Two spellings of one rule, and
+            # the local one was also a second spelling of *which zones* — it
+            # named the graveyard, so the identical sentence about a hand
+            # refused while the card reported itself unsupported for the wrong
+            # reason. The spec `count_spec` builds is byte-identical for Spoils
+            # of Evil, which is why this is a fold rather than a widening.
+            payload["per_each"] = count_spec(filt, node)
             return (OracleInstruction("target_gains_life", "", payload),)
         if node.player.kind != "you" or filt.zone != "battlefield":
             raise LoweringError(
@@ -594,6 +587,10 @@ def _lower_lose_life(
             "owner": (filt.zone_owner.kind if filt.zone_owner else "owner"),
             "card_types": list(filt.card_types),
         }
+        # The narrowing, for the reason the plain branch below records it: the
+        # gate above admits only "target opponent", so a bare `player` spec
+        # offered the ability's own controller (CR 115.4).
+        _describe_targets(payload, node.player)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "**That player**" after an event that was *about an object*: the object's
     # controller. Massacre Wurm's dead creature is in a graveyard by the time
@@ -622,6 +619,20 @@ def _lower_lose_life(
         payload["recipient"] = EVENT_SUBJECT_PLAYER
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
+        # **The printed narrowing, recorded.** "Target **opponent** loses 1
+        # life" (Ebony Charm, Forbidden Ritual, Vito) reached the picker as a
+        # bare instruction kind, and `targeting._KIND_SPECS` answers
+        # ``{"kind": "player"}`` for `target_loses_life` — which offers the
+        # caster their own face, a live two-player bug (CR 115.4). The
+        # description is what every other player picker in the engine reads,
+        # and it is `_targets_payload`'s answer rather than a flag invented
+        # here, so "target opponent" narrows the same way whichever sentence
+        # prints it.
+        #
+        # "That player" gets no entry, and that is the same function's answer
+        # rather than a branch here: the seat was frozen by the firing event
+        # and nobody chooses it (CR 115.10b).
+        _describe_targets(payload, node.player)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "Destroy target creature. Its controller loses 2 life." (Liliana, Death
     # Mage's −3.) The controller of the previous step's target — recorded by
@@ -698,11 +709,24 @@ def _lower_exchange_life_totals(
             f"{node.player.kind!r}",
             node=node,
         )
-    return (
-        OracleInstruction(
-            "exchange_life_totals", "", {"recipient": "target"}
-        ),
-    )
+    payload: dict[str, object] = {"recipient": "target"}
+    if node.player.kind == "target_opponent":
+        # The printed narrowing, carried the way every other player picker in
+        # the engine reads it. `targeting`'s kind table answers a flat
+        # ``{"kind": "player"}`` for this kind — right for "target player" and
+        # wrong for "target opponent", whose seat can never be the chooser's
+        # own (CR 102.2/102.3), so Mirror Universe offered its controller their
+        # own life total to swap with themselves.
+        #
+        # **The opponent spelling only**, and that is not caution: "exchange
+        # life totals with **that player**" (Psychic Transfer) reaches this
+        # function as ``target_player`` too, because the pronoun is rebound to
+        # the seat the *condition* already targeted. Describing that would
+        # announce a second target for a seat the spell has already chosen.
+        # The narrowing is the thing that was missing; the bare description was
+        # not.
+        _describe_targets(payload, node.player)
+    return (OracleInstruction("exchange_life_totals", "", payload),)
 
 def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ...]:
     """"That player's life total becomes 20." (Rebirth.)
