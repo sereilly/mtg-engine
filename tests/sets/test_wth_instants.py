@@ -106,8 +106,6 @@ def test_spinning_darkness_refuses_a_pile_that_cannot_pay_in_full(set_pool):
 
 
 # --- W2G2: damage divided, doubled and prevented ---
-import pytest
-
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle as _w2g2_compile

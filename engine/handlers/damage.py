@@ -612,10 +612,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # has always done and is what an unannounced division still means.
         division = (instruction.payload.get("targets") or {}).get("division", EVENLY)
         assigned = divide(damage, [entry for entry, _who in live], division=division)
-        # Creatures first (highest index first so removals can't shift earlier
-        # indices), then faces. One resumable list rather than two loops: a
-        # target that stops to ask the player something has to take the targets
-        # behind it with it, and "behind it" spans both groups.
+        # Creatures first, highest slot first, then the faces. One resumable
+        # list rather than two loops: a target that stops to ask the player
+        # something has to take the targets behind it with it, and "behind it"
+        # spans both groups.
+        #
+        # The ordering is kept now that each target is held as an *object* and
+        # not as a slot, because it is still rules-visible: it is the order the
+        # damage events happen in, and CR 616.1e asks the affected player which
+        # effect applies as each one arrives. What it is no longer *for* is
+        # safety -- an object cannot be renumbered out from under the loop.
         paired = [
             (who, seat, share)
             for (_entry, who), (seat, _index, share) in zip(live, assigned)
