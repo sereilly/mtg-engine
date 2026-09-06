@@ -719,7 +719,50 @@ def _parse_attacks_this_turn_if_able(
     if not stream.accept_phrase("this", "turn", "if", "able"):
         stream.reset(mark)
         return None
-    return ast.AttacksThisTurnIfAble(subject)
+    return ast.AttacksThisTurnIfAble(
+        subject, destroy_if_absent=_accept_destroy_those_that_didnt_attack(stream)
+    )
+
+
+def _accept_destroy_those_that_didnt_attack(stream: TokenStream) -> bool:
+    """``. At the beginning of the next end step, destroy each of those
+    creatures that didn't attack this turn`` — the tail Maddening Imp prints
+    behind its requirement.
+
+    Read here rather than as its own sentence, which is what
+    ``_parse_force_chosen_creature_to_attack`` does one screen up for Nettling
+    Imp's identical shape at singular scale: "those creatures" is the set the
+    sentence in front of it described, and a production reading this sentence on
+    its own would have nothing to resolve the words against. What the AST
+    carries is therefore a flag on the requirement rather than a second
+    statement.
+
+    Non-consuming on refusal, so a card printing the requirement alone (Kookus,
+    Boiling Blood) is unaffected and a card printing a *different* tail keeps
+    its own refusal, naming the sentence this could not read.
+
+    The full stop is consumed only when the whole tail is: a sentence boundary
+    the caller still owns is the difference between reading two sentences and
+    eating one.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return False
+    if not stream.accept_phrase(
+        "at", "the", "beginning", "of", "the", "next", "end", "step",
+    ):
+        stream.reset(mark)
+        return False
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase(
+        "destroy", "each", "of", "those", "creatures", "that", "didn't",
+        "attack", "this", "turn",
+    ):
+        stream.reset(mark)
+        return False
+    return True
 
 
 def _parse_blocks_this_turn_if_able(

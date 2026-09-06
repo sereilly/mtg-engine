@@ -795,6 +795,57 @@ _SOURCE_POSSESSIVES: tuple[tuple[str, ...], ...] = (
 _RELATIVE_CHARACTERISTICS = ("power", "toughness")
 
 
+#: The comparative adjectives a printed noun phrase states a bound with *no*
+#: number and *no* named other object: "a creature with **lesser** power" (No
+#: Quarter). The thing compared against is left implicit because English has
+#: already supplied it — the sentence is about two creatures and this is the
+#: second of them.
+#:
+#: Strict, and that is the word rather than a convenience: "lesser" is *less
+#: than*, where the spelled-out form one production down is "equal to or less
+#: than". Reading either as the other changes which creatures a card names by
+#: exactly the tie, which for No Quarter is every mirror match.
+_COMPARATIVE_ADJECTIVES = {"lesser": "lt", "greater": "gt"}
+
+
+def accept_comparative_characteristic(
+    stream: TokenStream,
+) -> "ast.SourceRelativeComparison | None":
+    """``lesser power`` / ``greater power`` — a bound stated against the *other*
+    object the sentence is about, with neither a number nor a possessive.
+
+    "Whenever a creature becomes blocked by **a creature with lesser power**"
+    (No Quarter). The comparison is between the two halves of a combat pair, and
+    the phrase names the second half only: which object "lesser" is lesser
+    *than* is the one the sentence already named.
+
+    It lowers onto the same ``characteristic_vs_source`` key Ironclaw Curse's
+    spelled-out comparison uses, and that is exact rather than convenient: the
+    matcher reads that key against the ``source`` its caller supplies, and at
+    both block fire sites the source supplied to a subject filter **is** the
+    other creature of the pair (``phases/declare_blockers_step.py`` passes the
+    attacker when testing a blocker and the blocker when testing an attacker).
+    So the two spellings are one question with one answer, and a second key
+    would be a second reading of "than what?".
+
+    Returns None with the cursor untouched when the word is not comparative, so
+    "with power 2 or less" and every other bound keep their own readings.
+    """
+    mark = stream.mark()
+    word = stream.peek_word()
+    if word not in _COMPARATIVE_ADJECTIVES:
+        return None
+    stream.advance()
+    characteristic = stream.peek_word()
+    if characteristic not in _RELATIVE_CHARACTERISTICS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.SourceRelativeComparison(
+        str(characteristic), _COMPARATIVE_ADJECTIVES[word], str(characteristic)
+    )
+
+
 def accept_source_relative_comparison(
     stream: TokenStream, characteristic: str
 ) -> "ast.SourceRelativeComparison | None":

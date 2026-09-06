@@ -784,17 +784,28 @@ def subject_matches(
         # does not -- the same split "another" and ``attached_to`` make, and
         # for the same reason: nothing here can know which combat the sentence
         # means.
+        #
+        # **Every one of the four named seats below tests and falls through**,
+        # where three of them used to `return` the seat answer. That early
+        # return skipped every key after this block — the two ownership tests,
+        # the layer-6 keyword pair, the combat relations, "controlled
+        # continuously since the turn began" — so a phrase that named one of
+        # these seats *and* narrowed further was silently the seat alone. Two
+        # shipped cards were live: Total War destroyed the creatures its own
+        # sentence exempts ("except for creatures the player hasn't controlled
+        # continuously since the beginning of the turn"), and Mudslide let a
+        # player pay to untap creatures **with** flying. Both compiled with the
+        # dropped key sitting in the payload, which is why no census could see
+        # it: the narrowing was carried the whole way and then not asked.
         if controller == "defending_player":
-            if defending is None:
+            if defending is None or not game.controls(defending, obj):
                 return False
-            return game.controls(defending, obj)
         # "**That player** controls", answered when the caller supplies the seat
         # and refused when it does not — the `defending_player` split directly
         # above, one record over.
-        if controller == "that_player":
-            if that_player is None:
+        elif controller == "that_player":
+            if that_player is None or not game.controls(that_player, obj):
                 return False
-            return game.controls(that_player, obj)
         # "…each creature **target opponent** controls" (Simoon). A seat the
         # *spell* chose (CR 115.4), which is the third of these and the one that
         # was not here: it fell through to the "not you" test below and became
@@ -806,15 +817,34 @@ def subject_matches(
         # Answered when the caller supplies the seat and refused when it does
         # not, exactly as the two above are: a caller that cannot say which
         # opponent was named must narrow to nothing rather than to everyone.
-        if controller in ("target_opponent", "target_player"):
-            if targeted_player is None:
+        elif controller in ("target_opponent", "target_player"):
+            if targeted_player is None or not game.controls(targeted_player, obj):
                 return False
-            return game.controls(targeted_player, obj)
-        seat = game.controller_index_of(obj)
-        if seat is None or observer is None:
-            return False
-        if (seat == observer) != (controller == "you"):
-            return False
+        # "Non-Wall creatures **the active player** controls" (Maddening Imp,
+        # Siren's Call). CR 102.1's seat, and the one seat word on this list
+        # that needs nothing from the caller: whose turn it is, is a fact about
+        # the game, not about the ability, the combat or anybody's choice. So it
+        # is answered here rather than refused and pushed onto a handler — which
+        # is what the two cards printing it did instead, one of them by keying
+        # the whole sentence on its own name and hardcoding
+        # ``active_player_index`` in the handler behind it.
+        #
+        # Not foldable into the "you"/"opponent" comparison below. On the turn
+        # these cards are played the active player *is* an opponent, but only
+        # one of them — a duel makes the two readings agree and a third seat
+        # makes the sweep twice the size the card names.
+        elif controller == "active_player":
+            active = game.active_player_index
+            if not (0 <= active < len(game.players)):
+                return False
+            if game.controller_index_of(obj) != active:
+                return False
+        else:
+            seat = game.controller_index_of(obj)
+            if seat is None or observer is None:
+                return False
+            if (seat == observer) != (controller == "you"):
+                return False
     # "…you both **own** and control" (Obelisk of Undoing). Ownership is
     # CR 108.3 and never changes; control is CR 613 layer 2 and does. A card
     # printed with both is printed to exclude the permanent where they differ,

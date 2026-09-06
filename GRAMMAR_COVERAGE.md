@@ -16,16 +16,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 86.1% | 84.5% | 47.9% | 169 |
-| LEB | 292 | 389 | 86.1% | 84.6% | 48.1% | 170 |
-| 2ED | 292 | 389 | 86.1% | 84.6% | 48.1% | 170 |
+| LEA | 290 | 388 | 86.3% | 84.8% | 48.2% | 170 |
+| LEB | 292 | 389 | 86.4% | 84.8% | 48.3% | 171 |
+| 2ED | 292 | 389 | 86.4% | 84.8% | 48.3% | 171 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 88.2% | 86.1% | 50.4% | 176 |
+| 3ED | 296 | 389 | 88.4% | 86.4% | 50.6% | 177 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 91.7% | 91.2% | 54.8% | 249 |
+| 4ED | 368 | 520 | 91.9% | 91.3% | 55.0% | 250 |
 | ICE | 373 | 601 | 89.5% | 89.0% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
@@ -34,8 +34,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 89.3% | 89.1% | 62.8% | 260 |
-| **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
+| TMP *(measured)* | 335 | 478 | 90.0% | 89.7% | 63.4% | 262 |
+| **All (shipped)** | **4252** | **6339** | **90.0%** | **89.3%** | **59.2%** | **3110** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 355 | 154 | expected a subject |  |
-| 111 | 53 | unrecognized effect verb |  |
+| 353 | 152 | expected a subject |  |
+| 105 | 51 | unrecognized effect verb |  |
 | 91 | 43 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -75,7 +75,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-3105 cards, 3745 lines.
+3110 cards, 3750 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -3359,6 +3359,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add three mana of any one color.`
 - **Lure of Prey**
   - `You may put a green creature card from your hand onto the battlefield.`
+- **Maddening Imp**
+  - `{T}: Non-Wall creatures the active player controls attack this turn if able. At the beginning of the next end step, destroy each of those creatures that didn't attack this turn. Activate only during an opponent's turn and only before combat.`
 - **Maddening Wind**
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 2 damage to that player.`
 - **Magical Hack**
@@ -3807,6 +3809,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
+- **No Quarter**
+  - `Whenever a creature becomes blocked by a creature with lesser power, destroy the blocking creature.`
+  - `Whenever a creature blocks a creature with lesser power, destroy the attacking creature.`
 - **Noble Benefactor**
   - `When this creature dies, each player may search their library for a card and put that card into their hand. Then each player who searched their library this way shuffles.`
 - **Noble Steeds**
@@ -4991,6 +4996,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Siren's Call**
+  - `Creatures the active player controls attack this turn if able.`
+  - `Creatures the active player controls attack this turn if able.`
+  - `Creatures the active player controls attack this turn if able.`
+  - `Creatures the active player controls attack this turn if able.`
+  - `Creatures the active player controls attack this turn if able.`
 - **Sirocco**
   - `Target player reveals their hand. For each blue instant card revealed this way, that player discards that card unless they pay 4 life.`
 - **Sisay's Ring**

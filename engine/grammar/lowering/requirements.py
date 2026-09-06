@@ -115,8 +115,81 @@ def _lower_attacks_this_turn_if_able(
     front of this one refuses the "each combat" spelling in the *parse*, which
     is what leaves the table its line.
     """
+    if node.destroy_if_absent and not (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+    ):
+        # The tail names "**those creatures**" — a set — so it is read only
+        # behind the quantified branch below. Refused rather than dropped for
+        # this file's standing reason: a rider parsed and ignored is a card that
+        # compels an attack and then forgives the creature that stayed home,
+        # which is the card working *more* often in its controller's favour and
+        # nothing failing.
+        raise LoweringError(
+            "the end-step destruction is about the set this sentence "
+            "described, and this sentence describes one creature",
+            node=node,
+        )
     if _is_source(node.subject):
         return (OracleInstruction("force_self_to_attack_until_eot", "", {}),)
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+    ):
+        # "**Non-Wall creatures the active player controls** attack this turn
+        # if able." (Maddening Imp.) The unnarrowed twin of the targeted branch
+        # below and the exact mirror of the block family's, down to the reason
+        # it carries no picker: every creature the printed noun phrase
+        # describes, reached through the same ``subject_matches`` every other
+        # noun phrase goes through, so there is nothing to choose.
+        #
+        # This is the sentence Siren's Call prints, which until now was a
+        # name-keyed hook with ``active_player_index`` written into the handler
+        # behind it. The seat is a filter word now
+        # (``subject_filters``: ``controller: "active_player"``), which is what
+        # turns one card's hook into a template.
+        described = testable_filter_payload(
+            node.subject.filter,
+            refusal=(
+                "the attack requirement is enforced against every creature the "
+                "phrase describes, so a narrowing the matcher cannot test "
+                "would compel a strictly larger set than the card names"
+            ),
+            node=node,
+            require_narrowing=False,
+        )
+        if described.get("type_filter") != "creature":
+            # CR 508.1a is about creatures, exactly as the targeted branch
+            # below requires: a noun phrase this lowering cannot confirm names
+            # one would mark permanents that can never meet the requirement.
+            raise LoweringError(
+                "an attack requirement names a creature", node=node
+            )
+        requirement = OracleInstruction(
+            "force_subject_to_attack_until_eot", "", {"subject": described}
+        )
+        if not node.destroy_if_absent:
+            return (requirement,)
+        # "…At the beginning of the next end step, destroy each of **those
+        # creatures** that didn't attack this turn." Composed rather than fused
+        # into a flag on the requirement, because the two halves *do* have a
+        # subject to compose over — the same one, and that is the whole content
+        # of the word "those". Nettling Imp's three sentences are fused for the
+        # opposite reason: there the set is one creature a *target* chose, so
+        # the second sentence has nothing but a pronoun to name it.
+        #
+        # The same description in both, evaluated in the same resolution, is
+        # what makes "those creatures" mean the set the requirement marked: both
+        # marks are placed now, and the end step reads only the marks
+        # (`engine/phases/end_step.py`). A second reading of the noun phrase a
+        # turn later would name whatever the board looked like by then.
+        return (
+            requirement,
+            OracleInstruction(
+                "destroy_subject_at_end_step_if_it_didnt_attack", "",
+                {"subject": described},
+            ),
+        )
     if isinstance(node.subject, ast.TargetSpec) and node.subject.targeted:
         if _names_several_targets(node.subject):
             raise LoweringError(

@@ -607,6 +607,28 @@ _BLOCK_PAIR_EVENTS = frozenset({
 })
 
 
+#: For each printed combat role, the events under which that role names the
+#: **partner** — the other half of the pair the firing is about, which
+#: ``handlers/_common.block_pair_permanents`` resolves.
+#:
+#: The mirror of ``rebinding._ROLE_EVENT_SUBJECTS``, which says when a role names
+#: the event's *own* subject; between them they are the two objects a block event
+#: has, and an event appears in at most one of the two per role. "Whenever a
+#: creature becomes blocked by …" is announced about the attacker, so under it
+#: "the blocking creature" is the partner; "whenever a creature blocks …" is
+#: announced about the blocker, so under it "the attacking creature" is.
+#:
+#: Only the board-wide kinds are here. Under the source-scoped ones the partner
+#: is still what ``block_pair_permanents`` returns, but the *combatant* is the
+#: ability's own source and the pool spells the partner "that creature" — the
+#: reading the four lowerings gated on :func:`binds_block_pair` already have. A
+#: role word admitted there as well would be a second spelling of one referent.
+ROLE_NAMES_BLOCK_PARTNER: dict[str, frozenset[str]] = {
+    "blocking": frozenset({"matching_creature_becomes_blocked"}),
+    "attacking": frozenset({"matching_creature_blocks"}),
+}
+
+
 def binds_block_pair(event: str | None, event_subject: object | None) -> bool:
     """Whether "that creature" under *event* names exactly one creature.
 

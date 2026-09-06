@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**364 / 614 tracked rules covered (59%)** — 2158 tests, 0 unannotated.
+**364 / 614 tracked rules covered (59%)** — 2162 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -615,7 +615,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(37 tests, subrules abcdfgk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(38 tests, subrules abcdfgk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -850,16 +850,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.5** Cast *(4 tests, subrules a)*
 - [x] **701.6** Counter *(6 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
-- [x] **701.8** Destroy *(4 tests, subrules ab)*
+- [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(4 tests, subrules ac)*
 - [x] **701.12** Exchange *(7 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*
 - [x] **701.17** Mill *(6 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
-- [x] **701.19** Regenerate *(28 tests, subrules abc)*
+- [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
-- [x] **701.21** Sacrifice *(12 tests, subrules a)*
+- [x] **701.21** Sacrifice *(13 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
@@ -878,7 +878,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.9** Flying *(7 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
-- [x] **702.12** Indestructible *(2 tests, subrules b)*
+- [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(8 tests, subrules b)*
 - [x] **702.16** Protection *(43 tests, subrules abcdefgmn)*

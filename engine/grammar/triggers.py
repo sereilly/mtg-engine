@@ -44,6 +44,7 @@ from .trigger_subjects import (
 from .trigger_casts import _parse_cast_event
 from .trigger_tables import (
     _WHENEVER_EVENTS,
+    _BOARD_WIDE_BLOCK_EVENTS,
     _FILTERED_EVENTS,
     _SUBJECT_LED_EVENTS,
     _AT_EVENTS,
@@ -609,6 +610,14 @@ def _parse_matched_event(
     if subject is not None:
         if explicit_self:
             subject = replace(subject, other_than_source=False)
+        # "Whenever **a creature** becomes blocked by **a creature with lesser
+        # power**" (No Quarter). A second noun phrase after the verb, which the
+        # table loop below cannot read — so it is a production, and it is tried
+        # first because its verbs are ones that loop has no row for and a
+        # sentence it half-read would fail on the tail.
+        pair = _accept_board_wide_block_event(stream, word, subject)
+        if pair is not None:
+            return pair
         for phrase, kind in _SUBJECT_LED_EVENTS:
             if stream.accept_phrase(*phrase):
                 # "Whenever a creature attacks **you**" (Barbed Foliage).
@@ -631,6 +640,43 @@ def _parse_matched_event(
                 return ast.TriggerEvent(kind, word, subject=subject)
     stream.reset(mark)
     return _parse_quantified_tap_event(stream)
+
+
+def _accept_board_wide_block_event(
+    stream: TokenStream, word: str, combatant: "ast.ObjectFilter"
+) -> "ast.TriggerEvent | None":
+    """``<noun phrase> becomes blocked by <noun phrase>`` and its blocking twin,
+    with the *combatant* noun phrase already read.
+
+    No Quarter's two lines, and the whole of what makes them board-wide: the
+    creature the event is about is a printed phrase rather than "this creature"
+    or "enchanted creature", so the source is in no combat at all and both
+    halves of CR 509.1a's pair have to be described.
+
+    **Which phrase is the subject is the convention, not a choice.** The
+    source-scoped rows one table up put the *partner* on ``subject`` — "whenever
+    this creature becomes blocked by a creature without flanking" carries the
+    blocker there — so these do too, and the combatant travels as the
+    ``combatant`` narrowing under the same stem
+    ``engine/oracle.py``'s ``combatant_subject`` group gives it.
+    ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`` is what
+    holds the two front ends to that pairing.
+
+    Refuses without consuming when the words after the noun phrase are anything
+    else, so the subject-led table behind it is untouched.
+    """
+    for phrase, kind in _BOARD_WIDE_BLOCK_EVENTS:
+        mark = stream.mark()
+        if not stream.accept_phrase(*phrase):
+            continue
+        partner = parse_subject_filter_at(stream)
+        if partner is not None:
+            return ast.TriggerEvent(
+                kind, word, subject=partner,
+                narrowings=(("combatant", combatant),),
+            )
+        stream.reset(mark)
+    return None
 
 
 def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:

@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -442,6 +442,48 @@ def _lower_destroy(
         if node.no_regen:
             subject_payload["bypass_regeneration"] = True
         return (OracleInstruction("destroy_event_subject", "", subject_payload),)
+
+    # "…destroy **the blocking creature**." / "…destroy **the attacking
+    # creature**." (No Quarter.) A printed *combat role*, which is how a
+    # board-wide block trigger names the half of the pair its own condition did
+    # not describe — the ability's source is in no combat at all, so neither
+    # "this creature" nor "that creature" is available to it.
+    #
+    # Gated on the event, and the gate is the whole of the card's correctness:
+    # a role names the partner under exactly one of the two block events, and
+    # under the other one it names the creature the firing is *about*. Read
+    # ungated, "destroy the blocking creature" under a blocks trigger would
+    # destroy the attacker.
+    #
+    # Its own kind rather than the targeted destroy, for `destroy_self`'s
+    # reason two branches up: the card offered no choice (CR 603.3d), so the
+    # picker would ask for one.
+    if spec.quantifier in ROLE_NAMES_BLOCK_PARTNER:
+        if event not in ROLE_NAMES_BLOCK_PARTNER[spec.quantifier]:
+            raise LoweringError(
+                f"\"the {spec.quantifier} creature\" names the other half of a "
+                "block, and this event announces none it is that half of",
+                node=node,
+            )
+        if filt.card_types not in ((), ("creature",)) or _restrictions_beyond(
+            filt, frozenset({"card_types"})
+        ):
+            # The role *is* the reference; a narrowing on top of it would be a
+            # second choice the sentence never offers, and dropped it would
+            # destroy a creature the card did not name.
+            raise LoweringError(
+                "a creature named by its combat role carries no narrowing the "
+                "destroy could honour",
+                node=node,
+            )
+        partner_payload: dict[str, object] = {}
+        if node.no_regen:
+            partner_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction(
+                "destroy_block_pair_partner", "", partner_payload
+            ),
+        )
 
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was

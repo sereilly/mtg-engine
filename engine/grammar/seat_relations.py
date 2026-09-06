@@ -97,6 +97,23 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
         d.controller = "target_opponent"
         return True
 
+    # "Non-Wall creatures **the active player controls**" (Maddening Imp),
+    # "Creatures **the active player controls**" (Siren's Call). CR 102.1: the
+    # player whose turn it is — a seat the *game* always knows, which is what
+    # separates it from the three relative seats below and above. It needs no
+    # observer, no target and no combat: `subject_matches` reads
+    # ``active_player_index`` directly, so a caller with a game can answer it
+    # and one without refuses like every other seat word.
+    #
+    # Read before "defending player controls" only for tidiness; the two share
+    # no prefix. It is *not* "an opponent controls": on a turn with three seats
+    # the active player is one opponent out of two, and on your own turn — which
+    # is when Maddening Imp's restriction forbids the activation and Siren's
+    # Call's forbids the cast, rather than making the phrase impossible — it is
+    # you.
+    if stream.accept_phrase("the", "active", "player", "controls"):
+        d.controller = "active_player"
+        return True
     # "target artifact **defending player controls**" (Floral Spuzzem).
     # A seat only the combat that fired the trigger knows, so it is carried
     # like `that_player` beside it — refused by the pure matcher and

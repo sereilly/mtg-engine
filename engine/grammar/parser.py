@@ -73,7 +73,8 @@ from .rebinding import (bind_recorded_card,
                         rebind_attachment_pronoun_to_sentence_target,
                         rebind_delayed_pronoun_to_sentence_target,
                         rebind_pump_pronoun_to_sentence_target,
-                        rebind_pronoun_to_event_subject)
+                        rebind_pronoun_to_event_subject,
+                        rebind_combat_role_to_event_subject)
 from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
@@ -217,7 +218,10 @@ def _parse_quoted_token_line(stream: TokenStream) -> ast.Statement | None:
         return None
     if event is not None:
         return ast.TriggeredAbilityNode(
-            event, rebind_pronoun_to_event_subject(event, statement)
+            event,
+            rebind_combat_role_to_event_subject(
+                event, rebind_pronoun_to_event_subject(event, statement)
+            ),
         )
     return statement
 
@@ -840,7 +844,9 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             # the effect at once can answer either.
             bind_recorded_card(
                 event.kind, intervening,
-                rebind_pronoun_to_event_subject(event, statement),
+                rebind_combat_role_to_event_subject(
+                    event, rebind_pronoun_to_event_subject(event, statement)
+                ),
             ),
             intervening,
         )

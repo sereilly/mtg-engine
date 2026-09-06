@@ -543,6 +543,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "untap_and_tap_matching": "triggered_tap",
     "phase_out_target": "triggered_phasing",
     "destroy_event_subject": "triggered_destruction",
+    # No Quarter's two lines: the other half of the block pair, destroyed the
+    # moment the pair is declared. Beside the block-pair pump and keyword rows
+    # in this table and filed with the *destructions*, because the label is what
+    # the ability does and not which referent it does it to.
+    "destroy_block_pair_partner": "triggered_destruction",
     "remove_keyword_from_block_pair": "triggered_combat",
     "return_source_card_to_owners_hand": "triggered_return",
     "exile_target_graveyard": "triggered_exile",

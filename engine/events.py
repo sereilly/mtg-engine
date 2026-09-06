@@ -1347,6 +1347,50 @@ def _subject_led_filter(
     )
 
 
+#: The two board-wide block events, and which payload key each one's *partner*
+#: filter lives under. The combatant's own filter is ``combatant_filter`` on
+#: both, exactly as ``engine/oracle.py``'s ``combatant_subject`` group writes it.
+_BOARD_WIDE_BLOCK_PARTNER_KEYS = {
+    "matching_creature_becomes_blocked": "blocker",
+    "matching_creature_blocks": "blocked",
+}
+
+
+@event_filter(*_BOARD_WIDE_BLOCK_PARTNER_KEYS)
+def _board_wide_block_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever a creature becomes blocked by a creature with lesser power"
+    (No Quarter) — CR 509.1a's pair, both halves described.
+
+    Two noun phrases, and the second is the reason this is not
+    ``_subject_led_filter`` with another row: the partner's phrase is answered
+    **against the combatant**. "Lesser power" is lesser than the creature on the
+    other side of the block, not than the enchantment watching it, so the
+    ``source`` handed to the partner's match is the combatant — which is the
+    same thing the two source-scoped block scans pass when they test a narrowed
+    condition, one screen apart in ``phases/declare_blockers_step.py``.
+
+    The combatant's own phrase takes the ability's source, like every other
+    board-wide narrowing: "you control" in it is CR 109.5's, the watcher's seat.
+
+    An unnarrowed condition would fire on every block on the table, which is why
+    the compiler refuses a phrase it cannot test rather than admitting an empty
+    filter here.
+    """
+    combatant = event.subject
+    partner = game.permanent_by_id(event.payload.get("partner_permanent_id"))
+    observer = game.controller_index_of(permanent)
+    if not trigger_subject_matches(
+        game, trig, "combatant", combatant, observer=observer, source=permanent,
+    ):
+        return False
+    return trigger_subject_matches(
+        game, trig, _BOARD_WIDE_BLOCK_PARTNER_KEYS[event.kind], partner,
+        observer=observer, source=combatant,
+    )
+
+
 # The one event narrowed on **both** axes: the actor and the object. "Whenever
 # **you** activate a loyalty ability of **a Chandra planeswalker**" (Keral Keep
 # Disciples) is the seat scoping of `_SEAT_SCOPED_EVENTS` — CR 109.5's "you",

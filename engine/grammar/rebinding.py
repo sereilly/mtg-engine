@@ -9,9 +9,13 @@ is pointed at it.
 Its own module rather than more of ``triggers``: only one of the two rebinders
 is about a trigger, and the walk underneath is about the shape of the AST rather
 than about either. It sits below ``triggers`` in the layer order because it
-imports nothing but ``ast`` — a rebinder that needed a production would be
-rebinding by a list of the productions that admit a pronoun, which is the
-per-node table the walk exists to avoid.
+reaches no production — a rebinder that needed one would be rebinding by a list
+of the productions that admit a pronoun, which is the per-node table the walk
+exists to avoid. The one name it takes from further down is a **vocabulary**,
+``back_references.COMBAT_ROLES``: the words "the attacking creature" and "the
+blocking creature" are read there and resolved here, and spelling them twice is
+how the reader and the resolver would come to disagree about which phrase is a
+role at all.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import dataclasses
 from dataclasses import replace
 
 from . import ast
+from .back_references import COMBAT_ROLES
 
 
 def _walk_specs(node, rewrite, kind=ast.TargetSpec):
@@ -248,6 +253,75 @@ def rebind_pronoun_to_event_subject(
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
         return statement
     return _rebound(statement, subject)
+
+
+#: For each printed combat role, the trigger events whose **subject** plays it.
+#:
+#: A role names one member of a combat pair, and a pair has two — so an event
+#: answers for exactly one of the words and never for both. Everything not
+#: listed leaves the role a role, which every lowering refuses by name.
+#:
+#: **Which phrase a block event puts on its subject is why this list is so
+#: short.** "Whenever this creature becomes blocked **by a creature without
+#: flanking**" carries the *blocker* as its subject, not the attacker — so
+#: reading "the attacking creature" against it would name the wrong half of the
+#: pair, silently. The unions ("attacks or blocks", "blocks or becomes blocked
+#: by") are out for the neighbouring reason: their subject is in the combat but
+#: which role it plays is not known until the trigger fires.
+_ROLE_EVENT_SUBJECTS: dict[str, frozenset[str]] = {
+    "attacking": frozenset({
+        "creature_attacks",
+        "attacks_unblocked",            # Farrel's Mantle
+    }),
+    "blocking": frozenset({"creature_blocks"}),
+}
+
+
+def rebind_combat_role_to_event_subject(
+    event: ast.TriggerEvent, statement: ast.Statement
+) -> ast.Statement:
+    """"…**the attacking creature** assigns no combat damage this turn."
+    (Farrel's Mantle.) The role names the object the trigger's condition was
+    about — but only where the condition established that role.
+
+    The sibling of :func:`rebind_pronoun_to_event_subject` and the same rewrite;
+    what differs is the gate. A bare "it" is rebound under any event with a
+    subject, because the word names whatever the sentence already named. A role
+    word says *which* combatant, so it is only the event subject when the event
+    is about a creature playing that role — and under any other event it stays a
+    role, which every lowering refuses by name (CR 509.1a: a block is a pair, and
+    a phrase naming the wrong half of one does not fail loudly on its own).
+
+    Left as a role rather than raising here: this runs over every trigger in the
+    pool, and a parse-time refusal would blame the subject for a lowering that
+    may yet be written. The refusal that reaches the support report should name
+    the effect that could not use the role.
+    """
+    subject = event.subject
+    if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
+        return statement
+    if not subject.is_enchanted:
+        # **The subject has to name one object.** A board-wide condition's
+        # subject is a printed noun phrase describing a *set* ("whenever a
+        # creature attacks"), and rewriting a role into it would hand the effect
+        # a filter where it expects a referent — a destroy that swept every
+        # creature the phrase describes rather than the one in the combat.
+        # Attachment is the only shape in the pool that names one, and it is the
+        # one Farrel's Mantle prints.
+        return statement
+    roles = {
+        role for role in COMBAT_ROLES
+        if event.kind in _ROLE_EVENT_SUBJECTS[role]
+    }
+    if not roles:
+        return statement
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        if spec.quantifier in roles:
+            return replace(spec, quantifier="it", filter=subject)
+        return None
+
+    return _walk_specs(statement, _rewrite)
 
 
 def rebind_pronoun_to_delay_target(

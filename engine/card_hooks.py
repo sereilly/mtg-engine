@@ -466,9 +466,41 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "{t}: draw a card and reveal it. if it isn't a land card, discard it":
             _line('draw_reveal_discard_unless_land', 'activated_draw'),
     },
+    # **Two of its three lines left this entry** when Tempest's third wave built
+    # the attack requirement over a described set. "Creatures the active player
+    # controls attack this turn if able" is a grammar production now (the seat
+    # is `subject_filters`' `controller: "active_player"`, CR 102.1), and the
+    # timing gate was always `cast_restrictions.py`'s. What is left is the one
+    # line no second card could share the shape of, and it is left for a reason
+    # the grammar cannot fix from here: **"that player" back-references a noun
+    # phrase on the line above**, and lines are compiled one at a time, so
+    # nothing this line can be read against knows which seat it means.
+    #
+    # The entry is payload rather than behaviour — the kind it names is the
+    # general one Maddening Imp's second sentence lowers to — so the day a
+    # production reads a cross-line "that player", this becomes a dead entry
+    # `tests/engine/test_card_lines.py` fails on rather than a second
+    # implementation to keep in step.
     "Siren's Call": {
-        'creatures the active player controls attack this turn if able':
-            _line('force_active_player_creatures_to_attack', 'spell_pattern'),
+        "at the beginning of the next end step, destroy all non-wall creatures "
+        "that player controls that didn't attack this turn. ignore this effect "
+        "for each creature the player didn't control continuously since the "
+        "beginning of the turn":
+            _line(
+                'destroy_subject_at_end_step_if_it_didnt_attack', 'spell_pattern',
+                subject={
+                    "type_filter": "creature",
+                    "controller": "active_player",
+                    "exclude_subtypes": ["wall"],
+                    # "Ignore this effect for each creature the player didn't
+                    # control continuously since the beginning of the turn" —
+                    # the second sentence is a narrowing of the first's set, so
+                    # it rides the same description rather than becoming a
+                    # second step that would have to un-mark what the first
+                    # marked.
+                    "controlled_since_turn_start": True,
+                },
+            ),
     },
     # **The one blocker swap Magic ever printed.** Three sentences that no
     # other card carries: two targets chosen with a relation *between* them, a
