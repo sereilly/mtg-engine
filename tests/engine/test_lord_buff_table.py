@@ -170,7 +170,8 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
     "line,why",
     [
         ("Other Goblins glimmer uncontrollably.", "no effect the table models"),
-        ("Other Goblins get +1/+1 and have shadow.", "layer 6 carries no shadow"),
+        # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+        ("Other Goblins get +1/+1 and have ward.", "layer 6 carries no ward"),
         ('Other Zombies have "{5}: Regenerate this permanent."',
          "nothing charges {5} for the granted ability"),
         ("Other Goblins get +1/+1 as long as you control a Mountain.",

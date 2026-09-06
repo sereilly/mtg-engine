@@ -820,6 +820,41 @@ class DeclareBlockersStepMixin:
             if not (is_artifact_creature or is_black_creature):
                 return False
 
+        # Shadow (CR 702.28b), and it is the only evasion ability in this
+        # function that restricts **both** creatures. "A creature with shadow
+        # can't be blocked by creatures without shadow, and a creature without
+        # shadow can't be blocked by creatures with shadow." Two prohibitions in
+        # one sentence, which is why the test is an inequality rather than the
+        # `attacker_has_x and not blocker_has_x` shape flying and fear use six
+        # lines up: a shadow creature is *unable to block the ground*, and a
+        # reading that kept only the first half would turn a printed drawback
+        # into pure evasion — silently, and in the player's favour.
+        #
+        # Both reads through layer 6, like every other keyword here, so a
+        # granted shadow (Dauthi Embrace, Shadow Rift) and a removed one
+        # (Reality Anchor) are answered by the same two lines.
+        attacker_has_shadow = self._has_keyword(attacker, "shadow")
+        blocker_has_shadow = self._has_keyword(blocker, "shadow")
+        if blocker_has_shadow and not attacker_has_shadow:
+            return False
+        if attacker_has_shadow and not blocker_has_shadow:
+            # "This creature can block creatures with shadow as though it had
+            # shadow." (Heartwood Dryad, Wall of Diffusion.) A permission over
+            # the *first* half only, so it is asked here and not folded into
+            # `blocker_has_shadow` above: the Dryad does not have shadow, and a
+            # reading that pretended it did would forbid it from blocking the
+            # ground creatures it is printed to stop. CR 702.28b is two
+            # prohibitions and this text lifts exactly one of them.
+            if not any(
+                restriction.kind == "can_block_as_though_it_had"
+                and restriction.payload.get("keyword") == "shadow"
+                for restriction in (
+                    *blocker_program.instructions,
+                    *attached_combat_restrictions(blocker),
+                )
+            ):
+                return False
+
         # Protection (CR 702.16f): an attacking creature with protection from a
         # quality can't be blocked by creatures that have that quality.
         if self._is_protected_from(attacker, blocker):

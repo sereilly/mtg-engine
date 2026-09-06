@@ -579,10 +579,11 @@ def test_w2g4_a_two_target_fight_refuses_a_keyword_with_no_behaviour():
     resolves."""
     with _w2g4a_pytest.raises(_W2G4aLoweringError) as raised:
         _w2g4a_lower(_w2g4a_parse_line(
-            "Target creature with shadow you control fights target creature "
+            # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+            "Target creature with ward you control fights target creature "
             "an opponent controls."
         ))
-    assert "shadow" in raised.value.reason
+    assert "ward" in raised.value.reason
 
 _W2G1A_LEA = {c.name: c for c in _w2g1a_load(_w2g1a_path("LEA"))}
 def _w2g1a_scene(set_pool, hand):

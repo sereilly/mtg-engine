@@ -1699,10 +1699,11 @@ def test_a_keyword_layer_6_does_not_carry_refuses_by_name():
     """An unimplemented keyword must take the line down rather than lower the
     P/T half and drop the grant — the dropped-rider bug class, in the sentence
     that first produced it."""
-    result = compile_line("Other Goblins get +1/+1 and have shadow.", card_name="Invented Lord")
+    # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+    result = compile_line("Other Goblins get +1/+1 and have ward.", card_name="Invented Lord")
 
     assert not result.lowered
-    assert "shadow" in result.failure_reason and "lord_buffs" in result.failure_reason
+    assert "ward" in result.failure_reason and "lord_buffs" in result.failure_reason
 
 
 def test_has_base_power_still_reaches_its_own_production():

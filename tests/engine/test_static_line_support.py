@@ -213,7 +213,8 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # sentence with a word the gate still cannot answer — a keyword no
         # behaviour is registered under makes the filter inert rather than
         # unreadable, so the restriction would forbid nothing.
-        "This creature can't block creatures with shadow.",
+        # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+        "This creature can't block creatures with ward.",
         "This creature can't attack unless you control a Wall.",
         # "As long as you control a **Wall**…" and "…a **Zombie**" used to stand
         # here, and both are implemented now: `static_bonuses` reads "you control
@@ -238,7 +239,7 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # than unimplemented, and the honest place for it is
         # `test_a_counted_anthem_condition_is_evaluated_as_a_count` below.
         "Other Goblins glimmer uncontrollably.",
-        "Other Goblins get +1/+1 and have shadow.",
+        "Other Goblins get +1/+1 and have ward.",
         'Other Zombies have "{5}: Regenerate this permanent."',
     ],
 )

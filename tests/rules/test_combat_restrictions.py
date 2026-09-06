@@ -207,9 +207,15 @@ def test_506_3_an_unrecognized_restriction_rider_is_unsupported_not_silently_dro
     keyword no behaviour is registered under. ``Game._has_keyword`` says no for
     every creature, so the restriction would forbid nothing — the same silent
     admission by a different route, which is what this guard is about.
+
+    **Shadow stood in that slot until TMP wave 1 implemented it**, which is the
+    second time this substitution has been made (flying was the first) and the
+    reason the keyword is asserted absent from the registry below rather than
+    assumed: a refusal test whose subject becomes implemented stops testing a
+    refusal and starts testing that a working mechanic is refused.
     """
     for text in (
-        "This creature can't block creatures with shadow.",
+        "This creature can't block creatures with ward.",
         "This creature can't attack unless you control a Wall.",
         "This creature can't attack unless defending player controls a snowfield.",
     ):
@@ -463,13 +469,14 @@ def test_506_3_an_untestable_subject_word_refuses_the_whole_line():
 
     The keyword named here has to be one the engine genuinely does not
     implement, so it is checked against the registry rather than assumed —
-    "shroud" stood here until round 27 built it, at which point the assertion
-    was testing that an implemented keyword is refused.
+    "shroud" stood here until round 27 built it, and "shadow" until TMP wave 1
+    built that, at each point the assertion turning into a claim that an
+    implemented keyword is refused.
     """
     from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
 
-    assert "shadow" not in IMPLEMENTED_KEYWORDS
-    assert combat_restriction_for("creatures without shadow can't attack") is None
+    assert "ward" not in IMPLEMENTED_KEYWORDS
+    assert combat_restriction_for("creatures without ward can't attack") is None
     assert combat_restriction_for(
         "non-blorb creatures you control can't attack"
     ) is None

@@ -126,6 +126,20 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # step, which is what lets Teferi's Curse and Shimmer grant it through the
     # ordinary channels with nothing else to build.
     "phasing",
+    # CR 702.28: shadow. An evasion ability like fear seven entries up, and the
+    # *word* is the whole of it — but unlike fear the restriction runs in both
+    # directions, and that is the half a one-sided reading loses. CR 702.28b:
+    # "A creature with shadow can't be blocked by creatures without shadow,
+    # **and a creature without shadow can't be blocked by creatures with
+    # shadow**." So a Soltari Priest is not merely hard to block; it is also
+    # unable to block the ground, which is what makes shadow a drawback as well
+    # as evasion and what the reminder text ("can block **or** be blocked by
+    # only creatures with shadow") says in one breath.
+    #
+    # `phases/declare_blockers_step._can_block_attacker` asks both halves off
+    # layer 6, so a granted shadow (Dauthi Embrace, Shadow Rift) and a removed
+    # one (Reality Anchor) are the ordinary channels with nothing else to build.
+    "shadow",
 })
 
 

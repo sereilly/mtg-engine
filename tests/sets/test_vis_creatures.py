@@ -975,17 +975,18 @@ def test_w2g4_knight_of_valors_sweep_refuses_a_keyword_with_no_behaviour():
 
     ``Game._has_keyword`` answers "no" for a word no behaviour is registered
     under, so the **negative** form of a keyword filter matches *everything* --
-    "each creature without shadow" would shrink the entire board rather than
+    "each creature without ward" would shrink the entire board rather than
     the printed subset. The positive form only ever does less than the card
     says; this one does more, which is why an unimplemented word has to refuse
     the line instead of riding along inert.
     """
     with _w2g4_pytest.raises(_W2G4LoweringError) as raised:
         _w2g4_lower(_w2g4_parse_line(
-            "{1}{W}: Each creature without shadow blocking this creature "
+            # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+            "{1}{W}: Each creature without ward blocking this creature "
             "gets -1/-1 until end of turn."
         ))
-    assert "shadow" in raised.value.reason
+    assert "ward" in raised.value.reason
     # And the implemented word still compiles, so the guard is a filter rather
     # than a wall.
     assert _w2g4_lower(_w2g4_parse_line(

@@ -702,6 +702,28 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "can_block_only_with_keyword",
     ),
     (
+        # "This creature can block creatures with shadow as though it had
+        # shadow." (Heartwood Dryad, Wall of Diffusion.) The **permission**
+        # mirror of the two rows above: those narrow what this creature may
+        # block, this widens it — CR 609.4's "as though", which applies only to
+        # the stated effect. The Dryad does not gain shadow: it still blocks the
+        # ground creatures it is printed to stop, and CR 702.28b's *other*
+        # prohibition ("a creature with shadow can't be blocked by creatures
+        # without shadow") is the only one lifted.
+        #
+        # The keyword is captured twice and both halves must name the same one
+        # (checked in `combat_restriction_for`), exactly as
+        # `evasion_negation._TEMPLATE` requires: a line reading "…with shadow as
+        # though it had flying" is not a card this table has ever seen, and
+        # matching it on the first half alone would lift the wrong restriction.
+        re.compile(
+            r"^this creature can block creatures with "
+            r"(?P<as_though_keyword>[a-z]+) as though it had "
+            r"(?P<as_though_repeat>[a-z]+)$"
+        ),
+        "can_block_as_though_it_had",
+    ),
+    (
         # "**Creatures with flying** can block only creatures with flying."
         # (Chaosphere.) The row above printed about the *board* instead of
         # about one creature, which makes it a different rule and not that
@@ -723,6 +745,19 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "subject_can_block_only",
     ),
 )
+
+
+#: The evasion abilities the "can block … as though it had …" row above may
+#: name. Shadow only, and deliberately: the enforcement site is
+#: `declare_blockers_step._can_block_attacker`'s **shadow** branch, so a word
+#: admitted here that it does not read would be a line this gate accepts and
+#: nothing acts on — a card reported supported for a permission that never
+#: applies. `engine/evasion_negation.py` made the same choice for the same
+#: reason one rule over ("Flying's and fear's negations arrive with the card
+#: that prints them, beside the check that enforces *them*"), and the keyword
+#: stays payload rather than part of the kind so the next word costs this tuple
+#: and one branch rather than a second row.
+_AS_THOUGH_BLOCKABLE: tuple[str, ...] = ("shadow",)
 
 
 #: "…**as long as defending player controls a snow land**." (Arctic Foxes.)
@@ -987,6 +1022,23 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["blocker_filter"] = described
+        # "…can block creatures with shadow **as though it had shadow**."
+        # The keyword is captured twice and both halves must name the same
+        # ability, for `evasion_negation._TEMPLATE`'s reason: the sentence
+        # states the restriction it lifts and then names the ability that lifts
+        # it, and matching on the first half alone would read a card that says
+        # something else. And the word has to be one the enforcement site reads
+        # (:data:`_AS_THOUGH_BLOCKABLE`) — a permission the blockers step never
+        # consults is a line the support gate would accept for behaviour that
+        # does not exist, which is the widening direction this whole file
+        # refuses in.
+        as_though = payload.pop("as_though_keyword", None)
+        if as_though is not None:
+            if payload.pop("as_though_repeat", None) != as_though:
+                return None
+            if as_though not in _AS_THOUGH_BLOCKABLE:
+                return None
+            payload["keyword"] = as_though
         # A captured colour reaches the payload as its **symbol**, converted
         # here for the reason a captured number is converted to an int here: a
         # payload whose shape depends on which regex matched is how a filter

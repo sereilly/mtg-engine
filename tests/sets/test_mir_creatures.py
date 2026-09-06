@@ -1483,10 +1483,11 @@ def test_a_keyword_the_engine_does_not_implement_refuses_the_anthem(set_pool):
     from engine.grammar import compile_line
 
     result = compile_line(
-        "Creatures with shadow get +1/+1 until end of turn.", card_name="Test"
+        # shadow stood here until Tempest wave 1 implemented it (CR 702.28); "ward" is the replacement, and `tests/engine/test_keyword_registry.py`'s `_NOT_IMPLEMENTED` is where it is asserted to still be unimplemented.
+        "Creatures with ward get +1/+1 until end of turn.", card_name="Test"
     )
     assert result.parsed and not result.lowered
-    assert "shadow" in result.failure_reason
+    assert "ward" in result.failure_reason
 
 
 # --- Catacomb Dragon: a halved characteristic in a where-clause ---
