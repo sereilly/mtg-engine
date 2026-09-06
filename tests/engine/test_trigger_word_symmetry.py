@@ -109,3 +109,56 @@ def test_the_long_dies_spelling_reads_any_permanent_noun_and_either_article():
             assert condition is not None, line
             assert condition.kind == "dies", line
             assert _event("when", line.split(", ")[0][len("When "):]).kind == "dies"
+
+
+def test_both_front_ends_name_one_condition_over_both_manifest_roles():
+    """The grammar's trigger kind must equal `engine/oracle.py`'s, for a
+    **measured** set as well as a shipped one.
+
+    `test_every_executed_trigger_agrees_with_the_legacy_condition_table` asks
+    the same question of the `catalog` fixture, which is the shipped, deduped
+    pool — so a condition mismatch in a set that has been ingested but not
+    promoted is invisible until the promotion, the same shape
+    `parse_coverage.py`'s gate has. Timid Drake is the card that proved it
+    costs a round rather than a minute: the grammar read
+    `matching_permanent_enters` with the source excluded and the regex table
+    read `enters_battlefield`, which is the source's own entry, and the engine
+    dispatches on the second one.
+
+    Only a trigger the grammar **executes** is asked, exactly as the shipped
+    guard does: a line the grammar refuses is honestly unsupported for that
+    reason, and nothing is dispatched from its condition either way.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.grammar import ast as grammar_ast
+    from engine.grammar.lower import lower_ability
+    from engine.oracle import expand_ability_lines, trigger_condition_of_line
+
+    disagreements = []
+    for card in load_cards(manifest_set_paths(include_measured=True)):
+        for raw in expand_ability_lines(card.oracle_text or "").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                node = parse_line(line, card_name=card.name)
+            except GrammarError:
+                continue
+            if not isinstance(node, grammar_ast.TriggeredAbilityNode):
+                continue
+            try:
+                lower_ability(node)
+            except Exception:
+                continue
+            condition, _ = trigger_condition_of_line(line, card.name)
+            legacy = condition.kind if condition is not None else None
+            if legacy != node.event.kind:
+                disagreements.append(
+                    f"{card.name}: {line}\n    legacy: {legacy}  "
+                    f"grammar: {node.event.kind}"
+                )
+
+    assert not disagreements, (
+        "the two trigger front ends name different conditions for one line, "
+        "and the engine dispatches on the legacy one:\n" + "\n".join(disagreements)
+    )
