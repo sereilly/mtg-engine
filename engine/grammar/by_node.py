@@ -91,6 +91,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_put_exiled_pile_on_library,
                        _lower_graveyard_top_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
+                       _lower_search_reveal_opponent_chooses,
                        _lower_search_library, _lower_change_base_pt, _lower_set_base_pt,
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
@@ -240,6 +241,11 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    # The same pick over a pile a **search** found (Intuition), which is
+    # why it is a row of its own rather than a field on that node: a search
+    # finds what a player picks out of a hidden zone (CR 701.23a), where a
+    # reveal off the top finds whatever is there.
+    ast.SearchRevealOpponentChooses: _lower_search_reveal_opponent_chooses,
     # The same pick over a *public* pile (Phyrexian Grimoire): no reveal,
     # because CR 400.2 makes a graveyard public — see the node.
     ast.GraveyardTopOpponentChooses: _lower_graveyard_top_opponent_chooses,

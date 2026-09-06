@@ -320,9 +320,11 @@ from .reveal import (
     _lower_reveal_until,
 )
 from .search import (
+    HELD_SEARCH_PILE,
     _SEARCH_HONOURED_FILTER_FIELDS,
     _lower_search_library,
     _lower_search_player_library,
+    _lower_search_reveal_opponent_chooses,
 )
 from .stack import (
     _COUNTER_HONOURED_FILTER_FIELDS,
@@ -596,6 +598,8 @@ __all__ = [
     "_lower_graveyard_pick_onto_battlefield",
     "_lower_put_graveyard_position_onto_battlefield",
     "_lower_search_library",
+    "_lower_search_reveal_opponent_chooses",
+    "HELD_SEARCH_PILE",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",

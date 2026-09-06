@@ -164,6 +164,16 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # kept and whose *pile* is exiled, which is the other way round from the
     # exile search below — read first because both open on a number and the
     # difference is the word after the noun.
+    # "Search your library for **three cards and reveal them. Target opponent
+    # chooses one. Put that card into your hand and the rest into your
+    # graveyard. Then shuffle.**" (Intuition.) A counted search whose finds go
+    # nowhere until another seat has picked among them — read here, before the
+    # two exile shapes, because all three open on a number and the difference
+    # is the clause after the noun. Non-consuming on refusal, so each of them
+    # keeps its own reading and its own refusal site.
+    picked = _accept_search_reveal_opponent_chooses(stream, graveyard)
+    if picked is not None:
+        return picked
     doomsday = _accept_search_exiling_the_rest(stream, graveyard)
     if doomsday is not None:
         return doomsday
@@ -692,3 +702,109 @@ def _parse_counted_search(
         reveal=reveal,
     )
 
+
+#: Where each half of a searched-and-revealed pile may be printed to go. Two
+#: closed lists for ``effects/reveal._SORTED_MATCH_ZONES``' reason: the chosen
+#: card is *kept* and the rest are *discarded*, and a card that swapped them
+#: would be a different spell with nothing to notice the difference. A word
+#: outside them refuses the line rather than lowering onto a fate nothing
+#: carries out.
+_PICKED_SEARCH_FATES: dict[str, str] = {"hand": "hand"}
+_REST_SEARCH_FATES: dict[str, str] = {"graveyard": "graveyard"}
+
+
+def _accept_search_reveal_opponent_chooses(
+    stream: TokenStream, graveyard: bool,
+) -> "ast.SearchRevealOpponentChooses | None":
+    """``<N> cards and reveal them. Target opponent chooses one. Put that card
+    into your hand and the rest into your graveyard. Then shuffle.`` at the
+    cursor, or None with the cursor where it was. (Intuition.)
+
+    All four sentences, interior full stops included, for
+    :class:`ast.SearchRevealOpponentChooses`' reason: "one", "that card" and
+    "the rest" all name the pile the first sentence found, and parsed apart
+    three of them dangle a referent nothing binds. The search also **suspends**
+    on its prompt, so a following statement would run before anybody had
+    chosen.
+
+    Every word is required and both destinations are read rather than assumed.
+    The chooser is read as a reference (a pick made by the wrong player is the
+    whole card), and the count is a plain number: CR 701.23d makes a search for
+    a bare quantity a *floor*, which is what separates this from the "up to"
+    spellings the counted production reads.
+
+    One zone only. "The rest into your graveyard" is about the cards this
+    search found, and a printing that also opened a graveyard would be finding
+    cards there and then putting them back into it — a sentence no card prints,
+    and one this refuses rather than performs.
+    """
+    if graveyard:
+        return None
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # A bare quantity and nothing else: CR 701.23c's "undefined quality" and
+    # CR 701.23b's "stated quality" are different searches from this one, and
+    # the floor below is only right for a search that names no quality at all.
+    if not filt.is_card or filt != ast.ObjectFilter(is_card=True):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "reveal", "them"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    chooser = parse_player_ref(stream)
+    if chooser is None or not stream.accept_phrase("chooses", "one"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("put", "that", "card", "into", "your"):
+        stream.reset(mark)
+        return None
+    fate = stream.peek_word()
+    if fate not in _PICKED_SEARCH_FATES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("and", "the", "rest", "into", "your"):
+        stream.reset(mark)
+        return None
+    rest = stream.peek_word()
+    if rest not in _REST_SEARCH_FATES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    # "**Then shuffle.**" CR 701.23h ends the search with one and the engine
+    # performs it inside the search prompt, so the word is read and dropped
+    # exactly as the ordinary tutor's is — required, so deleting it fails the
+    # line rather than quietly claiming a search that never shuffles. The final
+    # full stop is left for the sequence parser, which is what ends the line.
+    if not stream.accept_word("then"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("shuffle"):
+        stream.reset(mark)
+        return None
+    return ast.SearchRevealOpponentChooses(
+        count, chooser,
+        fate=_PICKED_SEARCH_FATES[fate],
+        other_fate=_REST_SEARCH_FATES[rest],
+    )

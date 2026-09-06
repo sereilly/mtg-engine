@@ -350,6 +350,46 @@ class RevealTopOpponentChooses:
 
 
 @dataclass(frozen=True)
+class SearchRevealOpponentChooses:
+    """``Search your library for three cards and reveal them. Target opponent
+    chooses one. Put that card into your hand and the rest into your graveyard.
+    Then shuffle.`` (Intuition.)
+
+    All four sentences, for :class:`RevealTopOpponentChooses`' reason: they
+    describe **one** pile, and "one", "that card" and "the rest" have nothing to
+    name without it. What differs from that node is only where the pile comes
+    from — a search of a hidden zone rather than the top of one — which is why
+    it is a node of its own rather than a field on that one: a search finds a
+    number of cards a *player* picks (CR 701.23a), and a reveal off the top
+    finds whatever is there.
+
+    Its lowering is deliberately **two** instructions and not one. The pile is
+    handed from the search to the pick through the resolution's scratchpad, and
+    both halves already exist: the search is the standing library search with
+    its finds *held* rather than placed (Transmute Artifact's word for the same
+    thing), and the pick is the standing ``opponent_picks_revealed`` prompt,
+    which has taken a chosen card's fate and the rest's since Phyrexian
+    Grimoire. Fusing them would be a third handler that re-implemented both.
+
+    ``count`` is a **floor** and not a ceiling: CR 701.23d makes a search for
+    a bare quantity find that many, or as many as possible. Every counted
+    search in the pool before this one printed "up to" or "any number of", so
+    the distinction had never had a card to be wrong about.
+    """
+    count: Amount
+    #: Who chooses. Only a targeted opponent has a printing; the lowering
+    #: refuses anything else rather than defaulting to a seat, for
+    #: :class:`RevealTopOpponentChooses`' reason — a choice made by the wrong
+    #: player is the whole card.
+    chooser: "PlayerRef"
+    #: Where the chosen card goes, and where the rest go. Both read from the
+    #: print and checked against closed lists, because they are opposite fates
+    #: and a card that swapped them would be a different spell entirely.
+    fate: str = "hand"
+    other_fate: str = "graveyard"
+
+
+@dataclass(frozen=True)
 class LookTopExileRandom:
     """``Look at the top eight cards of your library. Exile four of them at
     random, then put the rest on top of your library in any order.`` (Orcish

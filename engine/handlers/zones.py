@@ -604,6 +604,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # it runs, the card is one permanent among many. Handed over here
         # because this is where the resolution and the prompt meet.
         record=context.results,
+        # …and **under which key**, for a search whose finds are held rather
+        # than placed (Intuition). Every other record this prompt writes is a
+        # fact about the search itself and has one name; a held pile is a value
+        # the *next sentence* reads, so the sentence that reads it is what names
+        # the channel. Absent for every search written before this one.
+        record_key=instruction.payload.get("record_key"),
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]
@@ -790,11 +796,35 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
     # the list rather than the first. An absent `from_zone` is the library, so
     # every payload written before this is unchanged.
     from_zone = str(instruction.payload.get("from_zone", "library"))
-    pile = list(getattr(caster, from_zone, ()))
-    revealed = (
-        list(reversed(pile[-max(int(count), 0):])) if from_zone == "graveyard"
-        else pile[:max(int(count), 0)]
-    )
+    # **The pile may already be out of every zone**, held by an earlier step of
+    # this same resolution (Intuition: "Search your library for three cards and
+    # reveal them. Target opponent chooses one."). A third pile source and the
+    # same question, which is why it rides the payload rather than forking the
+    # kind: what this instruction does is *ask an opponent which of these
+    # cards*, and where they came from is data.
+    #
+    # The search revealed them already (its printed "reveal them", CR 701.20a)
+    # and shuffled already (CR 701.23h), so neither happens again here — and
+    # ``from_zone`` becomes "held", which is the word the mover reads as "this
+    # card is in no zone; just place it".
+    held_key = instruction.payload.get("cards_from")
+    if held_key is not None:
+        revealed = list(context.results.get(str(held_key)) or ())
+        from_zone = "held"
+        if not revealed:
+            # The search found nothing, which an empty library makes the only
+            # possible answer (CR 701.23d's "as many as possible"). There is
+            # nothing to choose between.
+            game.log.append(
+                f"{context.card.name}: nothing was found to choose from"
+            )
+            return True, "resolved"
+    else:
+        pile = list(getattr(caster, from_zone, ()))
+        revealed = (
+            list(reversed(pile[-max(int(count), 0):])) if from_zone == "graveyard"
+            else pile[:max(int(count), 0)]
+        )
     if not revealed:
         game.log.append(f"{caster.name} has no cards in their {from_zone}")
         return True, "resolved"

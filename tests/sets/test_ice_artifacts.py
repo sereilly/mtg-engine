@@ -708,18 +708,28 @@ def test_jesters_cap_searches_the_targets_library_and_exiles_three(set_pool):
 
 def test_jesters_cap_leaves_the_searchers_own_library_alone(set_pool):
     """The seat whose zone is opened is payload, and getting it wrong is
-    silent: the search would still find three cards and still report done."""
+    silent: the search would still find three cards and still report done.
+
+    All three picks, because "search target player's library for **three
+    cards**" is CR 701.23d's bare quantity and must find that many - this test
+    named one until Tempest's third wave, when Intuition gave the floor a card
+    it could be wrong about and the resolver started enforcing it.
+    """
     pool, p1, p2, game = _cap_board(
         set_pool, "Jester\'s Cap", ["Balduvian Bears", "Brown Ouphe", "Tor Giant"]
     )
     p1.library = [pool["Scaled Wurm"]]
 
     game.activate_permanent_ability(0, "Jester\'s Cap")
-    game.confirm_search_library_picks(0, [{"zone": "library", "index": 0}])
+    game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": index} for index in (0, 1, 2)]
+    )
     game._settle()
 
     assert [card.name for card in p1.library] == ["Scaled Wurm"]
-    assert [card.name for card in p2.exile] == ["Balduvian Bears"]
+    assert sorted(card.name for card in p2.exile) == [
+        "Balduvian Bears", "Brown Ouphe", "Tor Giant",
+    ]
 
 
 def test_jesters_mask_empties_the_hand_then_gives_that_many_back(set_pool):
