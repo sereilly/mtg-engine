@@ -44,6 +44,8 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
+                      EXILED_SPELL_CONTROLLER,
+                      EXILED_SPELL_RECORD,
                       LAST_TARGET_CONTROLLER,
                       EXILED_THIS_WAY,
                       _EVENT_SUBJECT_POWER_RECORD,
@@ -605,6 +607,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
     # the branch after it is the ordinary if-you-do rather than a fused kind.
     "exile_self": "exiled_self",
+    # "Target spell's controller exiles it with X delay counters on it. At the
+    # beginning of each of that player's upkeeps, …" (Ertai's Meddling.) Two
+    # records from one step, and the delayed ability behind it needs both: the
+    # exile register entry is what "remove a delay counter from **it**" reads,
+    # and the seat is what "each of **that player's** upkeeps" fires on. Declared
+    # here so the delay's lowering can refuse the sentence when no earlier step
+    # exiled anything — a delay bound to nothing would arm an ability that
+    # triggers every upkeep about a card nobody exiled.
+    "exile_target_spell": (EXILED_SPELL_RECORD, EXILED_SPELL_CONTROLLER),
     # "Sacrifice this artifact. **If you do**, discard your hand, then put all
     # cards exiled with this artifact into their owner's hand." (Knowledge
     # Vault.) The same shape: the sacrifice records that it took place, so the

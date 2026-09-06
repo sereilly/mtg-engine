@@ -834,6 +834,10 @@ def _lower_condition(
         # ``SourceExiledWithCounter`` below — a card printing a differently
         # named counter needs nothing here.
         return {"kind": "had_named_counter", "counter": condition.counter}
+    if isinstance(condition, ast.SourceExiled):
+        # "…if that card is exiled" (Ertai's Meddling) — the zone half of the
+        # clause below with no counter half, asked of the same register.
+        return {"kind": "source_exiled"}
     if isinstance(condition, ast.SourceExiledWithCounter):
         # The counter word is payload the whole way down, so a card printing a
         # differently-named counter needs nothing here.

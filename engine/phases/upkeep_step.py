@@ -15,7 +15,7 @@ import re
 
 from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
-from ..exiled_records import live_records
+from ..exiled_records import EXILE_RECORD_KEY, live_records
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords)
@@ -1122,7 +1122,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     "ability_text": trig.source_line or None,
                     "trigger_context": {
                         "event_subject_player": player_index,
-                        "exile_record": record,
+                        EXILE_RECORD_KEY: record,
                     },
                 })
 
@@ -1284,6 +1284,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # one the creating event recorded, which is what `EVENTS_SEATED_BY_
         # BOUND_PLAYER` makes `matching_delayed_triggers` compare against.
         fire_delayed_triggers(self, "damaged_players_next_upkeep", seat=player_index)
+        # "…at the beginning of **each of that player's upkeeps**" (Ertai's
+        # Meddling). The repeating sibling of the row above, on the same seat
+        # rule and announced from the same moment; `once=False` on the entry is
+        # what makes it stay on the waiting list rather than the fire site
+        # knowing anything about it.
+        fire_delayed_triggers(self, "bound_players_upkeep", seat=player_index)
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

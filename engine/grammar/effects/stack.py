@@ -863,3 +863,33 @@ def _parse_can_be_targeted_as_though(
         stream.reset(mark)
         return None
     return ast.WaiveShroud(player)
+
+
+def _parse_put_exiled_card_on_stack_as_copy(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.PutExiledCardOnStackAsCopy | None":
+    """``puts it onto the stack as a copy of the original spell`` (Ertai's
+    Meddling) — the verb and everything after it, with the subject already read.
+
+    Every word after the verb is required. "Onto the stack" is where it goes,
+    "as a copy" is what it becomes (CR 707.10), and "of the original spell" is
+    *which* object is copied — the spell this same effect exiled, and the only
+    one whose decisions the exile register still holds. A production that
+    consumed fewer of them would put a card onto the stack as a copy of
+    whatever the resolution happened to be carrying.
+
+    Declines with the cursor unmoved for anything else, so every other printed
+    "puts …" keeps its own reading and its own refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("puts", "put"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("onto", "the", "stack", "as", "a", "copy", "of",
+                                "the", "original", "spell"):
+        stream.reset(mark)
+        return None
+    return ast.PutExiledCardOnStackAsCopy(player=player)

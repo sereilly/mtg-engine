@@ -135,6 +135,21 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # possessive makes it a separate event rather than a spelling of either.
     (("at", "the", "beginning", "of", "their", "next", "upkeep"),
      "damaged_players_next_upkeep", True, "until_it_triggers", False),
+    # "…at the beginning of **each of that player's upkeeps**" (Ertai's
+    # Meddling). The repeating spelling of the row above — "each of" is
+    # CR 603.7b's stated-duration half exactly as it is in the draw-step row,
+    # so `once` is False — and the possessive names the same kind of seat: one
+    # the creating effect recorded.
+    #
+    # Its duration is `while_the_game_lasts`, the one row that carries it: the
+    # card prints no window at all, and the sentence's own intervening-if is
+    # what stops it (see `delayed_triggers.WHILE_THE_GAME_LASTS`). Read *above*
+    # the "their next upkeep" row would make no difference — the two differ from
+    # the fifth word on — and it is placed below it so the three one-shot upkeep
+    # rows stay together.
+    (("at", "the", "beginning", "of", "each", "of", "that", "player", "'s",
+      "upkeeps"),
+     "bound_players_upkeep", False, "while_the_game_lasts", False),
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). Unseated for `next_end_step`'s reason — CR 514 gives
     # every turn one cleanup step and the ability names the next one there is —

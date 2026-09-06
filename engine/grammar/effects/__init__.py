@@ -141,6 +141,7 @@ from .exile import (
     _parse_exile_graveyard,
     _parse_put_exiled_with_source,
     _parse_player_exiles_graveyard,
+    _parse_player_exiles_target_spell,
     _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,
 )
@@ -193,6 +194,7 @@ from .zones import (
 )
 from .search import _parse_search_library
 from .stack import (
+    _parse_put_exiled_card_on_stack_as_copy,
     _parse_can_be_targeted_as_though,
     _parse_change_target,
     _parse_copy_that_spell,
@@ -346,6 +348,8 @@ __all__ = [
     "_parse_exile_entire_library",
     "_parse_put_exiled_with_source",
     "_parse_player_exiles_graveyard",
+    "_parse_player_exiles_target_spell",
+    "_parse_put_exiled_card_on_stack_as_copy",
     "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",
     "parse_put_milled_card_onto_battlefield",

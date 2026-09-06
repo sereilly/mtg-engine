@@ -271,11 +271,24 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         # recipient, stamped by `damage_events._announce`. Two records, one
         # field, and the payload is what says which: read as the chosen-player
         # one it would find nothing and arm no ability at all.
-        recorded = (
-            (context.trigger_context or {}).get("defending_player_index")
-            if binds_player == "damaged_player"
-            else (context.results or {}).get("chosen_player")
-        )
+        # Three records, one field, and the payload is what says which. Read as
+        # each other none of them finds anything and the ability is armed about
+        # nobody, so the miss is loud rather than a default seat.
+        if binds_player == "damaged_player":
+            recorded = (context.trigger_context or {}).get("defending_player_index")
+        elif binds_player == "exiled_spell_controller":
+            # "Target spell's controller exiles it … at the beginning of each of
+            # **that player's** upkeeps" (Ertai's Meddling). The seat an earlier
+            # step of *this* resolution wrote down when it took the spell off the
+            # stack — the controller a card in exile no longer has (CR 108.4).
+            #
+            # The literal, for the reason the two beside it spell theirs: the key
+            # is declared in ``engine/exiled_records.py`` beside the reader that
+            # answers it, and the handler layer does not import from the
+            # grammar's lowering package.
+            recorded = (context.results or {}).get("exiled_spell_controller")
+        else:
+            recorded = (context.results or {}).get("chosen_player")
         if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
             game.log.append(f"{context.card.name} had no player to watch")
             return True, "no player"

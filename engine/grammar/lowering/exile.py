@@ -49,6 +49,27 @@ _GRAVEYARD_PILE_SEATS = frozenset({"defending_player"})
 _CHOSEN_GRAVEYARD_PILE = "chosen"
 
 
+def _entering_counter_payload(
+    counters: "tuple[tuple[str, int | ast.Var], ...]",
+) -> dict[str, "int | str"]:
+    """``((counter word, how many), …)`` as the payload every counter handler
+    reads.
+
+    The count is a printed number or the cast's X, and ``ast.Var`` is how the
+    parse spells the second (CR 107.3). It becomes the *string* ``"x"`` here
+    because that is the one spelling ``handlers/_common.resolve_amount`` reads,
+    and a payload carrying an AST node would be a second answer to "what is this
+    number" that no handler asks.
+
+    One converter for both branches that write this key, so the self-exile and
+    the spell exile cannot come to disagree about how a variable count travels.
+    """
+    return {
+        name: (count.name if isinstance(count, ast.Var) else int(count))
+        for name, count in counters
+    }
+
+
 def _is_hand_card_exile(subject: "ast.Recipient") -> bool:
     """Whether *subject* is the "a card from your hand" noun phrase.
 
@@ -266,6 +287,51 @@ def _lower_exile(
     # not a cosmetic loss: every other exile in this file resolves for the
     # ability's own controller, so "each player exiles …" read without its
     # subject would empty one graveyard where the card empties the table's.
+    # "**Target spell's controller** exiles it with X delay counters on it."
+    # (Ertai's Meddling.) The second shape in this file whose subject is
+    # printed, and the one whose subject *is* the target: the announcement
+    # chooses an object on the stack (CR 115.1) and the seat that performs the
+    # exile is read off it (CR 109.5), so the actor carries no seat of its own
+    # to drop.
+    #
+    # Read before the guard below, which is written about the graveyard sweep
+    # and would otherwise refuse this whole sentence. Every part of the clause
+    # is checked here rather than dropped, the way each branch in this file
+    # states about its own: an exile that lost its counters is a card whose
+    # second ability can never fire.
+    if node.actor is not None and node.actor.kind == "target_spells_controller":
+        subject = node.subject
+        if not (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "target"
+            and subject.count == 1
+            and subject.filter.zone == "stack"
+        ):
+            raise LoweringError(
+                "a spell's controller exiles the one spell the sentence "
+                "targeted", node=node,
+            )
+        if node.duration.kind is not None or node.face_down or node.same_zone:
+            raise LoweringError(
+                "the targeted-spell exile carries no duration, face-down "
+                "rider or pile", node=node,
+            )
+        leftovers = _restrictions_beyond(subject.filter, frozenset({"zone"}))
+        if leftovers:
+            raise LoweringError(
+                f"the targeted-spell exile does not honour {leftovers[0]!r}",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            # The same description the counterspell lowering writes, because it
+            # is the same picker: an object on the stack, never a battlefield
+            # permanent. Two spellings of it would be two answers to what may be
+            # chosen here.
+            "targets": {"quantifier": "target", "kind": "spell"},
+        }
+        if node.counters:
+            payload["counters"] = _entering_counter_payload(node.counters)
+        return (OracleInstruction("exile_target_spell", "", payload),)
     if node.actor is not None and not _is_graveyard_pile_exile(node.subject):
         raise LoweringError("no exile handler names a subject", node=node)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
@@ -549,7 +615,7 @@ def _lower_exile(
         # reads them back off the register.
         payload: dict = {}
         if node.counters:
-            payload["counters"] = {name: count for name, count in node.counters}
+            payload["counters"] = _entering_counter_payload(node.counters)
         return (OracleInstruction("exile_self", "", payload),)
     # "Exile **that token**…" (Stangg). The token this same effect created,
     # addressed by the id the token maker wrote to the scratchpad — not a

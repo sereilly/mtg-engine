@@ -332,3 +332,27 @@ class WaiveShroud:
 
     player: PlayerRef
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class PutExiledCardOnStackAsCopy:
+    """``the player puts it onto the stack as a copy of the original spell``
+    (Ertai's Meddling).
+
+    CR 707.10 from the far side of a zone change. The object is a **card in
+    exile** — the spell an earlier step of the same effect took off the stack —
+    and what goes onto the stack is that card, carrying the modes, targets and
+    value of X the original was announced with. CR 400.7 destroyed the stack
+    object those decisions lived on, so they can only be read out of the exile
+    register, which is why this is a node of its own rather than a spelling of
+    the copy productions beside it: :class:`CopySpell` copies an object that is
+    still on the stack and has nothing to look up.
+
+    ``player`` is who puts it there, which CR 707.10 makes the copy's
+    controller ("a copy of a spell is controlled by the player under whose
+    control it was put on the stack"). Recorded rather than assumed to be the
+    ability's controller: for the card that prints this the two are always
+    different players — the ability belongs to whoever cast the exiler.
+    """
+
+    player: PlayerRef

@@ -544,6 +544,38 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     return None
 
 
+def _accept_exiled_object_reference(stream: TokenStream) -> bool:
+    """The ability's own source **or the card it put into exile** — "it", "this
+    card", "that card", "the card".
+
+    ``accept_source_reference`` reads the first two and stops, which is right
+    everywhere it is asked: those three spellings name an object the ability is
+    an ability *of*. The two definite spellings here name an object in exile
+    that the ability is merely *about* — "…**that card** is exiled, remove a
+    delay counter from **it**" (Ertai's Meddling), where the delayed ability was
+    created by a spell that is already in a graveyard.
+
+    They reach the same answer, and that is why this is a reader rather than a
+    second node: ``exiled_records.source_object`` resolves "the source" as the
+    resolving ability's permanent *or* the exile record its trigger was fired
+    for, so a clause asking about either is answered by one function. The two
+    referents differ in what put the card there, not in which object the
+    condition tests.
+
+    Scoped to this module's counter and exile clauses on purpose. "That card"
+    all over the pool names a card an earlier step recorded — a dead creature, a
+    milled card — and widening the shared reader would let every one of those
+    read as the ability's own source.
+    """
+    if accept_source_reference(stream):
+        return True
+    mark = stream.mark()
+    if stream.accept_word("that", "the") and stream.accept_word("card"):
+        return True
+    stream.reset(mark)
+    return False
+
+
 def _accept_counter_kind(stream: TokenStream) -> str | None:
     """The counter's written name, or None with the cursor untouched.
 
@@ -594,7 +626,7 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
     # which refusal survives, and the more specific question asking first keeps
     # "exiled" from being reported as an unrecognised state word.
     exiled_mark = stream.mark()
-    if accept_source_reference(stream) and stream.accept_phrase("is", "exiled", "with"):
+    if _accept_exiled_object_reference(stream) and stream.accept_phrase("is", "exiled", "with"):
         stream.accept_word("a", "an")
         counter_word = stream.peek_word()
         if counter_word is not None and counter_word not in ("counter", "counters"):
@@ -605,6 +637,16 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
             ):
                 return ast.SourceExiledWithCounter(counter_word)
     stream.reset(exiled_mark)
+
+    # "…**if that card is exiled**, remove a delay counter from it."
+    # (Ertai's Meddling.) The clause above with nothing behind it: the object is
+    # in exile and the sentence asks no more than that. Read *after* it, so the
+    # longer question keeps its own words — this one would otherwise consume
+    # "is exiled" out of All Hallow's Eve and strand the counter phrase.
+    bare_exiled_mark = stream.mark()
+    if _accept_exiled_object_reference(stream) and stream.accept_phrase("is", "exiled"):
+        return ast.SourceExiled()
+    stream.reset(bare_exiled_mark)
 
     # "if **there are no more scream counters on it**" (All Hallow's Eve),
     # "if **there are no time counters on this Aura**" (Tourach's Gate),
@@ -655,7 +697,7 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
     # `accept_source_reference` also takes the card naming itself, which is how
     # a pre-modern printing ("if Fasting has …") reaches the same branch.
     threshold_mark = stream.mark()
-    if accept_source_reference(stream) and stream.accept_word("has"):
+    if _accept_exiled_object_reference(stream) and stream.accept_word("has"):
         # "if this artifact has **a** charge counter on it" (Ventifact
         # Bottle). The article is English's way of printing "one or more":
         # the clause is a *presence* test, and a card that had exactly one

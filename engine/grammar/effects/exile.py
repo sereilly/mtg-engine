@@ -22,6 +22,7 @@ import dataclasses
 
 from .. import ast
 from ..phrases import _accept_self_reference, _parse_zone
+from ..readers import _parse_entering_counters
 from ..references import parse_player_ref, parse_recipient
 from ..vocabulary import CARD_TYPES
 from ..stream import TokenStream
@@ -554,6 +555,55 @@ def _parse_player_exiles_graveyard(
         stream.reset(mark)
         return None
     return ast.Exile(subject, actor=player)
+
+
+def _parse_player_exiles_target_spell(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.Exile | None":
+    """``exiles it with X delay counters on it`` (Ertai's Meddling) — the verb
+    and everything after it, with ``Target spell's controller`` already read by
+    the caller.
+
+    The **object** of the verb is the sentence's target and it was printed in
+    front of the verb: "target" modifies *spell*, so the announcement chooses an
+    object on the stack (CR 115.1) and the seat performing the exile is read off
+    it (CR 109.5). That is why "it" is not resolved through ``parse_recipient``
+    here — the shared reader answers a bare pronoun with the ability's own
+    source, which for this sentence is the spell doing the exiling rather than
+    the spell being exiled. The subject phrase already said which object the
+    pronoun means, so the spec is built from it.
+
+    Gated on that one referent, which is the same narrowness
+    :func:`_parse_player_exiles_graveyard` states about its own: only the
+    ``target_spells_controller`` seat carries an object for "it" to name, and
+    every other player-subject exile keeps its own reading and its own refusal.
+
+    The counters rider is optional and read through the shared
+    ``_parse_entering_counters``, so "…with X delay counters on it" and All
+    Hallow's Eve's "…with two scream counters on it" are one printed phrase read
+    once (CR 121.2 puts them on as part of the move either way).
+
+    Returns None with the cursor unmoved for anything else.
+    """
+    if player.kind != "target_spells_controller":
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    counters = _parse_entering_counters(stream)
+    return ast.Exile(
+        # The zone is what says this is a spell rather than a permanent, and it
+        # is the same word ``nouns`` writes for "target instant or sorcery
+        # **spell**" — so the lowering and the picker read one answer to "what
+        # may be chosen here", not two.
+        ast.TargetSpec("target", ast.ObjectFilter(zone="stack")),
+        actor=player,
+        counters=counters,
+    )
 
 
 def _parse_put_exiled_this_way(

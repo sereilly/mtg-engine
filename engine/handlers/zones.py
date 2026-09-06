@@ -2884,6 +2884,13 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
         counters = instruction.payload.get("counters") or {}
         if not counters:
             return
+        # ``resolve_amount`` rather than ``int``: a count may be the cast's X
+        # (CR 107.3), which travels as the string ``"x"`` — the same spelling
+        # every other counted payload in this engine carries. Resolved once,
+        # because the register and the log must not disagree about how many.
+        placed = {
+            str(k): resolve_amount(v, context.x_value) for k, v in counters.items()
+        }
         record_exiled_card(
             game, card, owner_index,
             # CR 108.4: a card in exile has no controller, so its abilities
@@ -2891,13 +2898,13 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
             # default, because "at the beginning of **your** upkeep" needs a
             # seat and the register is the only thing that still has one.
             controller_index=owner_index,
-            counters={str(k): int(v) for k, v in counters.items()},
+            counters=placed,
         )
         game.log.append(
             f"{card.name} was exiled with "
             + ", ".join(
                 f"{count} {name} counter" + ("s" if count != 1 else "")
-                for name, count in counters.items()
+                for name, count in placed.items()
             )
         )
 

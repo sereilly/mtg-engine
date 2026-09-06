@@ -173,7 +173,9 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
-def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]:
+def _parse_entering_counters(
+    stream: TokenStream,
+) -> tuple[tuple[str, "int | ast.Var"], ...]:
     """``with two scream counters on it`` — counters an object carries into a zone.
 
     "Exile All Hallow's Eve **with two scream counters on it**." The counters
@@ -204,14 +206,25 @@ def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]
     mark = stream.mark()
     if not stream.accept_word("with"):
         return ()
+    count: "int | ast.Var"
     if stream.accept_word("a", "an"):
         count = 1
+    elif stream.at_word("x"):
+        # "…**with X delay counters on it**" (Ertai's Meddling). The cast's X
+        # (CR 107.3), which is a *value* the printed sentence names exactly as a
+        # number word does — so it rides the same slot rather than a second
+        # field, and every branch behind this one is unchanged. ``ast.Var`` is
+        # how the rest of this grammar spells the variable, and it is frozen and
+        # hashable, which is what the node holding this tuple requires.
+        stream.advance()
+        count = ast.Var("x")
     else:
         word = stream.peek_word()
-        count = NUMBER_WORDS.get(word) if word is not None else None
-        if count is None:
+        number = NUMBER_WORDS.get(word) if word is not None else None
+        if number is None:
             stream.reset(mark)
             return ()
+        count = number
         stream.advance()
     # The counter's name, which is a **word** for a card-invented kind ("scream")
     # and a `PT` token for a CR 122.1a pair ("+1/+1", Sand Golem). Both are read

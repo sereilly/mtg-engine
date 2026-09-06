@@ -62,6 +62,50 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import CardDefinition
 
 
+@dataclass(frozen=True)
+class StackAnnouncement:
+    """What was decided about a spell when it was announced (CR 601.2), frozen
+    so a *copy* of it can be put onto the stack later (CR 707.10).
+
+    "Target spell's controller exiles it with X delay counters on it. … the
+    player puts it onto the stack as a copy of the original spell."
+    (Ertai's Meddling.) CR 707.10 says a copy "copies both the characteristics
+    of the spell and all decisions made for it, including modes, targets, the
+    value of X" — and CR 400.7 destroys the ``StackItem`` those decisions live
+    on the moment the card leaves the stack. Turns later there is nothing left
+    to read them off, so they are written down here.
+
+    A declared schema rather than a loose dict, for :class:`DelayedTrigger`'s
+    stated reason one file over: six keys written in one place and read in
+    another is a shape nobody declares, and a key spelled differently at one end
+    reads as absent. Frozen, because a copy that could be edited afterwards
+    would be a record of decisions nobody made.
+
+    Not the ``StackItem`` itself, and that is CR 400.7 again: the object is
+    gone, and holding it would be exactly the "memory of its previous existence"
+    the rule forbids — a live handle onto a mutable object two zone changes out
+    of date.
+    """
+
+    caster_index: int
+    target_player_index: int | None = None
+    target_permanent_index: object = None
+    target_permanent_id: object = None
+    target_graveyard_card: object = None
+    x_value: int | None = None
+    chosen_mode_index: int | None = None
+    chosen_modes: tuple = ()
+    #: CR 707.10's "targets" where the target was another object on the stack
+    #: (Ertai's Meddling exiling a Counterspell). Carried as it stood; by the
+    #: time the copy is made the object may have resolved, which CR 608.2b
+    #: answers at the copy's own resolution rather than here.
+    target_stack_item: object = None
+    #: Everything the caster picked beyond the target itself — the same dict
+    #: ``StackItem.choices`` carries, copied rather than shared so the record
+    #: cannot be edited through the object it was read from.
+    choices: dict = field(default_factory=dict)
+
+
 @dataclass
 class ExiledRecord:
     """One card in exile that something still reads.
@@ -94,11 +138,35 @@ class ExiledRecord:
     #: entry keeps both — the card is still face down to everyone else, which is
     #: the whole point of the permission.
     looker_index: int | None = None
+    #: CR 707.10's copiable decisions, for a card exiled **off the stack** that
+    #: something will later put back onto it as a copy of the spell it was
+    #: (Ertai's Meddling). None for every other exile: nothing was announced, so
+    #: there is nothing to copy, and a handler that finds none makes no copy
+    #: rather than guessing at targets nobody chose.
+    announcement: "StackAnnouncement | None" = None
     metadata: dict = field(default_factory=dict)
 
 
 #: The register's attribute on ``Game``.
 RECORDS_ATTR = "exiled_records"
+
+#: The trigger-context key a record travels under — written by the upkeep scan
+#: that fires an exiled card's own trigger, and by the exile of a spell whose
+#: next sentence creates a delayed ability about the card
+#: (``handlers/stack.exile_target_spell``); read by :func:`record_in_context`,
+#: which is the one reader.
+#:
+#: Declared here because this file is where the reader is and because it imports
+#: nothing from the engine — so the handler layer and the grammar's lowering can
+#: both name it without either importing the other. A producer and a consumer
+#: two sentences apart is exactly where two spellings of a string come apart.
+EXILE_RECORD_KEY = "exile_record"
+
+#: …and the seat the exiled spell's controller was, for a delay that names
+#: "each of **that player's** upkeeps". Beside the record rather than read back
+#: off it, because ``create_delayed_trigger``'s ``binds_player`` reads a *seat*
+#: out of the resolution scratchpad and a record is not one.
+EXILED_SPELL_CONTROLLER_KEY = "exiled_spell_controller"
 
 
 def record_exiled_card(
@@ -110,6 +178,7 @@ def record_exiled_card(
     counters: dict[str, int] | None = None,
     face_down: bool = False,
     looker_index: int | None = None,
+    announcement: "StackAnnouncement | None" = None,
 ) -> ExiledRecord:
     """Register *card* as exiled, and return its record.
 
@@ -130,6 +199,7 @@ def record_exiled_card(
         ),
         face_down=bool(face_down),
         looker_index=None if looker_index is None else int(looker_index),
+        announcement=announcement,
     )
     for kind, count in (counters or {}).items():
         add_counters(record, kind, int(count))
@@ -173,7 +243,7 @@ def record_in_context(context) -> ExiledRecord | None:
     The upkeep scan stamps it into the trigger context (CR 603.10 — the ability
     is on the stack independently of its source), and this is the one reader.
     """
-    return (context.trigger_context or {}).get("exile_record")
+    return (context.trigger_context or {}).get(EXILE_RECORD_KEY)
 
 
 def source_object(context):

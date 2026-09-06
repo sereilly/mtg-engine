@@ -226,6 +226,18 @@ DELAYED_EVENTS: dict[str, str] = {
     # Seated by ``bound_player_index`` rather than ``controller_index`` — see
     # :data:`EVENTS_SEATED_BY_BOUND_PLAYER`.
     "damaged_players_next_upkeep": "the upkeep step",
+    # "At the beginning of **each of that player's upkeeps**, if that card is
+    # exiled, remove a delay counter from it." (Ertai's Meddling.) The fourth
+    # upkeep row, and it is the *repeating* one: the three above each wait for
+    # one upkeep and are done, where CR 603.7b's "unless it has a stated
+    # duration" makes "each of" an ability that fires at every one of them.
+    #
+    # Seated by ``bound_player_index`` like `damaged_players_next_upkeep` and
+    # for that row's reason — the possessive names a player the creating effect
+    # recorded rather than the ability's controller, and the two are different
+    # seats here by construction: the ability belongs to whoever cast Ertai's
+    # Meddling and the upkeep belongs to whoever cast the spell it exiled.
+    "bound_players_upkeep": "the upkeep step",
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). CR 514.3a names this ability shape in the rule
     # itself — the cleanup step's own exception to "no player receives
@@ -319,6 +331,23 @@ UNTIL_IT_TRIGGERS = "until_it_triggers"
 #: :func:`end_source_tapped_delayed_triggers`, which the two sites that already
 #: announce ``bound_permanent_leaves_or_untaps`` call for the same moment.
 WHILE_SOURCE_TAPPED = "while_source_tapped"
+#: "At the beginning of **each of that player's upkeeps**, …" (Ertai's
+#: Meddling.) CR 603.7b's repeating half with **no** stated end: the printed
+#: sentence says which upkeeps it fires on and never says when it stops, so
+#: nothing ever lifts it and only the game ending does.
+#:
+#: Its own name rather than :data:`UNTIL_IT_TRIGGERS`, which is what every
+#: one-shot row carries and means "removed by firing" — an entry that fires
+#: forever is removed by nothing, and filing the two together would make the
+#: word stop saying anything. Outside :data:`_TURN_SCOPED`, which is what the
+#: expiry sweep actually reads, so the two spellings behave identically today
+#: and the next reader is told which of them is a claim about the card.
+#:
+#: An ability that outlives what it is about is safe here only because the card
+#: printing it states an intervening-if — "if that card is exiled" — and that
+#: gate is enforced (``handlers/control_flow``'s ``source_exiled``). A repeating
+#: entry with no such gate would go on acting after its subject was gone.
+WHILE_THE_GAME_LASTS = "while_the_game_lasts"
 
 #: Events whose printed words name a turn **after** the one the ability was
 #: created in, so an entry must not answer to the announcement made in its own
@@ -345,6 +374,10 @@ EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({"granted_extra_turns_end_ste
 #: for one seat either way.
 EVENTS_SEATED_BY_BOUND_PLAYER: frozenset[str] = frozenset({
     "damaged_players_next_upkeep",
+    # "…each of **that player's** upkeeps" (Ertai's Meddling). The same
+    # possessive naming the same kind of seat: the player an earlier step of the
+    # creating effect recorded, not the ability's controller.
+    "bound_players_upkeep",
 })
 
 

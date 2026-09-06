@@ -122,6 +122,7 @@ from .conditions import (
     SelfInGraveyardWithCardsAbove,
     AttachedCounterCount,
     SourceCounterCount,
+    SourceExiled,
     SourceExiledWithCounter,
     SubjectCharacteristicIs,
     TurnIsYours,
@@ -344,6 +345,7 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     ModalNode,
+    PutExiledCardOnStackAsCopy,
     WaiveShroud,
 )
 from .combat import (
@@ -537,6 +539,7 @@ __all__ = [
     "ReturnSelfInsteadOfUntapping",
     "HadNamedCounter",
     "HadPlus1Counter",
+    "SourceExiled",
     "SourceExiledWithCounter",
     "SelfInGraveyardWithCardsAbove",
     "AttachedCounterCount",
@@ -714,6 +717,7 @@ __all__ = [
     "CounterAbility",
     "ChangeTarget",
     "ChooseTarget",
+    "PutExiledCardOnStackAsCopy",
     "WaiveShroud",
     "CreateDelayedTrigger",
     "NextDrawReplacement",

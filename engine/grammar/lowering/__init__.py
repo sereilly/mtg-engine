@@ -338,6 +338,7 @@ from .stack import (
     _lower_counter_ability,
     _lower_counter_spell,
     _lower_modal_head,
+    _lower_put_exiled_card_on_stack_as_copy,
 )
 from .delayed import (
     _lower_choose_target,
@@ -635,6 +636,7 @@ __all__ = [
     "_lower_choose_target",
     "_lower_waive_shroud",
     "_lower_counter_spell",
+    "_lower_put_exiled_card_on_stack_as_copy",
     "_lower_create_delayed_trigger",
     "_lower_modal_head",
     "_lower_combat_restriction",
