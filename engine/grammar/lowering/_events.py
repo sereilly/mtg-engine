@@ -654,6 +654,14 @@ DAMAGE_RECIPIENT = "damage_recipient"
 #: nothing else in the resolution can say which one it was.
 _UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
 
+#: "X target attacking creatures become blocked. Choking Vines deals 1 damage to
+#: **each of those creatures**." The becomes-blocked step records which
+#: creatures it chose, for the reason the tap and untap pair do: the sentence
+#: behind it names them and nothing else in the resolution can say which they
+#: were. The mirror image of ``_UNBLOCKABLE_PERMANENTS`` one entry up, which is
+#: why it sits beside it (CR 509.1h is the one rule both sentences are about).
+_BLOCKED_PERMANENTS = "blocked_permanents"
+
 #: "Target creature you cast this turn has base power and toughness 0/1 until
 #: your next upkeep. At the beginning of your next upkeep, put a +1/+1 counter
 #: on **that creature**." (Cycle of Life.) The rewrite records which permanent
@@ -709,6 +717,7 @@ PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
+    _BLOCKED_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
     _BASE_PT_SET_PERMANENTS,
     PUT_FROM_HAND_PERMANENTS,

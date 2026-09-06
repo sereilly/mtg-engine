@@ -393,6 +393,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # gate on — without one the pronoun would name the ability's own source and
     # the Sappers would destroy themselves twice.
     "grant_unblockable_to_target": "unblockable_permanents",
+    # "X target attacking creatures become blocked. Choking Vines deals 1 damage
+    # to **each of those creatures**." The mirror image of the grant one line
+    # up, recording for its reason exactly: the sentence behind it names the
+    # creatures this step chose and nothing else in the resolution can say which
+    # they were -- a board read would find every blocked attacker, including the
+    # ones the defending player blocked in the ordinary way.
+    "become_blocked": "blocked_permanents",
     # "Tap all untapped Islands that player controls and this enchantment deals
     # X damage to the player, **where X is the number of Islands tapped this
     # way**." (Monsoon.) How many the sweep turned, which is the only place the

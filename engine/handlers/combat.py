@@ -417,6 +417,13 @@ def swap_block_assignments(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+#: The scratchpad key the becomes-blocked step records its creatures under. One
+#: name, for ``UNBLOCKABLE_PERMANENTS``' reason below: the handler writes it and
+#: ``lowering/_records._PRODUCES`` declares it, and a second spelling would make
+#: the lowering's gate vacuous while the record sat unread.
+BLOCKED_PERMANENTS = "blocked_permanents"
+
+
 @effect_handler("become_blocked")
 def become_blocked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target unblocked attacking creature becomes blocked." (Dazzling Beauty.)
@@ -440,23 +447,44 @@ def become_blocked(game: Game, instruction: OracleInstruction, context: OracleEx
     """
     from ..subject_filters import subject_matches
 
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    described = instruction.payload.get("targets") or {}
+    filters = described.get("filter") or {}
     observer = game.players.index(context.caster)
-    creature = resolve_target_permanent(
-        game, context,
-        predicate=lambda perm: subject_matches(
+
+    def eligible(perm) -> bool:
+        return subject_matches(
             game, perm, filters, observer=observer,
             source=context.source_permanent,
-        ),
-        fallback_on_invalid_choice=False,
-    )
-    if creature is None:
+        )
+
+    # "**X target attacking creatures** become blocked." (Choking Vines.) The
+    # several-targets description says a list was collected, and each slot is
+    # resolved strictly: a creature that left or stopped attacking is dropped
+    # (CR 608.2b) and the rest still become blocked. No fallback scan, because a
+    # fallback per slot would mark whichever attacker the scan reached first for
+    # a choice the player made once.
+    if isinstance(described.get("count"), (int, str)) and described.get("count") != 1:
+        chosen = resolve_target_permanents(game, context, predicate=eligible)
+    else:
+        found = resolve_target_permanent(
+            game, context, predicate=eligible, fallback_on_invalid_choice=False,
+        )
+        chosen = [found] if found is not None else []
+    if not chosen:
         game.log.append(f"{context.card.name}: no valid creature target")
         return True, "resolved"
-    creature.blocked = True
-    creature.metadata[BLOCKED_WITHOUT_BLOCKERS] = True
-    game.log.append(
-        f"{creature.card.name} becomes blocked ({context.card.name})"
+    for creature in chosen:
+        creature.blocked = True
+        creature.metadata[BLOCKED_WITHOUT_BLOCKERS] = True
+        game.log.append(
+            f"{creature.card.name} becomes blocked ({context.card.name})"
+        )
+    # What the *next* sentence means. "Each of those creatures" names every
+    # creature this instruction blocked (CR 611.2c fixes the set when the effect
+    # begins), by id and never by slot: the next instruction runs after this one
+    # and a permanent may have left in between (CR 400.7).
+    context.results[BLOCKED_PERMANENTS] = tuple(
+        perm.permanent_id for perm in chosen
     )
     return True, "resolved"
 

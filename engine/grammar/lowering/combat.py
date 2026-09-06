@@ -487,7 +487,20 @@ def _lower_become_blocked(
             node=node,
         )
     payload: dict[str, object] = {}
-    _describe_targets(payload, subject)
+    # "**X target attacking creatures** become blocked. Choking Vines deals 1
+    # damage to each of those creatures." The plural of the same sentence, so
+    # it is the same instruction with the several-targets description rather
+    # than a kind of its own — the description is what tells the picker to
+    # collect X and the handler to resolve a list.
+    #
+    # Opted into here rather than admitted by the ordinary description, which is
+    # that description's whole safety: a handler resolving one permanent must
+    # never be handed a several-target picker, because every choice after the
+    # first would be collected and dropped.
+    if _names_several_targets(subject):
+        _describe_several_targets(payload, subject)
+    else:
+        _describe_targets(payload, subject)
     return (OracleInstruction("become_blocked", "", payload),)
 
 
