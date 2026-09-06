@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 65.9% | 57.8% | 37.8% | 86 |
+| WTH *(measured)* | 167 | 249 | 68.7% | 61.8% | 39.8% | 89 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.2%** | **58.8%** | **2962** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 346 | 154 | expected a subject |  |
+| 342 | 150 | expected a subject |  |
 | 107 | 51 | unrecognized effect verb |  |
-| 99 | 53 | unconsumed text |  |
+| 101 | 53 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -65,12 +65,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 1 | expected a keyword ability |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 4 | 4 | expected what to exile as a cost |  |
-| 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected something to destroy |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -809,6 +809,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B}.`
 - **Chariot of the Sun**
   - `{2}, {T}: Until end of turn, target creature you control gains flying and has base toughness 1.`
+- **Chimeric Sphere**
+  - `{2}: Until end of turn, this artifact becomes a 2/1 Construct artifact creature with flying.`
+  - `{2}: Until end of turn, this artifact becomes a 3/2 Construct artifact creature and loses flying.`
 - **Choking Sands**
   - `Destroy target non-Swamp land. If that land was nonbasic, Choking Sands deals 2 damage to the land's controller.`
 - **Chromatic Armor**
@@ -4086,6 +4089,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, return up to one target non-Spirit creature to its owner's hand.`
 - **Roc Hatchling**
   - `At the beginning of your upkeep, remove a shell counter from this creature.`
+  - `As long as this creature has no shell counters on it, it gets +3/+2 and has flying.`
 - **Rock Basilisk**
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
 - **Rock Hydra**
@@ -4996,6 +5000,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
 - **Thoughtleech**
   - `Whenever an Island an opponent controls becomes tapped, you may gain 1 life.`
+- **Thran Forge**
+  - `{2}: Until end of turn, target nonartifact creature gets +1/+0 and becomes an artifact in addition to its other types.`
 - **Thrashing Brontodon**
   - `{1}, Sacrifice this creature: Destroy target artifact or enchantment.`
 - **Three Wishes**
@@ -5632,6 +5638,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wyluli Wolf**
   - `{T}: Target creature gets +1/+1 until end of turn.`
   - `{T}: Target creature gets +1/+1 until end of turn.`
+- **Xanthic Statue**
+  - `{5}: Until end of turn, this artifact becomes an 8/8 Golem artifact creature with trample.`
 - **Xenic Poltergeist**
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
