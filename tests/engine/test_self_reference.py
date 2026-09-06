@@ -97,6 +97,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     left short, the line names a card no reader in the engine knows. "Maraxus"
     is not a word the game uses to describe objects, so this is the same case as
     the six above and not a word the rule should have left alone.
+
+    Tempest added one, the tenth and the same case again: Starke of Rath's
+    activated ability hands the destroyed permanent's controller "control of
+    Starke", and the control seam resolves a source by name. "Starke" is not a
+    word the game uses to describe objects, so the expansion is right to write
+    the whole name.
     """
     changed = {
         card.name
@@ -116,4 +122,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Hivis of the Scale",
         "Purraj of Urborg",
         "Maraxus of Keld",
+        "Starke of Rath",
     }
