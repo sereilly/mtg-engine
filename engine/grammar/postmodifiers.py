@@ -38,6 +38,7 @@ from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
                       accept_source_counter_bound,
                       accept_source_relative_comparison, parse_comparison)
 from .errors import GrammarError
+from .histories import accept_history_relation, accept_relative_clause_history
 from .lexer import PT, SELF
 from .names import accept_name_comparison, accept_original_expansion, parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
@@ -45,7 +46,7 @@ from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
 from .seat_relations import accept_seat_relation
 from .stream import TokenStream
 from .zones import accept_zone_scope
-from .vocabulary import CARD_TYPES, singular as _singular
+from .vocabulary import singular as _singular
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
 # what an Aura or Equipment is on, and the referent each consumer resolves.
@@ -75,68 +76,13 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
             colored = True
             continue
-        # "all untapped creatures **that didn't attack this turn**, **except
-        # for creatures that couldn't attack**" (Season of the Witch). Two
-        # narrowings of one noun phrase, both about the same combat: the first
-        # is the set the sweep takes, the second is the exemption the card
-        # prints. Read here rather than as a sentence-level exception clause
-        # because they narrow the *subject* — the sweep destroys exactly what
-        # the noun phrase names, and an exemption read anywhere else would have
-        # to be re-applied by every verb.
-        if stream.accept_phrase("that", "didn't", "attack", "this", "turn"):
-            d.attacked_this_turn = False
-            continue
-        # "…creatures that player controls **that didn't attack**" (Total War).
-        # The same narrowing with the two words the card does not print, and
-        # the same record answers it: `attacked_this_turn` is stamped at the
-        # declaration, so "didn't attack" asked during the combat it fired in
-        # names exactly the creatures left at home. Read *after* the longer
-        # spelling above, which it is a strict prefix of.
-        if stream.accept_phrase("that", "didn't", "attack"):
-            d.attacked_this_turn = False
-            continue
-        if stream.accept_phrase("that", "attacked", "this", "turn"):
-            d.attacked_this_turn = True
-            continue
-        # "destroy each creature **that blocked or was blocked this turn**"
-        # (Heat Stroke). CR 509.1a's relation with *neither* end named — the
-        # sentence asks whether the creature was on either side of a block,
-        # not which creature it was paired with — so it is a narrowing of
-        # the noun phrase like the attack records above it rather than one
-        # of the `blocking_*` relations further down, every one of which
-        # needs a second object to be about.
-        #
-        # "This turn", not this combat: the card fires at end of combat and
-        # a turn may hold two of them, so the window is the pair records the
-        # declare-blockers step keeps and the cleanup step sweeps.
-        if stream.accept_phrase(
-            "that", "blocked", "or", "was", "blocked", "this", "turn"
-        ):
-            d.blocked_or_was_blocked_this_turn = True
-            continue
-        # "target creature **you cast this turn**" (Cycle of Life). A narrowing
-        # of the noun phrase like the combat records above it, off a different
-        # record: CR 701.5a's cast, stamped as the permanent entered. Not "you
-        # control" and not "that entered this turn" — a creature you cast and
-        # then gave away is still one you cast, and a reanimated one never was.
-        if stream.accept_phrase("you", "cast", "this", "turn"):
-            d.cast_by_you_this_turn = True
-            continue
-        # "destroy all Plains **that weren't chosen this way by any player**"
-        # (Raiding Party). A narrowing of the noun phrase rather than an
-        # exception clause on the verb, for the reason Season of the Witch's
-        # pair above is: the sweep destroys exactly what the phrase names, and
-        # an exclusion read anywhere else would have to be re-applied by every
-        # verb that could carry it.
-        #
-        # "By any player" is the whole of what makes it one narrowing: the
-        # choices were made by several seats over several iterations, and the
-        # words ask about all of the answers at once — which is why the record
-        # behind it accumulates instead of holding the last seat's pick.
-        if stream.accept_phrase(
-            "that", "weren't", "chosen", "this", "way", "by", "any", "player"
-        ):
-            d.not_chosen_this_way = True
+        # The six clauses that narrow a noun phrase by a **record** of
+        # something that already happened — an attack declaration, a block, a
+        # cast, a pick a resolution has already made — rather than by
+        # anything a matcher could see on the board. They left for
+        # `histories` at Tempest's Phase 0; that module says why a history is
+        # none of the three relations this file's docstring names.
+        if accept_history_relation(stream, d):
             continue
         except_mark = stream.mark()
         stream.accept_punct(",")
@@ -623,17 +569,6 @@ def _parse_postmodifiers(
                     stream.advance()
                     d.not_ability_targeted_by_same_name = True
                     continue
-            # "…**that dealt damage to it this turn**" (Brine Hag). A history
-            # relative to the ability's source, answered from the damage record
-            # the victim carries rather than from the object's characteristics
-            # — so it is a flag the one lowering written for it reads, and every
-            # other one refuses (see ``ObjectFilter``). "This turn" is required:
-            # without it the sentence says something the record cannot answer.
-            # "…**that targets a permanent you control**" (Avoid Fate, Ring
-            # of Immortals). What the object *chose*, which is a question only
-            # a spell or an ability on the stack can be asked — so the inner
-            # noun phrase is parsed in full and recorded whole, and every
-            # lowering not written for it refuses the field by name.
             # "…**that isn't enchanted**" (Time Elemental). CR 303.4a: a
             # permanent is enchanted while an Aura is attached to it, so this is
             # a question about the candidate alone and the pure matcher answers
@@ -674,132 +609,23 @@ def _parse_postmodifiers(
                 stream.reset(keyword_probe)
                 stream.reset(probe)
                 break
+            # "…**that targets a permanent you control**" (Avoid Fate, Ring
+            # of Immortals). What the object *chose*, which is a question only
+            # a spell or an ability on the stack can be asked — so the inner
+            # noun phrase is parsed in full and recorded whole, and every
+            # lowering not written for it refuses the field by name.
             elif stream.accept_word("targets"):
                 stream.accept_word("a", "an")
                 d.targets_object = parse_filter(stream)
                 continue
-            # "…that **were blocked by that creature this turn**" (Glyph of
-            # Doom). "That creature" is the object the sentence's delayed
-            # ability was bound to, and "this turn" is what makes the record
-            # outlive the combat the block happened in — both required, for the
-            # reason the damage clause below requires its own.
-            elif stream.accept_phrase("were", "blocked", "by", "that"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in CARD_TYPES:
-                    stream.advance()
-                    if stream.accept_phrase("this", "turn"):
-                        d.blocked_by_bound_object = True
-                        continue
-            # "…that **blocked or were blocked by it this turn**" (Venomous
-            # Breath). The two-way reading of the clause directly above: the
-            # bound object stood on one side of a block and the sentence names
-            # whichever creatures stood on the other, whichever side that was.
-            # Its own field, not a widening of the one-way one — the set is
-            # strictly larger, and a lowering written for "were blocked by"
-            # answering this phrase would destroy creatures the card does not
-            # name.
-            #
-            # "It" and "that creature" are one referent here and both are
-            # admitted: this is the `that …` postmodifier run, whose subject is
-            # the sentence's own object, so neither spelling can be read as the
-            # ability's source. The present-participle relation
-            # (`in_combat_with_source`, "blocking or blocked by it") is a
-            # different production reached by a different first word, which is
-            # what keeps the two "it"s apart.
-            elif stream.accept_phrase("blocked", "or", "were", "blocked", "by"):
-                probe = stream.mark()
-                named_bound = stream.accept_word("it")
-                if not named_bound and stream.accept_word("that"):
-                    noun = stream.peek_word()
-                    if noun is not None and _singular(noun) in CARD_TYPES:
-                        stream.advance()
-                        named_bound = True
-                if named_bound and stream.accept_phrase("this", "turn"):
-                    d.in_combat_with_bound_object = True
-                    continue
-                stream.reset(probe)
-            # "…that were blocked by **target Wall** this turn" (Glyph of
-            # Reincarnation). The same history against the *spell's own target*
-            # instead of a bound object, so the blocker's own noun phrase is
-            # read and travels with the relation — the lowering hoists it into
-            # the instruction's `targets` description, which is what makes the
-            # picker offer Walls. "This turn" is required here for the reason it
-            # is required above: the record is kept per turn, and a clause
-            # naming some other window is a different sentence.
-            elif stream.accept_phrase("were", "blocked", "by", "target"):
-                blocker = parse_filter(stream)
-                if stream.accept_phrase("this", "turn"):
-                    d.blocked_by_target_object = blocker
-                    continue
-            # "…that **target Wall blocked this turn**" (Glyph of Delusion). The
-            # same relation as the passive clause directly above, printed with
-            # the blocker as the sentence's subject rather than its agent — so
-            # it sets the same field, and everything downstream (the lowering's
-            # hoist, the role picker, the block record the handler reads) is
-            # written once for both voices. Spelling it as its own field would
-            # have been two names for one fact, and the second would need its
-            # own reader everywhere the first already has one.
-            elif stream.accept_word("target"):
-                blocker = parse_filter(stream)
-                if stream.accept_phrase("blocked", "this", "turn"):
-                    d.blocked_by_target_object = blocker
-                    continue
-            # "…all creatures **that blocked this creature this turn**"
-            # (Joven's Ferrets). The active voice of the passive clause above,
-            # with the ability's own source as the referent — so it sets its
-            # own field rather than either of theirs: which object the block
-            # record is read against decides which permanent the sweep names,
-            # and one field meaning either would leave the matcher guessing.
-            #
-            # Read *after* "blocked or were blocked by", whose first word this
-            # is: tried first it would take the word and strand the "or".
-            # "This turn" is required for that clause's reason — the record is
-            # kept per turn, and a clause naming another window is a different
-            # sentence.
-            elif stream.at_word("blocked"):
-                blocked_probe = stream.mark()
-                stream.advance()
-                if accept_source_reference(stream) and stream.accept_phrase(
-                    "this", "turn"
-                ):
-                    d.blocked_source_this_turn = True
-                    continue
-                stream.reset(blocked_probe)
-                stream.reset(probe)
-                break
-            elif stream.accept_phrase("dealt", "damage", "to"):
-                if accept_source_reference(stream) and stream.accept_phrase(
-                    "this", "turn"
-                ):
-                    d.dealt_damage_to_source_this_turn = True
-                    continue
-            # "…that **has been dealt damage this turn**" (Giant Shark). The
-            # passive voice with no agent, which is the whole difference from
-            # the clause above: that one asks who dealt it, this one only that
-            # some damage was. Both halves required — a clause naming another
-            # window is a different sentence, and the record is kept per turn.
-            elif stream.accept_phrase("has", "been", "dealt", "damage"):
-                if stream.accept_phrase("this", "turn"):
-                    d.was_dealt_damage_this_turn = True
-                    continue
-            # "…that **was dealt damage this turn**" (Fatal Blow). The same
-            # agentless passive one branch up in the simple past — one printed
-            # fact in two English tenses, so it sets the same field rather than
-            # earning one of its own: a second field would be a second answer to
-            # "was this creature damaged", and the two would drift the moment a
-            # matcher was taught only one of them.
-            #
-            # A branch rather than a word bolted onto the phrase above, because
-            # the two spellings share no token: "has been dealt" and "was dealt"
-            # differ in length as well as in words, and `accept_phrase` matches a
-            # fixed run. The plural "were" is deliberately absent — the pool
-            # prints it only in Suffocation's cast restriction, which is a fact about
-            # a *player* and is read by `engine/cast_restrictions.py`, so
-            # admitting it here would be a reading nothing tests.
-            elif stream.accept_phrase("was", "dealt", "damage"):
-                if stream.accept_phrase("this", "turn"):
-                    d.was_dealt_damage_this_turn = True
-                    continue
+            # The eight arms of this clause that read a **record** — a block, a
+            # damage event, or a turn's worth of either — rather than the
+            # object's own characteristics. They left for `histories` at
+            # Tempest's Phase 0 (see that module) and stay the tail of this
+            # chain rather than a branch of their own: an arm that opens and
+            # then fails takes no later one, there exactly as here.
+            elif accept_relative_clause_history(stream, d, parse_filter):
+                continue
             stream.reset(probe)
             break
         # "…**blocking or [being] blocked by this creature**" (Sentinel, the

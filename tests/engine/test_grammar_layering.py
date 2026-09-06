@@ -108,6 +108,30 @@ PARSE_LAYERS = [
     # readings that write one key each — and it sits here because
     # `postmodifiers` reads it and it reads nothing back.
     "seat_relations",
+    # `histories` split off `postmodifiers` at Tempest's Phase 0, three lines
+    # under the guard below and with two wave-3 groups about to open on it —
+    # the shared-module case SET_PLAYBOOK.md says to pre-split rather than to
+    # brief. The line is the one that module's docstring draws and then does
+    # not finish: a postmodifier names a relation "to the controller, to
+    # another object the sentence names, to a zone", and the fourteen clauses
+    # that moved name a **record** — an attack declaration, a block pairing, a
+    # damage ledger, the seat that cast a permanent. Nothing on a board
+    # answers one, which is why each has to print "this turn" where the live
+    # combat relations left behind must not. It is also the half that grows:
+    # a set adds a clause about what happened far more often than it adds a
+    # way to say what an object *is*.
+    #
+    # No mirror name to reuse, and the near miss is the reason to say so:
+    # `seat_relations` called this family "records" on its way out of the same
+    # module, and `records` one layer down is already the parse-side mirror of
+    # `lowering/_records.py`, reading a *quantity* off an event. Taking the
+    # word here would fork a name inside one package rather than re-form one
+    # across two, which is the opposite of what every note in this file asks a
+    # split to do.
+    #
+    # Below `postmodifiers`, which calls it and is never imported back, and
+    # above `readers`, whose source-reference production two of its arms ask.
+    "histories",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.
