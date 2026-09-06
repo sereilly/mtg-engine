@@ -193,6 +193,17 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # narrows on. Both spellings are listed here because both are printed, and
     # a line only one front end reads is a card refused by the other.
     ("draws_card", ("an", "opponent", "draws", "a", "card")),
+    # "When **the chosen player draws a card with the chosen name**, …" (Booby
+    # Trap.) The third spelling of the same event, and here for the reason the
+    # second is: a line only one front end reads is a card the other refuses.
+    # Both narrowings are the condition's — the seat and the card name were
+    # chosen as the artifact entered (CR 614.1c), and `engine/events.py` tests
+    # them against the permanent's own record. This table carries no payload, so
+    # what it buys is the *effect* half: without the phrase the grammar refuses
+    # the line and the trigger compiles with no instruction behind it.
+    ("draws_card",
+     ("the", "chosen", "player", "draws", "a", "card", "with", "the",
+      "chosen", "name")),
     # "Whenever you gain life …" (Vito). No amount in the phrase: how much was
     # gained is the event's, and a "that much" in the effect reads it out of the
     # trigger's captured context rather than out of these words.

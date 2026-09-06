@@ -316,6 +316,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # object with a fresh id (CR 400.7), so there is nothing about it to look
     # up by.
     "create_token": CREATED_TOKEN,
+    # "Create a token that's a copy of that creature. **That token** gains
+    # haste until end of turn." (Echo Chamber.) The copy maker records what it
+    # made under the same key the token maker above it does, and for that
+    # entry's reason word for word — which token a sentence names is one
+    # question however the token was built, and two keys would be two readers
+    # of the same two printed words.
+    "create_copy_token": CREATED_TOKEN,
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
@@ -353,6 +360,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # read it from — CR 202.1 lets a player name any card, so nothing on a board
     # records the choice.
     "choose_card_name": "chosen_card_name",
+    # "…then you choose a card other than a basic land card from it. Search
+    # that player's … library for all cards with the same name as **the chosen
+    # card**…" (Lobotomy.) The pick records the chosen card's *name*, under the
+    # key the naming choice above writes — "the chosen card's name" and "the
+    # chosen card name" are one question asked by two sentences, and two keys
+    # would be two readers of it.
+    #
+    # Declared for the kind and written by every fate, which is what makes the
+    # declaration true of Duress as well: the pick is a chosen card whatever
+    # becomes of it.
+    "reveal_hand_and_choose": "chosen_card_name",
     "look_at_target_library_top": "revealed_card",
     # "…**target opponent mills a card**. If a card with the chosen name was
     # milled this way, …" (Foreshadow.) What the mill actually put into a

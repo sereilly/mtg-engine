@@ -91,6 +91,8 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_put_exiled_pile_on_library,
                        _lower_graveyard_top_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
+                       _lower_search_reveal_opponent_chooses,
+                       _lower_strip_cards_with_chosen_name,
                        _lower_search_library, _lower_change_base_pt, _lower_set_base_pt,
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
@@ -191,7 +193,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.Scry: _lower_scry,
     ast.ProducesManaInstead: _lower_produces_mana_instead,
     ast.SpendManaAsThough: _lower_spend_mana_as_though,
-    ast.CreateCopyToken: _lower_create_copy_token,
     ast.CreateEmblem: _lower_create_emblem,
     ast.DestroyEachUnlessPaid: _lower_destroy_each_unless_paid,
     ast.BecomeCreature: _lower_become_creature,
@@ -241,6 +242,11 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    # The same pick over a pile a **search** found (Intuition), which is
+    # why it is a row of its own rather than a field on that node: a search
+    # finds what a player picks out of a hidden zone (CR 701.23a), where a
+    # reveal off the top finds whatever is there.
+    ast.SearchRevealOpponentChooses: _lower_search_reveal_opponent_chooses,
     # The same pick over a *public* pile (Phyrexian Grimoire): no reveal,
     # because CR 400.2 makes a graveyard public — see the node.
     ast.GraveyardTopOpponentChooses: _lower_graveyard_top_opponent_chooses,
@@ -396,4 +402,14 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # of this same effect countered, and with no such record the words name
     # nothing.
     ast.BoundPermanentActivationBan: _lower_bound_permanent_activation_ban,
+    # "Search that player's graveyard, hand, and library for all cards with the
+    # same name as **the chosen card**…" (Lobotomy.) Here for the two rows
+    # above's reason: the description is a record an earlier step of the same
+    # spell wrote, and with none the words name nothing.
+    ast.StripCardsWithChosenName: _lower_strip_cards_with_chosen_name,
+    # "Create a token that's a copy of **that creature**." (Echo Chamber.) It
+    # left the name-only table above for ``ast.Attach``'s reason, word for
+    # word: a pronoun is only a pronoun relative to what came before it, and
+    # with no record the same words mean something else — here, nothing at all.
+    ast.CreateCopyToken: _lower_create_copy_token,
 }

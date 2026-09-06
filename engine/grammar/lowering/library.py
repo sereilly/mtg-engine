@@ -48,7 +48,15 @@ from ._events import (
 # refuses the line rather than leaving the caster choosing from the whole hand
 # while the card claims a restriction. Same rule the search lowering follows,
 # and the same predicate underneath it.
-_REVEALED_HAND_FIELDS = frozenset({"excluded_types", "is_card"})
+#: What the revealed-hand picker can narrow by. ``excluded_basic_lands`` is
+#: the third, and it arrived with Lobotomy's "a card **other than a basic land
+#: card**" — one printed phrase, read by ``search_filters.search_matches``,
+#: which is the one predicate the engine, the AI and the web picker all answer
+#: with. A field admitted here without that reader behind it would be a picker
+#: offering the whole hand while the card named less of it.
+_REVEALED_HAND_FIELDS = frozenset(
+    {"excluded_types", "is_card", "excluded_basic_lands"}
+)
 
 
 def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
@@ -214,6 +222,12 @@ def _lower_reveal_hand_and_choose(
     payload: dict[str, object] = {"fate": node.fate}
     if node.filter.excluded_types:
         payload["exclude_types"] = list(node.filter.excluded_types)
+    if node.filter.excluded_basic_lands:
+        # Emitted only when the card prints it, so Duress's payload stays
+        # byte-identical — and emitted at all, because a phrase the production
+        # consumes and the payload drops is a picker offering a Mountain while
+        # the card says otherwise.
+        payload["exclude_basic_lands"] = True
     # Both keys are emitted only when the card carries them, so Duress's payload
     # stays byte-identical and no behaviour signature moves.
     amount = _amount_payload(node.count)

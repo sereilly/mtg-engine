@@ -588,7 +588,8 @@ class PendingChoicesMixin:
         )
 
     def _resolve_search_library(
-        self, choice: PendingChoice, library_index: int, zone: str = "library"
+        self, choice: PendingChoice, library_index: int, zone: str = "library",
+        *, enforce_floor: bool = True,
     ) -> bool:
         # Who chooses and whose zone is looked in are two questions, and
         # Reincarnation prints them as two players: its controller picks the
@@ -600,6 +601,22 @@ class PendingChoicesMixin:
             # Fail-to-find ends the whole search, not one find of it: CR 701.23b
             # is about the search, and "up to two" makes finding fewer a legal
             # answer the player states by declining the rest.
+            #
+            # …but only where the card printed one. "Search your library for
+            # three cards" (Intuition, Jester's Cap) is CR 701.23d's bare
+            # quantity and *must* find that many, so a decline over a library
+            # that holds them is not an answer — refused here as well as on the
+            # picks path, because a floor enforced on one of the two ways into
+            # the same prompt is a floor a client can walk around.
+            #
+            # ``enforce_floor`` is the one door out, and only the *default*
+            # answer holds the key: a non-interactive seat whose policy list the
+            # resolver refuses has to be able to leave the prompt, or a search
+            # nobody can answer suspends the resolution for the rest of the
+            # game. Every answer off the wire goes through the registry's
+            # resolver, which never passes it.
+            if enforce_floor and self._search_floor(choice) > 0:
+                return False
             if "library" in zones:
                 random.shuffle(caster.library)
             self._record_search_reveal(choice)
@@ -776,10 +793,26 @@ class PendingChoicesMixin:
         if len(slots) < 2:
             # Not a counted search — the single-find path is its answer.
             return False
-        if not picks:
-            return self._resolve_search_library(choice, -1, "none")
         if len(picks) > len(slots):
             return False
+        # **CR 701.23d: a search for a bare quantity is a floor.** "Search your
+        # library for three cards" (Intuition, Jester's Cap) must find that
+        # many, or as many as possible if the zones hold fewer — where "up to
+        # three" and "any number of" let the searcher stop early, which is the
+        # `up_to` key those printings carry and these do not.
+        #
+        # Enforced here rather than in the picker, for the reason
+        # `activation_restrictions.py` exists: a printed restriction nobody
+        # enforces is not a dead clause, it is a clause that works more often
+        # than the card allows — an Intuition that found one card would be a
+        # strictly better spell, and silently so.
+        #
+        # Asked before the fail-to-find below, because with a floor an empty
+        # answer *is* an under-find rather than CR 701.23b's decline.
+        if len(picks) < self._search_floor(choice):
+            return False
+        if not picks:
+            return self._resolve_search_library(choice, -1, "none")
         # Whose zones are looked in, which is not always the seat answering:
         # Jester's Cap's controller searches the *target's* library. The
         # single-find path beside this one has asked since Reincarnation; this
@@ -850,6 +883,70 @@ class PendingChoicesMixin:
         self._exile_searched_remainder(choice.data, caster, zones)
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
+
+    def _search_findable_picks(self, choice: PendingChoice, limit: int) -> list:
+        """Up to *limit* picks the resolver itself admits, in zone order.
+
+        The safety net under :meth:`_default_search_library`, and it reads the
+        one predicate the answer will be checked against rather than the AI's —
+        a second reading is exactly what would leave the policy's list refused
+        and the prompt still owed.
+        """
+        searched = self.players[searched_seat(choice.data, choice.player_index)]
+        picks: list[dict] = []
+        for zone in tuple(choice.data.get("zones", ("library",))):
+            cards = searched.library if zone == "library" else searched.graveyard
+            for index, card in enumerate(cards):
+                if len(picks) >= limit:
+                    return picks
+                if search_matches(
+                    card, choice.data, game=self, owner=choice.player_index
+                ):
+                    picks.append({"zone": zone, "index": index})
+        return picks
+
+    def _search_floor(self, choice: PendingChoice) -> int:
+        """How many cards this search **must** find (CR 701.23d), or 0.
+
+        Three conditions, each a different sentence. A printed "up to" or "any
+        number of" is a ceiling and no floor at all. A search naming **one** card
+        is left alone deliberately: the single-find flow's decline is the
+        engine's one escape from a prompt nothing can answer, and closing it
+        would strand a seat wherever the picker and the resolver read a
+        restriction even slightly differently. And what is left is bounded by
+        what is actually there — CR 701.23d's "or as many as possible", which is
+        what keeps an empty library from being a refusal.
+        """
+        if choice.data.get("up_to"):
+            return 0
+        slots = len(self._search_destination_slots(choice.data))
+        if slots < 2:
+            return 0
+        return min(slots, self._search_findable_count(choice))
+
+    def _search_findable_count(self, choice: PendingChoice) -> int:
+        """How many cards in the searched zones the phrase actually admits.
+
+        The "…or as many as possible" half of CR 701.23d. A search with a floor
+        can still come up short — an empty library, or three cards where the
+        card asked for five — and that is a legal answer rather than a refusal,
+        so the floor is the smaller of what the card names and what is there.
+
+        Through ``search_matches``, the one predicate the engine, the AI and the
+        web picker all answer with: a second count written here would be a
+        second reading of the restriction, and the two would disagree the first
+        time a narrowing was added to either.
+        """
+        searched = self.players[searched_seat(choice.data, choice.player_index)]
+        zones = tuple(choice.data.get("zones", ("library",)))
+        return sum(
+            1
+            for zone in zones
+            for card in (searched.library if zone == "library" else searched.graveyard)
+            if search_matches(
+                card, choice.data, game=self, owner=choice.player_index
+            )
+        )
 
     def _exile_searched_remainder(self, data: dict, searched, zones: tuple) -> None:
         """"Search your library and graveyard for five cards **and exile the
@@ -987,6 +1084,24 @@ class PendingChoicesMixin:
             caster.exile.append(card)
             if data is not None:
                 self._record_search_exile(data, card)
+        elif destination == "held":
+            # "Search your library for three cards and reveal them. **Target
+            # opponent chooses one.**" (Intuition.) The counted twin of
+            # ``_resolve_search_library``'s own "held" branch, and here for that
+            # branch's reason word for word: where the finds go is a later
+            # step's decision, so the search hands them over rather than placing
+            # them. They are out of the library and in nobody's zone for exactly
+            # as long as it takes the next step of the same resolution to run,
+            # with no priority in between.
+            #
+            # A *list*, where the single-find branch writes one card: the next
+            # sentence asks which of them, which only a pile can answer. The key
+            # is named by the lowering that will read it (``record_key``),
+            # because a held pile is a value rather than a fact about the search.
+            record = (data or {}).get("record")
+            key = (data or {}).get("record_key")
+            if record is not None and key:
+                record.setdefault(str(key), []).append(card)
         elif destination == "library_top":
             # "…then shuffle and put those cards on top in any order."
             # (Goblin Recruiter.) The counted twin of the single-find branch in
@@ -1022,6 +1137,7 @@ class PendingChoicesMixin:
             else "into exile" if destination == "exile"
             else "on top of their library" if destination == "library_top"
             else "into their graveyard" if destination == "graveyard"
+            else "aside, for the next step to place" if destination == "held"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")
@@ -1088,11 +1204,22 @@ class PendingChoicesMixin:
                 self, choice.player_index, choice.data, len(slots)
             )
             if not self._resolve_search_library_picks(choice, picks):
-                self._resolve_search_library(choice, -1, "none")
+                # The policy's list was refused — it reads the restriction with
+                # no game in hand, so it can differ from the resolver's reading
+                # at the edges. Under a CR 701.23d floor the decline is no
+                # longer a way out, so the fallback is the resolver's **own**
+                # list before it is the decline: one predicate, asked the way
+                # the answer will be checked.
+                if not self._resolve_search_library_picks(
+                    choice, self._search_findable_picks(choice, len(slots))
+                ):
+                    self._resolve_search_library(
+                        choice, -1, "none", enforce_floor=False
+                    )
             return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
-            self._resolve_search_library(choice, -1, "none")
+            self._resolve_search_library(choice, -1, "none", enforce_floor=False)
 
     # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------
 
@@ -2123,15 +2250,23 @@ class PendingChoicesMixin:
         appending to a list, so the graveyard watchers and CR 903.9b both see
         the move.
         """
-        pile = getattr(owner, from_zone, None)
-        if pile is None:
-            return False
-        for slot, held in enumerate(pile):
-            if held is card:
-                pile.pop(slot)
-                break
+        if from_zone == "held":
+            # "…**and the rest into your graveyard**." (Intuition.) The pile was
+            # handed over by the search that found it and is in no zone at all,
+            # so there is nothing to take it out of — the move below is the
+            # whole of what this card does with it. Its own word rather than a
+            # missing ``from_zone``, because "absent" already means the library.
+            pile = None
         else:
-            return False
+            pile = getattr(owner, from_zone, None)
+            if pile is None:
+                return False
+            for slot, held in enumerate(pile):
+                if held is card:
+                    pile.pop(slot)
+                    break
+            else:
+                return False
         # ``from_zone`` is a *library* or a *graveyard* and never an exile — the
         # lowering that writes it offers exactly those two (Thran Tome's reveal
         # and Phyrexian Grimoire's graveyard pick) — so the pop above is not a
@@ -2140,16 +2275,28 @@ class PendingChoicesMixin:
         # saying so, because a computed attribute name is one the ban cannot
         # read for itself.
         if to_zone == "graveyard":
-            self.put_card_into_graveyard(owner, card, from_zone=from_zone)
+            # A held card came out of a library and CR 404.1 sends it to its
+            # owner's graveyard either way, so the announced source zone is the
+            # one it actually left — which is what Gaea's Blessing's "put into
+            # your graveyard from your library" answers to.
+            self.put_card_into_graveyard(
+                owner, card,
+                from_zone="library" if from_zone == "held" else from_zone,
+            )
         elif to_zone == "hand":
             self.put_card_into_hand(owner, card)
         elif to_zone == "exile":
             owner.exile.append(card)
-        else:
+        elif pile is not None:
             # A destination nobody implements: put it back rather than losing
             # the card. The lowering's closed list is what stops this being
             # reachable, and this is the belt behind it.
             pile.insert(0, card)
+            return False
+        else:
+            # …and with no pile to put it back into, the card is held by the
+            # resolution and stays there — the same refusal with nothing to
+            # undo.
             return False
         return True
 
@@ -2185,6 +2332,7 @@ class PendingChoicesMixin:
         if hand_index not in (choice.data.get("legal_indices") or []):
             return False
         victim_index = int(choice.data["victim_index"])
+        self._record_revealed_hand_pick(choice, victim_index, hand_index)
         if not self._apply_revealed_hand_fate(choice, victim_index, hand_index):
             return False
         self.discard_pending_choice(choice)
@@ -2204,6 +2352,7 @@ class PendingChoicesMixin:
         if legal and 0 <= victim_index < len(self.players):
             hand = self.players[victim_index].hand
             legal.sort(key=lambda i: (-(hand[i].cmc if i < len(hand) else 0), i))
+            self._record_revealed_hand_pick(choice, victim_index, legal[0])
             taken = self._apply_revealed_hand_fate(choice, victim_index, legal[0])
         self.discard_pending_choice(choice)
         if taken:
@@ -2226,11 +2375,15 @@ class PendingChoicesMixin:
         if remaining <= 0 or not 0 <= victim_index < len(self.players):
             return
         exclude_types = list(choice.data.get("exclude_types") or ())
+        narrowing = {
+            "exclude_types": exclude_types,
+            "exclude_basic_lands": bool(choice.data.get("exclude_basic_lands")),
+        }
         victim = self.players[victim_index]
         legal = [
             index
             for index, held in enumerate(victim.hand)
-            if search_matches(held, {"exclude_types": exclude_types})
+            if search_matches(held, narrowing)
         ]
         if not legal:
             return
@@ -2242,8 +2395,37 @@ class PendingChoicesMixin:
             remaining=min(remaining, len(legal)),
             fate=str(choice.data.get("fate", "discard")),
             exclude_types=exclude_types,
+            exclude_basic_lands=narrowing["exclude_basic_lands"],
             source_id=choice.data.get("source_id"),
+            record=choice.data.get("record"),
         )
+
+    def _record_revealed_hand_pick(
+        self, choice: PendingChoice, victim_index: int, hand_index: int
+    ) -> None:
+        """Write down **which card was chosen**, before anything moves it.
+
+        "…then you choose a card other than a basic land card from it. Search
+        that player's graveyard, hand, and library for all cards with the same
+        name as **the chosen card**…" (Lobotomy.) The sentence behind the pick
+        names the card by name, and by the time it runs the card may be in a
+        graveyard, in exile or still where it was — so the name is recorded here,
+        where the answer and the hand are both in hand.
+
+        Written for **every** fate, not only the one that needs it: the pick is
+        a chosen card whatever becomes of it, which is what lets
+        ``lowering/_records`` declare the record for the instruction kind rather
+        than for one of its payload values. Under the same key
+        ``choose_card_name`` writes, because "the chosen card's name" and "the
+        chosen card name" are one question asked by two sentences.
+        """
+        record = choice.data.get("record")
+        if record is None or not 0 <= victim_index < len(self.players):
+            return
+        hand = self.players[victim_index].hand
+        if not 0 <= hand_index < len(hand):
+            return
+        record["chosen_card_name"] = hand[hand_index].name
 
     def _apply_revealed_hand_fate(
         self, choice: PendingChoice, victim_index: int, hand_index: int
@@ -2255,6 +2437,15 @@ class PendingChoicesMixin:
         from ...linked_exile import LEAVES, link_exiled_card
 
         fate = str(choice.data.get("fate", "discard"))
+        if fate == "name":
+            # "…then you choose a card other than a basic land card from it."
+            # (Lobotomy.) The choice **is** the whole sentence: nothing happens
+            # to the card, and what the pick was for is the sentence behind it,
+            # which reads the name this pick already recorded. The same shape
+            # ``statement_dispatch_naming``'s own docstring asks of every
+            # choice — "the lowering carries the bounds of the choice and
+            # nothing else".
+            return True
         if fate == "discard":
             return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
         if fate == "library_top":
@@ -3503,7 +3694,13 @@ class PendingChoicesMixin:
         # choice is not bounded by what is on a board. An empty answer keeps the
         # default rather than naming nothing, which would make the protection
         # apply to nothing.
-        if choice.data.get("needs_card_name"):
+        # …and only when no seat is asked for beside it. "As this artifact
+        # enters, choose an opponent **and** a card name" (Booby Trap) is one
+        # prompt with two answers, so it falls through to the opponent branch at
+        # the bottom, which writes both — the same early-return rule the colour
+        # branch below follows, and for its reason: this prompt asks one
+        # question in several shapes and only some of them name a seat.
+        if choice.data.get("needs_card_name") and not choice.data["opponents"]:
             from ...cast_restrictions import CHOSEN_CARD_NAMES
 
             permanent = choice.data["permanent"]
@@ -3581,6 +3778,15 @@ class PendingChoicesMixin:
                 return False
             if color is None:
                 return False
+        # "…and a card name **other than a basic land card name**." (Booby
+        # Trap.) The one restriction the sentence prints on CR 201.2's otherwise
+        # unbounded choice, refused rather than repaired for the reason the
+        # card-name branch above gives: quietly keeping the default would tell
+        # the player they had chosen something they had not. An empty answer
+        # keeps the default, which is a choice already recorded.
+        if choice.data.get("needs_card_name") and card_name:
+            if str(card_name).strip().lower() in BASIC_LAND_WORDS:
+                return False
         # The permanent may already be gone (e.g. destroyed at instant speed);
         # the choice then has nothing to apply to, but the prompt still clears.
         if self.is_on_battlefield(permanent):
@@ -3589,6 +3795,9 @@ class PendingChoicesMixin:
             if color is not None:
                 permanent.metadata["chosen_color"] = color
                 chose += f" and {color}"
+            if choice.data.get("needs_card_name") and card_name:
+                permanent.metadata["chosen_card_name"] = card_name
+                chose += f" and {card_name}"
             self.log.append(f"{choice.data['card_name']}: {chose}")
             if color is not None:
                 # Jihad's anthem is conditioned on the chosen color/player.
@@ -7998,6 +8207,13 @@ register_choice(
     action="revealed_hand_pick_confirm",
     prompt_key="revealed_hand_pick",
     blocked_detail="choose a card from the revealed hand before other actions",
+    # "…then you choose a card … from it. **Search that player's graveyard,
+    # hand, and library for all cards with the same name as the chosen card**…"
+    # (Lobotomy.) The step behind the pick reads what it chose, so it must not
+    # run while the choice is still owed (CR 608.2, CR 117.3b) — the same reason
+    # the search beside it suspends, and inert for every printing that has
+    # nothing behind the pick.
+    suspends=True,
     # The revealed hand is public from the moment it is revealed (CR 701.20),
     # so a spectator sees the prompt exactly as the choosing seat does.
     spectator_visible=True,

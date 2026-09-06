@@ -98,10 +98,18 @@ def sweep(cards):
             findings["phantom_picker"].append((card.name, str(spec)))
         for ability in program.activated_abilities:
             line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
-            if "of an opponent's choice" in line:
-                # The opponent picks, not the activator (Preacher) — the
-                # activation ratchet derives the same exclusion from the
-                # program (tests/engine/test_activation_targeting.py).
+            if "of an opponent's choice" in line or (
+                # The same fact in the other printed word order, with the
+                # chooser as the sentence's subject: "**An opponent chooses**
+                # target creature they control" (Echo Chamber). Two spellings
+                # of one exclusion rather than two exclusions — a reader that
+                # knew only Preacher's would report the second card as a
+                # missing picker, which is the opposite of what it is.
+                "an opponent chooses target" in line
+            ):
+                # The opponent picks, not the activator (Preacher, Echo
+                # Chamber) — the activation ratchet derives the same exclusion
+                # from the program (tests/engine/test_activation_targeting.py).
                 continue
             if "target" in line and derive_activation_spec(ability) is None:
                 findings["activation_no_picker"].append(

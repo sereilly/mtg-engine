@@ -841,6 +841,7 @@ class EffectsMixin:
         drawn = player.draw(max(0, int(payload.get("count", count))))
         self._divert_drawn_commanders(player)
         self._reveal_first_draw_of_turn(player, before)
+        self._reveal_every_draw(player, before)
         return drawn
 
     def _reveal_first_draw_of_turn(self, player, drawn_before: int) -> None:
@@ -877,6 +878,36 @@ class EffectsMixin:
         emit(
             self, "revealed_drawn_card", subject=card,
             players=[player], event_subject_player=seat,
+        )
+
+    def _reveal_every_draw(self, player, drawn_before: int) -> None:
+        """"The chosen player reveals each card they draw." (Booby Trap.)
+        CR 701.20.
+
+        :meth:`_reveal_first_draw_of_turn`'s sibling, on the same seam and for
+        the same reason — a draw is a draw whatever made it. What differs is
+        that this one has no "first" to settle, so every card this call added is
+        shown: CR 121.2 makes a multi-card draw that many individual draws, and
+        *drawn_before* is where this event's share of the record starts.
+
+        The reveal is recorded and logged and **not** announced as
+        ``revealed_drawn_card``: that event is Rowen's "whenever you reveal a
+        basic land card **this way**", which names the reveal *its own card*
+        asks for. Announcing this one would fire Rowen's trigger on a reveal
+        another player's artifact caused, which is a card nobody printed.
+        """
+        from ..draw_reveals import reveals_every_draw
+
+        added = player.cards_drawn_this_turn[drawn_before:]
+        if not added:
+            return
+        seat = self.players.index(player)
+        if not reveals_every_draw(self, seat):
+            return
+        self.record_reveal(seat, [card.name for card in added])
+        self.log.append(
+            f"{player.name} revealed {', '.join(card.name for card in added)} "
+            "(each card they draw)"
         )
 
     def _divert_drawn_commanders(self, player) -> None:

@@ -330,12 +330,40 @@ def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstructio
         raise LoweringError(
             f"no prompt asks {node.chooser.kind!r} to choose a permanent", node=node
         )
+    described = node.spec.filter
+    scoped: dict[str, object] = {}
+    if node.spec.targeted:
+        # "An opponent chooses **target creature they control**." (Echo
+        # Chamber.) "They" is the seat this sentence has already named — the
+        # chooser — so the picked-from battlefield and the picking seat are one
+        # answer, exactly as Preacher's "of an opponent's choice **they**
+        # control" resolves them in ``lowering/control_changes.py``.
+        #
+        # Lifted out of the filter into the ``controlled_by`` key the candidate
+        # rule answers, for that lowering's reason: ``subject_matches`` has
+        # nobody to compare a bare "that_player" controller against, so left
+        # inside it the phrase refuses the line and dropped it would offer every
+        # creature on the table. Any other possessive names a third seat this
+        # has no word for and refuses.
+        if described.controller is not None:
+            if described.controller != "that_player":
+                raise LoweringError(
+                    "the choice cannot be scoped to this player's battlefield",
+                    node=node,
+                )
+            scoped["controlled_by"] = "chooser"
+            described = dataclasses.replace(described, controller=None)
     payload: dict[str, object] = {
-        "filter": _filter_payload(node.spec.filter),
+        "filter": _filter_payload(described),
         "result_key": _ATTACH_HOST_KEY,
         "prompt": "Choose a permanent.",
         "chooser": _CHOOSER_SEATS[node.chooser.kind],
         "optional": node.optional,
+        # Appended rather than inserted, for ``_lower_choose_permanents``'
+        # stated reason: the payload is compared as a repr by
+        # ``scripts/oracle_diff``, so a key ahead of another moves every card
+        # that never printed it.
+        **scoped,
     }
     untestable = untestable_filter_keys(payload["filter"])
     if untestable:
@@ -359,4 +387,12 @@ _CHOOSER_SEATS = {
     "that_player": "event_subject_controller",
     "target_player": "target",
     "target_opponent": "opponent",
+    # "**An opponent** chooses target creature they control." (Echo Chamber.)
+    # The untargeted spelling of the row above it, and the same seat to the
+    # handler: ``_chooser_seat`` reads the word "opponent" and answers with the
+    # first live opponent either way. The two printed phrases are kept apart in
+    # the *reference* reader on purpose — "target opponent" is announced when
+    # the ability goes on the stack and "an opponent" is not — but which of them
+    # a sentence prints changes nothing about who is asked.
+    "opponent": "opponent",
 }

@@ -604,6 +604,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # it runs, the card is one permanent among many. Handed over here
         # because this is where the resolution and the prompt meet.
         record=context.results,
+        # …and **under which key**, for a search whose finds are held rather
+        # than placed (Intuition). Every other record this prompt writes is a
+        # fact about the search itself and has one name; a held pile is a value
+        # the *next sentence* reads, so the sentence that reads it is what names
+        # the channel. Absent for every search written before this one.
+        record_key=instruction.payload.get("record_key"),
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]
@@ -790,11 +796,35 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
     # the list rather than the first. An absent `from_zone` is the library, so
     # every payload written before this is unchanged.
     from_zone = str(instruction.payload.get("from_zone", "library"))
-    pile = list(getattr(caster, from_zone, ()))
-    revealed = (
-        list(reversed(pile[-max(int(count), 0):])) if from_zone == "graveyard"
-        else pile[:max(int(count), 0)]
-    )
+    # **The pile may already be out of every zone**, held by an earlier step of
+    # this same resolution (Intuition: "Search your library for three cards and
+    # reveal them. Target opponent chooses one."). A third pile source and the
+    # same question, which is why it rides the payload rather than forking the
+    # kind: what this instruction does is *ask an opponent which of these
+    # cards*, and where they came from is data.
+    #
+    # The search revealed them already (its printed "reveal them", CR 701.20a)
+    # and shuffled already (CR 701.23h), so neither happens again here — and
+    # ``from_zone`` becomes "held", which is the word the mover reads as "this
+    # card is in no zone; just place it".
+    held_key = instruction.payload.get("cards_from")
+    if held_key is not None:
+        revealed = list(context.results.get(str(held_key)) or ())
+        from_zone = "held"
+        if not revealed:
+            # The search found nothing, which an empty library makes the only
+            # possible answer (CR 701.23d's "as many as possible"). There is
+            # nothing to choose between.
+            game.log.append(
+                f"{context.card.name}: nothing was found to choose from"
+            )
+            return True, "resolved"
+    else:
+        pile = list(getattr(caster, from_zone, ()))
+        revealed = (
+            list(reversed(pile[-max(int(count), 0):])) if from_zone == "graveyard"
+            else pile[:max(int(count), 0)]
+        )
     if not revealed:
         game.log.append(f"{caster.name} has no cards in their {from_zone}")
         return True, "resolved"
@@ -2517,6 +2547,65 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("strip_cards_with_chosen_name")
+def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Search that player's graveyard, hand, and library for all cards with the
+    same name as the chosen card and exile them. Then that player shuffles."
+    (Lobotomy.)
+
+    The **decomposed** half of Necromentia's paragraph. That card fuses the
+    naming, the strip and a token clause into one handler because its last
+    sentence counts a pile only that handler holds; this one has nothing behind
+    it, so the naming is the step in front and this is the strip alone — reading
+    the name out of the resolution's scratchpad, which is where every "the
+    chosen card" in this engine is written.
+
+    CR 701.23c is about this card by name: with an empty hand nothing was
+    chosen, so the quality is undefined, the searcher still searches and finds
+    nothing. An unrecorded name is exactly that case and is **not** treated as
+    "match everything" — the whole library would go to exile, which is the
+    opposite of what an empty choice means.
+
+    The zones are walked in the printed order and only the library is shuffled
+    (CR 701.24): a graveyard is an open zone and a hand is its owner's, and
+    randomising either would be a move the sentence does not describe.
+    """
+    target = context.target
+    if target is None or target not in game.players:
+        game.log.append(f"{context.card.name}: no player to search")
+        return True, "resolved"
+    named = str(context.results.get("chosen_card_name") or "").strip()
+    zones = tuple(instruction.payload.get("zones") or ())
+    if not named:
+        # The pick chose nothing (an empty hand, or a hand of nothing but basic
+        # lands). The search still happens and finds nothing, which CR 701.23c
+        # spells out on this very card.
+        game.log.append(
+            f"{context.card.name}: nothing was chosen, so nothing is exiled"
+        )
+        if "library" in zones:
+            random.shuffle(target.library)
+        return True, "resolved"
+    taken: list[str] = []
+    for zone in zones:
+        cards = getattr(target, zone, None)
+        if cards is None:
+            continue
+        kept = [card for card in cards if card.name != named]
+        found = [card for card in cards if card.name == named]
+        if found:
+            cards[:] = kept
+            target.exile.extend(found)
+            taken.extend(card.name for card in found)
+    if "library" in zones:
+        random.shuffle(target.library)
+    game.log.append(
+        f"{target.name} lost {len(taken)} copies of {named} to "
+        f"{context.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("name_and_strip")
 def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necromentia: name a card, strip every copy from an opponent's three
@@ -3144,10 +3233,21 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     if victim_index is None or caster_index is None:
         return True, "resolved"
     exclude_types = list(instruction.payload.get("exclude_types") or ())
+    # "…a card **other than a basic land card** from it" (Lobotomy). The second
+    # narrowing this picker can carry, and it travels beside the first for that
+    # one's reason: what is offered and what an answer is checked against are
+    # one predicate, and a restriction only the handler knew about would be a
+    # client offering the whole hand.
+    narrowing = {
+        "exclude_types": exclude_types,
+        "exclude_basic_lands": bool(
+            instruction.payload.get("exclude_basic_lands")
+        ),
+    }
     legal = [
         index
         for index, held in enumerate(victim.hand)
-        if search_matches(held, {"exclude_types": exclude_types})
+        if search_matches(held, narrowing)
     ]
     # CR 701.20 makes a reveal public where CR 701.20e's look shows the chooser
     # alone, so the line says which happened rather than saying "revealed" for
@@ -3184,7 +3284,14 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         # Carried so the picks after the first can recompute what is legal
         # against the hand as it then stands.
         exclude_types=exclude_types,
+        exclude_basic_lands=narrowing["exclude_basic_lands"],
         fate=str(instruction.payload.get("fate", "discard")),
+        # The resolution's own scratchpad. Every pick writes the chosen card's
+        # name into it — the pick *is* a chosen card, whatever becomes of it —
+        # so a later sentence naming "the chosen card" (Lobotomy's search) has
+        # one place to read it from, and ``lowering/_records`` can declare the
+        # record for the kind rather than for one of its fates.
+        record=context.results,
         # "…until **this creature** leaves the battlefield" (Kitesail
         # Freebooter): the source holds the exiled card, so which permanent it
         # is has to reach the answer. By id, because the prompt outlives the

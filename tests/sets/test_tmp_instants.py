@@ -880,3 +880,116 @@ def test_w3g5_kindle_ignores_a_graveyard_card_with_another_name(set_pool):
 
 def test_w3g5_kindle_is_supported(set_pool):
     assert compile_card_oracle(set_pool("TMP")["Kindle"]).supported
+
+
+# --- W3G3: Intuition's held search pile and the opponent's pick ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
+
+
+def _w3g3_card(name, type_line="Instant"):
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text="",
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": ""},
+    )
+
+
+def _w3g3_duel(library, hand, *, interactive=(0, 1)):
+    seats = [
+        PlayerState(name="P0", library=list(library), hand=list(hand)),
+        PlayerState(name="P1"),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def test_intuition_hands_the_search_pile_to_the_opponent(set_pool):
+    """`Search your library for three cards and reveal them. Target opponent
+    chooses one. Put that card into your hand and the rest into your graveyard.
+    Then shuffle.`
+
+    The Rock Hydra test: the search prompt is answered, the *opponent's* pick
+    prompt is answered, and the three cards are read out of the hand and the
+    graveyard rather than off a claim that the instruction compiled.
+    """
+    spell = set_pool("TMP")["Intuition"]
+    library = [_w3g3_card(name) for name in ("A", "B", "C", "D")]
+    game = _w3g3_duel(library, [spell])
+
+    game.cast_from_hand(0, "Intuition", target_player_index=1)
+    game.resolve_top_of_stack()
+
+    search = next(iter(game.pending_choices_of("search_library")))
+    assert search.player_index == 0
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": i} for i in (0, 1, 2)]
+    )
+    # CR 701.20a: the printed "reveal them" showed the finds to every player.
+    assert game.players[0].library and len(game.players[0].library) == 1
+
+    pick = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert pick.player_index == 1, "the *opponent* chooses"
+    assert pick.data["cards"] == ["A", "B", "C"]
+    assert game.confirm_opponent_picks_revealed(1, 1)
+
+    assert [c.name for c in game.players[0].hand] == ["B"]
+    # …and Intuition itself, which resolved into the same graveyard (CR 608.2m).
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "A", "C", "Intuition",
+    ]
+    assert [c.name for c in game.players[0].library] == ["D"]
+
+
+def test_intuition_must_find_three_cards_when_three_are_there(set_pool):
+    """CR 701.23d: a search for a bare quantity finds that many, or as many as
+    possible. Every counted search printed before this one says "up to" or "any
+    number of", so the floor had never had a card to be wrong about — and an
+    Intuition that found one card is a strictly better spell.
+    """
+    spell = set_pool("TMP")["Intuition"]
+    library = [_w3g3_card(name) for name in ("A", "B", "C", "D")]
+    game = _w3g3_duel(library, [spell])
+
+    game.cast_from_hand(0, "Intuition", target_player_index=1)
+    game.resolve_top_of_stack()
+    choice = next(iter(game.pending_choices_of("search_library")))
+
+    assert not game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0}]
+    ), "one find is under the floor"
+    assert not game.decline_search_library(0), "and so is failing to find"
+    assert choice in game.pending_choices, "the prompt is still owed"
+
+
+def test_intuition_takes_the_whole_library_when_it_is_short(set_pool):
+    """…"or as many as possible": a two-card library answers with two, which is
+    the half of CR 701.23d that keeps the floor from being a refusal."""
+    spell = set_pool("TMP")["Intuition"]
+    game = _w3g3_duel([_w3g3_card("A"), _w3g3_card("B")], [spell])
+
+    game.cast_from_hand(0, "Intuition", target_player_index=1)
+    game.resolve_top_of_stack()
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0}, {"zone": "library", "index": 1}]
+    )
+    pick = next(iter(game.pending_choices_of("opponent_picks_revealed")))
+    assert pick.data["cards"] == ["A", "B"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+    assert [c.name for c in game.players[0].hand] == ["A"]
+    assert sorted(c.name for c in game.players[0].graveyard) == ["B", "Intuition"]
+
+
+def test_intuition_asks_the_caster_for_an_opponent(set_pool):
+    """The spell targets, and the picker has to know it: a cast spec of None is
+    the value the client tests to decide whether to ask (the Roots class)."""
+    program = compile_card_oracle(set_pool("TMP")["Intuition"])
+    spec = derive_cast_spec(set_pool("TMP")["Intuition"], program)
+    assert spec is not None and spec.get("kind") == "player"
+    assert spec.get("opponents_only") is True

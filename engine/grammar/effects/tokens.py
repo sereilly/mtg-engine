@@ -26,6 +26,7 @@ from ..amounts import expect_pt, parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, WORD
 from ..phrases import _parse_for_each, _parse_per_each_objects
+from ..back_references import parse_bound_subject
 from ..references import parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
@@ -312,6 +313,16 @@ def _parse_create_token(
         "that", "'s", "a", "copy", "of"
     ):
         subject = parse_target_spec(stream)
+        if subject is None:
+            # "Create a token that's a copy of **that creature**." (Echo
+            # Chamber.) The permanent an earlier sentence of the same ability
+            # chose — not a target, because the ability targets nothing the
+            # copy sentence names. The shared back-reference reader is what
+            # answers it, exactly as the exile and keyword families ask it of
+            # their own "that creature"; nothing accepts the ``that``
+            # quantifier unless it says so, so the lowering is still where the
+            # producer is demanded.
+            subject = parse_bound_subject(stream)
         if subject is None:
             raise stream.error("expected what the token copies")
         return ast.CreateCopyToken(count, subject)

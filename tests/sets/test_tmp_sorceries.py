@@ -572,3 +572,109 @@ def test_w2g2_deadshots_biter_need_not_be_yours(set_pool):
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Ogre"], game.log
     assert p1.battlefield[0].tapped
+
+
+# --- W3G3: Lobotomy's decomposed pick-then-strip ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition
+from engine.oracle import compile_card_oracle
+
+
+def _w3g3_card(name, type_line="Creature — Bear"):
+    return CardDefinition(
+        name=name, mana_cost="", type_line=type_line, oracle_text="",
+        cmc=0.0, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "oracle_text": ""},
+    )
+
+
+def _w3g3_game(spell, *, victim_hand, victim_library=(), victim_graveyard=()):
+    seats = [
+        PlayerState(name="P0", hand=[spell]),
+        PlayerState(
+            name="P1", hand=list(victim_hand), library=list(victim_library),
+            graveyard=list(victim_graveyard),
+        ),
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._settle()
+    return game
+
+
+def test_lobotomy_exiles_every_copy_of_the_chosen_card(set_pool):
+    """`Target player reveals their hand, then you choose a card other than a
+    basic land card from it. Search that player's graveyard, hand, and library
+    for all cards with the same name as the chosen card and exile them. Then
+    that player shuffles.`
+
+    Two sentences, two instructions: the pick records the chosen card's name and
+    moves nothing, and the strip behind it reads that name out of the
+    resolution's scratchpad. The Rock Hydra test — the copies are read out of
+    exile, not off a claim that the spell compiled.
+    """
+    spell = set_pool("TMP")["Lobotomy"]
+    game = _w3g3_game(
+        spell,
+        victim_hand=[_w3g3_card("Wildfire"), _w3g3_card("Mountain", "Basic Land — Mountain")],
+        victim_library=[_w3g3_card("Wildfire"), _w3g3_card("Elf")],
+        victim_graveyard=[_w3g3_card("Wildfire")],
+    )
+
+    game.cast_from_hand(0, "Lobotomy", target_player_index=1)
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("revealed_hand_pick")))
+    assert prompt.player_index == 0, "the *caster* chooses out of the revealed hand"
+    # "other than a basic land card": the Mountain is not offered.
+    legal = [game.players[1].hand[i].name for i in prompt.data["legal_indices"]]
+    assert legal == ["Wildfire"]
+
+    assert game.confirm_revealed_hand_pick(0, prompt.data["legal_indices"][0])
+
+    assert sorted(c.name for c in game.players[1].exile) == [
+        "Wildfire", "Wildfire", "Wildfire",
+    ]
+    assert [c.name for c in game.players[1].hand] == ["Mountain"]
+    assert [c.name for c in game.players[1].library] == ["Elf"]
+    assert game.players[1].graveyard == []
+
+
+def test_lobotomy_over_an_empty_hand_searches_and_finds_nothing(set_pool):
+    """CR 701.23c names this card: with nothing chosen the quality is undefined,
+    so the searcher searches and exiles nothing.
+
+    Not "match everything", which would exile the victim's whole library — the
+    opposite of what an empty choice means.
+    """
+    spell = set_pool("TMP")["Lobotomy"]
+    game = _w3g3_game(
+        spell, victim_hand=[], victim_library=[_w3g3_card("Elf")],
+    )
+
+    game.cast_from_hand(0, "Lobotomy", target_player_index=1)
+    game.resolve_top_of_stack()
+
+    assert not list(game.pending_choices_of("revealed_hand_pick"))
+    assert game.players[1].exile == []
+    assert [c.name for c in game.players[1].library] == ["Elf"]
+
+
+def test_lobotomy_holds_the_strip_until_the_pick_is_answered(set_pool):
+    """The strip reads what the pick chose, so it must not run while the choice
+    is still owed (CR 608.2, CR 117.3b) — which is what the prompt's
+    ``suspends`` registration buys, and what nothing enforced before it."""
+    spell = set_pool("TMP")["Lobotomy"]
+    game = _w3g3_game(
+        spell,
+        victim_hand=[_w3g3_card("Wildfire")],
+        victim_library=[_w3g3_card("Wildfire")],
+    )
+
+    game.cast_from_hand(0, "Lobotomy", target_player_index=1)
+    game.resolve_top_of_stack()
+
+    assert game.players[1].exile == [], "nothing has been stripped yet"
+    assert game.waiting_prompt is not None

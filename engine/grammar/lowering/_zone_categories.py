@@ -201,6 +201,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
     "name_and_strip": "zones",
+    # Its decomposed half (Lobotomy): the same strip across the same three
+    # zones, reading a name an earlier step of the spell recorded rather than
+    # one this step asked for.
+    "strip_cards_with_chosen_name": "zones",
     # "Choose a card name. Target opponent reveals X cards at random from their
     # hand. Then that player discards all cards with that name revealed this
     # way." (Nebuchadnezzar.) The same category as the naming paragraph above:

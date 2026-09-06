@@ -1039,6 +1039,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # the land is played, and the printed word decides whose play it watches.
     ("land_played",
      r"whenever (?:you play|(?P<land_player>an opponent) plays) a land"),
+    # "**When the chosen player** draws a card **with the chosen name**, …"
+    # (Booby Trap.) Two narrowings on the same announcement rather than a second
+    # kind, which is the same reading `land_played` above records: one event,
+    # and the printed words decide whose draw it watches and which card. Both
+    # are answered against the *source permanent's* entry record, which is why
+    # they are words here and a metadata read in `engine/events.py` — nothing
+    # about the payload could carry a choice made when the artifact entered.
     ("draws_card",
      r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
@@ -1184,6 +1191,22 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # compiles supported.
     ("created_token_leaves_battlefield",
      r"when the token leaves(?: the battlefield)?"),
+    # "**When the chosen player draws a card with the chosen name**, sacrifice
+    # this artifact." (Booby Trap.) The same ``draws_card`` announcement the
+    # "whenever" table narrows by seat, narrowed here by *two* records the
+    # permanent made as it entered (CR 614.1c) — so both are words on the
+    # condition and the comparison is a metadata read in ``engine/events.py``,
+    # where the permanent is in hand. Nothing the announcement could carry says
+    # which player a trap was aimed at.
+    #
+    # The kind is shared with that table's row deliberately, which is the
+    # arrangement the ``attached_creature_dies`` note one table up records: one
+    # kind, one dispatcher, one filter, and the printed words decide what it
+    # watches. The word here really is "when" and not "whenever" — the artifact
+    # sacrifices itself, so the trap springs once.
+    ("draws_card",
+     r"when (?P<drawer>the chosen player) draws a card"
+     r"(?P<drawn_name> with the chosen name)"),
     # "When enchanted creature leaves the battlefield, its controller
     # sacrifices a creature of their choice." (Funeral March.) CR 603.6c's
     # event asked about the permanent this one is *attached to* —
@@ -4356,9 +4379,14 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # "Reveal the first card you draw each turn." (Rowen.) Asked of the reader
     # the draw seam carries it out with, so what is claimed and what is done are
     # one table.
-    from .draw_reveals import reveals_first_draw_line
+    from .draw_reveals import reveals_every_draw_line, reveals_first_draw_line
 
     if reveals_first_draw_line(normalized):
+        return True
+    # "The chosen player reveals each card they draw." (Booby Trap.) The
+    # sentence beside it, asked of the same seam's other reader and claimed for
+    # the same reason.
+    if reveals_every_draw_line(normalized):
         return True
     # "Remove this card from your deck before playing if you're not playing for
     # ante." (Tempest Efreet.) Not an ability at all — CR 113.6a, an instruction
@@ -5441,10 +5469,11 @@ def _derived_static_claims(
     # the permanent's own text on every draw, so there is no instruction to
     # point at — and on a card whose static half is only this sentence, no
     # instruction means it reports unsupported however well the reveal works.
-    from .draw_reveals import reveals_first_draw_line
+    from .draw_reveals import reveals_every_draw_line, reveals_first_draw_line
 
     if any(
-        reveals_first_draw_line(line) for line in (oracle_text or "").splitlines()
+        reveals_first_draw_line(line) or reveals_every_draw_line(line)
+        for line in (oracle_text or "").splitlines()
     ):
         claims.append("draw_reveals")
     # Extra land plays (Fastbond). The land-drop path derives the allowance from

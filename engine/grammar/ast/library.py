@@ -350,6 +350,77 @@ class RevealTopOpponentChooses:
 
 
 @dataclass(frozen=True)
+class StripCardsWithChosenName:
+    """``Search that player's graveyard, hand, and library for all cards with
+    the same name as the chosen card and exile them. Then that player
+    shuffles.`` (Lobotomy.)
+
+    A search whose description is a **record** rather than a printed word: the
+    name comes from the sentence in front of it, which is why this is a node of
+    its own and not a filter on the ordinary search. ``ObjectFilter.named``
+    holds a literal, and a literal is exactly what a card that names nothing
+    cannot supply.
+
+    Both sentences, because CR 701.24 ends a library search with the shuffle
+    and the shuffle names the same seat this one opened — split off, the second
+    is a statement no production implements and the whole line refuses.
+
+    Necromentia prints the same two sentences behind a *named* card
+    (``NameAndStrip``), fused there with a Zombie clause that counts what one of
+    these zones gave up. This is the decomposed half of the same idea, and the
+    two stay apart deliberately: that card's last sentence reads a pile only its
+    own handler holds.
+    """
+    #: Whose zones are opened. Read as a reference and checked by the lowering:
+    #: a search of the wrong player's library is a strictly different card and
+    #: silently so.
+    player: "PlayerRef"
+    #: Which zones, in the printed order. Data, not part of the kind — a card
+    #: printing two of the three is the same effect over a smaller reach.
+    zones: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SearchRevealOpponentChooses:
+    """``Search your library for three cards and reveal them. Target opponent
+    chooses one. Put that card into your hand and the rest into your graveyard.
+    Then shuffle.`` (Intuition.)
+
+    All four sentences, for :class:`RevealTopOpponentChooses`' reason: they
+    describe **one** pile, and "one", "that card" and "the rest" have nothing to
+    name without it. What differs from that node is only where the pile comes
+    from — a search of a hidden zone rather than the top of one — which is why
+    it is a node of its own rather than a field on that one: a search finds a
+    number of cards a *player* picks (CR 701.23a), and a reveal off the top
+    finds whatever is there.
+
+    Its lowering is deliberately **two** instructions and not one. The pile is
+    handed from the search to the pick through the resolution's scratchpad, and
+    both halves already exist: the search is the standing library search with
+    its finds *held* rather than placed (Transmute Artifact's word for the same
+    thing), and the pick is the standing ``opponent_picks_revealed`` prompt,
+    which has taken a chosen card's fate and the rest's since Phyrexian
+    Grimoire. Fusing them would be a third handler that re-implemented both.
+
+    ``count`` is a **floor** and not a ceiling: CR 701.23d makes a search for
+    a bare quantity find that many, or as many as possible. Every counted
+    search in the pool before this one printed "up to" or "any number of", so
+    the distinction had never had a card to be wrong about.
+    """
+    count: Amount
+    #: Who chooses. Only a targeted opponent has a printing; the lowering
+    #: refuses anything else rather than defaulting to a seat, for
+    #: :class:`RevealTopOpponentChooses`' reason — a choice made by the wrong
+    #: player is the whole card.
+    chooser: "PlayerRef"
+    #: Where the chosen card goes, and where the rest go. Both read from the
+    #: print and checked against closed lists, because they are opposite fates
+    #: and a card that swapped them would be a different spell entirely.
+    fate: str = "hand"
+    other_fate: str = "graveyard"
+
+
+@dataclass(frozen=True)
 class LookTopExileRandom:
     """``Look at the top eight cards of your library. Exile four of them at
     random, then put the rest on top of your library in any order.`` (Orcish

@@ -315,6 +315,14 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # still choosing. The pick is the opponent's; only an interactive one
         # queues it, since `default_at_arm` answers for everybody else.
         "opponent_picks_revealed",
+        # "…then you choose a card other than a basic land card from it.
+        # **Search that player's graveyard, hand, and library for all cards
+        # with the same name as the chosen card**…" (Lobotomy.) The step behind
+        # the pick reads the name it chose, so it must not run while the choice
+        # is still owed — the same sentence as the revealed pile above, one
+        # zone over. Inert for Duress and Mind Warp, which print nothing behind
+        # the pick.
+        "revealed_hand_pick",
         # Phyrexian Portal's three decisions, each of which arms the next.
         # The division decides what the controller is choosing between, the
         # choice decides which pile is searched, and the search decides what

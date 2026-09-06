@@ -354,3 +354,135 @@ def _lower_search_player_library(
         # target the ability already has.
         _describe_targets(payload, node.player)
     return (OracleInstruction("search_library", "", payload),)
+
+
+#: The scratchpad key a **held** search writes its finds under, and the one the
+#: pick behind it reads. Spelled once, here, for ``_records``' standing reason:
+#: a channel written at one end and read at the other is a channel that can be
+#: renamed at one end.
+HELD_SEARCH_PILE = "held_search_pile"
+
+
+def _lower_search_reveal_opponent_chooses(
+    node: "ast.SearchRevealOpponentChooses",
+) -> tuple[OracleInstruction, ...]:
+    """"Search your library for three cards and reveal them. Target opponent
+    chooses one. Put that card into your hand and the rest into your graveyard.
+    Then shuffle." (Intuition.)
+
+    **Two instructions, and that is the whole design.** The pile is found by one
+    seat and disposed of by another, and both halves already exist: the search
+    is the standing ``search_library`` with its finds *held* — Transmute
+    Artifact's word for a find whose destination is a later step's decision —
+    and the pick is the standing ``reveal_top_opponent_chooses``, which has
+    carried a chosen card's fate and the rest's since Phyrexian Grimoire. What
+    is new is one payload key on each: where the held pile is written, and
+    where it is read.
+
+    Fusing them into one handler is what the naming family's own docstring
+    warns against — "the lowering carries the bounds of the choice and nothing
+    else" — and it would be a third implementation of a search and a pick.
+
+    ``up_to`` is deliberately **absent**: CR 701.23d makes a search for a bare
+    quantity find that many, or as many as possible, and the resolver enforces
+    that floor for exactly the searches that omit the key. Every counted search
+    printed before this one says "up to" or "any number of".
+
+    The chooser is required to be a targeted opponent, for
+    ``_lower_reveal_top_opponent_chooses``' reason word for word: CR 608.2c
+    makes the ability's controller the actor for anything the sentence does not
+    say otherwise about, so a seat this cannot name would silently become the
+    chooser — which on this card is the caster choosing which of their own
+    three finds they keep.
+    """
+    if node.chooser.kind != "target_opponent":
+        raise LoweringError(
+            f"no flow lets {node.chooser.kind!r} choose from a searched pile",
+            node=node,
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count <= 0:
+        raise LoweringError(
+            "the searched pile is a fixed number of cards", node=node
+        )
+    search = OracleInstruction(
+        "search_library", "",
+        {
+            "count": count,
+            "card_type": "any",
+            # One entry per find, which is what drives the counted answer — the
+            # whole pick list in one action, validated together.
+            "destinations": ["held"] * count,
+            "tapped": [False] * count,
+            # "…and **reveal them**." CR 701.20a: the finds are shown to every
+            # player when the search ends.
+            "reveal": True,
+            "record_key": HELD_SEARCH_PILE,
+        },
+    )
+    pick: dict[str, object] = {
+        "count": count,
+        "cards_from": HELD_SEARCH_PILE,
+        "fate": node.fate,
+        "other_fate": node.other_fate,
+    }
+    _describe_targets(pick, node.chooser)
+    return (
+        OracleInstruction(
+            "sequence", "",
+            {
+                "steps": (
+                    search,
+                    OracleInstruction("reveal_top_opponent_chooses", "", pick),
+                ),
+            },
+        ),
+    )
+
+
+#: The seats a strip-by-name can open the zones of. "You" is deliberately
+#: absent: no card asks its own controller to lose every copy of a card they
+#: just chose, and a seat this cannot name is a search of the wrong library —
+#: strictly a different card, and silently so.
+_STRIP_PLAYERS = frozenset({"target_player", "target_opponent", "that_player"})
+
+
+def _lower_strip_cards_with_chosen_name(
+    node: "ast.StripCardsWithChosenName", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Search that player's graveyard, hand, and library for all cards with the
+    same name as the chosen card and exile them. Then that player shuffles."
+    (Lobotomy.)
+
+    ``produced`` is the whole gate. The name is the one an earlier step of this
+    same spell recorded (``chosen_card_name``), and with no such step the words
+    name nothing — the search would then match no card and the spell would
+    resolve, report supported and do nothing at all. Refused by name instead,
+    exactly as ``_lower_reveal_top_sorting_by_chosen_name`` refuses "that name"
+    with no naming step in front of it.
+
+    CR 701.23c is about this card by name: a hand with no cards in it makes the
+    quality *undefined*, and the searcher still searches and finds nothing. That
+    is the handler's business, not this one's — what is refused here is a
+    sentence with no naming step at all, which is a different thing from a
+    naming step that named nothing.
+
+    "That player" is the seat the sentence in front of this one targeted, which
+    is the same reference ``_lower_search_player_library`` reads for Jester's
+    Mask — so no target is described here and no second picker is raised.
+    """
+    if node.player.kind not in _STRIP_PLAYERS:
+        raise LoweringError(
+            f"no flow strips {node.player.kind!r}'s zones", node=node
+        )
+    if "chosen_card_name" not in produced:
+        raise LoweringError(
+            "\"the chosen card\" names a card no step of this spell chose",
+            node=node,
+        )
+    payload: dict[str, object] = {"zones": list(node.zones)}
+    if node.player.kind != "that_player":
+        _describe_targets(payload, node.player)
+    return (
+        OracleInstruction("strip_cards_with_chosen_name", "", payload),
+    )

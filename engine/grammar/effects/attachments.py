@@ -190,9 +190,35 @@ def parse_player_chooses_permanent(
     if not stream.accept_word("chooses", "choose"):
         return None
     spec = parse_target_spec(stream)
-    if spec is None or spec.targeted:
+    if spec is None:
         stream.reset(mark)
         return None
+    if spec.targeted:
+        # "An opponent chooses **target creature they control**." (Echo
+        # Chamber.) The printed word is "target" and the seat that picks is not
+        # the ability's controller, which CR 601.2c has no room for: a target is
+        # announced as the ability is activated, from one seat.
+        #
+        # So it is read as the same resolution-time pick every other sentence
+        # in this production is, and the deviation is the one
+        # ``lowering/control_changes.py`` already records for Preacher — what it
+        # costs is the 608.2b re-check and shroud on the chosen creature, and
+        # what the alternative costs is a second seat inside the announcement
+        # step. Preacher spells the same fact as "of an opponent's choice they
+        # control"; this card spells it with the chooser as the sentence's
+        # subject, and both arrive here as one node.
+        #
+        # The whole sentence or nothing: a targeted phrase with anything behind
+        # it is a sentence this production has no answer for, and it keeps
+        # whatever refusal it had.
+        if (
+            spec.quantifier != "target"
+            or spec.count != 1
+            or not (stream.exhausted or stream.at_punct(".", ";"))
+        ):
+            stream.reset(mark)
+            return None
+        return ast.ChoosePermanent(chooser, spec)
     if spec.quantifier == "up_to":
         # "that player **chooses up to two Plains**" (Raiding Party). The plural
         # of the same sentence, and the same node: how many may be picked is
