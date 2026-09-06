@@ -11,7 +11,8 @@ from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER,
-                            X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+                            X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+                            OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
@@ -2154,7 +2155,20 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # evaluator every other computed count uses, so the fraction and its
     # rounding are applied in one place (CR 107.2/107.3).
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
-    count = int(instruction.payload.get("count", 1))
+    # "…sacrifices a creature of their choice **for each creature put into your
+    # graveyard from the battlefield this turn**." (Urborg Justice.) One number
+    # for every payer, counted once when the effect happens (CR 608.2h) and
+    # counted for the *caster* — "your graveyard" is CR 400.3's owner and the
+    # payer is somebody else. Its own channel beside the per-seat one above
+    # because they answer for different seats; folded together, Urborg Justice
+    # would read the sacrificing opponent's tally and ask for nothing whenever
+    # they had lost nothing.
+    shared = instruction.payload.get(X_FROM_COUNT)
+    count = int(instruction.payload.get("count", 1)) if instruction.payload.get(
+        "count"
+    ) != "x" else 0
+    if shared is not None:
+        count = evaluate_count(game, context.caster, shared)
     # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
     # the sacrifice could be performed at all, recorded here rather than after
     # the prompt: an interactive seat answers a queued choice long after this

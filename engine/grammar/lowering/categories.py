@@ -666,6 +666,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # static `combat_restrictions.py` reads for "attacks **each combat** if
     # able". Same category, so GRAMMAR_CATEGORIES is unchanged.
     "force_self_to_attack_until_eot": "combat_restrictions",
+    # "Target creature attacks this turn if able." (Boiling Blood.) The
+    # same CR 508.1a requirement on a creature the caster chose rather
+    # than on the effect's own source.
+    "force_target_to_attack_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

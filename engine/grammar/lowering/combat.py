@@ -14,7 +14,8 @@ from ..errors import LoweringError
 from ._common import (
     _describe_several_targets, _describe_targets, _filter_payload,
     _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
-    _names_several_targets, _restrictions_beyond, refuse_untestable
+    _names_several_targets, _restrictions_beyond, refuse_untestable,
+    testable_filter_payload,
 )
 from ._events import (
     _TAPPED_PERMANENTS,
@@ -807,11 +808,60 @@ def _lower_reassign_blockers_between_attackers(
 def _lower_attacks_this_turn_if_able(
     node: ast.AttacksThisTurnIfAble,
 ) -> tuple[OracleInstruction, ...]:
-    """CR 508.1a's requirement for one turn (Kookus). Only the ability's own
-    source: a targeted spelling would need a picker, and admitting it here would
-    mark whatever the resolution happened to carry."""
-    if not _is_source(node.subject):
-        raise LoweringError(
-            "no handler makes that subject attack this turn", node=node
+    """CR 508.1a's requirement for one turn, on the source or on a chosen
+    creature.
+
+    "…this creature deals 3 damage to you **and attacks this turn if able**"
+    (Kookus) names its own source and needs no picker. "**Target creature**
+    attacks this turn if able." (Boiling Blood) names one the caster chose, and
+    the note that used to stand here — "a targeted spelling would need a
+    picker" — was the work item rather than the reason: the picker falls out of
+    the ``targets`` description, because ``targeting._from_targets_payload``
+    reads a description into a spec for any kind that carries one.
+
+    Two kinds rather than one with an optional target, because the two answer
+    "which permanent?" in different places: the source is on the context and a
+    chosen creature is a target CR 601.2c fixed at announcement, and a single
+    kind would have to guess which it was handed.
+
+    Not the printed static ``engine/combat_restrictions.py`` reads for "attacks
+    **each combat** if able": that one holds for as long as the permanent is on
+    the battlefield and this ends with the turn (CR 611.2a). The production in
+    front of this one refuses the "each combat" spelling in the *parse*, which
+    is what leaves the table its line.
+    """
+    if _is_source(node.subject):
+        return (OracleInstruction("force_self_to_attack_until_eot", "", {}),)
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.targeted:
+        if _names_several_targets(node.subject):
+            raise LoweringError(
+                "the attack requirement marks one creature; nothing here "
+                "collects several",
+                node=node,
+            )
+        described = testable_filter_payload(
+            node.subject.filter,
+            refusal=(
+                "the attack requirement is enforced against the chosen "
+                "creature, so a narrowing the matcher cannot test would be "
+                "dropped and the picker would offer creatures the card "
+                "never names"
+            ),
+            node=node,
+            require_narrowing=False,
         )
-    return (OracleInstruction("force_self_to_attack_until_eot", "", {}),)
+        payload: dict[str, object] = {}
+        _describe_targets(payload, node.subject)
+        if described.get("type_filter") != "creature":
+            # CR 508.1a is about creatures; a noun phrase this lowering cannot
+            # confirm names one would put the mark on a permanent that can
+            # never meet the requirement.
+            raise LoweringError(
+                "an attack requirement names a creature", node=node
+            )
+        return (
+            OracleInstruction("force_target_to_attack_until_eot", "", payload),
+        )
+    raise LoweringError(
+        "no handler makes that subject attack this turn", node=node
+    )

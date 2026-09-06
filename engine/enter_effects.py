@@ -807,6 +807,26 @@ ENTRY_SACRIFICE_ALL_TOLL = re.compile(
 )
 
 
+def _counted_sacrifice_phrase(phrase: str) -> "tuple[int | None, str]":
+    """``("two untapped lands")`` as ``(2, "untapped lands")``, or ``(None, …)``.
+
+    Only a number **greater than one**: "a Forest" and "an untapped Mountain"
+    are the singular the five Alliances lands print, and their article is the
+    noun parser's business. A word this table cannot read leaves the phrase
+    untouched, so the caller refuses it in the ordinary way rather than
+    sacrificing one permanent for a card that asked for several.
+    """
+    from .oracle_types import _NUMBER_WORDS
+
+    head, _, rest = phrase.partition(" ")
+    if not rest:
+        return None, phrase
+    count = int(head) if head.isdigit() else _NUMBER_WORDS.get(head)
+    if count is None or count < 2:
+        return None, phrase
+    return count, rest
+
+
 def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None:
     """What the entering permanent's controller must give up for it to enter.
 
@@ -862,7 +882,25 @@ def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None
             break
     if match is None:
         return None
-    filt = parse_subject_filter(match.group("phrase"), plural=plural)
+    phrase = match.group("phrase")
+    if count == 1:
+        # "sacrifice **two** untapped lands instead" (Lotus Vale, Scorched
+        # Ruins). The number is payload like every other word in this template:
+        # the five Alliances lands print "an untapped <land type>" and these two
+        # print a count in front of a bare plural, which is the same sentence
+        # with one word added. Read here rather than by the noun parser, which
+        # reads a *description* of a set and leaves the quantifier to the
+        # sentence that spends it — this pattern is that sentence, exactly as it
+        # is for ``ENTRY_SACRIFICE_ALL_TOLL``'s "each".
+        #
+        # The bare plural left behind is the noun parser's "all", which is why
+        # ``plural`` goes with it: without the flag the phrase would be refused
+        # for want of an article, and with the flag but no count it would be a
+        # sweep. The two are one reading and are set together.
+        counted, rest = _counted_sacrifice_phrase(phrase)
+        if counted is not None:
+            count, phrase, plural = counted, rest, True
+    filt = parse_subject_filter(phrase, plural=plural)
     if filt is None or filt.zone != "battlefield" or filt.is_card:
         return None
     payload = filt.to_payload()

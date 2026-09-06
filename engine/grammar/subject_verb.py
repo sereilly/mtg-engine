@@ -43,6 +43,7 @@ from .phrases import (
     parse_bound_subject,
 )
 from .effects import (
+    _parse_attacks_this_turn_if_able,
     parse_block_count_grant,
     parse_cant_play_lands,
     parse_choose_card_type,
@@ -685,6 +686,21 @@ def parse_subject_verb(
             no_damage = _parse_assigns_no_combat_damage(stream, source_spec)
             if no_damage is not None:
                 return no_damage
+        # "**Target creature** attacks this turn if able." (Boiling Blood.) The
+        # production already existed for Kookus' trailing conjunct; nothing had
+        # ever asked it at the head of a sentence, so a card printing the clause
+        # on its own refused at "unrecognized effect verb" and compiled to its
+        # second line alone.
+        #
+        # Non-consuming on refusal, and that is load-bearing rather than
+        # habitual: "attacks **each combat** if able" is a printed static
+        # `engine/combat_restrictions.py` reads as a table, and a production
+        # that consumed the verb would take the table's line away
+        # (CLAUDE.md: parsed-but-unlowered is still parsed).
+        if token.text in ("attacks", "attack"):
+            requirement = _parse_attacks_this_turn_if_able(stream, source_spec)
+            if requirement is not None:
+                return requirement
         if token.text in ("becomes", "become"):
             # "Target unblocked attacking creature **becomes blocked**."
             # (Dazzling Beauty; CR 509.1h.) Tried before the type/colour

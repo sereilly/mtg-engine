@@ -309,12 +309,72 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         # have to guess which record was meant.
         counted = _parse_for_each_history(stream, parse_object_filter)
     if counted is None:
+        second = _parse_second_counter_placement(stream)
+        if second is not None:
+            return ast.Conjunction((placement, second))
         return placement
     if up_to or not isinstance(count, ast.Fixed) or count.value != 1:
         raise stream.error(
             "a counter placed per recorded unit is placed one at a time"
         )
     return dataclasses.replace(placement, count=counted)
+
+
+def _parse_second_counter_placement(
+    stream: TokenStream,
+) -> "ast.PutCounter | None":
+    """``and [a|N] <counter> counter(s) on <subject>`` trailing a placement.
+
+    "{T}: Put a -1/-1 counter on this creature **and a -1/-1 counter on target
+    creature**." (Serrated Biskelion.) One sentence, two placements, two
+    different subjects — so it is neither a rider on the first placement nor a
+    repetition of it, and the two verbs the sentence prints once are the same
+    verb.
+
+    Read here rather than in ``conjuncts.py``: that module joins a tail onto a
+    statement whose *subject was printed in front of it* and shares it, and this
+    tail's whole point is that it names a different one.
+
+    Its own reader rather than a recursion into the production above, and the
+    difference is deliberate. The opening placement reads bound objects, pair
+    ordinals, "for each" multipliers and a choice between counter kinds; this
+    reads a noun phrase and nothing else, so a second half printing any of those
+    refuses and takes the line with it. A tail that quietly read half of what it
+    was handed would be a counter placed somewhere the card did not say.
+
+    Non-consuming on refusal, so "and" opening anything else keeps its own
+    reading — including the sentence-level joins the statement loop makes.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    # ``parse_amount`` reads the article as the number it is ("a counter" is
+    # one), exactly as the opening placement does — accepting "a" first would
+    # eat it and leave the counter kind where a quantity is expected.
+    try:
+        count = parse_amount(stream)
+        token = _expect_counter_kind(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if token.kind == PT and not is_pt_counter(token.text):
+        raise stream.error(f"unsupported counter kind {token.text!r}")
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("on"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None:
+        stream.reset(mark)
+        return None
+    return ast.PutCounter(subject, token.text, count, False)
 
 
 def _parse_distribute_counters(stream: TokenStream) -> ast.PutCounter | None:

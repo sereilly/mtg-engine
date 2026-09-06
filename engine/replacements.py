@@ -1945,7 +1945,18 @@ def _applies_unpayable_entry_sacrifice(game, payload: dict) -> bool:
     """
     if not _entry_sacrifice_refuses_entry(game, payload):
         return False
-    return not _entry_sacrifice_candidates(game, payload)
+    # **How many the sentence asks for**, not whether the board holds one.
+    # "Sacrifice **two** untapped lands instead" (Lotus Vale, Scorched Ruins) is
+    # indivisible: a player with a single untapped land cannot pay it, and a
+    # predicate that only asked "is there anything?" would let the land enter
+    # and then charge one — a strictly cheaper card than the one printed. The
+    # count comes from the same reader the prompt sizes itself from, so "can
+    # they pay?" and "how many do they give up?" cannot disagree.
+    from .enter_effects import entry_sacrifice_requirement
+
+    required = entry_sacrifice_requirement(payload["permanent"].card)
+    owed = int(required["count"]) if required is not None else 1
+    return len(_entry_sacrifice_candidates(game, payload)) < owed
 
 
 @replacement_effect(
