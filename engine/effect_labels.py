@@ -606,6 +606,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     # bucket as a +1/+1 one: the report asks what the ability is for.
     "add_named_counter_to_self": "triggered_counter",
     "add_mana_for_tapped_land": "spell_pattern",
+    # Eladamri's Vineyard: the mana a *triggered* ability adds to the seat the
+    # firing named. `triggered_mana` rather than the `spell_pattern` above it,
+    # because this one really does go on the stack and resolve through
+    # EFFECT_HANDLERS — which is the whole difference between the two kinds.
+    "frozen_seat_adds_mana": "triggered_mana",
     # Storm Cauldron, beside its neighbour: both are resolved inline by the tap
     # seam rather than through EFFECT_HANDLERS, so neither has an
     # ``activated_``/``triggered_`` bucket a dispatcher would give it.

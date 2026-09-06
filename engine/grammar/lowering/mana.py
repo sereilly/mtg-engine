@@ -20,7 +20,8 @@ from ._common import (
     _filter_payload,
     _targets_payload,
 )
-from ._events import _DEFENDING_PLAYER_EVENTS, _RECORDED_PERMANENTS
+from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      _RECORDED_PERMANENTS)
 from ._records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
@@ -416,6 +417,32 @@ def _lower_add_mana_for_tapped_land(
     clause unclaimed and visible instead.
     """
     if event != "land_tapped_for_mana":
+        # "At the beginning of each player's first main phase, **that player**
+        # adds {G}{G}." (Eladamri's Vineyard.) The other half of what this node
+        # can mean: "that player" is bound by any event that *freezes a seat*
+        # (``_EVENT_SUBJECT_PLAYERS``), and only "that land" needs the tap.
+        #
+        # So the pips-only spelling under such an event is a different
+        # instruction — one that resolves on the stack for a seat the firing
+        # named, rather than inline at the tap seam for the seat that tapped.
+        # Every other key on this node is bound by the tap ("any type **that
+        # land** produced", the snow alternative, the additional flag) and is
+        # refused below with the tap itself.
+        if (
+            node.recipient.kind == "that_player"
+            and event in _EVENT_SUBJECT_PLAYERS
+            and node.pips
+            and not node.of_type_produced
+            and not node.additional
+            and not node.optional
+            and not node.alt_supertype
+            and not node.spend_only
+        ):
+            return (
+                OracleInstruction(
+                    "frozen_seat_adds_mana", "", {"pips": node.pips}
+                ),
+            )
         raise LoweringError(
             "'that land'/'that player' are bound by a land_tapped_for_mana "
             f"trigger; {event!r} binds neither",

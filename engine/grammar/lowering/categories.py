@@ -778,6 +778,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "activate_each_lands_mana_ability": "mana",
     "add_mana_for_tapped_land": "mana",
+    # The same sentence under a trigger that freezes a *seat* rather than a
+    # land (Eladamri's Vineyard). Its own kind because it resolves on the stack
+    # like any other trigger, where its neighbour is run inline by the tap seam.
+    "frozen_seat_adds_mana": "mana",
     "lose_all_unspent_mana": "mana",
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on

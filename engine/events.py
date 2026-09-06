@@ -1215,9 +1215,25 @@ def _attack_declaration_filter(
     if seat is None:
         return False
     payload = trig.condition.payload
-    if "any_attacking_seat" not in payload and seat != event.payload.get("seat"):
-        return False
     attackers = event.payload.get("attackers") or ()
+    if "attackers_defending_you" in payload:
+        # "Whenever one or more creatures attack **you**." (Orim's Prayer.) The
+        # trigger's controller is CR 506.2's *defending* player, never the
+        # attacking one, so the seat test above is the wrong way round for it —
+        # and the attackers counted are only the ones aimed here. The rest of
+        # this function then asks its ordinary question of that narrowed list,
+        # so "one or more" is the default threshold of 1 and a card printing
+        # "two or more Zombies attack you" would need no code.
+        defenders = event.payload.get("defenders") or ()
+        attackers = [
+            attacker
+            for attacker, defender in zip(attackers, defenders)
+            if defender == seat
+        ]
+        if not attackers:
+            return False
+    elif "any_attacking_seat" not in payload and seat != event.payload.get("seat"):
+        return False
     described = payload.get("attacker_filter")
     if "all_attackers" in payload:
         # "Whenever **all** non-Wall creatures you control attack." (Mob

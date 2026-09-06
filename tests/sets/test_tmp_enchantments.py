@@ -855,3 +855,123 @@ def test_the_multiplier_line_is_read_as_a_shape(set_pool):
     ) == (3, True)
     assert damage_multiplier_line("If a source would deal damage, prevent it.") is None
     assert compile_card_oracle(set_pool("TMP")["Furnace of Rath"]).supported
+
+
+# --- W2G3: the declaration read from the defending side, and each player's
+# --- first main phase ---
+
+def _w2g3e_attack_board(set_pool, catalog_by_name, attackers, prayer_seat=1):
+    """*attackers* Grizzly Bears on seat 0, Orim's Prayer on *prayer_seat*."""
+    bears = [Permanent(card=catalog_by_name["Grizzly Bears"]) for _ in range(attackers)]
+    seats = [
+        PlayerState(name="P1", battlefield=list(bears)),
+        PlayerState(name="P2", battlefield=[]),
+    ]
+    seats[prayer_seat].battlefield.append(
+        Permanent(card=set_pool("TMP")["Orim's Prayer"])
+    )
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    for bear in bears:
+        bear.summoning_sick = False
+    while game.current_step != "declare_attackers":
+        game.advance_combat_phase()
+    return game, bears
+
+
+def test_orims_prayer_gains_one_life_per_attacker_and_fires_once(
+    set_pool, catalog_by_name
+):
+    """"Whenever **one or more creatures** attack you, you gain 1 life for each
+    attacking creature."
+
+    The quantifier is the card. Read as the per-creature announcement — which
+    *does* read "attacks you" — this ability would fire once for each attacker
+    and gain 1 life for each of them, so three attackers would be nine life.
+    CR 509.1 makes the declaration one event, and this is a card that can tell
+    the difference: three attackers, one trigger, three life.
+    """
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 3)
+
+    game.declare_attackers(0, [0, 1, 2])
+    game._settle()
+
+    assert game.players[1].life == 23, game.log
+    assert sum(
+        "gained 3 life from Orim's Prayer" in line for line in game.log
+    ) == 1, "one trigger, not one per attacker"
+
+
+def test_orims_prayer_is_silent_when_its_own_controller_attacks(
+    set_pool, catalog_by_name
+):
+    """"attack **you**" — CR 506.2's defending player, which is the trigger's
+    controller. Every other reading of this announcement narrows by the
+    *attacking* seat, so the marker turns that test round rather than dropping
+    it: without the narrowing the Prayer would pay its controller for their own
+    alpha strike."""
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 3, prayer_seat=0)
+
+    game.declare_attackers(0, [0, 1, 2])
+    game._settle()
+
+    assert game.players[0].life == 20, game.log
+
+
+def test_orims_prayer_counts_one_attacker(set_pool, catalog_by_name):
+    """The threshold is the printed "one or more", so a lone attacker fires it.
+    Worth pinning beside the three-attacker case because that is the board on
+    which the wrong reading and the right one agree."""
+    game, _ = _w2g3e_attack_board(set_pool, catalog_by_name, 1)
+
+    game.declare_attackers(0, [0])
+    game._settle()
+
+    assert game.players[1].life == 21, game.log
+
+
+def test_eladamris_vineyard_pays_whoever_is_taking_the_turn(set_pool):
+    """"At the beginning of **each player's** first main phase, **that player**
+    adds {G}{G}."
+
+    Two halves and both are the card. The condition fires on every turn rather
+    than on its controller's (CR 505.1a's precombat main phase, asked of every
+    seat), and the mana goes to the seat the firing named rather than to the
+    ability's controller — an enchantment that fed only its own controller
+    would be strictly better than the one printed, and right on every board
+    where it happens to be their turn.
+    """
+    vineyard = Permanent(card=set_pool("TMP")["Eladamri's Vineyard"])
+    game = _w2g3e_game([vineyard], [])
+
+    def _open_main(seat):
+        for player in game.players:
+            for symbol in list(player.mana_pool):
+                player.mana_pool[symbol] = 0
+        game.start_turn(seat)
+        while game.current_turn_phase != "precombat_main":
+            game.advance_phase()
+        game._settle()
+        return [
+            {sym: n for sym, n in player.mana_pool.items() if n}
+            for player in game.players
+        ]
+
+    assert _open_main(0) == [{"G": 2}, {}], game.log
+    assert _open_main(1) == [{}, {"G": 2}], "the opponent's own first main phase"
+    assert _open_main(0) == [{"G": 2}, {}], "and every turn after"
+
+
+def test_eladamris_vineyard_compiles_to_one_trigger_on_the_frozen_seat(set_pool):
+    """The two payload keys the card turns on, pinned so a later reading cannot
+    quietly drop either: the condition's scope word, and the mana instruction
+    that resolves for the seat the firing froze rather than for the caster."""
+    program = compile_card_oracle(set_pool("TMP")["Eladamri's Vineyard"])
+
+    assert program.supported, program.reason
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "main_phase_first_each"
+    assert trigger.condition.payload["main_phase_scope"] == "player"
+    assert trigger.instruction.kind == "frozen_seat_adds_mana"
+    assert trigger.instruction.payload == {"pips": (("G", 2),)}

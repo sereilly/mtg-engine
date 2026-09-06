@@ -492,6 +492,21 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # delimits them and the noun parser reads the phrase (round 34).
     ("attackers_declared",
      r"whenever you attack with (?P<attackers_count>[a-z]+) or more (?P<attacker_subjects>[^,]+)"),
+    # "Whenever **one or more creatures attack you**." (Orim's Prayer.) The
+    # declaration again, asked from CR 506.2's defending side — so the marker
+    # turns off the "you are the attacking seat" test above and narrows the
+    # attackers counted to the ones aimed at this permanent's controller.
+    #
+    # It is *not* `matching_creature_attacks`, which does read "attacks you":
+    # that announcement is per attacker, so an ability reading "one or more"
+    # would fire once for each of them. Orim's Prayer gains 1 life for each
+    # attacking creature, so three attackers would be three triggers of three
+    # life — N squared, and right on any board where exactly one creature
+    # attacks. CR 509.1 makes the declaration one event and this is a card that
+    # can tell the difference.
+    ("attackers_declared",
+     r"whenever (?P<attackers_defending_you>)one or more "
+     r"(?P<attacker_subjects>[^,]+) attack you(?![a-z])"),
     # "Whenever **all** non-Wall creatures you control attack" (Mob Mentality).
     # A third question about the same declaration, and the one that is not a
     # count at all: it asks whether the set the noun phrase describes and the
@@ -1373,6 +1388,19 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # CR 505.1a's precombat main phase, which is the only one that is "first".
     # Both printed spellings, because the modern templating says "precombat".
     ("main_phase_first",    r"at the beginning of your (?:first|precombat) main phase"),
+    # "At the beginning of **each player's** first main phase" (Eladamri's
+    # Vineyard). The scope narrowing beside its "your" twin, and its own kind
+    # for the reason `upkeep_self`/`upkeep_each` and `draw_step_self`/
+    # `draw_step_each` are two kinds each: the *dispatch* is what reads the
+    # difference, and a scope the fire site did not read would be an
+    # enchantment that only ever worked on its controller's turn.
+    #
+    # `main_phase_scope` is payload rather than a third kind, exactly as
+    # `upkeep_scope` is: a card printing "each opponent's first main phase" is
+    # the same event asked of a narrower set of seats.
+    ("main_phase_first_each",
+     r"at the beginning of each (?:(?P<main_phase_scope>opponent|player)'s )?"
+     r"(?:first|precombat) main phase"),
     # "Your end step" is a *scope* narrowing, exactly like combat's below and
     # upkeep_self/upkeep_each above: it fires only on its controller's own end
     # step where the bare form fires on everyone's. A separate kind because the

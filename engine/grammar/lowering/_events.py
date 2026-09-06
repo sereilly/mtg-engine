@@ -315,6 +315,14 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # exactly as `upkeep_each`'s does, so it cannot be re-derived at resolution
     # from the source's controller.
     "draw_step_each",
+    # "At the beginning of each player's first main phase, **that player** adds
+    # {G}{G}." (Eladamri's Vineyard.) The seat whose main phase it is, frozen by
+    # `phases/precombat_main_phase.py`'s enqueue — it varies per firing exactly
+    # as the upkeep and draw-step rows above do, so it cannot be re-derived at
+    # resolution from the source's controller. `main_phase_first` stays out, for
+    # `upkeep_self`'s reason: "your first main phase" has one seat and it is
+    # spelled "you".
+    "main_phase_first_each",
     # "Whenever an opponent casts an instant spell …, this creature deals 4
     # damage to **that player**" (Ichneumon Druid). The condition names one
     # seat — whoever cast the spell — and nothing chose it, so it is the seat

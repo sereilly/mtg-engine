@@ -352,6 +352,47 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("frozen_seat_adds_mana")
+def frozen_seat_adds_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of each player's first main phase, **that player** adds
+    {G}{G}." (Eladamri's Vineyard.)
+
+    The mana goes to the seat the *firing* named, not to the ability's
+    controller — an enchantment that fed only its own controller would be a
+    strictly better card than the one printed, and right on every board where
+    it is the controller's turn. CR 603.10's frozen seat is the answer, read
+    under the one key every "that player" in this engine reads
+    (``event_subject_player``), stamped by
+    ``phases/precombat_main_phase.py``'s enqueue.
+
+    No seat means no mana. A firing with nothing frozen would otherwise pay
+    whoever the resolution happened to be holding, which is the refusal every
+    other reading of those two words in this package makes; the lowering only
+    admits the clause under an event that freezes one, so this is the runtime
+    half of the same gate rather than a second opinion about it.
+
+    ``pips`` is the printed symbols, so a card adding {W}{U} or three of one
+    colour needs nothing here.
+    """
+    seat = (context.trigger_context or {}).get("event_subject_player")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        return False, "no player was named by this trigger"
+    player = game.players[seat]
+    added = 0
+    for symbol, amount in instruction.payload.get("pips") or ():
+        count = max(0, int(amount))
+        if count:
+            player.mana_pool[str(symbol)] = (
+                player.mana_pool.get(str(symbol), 0) + count
+            )
+            added += count
+    game.log.append(
+        f"{context.card.name}: {player.name} added {added} mana"
+        if added else f"{context.card.name} produced no mana"
+    )
+    return True, "resolved"
+
+
 @effect_handler("add_mana_from_text")
 def add_mana_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Add mana to the controller's pool.
