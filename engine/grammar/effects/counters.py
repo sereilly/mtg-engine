@@ -25,7 +25,8 @@ from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
                        accept_graveyard_position,
-                       is_pt_counter, parse_pair_ordinal_subject)
+                       is_pt_counter, parse_pair_ordinal_subject,
+                       _parse_that_object)
 
 
 def _accept_bottom_instead_rider(
@@ -149,6 +150,23 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             moved = parse_recipient(stream)
         except GrammarError:
             moved = None
+        if moved is None:
+            # "…put **that creature** on top of its owner's library." (Elven
+            # Warhounds.) The bound *permanent*, one word from "that card"
+            # above and a different object: the card is what a death trigger
+            # left in a graveyard, and this is the creature a block pair froze
+            # on the battlefield. Through the shared production rather than an
+            # inline `accept_phrase`, so "that Wall" and "that non-Wall
+            # creature" reach the same reader here as in the destroy one family
+            # over, and a made-up noun still refuses.
+            #
+            # **After** `parse_recipient` rather than before it, which is the
+            # order that matters: "that creature card from your graveyard" is a
+            # noun phrase the shared parser reads whole, and a bound reading
+            # taken first would consume its opening two words and hand the rest
+            # to the counter branch below, refusing a line that parses.
+            stream.reset(move_mark)
+            moved = _parse_that_object(stream)
     if moved is not None and stream.at_word("on", "onto"):
         # "…on top of **their** library" (Drafna's Restoration) is the same
         # destination as "its owner's": CR 404.1 puts a card in the graveyard of

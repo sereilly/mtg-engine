@@ -67,6 +67,13 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # graveyard (CR 404.1 put it there before the death trigger resolved). Its
     # battlefield arm passes the keyword.
     ("handlers/zones.py", "shuffle_source_card_into_library"),
+    # The *graveyard* branch of ``put_source_card_on_library_top`` — the same
+    # row again with a third destination: "you may put **it** on top of its
+    # owner's library" (Avenging Angel) names no source zone, so the handler
+    # reaches whichever one holds the card, and a dies trigger resolves with
+    # the card already in a graveyard (CR 404.1). Its battlefield arm, which is
+    # the one Thalakos Mistfolk takes, passes the keyword.
+    ("handlers/zones.py", "put_source_card_on_library_top"),
 }
 
 

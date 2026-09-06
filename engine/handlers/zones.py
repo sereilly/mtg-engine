@@ -3935,16 +3935,33 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
     tested here too rather than only at announcement.
     """
     from ..subject_filters import subject_matches
+    from ._common import block_pair_permanents
 
     described = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = game.players.index(context.caster)
-    target_perm = resolve_target_permanent(
-        game, context,
-        predicate=lambda perm: subject_matches(
-            game, perm, described, observer=observer,
-            source=context.source_permanent,
-        ),
-    )
+    # "Whenever this creature becomes blocked by a creature, put **that
+    # creature** on top of its owner's library." (Elven Warhounds.) The
+    # permanent is the one the block pair bound, not a chosen target — same
+    # zone change, and the subject key is the only thing that differs, which is
+    # why it is a payload here rather than a second handler.
+    #
+    # ``block_pair_permanents`` rather than the stack item's target, because the
+    # two halves of the pair are frozen differently and reading the target on
+    # the *blocks* half names the source itself.
+    if instruction.payload.get("subject") == "block_pair":
+        bound = block_pair_permanents(game, context)
+        if not bound:
+            game.log.append(f"{context.card.name}: the blocking creature has left")
+            return True, "resolved"
+        target_perm = bound[0]
+    else:
+        target_perm = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described, observer=observer,
+                source=context.source_permanent,
+            ),
+        )
     if target_perm is None:
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
@@ -4356,6 +4373,50 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
     )
+    return True, "resolved"
+
+
+@effect_handler("put_source_card_on_library_top")
+def put_source_card_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put this creature on top of its owner's library." (Thalakos Mistfolk's
+    ``{U}`` ability.) "When this creature dies, you may put it on top of its
+    owner's library." (Avenging Angel.)
+
+    The ability's own source, printed with **no source zone** — so this reaches
+    whichever zone the object is actually in (CR 608.2), exactly as
+    ``return_source_card_to_owners_hand`` does one screen up and for its reason.
+    Mistfolk's is still on the battlefield when the ability resolves; the
+    Angel's is a card in its owner's graveyard, because a dies trigger resolves
+    after the creature has already been put there (CR 700.4, CR 603.6d), and a
+    handler that looked only at the battlefield would silently do nothing for
+    the card that made this shape worth having.
+
+    By identity across every graveyard rather than the resolving seat's:
+    CR 404.1 puts a card in its *owner's*, and a creature its controller did not
+    own dies into the other player's pile.
+    """
+    card = context.card
+    source = context.source_permanent
+    if source is not None and game.is_on_battlefield(source):
+        owner_idx = game.owner_index_of(source)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        game.remove_from_battlefield(source)
+        game._remove_aura_effects(source)
+        game.put_card_into_library(owner, card, "top", from_battlefield=source)
+        game.log.append(
+            f"{card.name} put on top of {owner.name}'s library"
+        )
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.graveyard):
+            if held is card:
+                player.graveyard.pop(index)
+                game.put_card_into_library(player, card, "top")
+                game.log.append(
+                    f"{card.name} put on top of {player.name}'s library"
+                )
+                return True, "resolved"
+    game.log.append(f"{card.name} was no longer in a graveyard")
     return True, "resolved"
 
 

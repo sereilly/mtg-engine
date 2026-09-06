@@ -83,6 +83,7 @@ from .lowering import (
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_prevent_damage,
+    _lower_put_on_library_top,
     _lower_chosen_source_next_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
@@ -270,6 +271,17 @@ def lower_statement(
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
         return _lower_destroy(statement, event, event_subject, produced)
+    # "…becomes blocked by a creature, put **that creature** on top of its
+    # owner's library." (Elven Warhounds.) In the chain rather than the
+    # name-only table because the tuck's subject can be the block pair's other
+    # half, and `binds_block_pair` needs both halves of the trigger to answer:
+    # the kind says which fire site froze the pair and the *narrowing* says
+    # whether it froze one creature or several (CR 509.3c/509.3d).
+    #
+    # The raw `event`, like the destroy above: this asks a question about the
+    # trigger, which is true of the clause wherever in the sentence it sits.
+    if isinstance(statement, ast.PutOnLibraryTop):
+        return _lower_put_on_library_top(statement, event, event_subject)
     # In the chain rather than the name-only table, all three: each acts on what
     # an earlier step recorded, and `produced` refuses when nothing did.
     if isinstance(statement, ast.GainAbilityText):
