@@ -113,3 +113,65 @@ def test_familiar_ground_does_not_cap_the_opponents_attackers(set_pool):
 
     # Slots 1 and 2 on the defending side; slot 0 is the enchantment.
     assert game.declare_blockers(1, {1: 0, 2: 0})[0]
+
+
+def test_dense_foliage_stops_a_spell_targeting_any_creature(set_pool, catalog_by_name):
+    """"Creatures can't be the targets of spells." — CR 115.1's narrowed shroud
+    printed about a **described set**.
+
+    The third subject this clause has: the other two are relations from the
+    creature back to the line (its own text, or an Aura attached to it) and this
+    one is nowhere near the creature it protects, so the answer comes from a
+    board scan rather than from ``printed_about``.
+
+    The sentence narrows by nothing, so it reaches both seats; and it says
+    *spells*, so an ability still targets. Both are asserted, because a shroud
+    grant would pass the first and fail the second.
+    """
+    foliage = Permanent(card=set_pool("WTH")["Dense Foliage"])
+    mine = Permanent(card=_w1g4e_creature("Footman", 2, 2))
+    theirs = Permanent(card=_w1g4e_creature("Raider", 2, 2))
+    game = _w1g4e_combat([foliage, mine], [theirs])
+    bolt = catalog_by_name["Lightning Bolt"]
+
+    assert not game._can_be_targeted(mine, bolt, caster_index=0)
+    assert not game._can_be_targeted(theirs, bolt, caster_index=0)
+    # An *ability* is a separately targeted object (CR 115.1c), and the printed
+    # word is "spells" — so the same creature is still a legal target for one.
+    assert game._can_be_targeted(mine, None, ability_source=foliage)
+
+
+def test_a_creature_is_targetable_again_once_the_foliage_is_gone(
+    set_pool, catalog_by_name
+):
+    """A static ability ends with its source (CR 611.2) and the scan is made at
+    the moment a target is chosen, so nothing has to be undone."""
+    foliage = Permanent(card=set_pool("WTH")["Dense Foliage"])
+    mine = Permanent(card=_w1g4e_creature("Footman", 2, 2))
+    game = _w1g4e_combat([foliage, mine], [])
+    bolt = catalog_by_name["Lightning Bolt"]
+
+    assert not game._can_be_targeted(mine, bolt, caster_index=0)
+    game.remove_from_battlefield(foliage)
+    assert game._can_be_targeted(mine, bolt, caster_index=0)
+
+
+def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
+    """The refusal test, written before the gate is trusted.
+
+    ``subject_filter_payload`` answers a bare ``{"type_filter": "creature"}`` for
+    "this creature" and for "enchanted creature" — so a reader that took either
+    would shroud every creature in the game off one Aura. ``plural=True`` is what
+    refuses them, and a class this file does not name refuses too rather than
+    being read as the bare "spells".
+    """
+    from engine.target_immunity import board_target_immunities
+
+    assert board_target_immunities("Creatures can't be the targets of spells.")
+    assert not board_target_immunities("This creature can't be the targets of spells.")
+    assert not board_target_immunities(
+        "Enchanted creature can't be the targets of spells."
+    )
+    assert not board_target_immunities(
+        "Creatures can't be the targets of spells or abilities."
+    )

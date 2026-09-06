@@ -223,6 +223,102 @@ _SOURCE_CLASS_PART = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class BoardTargetImmunity:
+    """One printed "<noun phrase> can't be the targets of <class>" clause.
+
+    "Creatures can't be the targets of spells." (Dense Foliage.) The third
+    subject a narrowed shroud can be printed about, and the one
+    :func:`printed_about` cannot reach: the other two are the card itself and
+    the permanent an Aura is attached to, both of which are *relations* from the
+    permanent being targeted back to the line. This one is a **described set**,
+    so the line is nowhere near the permanent it protects and the question has
+    to be asked of the board instead.
+
+    *filter* is the printed noun phrase as the payload ``subject_matches``
+    tests, exactly as ``combat_restrictions.py``'s board-wide restrictions carry
+    theirs — so a card printing "Walls can't be the targets of spells" is this
+    rule and needs no code.
+    """
+
+    filter: dict
+    spell_class: str
+
+
+#: The plural of :data:`_TARGET_IMMUNITY`'s sentence, and the plural is not
+#: cosmetic: a **set** of objects takes "the target**s**", where a single
+#: permanent takes "the target". The subject is read with ``plural=True`` for
+#: the reason ``prevention.prevent_all_to_matching`` reads its own that way —
+#: the parser refuses a singular self-reference under that flag, so "this
+#: creature" and "enchanted creature", which reduce to a bare
+#: ``{"type_filter": "creature"}`` and would shroud every creature in the game,
+#: cannot reach this reader at all.
+_BOARD_TARGET_IMMUNITY = re.compile(
+    r"^(?P<subject>.+) can't be the targets of (?P<spell_class>[a-z ]+)$"
+)
+
+
+def board_target_immunities(line: str) -> tuple[BoardTargetImmunity, ...]:
+    """Every board-wide "can't be the targets of <class>" clause *line* prints.
+
+    A tuple for :func:`target_immunities`' reason one screen up, and empty for
+    both refusals that matter: a class this file does not name, and a subject
+    the noun parser cannot read *in full* or cannot test. Either admitted, the
+    protection would cover a strictly larger set than the card prints — which
+    for an untargetability is a board nothing can ever remove.
+    """
+    from .grammar import subject_filter_payload
+
+    # Reduced exactly as ``_clauses`` reduces its input, so the two readers of
+    # one printed line cannot disagree about what the line says.
+    match = _BOARD_TARGET_IMMUNITY.match(
+        " ".join((line or "").split()).strip().rstrip(".").lower()
+    )
+    if match is None:
+        return ()
+    printed = match.group("spell_class")
+    spell_class = next(
+        (value for phrase, value in _SPELL_CLASSES if printed == phrase), None
+    )
+    if spell_class is None:
+        return ()
+    described = subject_filter_payload(match.group("subject"), plural=True)
+    if not described:
+        return ()
+    return (BoardTargetImmunity(described, spell_class),)
+
+
+def board_target_immunity_classes(game, permanent) -> frozenset[str]:
+    """Every class of spell that may not target *permanent*, read off the board.
+
+    The board-wide sibling of :func:`spell_target_immunity_classes`, and it
+    takes the *game* because that is the whole difference: the clause is printed
+    on some other permanent entirely, so there is no relation from this one back
+    to the line and the battlefields have to be scanned.
+
+    Every battlefield and no seat comparison, because the sentence names no
+    controller — Dense Foliage protects both players' creatures, and a printing
+    that said "creatures you control" would carry the seat in its noun phrase
+    and be answered by the same matcher. ``observer`` is therefore the seat
+    controlling the *printing* permanent (CR 109.5) and ``source`` is that
+    permanent.
+    """
+    from .subject_filters import subject_matches
+
+    classes: set[str] = set()
+    for seat, source in game.permanents_with_controller():
+        for line in _lines_of(source.effective_card):
+            for found in board_target_immunities(line):
+                if found.spell_class in classes:
+                    continue
+                if subject_matches(
+                    game, permanent, dict(found.filter),
+                    observer=seat, source=source,
+                ):
+                    classes.add(found.spell_class)
+    return frozenset(classes)
+
+
 def _subject_of(who: str) -> str:
     return ATTACHED_SUBJECT if who.startswith("enchanted") else SELF_SUBJECT
 
@@ -379,6 +475,12 @@ def immunity_claims_line(line: str) -> bool:
             or enchant_immunities(clause)
             or narrow_source_immunities(clause)
             or source_class_immunities(clause)
+            # "Creatures can't be the targets of spells." (Dense Foliage.) The
+            # board-wide subject, asked here for the reason every other clause
+            # on this line is: the gate must read the same function the
+            # enforcement reads, or the card is admitted with the protection
+            # absent.
+            or board_target_immunities(clause)
         )
         for clause in clauses
     )
