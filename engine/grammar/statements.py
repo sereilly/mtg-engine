@@ -24,6 +24,7 @@ from .stream import TokenStream
 from .conditions import _parse_condition
 from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
+from .leading_iteration import parse_leading_iteration
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_counter_pronoun_to_bound_target,
                         rebind_player_pronoun_to_condition_target,
@@ -32,8 +33,7 @@ from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
                       _parse_duration, _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_untap_chosen_by_paying,
-                      _parse_for_each_destroy_unless_paid,
-                      _parse_have_source_deal_damage, _parse_cast_permission,
+                      _parse_cast_permission,
                       _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
                       _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
                       _parse_reveal_hand_and_choose,
@@ -53,8 +53,6 @@ from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
 from .effects.game import parse_extra_land_plays, parse_extra_phases
 from .effects.stack import _parse_conditional_retarget
-from .effects.cards import _parse_for_each_revealed_discard
-from .effects.attachments import parse_excess_choice_paragraph
 
 
 from .sentence_clauses import (
@@ -64,9 +62,6 @@ from .sentence_clauses import (
     _parse_unless_player_pays,
     accept_delayed_toll,
     _accept_trailing_toll,
-    _parse_leading_controller_of_each,
-    _parse_leading_count_scale,
-    _parse_leading_for_each,
     _parse_leading_linked_duration,
     _round_every_half,
 )
@@ -389,81 +384,18 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     graveyard_shuffle = _parse_shuffle_graveyard_into_library(stream)
     if graveyard_shuffle is not None:
         return graveyard_shuffle
-    # "**For each creature that died this way,** put a creature card …" (Glyph
-    # of Reincarnation) — the iteration clause in its *leading* printed
-    # position, where `phrases._parse_for_each` reads the trailing one. Read at
-    # the statement level rather than inside the effect behind it, because it
-    # governs a whole sentence: the same rule the leading duration a few
-    # branches below follows, and for the same reason — an effect that read its
-    # own "for each" would be one production per effect that can carry one.
-    # "**For each land,** destroy that land unless any player pays 1 life."
-    # (Cleansing.) Read before the "this way" windows below, because both open
-    # with the same two words and only this one names a set on the battlefield
-    # — the window reader would take the noun phrase and then fail the line on
-    # the missing participle, losing it to a less specific error.
-    # "**Have this enchantment deal 5 damage to that player**" (Worms of the
-    # Earth) — a damage event printed as something a player chooses to do, so
-    # it opens with a verb rather than with the subject `subject_verb` wants.
-    have_deal = _parse_have_source_deal_damage(stream)
-    if have_deal is not None:
-        return have_deal
-    each_bought_off = _parse_for_each_destroy_unless_paid(stream)
-    if each_bought_off is not None:
-        return each_bought_off
-    # The *count* reading of the same leading words, tried first because it is
-    # the narrower one: it requires the phrase to name a zone other than the
-    # battlefield, which the loop's sentences never do.
-    per_count = _parse_leading_count_scale(_parse_statement_body, stream)
-    if per_count is not None:
-        return per_count
-    # "**For each blue instant card revealed this way,** that player discards
-    # that card unless they pay 4 life." (Sirocco.) Read before the general
-    # leading loop below, which would take the noun phrase and then fail the
-    # line on a body it has no reading for — the discard names "that card",
-    # which is one turn of a loop rather than a subject anything else parses.
-    # Refuses without consuming, so every other "For each …" keeps its reading.
-    revealed_discard = _parse_for_each_revealed_discard(stream)
-    if revealed_discard is not None:
-        return revealed_discard
-
-    # "**The controller of each of those artifacts** gains life equal to its
-    # mana value." (Seeds of Innocence.) The loop with its subject printed in
-    # front of it. Read here, beside the "for each …" spelling it is a word
-    # order of and before the subject-verb reader below, which would take "the
-    # controller" as a bare back-reference and then loop over nothing.
-    controller_of_each = _parse_leading_controller_of_each(stream)
-    if controller_of_each is not None:
-        return ast.ForEach(
-            controller_of_each,
-            parse_subject_verb(
-                stream, ast.PlayerRef("controller"),
-                parse_optional_action=_parse_optional_action,
-            ),
-        )
-    # "**For each land target player controls in excess of the number you
-    # control,** choose a land that player controls, then the chosen permanents
-    # phase out." (Equipoise.) A head clause that is a *count* rather than a
-    # set, so it is not the loop below and cannot be read as one: lowered as a
-    # repetition it would arm one prompt per excess land and leave the plural
-    # sentence behind it naming one of them. Read first because both open on
-    # the same two words, and it refuses without consuming.
-    excess_choice = parse_excess_choice_paragraph(stream)
-    if excess_choice is not None:
-        return excess_choice
-    per_death = _parse_leading_for_each(_parse_statement_body, stream)
-    if per_death is not None:
-        # The repeated act may be printed as a choice of two ("pay 4 life **or**
-        # put the card on top of your library"), so it is read through the same
-        # alternatives reader "you may …" uses. One reader, so a statement-level
-        # "or" means one thing wherever the pool prints it — and neither
-        # position can quietly take the first half and drop the rest.
-        repeated = _parse_optional_action(stream)
-        # "…sacrifice a permanent other than this enchantment **unless you
-        # discard a card**" (Oath of Lim-Dûl). The toll belongs to the repeated
-        # sentence, not to the loop around it: the offer is made once per
-        # repetition, and read outside the loop it would be one offer buying
-        # off every repetition at once.
-        return ast.ForEach(per_death, _accept_trailing_toll(_parse_statement_body, stream, repeated) or repeated)
+    # A loop or a count printed in front of the sentence — eight spellings, one
+    # question — read in `leading_iteration`, which crossed out of this module
+    # at Weatherlight's Phase 0 (see that file's docstring). It declines without
+    # consuming, so everything below keeps its reading.
+    leading = parse_leading_iteration(
+        stream,
+        parse_body=_parse_statement_body,
+        parse_optional_action=_parse_optional_action,
+        accept_trailing_toll=_accept_trailing_toll,
+    )
+    if leading is not None:
+        return leading
     # "Each player shuffles the cards from their hand into their library, then
     # draws that many cards." (Winds of Change.) Same position and the same
     # reason: the subject-verb reader below has no "shuffles", and the sentence

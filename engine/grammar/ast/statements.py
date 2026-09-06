@@ -72,11 +72,20 @@ from .characteristics import (
     RemoveCounter,
     SetBasePT,
 )
+from .tapping import (
+    Tap,
+    Untap,
+    TapOrUntap,
+    DoesntUntapNextStep,
+    SimultaneousUntapAndTap,
+    UntapChosenByPaying,
+    DoesntUntapWhileSourceTapped,
+    DoesntUntapWhileCounter,
+    ReturnSelfInsteadOfUntapping,
+)
 from .board import (
     DelayedSelfAction,
     RebalanceLands,
-    DoesntUntapWhileSourceTapped,
-    DoesntUntapWhileCounter,
     SacrificeExpansionPermanents,
     ShuffleGraveyardIntoLibrary,
     ShuffleHandIntoLibrary,
@@ -85,7 +94,6 @@ from .board import (
     Exile,
     ExileUntilLeavesOrUntaps,
     PutSourceIntoZone,
-    ReturnSelfInsteadOfUntapping,
     Attach,
     BidLifeForControl,
     ExchangeControl,
@@ -106,12 +114,6 @@ from .board import (
     DestroyUnlessPay,
     DestroyEachUnlessPaid,
     SacrificeUnlessPay,
-    Tap,
-    TapOrUntap,
-    DoesntUntapNextStep,
-    SimultaneousUntapAndTap,
-    Untap,
-    UntapChosenByPaying,
 )
 from .mana import (
     ActivateEachLandsManaAbility,

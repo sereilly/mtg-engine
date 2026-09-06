@@ -50,8 +50,13 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **12,035 tests**, CI budget **500s**, CI-measured
-   baseline **260s** (`ci.yml`). The budget catches a step change; the baseline
+2. **The suite stays fast.** **14,670 tests**, CI budget **940s**, CI-measured
+   baseline **470s** (`ci.yml`). Both moved at Weatherlight's Phase 0 from run
+   33977035005 on the Visions promotion commit — `suite wall time: 470s`, 94%
+   of the old budget with the creep warning already firing — and the local
+   `--durations` read shows no single culprit: a 27s parse-coverage setup, one
+   17s AI simulation, then a long tail of pool-wide guards at 2–6s each. The
+   sweeps that walk every card scale with the pool, and that is what grew. The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
    budget is a decision, not maintenance — it has been raised four times on
    purpose.

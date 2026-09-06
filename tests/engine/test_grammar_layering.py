@@ -102,6 +102,12 @@ PARSE_LAYERS = [
     # importing the other, so the mirror re-forms rather than colliding — the
     # one thing `statics` could not do.
     "zones",
+    # `seat_relations` split off `postmodifiers` at Weatherlight's Phase 0, when
+    # that module sat one line from the guard with a wave about to open on it.
+    # It is the "whose is it" half of a noun phrase — ten seat and ownership
+    # readings that write one key each — and it sits here because
+    # `postmodifiers` reads it and it reads nothing back.
+    "seat_relations",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.
@@ -265,6 +271,13 @@ PARSE_LAYERS = [
     # is a floor under `phrases`.
     "tolls",
     "sentence_clauses",
+    # `leading_iteration` split off `statements` at Weatherlight's Phase 0, when
+    # that module sat at exactly the guard with a wave about to open on it. It
+    # is the eight spellings of a loop or count printed *in front of* the
+    # sentence, and it sits here because it imports `sentence_clauses`,
+    # `subject_verb` and `effects` and is imported by `statements` alone. The
+    # statement layer is handed down as parameters, never imported up.
+    "leading_iteration",
     "statements",
     # A sentence whose subject is a pronoun pointing at the sentence before it
     # ("It gains …", "Untap that creature", "It loses \"enchant creature\""). Split
@@ -768,11 +781,13 @@ LOWERING_FAMILIES = [
 # `PlayerGetsCounters` are three nodes beside the characteristics ones, and the
 # guards that made `counters` a family on the other two sides fired on the
 # lowerings and then, a set later, on the productions — never on the inventory.
-# `tapping` is the fifth, and the same reason a fifth time: `Tap`, `Untap`,
-# `TapOrUntap`, the two untap restrictions and the untap toll are six nodes
-# that sit perfectly well beside the board ones, and the guard that made
-# `tapping` a family on the other two sides fired on the lowerings and then, a
-# set later, on the productions — never on the inventory.
+# `tapping` **was** the fifth, for the same reason — until Weatherlight's
+# Phase 0, when the inventory guard did fire, in effect: `ast/board.py` sat
+# three lines from the cap with a wave about to open on it. Its nine tap/untap
+# nodes now live in `ast/tapping.py`, and the mirror re-forms on all three
+# sides, which is what these notes keep asking a split to do. The rule below
+# stands: a near-empty module bought back for symmetry costs the thing symmetry
+# is for; this one was bought by the guard.
 # `attachments` is the sixth, and the same reason a sixth time: `Attach` and
 # `ChoosePermanent` are two nodes that sit perfectly well beside the board ones
 # — the pair they relate is what the *production* reads and what the *lowering*
@@ -789,7 +804,7 @@ AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
         "search", "control_changes", "prevention", "counters",
-        "tapping", "attachments", "returns",
+        "attachments", "returns",
         # `redirection` is the fourth of `types`' shape: `RedirectDamage`,
         # `DoubleCombatDamage` and `DamageBecomesCounterRemoval` are all facts
         # about a **damage event**, and they live in `ast/damage.py` beside

@@ -40,6 +40,7 @@ from .lexer import PT, SELF
 from .names import accept_name_comparison, accept_original_expansion, parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
                       _parse_keyword_list, accept_source_reference)
+from .seat_relations import accept_seat_relation
 from .stream import TokenStream
 from .zones import accept_zone_scope
 from .vocabulary import CARD_TYPES, singular as _singular
@@ -60,120 +61,17 @@ def _parse_postmodifiers(
     """Read every postmodifier the cursor is at, onto *d*."""
     # --- postmodifiers ---------------------------------------------------
     while True:
-        # "you both own and control" (Obelisk of Undoing). Read before the bare
-        # "you control", which is its suffix: matching that first would consume
-        # "control" and strand "own", and — worse — would compile the card as
-        # though it read "any permanent you control", which is exactly the
-        # stolen permanent it is printed to exclude.
-        if stream.accept_phrase("you", "both", "own", "and", "control"):
-            d.controller = "you"
-            d.owned_by = "you"
-            continue
-        # "you **own or control**" (Telim'Tor's Edict). Read beside the "both
-        # own and control" branch above and before the bare "you control",
-        # whose prefix it also is: matched there, "or control" would strand
-        # "own" — and, worse, would compile the card as the strictly *smaller*
-        # set, dropping the permanent an opponent has taken from you, which is
-        # half of what this card is for.
-        if stream.accept_phrase("you", "own", "or", "control"):
-            d.owner_or_controller = "you"
-            continue
-        if stream.accept_phrase("you", "control"):
-            d.controller = "you"
-            continue
-        # "all Auras **you own** attached to permanents you control" (Remove
-        # Enchantments). Ownership alone, with no word about control: the card
-        # is deliberately naming a different seat for the Aura than for its
-        # host, so reading this as "you control" would return an Aura you own
-        # that an opponent has taken — and dropping it would return theirs.
-        # Read *after* the "both own and control" branch above, which this is a
-        # suffix of.
-        if stream.accept_phrase("you", "own"):
-            d.owned_by = "you"
-            continue
-        # "you don't control" (Teferi, Master of Time's −3). The lexer keeps
-        # "don't" as one word.
-        if stream.accept_phrase("you", "don't", "control"):
-            d.controller = "not_you"
-            continue
-        if stream.accept_phrase("an", "opponent", "controls"):
-            d.controller = "opponent"
-            continue
-        # "target nontoken permanent an opponent **owns**" (Bronze Tablet).
-        # Ownership, not control (CR 108.3 against CR 613 layer 2) — a card
-        # printed with "owns" excludes the permanent it stole from that
-        # opponent, and reading one as the other is exactly the mistake round
-        # 13 recorded about Obelisk of Undoing.
-        if stream.accept_phrase("an", "opponent", "owns"):
-            d.owned_by = "opponent"
-            continue
-        # "creatures **your opponents** control" (Massacre Wurm, Waker of
-        # Waves) — the plural spelling of the same scope: every opponent's
-        # creatures, and none of the controller's own.
-        if stream.accept_phrase("your", "opponents", "control"):
-            d.controller = "opponent"
-            continue
-        # "each creature **each opponent** controls" (Aku Djinn) — the
-        # distributive spelling of the two above. CR 109.5 reads "opponent"
-        # against the ability's controller, and "each opponent" names exactly
-        # the set "your opponents" does, so it is the same filter key rather
-        # than a third one: a quantifier over the seats is not a narrowing of
-        # the objects. Kept beside its siblings so the three spellings of one
-        # scope are read in one place.
-        if stream.accept_phrase("each", "opponent", "controls"):
-            d.controller = "opponent"
-            continue
-        # "each creature target opponent controls" (Teferi, Timeless Voyager's
-        # −8): the controller is a chosen player — the spell targets the
-        # opponent, not the creatures.
-        if stream.accept_phrase("target", "opponent", "controls"):
-            d.controller = "target_opponent"
+        # Whose is it — the ten seat and ownership readings, in
+        # `seat_relations` since Weatherlight's Phase 0 (see that file). Tried
+        # first because the loop always tried them first, and the branch left
+        # between them below opens on a word none of them does.
+        if accept_seat_relation(stream, d):
             continue
         # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the
         # object is colored — matching reads the effective colors, so a
         # colorless artifact escapes and a Lace-painted one does not.
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
             colored = True
-            continue
-        # "target artifact **defending player controls**" (Floral Spuzzem).
-        # A seat only the combat that fired the trigger knows, so it is carried
-        # like `that_player` beside it — refused by the pure matcher and
-        # resolved by whoever holds the event's context. Reading it as
-        # "opponent" would be right in a duel by coincidence and wrong the
-        # moment a third seat is not the one being attacked.
-        if stream.accept_phrase("defending", "player", "controls"):
-            d.controller = "defending_player"
-            continue
-        # "nontoken permanents **of the chosen color** they control" (Psychic
-        # Allergy). CR 614.1c's choice, made as the source entered and stored on
-        # it — so the phrase narrows by a colour the sentence never names and
-        # only a reader holding the *source* can answer. That is why it is its
-        # own filter key rather than a colour: `permanent_matches_filter` is the
-        # pure half and refuses the key outright, and the two readers that do
-        # have a source (`subject_matches`, `evaluate_count`) resolve it before
-        # matching.
-        if stream.accept_phrase("of", "the", "chosen", "color"):
-            d.chosen_color = True
-            continue
-        # "Creatures **of the chosen type**" (An-Zerrin Ruins). The same
-        # CR 614.1c choice one characteristic over — a creature type recorded
-        # on the source as it entered — so it is its own filter key for the
-        # colour's reason: the pure matcher has no source and refuses the key
-        # outright, and the readers that do hold one resolve it into the
-        # ordinary subtype key before matching.
-        if stream.accept_phrase("of", "the", "chosen", "type"):
-            # Which catalog the chosen word came from is spelled once, in the
-            # **head noun**: "Each *land* of the chosen type" (Shimmer) is a
-            # land type (CR 205.3i) and "*Creatures* of the chosen type"
-            # (An-Zerrin Ruins) a creature type (CR 205.3m). The phrase itself
-            # is identical, so reading it as one key would store Shimmer's
-            # Desert under a creature type's name — and the two choices are
-            # recorded separately on the source, which is what the reader
-            # holding that source resolves them from.
-            if "land" in d.card_types:
-                d.chosen_land_type = True
-            else:
-                d.chosen_creature_type = True
             continue
         # "all untapped creatures **that didn't attack this turn**, **except
         # for creatures that couldn't attack**" (Season of the Witch). Two

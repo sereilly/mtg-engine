@@ -21,7 +21,8 @@ from __future__ import annotations
 
 from ..oracle_types import OracleInstruction
 from . import ast
-from .lowering import (_lower_discard, _lower_exile_entire_library,
+from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tapped_land, _lower_activate_each_lands_mana_ability, _lower_lose_unspent_mana,
+                       _lower_discard, _lower_exile_entire_library,
                        _lower_exile_random_from_hand, _lower_mill,
                        _lower_move_counter, _lower_note_mana_spent,
                        _lower_bid_life_for_control, _lower_become_blocked,
@@ -283,6 +284,33 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     ast.PlayerGetsCounters: _lower_player_gets_counters,
     ast.LookTopPickToHand: _lower_look_top_pick,
+    # Four more of the chain's `return _lower_x(statement, event)` arms, moved
+    # at Weatherlight's Phase 0 with `statement_dispatch.py` thirteen lines
+    # from the guard — the move this table's own comment asks the next round
+    # to make. Each arm's reasoning about the *raw* event travels with it.
+    # The raw `event`, not `dispatch_event`: "defending player" is a fact
+    # about the *trigger* — which seat the fire site froze — rather than
+    # about where in the sentence the clause sits, and Stromgald Spy prints
+    # it inside a "you may have …" offer, where `dispatch_event` is already
+    # None. The same reading the delayed block-pair destroy takes above.
+    ast.PlayWithHandRevealed: _lower_play_with_hand_revealed,
+    # The **unfiltered** event, for `_lower_destroy`'s reason: which land
+    # "that land" names and which seat "that player" names are facts about
+    # the trigger, true of every clause under it. It read `dispatch_event`
+    # while the tap-for-mana seam dispatched on `trig.instruction.kind`
+    # alone, which made a nested occurrence genuinely unreachable — so
+    # Winter's Night, whose trigger's effect is *two* sentences and
+    # therefore lowers under a `Sequence`, refused with "None binds
+    # neither". That seam now walks a sequence's steps, so the nesting is
+    # reachable and the filtered event was the wrong question.
+    ast.AddManaForTappedLand: _lower_add_mana_for_tapped_land,
+    # The **unfiltered** event, for `_lower_play_with_hand_revealed`'s
+    # reason above: "defending player" is a fact about the trigger — which
+    # seat the fire site froze — rather than about where in the sentence
+    # the clause sits, and Pygmy Hippo prints it inside a "you may have …"
+    # offer, where `dispatch_event` is already None.
+    ast.ActivateEachLandsManaAbility: _lower_activate_each_lands_mana_ability,
+    ast.LoseUnspentMana: _lower_lose_unspent_mana,
 }
 
 

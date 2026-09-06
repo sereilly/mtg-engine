@@ -54,9 +54,6 @@ from .lowering import (
     _fused_exile_then_controller_life,
     _lower_add_mana,
     _lower_put_exiled_card_into_zone,
-    _lower_activate_each_lands_mana_ability,
-    _lower_add_mana_for_tapped_land,
-    _lower_lose_unspent_mana,
     _amount_payload,
     _lower_become_color,
     _lower_cant_be,
@@ -98,7 +95,6 @@ from .lowering import (
     _lower_gain_life,
     _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
-    _lower_play_with_hand_revealed,
     _lower_lose_life,
     _lower_bin_revealed_card,
     _lower_put_milled_card_onto_battlefield,
@@ -306,35 +302,8 @@ def lower_statement(
         # is attached to is a fact about the trigger, true of every clause under
         # it, and Mind Whip's tap sits inside a `may`'s otherwise branch.
         return _lower_tap(statement, event, produced)
-    if isinstance(statement, ast.PlayWithHandRevealed):
-        # The raw `event`, not `dispatch_event`: "defending player" is a fact
-        # about the *trigger* — which seat the fire site froze — rather than
-        # about where in the sentence the clause sits, and Stromgald Spy prints
-        # it inside a "you may have …" offer, where `dispatch_event` is already
-        # None. The same reading the delayed block-pair destroy takes above.
-        return _lower_play_with_hand_revealed(statement, event)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
-    if isinstance(statement, ast.AddManaForTappedLand):
-        # The **unfiltered** event, for `_lower_destroy`'s reason: which land
-        # "that land" names and which seat "that player" names are facts about
-        # the trigger, true of every clause under it. It read `dispatch_event`
-        # while the tap-for-mana seam dispatched on `trig.instruction.kind`
-        # alone, which made a nested occurrence genuinely unreachable — so
-        # Winter's Night, whose trigger's effect is *two* sentences and
-        # therefore lowers under a `Sequence`, refused with "None binds
-        # neither". That seam now walks a sequence's steps, so the nesting is
-        # reachable and the filtered event was the wrong question.
-        return _lower_add_mana_for_tapped_land(statement, event)
-    if isinstance(statement, ast.ActivateEachLandsManaAbility):
-        # The **unfiltered** event, for `_lower_play_with_hand_revealed`'s
-        # reason above: "defending player" is a fact about the trigger — which
-        # seat the fire site froze — rather than about where in the sentence
-        # the clause sits, and Pygmy Hippo prints it inside a "you may have …"
-        # offer, where `dispatch_event` is already None.
-        return _lower_activate_each_lands_mana_ability(statement, event)
-    if isinstance(statement, ast.LoseUnspentMana):
-        return _lower_lose_unspent_mana(statement, event)
     if isinstance(statement, ast.CreateToken):
         # ``event`` for the P/T back-reference: "its power is equal to that
         # creature's power" is read through the one place that decides where a

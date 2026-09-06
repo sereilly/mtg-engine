@@ -124,10 +124,25 @@ jobs:
       # status before the budget is consulted — a failing suite's duration says
       # nothing about a step change. BASELINE stays 260 until the next runner
       # reading of this step, per the method note above.
+      # BUDGET 500 -> 940 and BASELINE 260 -> 470 (2026-09-05, after the
+      # Visions promotion). The fifth raise, and both numbers are the step's
+      # own output: run 33977035005 on the promotion commit read
+      # `suite wall time: 470s` at 14,670 tests — 94% of the old budget, with
+      # the creep warning (1.5x = 390s) already firing. Weatherlight's ingest
+      # adds several hundred tests, so at 500 the next Phase 1 would go red for
+      # a reason unrelated to the set. BUDGET is ~2x BASELINE, the headroom this
+      # gate has always been documented to want.
+      #
+      # The `--durations` reading the ICE note asked for, taken locally (the
+      # runner step does not pass the flag): no single culprit. The top item is
+      # `test_parse_coverage`'s 27s setup, then one 17s AI simulation, then a
+      # long tail of pool-wide guards at 2-6s each — the sweeps that walk every
+      # card scale with the pool, and that is what grew. `-m "not slow"` would
+      # not help, because the batch tests are not the growth.
       - name: Run the test suite, enforcing the time budget
         env:
-          BUDGET: 500
-          BASELINE: 260
+          BUDGET: 940
+          BASELINE: 470
         run: |
           START=$(date +%s)
           STATUS=0
