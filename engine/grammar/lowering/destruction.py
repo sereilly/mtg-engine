@@ -688,7 +688,7 @@ def _lower_delayed_destroy(
     are ones the pair reading refuses anyway, and refusing them here with the
     producer named is the more useful failure.
     """
-    delayed = _lower_activated_delayed_destroy(node, produced)
+    delayed = _lower_activated_delayed_destroy(node, produced, event, event_subject)
     if delayed is not None:
         return delayed
     if not binds_block_pair(event, event_subject):
@@ -727,7 +727,8 @@ def _lower_delayed_destroy(
 
 
 def _lower_activated_delayed_destroy(
-    node: ast.Destroy, produced: frozenset[str]
+    node: ast.Destroy, produced: frozenset[str],
+    event: str | None = None, event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...] | None:
     """"…Destroy it [and this creature] at end of combat." (Goblin Sappers.)
 
@@ -797,6 +798,24 @@ def _lower_activated_delayed_destroy(
             # not an earlier step's.
             return None
         if _RECORDED_PERMANENTS.isdisjoint(produced):
+            # "When this creature blocks, **destroy it** at end of combat."
+            # (Cinder Wall.) Under a trigger whose condition named no other
+            # object, the word has one referent and it is the ability's own
+            # source — that is exactly what
+            # ``rebinding.rebind_pronoun_to_event_subject`` leaves behind, and
+            # the *immediate* destroy one screen up already reads it that way
+            # (its `_is_source` branch is tried first). Only the delay had the
+            # two branches in the other order, for Goblin Sappers' sake, so the
+            # same pronoun on the same verb meant the source without the delay
+            # and nothing with it.
+            #
+            # An **activated** ability keeps the refusal: with no trigger and no
+            # earlier step there is no antecedent at all, and reading the word
+            # as the source there would be a guess rather than the rebinder's
+            # answer.
+            if event is not None and event_subject is None:
+                inner = OracleInstruction("destroy_self", "", {})
+                return _delayed_destroy_trigger(node, inner)
             raise LoweringError(
                 "\"it\" names the permanent an earlier step of this effect "
                 "chose, and no step here recorded one",
@@ -807,6 +826,19 @@ def _lower_activated_delayed_destroy(
         inner = OracleInstruction("destroy_self", "", {})
     else:
         return None
+    return _delayed_destroy_trigger(node, inner)
+
+
+def _delayed_destroy_trigger(
+    node: ast.Destroy, inner: OracleInstruction
+) -> tuple[OracleInstruction, ...]:
+    """CR 603.7's delayed ability around one of the three inner destroys.
+
+    One function because the three subjects differ only in what they destroy —
+    the wrapper, its "once", its duration and the regeneration refusal are the
+    same sentence's "at end of combat" every time, and a second copy of them is
+    the second-copy-of-one-fact this repo forbids.
+    """
     if node.no_regen:
         raise LoweringError(
             "the end-of-combat destroy handler does not bypass regeneration",

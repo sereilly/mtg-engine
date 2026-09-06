@@ -1755,6 +1755,10 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
 
     Under **your** control, which CR 400.3 lets an effect say; ownership does
     not move, so the card goes back to its owner's graveyard when it next dies.
+    ``control="owner"`` is the other seat the phrase can name — "return that
+    card to the battlefield **under its owner's control**" (Abduction), where
+    the Aura took the creature while it lived and gives it back when it dies.
+    Absent, the payload means CR 110.2a's default, which is this seat.
 
     "Sacrifice the creature when you lose control of this creature" is the same
     sentence's second half, and it is recorded here rather than lowered as a
@@ -1783,7 +1787,8 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
             f"{context.card.name}: no recorded card to put onto the battlefield"
         )
         return True, "resolved"
-    seat = game.players.index(context.caster)
+    controller_seat = game.players.index(context.caster)
+    to_owner = instruction.payload.get("control") == "owner"
     for card in cards:
         for player in game.players:
             found = next(
@@ -1792,6 +1797,11 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
             if found is None:
                 continue
             owner_seat = game.players.index(player)
+            # CR 404.1 put the card in its *owner's* graveyard, so the seat
+            # holding it is the owner — which is what "under its owner's
+            # control" names, found here rather than passed in because it is
+            # the graveyard scan that discovers it.
+            seat = owner_seat if to_owner else controller_seat
             player.graveyard.pop(found)
             permanent = Permanent(card=card)
             # CR 400.3: "under your control" moves control, never ownership, so
@@ -1810,7 +1820,7 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
                     link_sacrifice_to_source(permanent, source, seat)
             game.log.append(
                 f"{card.name} entered the battlefield under "
-                f"{context.caster.name}'s control ({context.card.name})"
+                f"{game.players[seat].name}'s control ({context.card.name})"
             )
             break
         else:

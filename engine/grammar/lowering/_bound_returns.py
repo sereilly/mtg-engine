@@ -81,6 +81,16 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     # caller here still refuses a subtype at that gate, so the key is absent for
     # all of them.
     subtypes = {"graveyard_subtypes": list(filt.subtypes)} if filt.subtypes else {}
+    # "…return a **basic** land card from your graveyard to your hand."
+    # (Harvest Wurm.) CR 205.4a's supertype, carried on the key
+    # ``graveyard_card_matches`` already reads — it was written for Lodestone
+    # Bauble's "basic land cards" and asks the printed type line, which for a
+    # card in a graveyard is the whole of what there is (CR 613.1). Additive
+    # like the subtype above, so every payload written before this is
+    # byte-identical, and lifted out of ``_reads_no_return_restriction`` only by
+    # the branch whose handler asks that predicate.
+    if filt.supertypes:
+        subtypes = {**subtypes, "supertypes": list(filt.supertypes)}
     if len(filt.card_types) > 1:
         return {
             "any_card": False,
@@ -209,12 +219,28 @@ def lower_untargeted_return(
         # branch and not a row of a word table: the destination is the whole
         # difference, and it is read here.
         if node.to.name == "battlefield":
-            if node.under_control_of is None or node.under_control_of.kind != "you":
-                # The handler puts it under the *ability controller's* control
-                # and says so. Any other seat would be a card the engine hands
-                # to the wrong player, silently.
+            # Which seat the card comes back under, in the same
+            # ``control``/``you``/``owner`` vocabulary the self-return one
+            # screen down already uses — one spelling of one fact, so a fire
+            # site or a handler taught about it reaches both readings.
+            #
+            # **An unspoken seat is not an unknown seat.** CR 110.2a makes the
+            # controller of the spell or ability the default, so "return that
+            # card to the battlefield" (Angelic Renewal) and "…under your
+            # control" (False Demise) name the same player, and refusing the
+            # first was refusing a card for saying nothing.
+            #
+            # "…under **its owner's** control" (Abduction) is the seat that
+            # really differs, and it differs exactly when the printed line
+            # matters: an Aura that stole the creature and then watched it die
+            # gives it *back*, so reading the phrase as "you" would hand the
+            # thief a permanent the card returns to its owner. CR 400.3 —
+            # control moves, ownership never did.
+            control = getattr(node.under_control_of, "kind", None) or "you"
+            if control not in ("you", "owner"):
                 raise LoweringError(
-                    "the bound-card reanimation only puts it under your control",
+                    "the bound-card reanimation only puts it under your or "
+                    "its owner's control",
                     node=node,
                 )
             unread = [
@@ -239,7 +265,11 @@ def lower_untargeted_return(
                     "the bound-card reanimation honours no further narrowing",
                     node=node,
                 )
-            return (OracleInstruction("reanimate_bound_card", "", {}),)
+            # The default seat rides no key, so every card already compiling
+            # this instruction keeps the payload it had — the differential over
+            # the pool is the check that says so.
+            payload = {"control": "owner"} if control == "owner" else {}
+            return (OracleInstruction("reanimate_bound_card", "", payload),)
         if node.to.name != "hand" or node.to.owner is None:
             raise LoweringError(
                 "the bound card returns to a hand alone", node=node
@@ -524,7 +554,14 @@ def lower_untargeted_return(
         and node.to.owner is not None
         and node.to.owner.kind == "you"
     ):
-        if _reads_no_return_restriction(subject.filter):
+        # The supertype is lifted out of the blanket refusal here because this
+        # is the branch whose handler asks ``graveyard_card_matches``, which
+        # tests it — everywhere else in this file the gate still refuses one,
+        # and a phrase whose adjective no reader tests is a return wider than
+        # the card prints.
+        if _reads_no_return_restriction(
+            dataclasses.replace(subject.filter, supertypes=())
+        ):
             raise LoweringError("no return handler honours this restriction", node=node)
         return (
             OracleInstruction(
