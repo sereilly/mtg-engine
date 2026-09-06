@@ -27,9 +27,10 @@ from __future__ import annotations
 import re
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from .oracle_types import _NUMBER_WORDS
+from .oracle_types import _NUMBER_WORDS, compilation_cache
 from .subject_filters import filter_head_noun
 
 if TYPE_CHECKING:
@@ -930,14 +931,187 @@ def additional_cost_for_line(line: str) -> AdditionalCost | None:
     return _printed_additional_cost(line) or _self_permission_cost(line)
 
 
-def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
-    """Every additional cost *card* prints, in printed order."""
-    found = [
+# ---------------------------------------------------------------------------
+# Buyback (CR 702.27)
+# ---------------------------------------------------------------------------
+#
+# **A rewrite, not a flag**, for exactly ``engine/equipment.py``'s reason.
+# CR 702.27a says "Buyback [cost]" *means* two static abilities that function
+# while the spell is on the stack:
+#
+#   "You may pay an additional [cost] as you cast this spell" and "If the
+#   buyback cost was paid, put this spell into its owner's hand instead of
+#   into that player's graveyard as it resolves."
+#
+# The first of those is a sentence this table already reads in full, so the
+# keyword line is rewritten into it before any line is classified
+# (:func:`expand_buyback_lines`, composed into ``oracle.expand_ability_lines``)
+# and from there nothing downstream knows the word: ``_read_cost_clauses``
+# reads the offer, ``legality.cast_cost_offers`` prices it against the pool and
+# the untapped lands, ``web/static/app.js``'s cast-offer prompt asks for it, and
+# ``casting._optional_cost_announcement`` records how many times it was taken.
+#
+# The **second** static ability is the half none of that machinery had, and it
+# is implemented at the one seam a resolving spell leaves the stack through
+# (``mixins/stack/resolution._bin_spell_card``), asked through
+# :func:`buyback_paid` below. The claim and the implementation cannot drift
+# because they are the *same reader*: a card whose keyword line was rewritten
+# into an offer is exactly a card :func:`buyback_cost` names a cost for, so the
+# hand-return applies to every card the cost was charged on and to no other.
+
+#: "Buyback {3}", "Buyback {1}{U}". The cost is a run of mana symbols taken
+#: from the printed line so a coloured pip keeps its letter, exactly as
+#: ``equipment._EQUIP_LINE`` takes an equip cost.
+_BUYBACK_LINE = re.compile(
+    r"^buyback\s+(?P<cost>(?:\{[^{}]+\})+)$", re.IGNORECASE
+)
+
+#: Any line that *is* a buyback keyword line, readable or not. The wider shape
+#: is what the support gate asks (:func:`unread_cost_sentence`), so a printing
+#: this file cannot read — a buyback whose cost is not mana, say — is reported
+#: as an unimplemented cost rather than falling through to a gate that never
+#: heard of the keyword and casting the spell for its printed mana alone.
+_BUYBACK_SHAPE = re.compile(r"^buyback\b", re.IGNORECASE)
+
+_BUYBACK_REMINDER = re.compile(r"\([^)]*\)")
+
+#: CR 702.27a's first static ability, spelled as the sentence
+#: ``_ADDITIONAL_COST_PREAMBLE`` above already reads.
+BUYBACK_RULES_TEXT = (
+    "As an additional cost to cast this spell, you may pay {cost}."
+)
+
+
+def _buyback_line_cost(line: str) -> str | None:
+    """The canonical mana symbols one printed buyback line offers, or None.
+
+    Canonical — ``mana_cost_label``'s spelling, the same one
+    ``_optional_mana_offers`` gives the rewritten sentence — because that string
+    is the key the announcement is recorded under and the key
+    :func:`buyback_paid` reads it back by. Two spellings of one cost would make
+    the read-back miss a payment that was really made, which is a card that
+    charged its buyback and went to the graveyard anyway.
+    """
+    from .mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
+    stripped = stripped.strip().rstrip(".")
+    match = _BUYBACK_LINE.match(stripped)
+    if match is None:
+        return None
+    symbols = mana_cost_from_symbols(match.group("cost"))
+    if not symbols:
+        return None
+    return mana_cost_label(symbols)
+
+
+def is_buyback_line(line: str) -> bool:
+    """Whether *line* is a printed buyback keyword line, readable or not."""
+    stripped = _BUYBACK_REMINDER.sub("", line or "").strip()
+    return _BUYBACK_SHAPE.match(stripped) is not None
+
+
+def expand_buyback_line(line: str) -> str | None:
+    """The CR 702.27a rules text for one printed buyback line, or None."""
+    cost = _buyback_line_cost(line)
+    return None if cost is None else BUYBACK_RULES_TEXT.format(cost=cost)
+
+
+def expand_buyback_lines(oracle_text: str) -> str:
+    """*oracle_text* with every buyback keyword line rewritten to its rules text.
+
+    Text without one is returned unchanged, so applying this to every card costs
+    a substring test. Applied by the compiler before any line is classified —
+    beside ``expand_equip_lines`` and for its reason: what the compiler reads
+    and what every other reader of a card's lines reads must be one text.
+    """
+    if not oracle_text or "uyback" not in oracle_text:
+        return oracle_text
+    return "\n".join(
+        expand_buyback_line(line) or line for line in oracle_text.split("\n")
+    )
+
+
+def buyback_cost(oracle_text: str) -> str | None:
+    """The canonical symbols *oracle_text*'s buyback keyword offers, or None.
+
+    Read off the **printed** text, which is what a resolving spell's
+    ``CardDefinition`` still carries: the rewrite happens inside the compiler
+    and nothing writes it back onto the card.
+    """
+    for line in (oracle_text or "").split("\n"):
+        cost = _buyback_line_cost(line)
+        if cost is not None:
+            return cost
+    return None
+
+
+def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
+    """Whether this cast of *card* paid its buyback cost (CR 702.27a).
+
+    *choices* is the resolving stack item's own record — the pool is empty by
+    resolution (CR 500.4) and the announcement is long over, so
+    ``additional_costs_paid`` is the only place the answer survives, exactly as
+    it is for "for each additional {1}{R} you paid".
+
+    False for a card printing no buyback, which is every card but twelve: this
+    is asked at every spell's resolution.
+    """
+    cost = buyback_cost(getattr(card, "oracle_text", "") or "")
+    if cost is None:
+        return False
+    paid = (choices or {}).get("additional_costs_paid") or {}
+    try:
+        return int(paid.get(cost, 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+@compilation_cache
+@lru_cache(maxsize=None)
+def _additional_costs_of_text(
+    oracle_text: str, card_name: str, legendary: bool
+) -> tuple[AdditionalCost, ...]:
+    """:func:`additional_costs` keyed on what it actually reads.
+
+    Cached because it is asked of every card in every hand on every poll
+    (``legality.cast_cost_offers``) and now runs the whole rewrite pass to
+    answer — and because the answer is a pure function of exactly the three
+    arguments ``expand_ability_lines`` takes.
+
+    ``@compilation_cache`` because that pass *is* part of the compiler: a caller
+    that stubs the grammar out and puts it back leaves this holding whatever the
+    stub said otherwise, which is the shape ``clear_compilation_caches`` exists
+    for.
+    """
+    from .oracle import expand_ability_lines
+
+    lines = expand_ability_lines(
+        oracle_text or "", card_name=card_name or None, legendary=legendary
+    ).splitlines()
+    return tuple(
         cost
-        for line in (card.oracle_text or "").split("\n")
+        for line in lines
         if (cost := additional_cost_for_line(line)) is not None
-    ]
-    return tuple(found)
+    )
+
+
+def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
+    """Every additional cost *card* prints, in printed order.
+
+    Read off ``expand_ability_lines``'s text rather than off ``oracle_text``,
+    which is CLAUDE.md's rule that every reader of a card's lines starts from
+    that function — and this file is one of the readers it names. Buyback
+    (CR 702.27a) is *defined* as one of these costs and reaches this table only
+    as the rewrite's sentence, so a reader that split the printed text would see
+    a buyback card with no additional cost at all and charge nothing: this
+    module's own failure, one rewrite later.
+    """
+    return _additional_costs_of_text(
+        card.oracle_text or "",
+        getattr(card, "name", "") or "",
+        bool(getattr(card, "is_legendary", False)),
+    )
 
 
 def costs_charged_from(
@@ -1017,6 +1191,18 @@ def unread_cost_sentence(line: str) -> str | None:
         match = preamble.match(normalized)
         if match is not None and _read_cost_clauses(match.group("costs")) is None:
             return match.group(0)
+    # A buyback line the rewrite could not read (CR 702.27a). This is asked of
+    # the compiler's *expanded* text, where a readable one has already become
+    # the sentence above — so what survives here is a printing
+    # :func:`expand_buyback_line` refused, and refusing the card is the only
+    # honest answer: the alternative is a spell cast at its printed mana cost
+    # with an optional price nobody was offered and a hand-return nobody gets.
+    if is_buyback_line(line) and expand_buyback_line(line) is None:
+        # Spelled the way every other return here is — lowercased, reminder
+        # text and the full stop off — because the caller quotes it back to the
+        # reader as "printed cost nothing charges: …".
+        stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
+        return stripped.strip().lower().rstrip(".")
     return None
 
 
@@ -1033,6 +1219,12 @@ def cast_cost_claims_line(line: str) -> bool:
 __all__ = [
     "AdditionalCost",
     "OptionalManaCost",
+    "BUYBACK_RULES_TEXT",
+    "buyback_cost",
+    "buyback_paid",
+    "expand_buyback_line",
+    "expand_buyback_lines",
+    "is_buyback_line",
     "read_return_clause",
     "read_sacrifice_all_clause",
     "read_sacrifice_clause",

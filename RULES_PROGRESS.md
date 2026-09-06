@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2096 tests, 0 unannotated.
+**360 / 613 tracked rules covered (58%)** — 2104 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 27/27 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 28/28 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(214 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(217 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(18 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(65 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(67 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -891,6 +891,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.24** Cumulative Upkeep *(28 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(16 tests, subrules adfgim)*
+- [x] **702.27** Buyback *(6 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(4 tests, subrules ab)*

@@ -4969,7 +4969,7 @@ def expand_ability_lines(
     lines must start from (``engine/legality.py``, ``scripts/parse_coverage.py``,
     ``scripts/hook_reliance.py``), or it is reading a different card.
 
-    Two rewrites today, both of them the rules' own:
+    Three rewrites today, all of them the rules' own:
 
     * a modal activated head and its bullets become one ability line per
       bullet (:func:`expand_modal_activated_lines`);
@@ -4978,22 +4978,36 @@ def expand_ability_lines(
       Activate only as a sorcery." (``engine/equipment.py``). From there it is
       an ordinary activated ability to the grammar, the cost parser, the timing
       table and the target picker, none of which know the word.
+    * a **buyback** keyword line becomes the additional cost CR 702.27a says it
+      means — "As an additional cost to cast this spell, you may pay [cost]."
+      (``engine/cast_costs.py``). From there it is an ordinary CR 601.2b
+      optional additional cost to the cost table, the cast path, the payability
+      ceiling and the browser's cast-offer prompt, none of which know the word.
+      The rule's *second* static ability — the spell goes to its owner's hand
+      instead of the graveyard as it resolves — has no sentence to rewrite into
+      and is implemented at the one seam a resolving spell leaves the stack
+      through (``mixins/stack/resolution._bin_spell_card``), off the same
+      reader that produced this line.
 
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
     (``engine/self_reference.py``). It belongs in this pass for exactly the
-    reason the other two do — every reader of a card's lines has to see the same
-    sentence, and the readers that see only the compiler's stored text have no
-    name to shorten *with*. A caller that names no card gets the text unchanged,
-    which is what every reader asking about a line rather than a card wants.
+    reason the other three do — every reader of a card's lines has to see the
+    same sentence, and the readers that see only the compiler's stored text have
+    no name to shorten *with*. A caller that names no card gets the text
+    unchanged, which is what every reader asking about a line rather than a card
+    wants.
     """
+    from .cast_costs import expand_buyback_lines
     from .self_reference import expand_short_self_references
 
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
     return expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
-        expand_equip_lines(expand_modal_activated_lines(oracle_text))
+        expand_buyback_lines(
+            expand_equip_lines(expand_modal_activated_lines(oracle_text))
+        )
     ))
 
 
