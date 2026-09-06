@@ -575,3 +575,147 @@ def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
     assert not board_target_immunities(
         "Creatures can't be the targets of spells or abilities."
     )
+
+
+# --- W2G4: libraries and graveyards as piles ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent as _W2G4Permanent
+from engine.oracle import compile_card_oracle as _w2g4_compile
+
+
+def _w2g4_board(set_pool, source_name, library, *, interactive=(0,)):
+    """One permanent of *source_name* on P1's battlefield, over *library*."""
+    lea = set_pool("LEA")
+    game = Game(players=[
+        PlayerState(name="P1", library=list(library)),
+        PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    perm = _W2G4Permanent(card=set_pool("WTH")[source_name])
+    game.players[0].battlefield.append(perm)
+    game._sync_control()
+    return game, perm
+
+
+def test_call_of_the_wild_routes_the_revealed_card_by_what_it_is(set_pool):
+    """"Reveal the top card of your library. If it's a creature card, put it
+    onto the battlefield. Otherwise, put it into your graveyard."
+
+    Both pronouns used to bind to the ability's **own source** — the parse
+    cannot tell this sentence from All Hallow's Eve's "put it into your
+    graveyard", which names its own card. Lowered as written, Call of the Wild
+    would have binned itself.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Call of the Wild"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    reveal, branch = ability.instruction.payload["steps"]
+    assert reveal.kind == "reveal_top_of_library"
+    assert branch.payload["condition"]["kind"] == "revealed_card_is"
+    assert [i.kind for i in branch.payload["then"]] == [
+        "put_revealed_card_onto_battlefield"
+    ]
+    assert [i.kind for i in branch.payload["else"]] == ["bin_revealed_card"]
+
+    game, _ = _w2g4_board(
+        set_pool, "Call of the Wild",
+        [lea["Grizzly Bears"]] + [lea["Island"]] * 4,
+    )
+    game.activate_permanent_ability(0, "Call of the Wild")
+    game.resolve_stack()
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Call of the Wild", "Grizzly Bears",
+    ], game.log
+    assert game.players[0].graveyard == []
+
+    game, _ = _w2g4_board(
+        set_pool, "Call of the Wild",
+        [lea["Black Lotus"]] + [lea["Island"]] * 4,
+    )
+    game.activate_permanent_ability(0, "Call of the Wild")
+    game.resolve_stack()
+    assert [p.card.name for p in game.players[0].battlefield] == ["Call of the Wild"]
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"], game.log
+
+
+def test_all_hallows_eve_keeps_its_own_reading_of_the_same_words():
+    """The other side of the same pronoun. With no reveal in front of it, "put
+    it into your graveyard" is the ability moving its **own** card — which is
+    what `produced` decides, and what a parse-level fix could not."""
+    from engine.grammar.lower import lower_ability
+    from engine.grammar.parser import parse_line
+
+    (instruction,) = lower_ability(parse_line("Put it into your graveyard."))
+    assert instruction.kind == "put_self_into_zone"
+    assert instruction.payload == {"zone": "graveyard"}
+
+
+def test_ancestral_knowledge_exiles_the_cards_the_looker_names(set_pool):
+    """"Look at the top ten cards of your library, then exile any number of them
+    and put the rest back on top of your library in any order."
+
+    A **hollow line** before this round: the trigger compiled, the card reported
+    supported, and no instruction came out at all. The chain of one-card prompts
+    behind it put every pick in the looker's *hand* whatever the print said —
+    safe only because the lowering refused any counted pick that was not a draw.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_compile(wth["Ancestral Knowledge"])
+    (entry,) = [
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "enters_battlefield"
+    ]
+    assert entry.instruction is not None, "the entry trigger is still hollow"
+    assert entry.instruction.payload["pick_destination"] == "exile"
+    assert entry.instruction.payload["rest_destination"] == "library_top"
+    assert entry.instruction.payload["optional"] is True
+
+    names = ["Grizzly Bears", "Craw Wurm", "Shivan Dragon", "Black Lotus",
+             "Forest", "Island", "Mountain", "Plains", "Swamp", "Healing Salve",
+             "Ancestral Recall"]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[wth["Ancestral Knowledge"]],
+                    library=[lea[n] for n in names]),
+        PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game.cast_from_hand(0, "Ancestral Knowledge")
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+    assert game.confirm_look_top_pick(0, 2)   # Shivan Dragon
+    assert game.confirm_look_top_pick(0, 0)   # Grizzly Bears
+    assert game.confirm_look_top_pick(0, None)  # "any number" includes stopping
+
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Grizzly Bears", "Shivan Dragon",
+    ], game.log
+    assert game.players[0].hand == [], "a chained pick used to draw its finds"
+    assert len(game.players[0].library) == 9
+
+
+def test_ancestral_knowledge_exiles_nothing_for_a_non_interactive_seat(set_pool):
+    """"Any number" includes none, and for this card the pick is a **cost** —
+    a seat taking the first legal card ten times would exile a tenth of its own
+    deck for nothing."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = Game(players=[
+        PlayerState(name="P1", hand=[wth["Ancestral Knowledge"]],
+                    library=[lea["Island"]] * 11),
+        PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game.cast_from_hand(0, "Ancestral Knowledge")
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert game.players[0].exile == []
+    assert len(game.players[0].library) == 11

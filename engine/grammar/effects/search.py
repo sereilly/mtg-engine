@@ -112,7 +112,16 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     stream.expect_word("library")
     # "and/or graveyard" — a second zone, read here so lowering can arm the
     # search over both. The lexer splits "and/or" into two words.
-    graveyard = bool(stream.accept_phrase("and", "or", "graveyard"))
+    #
+    # "…library **and** graveyard…" (Doomsday) is the same two zones with the
+    # weaker conjunction, and the difference is only in what the sentence then
+    # does with them: an "and/or" search may look in either, and Doomsday looks
+    # in both because it empties both. One flag either way, because what the
+    # flow needs to know is which piles it may take a card out of.
+    graveyard = bool(
+        stream.accept_phrase("and", "or", "graveyard")
+        or stream.accept_phrase("and", "graveyard")
+    )
     stream.expect_word("for")
     # "…for **up to two** basic land cards, reveal those cards, put one onto the
     # battlefield tapped and the other into your hand" (Cultivate), and "…for
@@ -139,6 +148,14 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # which is `SearchAndExile`'s shape with a printed ceiling — the two-zone
     # spelling above reaches the same node with "any number of". Read before
     # the singular tutor below, whose article this line does not print.
+    # "…for five cards **and exile the rest**. Put the chosen cards on top of
+    # your library in any order." (Doomsday.) A counted search whose finds are
+    # kept and whose *pile* is exiled, which is the other way round from the
+    # exile search below — read first because both open on a number and the
+    # difference is the word after the noun.
+    doomsday = _accept_search_exiling_the_rest(stream, graveyard)
+    if doomsday is not None:
+        return doomsday
     exiled = _accept_counted_exile_search(stream, graveyard)
     if exiled is not None:
         return exiled
@@ -388,6 +405,77 @@ def _parse_search_untap_rider(stream: TokenStream):
         return None, None
     stream.advance()
     return ast.Comparison("ge", amount), counted
+
+
+def _accept_search_exiling_the_rest(
+    stream: TokenStream, graveyard: bool
+) -> "ast.SearchLibrary | None":
+    """``<N> cards and exile the rest. Put the chosen cards on top of your
+    library in any order`` at the cursor, or None with the cursor where it was.
+    (Doomsday.)
+
+    Both sentences, for the conditional-shuffle tail's reason one production
+    up: the second names the cards the first found, and the search arms a
+    prompt \u2014 so left to the sentence parser it would run before anybody had
+    chosen, with nothing to place.
+
+    **No shuffle, and that is the card rather than an omission.** Every other
+    search here ends with one and this production would refuse a line missing
+    it; this one exiles the library it searched, so there is nothing left to
+    shuffle and the printed sentence says so by saying nothing.
+
+    Both zones are required. "Exile the rest" is about the piles the search
+    looked through, and a one-zone printing of it would empty a library while
+    leaving a graveyard the sentence also named \u2014 so the flag is checked here
+    rather than assumed, and a card printing this over one zone refuses.
+    """
+    if not graveyard:
+        return None
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "exile", "the", "rest"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "put", "the", "chosen", "cards", "on", "top", "of", "your", "library",
+    ):
+        stream.reset(mark)
+        return None
+    # "in any order" is consumed and not recorded, exactly as the counted
+    # search's identical clause is: the finder names the cards in the order they
+    # want and that pick order *is* the answer.
+    if not stream.accept_phrase("in", "any", "order"):
+        stream.reset(mark)
+        return None
+    zone = ast.Zone("library_top")
+    return ast.SearchLibrary(
+        ast.PlayerRef("you"), filt, zone, graveyard,
+        extra_destinations=(zone,) * (count.value - 1),
+        tapped=(False,) * count.value,
+        # CR 701.23b lets any search find fewer than it names, and this one has
+        # to: a player with four cards left between the two zones still puts
+        # what they have on top.
+        up_to=True,
+        exile_rest=True,
+    )
 
 
 def _accept_counted_exile_search(

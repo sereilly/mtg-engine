@@ -94,6 +94,7 @@ ActionKind = Literal[
     "library_cycle_confirm",
     "library_pile_split_confirm",
     "pile_exile_confirm",
+    "opponent_picks_revealed_confirm",
     "pile_search_confirm",
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",

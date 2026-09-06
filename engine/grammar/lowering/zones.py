@@ -710,6 +710,7 @@ def _lower_random_reveal_ownership_exchange(
 ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "bin_revealed_card": "zones",
     "put_revealed_card_onto_battlefield": "zones",
+    "reveal_top_opponent_chooses": "zones",
     "choose_card_name": "zones",
     "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",

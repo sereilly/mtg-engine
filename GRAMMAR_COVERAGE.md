@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 78.3% | 76.3% | 54.2% | 119 |
+| WTH *(measured)* | 167 | 249 | 79.1% | 77.1% | 55.0% | 121 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,8 +54,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 9 | 9 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 7 | 3 | expected 'card' |  |
 | 7 | 2 | expected who takes the redirected damage |  |
+| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected what this creature can't block, or a duration |  |
@@ -1334,6 +1334,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target artifact. You gain life equal to its mana value.`
 - **Divine Retribution**
   - `Divine Retribution deals damage to target attacking creature equal to the number of attacking creatures.`
+- **Doomsday**
+  - `Search your library and graveyard for five cards and exile the rest. Put the chosen cards on top of your library in any order. You lose half your life, rounded up.`
 - **Dormant Volcano**
   - `When this land enters, sacrifice it unless you return an untapped Mountain you control to its owner's hand.`
   - `{T}: Add {C}{R}.`
@@ -5060,6 +5062,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an Island an opponent controls becomes tapped, you may gain 1 life.`
 - **Thran Forge**
   - `{2}: Until end of turn, target nonartifact creature gets +1/+0 and becomes an artifact in addition to its other types.`
+- **Thran Tome**
+  - `{5}, {T}: Reveal the top three cards of your library. Target opponent chooses one of those cards. Put that card into your graveyard, then draw two cards.`
 - **Thrashing Brontodon**
   - `{1}, Sacrifice this creature: Destroy target artifact or enchantment.`
 - **Three Wishes**

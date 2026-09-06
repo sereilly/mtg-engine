@@ -356,6 +356,51 @@ def _lower_look_top_cycle_for_life(
     )
 
 
+def _lower_reveal_top_opponent_chooses(
+    node: ast.RevealTopOpponentChooses,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top three cards of your library. Target opponent chooses one
+    of those cards. Put that card into your graveyard, then draw two cards."
+    (Thran Tome.)
+
+    Two instructions, not one. The reveal, the pick and the binning are a single
+    step because the pick is made **from** what the reveal showed and the
+    binning is what the pick was for \u2014 ``RevealHandAndChoose`` one zone over
+    records the same reasoning. The draw behind them is an ordinary effect that
+    happens afterwards (CR 608.2), so it composes as its own step; the prompt
+    suspends the sequence, which is what keeps it from drawing before the
+    opponent has chosen.
+
+    The chooser is required to be a targeted opponent. CR 608.2c makes the
+    ability's controller the actor for everything a spell does not say
+    otherwise about, so a seat this cannot name would silently become the
+    revealer \u2014 which is the card choosing its own discard.
+    """
+    if node.chooser.kind != "target_opponent":
+        raise LoweringError(
+            f"no flow lets {node.chooser.kind!r} choose from a revealed pile",
+            node=node,
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count <= 0:
+        raise LoweringError(
+            "the revealed pile is a fixed number of cards", node=node
+        )
+    payload: dict[str, object] = {"count": count, "fate": node.fate}
+    _describe_targets(payload, node.chooser)
+    steps = [OracleInstruction("reveal_top_opponent_chooses", "", payload)]
+    if node.then_draw is not None:
+        drawn = _amount_payload(node.then_draw)
+        if not isinstance(drawn, int) or drawn <= 0:
+            raise LoweringError("this draw takes a printed number", node=node)
+        steps.append(
+            OracleInstruction("draw_controller_cards", "", {"amount": drawn})
+        )
+    if len(steps) == 1:
+        return (steps[0],)
+    return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
+
+
 def _lower_bin_revealed_card(
     node: ast.BinRevealedCard, produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:

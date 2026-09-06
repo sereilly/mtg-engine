@@ -604,6 +604,10 @@ class PendingChoicesMixin:
                 random.shuffle(caster.library)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
+            # A search that found nothing still *searched*, so a printed "exile
+            # the rest" still empties the zones (Doomsday with an empty library
+            # and graveyard is a legal, and lethal, cast).
+            self._exile_searched_remainder(choice.data, caster, zones)
             self.log.append(f"{caster.name} searched and found nothing more")
             return True
         # A counted search ("up to two basic land cards") takes its whole
@@ -839,8 +843,42 @@ class PendingChoicesMixin:
             random.shuffle(caster.library)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
+        # "…**and exile the rest**." (Doomsday.) Before the finds are placed,
+        # or the cards about to go on top of the library would be exiled with
+        # everything else \u2014 they are out of the zones already, but the library
+        # is where they are going.
+        self._exile_searched_remainder(choice.data, caster, zones)
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
+
+    def _exile_searched_remainder(self, data: dict, searched, zones: tuple) -> None:
+        """"Search your library and graveyard for five cards **and exile the
+        rest**." (Doomsday.)
+
+        What becomes of the piles a search looked through, which for every other
+        printing is nothing at all: CR 701.23a looks and leaves the zone as it
+        was. Both named zones are emptied, because "the rest" is the rest of
+        what was searched \u2014 emptying only the library would leave a graveyard
+        the sentence also opened.
+
+        CR 400.3 sends each card to its **owner's** exile, which is the player
+        whose zones these are: a search of somebody else's library is a
+        different flow (``zone_owner_target``) and no printing of it exiles the
+        remainder, so the seat here is the one the finds were taken from.
+        """
+        if not data.get("exile_rest"):
+            return
+        moved = 0
+        for zone_name in zones:
+            pile = searched.library if zone_name == "library" else searched.graveyard
+            moved += len(pile)
+            searched.exile.extend(pile)
+            pile.clear()
+        self.log.append(
+            f"{searched.name} exiled the rest of their "
+            + " and ".join(zones)
+            + f" ({moved} card(s))"
+        )
 
 
     def _search_destination_slots(self, data: dict) -> list[tuple[str, bool]]:
@@ -1997,6 +2035,62 @@ class PendingChoicesMixin:
         queued = int(choice.data.get("queued_draws", 0) or 0)
         if queued > 0:
             self._draw_with_replacements(player, queued)
+
+    # -- An opponent picks out of a revealed pile (Thran Tome) ---------------
+
+    def confirm_opponent_picks_revealed(self, player_index: int, index: int) -> bool:
+        return self.resolve_pending_choice(
+            "opponent_picks_revealed", player_index, index=index
+        )
+
+    def _resolve_opponent_picks_revealed(self, choice: PendingChoice, index) -> bool:
+        """The opponent's pick out of the cards the revealer turned up.
+
+        *index* addresses the **revealed list**, not the library: CR 701.20 left
+        the cards where they were, and the list is what the prompt showed. The
+        card is then located in the library by identity \u2014 two copies of a card
+        in a deck are the same immutable ``CardDefinition``, so ``list.remove``
+        would take whichever entry came first \u2014 and moved through the one seam
+        a card reaches a graveyard by, naming the library it came out of so a
+        card watching for that move sees it.
+
+        A card that has already left is left alone, which is CR 608.2 doing as
+        much as it can.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        if not isinstance(index, int) or not (0 <= index < len(cards)):
+            return False
+        card = cards[index]
+        revealer = self.players[int(choice.data.get("revealer_index", 0))]
+        for slot, held in enumerate(revealer.library):
+            if held is card:
+                revealer.library.pop(slot)
+                self.put_card_into_graveyard(revealer, card, from_zone="library")
+                self.log.append(
+                    f"{self.players[choice.player_index].name} chose {card.name}; "
+                    f"it goes into {revealer.name}'s graveyard"
+                )
+                break
+        else:
+            self.log.append(f"{card.name} has already moved")
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_opponent_picks_revealed(self, choice: PendingChoice) -> None:
+        """A non-interactive chooser takes the **costliest** revealed card.
+
+        The same stated policy as ``_default_revealed_hand_pick``, and for the
+        same reason: this seat is an opponent, the card it names is the one the
+        revealer loses, and mana value is the one ranking every card in the pool
+        answers.
+        """
+        cards = list(choice.data.get("_cards") or ())
+        if not cards:
+            self.discard_pending_choice(choice)
+            return
+        best = max(range(len(cards)), key=lambda i: (cards[i].cmc, -i))
+        if not self._resolve_opponent_picks_revealed(choice, best):
+            self.discard_pending_choice(choice)
 
     def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
         return self.resolve_pending_choice(
@@ -7735,6 +7829,28 @@ register_choice(
     blocked_detail="choose a card from the revealed hand before other actions",
     # The revealed hand is public from the moment it is revealed (CR 701.20),
     # so a spectator sees the prompt exactly as the choosing seat does.
+    spectator_visible=True,
+)
+
+register_choice(
+    "opponent_picks_revealed",
+    resolve=lambda game, choice, r: game._resolve_opponent_picks_revealed(
+        choice, r.get("index")
+    ),
+    default=lambda game, choice: game._default_opponent_picks_revealed(choice),
+    action="opponent_picks_revealed_confirm",
+    prompt_key="opponent_picks_revealed",
+    blocked_detail="choose one of the revealed cards before other actions",
+    # The draw behind the pick is a later step of the same resolution
+    # (CR 608.2), and it must not run against a library the answer is about to
+    # change \u2014 so arming this stops the sequence until it is answered.
+    suspends=True,
+    # A non-interactive chooser answers where the offer stands: the resolution
+    # is suspended on this prompt, and a seat that never queues would hold it
+    # open for the rest of the game.
+    default_at_arm=True,
+    # A reveal is public: CR 701.20 reveals the cards to every player, and so
+    # is whose choice this is.
     spectator_visible=True,
 )
 

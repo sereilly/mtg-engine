@@ -202,6 +202,14 @@ class SearchLibrary:
     named_alternatives: tuple[str, ...] = ()
     untap_found_if: "Comparison | None" = None
     untap_found_filter: "ObjectFilter | None" = None
+    #: "Search your library and graveyard for five cards **and exile the
+    #: rest**." (Doomsday.) What happens to the cards the search did *not*
+    #: find, which is nothing at all for every other printing \u2014 CR 701.23a
+    #: looks through the zone and leaves it as it was. Its own field rather
+    #: than a destination, because it is about the pile and not about a find:
+    #: the searched zones are emptied, and both of them, which is why the
+    #: search that prints it also prints no shuffle.
+    exile_rest: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:
@@ -303,6 +311,43 @@ class LookTopPickToHand:
     #: one seat by construction here (the possessive says "their"), so one
     #: field answers both; a card that split them would be a different node.
     looker: "PlayerRef | None" = None
+
+@dataclass(frozen=True)
+class RevealTopOpponentChooses:
+    """``Reveal the top three cards of your library. Target opponent chooses one
+    of those cards. Put that card into your graveyard, then draw two cards.``
+    (Thran Tome.)
+
+    One node for the whole three-sentence template, for
+    :class:`LookTopPickToHand`'s reason: the sentences describe **one** revealed
+    pile, and parsed apart the second and third dangle a referent nothing binds.
+
+    The chooser is not the ability's controller, which is what separates this
+    from every look-and-pick in the family: CR 701.20 shows the cards to
+    everybody, and the sentence then hands the decision to a player it targets.
+    So the reveal, the choice and what becomes of the chosen card are one step —
+    the arrangement ``RevealHandAndChoose`` already records one zone over ("the
+    reveal is what makes the choice legal, and the discard is what the choice
+    was for, so splitting them would put a chosen card between two instructions
+    with nothing carrying it").
+
+    ``then_draw`` is the sentence *behind* that step and lowers to its own
+    instruction: a draw is an ordinary effect, and the only thing tying it to
+    the pick is that it happens after (CR 608.2). Carried on the node because
+    the production has to consume the words, not because the step is fused.
+    """
+    count: Amount
+    #: Who chooses. Only a targeted opponent has a printing; the lowering
+    #: refuses anything else rather than defaulting to a seat, because a choice
+    #: made by the wrong player is the whole card.
+    chooser: "PlayerRef"
+    #: Where the chosen card goes. Payload for ``rest_destination``'s reason:
+    #: the sentence states it, and a default would be a guess about the one
+    #: thing the card is for.
+    fate: str = "graveyard"
+    #: "…, then draw two cards." None for a printing that draws nothing.
+    then_draw: "Amount | None" = None
+
 
 @dataclass(frozen=True)
 class LookTopExileRandom:

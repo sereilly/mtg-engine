@@ -218,6 +218,13 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["restrictions"] = restrictions
     if node.graveyard:
         payload["zones"] = ("library", "graveyard")
+    if node.exile_rest:
+        # "…and exile the rest." (Doomsday.) What becomes of the searched piles
+        # once the finds are out of them \u2014 a fact about the zones rather than
+        # about a find, which is why it rides beside ``zones`` and not in
+        # ``destinations``. Emitted only when the card prints it, so every
+        # search written before this keeps a byte-identical payload.
+        payload["exile_rest"] = True
     if to_library_top:
         payload["destination"] = "library_top"
     if to_graveyard and len(destinations) == 1:

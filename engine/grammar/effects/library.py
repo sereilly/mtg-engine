@@ -46,7 +46,18 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     while the card named an opponent's.
     """
     stream.expect_word("reveal")
-    for word in ("the", "top", "card", "of"):
+    stream.expect_word("the")
+    stream.expect_word("top")
+    # "Reveal the top **three cards** of your library. Target opponent chooses
+    # one of those cards. \u2026" (Thran Tome.) A counted reveal, read here because
+    # the singular below expects the literal word "card" and failed the line on
+    # the number \u2014 the same one-line gap ``_parse_exile_top_of_library``
+    # answers this way. Non-consuming on refusal, so a counted reveal with any
+    # other tail keeps whatever refusal it had.
+    counted = _accept_counted_reveal_top(stream)
+    if counted is not None:
+        return counted
+    for word in ("card", "of"):
         stream.expect_word(word)
     if stream.accept_word("your"):
         player = ast.PlayerRef("you")
@@ -99,6 +110,70 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of", "your", "library"):
         raise stream.error("expected 'put it on the bottom of your library'")
     return ast.RevealTopToHandOrBottom(filt)
+
+
+def _accept_counted_reveal_top(
+    stream: TokenStream,
+) -> "ast.RevealTopOpponentChooses | None":
+    """``<N> cards of your library. Target opponent chooses one of those cards.
+    Put that card into your graveyard[, then draw <N> cards].`` at the cursor,
+    with "Reveal the top" already read \u2014 or None with the cursor where it was.
+    (Thran Tome.)
+
+    All three sentences, for ``_parse_reveal_top``'s reason: they describe one
+    revealed pile, and "those cards" and "that card" have nothing to name
+    without it. Every word is required. The chooser is read rather than assumed
+    (a pick made by the wrong player is the whole card), and so is where the
+    card goes \u2014 a printing that exiled it instead would be a different card
+    with nothing to notice the difference.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        # The singular "Reveal the top **card**", whose word this reader is not
+        # looking at. Refusing without consuming is what keeps its own refusal
+        # site intact.
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    chooser = parse_player_ref(stream)
+    if chooser is None or not stream.accept_phrase(
+        "chooses", "one", "of", "those", "cards"
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("put", "that", "card", "into", "your", "graveyard"):
+        stream.reset(mark)
+        return None
+    # "\u2026, then draw two cards." The sentence behind the pick, consumed here
+    # because it is inside the same printed sentence \u2014 it lowers to its own
+    # instruction, so nothing is fused by reading it.
+    drawn = None
+    probe = stream.mark()
+    if stream.accept_punct(",") and stream.accept_word("then") and stream.accept_word(
+        "draw"
+    ):
+        drawn = parse_amount(stream)
+        if not stream.accept_word("cards", "card"):
+            stream.reset(mark)
+            return None
+    else:
+        stream.reset(probe)
+    return ast.RevealTopOpponentChooses(
+        count, chooser, fate="graveyard", then_draw=drawn,
+    )
 
 
 def _parse_look_pick_tail(

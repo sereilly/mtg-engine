@@ -447,3 +447,85 @@ def test_well_of_knowledge_is_open_to_everyone_on_their_own_draw_step(set_pool):
     # permission widens who may reach the ability, it does not widen when.
     refused, drew = _w1g5a_try(game, 0, "draw", 1)
     assert not refused.supported and drew == 0, refused.details
+
+
+# --- W2G4: libraries and graveyards as piles ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent as _W2G4TomePermanent
+from engine.oracle import compile_card_oracle as _w2g4_tome_compile
+
+
+def _w2g4_tome_game(set_pool, library, *, interactive=(0, 1)):
+    lea = set_pool("LEA")
+    game = Game(players=[
+        PlayerState(name="P1", library=list(library)),
+        PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    perm = _W2G4TomePermanent(card=set_pool("WTH")["Thran Tome"])
+    game.players[0].battlefield.append(perm)
+    game._sync_control()
+    return game
+
+
+def test_thran_tome_lets_the_opponent_choose_and_waits_for_them(set_pool):
+    """"{5}, {T}: Reveal the top three cards of your library. Target opponent
+    chooses one of those cards. Put that card into your graveyard, then draw two
+    cards."
+
+    The prompt is owed by a seat that is not the ability's controller, and the
+    draw behind it is a later step of the same resolution (CR 608.2) — drawn
+    first, the revealer would draw the very card the opponent was still choosing
+    between.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w2g4_tome_compile(wth["Thran Tome"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    pick, draw = ability.instruction.payload["steps"]
+    assert pick.kind == "reveal_top_opponent_chooses"
+    assert pick.payload["count"] == 3
+    assert draw.payload["amount"] == 2
+
+    game = _w2g4_tome_game(set_pool, [
+        lea[n] for n in
+        ("Grizzly Bears", "Shivan Dragon", "Forest", "Island", "Mountain", "Plains")
+    ])
+    game.activate_permanent_ability(0, "Thran Tome", target_player_index=1)
+    game.resolve_stack()
+
+    (choice,) = game.pending_choices
+    assert choice.kind == "opponent_picks_revealed"
+    assert choice.player_index == 1, "the ability's controller does not choose"
+    assert choice.data["cards"] == ["Grizzly Bears", "Shivan Dragon", "Forest"]
+    assert game.waiting_prompt() is not None
+    assert game.players[0].hand == [], "the draw ran before the pick"
+
+    assert game.confirm_opponent_picks_revealed(1, 2)   # the Forest
+    assert [c.name for c in game.players[0].graveyard] == ["Forest"]
+    assert [c.name for c in game.players[0].hand] == [
+        "Grizzly Bears", "Shivan Dragon",
+    ], game.log
+    assert game.pending_choices == []
+
+
+def test_thran_tome_ai_opponent_takes_the_costliest(set_pool):
+    """The stated policy, and the same one ``_default_revealed_hand_pick``
+    takes for the same adversarial reason: the card this seat names is the one
+    the revealer loses."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w2g4_tome_game(
+        set_pool,
+        [lea[n] for n in
+         ("Grizzly Bears", "Shivan Dragon", "Forest", "Island", "Mountain")],
+        interactive=(0,),
+    )
+    game.activate_permanent_ability(0, "Thran Tome", target_player_index=1)
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in game.players[0].graveyard] == ["Shivan Dragon"]
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears", "Forest"]

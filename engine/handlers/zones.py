@@ -587,6 +587,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         enters_tapped=bool(instruction.payload.get("enters_tapped")),
         untap_found_if=instruction.payload.get("untap_found_if"),
         up_to=bool(instruction.payload.get("up_to")),
+        # "…and exile the rest." (Doomsday.) What happens to the searched piles
+        # once the finds are out of them. It rides to the prompt like the zones
+        # and the restriction do, because the seat that answers is the seat
+        # whose zones are emptied and the answer is what says which cards
+        # survive.
+        exile_rest=bool(instruction.payload.get("exile_rest")),
         # "…, reveal it/those cards, …" (CR 701.20): the finds are shown to
         # every player, which the resolution records as one reveal event when
         # the search ends. A search that does not print the word shows nothing.
@@ -738,6 +744,54 @@ def bin_revealed_card(game: Game, instruction: OracleInstruction, context: Oracl
                 )
                 return True, "resolved"
     game.log.append(f"{context.card.name}: {card.name} has already moved")
+    return True, "resolved"
+
+
+@effect_handler("reveal_top_opponent_chooses")
+def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top three cards of your library. Target opponent chooses one
+    of those cards. Put that card into your graveyard." (Thran Tome.)
+
+    The reveal and the choice are one step because the choice is made **from**
+    what the reveal showed \u2014 ``reveal_hand_and_choose`` one zone over records
+    the same reasoning. What is new here is *who* chooses: CR 608.2c makes the
+    ability's controller the actor for everything the sentence does not say
+    otherwise about, and this sentence says otherwise, so the prompt is queued
+    on the opponent's seat with the revealer's carried as payload.
+
+    CR 701.20 moves nothing, so the cards stay on top of the library and the
+    answer moves exactly one of them. Fewer cards than the printed number is a
+    legal board \u2014 the reveal shows what is there \u2014 and an empty library shows
+    nothing and chooses nothing.
+    """
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    opponent = context.target
+    if opponent not in game.players:
+        game.log.append(f"{context.card.name}: no opponent to choose")
+        return True, "resolved"
+    opponent_index = game.players.index(opponent)
+    count = resolve_amount(instruction.payload.get("count", 1) or 1, context.x_value)
+    revealed = list(caster.library[:max(int(count), 0)])
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards to reveal")
+        return True, "resolved"
+    game.record_reveal(caster_index, [card.name for card in revealed])
+    game.log.append(
+        f"{caster.name} revealed {', '.join(card.name for card in revealed)} "
+        f"from the top of their library"
+    )
+    game.arm_pending_choice(
+        "opponent_picks_revealed", opponent_index,
+        card_name=context.card.name if context.card is not None else "",
+        revealer_index=caster_index,
+        cards=[card.name for card in revealed],
+        fate=str(instruction.payload.get("fate", "graveyard")),
+        # The card objects, so the answer moves the card that was *revealed*
+        # rather than whatever has since slid into that library slot. Private,
+        # like every live reference on a prompt.
+        _cards=revealed,
+    )
     return True, "resolved"
 
 

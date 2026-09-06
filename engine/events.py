@@ -349,6 +349,23 @@ def _cast_card(event: Event) -> CardDefinition | None:
     return card if card is not None and hasattr(card, "colors") else None
 
 
+@event_filter("self_put_into_graveyard_from_library")
+def _moved_card_only_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """CR 113.6k's other half, and the only thing that enforces it.
+
+    "When **this card** is put into your graveyard from your library" cannot
+    trigger from the battlefield: a permanent is not in a library, so the move
+    the condition names is one it can never make. The battlefield scan in
+    :func:`collect` has no such notion — it matches on the condition's kind
+    alone — so a permanent carrying this ability would fire on every other
+    card's mill. ``moved_card_trigger_events`` is what announces it instead, and
+    that one is scoped to the object that moved.
+    """
+    return False
+
+
 @event_filter("you_play_card")
 def _controller_played_card_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
