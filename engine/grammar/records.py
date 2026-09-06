@@ -180,6 +180,46 @@ def accept_tapped_for_cost(stream: "TokenStream") -> "ast.TappedForCost | None":
     return None
 
 
+def accept_counters_removed_for_cost(
+    stream: "TokenStream",
+) -> "ast.CountersRemovedForCost | None":
+    """``<kind> counter[s] removed this way`` — or None, cursor unmoved.
+
+    "You gain 2 life for each **elixir counter removed this way**" (Essence
+    Bottle); "…equal to the number of **pain counters removed this way**"
+    (Torture Chamber); "…add an additional {B} for each **charge counter
+    removed this way**" (the five Mana Batteries).
+
+    :func:`accept_sacrificed_for_cost`'s fourth sibling and a named function for
+    that one's reason exactly, which this phrase had already broken: three front
+    ends print it — a "for each" multiplier, an "equal to the number of"
+    amount, and the mana family's own multiplier — and ``effects/mana.py`` had
+    grown a private copy, so which sentences could read the phrase depended on
+    what the card did with the number.
+
+    The kind is read as free text (CR 122.1 leaves counter names open) but the
+    surrounding words pin the structure: "counter"/"counters" and then
+    "removed this way" in full. Dropping "this way" would turn a payment into
+    a board count, which after CR 601.2h is always zero.
+
+    The leading word is the caller's: "the number of" is followed by the plural
+    and "for each" by the singular. Both inflections are accepted here rather
+    than pinned per caller, because a card is free to print either and the
+    phrase means one thing.
+    """
+    mark = stream.mark()
+    kind = stream.peek_word()
+    if kind is not None and kind not in ("counter", "counters"):
+        stream.advance()
+        if (
+            stream.accept_word("counter", "counters")
+            and stream.accept_phrase("removed", "this", "way")
+        ):
+            return ast.CountersRemovedForCost(str(kind))
+    stream.reset(mark)
+    return None
+
+
 def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
     """``the exiled card's <characteristic>`` — or None with the cursor unmoved.
 

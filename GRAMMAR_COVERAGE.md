@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 78.9% | 76.6% | 51.5% | 219 |
+| TMP *(measured)* | 335 | 478 | 80.3% | 78.7% | 53.6% | 222 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,9 +47,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 372 | 171 | expected a subject |  |
+| 371 | 170 | expected a subject |  |
 | 115 | 57 | unrecognized effect verb |  |
-| 98 | 50 | unconsumed text |  |
+| 96 | 48 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -59,19 +59,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
-| 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected what this creature can't block, or a duration |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | expected 'a' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected 'counter or counters' |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -389,6 +389,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy X target snow lands.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Avenging Angel**
+  - `When this creature dies, you may put it on top of its owner's library.`
 - **Avizoa**
   - `{0}: This creature gets +2/+2 until end of turn. You skip your next untap step. Activate only once each turn.`
 - **Avoid Fate**
@@ -1051,6 +1053,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of snow lands they control.`
 - **Cold Storage**
   - `{3}: Exile target creature you control.`
+  - `Sacrifice this artifact: Return each creature card exiled with this artifact to the battlefield under your control.`
 - **Colossus of Sardia**
   - `{9}: Untap this creature. Activate only during your upkeep.`
   - `{9}: Untap this creature. Activate only during your upkeep.`
@@ -1670,6 +1673,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: Target blocking creature gets +0/+1 until end of turn.`
 - **Elven Lyre**
   - `{1}, {T}, Sacrifice this artifact: Target creature gets +2/+2 until end of turn.`
+- **Elven Warhounds**
+  - `Whenever this creature becomes blocked by a creature, put that creature on top of its owner's library.`
 - **Elves of Deep Shadow**
   - `{T}: Add {B}. This creature deals 1 damage to you.`
 - **Elvish Farmer**
@@ -1748,6 +1753,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Until your next upkeep, this creature can't phase out.`
 - **Essence Bottle**
   - `{3}, {T}: Put an elixir counter on this artifact.`
+  - `{T}, Remove all elixir counters from this artifact: You gain 2 life for each elixir counter removed this way.`
 - **Essence Filter**
   - `Destroy all enchantments or all nonwhite enchantments.`
 - **Essence Flare**
@@ -2173,6 +2179,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}{U}: Regenerate this creature.`
 - **Ghost Town**
   - `{T}: Add {C}.`
+  - `{0}: Return this land to its owner's hand. Activate only if it's not your turn.`
 - **Ghostly Pilferer**
   - `Whenever this creature becomes untapped, you may pay {2}. If you do, draw a card.`
   - `Whenever an opponent casts a spell from anywhere other than their hand, draw a card.`
@@ -2772,6 +2779,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
 - **Interdict**
+  - `Counter target activated ability from an artifact, creature, enchantment, or land. That permanent's activated abilities can't be activated this turn. (Mana abilities can't be targeted.)`
   - `Draw a card.`
 - **Invigorating Surge**
   - `Put a +1/+1 counter on target creature you control, then double the number of +1/+1 counters on that creature.`
@@ -3143,6 +3151,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature gets -2/+2 and loses flying until end of turn.`
 - **Legacy's Allure**
   - `At the beginning of your upkeep, you may put a treasure counter on this enchantment.`
+  - `Sacrifice this enchantment: Gain control of target creature with power less than or equal to the number of treasure counters on this enchantment. (This effect lasts indefinitely.)`
 - **Legerdemain**
   - `Exchange control of target artifact or creature and another target permanent that shares one of those types with it. (This effect lasts indefinitely.)`
 - **Legion's Judgment**
@@ -5141,6 +5150,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target creature gets -2/-0 until end of turn.`
 - **Stalking Stones**
   - `{T}: Add {C}.`
+  - `{6}: This land becomes a 3/3 Elemental artifact creature that's still a land. (This effect lasts indefinitely.)`
 - **Stampede**
   - `Attacking creatures get +1/+0 and gain trample until end of turn.`
   - `Attacking creatures get +1/+0 and gain trample until end of turn.`
@@ -5429,6 +5439,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thalakos Lowlands**
   - `{T}: Add {C}.`
   - `{T}: Add {W} or {U}. This land doesn't untap during your next untap step.`
+- **Thalakos Mistfolk**
+  - `{U}: Put this creature on top of its owner's library.`
 - **Thalakos Seer**
   - `When this creature leaves the battlefield, draw a card.`
 - **Thallid**
@@ -5619,6 +5631,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Torture Chamber**
   - `At the beginning of your upkeep, put a pain counter on this artifact.`
   - `At the beginning of your end step, this artifact deals damage to you equal to the number of pain counters on it.`
+  - `{1}, {T}, Remove all pain counters from this artifact: It deals damage to target creature equal to the number of pain counters removed this way.`
 - **Total War**
   - `Whenever a player attacks with one or more creatures, destroy all untapped non-Wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn.`
 - **Touch of Darkness**

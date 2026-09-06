@@ -7,7 +7,7 @@ from ..counter_conditions import spell_cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
-from ..oracle_types import COUNTERED_SPELL_CONTROLLER
+from ..oracle_types import COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER
 from ._common import _card_matches_filter
 from .registry import effect_handler
 
@@ -223,6 +223,14 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
     game.stack.remove(chosen)
+    # "**That permanent's** activated abilities can't be activated this turn."
+    # (Interdict.) The permanent the countered ability came from, recorded here
+    # because this is the only step that knows it: the spell targeted the
+    # ability, and an ability on the stack has no card of its own (CR 113.7a),
+    # so once it is off the stack nothing else can be asked which permanent it
+    # came from.
+    if chosen.source_permanent is not None:
+        context.results[COUNTERED_ABILITY_SOURCE] = chosen.source_permanent
     game.log.append(f"{card.name} countered {chosen.card.name}'s {kind} ability")
     return True, "resolved"
 

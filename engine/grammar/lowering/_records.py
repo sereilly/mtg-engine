@@ -30,6 +30,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
+                             COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
                              MANA_PAID_BY_SEAT,
                              DREW_BY_SEAT,
@@ -122,6 +123,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "counter_top_stack_spell": (
         "countered_spell_mana_value", COUNTERED_SPELL_CONTROLLER,
     ),
+    # "Counter target activated ability from an artifact, creature, enchantment,
+    # or land. **That permanent's** activated abilities can't be activated this
+    # turn." (Interdict.) The counter records which permanent the ability came
+    # from, because the sentence behind it names that permanent and by then the
+    # ability is off the stack with no card to ask (CR 113.7a).
+    "counter_stack_ability": COUNTERED_ABILITY_SOURCE,
     # "Destroy all nonblack creatures. … where X is the number of creatures
     # that **died this way**." (Hellfire.) A sweep records how many permanents
     # it actually destroyed, which is the only place a later clause can read

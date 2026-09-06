@@ -64,7 +64,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_simultaneous_untap_and_tap,
                        _lower_put_on_library_bottom,
                        _lower_put_graveyard_top_on_library_bottom,
-                       _lower_put_on_library_top, _lower_regenerate, _lower_reveal_top,
+                       _lower_regenerate, _lower_reveal_top,
                        _lower_reveal_top_of_library, _lower_reanimate_enchanted_card,
                        _lower_sacrifice_expansion_permanents,
                        _lower_shuffle_graveyard_into_library,
@@ -91,6 +91,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_delayed_self_action, _lower_damage_reduced_by_paid_mana,
                        _lower_skip_step,
                        _lower_skip_turn,
+                       _lower_bound_permanent_activation_ban,
                        _lower_targeting_ban,
                        _lower_extra_land_plays,
                        _lower_cant_activate_nonmana_abilities,
@@ -193,7 +194,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.CantPhaseOut: _lower_cant_phase_out,
     ast.LandTypeSwap: _lower_land_type_swap,
     ast.SimultaneousPhasing: _lower_simultaneous_phasing,
-    ast.PutOnLibraryTop: _lower_put_on_library_top,
     ast.ChooseCardsInHand: _lower_choose_cards_in_hand,
     ast.PutIteratedCardOnLibrary: _lower_put_iterated_card_on_library,
     ast.PutOnLibraryBottom: _lower_put_on_library_bottom,
@@ -359,4 +359,10 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # reason, word for word: a pronoun is only a pronoun relative to what came
     # before it, and with no record the same words mean something else.
     ast.PutSourceIntoZone: _lower_put_source_into_zone,
+    # "**That permanent's** activated abilities can't be activated this turn."
+    # (Interdict.) Here rather than in the name-only table for the two rows
+    # above's reason: the pronoun names the source of an ability an earlier step
+    # of this same effect countered, and with no such record the words name
+    # nothing.
+    ast.BoundPermanentActivationBan: _lower_bound_permanent_activation_ban,
 }

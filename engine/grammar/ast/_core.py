@@ -260,6 +260,31 @@ class TappedForCost:
 
 
 @dataclass(frozen=True)
+class CountersRemovedForCost:
+    """How many counters the ability's **own cost** took off — "You gain 2 life
+    **for each elixir counter removed this way**" (Essence Bottle), "…equal to
+    **the number of pain counters removed this way**" (Torture Chamber).
+
+    :class:`SacrificedForCost`'s fourth sibling and the same channel argument
+    one store over: "Remove all <kind> counters from this artifact" is an
+    activation cost, so CR 601.2h takes the counters off before the ability is
+    on the stack and the permanent reads **zero** by resolution. Counting the
+    board would therefore be the exact complement of what the card says, which
+    is why the number is last-known information (CR 608.2h) recorded on
+    ``counters_removed_for_cost`` as the cost was charged.
+
+    "This way" is what pins it to the payment rather than to a board: the
+    printed phrase is the same one the Mana Batteries carry, and the kind rides
+    the node so a card printing another word is data.
+
+    Its own node rather than a flag on the three above for their stated reason:
+    each names a record a different payment wrote, and a card printing two of
+    them would have them disagree.
+    """
+    counter: str
+
+
+@dataclass(frozen=True)
 class TotalPowerSacrificedThisWay:
     """"…where X is **the total power of the creatures sacrificed this way**"
     (Sword of the Ages).

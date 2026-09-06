@@ -25,30 +25,13 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 11 supported card(s).**
+**4 unclaimed sentence(s) across 3 supported card(s).**
 
-- **Cold Storage**
-  - `sacrifice this artifact: return each creature card exiled with this artifact to the battlefield under your control`
 - **Duplicity**
   - `at the beginning of your upkeep, you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand`
-- **Essence Bottle**
-  - `{t}, remove all elixir counters from this artifact: you gain 2 life for each elixir counter removed this way`
-- **Ghost Town**
-  - `{0}: return this land to its owner's hand. activate only if it's not your turn`
-- **Interdict**
-  - `counter target activated ability from an artifact, creature, enchantment, or land`
-  - `that permanent's activated abilities can't be activated this turn`
-- **Legacy's Allure**
-  - `sacrifice this enchantment: gain control of target creature with power less than or equal to the number of treasure counters on this enchantment`
 - **Magnetic Web**
   - `if a creature with a magnet counter on it attacks, all creatures with magnet counters on them attack if able`
   - `whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able`
-- **Recycle**
-  - `your maximum hand size is two`
-- **Stalking Stones**
-  - `{6}: this land becomes a 3/3 elemental artifact creature that's still a land`
-- **Torture Chamber**
-  - `{1}, {t}, remove all pain counters from this artifact: it deals damage to target creature equal to the number of pain counters removed this way`
 - **Volrath's Curse**
   - `that creature's controller may sacrifice a permanent of their choice for that player to ignore this effect until end of turn`
 

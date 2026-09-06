@@ -81,6 +81,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # on a *sweep* — with the word untestable the lowering refuses the line, and
     # dropping it instead would destroy every creature on the table.
     "mana_value_equals_source_counters",
+    # "…target creature **with power less than or equal to the number of
+    # treasure counters on this enchantment**" (Legacy's Allure). The key above
+    # one characteristic over and on the same footing: the bound is a count on
+    # the ability's own source, so it is testable here and nowhere else, and a
+    # caller with no source answers no. That direction is what stops a gain of
+    # control admitting a creature the printed clause excludes.
+    "power_at_most_source_counters",
     "nontoken", "named", "supertypes",
     # "…with **a name originally printed in the Homelands expansion**"
     # (Apocalypse Chime). A fact about the card, read off
@@ -713,6 +720,24 @@ def subject_matches(
         if int(getattr(obj.effective_card, "cmc", 0) or 0) != counters_on(
             source, str(equals_counters)
         ):
+            return False
+    # "…with power **less than or equal to the number of treasure counters on
+    # this enchantment**" (Legacy's Allure). The bound above one characteristic
+    # over, and answered here for its reason: the count is on the ability's own
+    # source, which the pure matcher cannot reach. The power is the *computed*
+    # one (CR 613 layer 7), not the printed number, because a creature pumped
+    # since the ability was activated is the creature the clause is about.
+    at_most_source = described.get("power_at_most_source_counters")
+    if at_most_source is not None:
+        from .named_counters import counters_on
+
+        described = {
+            k: v for k, v in described.items()
+            if k != "power_at_most_source_counters"
+        }
+        if source is None:
+            return False
+        if int(obj.effective_power) > counters_on(source, str(at_most_source)):
             return False
     relative = described.get("characteristic_vs_source")
     if relative:

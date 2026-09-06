@@ -801,6 +801,40 @@ def parse_cant_activate_nonmana_abilities(
     return None
 
 
+def _parse_bound_permanent_activation_ban(
+    stream: TokenStream,
+) -> "ast.BoundPermanentActivationBan | None":
+    """``that permanent's activated abilities can't be activated <duration>``
+    (Interdict), or None with the cursor exactly where it was.
+
+    Read whole, with no payload in it, for :func:`_parse_targeting_ban`'s
+    reason: every word is the rule. "Activated" is required — a ban with the
+    word dropped would stop triggered and static abilities the card leaves
+    alone — and the pronoun is required to be "that permanent", the restated
+    noun phrase CR 113.7a forces on a spell that targeted an ability, because
+    an ability has no card of its own to name.
+
+    Refuses without consuming, so every other sentence opening on "that" keeps
+    its reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "that", "permanent", "'s", "activated", "abilities",
+        "can't", "be", "activated",
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind == "none":
+        # The trailing window is the whole of what makes this liftable; a
+        # sentence without one is refused rather than read as "for ever",
+        # which is the lowering's rule stated at the parse so the line fails
+        # where the words are.
+        stream.reset(mark)
+        return None
+    return ast.BoundPermanentActivationBan(duration)
+
+
 def _parse_targeting_ban(stream: TokenStream) -> "ast.TargetingBan | None":
     """``players and permanents can't be the targets of spells or activated
     abilities [<duration>]`` (Peace Talks).

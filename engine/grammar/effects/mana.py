@@ -27,6 +27,7 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
+from ..records import accept_counters_removed_for_cost
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 
@@ -92,18 +93,21 @@ def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
     "This way" is what makes it a *payment* rather than a board count: the
     counters were removed to pay this ability's own cost and are gone by the
     time the mana is added, so nothing on the battlefield can be counted.
+
+    The phrase itself is ``records.accept_counters_removed_for_cost``'s, and
+    this is the "for each" front end of it. It used to be a private copy, which
+    is the fork the shared reader was written to close: Essence Bottle prints
+    the identical clause after a *life gain* and Torture Chamber after a
+    *damage*, so which sentences could read the words depended on what the card
+    did with the number. What stays here is the leading "for each" and the
+    unwrapping to a bare kind, both of which are this family's payload shape.
     """
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         return None
-    kind = stream.peek_word()
-    if kind is not None and kind not in ("counter", "counters"):
-        stream.advance()
-        if (
-            stream.accept_word("counter", "counters")
-            and stream.accept_phrase("removed", "this", "way")
-        ):
-            return kind
+    removed = accept_counters_removed_for_cost(stream)
+    if removed is not None:
+        return removed.counter
     stream.reset(mark)
     return None
 

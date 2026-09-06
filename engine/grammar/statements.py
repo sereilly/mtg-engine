@@ -48,6 +48,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
                       parse_graveyard_top_to_library,
+                      _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.exile import _parse_bin_unplayed_exiled_card
@@ -494,6 +495,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         targeting_ban = _parse_targeting_ban(stream)
         if targeting_ban is not None:
             return targeting_ban
+
+    # "**That permanent's** activated abilities can't be activated this turn."
+    # (Interdict.) Read here beside the ban above rather than by the
+    # subject-verb table, whose subject reader would take "that permanent" as a
+    # bound object and then hand the verb an object nothing bans. Gated on the
+    # opening word and refusing without consuming, so every other sentence
+    # opening on "that" keeps its reading.
+    if stream.at_word("that"):
+        activation_ban = _parse_bound_permanent_activation_ban(stream)
+        if activation_ban is not None:
+            return activation_ban
 
     # "Until end of turn, <sentence>" — a duration in the *leading* printed
     # position (Rookie Mistake). Read **after** the cast permission above, which

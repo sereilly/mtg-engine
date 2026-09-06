@@ -249,6 +249,16 @@ def count_from_payload(
             value = getattr(tapped, f"effective_{cost_tap}", None)
             return max(0, _scaled(int(value or 0), spec))
         return 0
+    # "…equal to **the number of pain counters removed this way**" (Torture
+    # Chamber); "You gain 2 life **for each elixir counter removed this way**"
+    # (Essence Bottle). How many counters the ability's own cost took off,
+    # which after CR 601.2h is a number no board holds: the permanent reads
+    # zero by the time this resolves, so a store scan would answer the exact
+    # complement of what the card says. Off the record the activation kept
+    # (CR 608.2h), beside the three payment channels above.
+    if spec.get("cost_counters_removed") is not None:
+        removed = (context.choices or {}).get("counters_removed_for_cost", 0)
+        return max(0, _scaled(int(removed or 0), spec))
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         # Scaled here, like every aggregate below: "…where X is **half** the

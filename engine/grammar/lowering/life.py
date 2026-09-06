@@ -410,6 +410,22 @@ def _lower_gain_life(
             )
         payload["per_each"] = {"history": "creatures_died_this_turn"}
         return (OracleInstruction("target_gains_life", "", payload),)
+    if isinstance(node.per_each, ast.CountersRemovedForCost):
+        # "You gain 2 life **for each elixir counter removed this way**."
+        # (Essence Bottle.) The complement of the branch below it: those
+        # counters came off to pay this ability's own cost (CR 601.2h), so by
+        # resolution the artifact holds none and a source read would multiply
+        # by zero on every activation. The number is last-known information
+        # (CR 608.2h) the activation path recorded, reached through the one
+        # count evaluator every other computed amount uses.
+        if node.player.kind != "you":
+            raise LoweringError(
+                "a gain counted off the cost's counter removal is the "
+                "ability's own controller's",
+                node=node,
+            )
+        payload["per_each"] = {"cost_counters_removed": node.per_each.counter}
+        return (OracleInstruction("target_gains_life", "", payload),)
     if isinstance(node.per_each, ast.CountersOnSource):
         # "You gain 1 life **for each credit counter on this creature**."
         # (Icatian Moneychanger.) A count of the ability's own source, not of a

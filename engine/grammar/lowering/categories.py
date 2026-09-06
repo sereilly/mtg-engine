@@ -156,6 +156,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The "pump" family, because what the sentence does is set a P/T — the
     # type change beside it is the layer bridge reading the same record.
     "animate_self_until_eot": "pump",
+    # "{6}: This land becomes a 3/3 Elemental artifact creature that's still a
+    # land." (Stalking Stones.) The row above with no end to it (CR 611.2a), so
+    # the same category for `animate_target_indefinitely`'s reason: what differs
+    # is the duration, not what the sentence does.
+    "animate_self_indefinitely": "pump",
     # "Target snow land becomes a 2/2 creature until end of turn." (Balduvian
     # Conjurer.) The same record on a permanent the sentence names rather than
     # on the source, so the same category: what differs is which permanent
@@ -537,6 +542,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # turn, beside the land-play prohibition they are modelled on.
     "forbid_casting_types_this_turn": "turns",
     "forbid_nonmana_activations_this_turn": "turns",
+    # "That permanent's activated abilities can't be activated this turn."
+    # (Interdict.) The row above with a *permanent* in place of the seat, so the
+    # same category: what both change is what may be done for the rest of this
+    # turn, which is what `turns` is about — not `targeting`, whose subject is
+    # which objects CR 115.1 offers, and this ban offers and refuses nothing.
+    "forbid_bound_permanent_activations_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the

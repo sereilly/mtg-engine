@@ -8,7 +8,7 @@ through when this module crossed a thousand lines, exactly as
 ``lowering/tokens.py`` left through one set earlier.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import COUNTERED_ABILITY_SOURCE, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
@@ -426,6 +426,41 @@ def _lower_cant_activate_nonmana_abilities(
         )
     return (
         OracleInstruction("forbid_nonmana_activations_this_turn", "", {}),
+    )
+
+
+def _lower_bound_permanent_activation_ban(
+    node: "ast.BoundPermanentActivationBan", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**That permanent's** activated abilities can't be activated this turn."
+    (Interdict, CR 602.5c.)
+
+    Gated on the producer, which is the whole safety of it: "that permanent" is
+    the source of the ability the sentence in front of this one countered, and
+    with no such step the words name nothing. A ban lowered without the record
+    would arm itself against whatever the resolution context happened to hold.
+
+    **No target description.** The spell targeted an *ability* (CR 115.1c) and
+    this clause names the permanent behind it, so a description here would raise
+    a second picker for an object the caster never chose.
+
+    The window is this turn and only this turn: the record lives on the game and
+    is dropped by ``clear_turn_spell_prohibitions`` at the turn boundary, so a
+    longer one is a ban nothing would lift.
+    """
+    if COUNTERED_ABILITY_SOURCE not in produced:
+        raise LoweringError(
+            "\"that permanent\" names the source of a countered ability, and no "
+            "step of this effect countered one",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "an activation ban on a permanent lasts the rest of the turn",
+            node=node,
+        )
+    return (
+        OracleInstruction("forbid_bound_permanent_activations_this_turn", "", {}),
     )
 
 

@@ -971,6 +971,21 @@ LAST_DAMAGER_CONTROLLER = "last_damager_controller"
 COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
 
 
+#: The permanent "counter target activated ability" records: the source the
+#: countered ability came from. "**That permanent's** activated abilities can't
+#: be activated this turn" (Interdict) is the sentence that needs it, and
+#: nothing else can answer — the spell targeted the *ability*, which is off the
+#: stack by the time this clause runs (CR 113.7a gives it no card and no
+#: controller of its own), and the words name the permanent behind it rather
+#: than anything the caster chose.
+#:
+#: Its own record rather than ``LAST_TARGET_CONTROLLER`` beside it, for
+#: ``COUNTERED_SPELL_CONTROLLER``'s reason one line up: that one is a *seat* and
+#: this is an *object*, and the sentence that reads this one bans a permanent's
+#: abilities rather than a player's.
+COUNTERED_ABILITY_SOURCE = "countered_ability_source_permanent"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
     # "For each creature exiled this way, **its controller** draws a card."

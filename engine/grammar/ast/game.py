@@ -627,6 +627,29 @@ class CantActivateNonManaAbilities:
 
 
 @dataclass(frozen=True)
+class BoundPermanentActivationBan:
+    """"**That permanent's** activated abilities can't be activated this turn."
+    (Interdict.)
+
+    CR 602.5c for one permanent, and the permanent is a back-reference rather
+    than a target: the spell chose an **ability** (CR 115.1c), and by the time
+    this clause runs that ability is off the stack with no card to ask which
+    permanent it came from (CR 113.7a). So the object is whatever the sentence
+    in front of this one recorded, and the lowering refuses without that
+    producer — with no counter in front of it the words name nothing at all.
+
+    No filter and no subject field, for :class:`TargetingBan`'s reason: the
+    noun phrase is a pronoun, and there is nothing in it that is payload. A card
+    printing a narrowed version is a different sentence.
+
+    ``duration`` is required rather than defaulted. The ban is armed on the
+    game and dropped at the turn boundary, so a sentence naming a longer window
+    is one nothing would ever lift.
+    """
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class TargetingBan:
     """"…players and permanents can't be the targets of spells or activated
     abilities." (Peace Talks.)

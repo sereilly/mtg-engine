@@ -638,6 +638,9 @@ _COVERED_ELSEWHERE = {
     # --- W1G3 ---
     "mana_value_equals_source_counters":
         "test_w1g3_a_source_counter_bound_is_read_off_the_ability_s_source",
+    # --- W1G5 ---
+    "power_at_most_source_counters":
+        "test_w1g5_a_power_bound_counts_the_ability_s_own_source_counters",
 }
 
 
@@ -1886,3 +1889,52 @@ def test_w1g3_a_source_counter_bound_is_read_off_the_ability_s_source(pool):
         "with no source there is no pile to count, so the phrase narrows to "
         "nothing rather than to every creature on the table"
     )
+
+
+# --- W1G5: the hollow lines and the unclaimed sentences ---
+
+
+def test_w1g5_a_power_bound_counts_the_ability_s_own_source_counters(pool):
+    """"Gain control of target creature **with power less than or equal to the
+    number of treasure counters on this enchantment**." (Legacy's Allure.)
+
+    ``mana_value_equals_source_counters`` one characteristic over, and the two
+    differences are both load-bearing. The operator is ``<=`` rather than ``==``,
+    so the boundary and everything under it are admitted and only what is over
+    it is refused — a key that tested equality would let the enchantment steal
+    exactly one size of creature. And the stat is **power**, which CR 613
+    computes through the layers where CR 202.3 reads mana value off the card, so
+    a creature pumped since the ability was activated is tested at the size it
+    is now.
+
+    A caller with no source narrows to nothing, for the sibling's reason: there
+    is no pile to count, and the other direction would hand the ability every
+    creature on the table.
+    """
+    from engine.named_counters import add_counters
+    from engine.pt import add_pt_modifier
+
+    allure = Permanent(card=pool["Grizzly Bears"])   # stands in for the source
+    lions = Permanent(card=pool["Savannah Lions"])   # 2/1
+    bears = Permanent(card=pool["Grizzly Bears"])    # 2/2
+    ogre = Permanent(card=pool["Gray Ogre"])         # 2/2 — pumped below
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[allure]),
+        PlayerState(name="P2", battlefield=[lions, bears, ogre]),
+    ])
+    described = {
+        "type_filter": "creature", "power_at_most_source_counters": "treasure",
+    }
+
+    add_counters(allure, "treasure", 2)
+    assert subject_matches(game, bears, described, source=allure), "at the bound"
+    assert subject_matches(game, lions, described, source=allure), "at the bound"
+    assert not subject_matches(game, bears, described), (
+        "with no source there is no pile to count, so the phrase narrows to "
+        "nothing rather than to every creature on the table"
+    )
+
+    # CR 613 layer 7: the *computed* power, not the printed number. A creature
+    # pumped out of range after the counters were counted is out of range.
+    add_pt_modifier(ogre, 3, 0)
+    assert not subject_matches(game, ogre, described, source=allure), "over the bound"

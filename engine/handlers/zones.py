@@ -3935,16 +3935,33 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
     tested here too rather than only at announcement.
     """
     from ..subject_filters import subject_matches
+    from ._common import block_pair_permanents
 
     described = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = game.players.index(context.caster)
-    target_perm = resolve_target_permanent(
-        game, context,
-        predicate=lambda perm: subject_matches(
-            game, perm, described, observer=observer,
-            source=context.source_permanent,
-        ),
-    )
+    # "Whenever this creature becomes blocked by a creature, put **that
+    # creature** on top of its owner's library." (Elven Warhounds.) The
+    # permanent is the one the block pair bound, not a chosen target — same
+    # zone change, and the subject key is the only thing that differs, which is
+    # why it is a payload here rather than a second handler.
+    #
+    # ``block_pair_permanents`` rather than the stack item's target, because the
+    # two halves of the pair are frozen differently and reading the target on
+    # the *blocks* half names the source itself.
+    if instruction.payload.get("subject") == "block_pair":
+        bound = block_pair_permanents(game, context)
+        if not bound:
+            game.log.append(f"{context.card.name}: the blocking creature has left")
+            return True, "resolved"
+        target_perm = bound[0]
+    else:
+        target_perm = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described, observer=observer,
+                source=context.source_permanent,
+            ),
+        )
     if target_perm is None:
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
@@ -4356,6 +4373,50 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
     )
+    return True, "resolved"
+
+
+@effect_handler("put_source_card_on_library_top")
+def put_source_card_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put this creature on top of its owner's library." (Thalakos Mistfolk's
+    ``{U}`` ability.) "When this creature dies, you may put it on top of its
+    owner's library." (Avenging Angel.)
+
+    The ability's own source, printed with **no source zone** — so this reaches
+    whichever zone the object is actually in (CR 608.2), exactly as
+    ``return_source_card_to_owners_hand`` does one screen up and for its reason.
+    Mistfolk's is still on the battlefield when the ability resolves; the
+    Angel's is a card in its owner's graveyard, because a dies trigger resolves
+    after the creature has already been put there (CR 700.4, CR 603.6d), and a
+    handler that looked only at the battlefield would silently do nothing for
+    the card that made this shape worth having.
+
+    By identity across every graveyard rather than the resolving seat's:
+    CR 404.1 puts a card in its *owner's*, and a creature its controller did not
+    own dies into the other player's pile.
+    """
+    card = context.card
+    source = context.source_permanent
+    if source is not None and game.is_on_battlefield(source):
+        owner_idx = game.owner_index_of(source)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        game.remove_from_battlefield(source)
+        game._remove_aura_effects(source)
+        game.put_card_into_library(owner, card, "top", from_battlefield=source)
+        game.log.append(
+            f"{card.name} put on top of {owner.name}'s library"
+        )
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.graveyard):
+            if held is card:
+                player.graveyard.pop(index)
+                game.put_card_into_library(player, card, "top")
+                game.log.append(
+                    f"{card.name} put on top of {player.name}'s library"
+                )
+                return True, "resolved"
+    game.log.append(f"{card.name} was no longer in a graveyard")
     return True, "resolved"
 
 
@@ -5004,13 +5065,42 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             _source_permanent=source,
         )
         return True, "resolved"
+    # "Return **each creature card** exiled with this artifact…" (Cold Storage).
+    # The printed narrowing, applied *before* the drain: a card the sentence
+    # does not name is still exiled with this permanent afterwards, so taking
+    # the whole pile and putting part of it back would be two zone changes where
+    # the card describes none for it. Absent on every other printing, where the
+    # sentence names the pile whole.
+    wanted_type = instruction.payload.get("card_type")
     entries = take_linked_entries(source)
+    if wanted_type is not None:
+        from ..linked_exile import link_exiled_card
+
+        # Through the one card-in-a-zone matcher (_card_matches_filter),
+        # never primary_type: CR 205.2a gives a card every type printed on
+        # it, and an "Artifact Creature" collapsed to one word is a creature
+        # this sentence would leave in exile.
+        described = {"type_filter": str(wanted_type)}
+        kept = [e for e in entries if not _card_matches_filter(e["card"], described)]
+        entries = [e for e in entries if _card_matches_filter(e["card"], described)]
+        for entry in kept:
+            link_exiled_card(
+                source, entry["card"], int(entry["owner_index"]),
+                ends_on=tuple(entry.get("ends_on") or ()),
+            )
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
         return True, "resolved"
     moved: list[str] = []
     onto_battlefield = False
+    # CR 110.2a: "under **your** control" names the seat the effect instructed,
+    # which is not the owner. Absent means the owner, which is what every
+    # automatic return and every "into their owner's <zone>" spelling means.
+    controller_index = (
+        game.players.index(context.caster)
+        if instruction.payload.get("under_control_of") == "chooser" else None
+    )
     for entry in entries:
         owner = game.players[int(entry["owner_index"])]
         if entry["card"] not in owner.exile:
@@ -5019,10 +5109,18 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             continue
         # The one placement, shared with the automatic return: a hand or a
         # library goes through the CR 903.9b seam rather than being appended.
-        onto_battlefield |= game.leave_linked_exile(entry, zone) is not None
+        onto_battlefield |= game.leave_linked_exile(
+            entry, zone, controller_index=controller_index
+        ) is not None
         moved.append(entry["card"].name)
     if moved:
-        game.log.append(f"{', '.join(moved)} go to their owner's {zone}")
+        # "…under **your** control" is not the owner's zone, so the line has to
+        # say whose it is or the log describes a different effect.
+        whose = (
+            game.players[controller_index].name if controller_index is not None
+            else "their owner"
+        )
+        game.log.append(f"{', '.join(moved)} go to {whose}'s {zone}")
         if onto_battlefield:
             game._recompute_continuous_effects()
     return True, "resolved"

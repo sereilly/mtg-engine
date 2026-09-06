@@ -21,17 +21,31 @@ from .. import ast
 from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
+from ._events import binds_block_pair
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_targets,
-    _filter_payload, _is_target, _restrictions_beyond, _targets_only,
+    _filter_payload, _is_source, _is_target, _restrictions_beyond, _targets_only,
     graveyard_position_payload, refuse_untestable
 )
 
 
-def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruction, ...]:
+def _lower_put_on_library_top(
+    node: ast.PutOnLibraryTop,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"Put target creature on top of its owner's library." (Teferi, Timeless
     Voyager's −3.) One chosen battlefield creature; the owner is resolved by
-    the handler (CR 400.3), which is why no player rides the payload."""
+    the handler (CR 400.3), which is why no player rides the payload.
+
+    Three other subjects reach the same destination and each names its object a
+    different way, which is why *event* travels with the node: the source
+    itself ("Put **this creature** on top of its owner's library" — Thalakos
+    Mistfolk), the source under a trigger that has already killed it ("When
+    this creature dies, you may put **it** …" — Avenging Angel), and the
+    creature a block pair bound ("…becomes blocked by a creature, put **that
+    creature** …" — Elven Warhounds).
+    """
     # Which of the two handlers reads this sentence is decided by the **zone**
     # the noun phrase names, not by the quantifier. It was decided by "any
     # number" alone, which is a fact about how many cards move rather than about
@@ -51,6 +65,48 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
                 "the graveyard tuck reads no end swap", node=node
             )
         return _lower_graveyard_cards_on_library_top(node)
+    # "Put **this creature** on top of its owner's library" (Thalakos Mistfolk)
+    # and "…you may put **it** …" under a dies trigger (Avenging Angel — the
+    # noun parser marks that pronoun `is_source`, so both arrive here as one).
+    # Its own kind rather than the tuck below, for
+    # ``return_source_card_to_owners_hand``'s reason two families over: the
+    # sentence names **no source zone**, so it must reach the object wherever it
+    # actually is (CR 608.2). Mistfolk's is on the battlefield; the Angel's is a
+    # card in a graveyard by the time its trigger resolves, and a handler that
+    # resolved a battlefield permanent would silently do nothing for it.
+    if _is_source(node.target):
+        if node.bottom_instead_colors or node.to_owner != "owner":
+            # Refused rather than dropped: a dropped end swap is a card that
+            # never offers the choice it prints.
+            raise LoweringError(
+                "the self tuck reads no end swap and no fixed seat", node=node
+            )
+        return (OracleInstruction("put_source_card_on_library_top", "", {}),)
+
+    # "Whenever this creature becomes blocked by a creature, put **that
+    # creature** on top of its owner's library." (Elven Warhounds.) The other
+    # half of the pair the trigger bound — not a target, so no `targets`
+    # description is emitted and no picker is raised, exactly as the tap one
+    # family over reads the identical noun phrase. ``binds_block_pair`` rather
+    # than the kind alone, for the reason that helper exists: CR 509.3c/509.3d
+    # make a *bare* "becomes blocked" fire once with several blockers and no way
+    # to say which one "that creature" is.
+    if (
+        isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier == "that"
+        and not node.target.targeted
+        and binds_block_pair(event, event_subject)
+    ):
+        if node.bottom_instead_colors or node.to_owner != "owner":
+            raise LoweringError(
+                "the bound tuck reads no end swap and no fixed seat", node=node
+            )
+        bound: dict[str, object] = {"subject": "block_pair"}
+        described = _filter_payload(node.target.filter)
+        refuse_untestable(described, refusal="the tuck cannot narrow by", node=node)
+        bound.update(described)
+        return (OracleInstruction("put_target_on_library_top", "", bound),)
+
     if not _is_target(node.target):
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
     assert isinstance(node.target, ast.TargetSpec)
@@ -755,6 +811,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "each_player_discards_a_card": "zones",
     "discard_hand": "zones",
     "put_target_on_library_top": "zones",
+    # The self twin of the row above (Thalakos Mistfolk, Avenging Angel). Same
+    # zone change, and the only thing that differs is that the object is named
+    # rather than chosen.
+    "put_source_card_on_library_top": "zones",
     # "Choose two cards in your hand drawn this turn." (Sylvan Library.) A
     # pick out of a hidden zone that moves nothing; the sentence after it is
     # what moves anything.

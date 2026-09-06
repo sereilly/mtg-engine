@@ -215,6 +215,13 @@ def test_every_admitted_cost_clause_is_charged(pool):
                     wanted_count = (
                         cost.count.value if isinstance(cost.count, ast.Fixed)
                         else "any" if isinstance(cost.count, ast.AnyNumber)
+                        # "Remove **all** elixir counters from this artifact"
+                        # (Essence Bottle, Torture Chamber). A spelling this
+                        # translation did not have was the same hole the counted
+                        # one was: the parse read it, the charger did not, and
+                        # this guard read the charger's silence as agreement
+                        # because both sides came out None.
+                        else "all" if isinstance(cost.count, ast.AllOf)
                         else None
                     )
                     if (charged.remove_counter, charged.remove_counter_count) != (
