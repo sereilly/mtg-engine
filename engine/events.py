@@ -763,6 +763,23 @@ def _self_becomes_target_filter(
     if wanted in ("a spell", "an ability"):
         if event.payload.get("targeted_by") != wanted:
             return False
+    if wanted == "an aura spell":
+        # "…the target of **an Aura spell**" (Fugitive Druid). A spell, and a
+        # narrower class of one: an activated ability is out by the first test
+        # and everything else by the subtype. Read through `printed_shape`, the
+        # same reader a cast trigger's `cast_subtype` narrowing goes through —
+        # a spell on the stack is not a permanent, so the layer system has no
+        # answer and the printed face is the whole of what is testable.
+        if event.payload.get("targeted_by") != "a spell":
+            return False
+        from .layer_bridge import printed_shape
+
+        card = event.payload.get("targeted_by_card")
+        if card is None:
+            return False
+        _, subtypes = printed_shape(card)
+        if "aura" not in subtypes:
+            return False
     scope = _TARGETING_CONTROLLER_SCOPES.get(
         trig.condition.payload.get("targeting_controller")
     )
@@ -1030,6 +1047,23 @@ def _damage_dealt_filter(
         )
     test = _DAMAGE_RECIPIENT_TESTS.get(payload.get("damage_recipient"))
     if test is None:
+        # "…deals damage **to a creature**" (Bellowing Fiend). A recipient
+        # described by a noun phrase and by no seat word at all — so it is
+        # neither of the two branches above, and it must not fall through to
+        # "no narrowing printed", which fires on every point of damage the card
+        # narrows away.
+        #
+        # A noun phrase never names a seat: the words that do are the fixed list
+        # this test came from. So a player recipient is simply not in the set the
+        # phrase describes, which is the same answer the damager half gives a
+        # spell it cannot ask about.
+        if "damaged_filter" in payload:
+            if _is_player(recipient):
+                return False
+            return trigger_subject_matches(
+                game, trig, "damaged", recipient,
+                observer=observer, source=permanent,
+            )
         return True
     return bool(test(recipient, seat, observer))
 
@@ -1088,6 +1122,34 @@ def _seat_scoped_filter(
     permanent" — only the acting seat's own permanents."""
     seat = event.payload.get("seat")
     return seat is not None and game.controller_index_of(permanent) == seat
+
+
+@event_filter("land_played")
+def _land_played_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **an opponent** plays a land" (Dirtcowl Wurm).
+
+    The seat half of :func:`_draws_card_filter` below, word for word and for
+    its reason: one game-wide announcement, made at CR 305.1's special action,
+    with the printed seat as the trigger's own narrowing rather than a second
+    event kind. "You" is the permanent's controller (CR 109.5); "an opponent"
+    is any *other* seat, which is what makes the unnarrowed reading wrong in a
+    three-player game rather than merely inverted.
+
+    An announcement with no seat on it fires nothing, which is the safe
+    direction: a land play whose player nobody recorded cannot be compared
+    against the word the card printed.
+    """
+    seat = event.payload.get("seat")
+    if seat is None:
+        return False
+    observer = game.controller_index_of(permanent)
+    if observer is None:
+        return False
+    if trig.condition.payload.get("land_player") == "an opponent":
+        return seat != observer
+    return seat == observer
 
 
 @event_filter("draws_card")

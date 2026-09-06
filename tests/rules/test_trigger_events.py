@@ -815,3 +815,72 @@ def test_701_18b_the_trigger_is_scoped_to_the_permanent_s_own_controller():
 
     assert [p.card.name for p in p1.battlefield] == ["W2G1 Watcher"]
     assert p1.graveyard == []
+
+
+# --- W1G4: a death trigger narrowed by a printed noun phrase ---
+
+from engine import load_cards as _w1g4_load_cards
+from engine.card_loader import manifest_set_path as _w1g4_set_path
+
+
+def _w1g4_lea():
+    return {c.name: c for c in _w1g4_load_cards(_w1g4_set_path("LEA"))}
+
+
+def _w1g4_watcher() -> CardDefinition:
+    return _card(
+        "Flier Watcher",
+        "Whenever a creature with flying dies, "
+        "put a +1/+1 counter on this creature.",
+    )
+
+
+def _w1g4_death(victim_name: str) -> tuple[Permanent, Game]:
+    watcher = Permanent(card=_w1g4_watcher())
+    watcher.metadata["summoning_sickness_turn"] = -99
+    victim = Permanent(card=_w1g4_lea()[victim_name])
+    victim.metadata["summoning_sickness_turn"] = -99
+    owner = PlayerState(name="P1", battlefield=[watcher], life=20)
+    opponent = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[owner, opponent])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._settle()
+    victim.damage_marked = 99
+    game.check_state_based_actions()
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+    return watcher, game
+
+
+@pytest.mark.cr("700.4", "603.2")
+def test_a_narrowed_death_trigger_reads_the_short_spelling_of_dies():
+    """CR 700.4: "dies" **means** "is put into a graveyard from the
+    battlefield", so the two are one condition.
+
+    The engine read the long spelling with a noun phrase in front of it
+    (`permanent_dies`, Urza's Miter) and the short spelling only unnarrowed
+    ("whenever a creature dies", a fixed phrase on both front ends). A
+    *narrowed* death spelled the short way — "whenever a creature **with
+    flying** dies" — had no reader at all, on either side.
+
+    Dauthi Ghoul (Tempest) is the card that wanted it, and this is the finding
+    the shadow keyword hides: the same sentence with "flying" in place of
+    "shadow" refused identically, so the keyword was never the gap.
+    """
+    watcher, _ = _w1g4_death("Granite Gargoyle")
+
+    assert (watcher.effective_power, watcher.effective_toughness) == (3, 3)
+
+
+@pytest.mark.cr("700.4", "603.2")
+def test_a_narrowed_death_trigger_ignores_a_creature_outside_the_phrase():
+    """The narrowing is tested through ``subject_matches`` at the one death fire
+    site, with the *observer's* seat — so a keyword granted in layer 6 counts and
+    a printed one that was removed does not, and the read still answers for a
+    permanent that has already left the battlefield (CR 603.10).
+    """
+    watcher, _ = _w1g4_death("Grizzly Bears")
+
+    assert (watcher.effective_power, watcher.effective_toughness) == (2, 2)

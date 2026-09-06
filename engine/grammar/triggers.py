@@ -152,11 +152,30 @@ def _parse_damage_dealt_event(
             if stream.accept_phrase(*phrase):
                 break
         else:
-            # A recipient this production cannot name would be consumed as
-            # nothing and the trigger would fire on every damage event the card
-            # narrows away. Refuse the line instead.
-            stream.reset(mark)
-            return None
+            # "…deals damage **to a creature**" (Bellowing Fiend). A recipient
+            # that is an object rather than a seat: every phrase in the table
+            # above names a player or a planeswalker, so a noun phrase has no
+            # entry there and cannot get one — the table is fixed words and this
+            # is anything the noun parser reads.
+            #
+            # Carried under the same ``damaged`` stem the union below uses, so
+            # the two front ends describe one narrowing one way
+            # (``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``).
+            # Returned here rather than falling through, because the union
+            # clause below is about a *second* half this branch has already
+            # consumed the whole of.
+            #
+            # A phrase the noun parser refuses still refuses the line, which is
+            # the lock this else-branch has always been: a recipient consumed as
+            # nothing is a trigger firing on every damage event in the game.
+            damaged_only = parse_subject_filter_at(stream)
+            if damaged_only is None:
+                stream.reset(mark)
+                return None
+            return ast.TriggerEvent(
+                "damage_dealt", word, subject=subject,
+                narrowings=(("damaged", damaged_only),),
+            )
         # "…deals damage to **you or a white creature you control**"
         # (Mangara's Equity). A seat word and a noun phrase naming one
         # recipient between them: the table above matched the seat, and the
@@ -613,6 +632,19 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 return ast.TriggerEvent(kind, "at")
         return None
     if stream.accept_word("when"):
+        # "…dies **during combat**" (Mongrel Pack). Read before the bare
+        # spelling it extends, for this file's standing ordering rule: matched
+        # there, the two extra words are left on the stream and the line fails
+        # full-token consumption — which is the *safe* half of the failure. The
+        # unsafe half is on the regex side, where an unanchored bare row reads
+        # them as nothing at all.
+        #
+        # The narrowing itself is `engine/oracle.py`'s payload and the death
+        # fire site's to enforce; what is owed here is reading the same
+        # sentence, so a line one front end claims is not a card the other
+        # refuses.
+        if accept_event_phrase(stream, ("this", "creature", "dies", "during", "combat")):
+            return ast.TriggerEvent("dies", "when")
         if accept_event_phrase(stream, ("this", "creature", "dies")):
             return ast.TriggerEvent("dies", "when")
         # CR 700.4: "dies" *means* "is put into a graveyard from the

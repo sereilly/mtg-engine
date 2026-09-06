@@ -342,9 +342,16 @@ ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
 #: The X form stays its own constant — its count is not printed at all, it is
 #: the value announced when the spell was cast, so it is read from a different
 #: place at a different time.
+#: The article and the singular noun are both here, and both were missing.
+#: "This creature enters with **a** +1/+1 **counter** on it" (Spike Drone) is
+#: this template with the number one printed the way English prints it — the
+#: named-counter pattern below already reads it that way and its own comment
+#: says *this* pattern does too, which it did not: "a" is not in
+#: ``NUMBER_WORDS``, so the line refused and the card was unsupported. A claim
+#: in a comment is not a second reader.
 ENTERS_WITH_PT_COUNTERS = re.compile(
     r"^this [a-z]+ enters with (?P<count>[a-z]+) "
-    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters? on it$"
 )
 
 
@@ -449,7 +456,13 @@ def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[in
     match = ENTERS_WITH_PT_COUNTERS.match(_self_normalized(line, card_name))
     if match is None:
         return None
-    count = NUMBER_WORDS.get(match.group("count"))
+    printed = match.group("count")
+    if printed in ("a", "an"):
+        # An article is the number one — the same reading
+        # ``enters_with_named_counter`` below gives it, and the reading its
+        # comment already claimed this function had.
+        return 1, match.group("counter")
+    count = NUMBER_WORDS.get(printed)
     if count is None:
         return None
     return count, match.group("counter")

@@ -552,6 +552,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     "skip_next_untap": "triggered_tap",
     "add_named_counter_to_creatures_in_combat_with_source": "triggered_counter",
     "grant_keyword_to_block_pair": "triggered_pump",
+    # Flailing Drake's "+1/+1 to that creature" — the P/T twin of the grant
+    # above, and the same bucket: one printed sentence, one label, whichever of
+    # the two the card spells.
+    "pump_block_pair": "triggered_pump",
     # Mishra's War Machine / Minion of Leshrac. The bucket the card hook
     # carried before the grammar read the template, kept across the retirement
     # so the support report does not silently re-bucket a shipped card — which

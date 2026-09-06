@@ -123,6 +123,16 @@ class EffectsMixin:
         context = {
             "damage_dealt": max(0, int(amount)),
             "event_subject_controller": controller_index,
+            # "Whenever a creature is dealt damage, **destroy it**." (Death
+            # Pits of Rath.) The damaged permanent itself, by id, for the
+            # reason the seat above is frozen: this trigger resolves off the
+            # stack (CR 603.3), and lethal damage puts the creature in a
+            # graveyard before then, where CR 400.7 makes it a new object with
+            # no id of its own. Stamped for every trigger this site announces
+            # whether or not it asks — the two death sites already freeze their
+            # last-known information that way, and a site that freezes only
+            # what today's cards read is a site the next card has to edit.
+            "event_subject_permanent_id": permanent.permanent_id,
         }
         events = [
             make_trigger_event(controller_index, permanent, trig, trigger_context=context)
@@ -130,6 +140,13 @@ class EffectsMixin:
                 permanent.effective_card,
                 condition_kinds={"creature_dealt_damage"},
             )
+            # A **narrowed** trigger is the board-wide scan's, not this one's.
+            # This scan is "the damaged permanent's own ability", which is
+            # exactly what "whenever **this** creature is dealt damage" means;
+            # a permanent that also printed "whenever **a** creature is dealt
+            # damage" would otherwise be announced twice for its own damage —
+            # once here and once below.
+            if "damaged_filter" not in trig.condition.payload
         ]
         # "Whenever **enchanted creature** is dealt damage…" (Binding Agony).
         # The same event watched by something attached to the damaged creature
@@ -145,6 +162,33 @@ class EffectsMixin:
                 # controller, never the damaged creature's — which on this card
                 # is the whole point, since the damage goes the other way.
                 seat, attachment, trig, trigger_context=context,
+            ))
+        # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
+        # Rath.) The third dispatch scope for one event: an observer that is
+        # neither the damaged permanent nor attached to it, so neither scan
+        # above can reach it — the *condition kind* was in both front-end tables
+        # and the fire site watched two permanents out of the whole board.
+        #
+        # The printed noun phrase is the narrowing and is tested here, against
+        # the permanent that took the damage, through the one matcher every
+        # other reader of a noun phrase goes through. Dropped, the enchantment
+        # would destroy a damaged *land* — and `subject_matches` is what makes
+        # "another creature" or "a creature you control" cost nothing to add.
+        from ..subject_filters import subject_matches
+        from ..trigger_utils import iter_triggered_abilities
+
+        for seat, observer, trig in iter_triggered_abilities(
+            self, condition_kinds={"creature_dealt_damage"},
+        ):
+            described = trig.condition.payload.get("damaged_filter")
+            if not described or trig.instruction is None:
+                continue
+            if not subject_matches(
+                self, permanent, described, observer=seat, source=observer
+            ):
+                continue
+            events.append(make_trigger_event(
+                seat, observer, trig, trigger_context=dict(context),
             ))
         self._enqueue_triggered_batch(events)
 

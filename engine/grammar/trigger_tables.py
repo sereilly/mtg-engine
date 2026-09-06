@@ -40,6 +40,14 @@ _DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
 #: ability" and strand the rest of it.
 _BECOMES_TARGET_OBJECTS: tuple[tuple[str, ...], ...] = (
     ("a", "spell", "or", "ability"),
+    # "…becomes the target of **an Aura spell**" (Fugitive Druid). A narrower
+    # class than "a spell", and an *axis entry* rather than a fourth condition
+    # for the reason this table is generated at all: the three axes multiply,
+    # so a card printing this phrase about an artifact, or about a spell an
+    # opponent controls, is already read. The filter in `engine/events.py` is
+    # what enforces it — dropped, the Druid would draw a card for any spell at
+    # all.
+    ("an", "aura", "spell"),
     ("a", "spell"),
     ("an", "ability"),
 )
@@ -168,6 +176,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # dispatcher and no card, and the subject-led production below reads the
     # same words as `matching_permanent_enters`, which does fire.
     ("land_enters", ("a", "land", "enters")),
+    # "Whenever an opponent **plays** a land" (Dirtcowl Wurm) — CR 305.1's
+    # special action, not the entry above it, and not a cast. Both seat
+    # spellings are listed for `draws_card`'s reason below: which seat played is
+    # the event's, the printed word is the condition's narrowing, and a line
+    # only one front end reads is a card the other refuses.
+    ("land_played", ("an", "opponent", "plays", "a", "land")),
+    ("land_played", ("you", "play", "a", "land")),
     # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
     # article, so no prefix collision with the bare draw event above.
     ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),
@@ -238,6 +253,19 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),
+    # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
+    # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
+    # damage" names and Binding Agony's "whenever **enchanted** creature is
+    # dealt damage" names, watched by a permanent that is neither the damaged
+    # creature nor attached to it — so the subject leads and the phrase is the
+    # narrowing, which is exactly this table's shape.
+    (("is", "dealt", "damage"), "creature_dealt_damage"),
+    # "Whenever **a creature with shadow** dies" (Dauthi Ghoul). CR 700.4 makes
+    # this the long spelling read a few lines up in `_parse_matched_event`
+    # ("…is put into a graveyard from the battlefield"), so it is the same kind
+    # and reaches the same fire site. Last, because the table is tried in order
+    # and a one-word verb is the most permissive entry in it.
+    (("dies",), "permanent_dies"),
 )
 
 

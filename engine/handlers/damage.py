@@ -387,6 +387,33 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=_report_player, asks=True,
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "damaged_permanent_controller":
+        # "…deals 3 damage to **that creature's controller**" (Bellowing Fiend).
+        # The seat that controlled the permanent this trigger's damage event
+        # *hit*, frozen by the one damage seam — the other end from
+        # `event_subject_controller` directly below, which is the damager's.
+        #
+        # Implemented here and nowhere else on purpose: the word is produced by
+        # one lowering branch (`lowering/damage.py`), for a phrase only a damage
+        # sentence can print, so a second family reading it would be a key with
+        # no sentence behind it. No record means the words named nobody, and the
+        # damage does not happen rather than landing on a guess.
+        seat = (context.trigger_context or {}).get("damaged_permanent_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no damage dealt")
+            return True, "resolved"
+        victim = game.players[seat]
+
+        def _report_damaged(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {victim.name}")
+
+        game._deal_damage_to_player(
+            victim, damage, source=source_permanent or card,
+            then=_report_damaged, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "event_subject_controller":
         # "…deals that much damage to **that creature's controller**"
         # (Backfire). The controller of the object the trigger's event was

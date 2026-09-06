@@ -343,10 +343,28 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # and then fail the comma bound, taking the whole condition down with it.
      # That is exactly what it did — Mangara's Equity's third sentence compiled
      # to nothing at all.
-     r"(?P<damage_recipient_seat>you|an opponent) or"
-     r" (?P<damaged_subject>an? [^,]+)"
-     r"|(?P<damage_recipient>a player or planeswalker|a player"
+     r"(?P<damage_recipient>a player or planeswalker|a player"
      r"|an opponent|a planeswalker|you)"
+     # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
+     # an *object*: none of the fixed words above can say it, because every one
+     # of them names a player or a planeswalker. Delimited as a `damaged_subject`
+     # group, read by the same noun parser every other narrowed condition here
+     # goes through, and tested by `engine/events.py`'s filter against the
+     # permanent that took the damage — which the one damage seam already
+     # freezes (`target_permanent_id`).
+     #
+     # The seat prefix is *optional* on this branch, which is what folds
+     # Mangara's Equity's "to you or a white creature you control" back in: the
+     # union is this same noun phrase with a seat word in front of it, and two
+     # branches would need two group names for one stem.
+     #
+     # **Below** the fixed list, and the ordering is this table's usual rule
+     # read backwards: `an? [^,]+` would happily claim "a player", so the words
+     # that have a seat reading have to be offered theirs first. "you or a …"
+     # still reaches here — the fixed branch matches "you", the comma bound
+     # then fails, and the alternation backtracks into this one.
+     r"|(?:(?P<damage_recipient_seat>you|an opponent) or )?"
+     r"(?P<damaged_subject>an? [^,]+)"
      r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a
@@ -585,6 +603,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",
      r"whenever enchanted (?P<damaged_attached>[a-z]+) is dealt damage"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
+    # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
+    # Rath.) The board-wide spelling of the two rows above: the observer is
+    # neither the damaged creature nor attached to it, so the noun phrase is
+    # delimited as a `damaged_subject` group and the damage fire site tests it
+    # against the permanent that took the damage. Below the two narrower rows in
+    # this table's usual order, though neither is a prefix of this one — "this"
+    # and "enchanted" are not articles.
+    ("creature_dealt_damage",
+     r"whenever (?P<damaged_subject>an? [^,]+) is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
     # opponent controls" (Warden of the Woods). Whose spell it must be is a
@@ -605,7 +632,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # ability" would consume the shorter reading and drop the rest.
     ("self_becomes_target",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
-     r"the target of (?P<targeted_by>a spell or ability|a spell|an ability)"
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to
@@ -968,6 +996,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # exactly the position `targeting_controller` occupies above. Underworld
     # Dreams is the second spelling; Lorescale Coatl and Burlfist Oak the
     # first, whose absent group is how a pattern says "you".
+    # "Whenever **an opponent plays a land**, put a +1/+1 counter on this
+    # creature." (Dirtcowl Wurm.) CR 305.1: playing a land is a special action
+    # that uses no stack, so it is neither a cast nor — necessarily — a land
+    # *entering*: `land_enters` beside this one is announced for a land that
+    # arrives by any route, and a land put onto the battlefield by an effect was
+    # never played. Two events, and a card printing one must not fire on the
+    # other.
+    #
+    # The seat is the trigger's own narrowing rather than a second kind, which
+    # is `draws_card` below read one event over: one announcement, made where
+    # the land is played, and the printed word decides whose play it watches.
+    ("land_played",
+     r"whenever (?:you play|(?P<land_player>an opponent) plays) a land"),
     ("draws_card",
      r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
@@ -1060,24 +1101,25 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("cumulative_upkeep_unpaid",
      r"whenever a player doesn't pay this "
      r"(?:artifact|creature|enchantment|permanent|land)'s cumulative upkeep"),
-    # CR 700.4: "dies" **means** "is put into a graveyard from the
-    # battlefield", so this is the short spelling of the narrowed
-    # ``permanent_dies`` rows at the top of this table — the same kind, the same
-    # ``dying_subject`` group, the same dispatcher
-    # (``_fire_permanent_dies_triggers``). Only the wording is new: "Whenever a
-    # creature **with shadow** dies" (Dauthi Ghoul) is the one card in the pool
-    # that prints it, and the long spelling has carried a noun phrase since
-    # Tablet of Epityr.
+    # "Whenever **a creature with shadow** dies, …" (Dauthi Ghoul.) CR 700.4:
+    # "dies" *means* "is put into a graveyard from the battlefield", so this is
+    # the `permanent_dies` rows above spelled the short way — same kind, same
+    # `dying_subject` group, same board-wide fire site
+    # (`_fire_permanent_dies_triggers`), which already tests the phrase through
+    # `subject_matches`. Nothing else was missing: a *narrowed* death had no
+    # reader at all on either front end, so "a creature with flying dies" refused
+    # exactly as "a creature with shadow dies" did — the keyword was never the
+    # gap.
     #
-    # **Last in the table, and that is the whole of its placement rule.** Its
-    # subject group is `[^,]+`, so it matches every "whenever a … dies" there
-    # is — including four rows above it that read the same opening words as
-    # their own conditions (`creature_dies`, `creature_you_control_dies`,
-    # `creature_opponent_controls_dies`, and `creature_dealt_damage_by_self_dies`
-    # thirty rows further down, which is why "after the specific ones" is not
-    # enough and the end of the table is). First match wins, so a row at the end
-    # can shadow nothing.
-    ("permanent_dies",              r"whenever (?P<dying_subject>an? [^,]+) dies"),
+    # **Last in the table**, and that is the whole of its safety. `[^,]+` reads
+    # any noun phrase, so every specific death row above — "a creature you
+    # control dies", "a creature an opponent controls dies", "a creature dealt
+    # damage by this creature this turn dies" — has to be offered its line
+    # first; and `_match_trigger_patterns` *aborts* on a phrase the noun parser
+    # refuses rather than falling through, so a row placed above them would take
+    # their cards down with it rather than merely shadowing them.
+    ("permanent_dies",
+     r"whenever (?P<dying_subject>an? [^,]+) dies"),
 )
 
 # "when" triggers (enter/leave events)
@@ -1195,6 +1237,19 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # swallow any line ending in the word.
     ("self_put_into_graveyard_from_library",
      r"when this card is put into your graveyard from your library"),
+    # "When this creature dies **during combat**, …" (Mongrel Pack). CR 506.1's
+    # phase, asked of the death rather than of the creature: the same death, in
+    # a different part of the turn, is a different card. The marker is an empty
+    # named group — the idiom this table uses everywhere a narrowing carries no
+    # text of its own — and the death fire site is what compares it against the
+    # phase the game is in.
+    #
+    # **Above** the bare row, which its `.+` would otherwise swallow whole:
+    # matched there the words "during combat" are left unread and the trigger
+    # fires on every death, which is a strictly more generous card than the one
+    # printed and invisible from the outside.
+    ("dies",
+     r"when this creature dies (?P<dies_during_combat>)during combat"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is
@@ -2786,6 +2841,21 @@ def trigger_condition_of_line(
     return condition, remainder
 
 
+def _reads_as_registry_line(line: str, card_name: str | None) -> bool:
+    """Whether the grammar reads *line* as a line a text-keyed registry runs.
+
+    Asked of the grammar rather than of a list of the registries' phrases, for
+    the reason every gate in this engine is asked that way: a second copy of
+    which sentences ``engine/grammar/registries.py`` claims would go stale the
+    first time one is added.
+    """
+    compiled = compile_grammar_line(line, card_name=card_name)
+    return (
+        compiled.parse_error is None
+        and isinstance(compiled.node, grammar_ast.RegistryLine)
+    )
+
+
 def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedTriggeredAbility | None:
     """Parse a single oracle text line as a triggered ability.
 
@@ -2797,6 +2867,25 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     condition, remainder = trigger_condition_of_line(line, card_name)
     if condition is None:
         return None  # not a triggered ability line
+    if _reads_as_registry_line(line, card_name):
+        # A line a **text-keyed registry already runs** is not an unimplemented
+        # trigger, however clearly its first clause reads as a condition
+        # (`engine/grammar/registries.py`; CLAUDE.md's "zero instructions is
+        # the correct lowering, not a gap").
+        #
+        # Fastbond is the card: "Whenever you play a land, if it wasn't the
+        # first land you played this turn, this enchantment deals 1 damage to
+        # you" is carried out by `engine/land_play_allowance.py`'s
+        # `damage_per_extra_land` off the land-drop path. Before a `land_played`
+        # row existed nothing here matched the sentence and the registry had it
+        # to itself; the moment one did, the card grew a triggered ability with
+        # no instruction — reported by `--hollow-lines` and, worse, offered to
+        # `engine/events.collect`, which does not ask whether a trigger has one.
+        #
+        # This is the **grammar before the derivation tables** ordering read one
+        # front end over: a production that claims a line takes it from the
+        # table, and a table that claims a line takes it from this one.
+        return None
 
     # Strip leading colon/comma that sometimes follows the condition clause
     remainder = remainder.lstrip(": ")

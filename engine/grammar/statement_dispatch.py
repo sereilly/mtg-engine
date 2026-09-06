@@ -86,6 +86,7 @@ from .lowering import (
     _lower_chosen_source_next_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
+    _lower_pump,
     _lower_phase_out,
     _lower_gain_life,
     _lower_discard_revealed_matching_unless_pay_life,
@@ -222,11 +223,28 @@ def lower_statement(
         # node and nothing else.
         return _lower_draw(statement, produced, event)
     if isinstance(statement, ast.DealDamage):
-        return _lower_damage(statement, event, produced)
+        # The **unfiltered** event and its subject: "that creature's controller"
+        # under a damage trigger names one of the event's *two* objects, and
+        # which one is decided by how the condition spelled its damager
+        # (`damage_trigger_names_damaged_end`). A reader given the kind alone
+        # cannot tell Backfire's end from Bellowing Fiend's.
+        return _lower_damage(statement, event, produced, event_subject)
     if isinstance(statement, ast.Fight):
         return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):
         return _lower_damage_unless_pay(statement, dispatch_event, produced)
+    if isinstance(statement, ast.Pump):
+        # "…**that creature** gets +1/+1 until end of turn." (Flailing Drake.)
+        # The **unfiltered** event and its subject, for `_lower_lose_keyword`'s
+        # reason directly below: the pump asks whether the trigger bound exactly
+        # one creature, which is a fact about the *trigger* rather than about
+        # where in the sentence the clause sits — and `binds_block_pair` cannot
+        # answer it from the kind alone (CR 509.3c/509.3d).
+        #
+        # It left `_BY_NODE_TYPE` for that: the name-only table is for a node
+        # whose lowering decides nothing, and a pump now picks between two
+        # engine kinds by what the firing event bound.
+        return _lower_pump(statement, event, event_subject)
     if isinstance(statement, ast.LoseKeyword):
         # The **unfiltered** event and its subject, for `_lower_destroy`'s
         # reason below: the removal asks whether the trigger bound exactly one
@@ -322,7 +340,9 @@ def lower_statement(
         if len(statement.effects) >= 2 and all(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
         ):
-            return _lower_damage_conjunction(statement)
+            return _lower_damage_conjunction(
+                statement, event, produced, event_subject
+            )
         # `event_subject` travels with `event`, exactly as it does for the
         # `Sequence` branch below: they are the same fact about the same
         # trigger, and a conjunct that saw only the kind could not tell CR

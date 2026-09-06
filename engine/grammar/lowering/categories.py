@@ -581,6 +581,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Goblin Flotilla) — the keyword half of the same family, over the pair the
     # trigger named rather than over a board.
     "grant_keyword_to_block_pair": "pump",
+    # "…that creature gets +1/+1 until end of turn" on a block trigger
+    # (Flailing Drake) — the P/T half of the pair above, and the kind
+    # ``engine/flanking.py`` has always built by hand (CR 702.25a). It had no
+    # row here because until the grammar could read the *printed* sentence
+    # nothing lowered to it, and a category is what a lowering needs.
+    "pump_block_pair": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
     # recorded on the creature through the layer-6 write API, so it survives
     # the Aura (CR 611.2c).

@@ -228,6 +228,15 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # freezes the damager's id — the object the words name, which is the *other*
     # end of the event from the permanent it damaged.
     "damage_dealt",
+    # "Whenever a creature is dealt damage, **destroy it**." (Death Pits of
+    # Rath.) The *damaged* creature, which is what the subject of this event is
+    # — the row above is the other way round, and the two are the two ends of
+    # one damage event (`_EVENT_SUBJECT_CONTROLLERS` says the same thing about
+    # the seats). Frozen by `_fire_dealt_damage_triggers`, which stamps the id
+    # while the creature is still on a battlefield: this trigger resolves off
+    # the stack (CR 603.3) and lethal damage puts it in a graveyard before then,
+    # where CR 400.7 makes it a new object.
+    "creature_dealt_damage",
 })
 
 
@@ -426,6 +435,44 @@ SWEPT_CONTROLLER_SEATS = PER_OBJECT_SEAT_RECORDS["controller"]
 #: reason, one table over: the fire site writes it, the damage lowering and the
 #: sacrifice lowering both emit it, and three handlers read it.
 EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
+
+
+#: The seat that controlled the **damaged** permanent of a `damage_dealt`
+#: event, frozen by the one damage seam (`damage_events._announce`). The other
+#: end of the event from :data:`EVENT_SUBJECT_CONTROLLER`, which is the
+#: damager's — Backfire wants that one and Bellowing Fiend wants this one, off
+#: the same announcement.
+DAMAGED_PERMANENT_CONTROLLER = "damaged_permanent_controller"
+
+
+def damage_trigger_names_damaged_end(event: str | None, event_subject) -> bool:
+    """Whether a printed "that creature" under *event* names the **damaged**
+    permanent rather than the damager.
+
+    A `damage_dealt` event has two objects in it and the sentence names one of
+    them with a bare pronoun, so something has to decide which — and getting it
+    wrong is silent and exactly backwards: Bellowing Fiend would deal its 3
+    damage to its *own* controller and none to the player whose creature it
+    just hit, while reporting supported.
+
+    The card decides, and it decides in the condition. A permanent spells
+    **itself** "this creature" (CR 109.2's self-reference, written out by the
+    lexer), so a "that creature" behind a trigger whose damager is the source
+    cannot be the damager — there is no other creature in the sentence but the
+    one it damaged. Where the damager is a *described* creature instead
+    ("whenever **enchanted creature** deals damage to you", Backfire;
+    "whenever **a creature of the chosen color** deals damage to you", Mangara's
+    Equity) the phrase names that one, which is what
+    :data:`_EVENT_SUBJECT_CONTROLLERS` already says.
+
+    Only `damage_dealt`: every other condition in that table has one object in
+    its event, so there is nothing to pick between and asking would be a second
+    answer to a settled question.
+    """
+    return (
+        event == "damage_dealt"
+        and getattr(event_subject, "is_source", False)
+    )
 
 
 # What a bare "that much" names when the effect is a *triggered ability*: the

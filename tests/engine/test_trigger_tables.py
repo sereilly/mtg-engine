@@ -202,6 +202,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever you draw a card",
         "whenever an opponent draws a card",
     ),
+    # CR 305.1's special action, and both printed seats for the reason
+    # `draws_card` above lists both: one pattern names them and the narrowing
+    # is payload, so each spelling needs its own example to be checked against
+    # every earlier pattern.
+    "land_played": (
+        "whenever an opponent plays a land",
+        "whenever you play a land",
+    ),
     "you_activate_loyalty_ability": (
         "whenever you activate a loyalty ability of a chandra planeswalker"
     ),

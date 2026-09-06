@@ -977,7 +977,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1314,6 +1314,20 @@ FAMILY_SHARED = {
     # `damage.py`; the two had drifted, and the inline one was dropping the head
     # noun from the payload it built.
     "_sweeps",
+    # `_conjuncts` split out of `lowering/damage.py` the *third* time that
+    # module reached the guard, along the boundary its own docstring already
+    # listed ("damage conjunctions" is one of the four things it says it
+    # holds). One question: how many choices did the sentence announce
+    # (CR 601.2c)? One clause naming several recipients announces at most one
+    # and may be split; two printed clauses announce their own and may not be
+    # fused. Named for `grammar/conjuncts.py`, its mirror one package over.
+    #
+    # A floor for `_sweeps`' reason, and it stays one **because the callback is
+    # an argument**: every shape in it finishes by lowering its pieces as
+    # ordinary damage clauses, so `damage.py` hands its own `_lower_damage`
+    # down rather than being imported back — `_lower_steps`' `lower_statement`
+    # arrangement, one package over.
+    "_conjuncts",
     # `_bound_returns` split out of `lowering/returns.py` at Alliances'
     # integration, when three branches each added a reading under the cap and
     # their sum crossed it. The line is the one `returns.py` already drew: a
