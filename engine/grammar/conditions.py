@@ -472,6 +472,45 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return blocking
     stream.reset(blockers_mark)
 
+    # "if **there are no Zombies on the battlefield**" (Sarcomancy) / "if
+    # **there are no Reflection tokens on the battlefield**" (Spirit Mirror).
+    # The same question the clause below asks, printed with an existential
+    # "there" instead of the noun phrase in subject position — one behaviour,
+    # two printed word orders, which is the arrangement this file keeps for
+    # every clause a card can spell two ways (the possessive/"that player"
+    # hand-count pair above is the precedent).
+    #
+    # `parse_object_filter` reads "on the battlefield" itself and records it as
+    # a flag, so the trailing words may already be gone by the time this looks
+    # for them. The flag is stripped rather than carried: `to_payload` has no
+    # spelling for it and would drop it silently, and the zone is what
+    # `OnBattlefield` *is*. Accepting either shape — flag set, or the three
+    # words still on the stream — is what makes the production independent of
+    # how greedy the noun parser happens to be.
+    there_mark = stream.mark()
+    if stream.accept_word("there") and (
+        stream.accept_word("are") or stream.accept_word("is")
+    ):
+        there_quantifier = "no" if stream.accept_word("no") else (
+            "a" if stream.accept_word("a", "an") else None
+        )
+        if there_quantifier is not None:
+            try:
+                there_filter = parse_object_filter(stream)
+            except GrammarError:
+                there_filter = None
+            if there_filter is not None and (
+                there_filter.on_the_battlefield
+                or stream.accept_phrase("on", "the", "battlefield")
+            ):
+                return ast.OnBattlefield(
+                    dataclasses.replace(there_filter, on_the_battlefield=False),
+                    ast.Comparison("eq", ast.Fixed(0))
+                    if there_quantifier == "no"
+                    else ast.Comparison("ge", ast.Fixed(1)),
+                )
+    stream.reset(there_mark)
+
     # "if **no creatures are on the battlefield**" (Pestilence, Withering
     # Wisps). The board's own count, with no seat in it — read here, beside the
     # "you control" clause it is *not*: that one asks a player what they have,

@@ -51,6 +51,16 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("each_player")
     if stream.accept_phrase("each", "opponent"):
         return ast.PlayerRef("each_opponent")
+    # "if **your opponents** control no creatures" (Kezzerdrix). CR 102.2/102.3
+    # again: a player's opponents are every player who is not them, which is the
+    # set "each opponent" already names — so this is a third spelling of that
+    # seat, not a fourth referent, exactly as "each other player" below is.
+    #
+    # The plural matters and is required: "your opponent" singular is a phrase
+    # no modern printing uses, and reading it here would give a duel-only card
+    # the same reading in a free-for-all, where the two differ.
+    if stream.accept_phrase("your", "opponents"):
+        return ast.PlayerRef("each_opponent")
     # "…deals 2 damage to **each other player**" (Syphon Soul). CR 102.2/102.3:
     # a player's opponents are every player not on their team, and this engine
     # has no teams (the team rules are `EXCLUDED` in `rules_progress.py`
