@@ -67,7 +67,9 @@ REVIEWED = {
     # "finding fewer, none included, is a legal answer" — 701.23b is
     # fail-to-find, and neither comment prints the word "search".
     ("engine/grammar/ast/library.py", "701.23b"),
-    ("engine/grammar/lowering/exile.py", "701.23b"),
+    # Moved with the linked-exile block when `exile.py` was pre-split at
+    # Tempest's Phase 0 — the exemption is keyed by file, so a split carries it.
+    ("engine/grammar/lowering/linked_exile.py", "701.23b"),
     # "the look" / "a look" — 701.20e is the look, filed under Reveal.
     ("engine/grammar/ast/statements.py", "701.20e"),
     ("engine/handlers/control_flow.py", "701.20e"),
