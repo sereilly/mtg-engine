@@ -1492,7 +1492,7 @@ def test_w2g2_flowstone_salamander_targets_only_its_own_blocker(set_pool):
 
 def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
     """``{T}: Destroy target creature with a bounty counter on it.`` — the first
-    card of ``ObjectFilter.with_counter``, and the assertion that matters is the
+    card of ``ObjectFilter.with_named_counter``, and the assertion that matters is the
     *refusal*: the activation gate reads the same filter the picker does, so a
     creature carrying no bounty counter is not a legal target at all."""
     hunter = set_pool("TMP")["Bounty Hunter"]

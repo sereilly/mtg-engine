@@ -207,7 +207,7 @@ def test_w2g2_magnetic_web_compels_the_magnetized_creatures_to_block(set_pool):
     A sentence that was **claimed by nothing** while the card reported itself
     supported — ``parse_coverage`` was the only instrument that could see it.
     Three pieces behind it: a counter-defined noun phrase
-    (``ObjectFilter.with_counter``), an unnarrowed block requirement over the
+    (``ObjectFilter.with_named_counter``), an unnarrowed block requirement over the
     set it describes, and "that creature" as the attacker the trigger's event
     froze.
     """

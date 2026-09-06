@@ -1602,18 +1602,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
-    # "target creature **with a bounty counter on it**" (Bounty Hunter). The
-    # same question as the key above with the kind as data rather than as the
-    # key's name, through ``named_counters.counters_on`` — the one reader that
-    # knows whether a word means the P/T channel or a store the card invented
-    # (CR 122.1a). Spelling the metadata key here would answer zero for every
-    # counter that also has rules meaning, silently, because a missing key is a
-    # legal zero.
-    with_counter = payload.get("with_counter")
-    if with_counter is not None:
+    # "with a **bounty** counter on it" (Bounty Hunter). CR 122.1's open kind
+    # space, asked of ``named_counters``' store — the one place an invented
+    # counter kind is recorded, and deliberately *not* the ``plus_counters``
+    # record above it: a card that puts bounty counters on a creature someone
+    # else has been pumping must not find them there.
+    named_counter = payload.get("with_named_counter")
+    if named_counter:
         from ..named_counters import counters_on
 
-        if counters_on(perm, str(with_counter)) <= 0:
+        if counters_on(perm, str(named_counter)) <= 0:
             return False
     # "an **untapped** creature" (Enthralling Hold). The twin of ``tapped_only``
     # and a separate key for the reason stated on ``to_payload``.

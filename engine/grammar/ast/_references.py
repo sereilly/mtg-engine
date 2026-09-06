@@ -210,17 +210,18 @@ class ObjectFilter:
     # placing handlers keep (CR 122).
     with_plus1_counter: bool = False
     # "target creature **with a bounty counter on it**" (Bounty Hunter), "all
-    # creatures **with magnet counters on them**" (Magnetic Web). A counter the
-    # card invented (CR 122.1), which has no rules meaning of its own — the
-    # object simply carries at least one, read through ``named_counters``'
-    # single reader so a kind that also has a P/T store answers off the store
-    # the placement filled.
+    # creatures **with magnet counters on them**" (Magnetic Web). A counter
+    # kind out of ``engine/named_counters.py``'s open key space (CR 122.1: a
+    # counter's kind is whatever word the card invents, and nothing in the
+    # rules reacts to it).
     #
-    # Its own field rather than a value on ``with_plus1_counter``: that one is
-    # a *bool* and every consumer tests it as one, so a kind name arriving
-    # there would read as "has a +1/+1 counter" on every card that printed any
-    # other word.
-    with_counter: str | None = None
+    # A **separate field from ``with_plus1_counter`` above**, not a widening of
+    # it. CR 122.1a's +1/+1 counter has rules meaning — it is layer 7d and it
+    # lives in ``engine/pt.py``'s channel, under the ``plus_counters`` key —
+    # while every other kind is an inert marker in a different store. One field
+    # carrying both would be one question with two places to look for the
+    # answer.
+    with_named_counter: str | None = None
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False
@@ -885,10 +886,10 @@ class ObjectFilter:
         # byte-identical.
         if self.with_plus1_counter:
             payload["with_plus1_counter"] = True
-        # "with a bounty counter on it" (Bounty Hunter). Emitted only when set,
-        # for the key above's reason.
-        if self.with_counter:
-            payload["with_counter"] = self.with_counter
+        # "with a **bounty** counter on it" (Bounty Hunter). Emitted only when
+        # set, for the reason its neighbour is.
+        if self.with_named_counter:
+            payload["with_named_counter"] = self.with_named_counter
         # "a **legendary** card" (Niambi), "target **legendary** creature". A
         # supertype is a restriction like any other and rides the payload like
         # any other; until this key existed it rode nothing at all, and

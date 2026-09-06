@@ -518,7 +518,7 @@ def _parse_postmodifiers(
             #
             # The refusal that used to stand here — "only the +1/+1 kind is
             # accepted: the counters the engine records under another name have
-            # no matcher" — has **expired**. ``ObjectFilter.with_counter`` is
+            # no matcher" — has **expired**. ``ObjectFilter.with_named_counter`` is
             # that matcher, answered off the candidate through
             # ``named_counters.counters_on``, so a named kind is read below
             # rather than failing the line. The +1/+1 branch stays its own
@@ -551,7 +551,7 @@ def _parse_postmodifiers(
                     if stream.accept_phrase("on", "it") or stream.accept_phrase(
                         "on", "them"
                     ):
-                        d.with_counter = kind
+                        d.with_named_counter = kind
                         continue
                 stream.reset(counter_probe)
             # "with **magnet counters** on them" (Magnetic Web). The plural of
@@ -566,7 +566,7 @@ def _parse_postmodifiers(
                 if stream.accept_phrase("on", "them") or stream.accept_phrase(
                     "on", "it"
                 ):
-                    d.with_counter = kind
+                    d.with_named_counter = kind
                     continue
             stream.reset(plural_probe)
             # "with mana value X" (Spell Blast). Two words, so it is tried

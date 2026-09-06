@@ -92,7 +92,7 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # matcher that ignored the key would let Bounty Hunter destroy any creature
     # on the table, which is the whole of what the counter is for. The positive
     # half is demonstrated below, on a permanent carrying one.
-    ("with_counter", {"with_counter": "bounty"}, "Grizzly Bears"),
+    ("with_named_counter", {"with_named_counter": "bounty"}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
     # The negative twin (Moat's "creatures without flying"). Air Elemental
     # prints the keyword, so a matcher that ignored the key — or one that read
@@ -159,7 +159,7 @@ def test_a_counter_bound_matches_once_there_are_enough_counters(pool):
 
 
 def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
-    """The positive half of ``with_counter``: Bounty Hunter destroys a creature
+    """The positive half of ``with_named_counter``: Bounty Hunter destroys a creature
     once *its own* first ability has put a bounty counter on one.
 
     The rejection row above is passed by a matcher that always answers False, so
@@ -173,7 +173,7 @@ def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
     game = Game(players=[
         PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2"),
     ])
-    described = {"type_filter": "creature", "with_counter": "bounty"}
+    described = {"type_filter": "creature", "with_named_counter": "bounty"}
 
     assert not subject_matches(game, perm, described)
     add_counters(perm, "bounty", 1)
@@ -181,7 +181,7 @@ def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
     # …and a *different* kind is a different question: one counter does not
     # answer for every word a card could print.
     assert not subject_matches(
-        game, perm, {"type_filter": "creature", "with_counter": "magnet"}
+        game, perm, {"type_filter": "creature", "with_named_counter": "magnet"}
     )
 
 
