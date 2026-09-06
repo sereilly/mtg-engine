@@ -789,3 +789,69 @@ def test_120_1a_a_described_set_sweep_reaches_only_creatures():
 
     assert sweep.payload["filter"] == {"type_filter": "creature"}
 
+
+# --- Closer: "that source's controller" is one question (CR 109.5) ---
+
+
+def _closer_eye_game(seats: int, armed_seat: int):
+    """*seats* players, one of them holding Eye for an Eye's generic charge."""
+    players = [PlayerState(name=chr(ord("A") + index)) for index in range(seats)]
+    players[armed_seat].mirror_damage_charges = 1
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def _closer_spell_card():
+    """A damage source with **no controller**: a spell's source is the card as
+    printed (CR 109.5), one object shared by every copy in every deck."""
+    return CardDefinition(
+        name="Invented Bolt", mana_cost="{R}", cmc=1.0, type_line="Instant",
+        oracle_text="Invented Bolt deals 3 damage to any target.",
+        colors=("R",), color_identity=("R",), keywords=(), produced_mana=(),
+        raw={"name": "Invented Bolt", "type_line": "Instant"},
+    )
+
+
+@pytest.mark.cr("109.5")
+def test_a_spells_own_controller_takes_the_mirrored_damage():
+    """Eye for an Eye: "…and Eye for an Eye deals that much damage to **that
+    source's controller**."
+
+    A spell's source is a ``CardDefinition``, which no player controls, so the
+    seat has to come from who is *resolving* it (CR 109.5) — which is what
+    ``damage_source_seat`` answers for every damage event in this engine.
+
+    The mirror used to fall back to "the first living opponent of the damaged
+    player" for a sourceless-looking source, which is the spell's controller in
+    a duel only when somebody else cast it. Aiming your own burn spell at
+    yourself with an Eye armed sent the mirror across the table instead of back
+    at you — a card strictly better than the one printed, and silent, because
+    every test that ever ran on it had the opponent casting.
+    """
+    game = _closer_eye_game(2, armed_seat=0)
+    game.start_turn(0)
+    game.resolving_seats.append(0)
+
+    game._deal_damage_to_player(game.players[0], 3, source=_closer_spell_card())
+
+    assert game.players[0].life == 20 - 3 - 3, game.log
+    assert game.players[1].life == 20
+
+
+@pytest.mark.cr("109.5")
+def test_the_mirror_finds_the_caster_and_not_the_lowest_seated_opponent():
+    """The same fallback, seen where a duel cannot show it: with three seats,
+    "the first living opponent" and "the spell's controller" are different
+    players, and only one of them is what the card says.
+    """
+    game = _closer_eye_game(3, armed_seat=0)
+    game.start_turn(2)
+    game.resolving_seats.append(2)
+
+    game._deal_damage_to_player(game.players[0], 3, source=_closer_spell_card())
+
+    assert game.players[0].life == 17, game.log
+    assert game.players[1].life == 20
+    assert game.players[2].life == 17
