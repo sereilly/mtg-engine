@@ -20,7 +20,6 @@ it, over a body vocabulary those files share, and is nowhere near the cap.
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
                              OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
-from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._records import optional_cost_key
@@ -404,32 +403,26 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
-        zone_owner = filt.zone_owner.kind if filt.zone_owner is not None else None
-        if node.player.kind == "you" and filt.zone == "graveyard" and (
-            zone_owner == "target_opponent"
-        ):
+        if node.player.kind == "you" and filt.zone != "battlefield":
             # "For each artifact or creature card in target opponent's
-            # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a
-            # chosen player's graveyard, evaluated by `count_from_payload` —
-            # the same reader the mana half of this very sentence uses one
-            # instruction over, because the two halves are one count and two
-            # readings of it are two answers.
+            # graveyard, … you gain 1 life." (Spoils of Evil.)
+            # "You gain 2 life **for each card in your hand**." (Gerrard's
+            # Wisdom.) A count out of a zone rather than off a board, evaluated
+            # by `count_from_payload` — the same reader the mana half of Spoils
+            # of Evil's sentence uses one instruction over, because the two
+            # halves are one count and two readings of it are two answers.
             #
-            # Held to what a *card* can be asked: a card in a graveyard has no
-            # computed characteristics at all (CR 613.1), which is what
-            # `card_only_filter` says.
-            carried = card_only_filter({
-                key: value
-                for key, value in filt.to_payload().items()
-                if key not in ("zone", "zone_owner", "is_card")
-            })
-            if carried is None:
-                raise LoweringError(
-                    "the per-each life gain cannot count this restriction", node=node
-                )
-            payload["per_each"] = {
-                "zone": "graveyard", "owner": "target_opponent", "filter": carried,
-            }
+            # Through `count_spec`, which is the one place that decides what a
+            # count of a zone may test: a card outside the battlefield has no
+            # computed characteristics at all (CR 613.1), and that rule was
+            # spelled here a second time as a `card_only_filter` over
+            # `to_payload` minus the zone keys. Two spellings of one rule, and
+            # the local one was also a second spelling of *which zones* — it
+            # named the graveyard, so the identical sentence about a hand
+            # refused while the card reported itself unsupported for the wrong
+            # reason. The spec `count_spec` builds is byte-identical for Spoils
+            # of Evil, which is why this is a fold rather than a widening.
+            payload["per_each"] = count_spec(filt, node)
             return (OracleInstruction("target_gains_life", "", payload),)
         if node.player.kind != "you" or filt.zone != "battlefield":
             raise LoweringError(

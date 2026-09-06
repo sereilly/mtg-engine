@@ -108,14 +108,38 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     counters = accept_counters_on_source(stream)
     if counters is not None:
         return counters
-    if not stream.accept_phrase("color", "among"):
-        stream.reset(mark)
-        return None
+    if stream.accept_phrase("color", "among"):
+        try:
+            return ast.ColorsAmong(parse_object_filter(stream))
+        except GrammarError:
+            stream.reset(mark)
+            return None
+    # "Each player draws a card **for each creature card in their graveyard**."
+    # (Nature's Resurgence.) A plain count of a set, which is the same quantity
+    # "draw cards **equal to** the number of …" puts in front of the noun
+    # — so it produces the `CountOf` that spelling already produces and travels
+    # the one count spec every computed number in this engine travels on.
+    #
+    # The docstring above said this reading belonged "to whatever production
+    # already handles a per-each". For a draw there is no such production: the
+    # statement ends here, so an unclaimed "for each" was unconsumed text and
+    # the card was refused. Claiming it is therefore not a second reader of one
+    # phrase — it is the only one.
+    #
+    # "…that died this turn" / "…that died this way" are histories rather than
+    # sets and belong to `phrases._parse_for_each`; a relative clause left
+    # behind here would be unconsumed text with the count already claimed, so
+    # the whole clause is handed back, exactly as `_parse_per_each_objects`
+    # hands it back one module over.
     try:
-        return ast.ColorsAmong(parse_object_filter(stream))
+        counted = parse_object_filter(stream)
     except GrammarError:
         stream.reset(mark)
         return None
+    if stream.at_word("that"):
+        stream.reset(mark)
+        return None
+    return ast.CountOf(counted)
 
 
 def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:

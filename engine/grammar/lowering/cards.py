@@ -579,6 +579,29 @@ def _lower_draw(
         payload["drawer_seat"] = drawer_seat
     if looped_seats is not None:
         payload["recipient"] = looped_seats
+        # "**Each player** draws a card **for each creature card in their
+        # graveyard**." (Nature's Resurgence.) One number per seat, so it
+        # cannot be the single X: `draw_target_cards`' looping branch resolves
+        # ``amount`` once, against the *cast's* X, and a shared count there
+        # would have every seat draw whatever `context.x_value` held — zero for
+        # a spell that announces no X, which is a card compiling supported and
+        # drawing nothing.
+        #
+        # Moved onto the per-recipient channel `each_player_discards_a_card`
+        # already reads for "a third of the cards in **their** hand", and for
+        # that channel's reason: the evaluator is owner-blind and is handed the
+        # seat, which is exactly what "their" names. A count scoped to somebody
+        # *else* ("…for each card in **your** hand") is one shared number and
+        # belongs on the ordinary channel — but the looping handler has no
+        # reader for that at all, so it refuses rather than drawing zero.
+        shared = payload.pop(X_FROM_COUNT, None)
+        if shared is not None:
+            if shared.get("owner") not in ("owner", "target"):
+                raise LoweringError(
+                    "a looped draw counts each drawer's own zone", node=node,
+                )
+            payload.pop("amount", None)
+            payload[X_FROM_COUNT_PER_RECIPIENT] = shared
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
         # "At the beginning of each opponent's draw step, **that player** draws
         # an additional card." (Malignant Growth.) The seat the fire site froze

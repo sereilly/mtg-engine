@@ -76,10 +76,25 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
                 (i for i, p in enumerate(game.players) if not p.lost),
                 key=lambda i: ((i - active) % total, i),
             )
-        count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        # "…draws a card **for each creature card in their graveyard**."
+        # (Nature's Resurgence.) One number per seat, taken against that seat's
+        # own zone — the same channel and the same evaluator
+        # `each_player_discards_a_card` asks for "a third of the cards in their
+        # hand", because a single ``amount`` here is resolved once and would
+        # give every player the first one's number. Read before ``amount``,
+        # which the lowering removes when it emits this.
+        per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+        count = (
+            None if per_seat is not None
+            else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        )
         for seat in seats:
             drawer = game.players[seat]
-            drawn = game._draw_with_replacements(drawer, count)
+            wanted = (
+                max(0, evaluate_count(game, drawer, per_seat))
+                if per_seat is not None else count
+            )
+            drawn = game._draw_with_replacements(drawer, wanted)
             game.log.append(f"{drawer.name} drew {drawn} cards")
         return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
