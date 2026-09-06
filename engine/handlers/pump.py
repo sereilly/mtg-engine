@@ -1494,9 +1494,22 @@ def granted_target_legal(game, instruction, context, *, characteristics=True):
     """
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     source = context.source_permanent
+    # The printed **type**, from the same payload the rest of the phrase comes
+    # from. It used to be the literal question "is it a creature?", which is
+    # what every card reaching this helper prints — until the removal twin
+    # started reaching it too: Soul Sear's "target creature **or
+    # planeswalker**" lowers `type_filter` as a list, and a hardcoded creature
+    # floor would decline the planeswalker half of a card that prints it.
+    #
+    # A floor at all, rather than leaving it to `permanent_matches_filter`
+    # below, because *characteristics* switches that check off for CR 608.2b's
+    # second pass — and a pass with no floor would scan every permanent on the
+    # board.
+    printed = filters.get("type_filter") or "creature"
+    wanted = (printed,) if isinstance(printed, str) else tuple(printed)
 
     def legal(perm) -> bool:
-        if not perm.is_creature:
+        if not any(perm.has_type(kind) for kind in wanted):
             return False
         if characteristics and not permanent_matches_filter(perm, filters):
             return False
@@ -1925,9 +1938,23 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
     into layer 6, so it beats an older grant by timestamp and expires at
     cleanup with everything else until-end-of-turn."""
     card = context.card
-    # The damage target may be a planeswalker, so no creature predicate: the
-    # removal reaches whatever permanent the spell chose.
-    target = resolve_target_permanent(game, context, predicate=lambda p: True)
+    # **The printed noun phrase, through the reader the grant twin already
+    # uses.** This read `predicate=lambda p: True` — "the damage target may be
+    # a planeswalker, so no creature predicate" — which is true of Soul Sear
+    # and of nothing else that reaches here: the other fifteen printings say
+    # "target creature", and an unconditional predicate makes the fallback scan
+    # take whatever permanent it reaches first. Reality Anchor stripped shadow
+    # from a *Circle of Protection* in an AI game for exactly that reason, the
+    # AI having named a player where the spell wants a creature.
+    #
+    # `granted_target_legal` is the same three questions the grant side asks,
+    # and its docstring is this bug found on that side: two handlers for one
+    # printed sentence, and the one that kept its own copy was the one that had
+    # none. It reads the printed type off the payload, so Soul Sear's
+    # planeswalker is still legal and nothing else is.
+    target = resolve_target_permanent(
+        game, context, predicate=granted_target_legal(game, instruction, context)
+    )
     if target is None:
         game.log.append(f"{card.name}: no valid target to strip")
         return True, "resolved"

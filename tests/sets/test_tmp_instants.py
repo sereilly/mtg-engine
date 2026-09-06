@@ -123,3 +123,57 @@ def test_w1g1_reality_anchor_also_frees_a_shadow_creature_to_block(set_pool):
     ordinary_attacker = p1.battlefield[0]
 
     assert game._can_block_attacker(soltari, ordinary_attacker)
+
+
+# --- W1G1: the removal handler's missing noun phrase ---
+
+
+def test_w1g1_reality_anchor_will_not_strip_a_noncreature(set_pool):
+    """Found by driving eight AI games, not by any census.
+
+    `remove_target_keyword_until_eot` resolved with `predicate=lambda p: True`
+    — "the damage target may be a planeswalker, so no creature predicate" — and
+    read the printed noun phrase not at all. So when the AI named a *player*
+    where the spell wants a creature, the fallback scan took whatever permanent
+    it reached first and **Reality Anchor stripped shadow from a Circle of
+    Protection**. Its grant twin was fixed for exactly this a set earlier and
+    has `granted_target_legal`; the removal twin kept its own reading, which is
+    the "two handlers for one printed sentence" shape that helper's docstring
+    is about.
+
+    Two rigs, because the fallback scan is legitimate and only its *blindness*
+    was the bug: with a legal creature on the board the scan should find it,
+    and with none it should find nothing rather than settle for an enchantment.
+    The illegal permanent is placed **first** in both, so a scan that ignores
+    the phrase reaches it before anything else.
+    """
+    tmp = set_pool("TMP")
+
+    def cast_with_no_permanent_named(battlefield):
+        p0 = PlayerState(
+            name="P0",
+            battlefield=[_nosick(Permanent(card=tmp[name])) for name in battlefield],
+            life=20, hand=[tmp["Reality Anchor"]],
+            library=[tmp["Trained Armodon"]] * 4,
+        )
+        game = Game(players=[p0, PlayerState(name="P1", life=20)])
+        game.enforce_mana_costs = False
+        game._sync_control()
+        # The shape the AI produced: a player named, no permanent.
+        game.cast_from_hand(0, "Reality Anchor", target_player_index=0)
+        while game.stack:
+            game.resolve_top_of_stack()
+        return game, p0
+
+    # No creature at all: the enchantment must not be taken as a substitute.
+    game, _ = cast_with_no_permanent_named(["Circle of Protection: Shadow"])
+    assert any("no valid target to strip" in line for line in game.log)
+    assert not any("Circle of Protection: Shadow loses" in line for line in game.log)
+
+    # A creature behind it: the scan finds the creature, not the enchantment.
+    game, p0 = cast_with_no_permanent_named(
+        ["Circle of Protection: Shadow", "Soltari Foot Soldier"]
+    )
+    soltari = p0.battlefield[1]
+    assert not game._has_keyword(soltari, "shadow")
+    assert any("Soltari Foot Soldier loses shadow" in line for line in game.log)

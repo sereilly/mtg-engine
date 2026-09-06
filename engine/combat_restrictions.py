@@ -22,7 +22,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES, IMPLEMENTED_KEYWORDS
+from .grammar.vocabulary import (COLOR_WORDS, CREATURE_TYPES,
+                                 IMPLEMENTED_KEYWORDS, KEYWORD_ABILITIES)
 from .mana_payment import mana_cost_from_symbols
 
 # Basic land types a "controls a <type>" clause can name. Five, because a regex
@@ -760,6 +761,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
 _AS_THOUGH_BLOCKABLE: tuple[str, ...] = ("shadow",)
 
 
+#: Every keyword ability the printed vocabulary knows, lowercased — the gate a
+#: captured keyword word has to pass. Read off ``data/vocabulary/`` through the
+#: grammar's catalog rather than listed here, exactly as ``_COLOR_WORD`` above
+#: is read off ``COLOR_WORDS``: a second list of keyword names is the drift this
+#: file's opening docstring is about.
+_KEYWORD_WORDS: frozenset[str] = frozenset(
+    word.lower() for word in KEYWORD_ABILITIES
+)
+
+
 #: "…**as long as defending player controls a snow land**." (Arctic Foxes.)
 #: A qualifier on whatever restriction precedes it, so it is stripped once here
 #: rather than written into every row — the same arrangement
@@ -1022,6 +1033,23 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["blocker_filter"] = described
+        # "This creature can block only creatures with **flying**." The captured
+        # word must actually be a keyword ability, for the reason the captured
+        # *subtype* below must be a subtype: the enforcement asks
+        # ``Game._has_keyword``, which answers False for a word no card carries
+        # — so a phrase the vocabulary has never heard of would make the
+        # creature able to block **nothing at all** while its card reported
+        # supported. That is the narrowing direction rather than the widening
+        # one, and it is still a card doing something other than what it prints.
+        #
+        # The catalog rather than ``IMPLEMENTED_KEYWORDS``, because the question
+        # here is what the *enforcement* can answer and `_has_keyword` reads the
+        # printed keyword off layer 6 whether or not this engine implements the
+        # behaviour behind it — Shadowstorm hit exactly the shadow creatures for
+        # a whole set before shadow was implemented, for that reason.
+        required_keyword = payload.get("required_keyword")
+        if required_keyword is not None and required_keyword not in _KEYWORD_WORDS:
+            return None
         # "…can block creatures with shadow **as though it had shadow**."
         # The keyword is captured twice and both halves must name the same
         # ability, for `evasion_negation._TEMPLATE`'s reason: the sentence

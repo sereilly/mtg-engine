@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 74.3% | 70.9% | 46.9% | 201 |
+| TMP *(measured)* | 335 | 478 | 74.7% | 72.2% | 48.1% | 205 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,7 +47,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 385 | 184 | expected a subject |  |
+| 383 | 182 | expected a subject |  |
 | 116 | 58 | unrecognized effect verb |  |
 | 100 | 52 | unconsumed text |  |
 | 41 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -69,9 +69,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 4 | unrecognized "can't be" restriction |  |
 | 4 | 4 | expected 'a' |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 3 | granting 'shadow' needs the keyword implemented |  |
 | 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 2 | expected 'counter or counters' |  |
 
 ## Cards executing through the grammar
 
@@ -948,6 +948,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Protection: Shadow**
+  - `{1}: The next time a creature of your choice with shadow would deal damage to you this turn, prevent that damage.`
 - **Circle of Protection: White**
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
@@ -1247,6 +1249,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent all combat damage that would be dealt this turn.`
 - **Daughter of Autumn**
   - `{W}: The next 1 damage that would be dealt to target white creature this turn is dealt to Daughter of Autumn instead.`
+- **Dauthi Embrace**
+  - `{B}{B}: Target creature gains shadow until end of turn. (It can block or be blocked by only creatures with shadow.)`
+- **Dauthi Ghoul**
+  - `Whenever a creature with shadow dies, put a +1/+1 counter on this creature.`
 - **Dauthi Mercenary**
   - `{1}{B}: This creature gets +1/+0 until end of turn.`
 - **Dauthi Mindripper**
@@ -4265,6 +4271,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Draw three cards.`
   - `• Return up to two target creatures to their owners' hands.`
 - **Reality Anchor**
+  - `Target creature loses shadow until end of turn.`
   - `Draw a card.`
 - **Reality Ripple**
   - `Target artifact, creature, or land phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
@@ -4788,6 +4795,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, {T}: Put target creature you control on top of its owner's library.`
   - `{R}, {T}: This creature deals 1 damage to any target and 1 damage to you.`
 - **Shadow Rift**
+  - `Target creature gains shadow until end of turn. (It can block or be blocked by only creatures with shadow.)`
   - `Draw a card.`
 - **Shadowbane**
   - `The next time a source of your choice would deal damage to you and/or creatures you control this turn, prevent that damage. If damage from a black source is prevented this way, you gain that much life.`
@@ -4984,6 +4992,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Soltari Crusader**
   - `{1}{W}: This creature gets +1/+0 until end of turn.`
+- **Soltari Emissary**
+  - `{W}: This creature gains shadow until end of turn. (It can block or be blocked by only creatures with shadow.)`
 - **Soltari Trooper**
   - `Whenever this creature attacks, it gets +1/+1 until end of turn.`
 - **Songs of the Damned**

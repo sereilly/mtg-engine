@@ -285,3 +285,83 @@ def test_615_9_a_keyword_narrowed_shield_rechecks_the_source():
     add_shield(p0, make_source_subject_shield(described, 0, "Test Circle"))
     remove_keyword(shadow_source, "shadow", duration="end_of_turn")
     assert _damage_dealt(game, p0, 2, source=shadow_source, combat=True) == 2
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_a_block_narrowing_refuses_a_word_that_is_not_a_keyword():
+    """The row next door to the one this group added, and the same hole.
+
+    "This creature can block only creatures with **flying**" (Shacklegeist,
+    Cloud Elemental, Cloud Djinn) captured its keyword as `[a-z]+` and checked
+    it against nothing. The enforcement asks ``Game._has_keyword``, which
+    answers False for a word no card carries — so an invented creature printed
+    "can block only creatures with blorb" compiled **supported** and could then
+    block nothing at all.
+
+    That is the narrowing direction rather than the widening one, which is why
+    no card in the pool exposed it: all four printings say "flying". It is the
+    same shape SET_PLAYBOOK's round 7 found on a whitelist that accepted
+    "creatures with three heads", and it is caught the same way — by writing
+    the refusing gate's refusal test rather than only its positive cases.
+
+    The gate is the printed keyword **catalog**, not `IMPLEMENTED_KEYWORDS`: the
+    question is what the enforcement can answer, and `_has_keyword` reads a
+    keyword off layer 6 whether or not this engine implements the behaviour
+    behind it. Shadowstorm hit exactly the shadow creatures for a whole set
+    before shadow was implemented, for exactly that reason.
+    """
+    from engine.combat_restrictions import combat_restriction_for
+    from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    for keyword in ("flying", "shadow"):
+        restriction = combat_restriction_for(
+            f"this creature can block only creatures with {keyword}"
+        )
+        assert restriction is not None, keyword
+        assert restriction.payload == {"required_keyword": keyword}
+
+    # A real keyword the engine does not implement still reads: `_has_keyword`
+    # can answer it, so the restriction is enforceable as printed.
+    assert "ward" not in IMPLEMENTED_KEYWORDS
+    assert combat_restriction_for(
+        "this creature can block only creatures with ward"
+    ) is not None
+
+    # A word that is not a keyword ability at all refuses the whole line.
+    assert combat_restriction_for(
+        "this creature can block only creatures with blorb"
+    ) is None
+    assert not compile_card_oracle(_bear(
+        "Test Blorb Blocker",
+        "This creature can block only creatures with blorb.",
+    )).supported
+
+
+@pytest.mark.cr("608.2b", "115.1c")
+def test_w1g1_the_removal_still_reaches_a_printed_planeswalker(catalog_by_name):
+    """The reason the predicate was unconditional in the first place, kept.
+
+    Soul Sear prints "target creature **or planeswalker**", which lowers
+    `type_filter` as a *list* — so the fix reads the printed type off the
+    payload rather than asking "is it a creature?", and both halves of that
+    card's target line still resolve. A hardcoded creature floor would have
+    declined the planeswalker, which is the direction this whole family of
+    fixes exists to avoid.
+    """
+    sear = catalog_by_name["Soul Sear"]
+    ugin = _nosick(Permanent(card=catalog_by_name["Ugin, the Spirit Dragon"]))
+    p0 = PlayerState(name="P0", battlefield=[ugin], life=20, hand=[sear],
+                     library=[catalog_by_name["Mox Pearl"]] * 4)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    game.cast_from_hand(0, "Soul Sear", target_permanent_index=0,
+                        target_player_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert any(
+        "Ugin, the Spirit Dragon loses indestructible" in line
+        for line in game.log
+    )
