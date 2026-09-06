@@ -364,7 +364,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation cost | 1049 |
 | trigger table | 743 |
 | keyword table | 533 |
-| static-line table | 483 |
+| static-line table | 499 |
 | aura enchant noun (oracle_instructions attach) | 187 |
 | activation_restrictions.py | 99 |
 | card_hooks bespoke (name-keyed) | 91 |
@@ -375,7 +375,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | oracle.py (modal trigger head) | 29 |
 | cast_restrictions.py | 20 |
 | cost_modifiers.py | 17 |
-| untap_restrictions.py | 16 |
 | mixin text scan | 15 |
 | activation_permissions.py | 11 |
 | cast_timing.py (granted flash) | 10 |
