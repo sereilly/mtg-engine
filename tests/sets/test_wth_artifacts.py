@@ -615,3 +615,66 @@ def test_bosium_strip_exiles_what_was_cast_this_way(set_pool, catalog_by_name):
     assert [c.name for c in p1.exile] == ["Lightning Bolt"]
     assert [c.name for c in p1.graveyard] == ["Grizzly Bears"]
     assert playable_from_zones(game, 0) == [], "and the new top is a creature"
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState  # noqa: E402
+from engine.card_loader import load_cards as _w2g5_load  # noqa: E402
+from engine.card_loader import manifest_set_path as _w2g5_path  # noqa: E402
+from engine.models import Permanent as _W2G5Permanent  # noqa: E402
+
+
+def _w2g5_lea(name: str):
+    return {c.name: c for c in _w2g5_load([_w2g5_path("LEA")])}[name]
+
+
+def _w2g5_mana_web_game(set_pool):
+    """Seat 0 has Mana Web and a Forest; seat 1 has two Mountains and an Island."""
+    web = _W2G5Permanent(card=set_pool("WTH")["Mana Web"])
+    mine = _W2G5Permanent(card=_w2g5_lea("Forest"))
+    theirs = [
+        _W2G5Permanent(card=_w2g5_lea("Mountain")),
+        _W2G5Permanent(card=_w2g5_lea("Mountain")),
+        _W2G5Permanent(card=_w2g5_lea("Island")),
+    ]
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="P0", battlefield=[web, mine]),
+        _W2G5PlayerState(name="P1", battlefield=theirs),
+    ])
+    return game, mine, theirs
+
+
+def test_mana_web_taps_the_lands_that_make_the_same_mana(set_pool):
+    """"Whenever a land an opponent controls is tapped for mana, tap all lands
+    that player controls that could produce any type of mana that land could
+    produce."
+
+    The comparison is between two lands' produced-mana **sets**, and the other
+    land is the one the trigger watched — an object no filter can name, which
+    is why the clause rides the tap node and is resolved at the tap-for-mana
+    seam. The Island shares no type with a Mountain and stays untapped.
+    """
+    game, _mine, theirs = _w2g5_mana_web_game(set_pool)
+
+    assert game.tap_land_for_mana(1, "Mountain", "R")
+
+    assert [p.tapped for p in theirs] == [True, True, False], game.log
+    assert any("Mana Web tapped" in line for line in game.log), game.log
+
+
+def test_mana_web_does_not_watch_its_own_controllers_lands(set_pool):
+    """"…a land **an opponent** controls." The seat is relative to the ability's
+    own controller (CR 109.5), and dropped it would make Mana Web tap out the
+    player who cast it."""
+    game, mine, _theirs = _w2g5_mana_web_game(set_pool)
+    spare = _W2G5Permanent(card=_w2g5_lea("Forest"))
+    game.players[0].battlefield.append(spare)
+
+    assert game.tap_land_for_mana(0, "Forest", "G")
+
+    assert mine.tapped is True, "the land the seat actually tapped"
+    assert spare.tapped is False, game.log
+    assert not any("Mana Web tapped" in line for line in game.log), game.log
+
+# --- end W2G5 ---

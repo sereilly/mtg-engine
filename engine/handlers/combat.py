@@ -715,6 +715,50 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+@effect_handler("force_target_to_attack_until_eot")
+def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature attacks this turn if able." (Boiling Blood.)
+
+    CR 508.1a's requirement for one turn on the creature the caster chose
+    (CR 601.2c), through the same ``must_attack_until_eot`` mark
+    ``declare_attackers_step`` already reads — so "if able" keeps meaning what
+    it means everywhere else and a creature that cannot legally attack simply
+    does not.
+
+    No destroy rider. The sibling kind one function up (Nettling Imp's) carries
+    one because *its* card prints one, and folding the two would have made this
+    spell kill a creature that stayed home.
+
+    The printed noun phrase is re-asked here, not only at announcement: a target
+    that stopped being a creature between the two is no longer the thing the
+    card names (CR 608.2b), and asking it through ``subject_matches`` is what
+    keeps the picker's list and this resolution's one list.
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        game.log.append(
+            f"{context.card.name}: its target is gone (608.2b)"
+        )
+        return True, "resolved"
+    chosen.metadata["must_attack_until_eot"] = True
+    game.log.append(f"{chosen.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
 @effect_handler("force_self_to_attack_until_eot")
 def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…this creature deals 3 damage to you **and attacks this turn if able**."

@@ -161,11 +161,26 @@ _SPELL_SUBJECT = re.compile(
 # spells" (Mana Matrix) is one phrase -- so a bare split on " and " would tear
 # that card's subject in half and leave "instant" reading as nothing.
 _SUBJECT_SPLIT = re.compile(r"(?<=spells) and ")
+# The caster clause is **which** seat, not merely whether one is printed.
+# "…spells **your opponents cast**" (Aura of Silence) is the mirror of
+# Watcher of the Spheres' "…you cast", and ``CostModifier.controller`` has
+# carried both words since Terror of the Peaks — only this pattern could not
+# say the second, so Aura of Silence's whole sentence went unread and the tax
+# was charged to nobody. Read as one alternation for ``_TARGETING_MANA_TAX``'s
+# reason directly above: who casts it and what it is called are independent
+# axes, and pairing them as templates is quadratic in the phrases that exist.
 _SPELL_TAX = re.compile(
     rf"(?P<subjects>{_SPELL_SUBJECT_TEXT}(?: and {_SPELL_SUBJECT_TEXT})*)"
-    r"(?: with (?P<keyword>[a-z]+))?(?P<controller> you cast)? cost "
+    r"(?: with (?P<keyword>[a-z]+))?"
+    r"(?:(?P<controller> you| your opponents) cast)? cost "
     r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
 )
+
+#: Which seat a printed caster clause names. A table rather than a truth test on
+#: the group, because the two words scope the tax in opposite directions and a
+#: bare "was something printed?" would read Aura of Silence's opponents-only
+#: sentence as taxing its own controller.
+_TAX_CASTERS = {" you": "you", " your opponents": "opponents"}
 
 
 def _tax_symbols(printed: str) -> tuple[int, tuple[tuple[str, int], ...]]:
@@ -364,7 +379,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         colour=colour,
         card_types=card_types,
         keyword=match.group("keyword"),
-        controller="you" if match.group("controller") else None,
+        controller=_TAX_CASTERS.get(match.group("controller") or ""),
         symbols=pips,
         alternative_subjects=tuple(subjects[1:]),
     )

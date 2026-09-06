@@ -214,7 +214,29 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
         raise stream.error(f"expected something to {verb}")
     if either_way:
         return ast.TapOrUntap(subject)
-    return ast.Tap(subject) if verb == "tap" else ast.Untap(subject)
+    if verb == "tap":
+        return ast.Tap(subject, _accept_shared_produced_mana(stream))
+    return ast.Untap(subject)
+
+
+def _accept_shared_produced_mana(stream: TokenStream) -> bool:
+    """``that could produce any type of mana that land could produce`` — whether
+    the tap carries Mana Web's comparison, with the cursor put back if not.
+
+    Every word is required. "any type of mana" is CR 106.1b's five colours plus
+    colorless read as a *set*, and the second "that land" is the one the
+    trigger watched being tapped — so a reader that stopped early would tap
+    every land the player controls, which is the whole board rather than the
+    half the card names.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase(
+        "that", "could", "produce", "any", "type", "of", "mana",
+        "that", "land", "could", "produce",
+    ):
+        return True
+    stream.reset(mark)
+    return False
 
 
 def _accept_object_filter(stream: TokenStream) -> "ast.ObjectFilter | None":

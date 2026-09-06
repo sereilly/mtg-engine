@@ -601,6 +601,42 @@ class AbilityActivationMixin:
         # ability like any other and the sentence names none, which is the
         # whole of what this card does to a Bird of Paradise. The Aura clause
         # further down prints its exception out loud and keeps it.
+        # "Until end of turn, … that player can't activate abilities that
+        # **aren't mana abilities**." (Abeyance.) CR 602.5's prohibition with
+        # no permanent behind it — a resolved effect named the seat and the
+        # window — so it is asked of the per-turn record rather than of any
+        # card's text, beside the board-scanned clauses here for the reason
+        # the cast gate asks its twin beside the board-scanned cast bans.
+        #
+        # The exception is not a card type but a *rule*: CR 605.1a defines a mana
+        # ability by what it *does*, so the test is ``mana_payment.is_mana_ability``
+        # — the reader Faith's Fetters' identical exception already asks below,
+        # and the one this module has imported since it was written.
+        #
+        # **Not the same-named function in ``ai_valuation``**, which is a
+        # strictly weaker answer to the same question: it takes a bare
+        # instruction, tests membership of a smaller kind set, and answers False
+        # for the twelve painlands and depletion lands whose mana ability lowers
+        # to a ``sequence``. Reaching for it here would have shut off a mana
+        # ability the card leaves open — and, because a function-level import
+        # rebinds the name for the whole function, it silently broke Faith's
+        # Fetters two hundred lines below. Two names for one question, which is
+        # the hazard SET_PLAYBOOK.md names and the suite caught.
+        from ...spell_prohibitions import nonmana_activations_forbidden
+
+        if nonmana_activations_forbidden(
+            self, controller_index
+        ) and not is_mana_ability(ability):
+            details = (
+                f"{permanent.card.name}'s ability can't be activated: "
+                f"{self.players[controller_index].name} can't activate "
+                "abilities that aren't mana abilities this turn"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
+
         # "Players can cast spells and activate abilities only during their
         # own turns." (City of Solitude.) The activation half of the one
         # sentence `mixins/stack/casting.py` reads for its casting half —

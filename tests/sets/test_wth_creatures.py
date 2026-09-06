@@ -1136,3 +1136,52 @@ def test_circling_vultures_upkeep_still_costs_a_creature_card(
         "and with no creature card left, it is sacrificed"
     )
     assert [c.name for c in p1.graveyard] == ["Circling Vultures"]
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine.oracle import compile_card_oracle as _w2g5_compile  # noqa: E402
+from tests.helpers import _mk_card as _w2g5_mk_card  # noqa: E402
+from tests.helpers import _nosick as _w2g5_nosick  # noqa: E402
+
+
+def test_serrated_biskelion_shrinks_itself_and_its_target(set_pool):
+    """"{T}: Put a -1/-1 counter on this creature **and a -1/-1 counter on
+    target creature**."
+
+    One sentence, two placements, two different subjects — so it is neither a
+    rider on the first placement nor a repetition of it, and the trailing half
+    was unconsumed text that refused the whole ability. Both counters land, and
+    on the two permanents the card names rather than twice on either.
+    """
+    biskelion = set_pool("WTH")["Serrated Biskelion"]
+    source = _w2g5_nosick(Permanent(card=biskelion))
+    bear = Permanent(card=_w2g5_mk_card("Plain Bear", "Creature - Bear"))
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[source]),
+        PlayerState(name="P1", battlefield=[bear]),
+    ])
+
+    result = game.activate_permanent_ability(
+        0, "Serrated Biskelion", target_player_index=1, target_permanent_index=0
+    )
+    game.resolve_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert (source.effective_power, source.effective_toughness) == (1, 1), game.log
+    assert (bear.effective_power, bear.effective_toughness) == (1, 1), game.log
+
+
+def test_serrated_biskelion_offers_a_creature_picker(set_pool):
+    """The ability targets, so the activation derivation has to say so — an
+    ability that names a target and offers no picker is refused by the engine
+    the moment the client sends a bare activation."""
+    from engine.targeting import derive_activation_spec
+
+    biskelion = set_pool("WTH")["Serrated Biskelion"]
+    ability = _w2g5_compile(biskelion).activated_abilities[0]
+
+    assert derive_activation_spec(ability).get("kind") == "creature"
+
+# --- end W2G5 ---

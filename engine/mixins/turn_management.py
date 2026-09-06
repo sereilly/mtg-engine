@@ -8,6 +8,7 @@ from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
 from ..land_play_allowance import clear_turn_land_play_effects
+from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -30,6 +31,7 @@ TAP_TRIGGER_KINDS = frozenset({
     "return_tapped_land_to_hand", # Storm Cauldron
     "skip_next_untap",            # Winter's Night
     "deal_damage",                # Manabarbs
+    "tap_lands_sharing_produced_mana",  # Mana Web
 })
 
 
@@ -278,6 +280,11 @@ class TurnManagementMixin:
         # modify rather than in a sweep of their own — a prohibition that
         # outlived its turn is a seat that quietly stops playing lands.
         clear_turn_land_play_effects(self)
+        # "**Until end of turn**, target player can't cast instant or sorcery
+        # spells…" (Abeyance.) The same boundary and the same reason as the
+        # land-play records above it: a prohibition that outlived its turn is a
+        # seat that quietly stops casting.
+        clear_turn_spell_prohibitions(self)
         # "Until that player's next turn" (Firestorm Phoenix) is an ordinal
         # against the counter just incremented, so this drops what has expired
         # rather than deciding anything — engine/hand_locks.py derives the
@@ -639,6 +646,23 @@ class TurnManagementMixin:
             supertype = trig.condition.payload.get("tapped_land_supertype")
             if supertype and not land.has_supertype(str(supertype)):
                 continue
+            # "Whenever **a land an opponent controls** is tapped for mana"
+            # (Mana Web). A whole noun phrase where the two rows above carry a
+            # single word, so it is tested through the one matcher every other
+            # narrowed subject in this engine goes through — and the seat it
+            # carries is relative to *this ability's* controller (CR 109.5),
+            # never to whoever tapped the land. Dropped, the trigger would fire
+            # on its own controller's lands too, which on Mana Web is a card
+            # that taps out the player who cast it.
+            described = trig.condition.payload.get("tapped_land_filter")
+            if described:
+                from ..subject_filters import subject_matches
+
+                if not subject_matches(
+                    self, land, described,
+                    observer=self.controller_index_of(perm), source=perm,
+                ):
+                    continue
             # "…that player adds one mana of any type that land produced.
             # **That land doesn't untap during its controller's next untap
             # step.**" (Winter's Night.) One trigger whose effect is two
@@ -726,6 +750,16 @@ class TurnManagementMixin:
         if kind == "return_tapped_land_to_hand":
             self._return_tapped_land_to_hand(land, perm)
             return
+        # "…tap all lands that player controls that could produce any type of
+        # mana that land could produce." (Mana Web.) The sweep whose set is
+        # named by a comparison against the land this event was about — which
+        # is why it is resolved here and by no ``@effect_handler``: this site
+        # is the only one holding both lands at once.
+        if kind == "tap_lands_sharing_produced_mana":
+            self._tap_lands_sharing_produced_mana(
+                instruction, player_index, land, perm
+            )
+            return
         # "**That land** doesn't untap during its controller's next untap
         # step." (Winter's Night.) CR 502.3's restriction on the land the event
         # was about — which only this site knows, so the marker is written here
@@ -763,6 +797,62 @@ class TurnManagementMixin:
                 f"{perm.card.name} triggered: {player.name} took {damage} damage"
             ),
         )
+
+    def _tap_lands_sharing_produced_mana(
+        self, instruction, tapping_seat: int, land, source
+    ) -> None:
+        """Mana Web: tap every land that seat controls whose produced-mana set
+        overlaps the one just tapped for mana.
+
+        **Types, not colours** (CR 106.1b): a land that taps for {C} answers
+        "any type of mana", which is why the sets come off
+        ``Permanent.effective_produced_mana`` — the one place the engine asks
+        what a land makes, so a land whose types were replaced (Evil Presence),
+        whose production was swapped (Quarum Trench Gnomes) or which is a copy
+        of another land is compared by what it makes now rather than by what it
+        was printed as.
+
+        The land that was tapped is in the set it describes, and is skipped
+        rather than tapped again — it is already tapped, so nothing changes
+        either way, and skipping keeps the log honest about what this ability
+        did.
+
+        The seat is the one that tapped the land, which is what the payload's
+        ``controller: that_player`` names and what the lowering refuses any
+        other value of.
+        """
+        produced = {
+            str(symbol).upper()
+            for symbol in (land.effective_produced_mana or ())
+        }
+        if not produced:
+            return
+        described = {
+            key: value for key, value in instruction.payload.items()
+            if key != "controller"
+        }
+        from ..subject_filters import subject_matches
+
+        tapped: list[str] = []
+        for candidate in self.controlled_by(self.players[tapping_seat]):
+            if candidate is land or candidate.tapped:
+                continue
+            if not subject_matches(
+                self, candidate, described,
+                observer=tapping_seat, source=source,
+            ):
+                continue
+            if not produced & {
+                str(symbol).upper()
+                for symbol in (candidate.effective_produced_mana or ())
+            }:
+                continue
+            self.become_tapped(candidate)
+            tapped.append(candidate.card.name)
+        if tapped:
+            self.log.append(
+                f"{source.card.name} tapped {', '.join(tapped)}"
+            )
 
     def _return_tapped_land_to_hand(self, land, source) -> None:
         """Storm Cauldron: the land that was just tapped for mana goes home.

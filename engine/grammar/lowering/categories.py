@@ -369,6 +369,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # control", Reset; "tap all legendary creatures", Arena of the Ancients).
     "tap_enchanted_creature": "tapping",
     "tap_all_matching": "tapping",
+    # "…tap all lands that player controls that could produce any type of
+    # mana that land could produce." (Mana Web.) The sweep above with a
+    # comparison against the land the trigger watched, dispatched by the
+    # tap-for-mana seam because nothing else holds both lands at once.
+    "tap_lands_sharing_produced_mana": "tapping",
     # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
     # over a set named by a combat relation to the spell's own target.
     "tap_creatures_blocking_target": "tapping",
@@ -511,6 +516,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # comes out of, and this one moves no card at all.
     "grant_flash_timing": "turns",
     "forbid_land_plays_this_turn": "turns",
+    # "Until end of turn, target player can't cast instant or sorcery
+    # spells, and that player can't activate abilities that aren't mana
+    # abilities." (Abeyance.) CR 601.3 and CR 602.5 for one seat and one
+    # turn, beside the land-play prohibition they are modelled on.
+    "forbid_casting_types_this_turn": "turns",
+    "forbid_nonmana_activations_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the
@@ -673,6 +684,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # static `combat_restrictions.py` reads for "attacks **each combat** if
     # able". Same category, so GRAMMAR_CATEGORIES is unchanged.
     "force_self_to_attack_until_eot": "combat_restrictions",
+    # "Target creature attacks this turn if able." (Boiling Blood.) The
+    # same CR 508.1a requirement on a creature the caster chose rather
+    # than on the effect's own source.
+    "force_target_to_attack_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

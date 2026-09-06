@@ -730,6 +730,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # mana" are both shapes the rows above answer more exactly.
     ("land_tapped_for_mana",
      r"whenever a player taps an? (?P<tapped_land_subtype>[a-z]+) for mana"),
+    # "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).
+    # The passive voice with a whole *noun phrase* where the three rows above
+    # carry a single word — so it is a `_subject` group read by the noun parser,
+    # exactly as `permanent_becomes_tapped` reads its own. **Last** of the four:
+    # `an? [a-z]+` claims "a Mountain is tapped for mana" and this pattern would
+    # too, and a subject row placed first would take the narrow rows' lines and
+    # answer them through a filter where they answer through a type accessor.
+    #
+    # The seat rides the filter as ``controller``, which
+    # ``subject_filters.subject_matches`` answers against the ability's own
+    # controller (CR 109.5) — so a Mana Web whose controller taps a land does
+    # not trigger, which is the whole of what the word "opponent" buys.
+    ("land_tapped_for_mana",
+     r"whenever (?P<tapped_land_subject>an? .+?) is tapped for mana"),
     # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
     # captured into the condition payload so one dispatcher covers every card
     # written this way; must precede the unnarrowed form below.

@@ -29,6 +29,19 @@ from ._core import (
 @dataclass(frozen=True)
 class Tap:
     subject: Recipient
+    #: "…that could produce **any type of mana that land could produce**."
+    #: (Mana Web.) A comparison between two lands' produced-mana sets, where
+    #: the other land is the one the ability's *trigger* watched being tapped.
+    #:
+    #: A field on the tap rather than a narrowing on ``subject``, and that is
+    #: the honest place for it: ``ObjectFilter`` describes one object, and
+    #: nothing a filter can say names an object the **event** chose.
+    #: ``subject_filters.subject_matches`` takes a source, an observer, a
+    #: defending seat and a "that player" — it takes no tapped land, so a
+    #: filter key here would be a narrowing the matcher silently drops, which
+    #: on a sweep is every land on that player's board rather than the ones
+    #: the card names.
+    matching_tapped_land_mana: bool = False
 
 
 @dataclass(frozen=True)

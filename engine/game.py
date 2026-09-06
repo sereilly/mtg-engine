@@ -115,6 +115,19 @@ class Game(
     # asks; cleared together at the turn boundary.
     extra_land_plays_this_turn: dict[int, int] = field(default_factory=dict)
     land_plays_forbidden_this_turn: set[int] = field(default_factory=set)
+    # CR 601.3 / CR 602.5 for one turn: what a *resolved effect* said a named
+    # seat may not do (Abeyance), where `cast_restrictions.py` and
+    # `activation_restrictions.py` say what a card's own printed clause does.
+    # Two records rather than one, because a card may print either alone and
+    # because their exceptions are different questions: the cast ban is narrowed
+    # by card type and the activation ban is not narrowed at all — CR 605.1's
+    # mana ability (CR 605.1a) is defined by what an ability *does*. Read through
+    # `spell_prohibitions.py`, which is where both gates ask; cleared together
+    # at the turn boundary.
+    spell_types_forbidden_this_turn: dict[int, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    nonmana_activations_forbidden_this_turn: set[int] = field(default_factory=set)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     # CR 701.20: cards revealed to all players, as a structured record beside

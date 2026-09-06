@@ -1392,3 +1392,84 @@ def test_whippoorwill_exiles_nothing_when_the_card_has_already_left(set_pool):
     assert [c.name for c in game.players[1].graveyard] == ["Someone Else"], game.log
     assert game.is_on_battlefield(bird), game.log
 # --- end HML W2G4 ---
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine.card_loader import load_cards, manifest_set_path  # noqa: E402
+from tests.helpers import _mk_card  # noqa: E402
+
+
+def _w2g5_islandwalker():
+    """A creature that really prints islandwalk, out of the pool.
+
+    Not a hand-made card with the word in its keyword tuple: the narrowing is
+    asked of layer 6 (CR 613.1f), so the point of the test is that the *engine's*
+    keyword answer is what the gate reads.
+    """
+    legends = {c.name: c for c in load_cards([manifest_set_path("LEG")])}
+    return legends["Segovian Leviathan"]
+
+
+def test_merfolk_assassin_refuses_a_creature_without_islandwalk(set_pool):
+    """"{T}: Destroy target creature with islandwalk." — and nothing else.
+
+    The refusal is the test. Before this round the target gate asked the *pure*
+    half of the matcher, which reads no keyword at all, so the ability was
+    activated on a vanilla 4/4 Bear with the tap cost paid and the Bear was
+    destroyed. CR 602.2b via 601.2c: with no legal target the ability cannot be
+    activated, and nothing is spent.
+    """
+    assassin = set_pool("DRK")["Merfolk Assassin"]
+    bear = Permanent(card=_mk_card("Plain Bear", "Creature - Bear"))
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=assassin)])
+    p2 = PlayerState(name="P2", battlefield=[bear])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Merfolk Assassin", target_player_index=1
+    )
+
+    assert not result.supported
+    assert game.is_on_battlefield(bear)
+    assert not p1.battlefield[0].tapped, "the cost was paid for a refused ability"
+
+
+def test_merfolk_assassin_destroys_a_creature_with_islandwalk(set_pool):
+    """The positive half, so the refusal above is a narrowing rather than a
+    broken ability."""
+    assassin = set_pool("DRK")["Merfolk Assassin"]
+    walker = Permanent(card=_w2g5_islandwalker())
+    bear = Permanent(card=_mk_card("Plain Bear", "Creature - Bear"))
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=assassin)])
+    p2 = PlayerState(name="P2", battlefield=[bear, walker])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Merfolk Assassin", target_player_index=1, target_permanent_index=1
+    )
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(walker)
+    assert game.is_on_battlefield(bear)
+
+
+def test_merfolk_assassin_refuses_a_named_creature_without_islandwalk(set_pool):
+    """A *named* illegal target is refused too (CR 601.2c), not silently slid
+    onto the legal one beside it."""
+    assassin = set_pool("DRK")["Merfolk Assassin"]
+    walker = Permanent(card=_w2g5_islandwalker())
+    bear = Permanent(card=_mk_card("Plain Bear", "Creature - Bear"))
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=assassin)])
+    p2 = PlayerState(name="P2", battlefield=[bear, walker])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Merfolk Assassin", target_player_index=1, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert game.is_on_battlefield(bear)
+    assert game.is_on_battlefield(walker)
+
+# --- end W2G5 ---

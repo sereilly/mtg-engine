@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 82.3% | 81.1% | 59.0% | 129 |
+| WTH *(measured)* | 167 | 249 | 85.5% | 84.3% | 61.0% | 132 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 332 | 142 | expected a subject |  |
-| 103 | 47 | unrecognized effect verb |  |
-| 91 | 44 | unconsumed text |  |
+| 329 | 140 | expected a subject |  |
+| 101 | 45 | unrecognized effect verb |  |
+| 88 | 41 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -82,6 +82,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura enters, untap enchanted creature.`
   - `When enchanted creature dies, return that card to the battlefield under its owner's control.`
 - **Abeyance**
+  - `Until end of turn, target player can't cast instant or sorcery spells, and that player can't activate abilities that aren't mana abilities.`
   - `Draw a card.`
 - **Abjure**
   - `Counter target spell.`
@@ -610,6 +611,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bogardan Phoenix**
   - `When this creature dies, exile it if it had a death counter on it. Otherwise, return it to the battlefield under your control and put a death counter on it.`
 - **Boiling Blood**
+  - `Target creature attacks this turn if able.`
   - `Draw a card.`
 - **Bolt Hound**
   - `Whenever this creature attacks, other creatures you control get +1/+0 until end of turn.`
@@ -3166,6 +3168,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast this spell, counter it unless you sacrifice a land.`
   - `At the beginning of each player's upkeep, that player sacrifices a land of their choice.`
   - `When there are no lands on the battlefield, sacrifice this enchantment.`
+- **Mana Web**
+  - `Whenever a land an opponent controls is tapped for mana, tap all lands that player controls that could produce any type of mana that land could produce.`
 - **Manabarbs**
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
@@ -4452,6 +4456,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Serrated Arrows**
   - `At the beginning of your upkeep, if there are no arrowhead counters on this artifact, sacrifice it.`
   - `{T}, Remove an arrowhead counter from this artifact: Put a -1/-1 counter on target creature.`
+- **Serrated Biskelion**
+  - `{T}: Put a -1/-1 counter on this creature and a -1/-1 counter on target creature.`
 - **Setessan Training**
   - `When this Aura enters, draw a card.`
 - **Sewer Rats**
@@ -5344,6 +5350,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`
+- **Urborg Justice**
+  - `Target opponent sacrifices a creature of their choice for each creature put into your graveyard from the battlefield this turn.`
 - **Urborg Mindsucker**
   - `{B}, Sacrifice this creature: Target opponent discards a card at random. Activate only as a sorcery.`
 - **Urborg Panther**

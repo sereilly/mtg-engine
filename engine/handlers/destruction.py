@@ -706,12 +706,18 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # An unresolvable seat ends the resolution, for the reason the sweep beside
     # this one ends: a dropped seat is not an ability that destroys less, it is
     # one that destroys somebody else's permanent.
+    singular_that_player: int | None = None
     if instruction.payload.get("controller") == "that_player":
         seat = frozen_that_player_seat(game, context)
         if seat is None:
             game.log.append(f"{card.name}: no player for 'that player' to name")
             return True, "resolved"
         target = game.players[seat]
+        # Handed to the filter as well as used to pick the battlefield, because
+        # the key stays in the payload and ``subject_matches`` refuses it
+        # outright without a seat. Two readings of one frozen fact rather than
+        # one reading and one silent drop.
+        singular_that_player = seat
     # A later step of the same resolution may read the victim's controller
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now
@@ -795,17 +801,29 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # counter-laden creature is worth what it was worth on the battlefield.
         context.results["its_power"] = max(0, int(victim.effective_power))
         context.results["its_toughness"] = max(0, int(victim.effective_toughness))
+    # One reading of "what does this destroy name", shared with the picker and
+    # the cast gate. Imported here rather than at module scope for the reason
+    # `handlers/stack.py` does the same: `targeting` reads `subject_filters`,
+    # which reads this package.
+    from ..targeting import destroy_subject_filter
+
+    # The **whole** printed noun phrase, through the same reader the picker and
+    # the cast gate use. Nine keys were named here by hand, which made every
+    # other key the lowering can emit a narrowing this resolution ignored:
+    # "with islandwalk" (Merfolk Assassin), "without flying" (Pit Trap), "you
+    # own" (Despotic Scepter), "blocking this creature" (Urborg Panther).
     destroyed = game._destroy_target_permanent(
         target,
-        type_filter=instruction.payload.get("type_filter"),
-        color_filter=instruction.payload.get("color_filter"),
+        described=destroy_subject_filter(instruction.payload),
         target_permanent_index=chosen_index,
-        exclude_colors=instruction.payload.get("exclude_colors"),
-        exclude_types=instruction.payload.get("exclude_types"),
         bypass_regeneration=instruction.payload.get("bypass_regeneration", False),
-        subtype_filter=instruction.payload.get("subtype_filter"),
-        tapped_only=instruction.payload.get("tapped_only", False),
-        attached_to_filter=instruction.payload.get("attached_to_filter"),
+        observer=(
+            game.players.index(context.caster) if context.caster in game.players
+            else None
+        ),
+        source=source_permanent,
+        defending=game.defending_player_index_now(),
+        that_player=singular_that_player,
     )
     # The record every other branch of this handler keeps, and this one did
     # not: "the number of Mountains put into a graveyard this way" is the same

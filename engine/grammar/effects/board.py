@@ -30,6 +30,7 @@ from ..amounts import accept_fraction_head, accept_rounding, parse_amount
 from ..errors import GrammarError
 from ..names import accept_original_expansion
 from ..nouns import parse_object_filter
+from ..records import _parse_for_each_history
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (
@@ -111,6 +112,17 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     # discount that means nothing here, so a phrase carrying it hands the
     # clause back untouched and the line refuses rather than sacrificing one
     # permanent too few.
+    # "…sacrifices a creature of their choice **for each creature put into your
+    # graveyard from the battlefield this turn**." (Urborg Justice.) A count of
+    # the *turn's history* rather than of anybody's board, and asked **before**
+    # the board reader below: that one consumes "for each creature" and hands it
+    # back as a set, which left "put into your graveyard from the battlefield
+    # this turn" as unconsumed text and refused the line. This reader declines
+    # with the cursor unmoved, so asking it first costs the board reading
+    # nothing.
+    history = _parse_for_each_history(stream, parse_object_filter)
+    if history is not None:
+        return ast.Sacrifice(player, subject, count=history)
     counted, beyond_first = _parse_per_each_objects(stream)
     if counted is not None and not beyond_first:
         return ast.Sacrifice(player, subject, count=ast.CountOf(counted))

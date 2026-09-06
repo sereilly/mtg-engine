@@ -48,13 +48,14 @@ from ...cost_modifiers import (
     self_per_target_tax, spell_cost_tax, spell_life_tax, spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
-from ...handlers._common import graveyard_card_matches, permanent_matches_filter
+from ...handlers._common import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_colors_from_text
 from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
-from ...targeting import bounce_subject_filter, graveyard_target_spec
+from ...targeting import (bounce_subject_filter, destroy_subject_filter,
+                          graveyard_target_spec)
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from ...targeting import (derive_cast_spec, enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
@@ -872,6 +873,25 @@ class SpellCastingMixin:
         forbidding_own = own_cast_ban(self, caster_index, card)
         if forbidding_own is not None:
             details = f"can't cast {card.name}: {forbidding_own}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Until end of turn, **target player** can't cast instant or sorcery
+        # spells." (Abeyance.) The same CR 601.3 prohibition with no permanent
+        # behind it: a resolved effect named the seat and the window, so there is
+        # no card text for the three board scans around this to find. Asked here
+        # beside them because it is the same question at the same moment, and
+        # through `spell_prohibitions.py` because that record's one writer and
+        # one reader are named for each other — a prohibition recorded and not
+        # asked is an effect that resolves, logs itself and changes nothing.
+        from ...spell_prohibitions import casting_forbidden_this_turn
+
+        forbidden_type = casting_forbidden_this_turn(self, caster_index, card)
+        if forbidden_type is not None:
+            details = (
+                f"can't cast {card.name}: {self.players[caster_index].name} "
+                f"can't cast {forbidden_type} spells this turn"
+            )
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 
@@ -2621,22 +2641,51 @@ class SpellCastingMixin:
         chosen = self.permanent_at(self.players[seat], target_permanent_index)
         return None if chosen is None else int(getattr(chosen.card, "cmc", 0) or 0)
 
-    def _destroy_target_legal(self, payload: dict, perm: Permanent) -> bool:
-        """Whether *perm* satisfies a ``destroy_target_permanent`` instruction's
-        target filters (type/subtype/colour/tapped + exclusions). Shared by cast
-        validation and the legality enumerator so a destroy ability (Royal
-        Assassin's "target tapped creature", Northern Paladin's "target black
-        permanent") offers exactly the permanents it can legally destroy.
+    def _destroy_target_legal(
+        self, payload: dict, perm: Permanent, *,
+        observer: int | None = None,
+        source: "Permanent | None" = None,
+        defending: int | None = None,
+        that_player: int | None = None,
+    ) -> bool:
+        """Whether *perm* is in the noun phrase a ``destroy_target_permanent``
+        instruction printed. Shared by cast validation and the legality
+        enumerator so a destroy ability (Royal Assassin's "target tapped
+        creature", Northern Paladin's "target black permanent") offers exactly
+        the permanents it can legally destroy.
+
+        **Through ``subject_matches``, never the pure matcher.** This asked
+        ``permanent_matches_filter`` — the half of the question that is readable
+        off the permanent alone — and so it dropped, silently, every key that
+        needs the game: a keyword is layer 6 (CR 613.1f), a controller and an
+        owner are seats, and "blocking this creature" is a combat relation. The
+        gate answered yes and the ability was activated with the cost paid.
+        Merfolk Assassin's "target creature **with islandwalk**" destroyed a
+        vanilla Bear; Pit Trap's "attacking creature **without flying**" and
+        Despotic Scepter's "nontoken permanent **you own**" read the same way.
+        Nothing crashed and nothing was missing — the ability simply worked more
+        often than the card allows, which is the one direction a target gate must
+        never fail in.
+
+        The four seats are the ones ``subject_matches`` refuses without: a caller
+        that cannot say whose ability this is must not be handed a narrowing it
+        would then ignore. Every one is supplied by the two callers below and by
+        ``legality._ability_target_legal``.
 
         Deliberately silent about "…with mana value X" (Detonate), which is the
-        one restriction with no literal to test. The picker calls this before any
-        X exists, and "X is not chosen yet" is not "no restriction" — it is
-        *every* mana value still being reachable, since the caster announces the
-        target and the X together (CR 601.2b, then 601.2c). Narrowing here would
-        offer nothing at all; the pair is checked in `_validate_cast_targets`,
-        where both halves are known.
+        one restriction with no literal to test — ``destroy_subject_filter``
+        drops the key and says why. The picker calls this before any X exists,
+        and "X is not chosen yet" is not "no restriction": it is *every* mana
+        value still being reachable, since the caster announces the target and
+        the X together (CR 601.2b, then 601.2c). Narrowing here would offer
+        nothing at all; the pair is checked in `_validate_cast_targets`, where
+        both halves are known.
         """
-        return permanent_matches_filter(perm, payload)
+        return subject_matches(
+            self, perm, destroy_subject_filter(payload),
+            observer=observer, source=source,
+            defending=defending, that_player=that_player,
+        )
     def _named_role_targets(
         self, caster_index: int, target_player_index, target_permanent_index,
         target_permanent_ids,
@@ -2933,7 +2982,8 @@ class SpellCastingMixin:
                 # A specific target was chosen — it must itself be legal (601.2c).
                 battlefield = target.battlefield
                 if not (0 <= target_permanent_index < len(battlefield)) or not self._destroy_target_legal(
-                    primary.payload, battlefield[target_permanent_index]
+                    primary.payload, battlefield[target_permanent_index],
+                    observer=caster_index,
                 ):
                     return False, f"no valid target for {card.name}"
             else:
@@ -2941,7 +2991,9 @@ class SpellCastingMixin:
                 # by anyone, so a legal target on the caster's own battlefield (e.g.
                 # Disenchant on one's own artifact) is enough to make the cast legal.
                 has_target = any(
-                    self._destroy_target_legal(primary.payload, p)
+                    self._destroy_target_legal(
+                        primary.payload, p, observer=caster_index
+                    )
                     for p in self.all_permanents()
                 )
                 if not has_target:

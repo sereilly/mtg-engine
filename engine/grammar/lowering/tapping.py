@@ -83,6 +83,67 @@ def _lower_for_each_tapped(
     )
 
 
+def _lower_tap_lands_sharing_produced_mana(
+    node: "ast.Tap", spec: "ast.TargetSpec", event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """"…tap all lands that player controls **that could produce any type of
+    mana that land could produce**." (Mana Web.)
+
+    A sweep whose set is described by a comparison against the land the
+    ability's own trigger watched being tapped — an object no filter can name,
+    which is why the clause is a field on the node rather than a key on the noun
+    phrase. Only ``engine/mixins/turn_management.py``'s tap-for-mana seam holds
+    both lands at once, so the instruction is dispatched there and nowhere else.
+
+    Three refusals, each of them a narrowing this kind would otherwise drop:
+
+    * a sentence outside ``land_tapped_for_mana`` has no tapped land to compare
+      against, so the comparison would be vacuous and the sweep would tap every
+      land the seat controls;
+    * a seat other than the event's ("that player") is one the seam cannot
+      resolve;
+    * anything the noun phrase says beyond "lands that player controls" is a
+      restriction the seam does not apply.
+    """
+    if event != "land_tapped_for_mana":
+        raise LoweringError(
+            "'any type of mana that land could produce' names the land a "
+            "tap-for-mana trigger watched, and no other event has one",
+            node=node,
+        )
+    if spec.quantifier not in ("all", "each") or spec.targeted:
+        raise LoweringError(
+            "the shared-mana tap is a sweep, not a chosen target", node=node
+        )
+    leftovers = _restrictions_beyond(
+        spec.filter, frozenset({"card_types", "controller"})
+    )
+    if leftovers:
+        raise LoweringError(
+            "the shared-mana tap cannot narrow by: " + ", ".join(leftovers),
+            node=node,
+        )
+    described = testable_filter_payload(
+        spec.filter,
+        refusal="the shared-mana tap cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
+    if described.get("type_filter") != "land":
+        raise LoweringError(
+            "only lands produce mana to compare", node=node
+        )
+    if described.get("controller") != "that_player":
+        raise LoweringError(
+            "the shared-mana tap sweeps the board of the player whose land was "
+            "tapped, and the seam knows no other seat",
+            node=node,
+        )
+    return (
+        OracleInstruction("tap_lands_sharing_produced_mana", "", described),
+    )
+
+
 def _lower_tap(
     node: ast.Tap | ast.Untap,
     event: str | None = None,
@@ -91,6 +152,8 @@ def _lower_tap(
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)
     spec = node.subject
+    if getattr(node, "matching_tapped_land_mana", False):
+        return _lower_tap_lands_sharing_produced_mana(node, spec, event)
     # "…and tap **those creatures**." (Dread Wight.) The bound plural: the set
     # is whatever the sentence in front of this one acted on (CR 611.2c fixed
     # it when the effect began), so nothing is chosen and nothing is swept —

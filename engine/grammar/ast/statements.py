@@ -207,6 +207,8 @@ from .combat import (
 )
 from .game import (
     Ante,
+    CantActivateNonManaAbilities,
+    CantCastSpellTypes,
     CantPlayLands,
     CoinFlipStakesLoop,
     CountObjects,
@@ -293,7 +295,8 @@ Effect = Union[
     ExileRandomFromHand,
     DiscardRevealedMatchingUnlessPayLife,
     DiscardRevealedUnlessPayLife,
-    Shuffle, ExtraTurn, ExtraLandPlays, CantPlayLands, EndTheTurn, ChooseNumber, ChooseColor, ChooseCardType, ChooseCardName, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
+    Shuffle, ExtraTurn, ExtraLandPlays, CantPlayLands,
+    CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, ChooseColor, ChooseCardType, ChooseCardName, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,

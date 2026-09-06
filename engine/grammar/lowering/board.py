@@ -25,7 +25,8 @@ owner.
 import dataclasses
 
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
-                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+                             OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -453,7 +454,35 @@ def _lower_sacrifice(
         # count: it is a fraction of *that* player's board, and the handler
         # asks the evaluator once per payer through the same channel the
         # per-recipient damage and the each-player discard already use.
-        if node.count is not None:
+        if isinstance(node.count, ast.CountOfDeaths):
+            # "…sacrifices a creature of their choice **for each creature put
+            # into your graveyard from the battlefield this turn**." (Urborg
+            # Justice.) One number for the whole resolution, not one per payer:
+            # the graveyard the clause names is the *caster's* (CR 400.3's
+            # owner), so it goes on the shared `x_from_count` channel rather
+            # than the per-recipient one beside it. Read through the
+            # per-recipient key it would be answered against the sacrificing
+            # opponent's own tally, which is a different card — and one that
+            # asks for nothing whenever they lost no creatures.
+            filt = node.count.filter
+            if (
+                filt.to_payload() != {"type_filter": "creature"}
+                or filt.zone != "battlefield"
+            ):
+                # The tally counts creatures and nothing narrower, so a
+                # narrowing admitted here would be counted as though it were
+                # not there — a player made to sacrifice more often than the
+                # card says. Word for word `_lower_where_x_deaths`' refusal,
+                # because it is the same tracker.
+                raise LoweringError(
+                    "the death tracker counts creatures and cannot be narrowed",
+                    node=node,
+                )
+            payload["count"] = "x"
+            payload[X_FROM_COUNT] = {
+                "history": f"creatures_{node.count.scope}"
+            }
+        elif node.count is not None:
             payload[X_FROM_COUNT_PER_RECIPIENT] = _per_payer_count(node)
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
