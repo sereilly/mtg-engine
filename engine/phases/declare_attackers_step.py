@@ -1056,7 +1056,34 @@ class DeclareAttackersStepMixin:
         if aura_restriction_active(attacker, "must_attack_each_combat"):
             return True
         program = compile_card_oracle(attacker.effective_card)
-        return any(i.kind == "must_attack_each_combat" for i in program.instructions)
+        if any(i.kind == "must_attack_each_combat" for i in program.instructions):
+            return True
+        # "**Creatures you control** attack each combat if able." (the Pirate
+        # token Pursued Whale gives each opponent.) CR 508.1d's requirement
+        # printed on one permanent about a *set* of others, so it is found by a
+        # board scan rather than on the attacker itself — the exact arrangement
+        # `can_attack` already has for `creatures_cant_attack`, the restriction
+        # that says the opposite, and read the same way: every noun phrase goes
+        # through `subject_matches` with the *carrier's* seat as CR 109.5's
+        # "you", which is what scopes the token's line to its own controller's
+        # creatures while a card printing no controller word would reach every
+        # seat's.
+        #
+        # Until this scan existed the token's second line compiled to a bare
+        # `static_line` and obliged nobody: it could not block, which is
+        # enforced, and was under no obligation to attack, which was not.
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "creatures_must_attack":
+                    continue
+                if subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    return True
+        return False
 
     def _must_attack_beside(
         self, attacker: Permanent, declared: "list[Permanent]"
