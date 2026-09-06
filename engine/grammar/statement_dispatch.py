@@ -289,11 +289,8 @@ def lower_statement(
     # that needs nothing but its node.
     if isinstance(statement, ast.PreventDamage):
         return _lower_prevent_damage(statement, produced)
-    # "The next time that source would deal damage this turn, it deals double
-    # that damage instead." (Desperate Gambit.) Beside the shield above and here
-    # rather than in `by_node.py` for its reason: the source it names is what a
-    # step in front of it chose, so the lowering has to be able to ask whether
-    # anything really did (idiom 7).
+    # Beside the shield above, and here rather than in `by_node.py` for its
+    # reason: the source it names is one a step in front of it chose (idiom 7).
     if isinstance(statement, ast.ChosenSourceNextDamage):
         return _lower_chosen_source_next_damage(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
