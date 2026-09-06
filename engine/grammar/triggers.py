@@ -218,7 +218,7 @@ def _accept_land_tapped_for_mana_by_a_player(
     land for mana", Manabarbs): that table matches literal words and has no
     slot for the noun phrase Winter's Night prints. The same words are already
     read one module up for the *delayed* spelling of this ability
-    (``delayed._parse_land_tapped_for_mana``, Chaos Moon's odd branch); this
+    (``delay_openers._parse_land_tapped_for_mana``, Chaos Moon's odd branch); this
     reader is its printed-on-a-permanent twin and produces the same subject
     filter, so the fire site tests one narrowing however the ability was made.
 
