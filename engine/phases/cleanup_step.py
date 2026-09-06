@@ -29,18 +29,34 @@ from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
 from ..shields import clear_shields
 from ..text_changes import end_until_eot_text_changes
 from ..pt import remove_temporary_pt
+from ..turn_state import stamped_turn_has_passed
 
 
-def _turn_expired(entries: list) -> list:
+def _turn_expired(entries: list, game=None) -> list:
     """*entries* with this cleanup counted against each one's window.
 
     An entry lasts one turn unless it says otherwise (``remaining_turns``), so
     the list this returns holds exactly the entries whose window outlives the
     turn ending now — with one fewer to go. That is what "this turn and next
     turn" means and what a bare ``clear()`` could not say.
+
+    **A countdown cannot say "during that player's next turn"** (Oracle
+    en-Vec): the entry is armed on one turn to take hold on another that may be
+    several turns away, and one cleanup subtracted from it would end the
+    restriction before it ever applied. Such an entry carries an
+    ``on_seat_turn`` stamp instead of a count, and it is dropped by the one
+    question a stamp can answer — has the turn it names been and gone
+    (``turn_state.stamped_turn_has_passed``). Which is also why *game* is
+    optional: the countdown half needs nothing but the entry, and callers
+    sweeping a list that has never carried a stamp are unchanged.
     """
     kept = []
     for entry in entries:
+        window = entry.get("on_seat_turn")
+        if window is not None:
+            if game is None or not stamped_turn_has_passed(game, window):
+                kept.append(entry)
+            continue
         remaining = int(entry.get("remaining_turns", 1)) - 1
         if remaining > 0:
             kept.append({**entry, "remaining_turns": remaining})
@@ -144,7 +160,7 @@ class CleanupStepMixin:
         # list for the two-turn case would be a second place to ask when a
         # restriction ends.
         self.attack_restrictions_until_eot = _turn_expired(
-            self.attack_restrictions_until_eot
+            self.attack_restrictions_until_eot, self
         )
         # The same countdown for the targeting ban Peace Talks' other clause
         # arms, read by `legality._enumerate_targets`.

@@ -1314,6 +1314,27 @@ class LegalityMixin:
         legal_stack = [t for t in valid if t.get("kind") == "stack"]
         refused = f"no valid target for {card.name}"
 
+        # **A named player has to be one of the legal ones.** The comment above
+        # is about whether an ability that targets a player can be activated at
+        # all — it always can, because a player is always there — and that was
+        # read as though it settled the other half of CR 601.2c too. It does
+        # not: "target **opponent**" strikes the activator's own seat out
+        # (CR 115.4), ``_enumerate_targets`` already leaves it out of the
+        # offered list, and nothing compared the seat the caller named against
+        # that list. The picker never offered it; a script, the AI and a test
+        # could all name it, and the ability resolved.
+        #
+        # Only for a spec whose *whole* target is a player: everywhere else
+        # ``target_player_index`` is the seat carrying a targeted **permanent**
+        # (the branch below reads it exactly that way), and comparing it here
+        # would refuse a legal announcement.
+        if kind in ("player", "player_or_planeswalker") and target_player_index is not None:
+            legal_seats = {
+                entry["seat"] for entry in valid if entry.get("kind") == "player"
+            }
+            if target_player_index not in legal_seats:
+                return refused
+
         # A named target must be legal. The web layer sends ids; a test or the
         # AI may send an index on a seat.
         if target_permanent_ids:

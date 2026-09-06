@@ -15,6 +15,8 @@ no seat.
 
 from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
+from ..turn_state import (DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                          marked_for_this_turn)
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 # Instruction kinds this step enqueues under the ``end_step`` trigger condition,
@@ -122,8 +124,17 @@ class EndStepMixin:
         def _delayed_eot_destruction(permanent: Permanent) -> bool:
             # Nettling Imp / Siren's Call / Maddening Imp: destroy creatures
             # that were required to attack this turn but didn't.
-            did_not_attack = permanent.metadata.get(
-                "destroy_if_did_not_attack_eot"
+            # "At the beginning of **that turn's** end step, destroy each of
+            # the chosen creatures that didn't attack this turn." (Oracle
+            # en-Vec.) The same sentence Maddening Imp prints, aimed at a turn
+            # that had not started when the ability resolved — so the mark is
+            # the seat-turn stamp beside the cleanup-swept one, read at the
+            # only end step it names and inert at every other.
+            did_not_attack = (
+                permanent.metadata.get("destroy_if_did_not_attack_eot")
+                or marked_for_this_turn(
+                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
+                )
             ) and not permanent.metadata.get("attacked_this_turn")
             # Berserk: "destroy that creature if it attacked this turn."
             berserk_attacked = permanent.metadata.get(

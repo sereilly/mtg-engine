@@ -351,6 +351,7 @@ from .stack import (
 from .combat import (
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
+    DestroyChosenThatDidntAttack,
     BlocksThisTurnIfAble,
     AttackingDoesntTap,
     BlockCountGrant,
@@ -730,6 +731,7 @@ __all__ = [
     "AttackAsThough",
     "AssignsNoCombatDamage",
     "AttacksThisTurnIfAble",
+    "DestroyChosenThatDidntAttack",
     "BlocksThisTurnIfAble",
     "AttackingDoesntTap",
     "BlockCountGrant",

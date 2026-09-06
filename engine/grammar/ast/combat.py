@@ -343,6 +343,43 @@ class AttacksThisTurnIfAble:
 
     subject: Recipient
     destroy_if_absent: bool = False
+    #: Which turn the requirement holds for. ``"this_turn"`` is the printed
+    #: duration this node was named after; ``turn_state.THAT_PLAYERS_NEXT_TURN``
+    #: is the one Oracle en-Vec prints in front of the sentence instead
+    #: ("During that player's next turn, the chosen creatures attack if able").
+    #:
+    #: A field rather than two nodes, because CR 508.1a's requirement is the
+    #: same requirement either way and only its window differs — the same reason
+    #: every other printed window in this grammar is payload. None means the
+    #: sentence printed no window *here*, which is legal only until a leading
+    #: duration supplies one (``sentence_clauses._distribute_duration``); the
+    #: lowering refuses a node that still has none, because a requirement with
+    #: no window is one that never ends.
+    window: str | None = None
+
+
+@dataclass(frozen=True)
+class DestroyChosenThatDidntAttack:
+    """``At the beginning of that turn's end step, destroy each of the chosen
+    creatures that didn't attack this turn.`` (Oracle en-Vec.)
+
+    The sentence :class:`AttacksThisTurnIfAble`'s ``destroy_if_absent`` carries
+    as a flag when Maddening Imp prints it directly behind the requirement — and
+    its own node here because this card does not: "and other creatures can't
+    attack" stands between the two, so there is no tail for the flag to be read
+    from and the sentence has to stand on its own.
+
+    It can stand on its own precisely because its subject is *named*: "the
+    chosen creatures" is the set an earlier step of this same effect recorded,
+    where Maddening Imp's "those creatures" is a pronoun that means nothing
+    without the sentence in front of it.
+
+    "That turn" is the window the sentence before it named, which the parser
+    cannot identify — see the ``window`` field on the node above. The lowering
+    is where it becomes one.
+    """
+
+    subject: Recipient
 
 
 @dataclass(frozen=True)

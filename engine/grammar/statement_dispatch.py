@@ -497,7 +497,7 @@ def lower_statement(
         return named
 
     if isinstance(statement, ast.CombatRestriction):
-        return _lower_combat_restriction(statement, dispatch_event)
+        return _lower_combat_restriction(statement, dispatch_event, produced)
 
     if isinstance(statement, ast.BlockCountGrant):
         # The permission twin of the restriction above, and its own branch for
@@ -670,7 +670,12 @@ def lower_statement(
         # object the loop is on, which is a reading only the producer set can
         # admit. That argument is why this pair sits here rather than in
         # ``by_node``, whose rows take the node and nothing else.
-        if statement.spec.quantifier == "up_to":
+        # "**any number of** creatures they control" (Oracle en-Vec) is the
+        # plural too, and its own word rather than an "up to" with a very large
+        # count — see ``references.parse_target_spec``. Both go left, so the set
+        # and the singular pick stay two answers rather than one that has to be
+        # told which it is.
+        if statement.spec.quantifier in ("up_to", "any_number"):
             return _lower_choose_permanents(statement, produced, event=event)
         return _lower_choose_permanent(statement)
 

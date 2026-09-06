@@ -405,6 +405,22 @@ def _distribute_duration(
         if statement.duration not in (None, "end_of_turn"):
             raise stream.error("this sentence prints two different durations")
         return dataclasses.replace(statement, duration="end_of_turn")
+    # CR 508.1a's requirement keeps its window as a **name** rather than a
+    # ``Duration`` — "this turn" and "that player's next turn" are the two the
+    # engine has a mark for, and neither is a node — so it takes the prefix by
+    # translation, exactly as the three nodes below do and for their reason: the
+    # ``replace`` at the bottom would find no ``duration`` field and refuse a
+    # sentence the grammar can read.
+    #
+    # "**During that player's next turn,** the chosen creatures attack if able,
+    # and other creatures can't attack." (Oracle en-Vec.) The production leaves
+    # the window off when the sentence prints it in front, and the lowering
+    # refuses a requirement that ends up with none — so a prefix that failed to
+    # arrive here is a loud refusal rather than a requirement that never ends.
+    if isinstance(statement, ast.AttacksThisTurnIfAble):
+        if statement.window is not None and statement.window != duration.kind:
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(statement, window=duration.kind)
     # A combat restriction keeps its duration in ``payload`` rather than in a
     # field — the kind and its parameters are what that node carries — so it
     # takes the prefix by translation, exactly as the delayed trigger above

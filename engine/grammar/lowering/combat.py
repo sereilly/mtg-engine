@@ -7,10 +7,12 @@ lowering can check it rather than assume it.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
+from ...turn_state import THAT_PLAYERS_NEXT_TURN
 from .. import ast
 from ..errors import LoweringError
+from ._record_keys import CHOSEN_PLAYER
 from ._common import (
     _describe_several_targets, _describe_targets, _filter_payload,
     _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
@@ -95,7 +97,8 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
 
 
 def _lower_combat_restriction(
-    node: ast.CombatRestriction, event: str | None = None
+    node: ast.CombatRestriction, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """``can't attack unless …`` / ``can't block creatures with power N …``.
 
@@ -178,6 +181,47 @@ def _lower_combat_restriction(
             return (
                 OracleInstruction(
                     "creatures_cant_attack", "", {"subject": described}
+                ),
+            )
+        # "**During that player's next turn**, … and other creatures can't
+        # attack." (Oracle en-Vec.) A window that opens on a turn nobody is
+        # taking yet, so it cannot be a count of cleanup steps — one subtracted
+        # from it would end the restriction before it ever applied. The entry
+        # carries the window by name and the handler turns it into a seat-turn
+        # stamp; ``phases/cleanup_step`` drops it once that turn has passed.
+        if duration == THAT_PLAYERS_NEXT_TURN:
+            if CHOSEN_THIS_WAY_OBJECTS not in produced:
+                raise LoweringError(
+                    "no step of this effect chose the creatures this window "
+                    "spares",
+                    node=node,
+                )
+            if CHOSEN_PLAYER not in produced:
+                raise LoweringError(
+                    "no step of this effect named the player whose turn this is",
+                    node=node,
+                )
+            # "**Other** creatures can't attack." The word is read by the noun
+            # parser as "other than this creature", which is what it means on a
+            # permanent's own static — and not what it means here, where the
+            # sentence in front named a set. Lifted out of the filter into the
+            # exclusion the gate answers, exactly as the choose family lifts
+            # "that player" out of a controller: left inside it the restriction
+            # would ground the chosen creatures too, which is the whole card.
+            if not described.pop("exclude_self", False):
+                raise LoweringError(
+                    "this window's restriction is the complement of the set "
+                    "an earlier step chose",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "cant_attack_until_eot", "",
+                    {
+                        "filter": described,
+                        "window": THAT_PLAYERS_NEXT_TURN,
+                        "except_from": CHOSEN_THIS_WAY_OBJECTS,
+                    },
                 ),
             )
         # "This turn **and next turn**" (Peace Talks). The same one-shot

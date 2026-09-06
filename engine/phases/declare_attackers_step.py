@@ -23,7 +23,11 @@ from ..oracle import compile_card_oracle
 from ..pt import pt_counter_key
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
-from ..turn_state import record_attacked_seat, attacked_during_seats_last_turn, record_attack
+from ..turn_state import (record_attacked_seat, attacked_during_seats_last_turn,
+                          record_attack, marked_for_this_turn,
+                          stamped_turn_is_now,
+                          CANT_ATTACK_ON_SEAT_TURN_KEY,
+                          MUST_ATTACK_ON_SEAT_TURN_KEY)
 
 
 class DeclareAttackersStepMixin:
@@ -963,6 +967,28 @@ class DeclareAttackersStepMixin:
         # keeps it cumulative: passing every other restriction answers only
         # those.
         for entry in self.attack_restrictions_until_eot:
+            # "**During that player's next turn**, … other creatures can't
+            # attack." (Oracle en-Vec.) The same blanket restriction over a turn
+            # that had not started when the ability resolved, so the entry
+            # carries a `turn_state` window stamp and is inert on every other
+            # turn. Asked before the noun phrase, which is what makes an entry
+            # waiting for a later turn cost nothing on this one.
+            window = entry.get("on_seat_turn")
+            if window is not None and not stamped_turn_is_now(self, window):
+                continue
+            # "**Other** creatures can't attack" — other than the set the
+            # sentence in front of it chose. That set is fixed because the
+            # choice was made as the ability resolved (CR 608.2), which is a
+            # different question from the restriction's own reach: CR 611.2c
+            # gives a rules-modifying continuous effect every object there is,
+            # including one that arrived afterwards, which is exactly why the
+            # entry is state on the game and only the *exclusion* is a list.
+            # By ``permanent_id`` rather than by object, because the exclusion
+            # outlives the turn the ids were recorded in and a creature that
+            # left and returned is a new object the sentence never named
+            # (CR 400.7).
+            if attacker.permanent_id in (entry.get("except_permanent_ids") or ()):
+                continue
             if subject_matches(self, attacker, dict(entry.get("filter") or {})):
                 return False
 
@@ -974,13 +1000,7 @@ class DeclareAttackersStepMixin:
         # rather than the game because the sentence restricts one creature,
         # and a creature that leaves and returns is a new object with no
         # stamp (CR 400.7).
-        stamp = attacker.metadata.get("cant_attack_on_seat_turn")
-        if (
-            isinstance(stamp, dict)
-            and stamp.get("seat") == self.active_player_index
-            and stamp.get("seat_turn")
-            == self.seat_turn_counts.get(self.active_player_index, 0)
-        ):
+        if marked_for_this_turn(self, attacker, CANT_ATTACK_ON_SEAT_TURN_KEY):
             return False
 
         # Defender is asked of layer 6, not of the printed keyword list: a Clone
@@ -1048,6 +1068,13 @@ class DeclareAttackersStepMixin:
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
         if attacker.metadata.get("must_attack_until_eot"):
+            return True
+        # "**During that player's next turn**, the chosen creatures attack if
+        # able" (Oracle en-Vec). The same CR 508.1a requirement the mark above
+        # carries, over a turn that had not started when the ability resolved —
+        # so it is the seat-turn stamp rather than the cleanup-swept flag, which
+        # would have been gone a whole turn before the requirement applied.
+        if marked_for_this_turn(self, attacker, MUST_ATTACK_ON_SEAT_TURN_KEY):
             return True
         # An Aura can impose the requirement too (Furor of the Bitten). Asked of
         # the attached Auras rather than stamped on the creature, so the

@@ -1217,9 +1217,27 @@ def _chosen_permanent_spec(payload: dict) -> dict | None:
     every step named the caster would otherwise raise a player picker for a
     choice nobody makes.
     """
-    if payload.get("controlled_by") == "target" or payload.get("chooser") == "target":
-        return {"kind": "player"}
-    return None
+    return _chooser_announcement_spec(payload)
+
+
+def _chooser_announcement_spec(payload: dict) -> dict | None:
+    """The player a mid-resolution choice **announces**, for both prompts.
+
+    ``controlled_by``/``chooser`` say the seat is the one the line targeted; the
+    payload's own ``targets`` description says *which* seats were legal answers,
+    which is the half a bare ``{"kind": "player"}`` drops. "**Target opponent**
+    chooses any number of creatures they control" (Oracle en-Vec) may not name
+    the caster (CR 115.4), and a picker told only "a player" offers them.
+
+    Read through :func:`_from_targets_payload` rather than by reaching into the
+    description, so a narrowing added to that reader reaches this prompt for
+    free — the reason every kind with its own spec function is told to combine
+    its payload with its description here rather than anywhere else.
+    """
+    if payload.get("controlled_by") != "target" and payload.get("chooser") != "target":
+        return None
+    described = _from_targets_payload(payload.get("targets"))
+    return described if described is not None else {"kind": "player"}
 
 
 def _counter_ability_spec(payload: dict) -> dict | None:
@@ -1589,9 +1607,12 @@ def _chosen_from_target_player_spec(payload: dict) -> dict | None:
     Every other spelling of ``controlled_by`` names a seat the sentence already
     fixes ("chooser", Raiding Party) and announces nothing.
     """
-    if payload.get("controlled_by") != "target":
-        return None
-    return {"kind": "player"}
+    # "**Target opponent** chooses any number of creatures they control."
+    # (Oracle en-Vec.) The other way a plural pick announces a seat: the
+    # *chooser* is the targeted player rather than the owner of the board it is
+    # drawn from. One reader for both, so which of the two the sentence printed
+    # cannot change whether a picker is offered.
+    return _chooser_announcement_spec(payload)
 
 
 # One kind, several specs, decided by payload.
