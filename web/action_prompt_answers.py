@@ -583,6 +583,19 @@ def _action_card_type_choice_confirm(session, req, seat_type):
             status_code=400, detail="no card-type choice pending for you"
         )
 
+@action_handler("creature_type_choice_confirm")
+def _action_creature_type_choice_confirm(session, req, seat_type):
+    # Extinction: the spell's controller names one creature type (CR 608.2d) and
+    # the sweep in the same sentence destroys every creature of it. The word
+    # travels as itself and is checked against CR 205.3m's catalog by the
+    # resolver, which is the same list the prompt offered.
+    if not req.creature_type:
+        raise HTTPException(status_code=400, detail="creature_type is required")
+    if not session.game.confirm_creature_type_choice(req.seat, req.creature_type):
+        raise HTTPException(
+            status_code=400, detail="no creature-type choice pending for you"
+        )
+
 @action_handler("confirm_mana_payment")
 def _action_confirm_mana_payment(session, req, seat_type):
     # Power Sink: the targeted spell's controller pays {X} to keep their spell,

@@ -192,6 +192,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",
+    # "…target creature with the chosen ability loses it and another target
+    # creature gains it." (Phyrexian Splicer.) One keyword leaving one creature
+    # and landing on another — the same family as the grants above it, because
+    # what the sentence is *about* is a keyword an object has. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "move_chosen_keyword_between_targets": "pump",
     # The quoted-text grants (Life Matrix): the same layer-6 family, carrying a
     # whole printed ability instead of a word.
     "grant_target_ability_text": "pump",
@@ -846,6 +852,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # of the same ability. The value is a *card type* rather than a colour,
     # which is what the key it records under says and not what the family does.
     "choose_card_type": "chosen_colors",
+    # "Destroy all creatures **of the creature type of your choice**."
+    # (Extinction.) The third member of the family and the same reasoning: the
+    # sentence produces a *word* and no effect, and the sweep behind it carries
+    # the destruction category of its own. The record is a creature type rather
+    # than a card type, which is what the key it writes says and not what the
+    # family does.
+    "choose_creature_type": "chosen_colors",
     # "…put a +0/+1 counter on that creature for each 1 damage prevented
     # this way." (Sacred Boon.) A counter placement whose number is what an
     # earlier step's shield absorbed, so it sits in the counters family with

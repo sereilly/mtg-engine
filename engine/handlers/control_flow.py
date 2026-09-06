@@ -1367,6 +1367,71 @@ def choose_card_type(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+@effect_handler("choose_creature_type")
+def choose_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Destroy all creatures **of the creature type of your choice**."
+    (Extinction.)
+
+    ``choose_card_type``'s sibling one catalog over, with one difference that
+    changes where the answer goes: this card is a **sorcery**, so there is no
+    source permanent to record on and no permanent for a later turn to read.
+    The word lives in the resolution scratchpad and is spent by the next step of
+    the same sentence, which is what ``result_key`` names.
+
+    The default is stamped **first**, so a headless or AI seat is never blocked
+    and the sweep behind this always has an answer. It is a real one rather than
+    the first catalog entry: the type that kills the most of the chooser's
+    opponents' creatures and the fewest of their own, which is the choice a
+    player would make. ``None`` when no creature is on the battlefield at all —
+    and the sweep reads that as destroying nothing, never as destroying
+    everything.
+    """
+    key = str(instruction.payload["result_key"])
+    context.results[key] = None
+    card_name = getattr(context.card, "name", "an effect")
+    if context.caster not in game.players:
+        game.log.append(f"{card_name}: nobody to choose a creature type")
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    default = _best_creature_type_to_sweep(game, seat)
+    context.results[key] = default
+    game.arm_creature_type_choice(
+        seat, card_name=card_name, result_key=key, context=context,
+        default=default,
+    )
+    game.log.append(f"{card_name}: {game.players[seat].name} chooses a creature type")
+    return True, "resolved"
+
+
+def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
+    """The creature type a sweep would most like to name, from *seat*'s side.
+
+    The type maximising (opponents' creatures of it − own creatures of it), ties
+    broken by the alphabetically first word, which keeps the answer
+    deterministic — the property the AI-simulation regressions depend on.
+
+    Only types actually on the battlefield are considered, and ``None`` comes
+    back when there are none. Naming a type nothing has would be an answer that
+    reads as a choice and destroys nothing; ``None`` says outright that no
+    choice was made, which is what the sweep behind this checks.
+
+    The subtypes are read through the CR 613 accessor, so a creature Artificial
+    Evolution or an animated land has become a Zombie counts as one.
+    """
+    from ..layer_bridge import computed_types
+
+    scores: dict[str, int] = {}
+    for owner, perm in game.permanents_with_controller():
+        if not perm.is_creature:
+            continue
+        for subtype in computed_types(perm)[1]:
+            word = str(subtype).lower()
+            scores[word] = scores.get(word, 0) + (-1 if owner == seat else 1)
+    if not scores:
+        return None
+    return max(sorted(scores), key=lambda word: scores[word])
+
+
 def _fewest_own_permanents_type(game: Game, seat: int, options: list[str]) -> str:
     """The offered option that costs *seat* least and their opponents most.
 

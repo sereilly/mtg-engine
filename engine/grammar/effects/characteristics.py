@@ -316,6 +316,40 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             subject, abilities, _parse_duration(stream), self_name=self_name
         )
 
+    # "…gains **landwalk of each of the land types of the sacrificed land**"
+    # (Excavator). Read before the keyword list, which matches "landwalk" on its
+    # own and then strands "of each of…" — the whole line failing on a phrase
+    # whose first word it had already taken, the same probe-order trap the
+    # "with protection from" branch avoids one package over.
+    #
+    # No keyword travels: CR 702.14a builds the ability's *name* out of a land
+    # type, and which land type is a fact about the cost that was paid rather
+    # than about the sentence. The node carries the record instead.
+    # "…another target creature **gains it**" (Phyrexian Splicer). The pronoun
+    # names the ability the activation chose, which is why it is read here and
+    # not by the noun parser: after "gains" there is no object to be, and the
+    # keyword list below would refuse "it" and take the whole line with it.
+    #
+    # Read generally and refused in the *lowering* unless the sentence is the
+    # move this card prints — a pronoun admitted here and dropped there is a
+    # card that compiles and grants nothing.
+    it_mark = stream.mark()
+    if stream.accept_word("it"):
+        return ast.GainKeyword(
+            subject, (), _parse_duration(stream), chosen_ability=True,
+        )
+    stream.reset(it_mark)
+
+    landwalk_mark = stream.mark()
+    if stream.accept_word("landwalk") and stream.accept_phrase(
+        "of", "each", "of", "the", "land", "types", "of", "the", "sacrificed",
+        "land",
+    ):
+        return ast.GainKeyword(
+            subject, (), _parse_duration(stream), landwalk_from="sacrificed",
+        )
+    stream.reset(landwalk_mark)
+
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift), and
     # "gains banding, first strike, **or** trample" (Nature's Blessing) — the
     # same card with the four words the older printing does not spell out.
@@ -599,6 +633,16 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         return ast.RemoveCounter(subject, kind.text, count)
     except GrammarError:
         stream.reset(counter_mark)
+    # "…target creature with the chosen ability **loses it**" (Phyrexian
+    # Splicer). The other half of the same pronoun the gain production reads,
+    # and read here for the same reason: "it" is not a keyword and the list
+    # would refuse it.
+    it_mark = stream.mark()
+    if stream.accept_word("it"):
+        return ast.LoseKeyword(
+            subject, (), _parse_duration(stream), chosen_ability=True,
+        )
+    stream.reset(it_mark)
     keywords = _parse_keywords(stream)
     duration = _parse_duration(stream)
     return ast.LoseKeyword(subject, keywords, duration)

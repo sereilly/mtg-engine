@@ -209,6 +209,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # these are the same ability with a different word after "gains".
     "grant_self_keyword_until_eot": "activated_pump",
     "grant_target_keyword_until_eot": "activated_pump",
+    # Phyrexian Splicer's move, which is a removal and a grant in one
+    # instruction — the bucket its two halves would each have had.
+    "move_chosen_keyword_between_targets": "activated_pump",
     "grant_team_keyword_until_eot": "activated_pump",
     "set_team_base_pt_until_eot": "activated_pump",
     # Evasion. Dwarven Warriors, Tawnos's Wand and Subira's second ability

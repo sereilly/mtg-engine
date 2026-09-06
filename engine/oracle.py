@@ -2158,6 +2158,47 @@ def _split_mana_alternative(cost_part: str) -> tuple[str, dict[str, int] | None]
     return cost_part[: match.start(1)].rstrip()[: -len("or")].rstrip(), alternative
 
 
+#: "**Choose flying, first strike, trample, or shadow**" (Phyrexian Splicer),
+#: as the cost clause leaves it. Delimited here and read by the keyword
+#: vocabulary below, which is the split every other list in this file makes:
+#: the regex says where the words are, the registry says what they mean.
+_CHOOSE_KEYWORD_COST = re.compile(r"\bchoose ([a-z, ]+?)(?:,|$)\s*$")
+
+
+def _chosen_keyword_options(cost_lower: str) -> tuple[str, ...]:
+    """The keywords a "Choose A, B, or C" cost clause offers, or ``()``.
+
+    The second reader of a cost clause this file keeps (the grammar's is
+    ``engine/grammar/costs.py``), and it has to agree with the first or the
+    ability compiles and then charges a cost nobody announced. So the gate is
+    the same one: two or more options, every one of them a keyword the engine
+    implements. Anything else is ``()``, which the grammar has already refused
+    the line for — the pair fails closed rather than half-open.
+    """
+    match = _CHOOSE_KEYWORD_COST.search(cost_lower.strip())
+    if match is None:
+        return ()
+    from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+    from .keywords import keyword_ability_name
+
+    words = [
+        part.strip()
+        for chunk in match.group(1).split(",")
+        for part in [chunk.strip()]
+        if part
+    ]
+    options = [
+        word[len("or "):].strip() if word.startswith("or ") else word
+        for word in words
+    ]
+    if len(options) < 2 or any(
+        keyword_ability_name(option) not in IMPLEMENTED_KEYWORDS
+        for option in options
+    ):
+        return ()
+    return tuple(options)
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -2673,6 +2714,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         exile_top_of_library=exile_top_of_library,
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
+        chosen_keyword_options=_chosen_keyword_options(cost_lower),
     )
 
 
@@ -5366,11 +5408,13 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
-    return expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
-        expand_buyback_lines(
-            expand_equip_lines(expand_modal_activated_lines(oracle_text))
-        )
-    ))
+    return expand_same_is_true_lines(
+        expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
+            expand_buyback_lines(
+                expand_equip_lines(expand_modal_activated_lines(oracle_text))
+            )
+        ))
+    )
 
 
 #: "Reveal the first card you draw each turn. **Whenever** you reveal a basic
@@ -5416,6 +5460,85 @@ def expand_static_then_trigger_lines(oracle_text: str) -> str:
             continue
         out.append(static)
         out.append(match.group("trigger"))
+    return "\n".join(out)
+
+
+#: "As long as an opponent controls a creature with flying not named ~, this
+#: creature has flying. **The same is true for first strike, trample, and
+#: protection from any color.**" (Escaped Shapeshifter.)
+#:
+#: CR 113.3: what the second sentence names is not a second ability, it is a
+#: shorthand for the first ability repeated once per quality — so the rewrite
+#: writes them out and every reader downstream sees ordinary conditional
+#: statics, none of which learns the phrase.
+#:
+#: The gate is deliberately narrow. Both halves of the first sentence must name
+#: the **same** quality, checked as a substitution rather than as a pattern (see
+#: below), and the sentence must be the conditional-static shape: the other card
+#: in the pool printing these five words is Celestial Dawn, whose "The same is
+#: true for spells you control and nonland cards you own…" extends a *colour
+#: rewrite* to objects in other zones and is nothing like this.
+_SAME_IS_TRUE_LINE = re.compile(
+    r"^(?P<first>As long as .+?, this creature has (?P<quality>[^.]+?)\.) "
+    r"The same is true for (?P<rest>[^.]+)\.$"
+)
+
+#: "protection from **any color**" is five abilities, not one quality
+#: (CR 702.16b: protection is always from a stated quality). The card gains
+#: protection from a colour only while an opponent controls a creature with
+#: protection from *that* colour, so a single "any color" static would be five
+#: conditions collapsed into one and would hold when none of them did.
+_ANY_COLOR_PROTECTION = "protection from any color"
+_PROTECTION_COLOR_WORDS = ("white", "blue", "black", "red", "green")
+
+
+def _same_is_true_qualities(rest: str) -> list[str] | None:
+    """The qualities "The same is true for <rest>" names, or None.
+
+    A printed list with an Oxford comma, so the conjunction is stripped from the
+    last item rather than used as the separator. An empty item refuses the whole
+    rewrite: a rewrite that guesses is worse than a card left unsupported.
+    """
+    items: list[str] = []
+    for part in rest.split(","):
+        part = part.strip()
+        if part.lower().startswith("and "):
+            part = part[len("and "):].strip()
+        if not part:
+            return None
+        if part.lower() == _ANY_COLOR_PROTECTION:
+            items.extend(f"protection from {word}" for word in _PROTECTION_COLOR_WORDS)
+        else:
+            items.append(part)
+    return items or None
+
+
+def expand_same_is_true_lines(oracle_text: str) -> str:
+    """*oracle_text* with a "The same is true for …" paragraph written out.
+
+    One line in, one line per quality out — the first sentence verbatim, then a
+    copy of it per further quality with the quality **substituted in both
+    places it appears**. Substitution rather than a template is what makes the
+    rewrite checkable: the quality has to occur exactly twice in the sentence
+    (once in the condition, once in the effect), and a sentence where it does
+    not is left alone. Anything else would be guessing which "flying" the second
+    sentence meant.
+    """
+    if not oracle_text or "The same is true for" not in oracle_text:
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        match = _SAME_IS_TRUE_LINE.match(line.strip())
+        if match is None:
+            out.append(line)
+            continue
+        first, quality = match.group("first"), match.group("quality")
+        qualities = _same_is_true_qualities(match.group("rest"))
+        if qualities is None or first.count(quality) != 2:
+            out.append(line)
+            continue
+        out.append(first)
+        out.extend(first.replace(quality, other) for other in qualities)
     return "\n".join(out)
 
 

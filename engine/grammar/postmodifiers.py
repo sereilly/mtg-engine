@@ -49,6 +49,19 @@ from .stream import TokenStream
 from .zones import accept_zone_scope
 from .vocabulary import singular as _singular
 
+
+def _protection_quality(word: str):
+    """The quality a protection clause's word names, or None.
+
+    Late-bound through a one-line wrapper because ``engine/keywords.py`` sits
+    *above* the grammar in the import order — the same inversion this file's
+    docstring describes for ``parse_object_filter``, taken for a leaf instead
+    of for a production.
+    """
+    from ..keywords import protection_quality
+
+    return protection_quality(word)
+
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
 # what an Aura or Equipment is on, and the referent each consumer resolves.
 # Every consumer must answer every entry: a referent nothing resolves is a
@@ -75,7 +88,7 @@ def _parse_postmodifiers(
         # object is colored — matching reads the effective colors, so a
         # colorless artifact escapes and a Lace-painted one does not.
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
-            colored = True
+            d.colored = True
             continue
         # The six clauses that narrow a noun phrase by a **record** of
         # something that already happened — an attack declaration, a block, a
@@ -553,6 +566,32 @@ def _parse_postmodifiers(
                     continue
                 d.mana_value = parse_comparison(stream)
                 continue
+            # "…**with protection from white**" (Escaped Shapeshifter). Read
+            # before the keyword list below, which matches "protection" on its
+            # own and then strands "from white" — the whole line failing on a
+            # phrase whose first word it had already taken.
+            #
+            # The quality, not the word: `keywords.protection_quality` is the
+            # one reader of what a protection clause names, and it is the same
+            # one `_protection_qualities` answers the board with — so a phrase
+            # naming a quality the shield reader cannot model refuses here
+            # rather than describing a set nothing is ever in.
+            # "target creature **with the chosen ability**" (Phyrexian
+            # Splicer). Read before the keyword list for the protection
+            # branch's reason: "the" is not a keyword, so the list would refuse
+            # and take the whole line with it — which is the `expected a
+            # subject` this phrase refused with for two waves.
+            if stream.accept_phrase("the", "chosen", "ability"):
+                d.chosen_keyword = True
+                continue
+            protection_probe = stream.mark()
+            if stream.accept_phrase("protection", "from"):
+                word = stream.peek_word()
+                if word is not None and _protection_quality(word) is not None:
+                    stream.advance()
+                    d.with_protection_from = word
+                    continue
+            stream.reset(protection_probe)
             try:
                 d.with_keywords.extend(_parse_keyword_list(stream))
                 continue
@@ -689,6 +728,42 @@ def _parse_postmodifiers(
                     stream.advance()
                     d.created_with_source = True
                     continue
+            stream.reset(probe)
+            break
+        if stream.at_word("not"):
+            # "…a creature with flying **not named Escaped Shapeshifter**"
+            # (Escaped Shapeshifter). The negative of the `named` branch below,
+            # and it arrives in **two spellings** of the same reference. The
+            # grammar reads the card's own name as a SELF token (the lexer
+            # collapsed it); `oracle._restriction_line` has already rewritten it
+            # to "this creature" by the time the derivation tables see the line.
+            # One field for both, because they are one phrase: two would be two
+            # readings of a card excluding itself, free to disagree.
+            #
+            # A *name*, never an identity — a second copy of the card is
+            # excluded too (CR 201.2), which is what the card means and what
+            # `exclude_self` would get wrong.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_word("named"):
+                token = stream.peek()
+                if token is not None and token.kind == SELF:
+                    stream.advance()
+                    d.not_named_source = True
+                    continue
+                self_probe = stream.mark()
+                if stream.accept_word("this"):
+                    noun = stream.peek_word()
+                    if noun is not None and _singular(noun) in _SELF_NOUNS:
+                        stream.advance()
+                        d.not_named_source = True
+                        continue
+                stream.reset(self_probe)
+                try:
+                    d.not_named = parse_card_name(stream)
+                    continue
+                except GrammarError:
+                    pass
             stream.reset(probe)
             break
         if stream.at_word("named"):

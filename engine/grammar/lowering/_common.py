@@ -38,6 +38,47 @@ from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
                        refuse_untestable, testable_filter_payload)
 
 
+def split_creature_type_choice(described: dict) -> tuple[tuple, dict, dict]:
+    """*described* with "of the creature type of your choice" turned into the
+    steps that answer it: the instructions to run first, and the payload the
+    caller should carry.
+
+    CR 608.2d: the choice is announced while the effect is applied, by the
+    controller of the spell — so it is a *step*, not a characteristic, and it
+    goes in front of the sentence that spends it exactly as ``choose_opponent``
+    goes in front of the hand-over that reads the seat. A handler that stopped
+    to ask could not also finish the sentence.
+
+    Three things come back: the instructions to run first, the filter with the
+    phrase taken out, and the keys the caller must **add after its testability
+    gate**. ``subtype_filter_from`` names the scratchpad slot the choosing step
+    writes and is resolved by the handler, not by the matcher — so it is carried
+    separately for the reason ``exile_all_matching``'s ``mana_value`` is: a key
+    no matcher answers must not be put to a gate that asks whether every key is
+    answerable. Naming the slot rather than hard-coding it is what lets a second
+    card put the choice in a different sentence of the same effect.
+
+    An untouched filter comes back with an empty prelude and no extra keys, so
+    every caller can ask unconditionally.
+    """
+    if not described.get("creature_type_of_your_choice"):
+        return (), described, {}
+    from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                                 OracleInstruction)
+
+    rest = {
+        key: value for key, value in described.items()
+        if key != "creature_type_of_your_choice"
+    }
+    prelude = (
+        OracleInstruction(
+            "choose_creature_type", "",
+            {"result_key": CHOSEN_CREATURE_TYPE_THIS_WAY},
+        ),
+    )
+    return prelude, rest, {"subtype_filter_from": CHOSEN_CREATURE_TYPE_THIS_WAY}
+
+
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*
 # of what a line targets, kept so the engine can answer "what does this spell
 # target?" from the compiled program instead of re-reading oracle text
@@ -908,3 +949,41 @@ def player_deed_payload(player, node) -> "dict[str, object] | None":
         )
     payload["filter"] = described
     return payload
+
+
+# Both halves of the keyword family read these — the grant in
+# `keywords.py` and the removal in `keyword_removal.py` — so they sit on
+# the floor rather than in either, which is the rule a fragment two
+# families need has followed since `phrases`.
+def _is_landwalk(keyword: str) -> bool:
+    """Whether *keyword* is a landwalk the engine enforces.
+
+    Asked beside :data:`IMPLEMENTED_KEYWORDS` rather than folded into it,
+    because CR 702.14a builds a landwalk's **name** out of a printed quality —
+    "islandwalk", "snow forestwalk", "nonbasic landwalk" — so the set of names
+    is open and no frozenset can hold it. `engine/landwalk.py` is the reader
+    that decides whether a quality is one the block check can test, and it is
+    already the gate `engine/oracle.py` asks about a printed keyword *line*.
+    A grant asking a different question is how "gains landwalk of the chosen
+    type" comes to work for five types and refuse the other thirteen.
+    """
+    from ...landwalk import is_landwalk
+
+    return is_landwalk(keyword)
+
+
+def _refuse_bare_chosen_ability(node) -> None:
+    """A "gains it" / "loses it" that reached an ordinary lowering.
+
+    The pronoun names the keyword an activation chose, and only the two-clause
+    *move* it is printed in (``_fused_two_target_keyword_move``) knows how to
+    spend it — that fuser reads both halves before either is lowered. Anything
+    else arriving here carries an empty keyword tuple, which every branch below
+    would happily turn into a grant of nothing.
+    """
+    if getattr(node, "chosen_ability", False):
+        raise LoweringError(
+            'a "gains it" naming the chosen ability is read by the keyword '
+            "move that prints it, not on its own",
+            node=node,
+        )

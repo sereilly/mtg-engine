@@ -1660,6 +1660,29 @@ def _card_type_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("creature_type_choice")
+def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
+    """"Destroy all creatures **of the creature type of your choice**."
+    (Extinction.)
+
+    The offered list is CR 205.3m's whole catalog rather than the types in play,
+    because the rule bounds the choice by the catalog and not by any board — and
+    it is the same constant the resolver checks the answer against (idiom 9), so
+    the picker cannot show a word the answer path would refuse.
+
+    The default travels beside it: the handler already recorded it, so a seat
+    that dismisses the prompt has the answer the sweep will use rather than
+    none.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "creature_types": sorted(CREATURE_TYPES),
+        "default_creature_type": data.get("default_creature_type"),
+    }
+
+
 @prompt_renderer("entry_exile")
 def _entry_exile(ctx: PromptContext, choices: list) -> dict:
     """The entry cost paid out of a graveyard (Frankenstein's Monster): the

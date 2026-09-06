@@ -237,12 +237,23 @@ class _FilterDraft:
     # ``ast.ObjectFilter.with_named_counter``.
     with_named_counter: str | None = None
     nontoken: bool = False
+    # "that's one or more colors" (Ugin, the Spirit Dragon's −X) — see the
+    # field of the same name on ``ast.ObjectFilter``. Declared here because
+    # the postmodifier that reads the phrase wrote a *bare local* instead: an
+    # undeclared draft attribute is dropped by the builder below, and a bare
+    # local is dropped before it even gets that far, so the guard on this
+    # mirror could not see it either.
+    colored: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
+    #: See ``ast.ObjectFilter.chosen_keyword``.
+    chosen_keyword: bool = False
     # "Creatures **of the chosen type**" (An-Zerrin Ruins) — see the field of
     # the same name on ``ast.ObjectFilter``.
     chosen_creature_type: bool = False
+    #: See ``ast.ObjectFilter.creature_type_of_your_choice``.
+    creature_type_of_your_choice: bool = False
     # "Each **land** of the chosen type" (Shimmer) — see the field of the same
     # name on ``ast.ObjectFilter``.
     chosen_land_type: bool = False
@@ -263,6 +274,11 @@ class _FilterDraft:
     # ``ast.ObjectFilter.on_the_battlefield``.
     on_the_battlefield: bool = False
     named: str | None = None
+    #: See ``ast.ObjectFilter.not_named`` / ``not_named_source`` /
+    #: ``with_protection_from``.
+    not_named: str | None = None
+    not_named_source: bool = False
+    with_protection_from: str | None = None
     # "…with a name originally printed in the <Set> expansion" -- see
     # ``ast.ObjectFilter.original_expansion``.
     original_expansion: str | None = None
@@ -899,8 +915,11 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_plus1_counter=d.with_plus1_counter,
         with_named_counter=d.with_named_counter,
         nontoken=d.nontoken,
+        colored=d.colored,
         chosen_color=d.chosen_color,
+        chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,
+        creature_type_of_your_choice=d.creature_type_of_your_choice,
         chosen_land_type=d.chosen_land_type,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,
@@ -909,6 +928,9 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,
+        not_named=d.not_named,
+        not_named_source=d.not_named_source,
+        with_protection_from=d.with_protection_from,
         original_expansion=d.original_expansion,
         other_than_source=d.other_than_source,
         is_source=d.is_source,

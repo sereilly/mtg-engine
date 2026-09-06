@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 90.6% | 90.4% | 64.0% | 265 |
+| TMP *(measured)* | 335 | 478 | 91.2% | 91.0% | 64.6% | 268 |
 | **All (shipped)** | **4252** | **6339** | **90.0%** | **89.3%** | **59.2%** | **3110** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,9 +49,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 351 | 150 | expected a subject |  |
 | 104 | 50 | unrecognized effect verb |  |
-| 91 | 43 | unconsumed text |  |
+| 89 | 41 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 11 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -1797,12 +1797,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{B}.`
 - **Evincar's Justice**
   - `Evincar's Justice deals 2 damage to each creature and each player.`
+- **Excavator**
+  - `{T}, Sacrifice a basic land: Target creature gains landwalk of each of the land types of the sacrificed land until end of turn. (It can't be blocked as long as defending player controls a land of any of those types.)`
 - **Exile**
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
   - `{1}{W}, {T}: Destroy target black creature.`
 - **Experimental Overload**
   - `Create an X/X blue and red Weird creature token, where X is the number of instant and sorcery cards in your graveyard. Then you may return an instant or sorcery card from your graveyard to your hand. Exile Experimental Overload.`
+- **Extinction**
+  - `Destroy all creatures of the creature type of your choice.`
 - **Eye of Singularity**
   - `When this enchantment enters, destroy each permanent with the same name as another permanent, except for basic lands. They can't be regenerated.`
   - `Whenever a permanent other than a basic land enters, destroy all other permanents with that name. They can't be regenerated.`
@@ -4071,6 +4075,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: If your library has ten or more cards in it, target opponent looks at the top ten cards of your library and separates them into two face-down piles. Exile one of those piles. Search the other pile for a card, put it into your hand, then shuffle the rest of that pile into your library.`
 - **Phyrexian Purge**
   - `Destroy any number of target creatures.`
+- **Phyrexian Splicer**
+  - `{2}, {T}, Choose flying, first strike, trample, or shadow: Until end of turn, target creature with the chosen ability loses it and another target creature gains it.`
 - **Phyrexian Tribute**
   - `Destroy target artifact.`
 - **Phyrexian Vault**

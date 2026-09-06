@@ -65,6 +65,7 @@ from .lowering import (
     _fused_tap_then_bite,
     _fused_prepare_then_interact,
     _fused_tap_any_number_then_pump,
+    _fused_two_target_keyword_move,
     _fused_two_target_pump,
     _fused_cost_repeated_destroys,
     _lower_fight,
@@ -696,6 +697,11 @@ def lower_statement(
             _fused_exile_then_controller_life,
             _fused_prepare_then_interact,
             _fused_two_target_pump,
+            # "…target creature with the chosen ability loses it and
+            # another target creature gains it." (Phyrexian Splicer.) The
+            # keyword twin of the pump above, opening on a different node
+            # pair, so neither can claim the other's sentence.
+            _fused_two_target_keyword_move,
             _fused_conditional_counter,
             _fused_tap_any_number_then_pump,
             _fused_tap_enchanted_then_counters,

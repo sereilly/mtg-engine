@@ -2807,6 +2807,60 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- "…the creature type of your choice" (CR 608.2d) ---------------------
+
+    def arm_creature_type_choice(
+        self, player_index: int, *, card_name: str, result_key: str, context,
+        default: str | None,
+    ):
+        """Queue "choose a creature type" for the resolving spell's controller.
+
+        The answer goes into the **resolution scratchpad** rather than onto a
+        permanent, which is what separates this from ``enter_choice``'s
+        creature-type shape: Extinction is a sorcery, so there is no permanent
+        for a CR 614.1c entry choice to have been recorded on, and the sentence
+        that spends the word is the next step of the same resolution.
+        """
+        return self.arm_pending_choice(
+            "creature_type_choice", player_index,
+            card_name=card_name,
+            result_key=result_key,
+            default_creature_type=default,
+            _context=context,
+        )
+
+    def confirm_creature_type_choice(
+        self, player_index: int, creature_type: str
+    ) -> bool:
+        """Answer "the creature type of your choice" with one word."""
+        return self.resolve_pending_choice(
+            "creature_type_choice", player_index, creature_type=creature_type
+        )
+
+    def _resolve_creature_type_choice(
+        self, choice: PendingChoice, creature_type
+    ) -> bool:
+        """Record the chosen creature type for the step behind this one.
+
+        CR 205.3m bounds the answer, checked against the same catalog the picker
+        offers (idiom 9) so the two cannot disagree — and refused rather than
+        repaired, because quietly keeping the default would tell the player they
+        had chosen something they had not.
+
+        An empty answer keeps whatever the handler stamped before arming, which
+        is a real choice already recorded rather than none at all.
+        """
+        from ...grammar.vocabulary import CREATURE_TYPES
+
+        word = str(creature_type or "").strip().lower()
+        if word:
+            if word not in CREATURE_TYPES:
+                return False
+            choice.data["_context"].results[choice.data["result_key"]] = word
+            self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
+        self.discard_pending_choice(choice)
+        return True
+
     # -- "You may draw up to N cards" ----------------------------------------
 
     def confirm_draw_up_to(self, player_index: int, number: int) -> bool:
@@ -8569,6 +8623,29 @@ register_choice(
     # whose readers are continuous effects, does not need this and must not
     # gain it.
     suspends=True,
+)
+
+register_choice(
+    "creature_type_choice",
+    resolve=lambda game, choice, r: game._resolve_creature_type_choice(
+        choice, r.get("creature_type")
+    ),
+    # The handler stamps its deterministic default into the scratchpad before
+    # arming, so a non-interactive seat has nothing left to apply and the sweep
+    # behind this prompt runs at once with that answer — ``card_type_choice``'s
+    # arrangement, and for its reason.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="creature_type_choice_confirm",
+    prompt_key="creature_type_choice",
+    blocked_detail="choose a creature type before other actions",
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before the sweep runs: an
+    # answer that landed after the board had already been swept on the default
+    # would change nothing, which is a prompt that lies.
+    suspends=True,
+    # Which creature type a player named is announced in the open (CR 608.2d is
+    # applied where everyone can see), so a seatless viewer may see the question.
+    spectator_visible=True,
 )
 
 register_choice(

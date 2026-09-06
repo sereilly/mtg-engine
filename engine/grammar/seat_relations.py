@@ -140,6 +140,21 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     # colour's reason: the pure matcher has no source and refuses the key
     # outright, and the readers that do hold one resolve it into the
     # ordinary subtype key before matching.
+    # "Destroy all creatures **of the creature type of your choice**."
+    # (Extinction.) The same narrowing as "of the chosen type" below with the
+    # choice made at a different time — CR 608.2d, while the spell resolves,
+    # rather than CR 614.1c, as a permanent entered. That difference is the
+    # whole of it: there is no source permanent to have recorded a word, so the
+    # phrase cannot share the key below, whose readers all resolve it off one.
+    #
+    # The catalog is named in the phrase itself here rather than inferred from
+    # the head noun, so nothing has to be guessed; a land-type spelling would be
+    # its own branch when a card prints one.
+    if stream.accept_phrase(
+        "of", "the", "creature", "type", "of", "your", "choice"
+    ):
+        d.creature_type_of_your_choice = True
+        return True
     if stream.accept_phrase("of", "the", "chosen", "type"):
         # Which catalog the chosen word came from is spelled once, in the
         # **head noun**: "Each *land* of the chosen type" (Shimmer) is a

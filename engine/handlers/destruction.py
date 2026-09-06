@@ -209,8 +209,31 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # (Eye of Singularity), both resolved below against the firing
             # event's context — which `subject_matches` never sees.
             "name_from_event", "other_than_event_subject",
+            # "…**of the creature type of your choice**" (Extinction). A word an
+            # earlier step of this same resolution wrote, resolved just below
+            # into the ordinary ``subtype_filter`` every matcher already reads.
+            "subtype_filter_from",
         )
     }
+    # CR 608.2d's choice, spent. The word is read out of the scratchpad rather
+    # than off a permanent, because the card that prints this is a sorcery and
+    # there is no permanent — which is the whole difference from "of the chosen
+    # type" (An-Zerrin Ruins), whose word rides the source's metadata.
+    #
+    # **No word means no sweep**, and it must: a missing record resolved as "no
+    # narrowing" is not a card that does less, it is one that destroys every
+    # creature on the table. The same direction ``_resolve_chosen_subtype``
+    # takes for its own absent record, reached by refusing here rather than by
+    # leaving an unanswerable key in the payload.
+    scratch_key = instruction.payload.get("subtype_filter_from")
+    if scratch_key is not None:
+        chosen = context.results.get(str(scratch_key))
+        if not chosen:
+            game.log.append(
+                f"{context.card.name}: no creature type was chosen"
+            )
+            return True, "resolved"
+        filters["subtype_filter"] = str(chosen)
     # "…all creatures that were blocked by **that creature** this turn."
     # (Glyph of Doom.) A relation, resolved here for the reason `attached_to`
     # below is: the record lives on the blocker the delayed ability was bound

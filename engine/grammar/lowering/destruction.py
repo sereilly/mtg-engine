@@ -25,7 +25,7 @@ from ._common import (
     describe_independent_target_roles, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _names_several_targets,
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
-    testable_filter_payload
+    split_creature_type_choice, testable_filter_payload
 )
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
@@ -335,13 +335,22 @@ def _lower_destroy(
             if key not in ("type_filter", "type_filter_all")
         }
         if narrowing:
+            # "Destroy all creatures **of the creature type of your choice**."
+            # (Extinction.) CR 608.2d's choice, lifted out of the noun phrase
+            # into a step of its own in front of the sweep — the sweep then
+            # reads the word back out of the scratchpad rather than testing a
+            # narrowing no matcher can answer. Asked before the testability
+            # gate below, because with the phrase still in the payload that
+            # gate is exactly what refuses the card.
+            prelude, described, chosen_type = split_creature_type_choice(described)
             if untestable_filter_keys(described):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
             _refuse_unfrozen_that_player(described, event, node)
-            narrowed_payload = dict(described)
+            narrowed_payload = {**described, **chosen_type}
             if node.no_regen:
                 narrowed_payload["bypass_regeneration"] = True
             return (
+                *prelude,
                 OracleInstruction("destroy_all_matching", "", narrowed_payload),
             )
         kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))

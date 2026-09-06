@@ -18,17 +18,25 @@ import dataclasses
 from ...banding import BANDS_WITH_OTHER
 from ...keywords import keyword_ability_name
 from ...oracle_types import OracleInstruction
-from ...subject_filters import object_only_filter, untestable_filter_keys
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
-from ._events import (_EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS,
-                      binds_block_pair)
+from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import CREATED_TOKEN
 from ._common import (_describe_several_targets, _describe_targets, _filter_payload,
-                      _durationless_reason, _is_created_token,
+                      _durationless_reason, _is_created_token, _is_landwalk,
+                      _refuse_bare_chosen_ability,
                       _restrictions_beyond, _is_enchanted,
                       _is_source, _is_target, _names_several_targets)
+
+#: Where a landwalk whose land type is not printed reads that type from
+#: (Excavator: "landwalk of each of the land types of **the sacrificed land**").
+#: The parse side names the record in its own words and this is the only place
+#: those words become a scratchpad key — an unlisted word refuses the line
+#: rather than lowering onto a record nothing writes, which is the difference
+#: between an unsupported card and one that grants no keyword at all.
+_LANDWALK_SOURCES: dict[str, str] = {"sacrificed": "sacrificed_for_cost"}
 
 _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
     ("flying", "target"): "grant_target_flying_until_eot",
@@ -102,6 +110,41 @@ def _lower_gain_keyword(
                 raise LoweringError("a keyword choice needs one instruction per option", node=node)
             modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
         return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
+    # "Target creature gains **landwalk of each of the land types of the
+    # sacrificed land** until end of turn." (Excavator.) CR 702.14a builds a
+    # landwalk's *name* out of a land type, and which land type is a fact about
+    # the cost that was paid — so no keyword can be in the payload and the
+    # handler builds the words at resolution off the record the cost wrote.
+    #
+    # `_check_grantable` is deliberately not asked: it validates printed words,
+    # and there is none here. What stands in its place is the table above (the
+    # record has to be one something writes) and `landwalk.landwalk_abilities_of`
+    # (every word it builds is one `landwalk_requirement` can answer, because it
+    # is built from the land's own types).
+    _refuse_bare_chosen_ability(node)
+    if node.landwalk_from is not None:
+        if node.keywords:
+            raise LoweringError(
+                "a computed landwalk grant carries no printed keyword", node=node
+            )
+        record = _LANDWALK_SOURCES.get(node.landwalk_from)
+        if record is None:
+            raise LoweringError(
+                f"nothing records the land {node.landwalk_from!r} names", node=node
+            )
+        if not _is_target(node.subject):
+            raise LoweringError(
+                "a computed landwalk grant reads a chosen target", node=node
+            )
+        computed: dict[str, object] = {
+            "keywords": (),
+            "duration": _grant_duration(node, node.duration),
+            "landwalk_from": record,
+        }
+        _describe_targets(computed, node.subject)
+        return (
+            OracleInstruction("grant_target_keyword_until_eot", "", computed),
+        )
     if node.duration.kind is None:
         # "…and that creature gains flying." (Cocoon's hatch, bound to the
         # enchanted creature by the rider that read it.) A one-shot grant with
@@ -684,23 +727,6 @@ def _lower_gain_ability_text(
 LANDWALK = "landwalk"
 
 
-def _is_landwalk(keyword: str) -> bool:
-    """Whether *keyword* is a landwalk the engine enforces.
-
-    Asked beside :data:`IMPLEMENTED_KEYWORDS` rather than folded into it,
-    because CR 702.14a builds a landwalk's **name** out of a printed quality —
-    "islandwalk", "snow forestwalk", "nonbasic landwalk" — so the set of names
-    is open and no frozenset can hold it. `engine/landwalk.py` is the reader
-    that decides whether a quality is one the block check can test, and it is
-    already the gate `engine/oracle.py` asks about a printed keyword *line*.
-    A grant asking a different question is how "gains landwalk of the chosen
-    type" comes to work for five types and refuse the other thirteen.
-    """
-    from ...landwalk import is_landwalk
-
-    return is_landwalk(keyword)
-
-
 def _check_grantable(keyword: str, node) -> None:
     """Refuse a grant of a keyword the engine cannot actually give.
 
@@ -742,231 +768,3 @@ def _check_grantable(keyword: str, node) -> None:
         raise LoweringError(
             f"granting {keyword!r} needs the printed number it takes", node=node
         )
-
-
-def _team_removal_payload(node: ast.LoseKeyword) -> dict[str, object] | None:
-    """The payload for a board-wide keyword removal, or None when the subject
-    is not one.
-
-    Written against the same three facts the team *grant* reads — the
-    quantifier, the card types and the controller — because "all creatures" and
-    "creatures you control" are one sentence with one word changed, and the
-    difference is which seats the handler walks.
-
-    A narrowing the subject matcher cannot test refuses rather than being
-    dropped. Dropping it on the grant side gives a keyword to more creatures
-    than the card names; dropping it here takes one away from more creatures
-    than the card names, which is the same error and just as silent.
-    """
-    subject = node.subject
-    if not isinstance(subject, ast.TargetSpec):
-        return None
-    if subject.targeted or subject.quantifier not in ("all", "each"):
-        return None
-    if subject.filter.card_types not in ((), ("creature",)):
-        return None
-    if subject.filter.controller not in ("you", None):
-        return None
-    leftover = _restrictions_beyond(
-        subject.filter, frozenset({"card_types", "controller"})
-    )
-    described = _filter_payload(subject.filter)
-    if leftover and untestable_filter_keys(described):
-        raise LoweringError(
-            "the team keyword removal cannot narrow by: " + ", ".join(leftover),
-            node=node,
-        )
-    payload: dict[str, object] = {
-        "keywords": tuple(node.keywords), "duration": "end_of_turn",
-    }
-    if not subject.filter.card_types:
-        # "Permanents lose …" — the same removal over a wider board, which is
-        # the one key that changes. The handler defaults to creatures, so every
-        # payload written for the narrower reading stays what it was.
-        payload["every_permanent"] = True
-    if leftover:
-        payload["filter"] = described
-    # No controller word is every seat's board: "all creatures" is not "creatures
-    # you control", and a removal scoped to the caster would leave the half of
-    # the board the card names untouched.
-    payload["every_seat"] = subject.filter.controller is None
-    return payload
-
-
-def _lower_lose_keyword(
-    node: ast.LoseKeyword,
-    event: str | None = None,
-    event_subject: object | None = None,
-) -> tuple[OracleInstruction, ...]:
-    """"It loses indestructible until end of turn." (Soul Sear, bound to the
-    damage sentence's target by the pronoun rider.)
-
-    The mirror of the targeted grant: `remove_keyword` puts the removal into
-    layer 6, so it composes with grants by timestamp rather than by flag
-    fights. Gated on IMPLEMENTED_KEYWORDS exactly like the grant — removing a
-    word whose behaviour is not built would report a removal of nothing.
-    """
-    for keyword in node.keywords:
-        # Through the ability's *name*, so a keyword carrying a printed
-        # argument is asked about the ability rather than about the argument:
-        # "all 'bands with other' abilities" and "bands with other legendary
-        # creatures" are the same registry entry, and only the first is a word
-        # any list could hold.
-        if (
-            keyword_ability_name(keyword) not in IMPLEMENTED_KEYWORDS
-            and not _is_landwalk(keyword)
-        ):
-            raise LoweringError(
-                f"removing {keyword!r} needs the keyword implemented", node=node
-            )
-        # A line-derived ability (CR 702.23a, CR 702.25a) is not in layer 6's
-        # word set at all — the compiler built the trigger out of the printed
-        # line — so removing the word there would report a removal and take
-        # nothing away. That used to refuse here, with the comment "the day one
-        # does, it needs the removal channel built". Barbed Foliage is that
-        # card, and the channel is ``keywords.remove_ability_keyword``: the
-        # keyword is recorded and ``Permanent.effective_card`` strikes its part
-        # out of the keyword line, so the compiler never makes the trigger.
-        # Which channel a word goes on is the *handler's* decision
-        # (``handlers/pump._remove_one_keyword``), exactly as it is on the
-        # granting side — so nothing here has to know the difference.
-    if node.duration.kind is None:
-        # "When this creature blocks, **it loses defender**." (Elder Land
-        # Wurm.) Durationless and still not a static ability: it is the one-shot
-        # effect of a *triggered* ability, so it happens once and the word is
-        # gone for good rather than being a continuous effect the layer system
-        # re-derives. `remove_keyword` without the until-end-of-turn flag writes
-        # exactly that record into layer 6 — the cleanup sweep drops only the
-        # flagged ones — so nothing new is needed under it.
-        #
-        # "{0}: This creature loses flying. (This effect lasts indefinitely.)"
-        # (Mist Dragon.) An **activated** ability's own effect is the same
-        # one-shot as the trigger's — CR 611.2 gives an effect with no printed
-        # duration an indefinite one either way — so the gate here is the
-        # subject, not which kind of ability produced the clause.
-        #
-        # It used to be ``event is None``, refusing on the ground that the
-        # printed *static* line is a continuous effect the layer system has to
-        # re-derive. That is true and it is enforced somewhere else: a bare
-        # printed line about the source lowers through
-        # ``statics._lower_lord_effects`` and refuses there with "static
-        # abilities need the CR 613 layers engine", and one about a *set*
-        # ("Creatures you control lose flying") is stopped by the `_is_source`
-        # check immediately below. Nothing but an ability's effect clause
-        # reaches this line, so the trigger test was buying nothing and cost
-        # Mist Dragon the half of its card that turns the flying back off.
-        if not _is_source(node.subject):
-            raise LoweringError(
-                "the durationless removal reaches the ability's own source",
-                node=node,
-            )
-        return (
-            OracleInstruction(
-                "remove_self_keyword", "", {"keywords": tuple(node.keywords)}
-            ),
-        )
-    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
-        raise LoweringError(
-            f"no handler removes a keyword for {node.duration.kind!r}", node=node
-        )
-    # "**All creatures** lose flying until end of turn." (Whiteout.) The mirror
-    # of the team *grant* above, and the same reading of CR 611.2c: the set is
-    # locked in at resolution, so the handler walks the board once rather than
-    # contributing a derived effect. The width is payload — which seats' boards
-    # and which permanents on them — for the reason the grant's is: a card
-    # printing "creatures you control lose flying" is the same instruction with
-    # one key different.
-    team = _team_removal_payload(node)
-    if team is not None:
-        return (OracleInstruction("remove_team_keyword_until_eot", "", team),)
-    # "{1}{G}: This creature gains flying and **loses trample** until end of
-    # turn." (Canopy Dragon); "{T}: This creature gets -2/+2 and **loses
-    # flying** until end of turn." (Leering Gargoyle.) The ability's own source,
-    # with a duration — which the durationless branch above reads and the
-    # targeted branch below reads, and neither of them covered. Same kind as the
-    # durationless self-removal, carrying the duration as payload for the reason
-    # ``pump_self`` carries its "indefinite": every payload written before this
-    # branch existed meant no expiry, so the new answer has to say so out loud.
-    if _is_source(node.subject):
-        return (
-            OracleInstruction(
-                "remove_self_keyword", "",
-                {"keywords": tuple(node.keywords), "duration": "end_of_turn"},
-            ),
-        )
-    # "Whenever a creature attacks you, **it** loses flanking until end of
-    # turn." (Barbed Foliage.) The pronoun was rebound to the *event's* subject
-    # by ``rebinding.rebind_pronoun_to_event_subject``, so it is neither the
-    # source nor a target: nothing was chosen and nothing may be, because the
-    # object is the one the event was about.
-    #
-    # Gated on the event, exactly as the counter one family over is: under any
-    # other trigger the same word names an object no fire site recorded, and the
-    # handler would strip a keyword from nothing while the card compiled clean.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "it"
-        and not node.subject.filter.is_source
-    ):
-        if event not in _EVENT_SUBJECT_OBJECTS:
-            raise LoweringError(
-                "\"it\" names the object the event was about, and this event "
-                "records none",
-                node=node,
-            )
-        described = _filter_payload(node.subject.filter)
-        if object_only_filter(described) is None:
-            # The rebound filter re-states the event's own narrowing, so it is
-            # carried and re-checked rather than dropped — a word consumed and
-            # never read is a word that could be deleted with no change to what
-            # the card does.
-            raise LoweringError(
-                "the removal's subject carries a restriction the resolution "
-                "cannot test", node=node,
-            )
-        payload = {
-            "keywords": tuple(node.keywords),
-            "duration": "end_of_turn",
-            "on_event_subject": True,
-        }
-        if described:
-            payload["filter"] = described
-        return (OracleInstruction("remove_event_subject_keyword", "", payload),)
-    # "Whenever this creature blocks or becomes blocked by a creature, **that
-    # creature** loses first strike until end of turn." (Talruum Champion.) The
-    # mirror of the block-pair *grant* above, and admitted by the same
-    # question: `binds_block_pair` rather than the kind, because CR 509.3c
-    # makes a bare "becomes blocked" fire once with several blockers in hand
-    # and no way to say which "that creature" is, while CR 509.3d's narrowed
-    # spelling fires once per creature and names exactly one.
-    #
-    # It has to come **before** the target-shaped reading below, and that order
-    # is the card: on the *blocks* half of the event the stack item's target is
-    # the blocking creature itself (the fire site puts it there so a
-    # self-affecting trigger can find itself), so falling through would strip
-    # first strike from the Champion and leave the creature it blocked with it
-    # — the card playing as its own opposite while reporting supported. The
-    # grant one function up records the same trap.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier in ("that", "other")
-        and binds_block_pair(event, event_subject)
-    ):
-        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
-            raise LoweringError(
-                "the block-pair keyword removal reads the creature its trigger "
-                "already named and nothing narrower",
-                node=node,
-            )
-        return (
-            OracleInstruction(
-                "remove_keyword_from_block_pair", "",
-                {"keywords": tuple(node.keywords), "duration": "end_of_turn"},
-            ),
-        )
-    if not _is_target(node.subject):
-        raise LoweringError("no handler removes a keyword from this subject", node=node)
-    payload: dict[str, object] = {"keywords": tuple(node.keywords)}
-    assert isinstance(node.subject, ast.TargetSpec)
-    _describe_targets(payload, node.subject)
-    return (OracleInstruction("remove_target_keyword_until_eot", "", payload),)

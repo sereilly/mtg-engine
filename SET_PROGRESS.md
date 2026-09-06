@@ -29,7 +29,7 @@ Do not edit by hand — re-run the script instead.
 | 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Complete (167/167 supported) |
 | 16 | Fifth Edition | 5ED | 1997-03-24 | 434 | 0 | Complete (434/434 supported) |
 | 17 | Weatherlight | WTH | 1997-06-09 | 167 | 161 | Complete (167/167 supported) |
-| 18 | Tempest | TMP | 1997-10-14 | 335 | 299 | Measured (319/335 supported, not shipped) |
+| 18 | Tempest | TMP | 1997-10-14 | 335 | 299 | Measured (332/335 supported, not shipped) |
 | 19 | Stronghold | STH | 1998-03-02 | 143 | 137 | Not Implemented |
 | 20 | Exodus | EXO | 1998-06-15 | 143 | 138 | Not Implemented |
 | 21 | Urza's Saga | USG | 1998-10-12 | 335 | 309 | Not Implemented |

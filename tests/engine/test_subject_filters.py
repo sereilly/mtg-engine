@@ -121,6 +121,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # and a matcher that ignored the key would let Righteousness pump it and
     # Sorrow's Path name it as one of its two blockers.
     ("blocking_only", {"blocking_only": True}, "Grizzly Bears"),
+    # "…a creature with flying **not named Escaped Shapeshifter**". The negative
+    # of ``named`` a few rows up, and rejected by the *positive* card: a matcher
+    # ignoring the key would admit the one permanent the phrase excludes, which
+    # on Escaped Shapeshifter's condition is the difference between a creature
+    # answering its own question and not.
+    ("not_named", {"not_named": "Grizzly Bears"}, "Grizzly Bears"),
 )
 
 
@@ -610,6 +616,15 @@ def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
 # rather than a different permanent. Each names the test that exercises it, so
 # a key can only be listed here by someone who wrote one.
 _COVERED_ELSEWHERE = {
+    # The two halves of Escaped Shapeshifter's condition. Neither can be a row
+    # above: that table builds one bare permanent and passes no source, so
+    # ``not_named_source`` would be rejected for having nothing to be named
+    # against, and ``with_protection_from`` needs a second permanent whose
+    # protection the first is compared to.
+    "not_named_source":
+        "test_not_named_source_excludes_by_name_and_not_by_identity",
+    "with_protection_from":
+        "test_with_protection_from_asks_the_quality_and_not_the_keyword",
     "original_expansion":
         "test_original_expansion_reads_the_first_printing_not_every_printing",
     "nontoken": "test_nontoken_rejects_a_token",
@@ -623,6 +638,7 @@ _COVERED_ELSEWHERE = {
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
+    "chosen_keyword": "test_chosen_keyword_is_read_off_the_ability_s_source",
     "chosen_creature_type":
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
     "chosen_land_type":
@@ -2010,3 +2026,108 @@ def test_w2g5_a_named_counter_is_read_off_its_own_store_not_the_plus1_one(pool):
     # And the mirror, so neither store answers for the other.
     assert subject_matches(game, pumped, {"with_plus1_counter": True})
     assert not subject_matches(game, hunted, {"with_plus1_counter": True})
+
+
+# ---------------------------------------------------------------------------
+# W3G4: the two keys Escaped Shapeshifter's condition needs
+# ---------------------------------------------------------------------------
+
+
+def test_not_named_source_excludes_by_name_and_not_by_identity(pool):
+    """"…a creature with flying **not named Escaped Shapeshifter**".
+
+    The exclusion is CR 201.2's *name*, so a second copy of the card is excluded
+    too — which is the whole reason this is not ``exclude_self``. Three
+    permanents make the distinction visible: the source itself, a different
+    permanent with the same name, and a permanent with a different one.
+
+    With no source there is nothing to be named against, and the key refuses
+    every candidate — the direction that cannot let a condition hold on a board
+    the card excludes.
+    """
+    source = Permanent(card=pool["Grizzly Bears"])
+    twin = Permanent(card=pool["Grizzly Bears"])
+    other = Permanent(card=pool["Hill Giant"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[source, twin, other]),
+        PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "not_named_source": True}
+
+    assert not subject_matches(game, source, described, source=source)
+    assert not subject_matches(game, twin, described, source=source), (
+        "a second copy of the named card is excluded too (CR 201.2)"
+    )
+    assert subject_matches(game, other, described, source=source)
+    assert not subject_matches(game, other, described), (
+        "with no source there is no name to exclude, so nothing matches"
+    )
+
+
+def test_with_protection_from_asks_the_quality_and_not_the_keyword(pool):
+    """"…a creature **with protection from white**" (Escaped Shapeshifter).
+
+    Read through ``_protection_qualities``, which is what makes the *quality*
+    part of the question: Black Knight has protection from white and Kird Ape
+    has none, and a creature with protection from some other colour must not
+    answer a white-protection phrase. Asking ``with_keywords: ["protection"]``
+    instead would admit all three of the first two categories at once, which is
+    the widening this key exists to prevent.
+    """
+    warded = Permanent(card=pool["Black Knight"])          # protection from white
+    elsewhere = Permanent(card=pool["White Knight"])       # protection from black
+    bare = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[warded, elsewhere, bare]),
+        PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "with_protection_from": "white"}
+
+    assert subject_matches(game, warded, described)
+    assert not subject_matches(game, elsewhere, described), (
+        "protection from black is not protection from white"
+    )
+    assert not subject_matches(game, bare, described)
+    # And the unmodelled word narrows to nothing rather than to everything.
+    assert not subject_matches(
+        game, warded, {"type_filter": "creature", "with_protection_from": "nonsense"}
+    )
+
+
+
+def test_chosen_keyword_is_read_off_the_ability_s_source(pool):
+    """"target creature **with the chosen ability**" (Phyrexian Splicer).
+
+    A keyword the *activation* chose (CR 601.2b), recorded on the ability's own
+    source — so, like ``chosen_color``, it is answerable only by a reader
+    holding that permanent, and the pure matcher refuses it outright.
+
+    Resolved into ``with_keywords``, which is what makes the answer a layer-6
+    question: a creature that was **granted** flying answers a chosen-flying
+    phrase exactly as a printed flyer does, and asking the printed keyword list
+    instead would miss it.
+    """
+    from engine.keywords import grant_keyword
+    from engine.handlers._common import CHOSEN_ABILITY
+
+    splicer = Permanent(card=pool["Phyrexian Splicer"])
+    flier = Permanent(card=pool["Air Elemental"])          # printed flying
+    grounded = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[splicer, flier, grounded]),
+        PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "chosen_keyword": True}
+
+    # Nothing chosen: the key survives to the pure matcher, which refuses.
+    assert not subject_matches(game, flier, described, source=splicer)
+
+    splicer.metadata[CHOSEN_ABILITY] = "flying"
+    assert subject_matches(game, flier, described, source=splicer)
+    assert not subject_matches(game, grounded, described, source=splicer)
+    # …and a *granted* flier answers it, because the resolved key is asked of
+    # layer 6.
+    grant_keyword(grounded, "flying", duration="end_of_turn")
+    assert subject_matches(game, grounded, described, source=splicer)
+    # With no source there is nothing to have chosen, and the key refuses.
+    assert not subject_matches(game, flier, described)

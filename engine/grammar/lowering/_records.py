@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
-from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
@@ -103,6 +104,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # record: an unnamed seat the effect picks is written where every chosen
     # player is written, so the hand-over behind it needs no key of its own.
     "choose_opponent": CHOSEN_PLAYER,
+    # "Destroy all creatures **of the creature type of your choice**."
+    # (Extinction.) The word the sweep in the same sentence spends. A record
+    # rather than a characteristic for the reason every entry here is one:
+    # nothing on a board holds it — the card is a sorcery, so there is no
+    # permanent for a CR 614.1c entry choice to have been written on.
+    "choose_creature_type": CHOSEN_CREATURE_TYPE_THIS_WAY,
     # "**Choose target opponent.** … When it regenerates this way, **that
     # player** may draw a card." (Soldevi Sentry.) The seat the *targeting*
     # sentence chose, under the same key the resolution-time choice above

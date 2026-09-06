@@ -518,6 +518,19 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     sacrifice_attached: bool = False
+    #: "{2}, {T}, **Choose flying, first strike, trample, or shadow**: …"
+    #: (Phyrexian Splicer.) A clause in the activation cost that spends nothing
+    #: and decides a word (CR 602.1a puts it in the cost, CR 601.2b announces
+    #: it). The options are the printed ones, because a choice the sentence did
+    #: not offer is not a choice.
+    #:
+    #: Empty for every other ability, so nothing that reads a cost changes: the
+    #: activation path asks for a word only when there is a list to pick from.
+    #:
+    #: Last for ``sacrifice_attached``'s stated reason — the positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
+    #: field inserted among them silently rebinds one of them.
+    chosen_keyword_options: tuple[str, ...] = ()
 
     @property
     def is_loyalty(self) -> bool:
@@ -870,6 +883,17 @@ BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 #: sentence reading one as the other would find an empty set on every card that
 #: prints the other.
 CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
+
+#: What "**the creature type of your choice**" names (Extinction). One word,
+#: chosen by the controller of the resolving spell (CR 608.2d) and read back by
+#: the sweep in the same sentence through a ``subtype_filter_from`` key.
+#:
+#: A *scratchpad* record and not the ``chosen_creature_type`` metadata key one
+#: characteristic over: that one is a choice a permanent made as it entered
+#: (CR 614.1c) and lives for as long as the permanent does, where this one is
+#: made and spent inside a single resolution and has no permanent at all — the
+#: card that prints it is a sorcery.
+CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 
 #: What "…**each player who sacrificed a Plains this way**" names (Desolation).
 #: The cards a forced sacrifice took, split by the **seat** that gave each one

@@ -2542,6 +2542,17 @@ function getCardTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Extinction: "Destroy all creatures of the creature type of your choice."
+// CR 205.3m's whole catalog rather than the types in play, so the widget is a
+// dropdown and not a row of buttons.
+function getCreatureTypeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.creature_type_choice;
+  if (!info || info.player_index !== seat) return null;
+  if (!Array.isArray(info.creature_types) || info.creature_types.length === 0) return null;
+  return info;
+}
+
 // Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
 function getEnterChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5398,6 +5409,96 @@ function applyCardTypeChoicePrompt(info) {
         action: "card_type_choice_confirm",
         card_type: btn.dataset.cardType,
       });
+    });
+  });
+}
+
+// Phyrexian Splicer: one of the four abilities the card printed, chosen before
+// its targets. Not a pending-choice prompt — nothing is on the stack yet — so it
+// is rendered here and the answer rides the activate action.
+function renderAbilityWordPrompt(card, options, then) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.remove("hidden");
+  cancelBtn.disabled = false;
+  customOkBtn.disabled = true;
+
+  const cardName = card?.name || "an ability";
+  title.textContent = "Choose an ability";
+  body.textContent = `${cardName}: the creature you target first must have it.`;
+  steps.innerHTML =
+    `<div class="prompt-choice-column">` +
+    options
+      .map(
+        (word) =>
+          `<button type="button" class="prompt-choice-btn" data-ability-word="${escapeHtml(word)}">` +
+          `${escapeHtml(word.charAt(0).toUpperCase() + word.slice(1))}</button>`
+      )
+      .join("") +
+    `</div>`;
+
+  steps.querySelectorAll("[data-ability-word]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      pendingChosenAbilityWord = btn.dataset.abilityWord;
+      then();
+    });
+  });
+}
+
+function applyCreatureTypeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "an effect";
+  title.textContent = "Choose a creature type";
+  body.textContent = `${cardName}: every creature of the type you name is destroyed.`;
+  // A select rather than the button column the card-type prompt uses: that one
+  // offers the four the card printed, this one offers CR 205.3m's whole
+  // catalog.
+  const selected = info.default_creature_type || "";
+  const options = info.creature_types
+    .map((type) => {
+      const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
+      const value = escapeHtml(type);
+      const mark = type === selected ? " selected" : "";
+      return `<option value="${value}"${mark}>${label}</option>`;
+    })
+    .join("");
+  steps.innerHTML =
+    `<div class="prompt-choice-column">` +
+    `<select id="creatureTypeChoiceSelect">${options}</select>` +
+    `<button type="button" class="prompt-choice-btn" id="creatureTypeChoiceOk">Choose</button>` +
+    `</div>`;
+
+  const picker = steps.querySelector("#creatureTypeChoiceSelect");
+  steps.querySelector("#creatureTypeChoiceOk").addEventListener("click", async () => {
+    await sendAction({
+      seat,
+      action: "creature_type_choice_confirm",
+      creature_type: picker.value,
     });
   });
 }
@@ -9017,6 +9118,12 @@ function renderActivationPrompt() {
     return;
   }
 
+  const creatureTypeChoiceInfo = getCreatureTypeChoiceInfo();
+  if (creatureTypeChoiceInfo) {
+    applyCreatureTypeChoicePrompt(creatureTypeChoiceInfo);
+    return;
+  }
+
   const enterChoiceInfo = getEnterChoiceInfo();
   if (enterChoiceInfo) {
     applyEnterChoicePrompt(enterChoiceInfo);
@@ -10424,6 +10531,12 @@ function resolveAbilityChoice(optionIndex) {
   startActivationPrompt(singleAbilityCard, pending.targetSeat, pending.permanentIndex);
 }
 
+// Phyrexian Splicer: the ability its activation chose. Module-level for the
+// reason `pendingCastModeIndex` is — the word is announced with the activation
+// (CR 601.2b) and every activate body is built somewhere different, so it is
+// carried through the one place they all end up (`sendAction`).
+let pendingChosenAbilityWord = null;
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -10524,6 +10637,19 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     startCastGraveyardCreatureTargetPrompt(card, "activate", {
       sourcePermanentIndex: permanentIndex, abilityIndex,
     });
+    return;
+  }
+
+  // "Choose flying, first strike, trample, or shadow:" (Phyrexian Splicer).
+  // CR 601.2b's choice, asked **before** any target branch below, because the
+  // first target's phrase is "creature with the chosen ability" — a word picked
+  // afterwards would narrow nothing. The offered list is the card's own, off
+  // the same spec the picker is built from.
+  const abilityWords = targetSpecOf(card).keyword_options;
+  if (Array.isArray(abilityWords) && abilityWords.length && !pendingChosenAbilityWord) {
+    renderAbilityWordPrompt(card, abilityWords, () =>
+      startActivationPrompt(card, targetSeat, permanentIndex)
+    );
     return;
   }
 
@@ -17852,6 +17978,13 @@ async function sendAction(actionBody) {
   // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
   if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
     body.mode_index = pendingCastModeIndex;
+  }
+  // Phyrexian Splicer's chosen ability, carried the same way and for the same
+  // reason: it is part of the announcement (CR 601.2b), and the activate body
+  // is built in a dozen places while this is the one they all pass through.
+  if (body.action === "activate" && body.chosen_keyword == null && pendingChosenAbilityWord) {
+    body.chosen_keyword = pendingChosenAbilityWord;
+    pendingChosenAbilityWord = null;
   }
   // "Choose one or more —": while a collection is open, a cast body is not a
   // cast — it is the target the current mode's own prompt just produced. Capture

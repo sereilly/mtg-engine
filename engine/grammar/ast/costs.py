@@ -109,6 +109,26 @@ class PutCounterCost:
 
 
 @dataclass(frozen=True)
+class ChooseKeywordCost:
+    """``Choose flying, first strike, trample, or shadow`` (Phyrexian Splicer).
+
+    A clause in the **cost** half of an activated ability that spends nothing:
+    CR 602.1a makes everything before the colon the activation cost, and
+    CR 601.2b (through CR 602.2b) has the player announce their choices there —
+    before targets are chosen at CR 601.2c. That ordering is the whole reason
+    the clause is a cost node rather than a first step of the effect: the
+    sentence behind it says "target creature **with the chosen ability**", and a
+    choice made at resolution would be made after the target it narrows.
+
+    The options are the printed words. A choice the sentence did not offer is
+    not a choice, and a catalog here would let a player name a keyword the card
+    never listed.
+    """
+
+    options: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class UntapPermanentCost:
     """``Untap a tapped land an opponent controls`` (Benthic Explorers) — an
     activation cost that *unt*aps rather than taps, and one somebody else's

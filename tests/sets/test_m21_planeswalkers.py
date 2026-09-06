@@ -509,3 +509,47 @@ def test_a_non_interactive_seat_feeds_the_liliana_closest_to_dying(set_pool):
     _end_step(_scrounger_board(set_pool, [waker, mage]))
 
     assert (_loyalty(waker), _loyalty(mage)) == (4, 3)
+
+
+# --- W3G4: "that's one or more colors" was parsed onto a bare local ---------
+
+
+def test_ugin_minus_x_spares_a_colorless_permanent_inside_the_mana_value_bound(set_pool):
+    """"Exile each permanent with mana value X or less **that's one or more
+    colors**."
+
+    The colour narrowing was read by `postmodifiers._parse_postmodifiers` and
+    assigned to a *bare local* — so the phrase parsed, `colored_only` never
+    reached the payload, and the sweep took every colourless permanent inside
+    the bound as well. Wrong in the caster's favour and invisible to every
+    census: the sentence is claimed, the instruction is real, and the only
+    surviving test put Ugin itself outside the mana-value bound, so nothing
+    ever asked the colour question.
+
+    The two permanents here are both mana value 2 and both inside X=3; only
+    their colours differ.
+    """
+    pool = set_pool("M21")
+    colored = Permanent(card=pool["Concordia Pegasus"])    # mv 2, white
+    colorless = Permanent(card=pool["Mazemind Tome"])      # mv 2, colorless
+    game, walker = _walker_game(set_pool, "Ugin, the Spirit Dragon",
+                                opp_battlefield=[colored, colorless])
+    result = game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1, x_value=3,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(colored)
+    assert game.is_on_battlefield(colorless)
+    assert [c.name for c in game.players[1].exile] == ["Concordia Pegasus"]
+
+
+def test_the_colored_narrowing_reaches_the_compiled_payload(set_pool):
+    """The parse half of the same bug, asserted as the payload key rather than
+    through a board: a filter field written nowhere the builder reads is
+    exactly the class `test_every_filter_draft_field_is_carried_into_the_object_filter`
+    guards, and that guard could not see this one — the draft never declared
+    `colored`, so there was no field for it to find missing."""
+    program = compile_card_oracle(set_pool("M21")["Ugin, the Spirit Dragon"])
+    sweep = program.activated_abilities[1].instruction
+    assert sweep.kind == "exile_all_matching"
+    assert sweep.payload.get("colored_only") is True
