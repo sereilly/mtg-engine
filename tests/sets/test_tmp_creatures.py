@@ -39,25 +39,23 @@ def _w1g1_duel(p0_cards, p1_cards):
     return game, p0, p1
 
 
-#: The fourteen printed shadow creatures the keyword round alone makes
-#: playable — every one of them was unsupported on the keyword line and on
-#: nothing else.
+#: The fifteen printed shadow creatures W1G1 makes playable — fourteen were
+#: unsupported on the keyword line and on nothing else, and Dauthi Ghoul needed
+#: one more piece (the short spelling of a narrowed death trigger, CR 700.4).
 W1G1_SHADOW_CREATURES = (
     "Soltari Crusader", "Soltari Foot Soldier", "Soltari Monk", "Soltari Priest",
     "Soltari Trooper", "Soltari Lancer",
     "Thalakos Dreamsower", "Thalakos Seer", "Thalakos Sentry",
     "Dauthi Marauder", "Dauthi Mercenary", "Dauthi Mindripper",
-    "Dauthi Horror", "Dauthi Slayer",
+    "Dauthi Horror", "Dauthi Slayer", "Dauthi Ghoul",
 )
 
-#: The three that print shadow **and** a second line this group declined, with
+#: The two that print shadow **and** a second line this group declined, with
 #: the line each still refuses on. They are listed rather than dropped because
 #: an unsupported program records no static lines at all: a sweep that only
 #: asserted "shadow is a static line" would have to skip them silently, and the
 #: assertion that survives is about *which* line is still refusing.
 W1G1_SHADOW_CREATURES_STILL_REFUSING = {
-    "Dauthi Ghoul":
-        "Whenever a creature with shadow dies, put a +1/+1 counter on this creature.",
     "Soltari Guerrillas":
         "{0}: The next time this creature would deal combat damage to an "
         "opponent this turn, it deals that damage to target creature instead.",
@@ -85,10 +83,10 @@ def test_w1g1_every_printed_shadow_creature_records_the_keyword(set_pool, name):
 @pytest.mark.parametrize(
     "name,line", sorted(W1G1_SHADOW_CREATURES_STILL_REFUSING.items())
 )
-def test_w1g1_the_three_declines_no_longer_refuse_on_shadow(set_pool, name, line):
+def test_w1g1_the_declines_no_longer_refuse_on_shadow(set_pool, name, line):
     """The declines, pinned to the line they are actually declined for.
 
-    Each of these three refused on `Shadow` before this round and refuses on its
+    Each of these refused on `Shadow` before this round and refuses on its
     *second* line after it, so the assertion is on the refusal's **subject**:
     that is what makes the decline a work-list entry another group can pick up,
     and what fails loudly if a later round makes one of them refuse for a new
@@ -235,3 +233,75 @@ def test_w1g1_dauthi_horror_and_dauthi_slayer_were_only_ever_the_keyword(set_poo
         for i in horror.instructions
     )
     assert any(i.kind == "must_attack_each_combat" for i in slayer.instructions)
+
+
+# --- W1G1: Dauthi Ghoul's narrowed death trigger (CR 700.4) ---
+
+
+def test_w1g1_dauthi_ghoul_grows_only_when_a_shadow_creature_dies(set_pool):
+    """"Whenever a creature with shadow dies, put a +1/+1 counter on this
+    creature."
+
+    CR 700.4 makes "dies" mean "is put into a graveyard from the battlefield",
+    and the engine has read a **narrowed** noun phrase off the long spelling
+    since Tablet of Epityr — the dispatcher, the `dying_filter` payload and the
+    `subject_matches` recheck were all already there. Only the two front ends
+    could not read the rule's own shorthand, which is why every narrowing of
+    "whenever a creature dies" refused, not just this one.
+
+    Driven through a real death rather than asserted off the compiled condition,
+    because a trigger can sit in both front-end tables and be announced by
+    nothing (`tests/engine/test_trigger_dispatchers.py`'s subject) — and the
+    negative half is the assertion the narrowing exists at all.
+    """
+    tmp = set_pool("TMP")
+    ghoul = _nosick(Permanent(card=tmp["Dauthi Ghoul"]))
+    p0 = PlayerState(name="P0", battlefield=[ghoul], life=20)
+    shadowy = _nosick(Permanent(card=tmp["Soltari Foot Soldier"]))
+    ground = _nosick(Permanent(card=tmp["Trained Armodon"]))
+    p1 = PlayerState(name="P1", battlefield=[shadowy, ground], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+
+    assert (ghoul.effective_power, ghoul.effective_toughness) == (1, 1)
+
+    game._permanent_to_graveyard(p1, ground)
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert (ghoul.effective_power, ghoul.effective_toughness) == (1, 1), (
+        "a creature without shadow died and the Ghoul grew anyway — the "
+        "narrowing was dropped"
+    )
+
+    game._permanent_to_graveyard(p1, shadowy)
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert (ghoul.effective_power, ghoul.effective_toughness) == (2, 2)
+
+
+def test_w1g1_the_short_death_spelling_does_not_shadow_the_specific_rows(set_pool):
+    """The new row is last in `WHENEVER_TRIGGER_PATTERNS` and this is why.
+
+    Its subject group is `[^,]+`, so it matches every "whenever a … dies" line
+    there is — including four earlier rows whose conditions are their own kinds
+    with their own dispatchers. First match wins, so the row is safe at the end
+    of the table and nowhere else; this asserts the consequence rather than the
+    position, because the position is what a later edit would move.
+    """
+    from engine.oracle import trigger_condition_of_line
+
+    expected = {
+        "Whenever a creature dies, you gain 1 life.": "creature_dies",
+        "Whenever a creature you control dies, you gain 1 life.":
+            "creature_you_control_dies",
+        "Whenever a creature an opponent controls dies, you gain 1 life.":
+            "creature_opponent_controls_dies",
+        "Whenever a creature dealt damage by this creature this turn dies, "
+        "you gain 1 life.": "creature_dealt_damage_by_self_dies",
+        "Whenever a creature with shadow dies, you gain 1 life.": "permanent_dies",
+    }
+    for line, kind in expected.items():
+        condition, _ = trigger_condition_of_line(line)
+        assert condition is not None and condition.kind == kind, line

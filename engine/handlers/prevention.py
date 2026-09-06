@@ -20,6 +20,7 @@ from ..shields import (
     make_numeric_pool,
     make_reflect_charge,
     make_reflect_source,
+    make_source_subject_shield,
     make_subject_shield,
     make_whole_charge,
     make_whole_source,
@@ -220,6 +221,30 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
             f"{caster.name} sets a Circle of Protection shield against "
             f"an {source_type} source"
         )
+        return True, "resolved"
+    # Circle of Protection: Shadow — the same Circle keyed on a printed noun
+    # phrase. Its own branch beside the card-type one above and for that
+    # branch's reason: `source_has_type` cannot answer a keyword, so a shield
+    # holding "creature with shadow" in `source_type` would answer to every
+    # creature and the narrowing the card is named for would be gone.
+    #
+    # `filter_seat` is CR 109.5's observer, captured now rather than at damage
+    # time: "you control" inside such a phrase means the seat that activated the
+    # ability, and the shield may still be armed when that seat is not the one
+    # being damaged.
+    if instruction.payload.get("protection_kind") == "source_subject":
+        described = dict(instruction.payload.get("source_filter") or {})
+        if described:
+            add_shield(
+                caster,
+                make_source_subject_shield(
+                    described, game.players.index(caster), source_name
+                ),
+            )
+            game.log.append(
+                f"{caster.name} sets a Circle of Protection shield against "
+                "a chosen source"
+            )
         return True, "resolved"
     if instruction.payload.get("protection_kind") == "color":
         # Circle of Protection: "The next time a <color> source of your choice

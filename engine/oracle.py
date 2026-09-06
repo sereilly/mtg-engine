@@ -1060,6 +1060,24 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("cumulative_upkeep_unpaid",
      r"whenever a player doesn't pay this "
      r"(?:artifact|creature|enchantment|permanent|land)'s cumulative upkeep"),
+    # CR 700.4: "dies" **means** "is put into a graveyard from the
+    # battlefield", so this is the short spelling of the narrowed
+    # ``permanent_dies`` rows at the top of this table — the same kind, the same
+    # ``dying_subject`` group, the same dispatcher
+    # (``_fire_permanent_dies_triggers``). Only the wording is new: "Whenever a
+    # creature **with shadow** dies" (Dauthi Ghoul) is the one card in the pool
+    # that prints it, and the long spelling has carried a noun phrase since
+    # Tablet of Epityr.
+    #
+    # **Last in the table, and that is the whole of its placement rule.** Its
+    # subject group is `[^,]+`, so it matches every "whenever a … dies" there
+    # is — including four rows above it that read the same opening words as
+    # their own conditions (`creature_dies`, `creature_you_control_dies`,
+    # `creature_opponent_controls_dies`, and `creature_dealt_damage_by_self_dies`
+    # thirty rows further down, which is why "after the specific ones" is not
+    # enough and the end of the table is). First match wins, so a row at the end
+    # can shadow nothing.
+    ("permanent_dies",              r"whenever (?P<dying_subject>an? [^,]+) dies"),
 )
 
 # "when" triggers (enter/leave events)

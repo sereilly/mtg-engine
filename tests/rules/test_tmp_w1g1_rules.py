@@ -214,3 +214,74 @@ def test_609_4_the_as_though_line_refuses_a_keyword_nothing_enforces():
         "Test Refusal",
         "This creature can block creatures with ward as though it had ward.",
     )).supported is False
+
+
+@pytest.mark.cr("700.4")
+def test_700_4_dies_is_the_short_spelling_of_the_same_event():
+    """"The term **dies** means 'is put into a graveyard from the
+    battlefield.'"
+
+    So a printed noun phrase means the same thing in front of either wording,
+    and the two must produce the *same condition kind with the same payload* —
+    otherwise a card printing the rule's own shorthand would reach a different
+    dispatcher (or, as it did, none at all). Asserted as an equality between the
+    two spellings rather than as "the short one works", because the failure this
+    guards is the two drifting.
+    """
+    from engine.oracle import trigger_condition_of_line
+
+    long_form, _ = trigger_condition_of_line(
+        "Whenever a creature with shadow is put into a graveyard from the "
+        "battlefield, put a +1/+1 counter on this creature."
+    )
+    short_form, _ = trigger_condition_of_line(
+        "Whenever a creature with shadow dies, put a +1/+1 counter on this "
+        "creature."
+    )
+
+    assert long_form is not None and short_form is not None
+    assert short_form.kind == long_form.kind == "permanent_dies"
+    assert short_form.payload == long_form.payload == {
+        "dying_filter": {"type_filter": "creature", "with_keywords": ["shadow"]}
+    }
+
+
+@pytest.mark.cr("615.8", "615.9", "702.28a")
+def test_615_9_a_keyword_narrowed_shield_rechecks_the_source():
+    """Circle of Protection: Shadow, as a rule rather than as a card.
+
+    CR 615.8 gives the shield its one instance and CR 615.9 makes the recorded
+    property a **recheck** at damage time. A shield that snapshotted "these are
+    the shadow creatures" when it was armed would pass every positive test and
+    fail the third assertion here — and the pool has no other card that can
+    change a source's recorded property between the arming and the damage,
+    which is why shadow is where this rule finally gets exercised.
+    """
+    from engine.keywords import grant_keyword, remove_keyword
+    from engine.shields import add_shield, make_source_subject_shield
+    from tests.helpers import _damage_dealt
+
+    shadowy = _bear("Shade Bear", "Shadow", keywords=("Shadow",))
+    ground = _bear("Ground Bear")
+    game, p0, p1 = _duel([], [shadowy, ground])
+    shadow_source, ordinary_source = p1.battlefield
+
+    described = {"type_filter": "creature", "with_keywords": ["shadow"]}
+    add_shield(p0, make_source_subject_shield(described, 0, "Test Circle"))
+
+    # An ordinary creature is not the described source.
+    assert _damage_dealt(game, p0, 3, source=ordinary_source, combat=True) == 3
+
+    # The described one is, and one instance is all the shield holds.
+    assert _damage_dealt(game, p0, 2, source=shadow_source, combat=True) == 0
+    assert _damage_dealt(game, p0, 2, source=shadow_source, combat=True) == 2
+
+    # And the recheck, both ways: a source that gains the keyword after the
+    # shield was armed matches, and one that loses it stops matching.
+    add_shield(p0, make_source_subject_shield(described, 0, "Test Circle"))
+    grant_keyword(ordinary_source, "shadow", duration="end_of_turn")
+    assert _damage_dealt(game, p0, 3, source=ordinary_source, combat=True) == 0
+
+    add_shield(p0, make_source_subject_shield(described, 0, "Test Circle"))
+    remove_keyword(shadow_source, "shadow", duration="end_of_turn")
+    assert _damage_dealt(game, p0, 2, source=shadow_source, combat=True) == 2

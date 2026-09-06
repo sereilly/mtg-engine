@@ -16,6 +16,7 @@ this name so the mirror re-forms instead of forking.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._blankets import _lower_prevent_all
 from ._events import CHOSEN_DAMAGE_SOURCE
 from ._common import (
@@ -430,6 +431,52 @@ def _lower_prevent_damage(
             raise LoweringError("no handler for this source-scoped shield", node=node)
         if not _is_you(recipient):
             raise LoweringError("colour-scoped shields only protect their controller", node=node)
+        if card_types and node.from_filter.with_keywords:
+            # Circle of Protection: Shadow — "The next time **a creature of
+            # your choice with shadow** would deal damage to you this turn,
+            # prevent that damage."
+            #
+            # A *third* narrowing axis beside the colour and the card type, and
+            # the reason it is not simply a second key on the branch below:
+            # ``prevention_source_type`` is compared with ``source_has_type``,
+            # which cannot answer a keyword, so a shield carrying both would
+            # have been armed against **every creature source** with the
+            # keyword dropped — the dropped-rider class, in the widening
+            # direction, on a card whose whole point is the narrowing.
+            #
+            # The whole noun phrase travels as a ``source_filter`` instead,
+            # which ``Shield`` already carries and ``prevention._source_matches``
+            # already rechecks (CR 615.9) through ``subject_matches`` — the one
+            # answer every reader of a printed noun phrase asks. So a phrase
+            # the matcher cannot test refuses here rather than being ignored at
+            # damage time.
+            described = testable_filter_payload(
+                node.from_filter,
+                refusal="the shield's source phrase cannot be tested",
+                node=node,
+            )
+            for keyword in node.from_filter.with_keywords:
+                if keyword not in IMPLEMENTED_KEYWORDS:
+                    # ``subject_matches`` reads a keyword off layer 6, which
+                    # answers "no" for every source when nothing implements the
+                    # word — so the shield would prevent nothing at all while
+                    # the card reported supported. ``with_keywords`` is a
+                    # *testable* key, so the check above cannot see this: it
+                    # asks whether the matcher can answer the question, not
+                    # whether the answer can ever be yes.
+                    raise LoweringError(
+                        f"the shield cannot test the keyword: {keyword}", node=node
+                    )
+            return (
+                OracleInstruction(
+                    "grant_prevention_shield", "",
+                    {
+                        "amount": 1,
+                        "protection_kind": "source_subject",
+                        "source_filter": described,
+                    },
+                ),
+            )
         if card_types:
             # Circle of Protection: Artifacts. Same instruction, same handler,
             # same band — the shield records a card type where the colour

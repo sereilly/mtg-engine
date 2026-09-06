@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **2513**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **248**
+- With deletion-probe findings (ignored words): **249**
 
 ## Measured sets — reported, not gated
 
@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 26 supported card(s).**
+**26 unclaimed sentence(s) across 24 supported card(s).**
 
 - **Anoint**
   - `buyback {3}`
@@ -59,16 +59,12 @@ anything anyone did, and every ingest would arrive red.
 - **Magnetic Web**
   - `if a creature with a magnet counter on it attacks, all creatures with magnet counters on them attack if able`
   - `whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able`
-- **Reality Anchor**
-  - `target creature loses shadow until end of turn`
 - **Recycle**
   - `your maximum hand size is two`
 - **Sarcomancy**
   - `at the beginning of your upkeep, if there are no zombies on the battlefield, this enchantment deals 1 damage to you`
 - **Searing Touch**
   - `buyback {4}`
-- **Shadow Rift**
-  - `target creature gains shadow until end of turn`
 - **Spirit Mirror**
   - `at the beginning of your upkeep, if there are no reflection tokens on the battlefield, create a 2/2 white reflection creature token`
 - **Stalking Stones**
@@ -134,6 +130,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Chandra, Heart of Fire | `search your graveyard and library for any number of red instant and/or` | and/or |
 | Cinder Cloud | `destroy target creature. if a white creature dies this way, cinder clo` | cinder |
 | Cinder Giant | `this creature deals 2 damage to each other creature you control` | each |
+| Circle of Protection: Artifacts | `the next time an artifact source of your choice would deal damage to y` | source |
 | Cleanse | `destroy all black creatures` | all |
 | Cloak of Confusion | `you may have it assign no combat damage this turn. if you do, defendin` | have |
 | Coils of the Medusa | `destroy all non-wall creatures blocking enchanted creature` | all |

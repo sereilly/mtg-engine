@@ -24,7 +24,7 @@ from ..references import parse_recipient
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..names import accept_source_card_name
-from ..readers import accept_source_reference
+from ..readers import _parse_keyword_list, accept_source_reference
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..phrases import (_parse_duration, _parse_opponents_choice,
@@ -583,12 +583,47 @@ def _parse_source_of_choice_effect(
         # two are one production with two narrowings rather than two effects.
         card_type = word
         stream.advance()
-    if not stream.accept_word("source"):
+    # "an artifact **source** of your choice" (Circle of Protection: Artifacts)
+    # and "a **creature** of your choice with shadow" (Circle of Protection:
+    # Shadow) are the same clause with the head noun spelled two ways. CR 615.8
+    # says "a source of your choice", and a card naming a card type is naming a
+    # source of that type — so the word is optional exactly where the type
+    # supplies it, and required where nothing else does (a bare "a of your
+    # choice" is not a sentence).
+    if not stream.accept_word("source") and card_type is None:
         stream.reset(mark)
         return None
     if not stream.accept_phrase("of", "your", "choice"):
         stream.reset(mark)
         return None
+    # "a creature of your choice **with shadow**" (Circle of Protection:
+    # Shadow). A postmodifier on the head noun, printed *after* "of your
+    # choice" rather than before the noun the way a colour or a card type is —
+    # which is why it is read here and not in the adjective run above. It is a
+    # third narrowing axis beside those two, and CR 615.9 rechecks it at damage
+    # time exactly as it rechecks them (a creature that has since lost shadow no
+    # longer matches).
+    #
+    # Read by ``_parse_keyword_list`` — the one reader every other "with
+    # <keyword>" postmodifier in the grammar goes through — rather than a
+    # keyword word of this production's own, so "with shadow and flying" is
+    # the same phrase here as it is anywhere else and no second keyword
+    # vocabulary can drift from it.
+    keywords: tuple[str, ...] = ()
+    keyword_mark = stream.mark()
+    if stream.accept_word("with"):
+        try:
+            keywords = _parse_keyword_list(stream)
+        except GrammarError:
+            stream.reset(keyword_mark)
+        else:
+            if card_type is None:
+                # "a source of your choice with shadow" names no object the
+                # keyword could be tested on — a spell reaches the damage paths
+                # as its printed CardDefinition, which has no layers — so the
+                # phrase refuses rather than arming a shield that answers to
+                # nothing.
+                raise stream.error("a keyword-narrowed shield needs the object type")
     # "a source of your choice **of the chosen color**" (Prismatic Circle). The
     # same Circle narrowing read one branch above, with the colour deferred to
     # what the permanent recorded as it entered (CR 614.1c) instead of printed
@@ -677,7 +712,7 @@ def _parse_source_of_choice_effect(
                 rounding = "up"
             elif not stream.accept_word("down"):
                 raise stream.error("expected 'up' or 'down' after 'rounded'")
-        if colours or card_type or chosen_color:
+        if colours or card_type or chosen_color or keywords:
             # A shield that records a property *and* halves is a card nobody has
             # printed; refusing names the gap rather than dropping one half.
             raise stream.error("no shield both narrows its source and halves")
@@ -697,7 +732,7 @@ def _parse_source_of_choice_effect(
     if colours:
         filt = ast.ObjectFilter(colors=tuple(colours))
     elif card_type:
-        filt = ast.ObjectFilter(card_types=(card_type,))
+        filt = ast.ObjectFilter(card_types=(card_type,), with_keywords=keywords)
     elif chosen_color:
         # Not a member of ``colors``: the colour is not in the sentence at all,
         # and folding it in would need a sentinel every ``colors`` reader would

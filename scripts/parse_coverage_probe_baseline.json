@@ -249,6 +249,13 @@
   ]
  },
  {
+  "card": "Circle of Protection: Artifacts",
+  "clause": "the next time an artifact source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "source"
+  ]
+ },
+ {
   "card": "Cleanse",
   "clause": "destroy all black creatures",
   "ignored": [

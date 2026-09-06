@@ -690,6 +690,33 @@ def make_subject_shield(
     )
 
 
+def make_source_subject_shield(
+    source_filter: dict, seat: int | None = None, source_name: str | None = None
+) -> Shield:
+    """A Circle of Protection keyed on a printed **noun phrase**.
+
+    "The next time a creature of your choice **with shadow** would deal damage
+    to you this turn, prevent that damage." (Circle of Protection: Shadow.)
+
+    The same `kind` as :func:`make_color_shield` and
+    :func:`make_source_type_shield`, so it sits in the same band, is spent by
+    the same interceptor and is swept at the same moment; only the property it
+    answers to differs, and CR 615.9 rechecks whichever one the shield holds.
+
+    Not :func:`make_subject_shield` above, which carries the same
+    ``source_filter`` field: that one is a **blanket** (``uses=None``, Al-abara's
+    Carpet's "prevent *all* damage"), and this sentence says "the next time".
+    One use, spent whole on one instance, exactly as the colour Circles are.
+    """
+    return Shield(
+        kind=PREVENT_FROM_COLOR,
+        uses=1,
+        source_filter=dict(source_filter),
+        filter_seat=seat,
+        source_name=source_name,
+    )
+
+
 def make_targeting_source_shield(source_name: str | None = None) -> Shield:
     """Silhouette's shield: every damage a spell or ability that targets this
     creature causes, for the rest of the turn.

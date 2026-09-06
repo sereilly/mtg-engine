@@ -498,6 +498,19 @@ def _parse_matched_event(
             "is", "put", "into", "an", "opponent", "'s", "graveyard",
             "from", "the", "battlefield"
         )
+        # CR 700.4: "dies" **means** "is put into a graveyard from the
+        # battlefield". "Whenever a creature **with shadow** dies" (Dauthi
+        # Ghoul) is the same event as the three spellings above with the rule's
+        # own shorthand, so it belongs in this production rather than in one of
+        # its own — a second production reading a second spelling of one event
+        # is how the two come to carry different narrowings.
+        #
+        # Safe *here* rather than earlier because this production already sits
+        # after the phrase table (see the comment above it): every fixed-word
+        # death this front end knows — "this creature dies", "equipped creature
+        # dies", "a creature you control dies" — is claimed there and never
+        # reaches the noun parser above.
+        or stream.accept_word("dies")
     )
     if dying is not None and dying_grave:
         # "…**, if it wasn't sacrificed**" (Urza's Miter). CR 603.4's
