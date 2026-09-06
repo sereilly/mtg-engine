@@ -201,6 +201,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "draws_card": (
         "whenever you draw a card",
         "whenever an opponent draws a card",
+        # …and the "when" table's row (Booby Trap), whose two narrowings are
+        # records the permanent made as it entered rather than payload the
+        # announcement carries. A third example rather than a third kind, for
+        # the reason the two above are two: one event, and the printed words
+        # decide what it watches.
+        "when the chosen player draws a card with the chosen name",
     ),
     # CR 305.1's special action, and both printed seats for the reason
     # `draws_card` above lists both: one pattern names them and the narrowing

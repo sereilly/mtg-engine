@@ -421,13 +421,20 @@ class PermanentStateMixin:
                 self._recalculate_lord_buffs()
             default_name = None
             if needs_name:
-                # The default names a card the chooser can actually see — the
-                # priciest nonland card in the chosen seat's graveyard, else one
-                # of their permanents — for Runed Halo's stated reason: naming
-                # nothing makes the trap inert, which is legal and is not a
-                # choice any player would make (idiom 8).
+                # The default names a card the chooser can actually see — one
+                # in an opponent's graveyard, else one of their permanents — for
+                # Runed Halo's stated reason: naming nothing makes the trap
+                # inert, which is legal and is not a choice any player would
+                # make (idiom 8).
+                #
+                # Asked of the **caster**, which is what ``_nameable_cards``
+                # means by its argument: it returns what every *other* seat
+                # shows, so the caster's own board is excluded and the chosen
+                # player's is exactly what is offered. Passing the chosen seat
+                # would offer the caster their own cards, which is the one set
+                # this trap can never catch.
                 default_name = self._default_named_card(
-                    chosen, exclude=permanent.card.name
+                    caster_index, exclude=permanent.card.name
                 )
                 permanent.metadata["chosen_card_name"] = default_name or ""
             if needs_color or needs_name or len(opponents) > 1:
