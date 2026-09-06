@@ -517,6 +517,73 @@ ACTIVATED_LABELS: dict[str, str] = {
     # ``switch_self_pt_until_eot`` directly above is the same act on its own
     # source and reads `activated_pump`, for the reason that entry states.
     "switch_target_pt_until_eot": "activated_pump",
+    # --- Tempest, at its promotion ------------------------------------------
+    # Seven kinds whose label was falling through to ``activated_{grammar
+    # family}``, every one surfaced the moment `load_catalog()` widened. All
+    # seven are this set's -- no earlier set's card reaches any of them -- and
+    # each is settled against a shipped neighbour rather than against the family
+    # its lowering happens to sit in, which is the whole reason this table
+    # exists. ``activated_combat_restrictions`` is the tell: that bucket held
+    # *nothing* but the two defaulted kinds below, so it was a grammar family
+    # name leaking into the report's vocabulary rather than a word the support
+    # report had ever bucketed by.
+    #
+    # Grindstone's "...repeat this process". A **wrapper** -- its payload
+    # carries the mill it repeats -- so it cannot say what the ability is for,
+    # only that the steps happen again. ``for_each`` is already
+    # `activated_repeated` for exactly that reason, and this is the same shape
+    # with the loop's bound read off a condition rather than off a count. Its
+    # default was `activated_zones`, a **leaf** bucket
+    # (``put_exiled_with_source`` holds it), which is the borrowing
+    # `test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket` forbids -- and
+    # which that guard could not see, because it only reads kinds this table
+    # already names.
+    "repeat_process_while": "activated_repeated",
+    # Jinxed Idol hands its own source to an opponent, and takes nothing.
+    # Deliberately **not** `activated_steal`, for the reason
+    # ``exchange_life_totals`` is not `activated_lifegain`: a bucket that says
+    # "steal" of an ability whose whole effect is giving your own permanent away
+    # is a report that misleads. `activated_control` is unavailable for a second
+    # reason worth recording -- ``unless_player_pays`` holds it and is a
+    # *wrapper*, so filing a leaf there would make that entry borrow. The kind
+    # arrived in this set's wave 2 for Starke of Rath's second sentence, where
+    # it lowers inside a ``sequence``; Jinxed Idol is the card that reaches it
+    # as a whole activated ability.
+    "give_control_of_source_to_player": "activated_give_control",
+    # Legacy's Allure, the other direction, and the settled word for it: Old Man
+    # of the Sea's hook declares `activated_steal` for
+    # ``steal_creature_while_tapped_and_weaker`` -- "gain control of target
+    # creature with power less than or equal to ...", which is this card's
+    # sentence with the bound read off counters instead of off power -- and
+    # ``steal_target_linked_to_source`` is the same act with a linked duration.
+    "gain_control_of_target": "activated_steal",
+    # Mounted Archers may block one more creature than CR 509.1a allows;
+    # Trumpeting Armodon imposes a blocking requirement (CR 509.1c). A
+    # permission and a requirement, which is the pair
+    # ``attack_as_though_no_defender_until_eot`` and
+    # ``mark_non_wall_target_to_attack`` already are one declaration step over
+    # -- and both of those read `activated_combat`, whose entry states the rule
+    # these two follow: "the grammar family is combat_restrictions, and the
+    # settled vocabulary is combat". Not `activated_restriction`, which
+    # ``target_cant_block_until_eot`` holds for the *denial*: what these two
+    # produce is a thing that may or must happen, not one that may not.
+    "grant_additional_blocks_until_eot": "activated_combat",
+    "force_target_to_block_until_eot": "activated_combat",
+    # Phyrexian Grimoire empties two cards out of a graveyard, one to exile and
+    # one to a hand. Both destinations are already `activated_recursion` --
+    # ``exile_graveyard_position`` (Phyrexian Furnace) and
+    # ``return_creature_from_graveyard_to_hand`` (Adun Oakenshield) -- and that
+    # bucket's own note is why one row covers both: "what the ability is for is
+    # that the graveyard stops holding it". Which of the two the opponent picks
+    # is payload.
+    "reveal_top_opponent_chooses": "activated_recursion",
+    # Sacred Guide digs down its own library and exiles everything it passes.
+    # Beside ``look_top_exile_random`` (Orcish Librarian), which is the same act
+    # with the stopping point read off a count rather than off a colour: the
+    # library is the object. Not `activated_search`, which is for a tutor
+    # "chosen from a zone nobody sees" -- this one is revealed as it goes and
+    # can whiff, and a deck with no white card left exiles itself.
+    "reveal_until_match": "activated_library",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -856,6 +923,45 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Mana Web tapping the lands that could pay for what was just tapped. A tap
     # sweep like the row above it, and the same word for the same reason.
     "tap_lands_sharing_produced_mana": "triggered_tapping",
+    # --- Tempest, at its promotion ------------------------------------------
+    # Four kinds falling back to the `spell_pattern` marker, all four this
+    # set's. They were **masked**: the activated half of
+    # ``test_no_grammar_read_ability_falls_back_to_the_category_default``
+    # asserts first, so seven activated rows had to land before this half of the
+    # same test could say anything. A guard with two assertions reports the
+    # first one only.
+    #
+    # The fallback is not merely a bucket here. `web/serialization.py` reads a
+    # stack item's `is_triggered` off this label's ``triggered_`` prefix, and
+    # `spell_pattern` has none -- so each of these four announced itself on the
+    # stack as though it were a spell.
+    #
+    # Duplicity's entry exiles the top five face down. ``exile_entire_library``
+    # and ``exile_all_matching`` are already `triggered_exile`, which is the
+    # word this side spells the family with -- the same kind reads
+    # `activated_recursion` for Knowledge Vault on the other side, exactly as
+    # ``exile_target_graveyard`` and ``put_exiled_with_source`` do.
+    "exile_top_of_library": "triggered_exile",
+    # Elven Warhounds puts its blocker on top of a library --
+    # ``put_target_on_library_top`` is `activated_library` for Civic Guildmage
+    # ("a permanent on top of a library"), and ``shuffle_source_card_into_library``
+    # is already the triggered spelling of the same act on this side.
+    "put_target_on_library_top": "triggered_library",
+    # Magnetic Web's magnet counters make every other one block the attacker.
+    # The sweep twin of ``force_target_to_block_until_eot``, added to the
+    # activated table above as `activated_combat` for Trumpeting Armodon: a
+    # blocking requirement (CR 509.1c), and how many creatures it names is
+    # payload rather than a different act.
+    "force_subject_to_block_until_eot": "triggered_combat",
+    # Unstable Shapeshifter takes the copiable values of whatever just entered
+    # (CR 707.2). `triggered_copy` is the bucket for an ability whose point is
+    # that something is copied; its other member (``copy_triggering_spell``)
+    # copies an object on the stack rather than a permanent's layer-1 values,
+    # which is the payload's business and not what the label answers.
+    # Deliberately not `triggered_pump`: that is this side's word for a P/T or
+    # keyword change, and a report saying "pump" of an ability that can *shrink*
+    # the creature to a 1/1 is the misleading kind this table refuses.
+    "become_copy_of_bound_permanent": "triggered_copy",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

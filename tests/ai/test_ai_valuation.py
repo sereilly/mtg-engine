@@ -390,6 +390,18 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # *number of targets* is the announced X (CR 107.3a), so the count and
         # the cost are one number.
         "Cone of Flame", "Firestorm",
+        # Reviewed at Tempest's promotion, and it is the entry that adds
+        # nothing -- which is the reviewable result rather than the absence of
+        # one. Rolling Thunder's every derived field already matched four cards
+        # above it (`deal_damage`, division `chosen`, amount `x`, side
+        # "opponent" off the `damage` category, thresholded, not whole-board):
+        # it is Fire Covenant, Infernal Harvest, Meteor Shower and Rock Slide's
+        # shape exactly. Driven, the concentrate policy sends the whole X at the
+        # opponent's face, which is the play those four already had. So no
+        # weight and no side list moved for it -- the derivation reached a card
+        # printed two sets later with no edit, which is what "derived from the
+        # compiled program, never a list of names" buys.
+        "Rolling Thunder",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 
