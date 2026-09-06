@@ -472,6 +472,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # touch colour at all.
     "mark_text_modified": "text_change",
     "gain_control_of_target": "control",
+    # "…gain control of that creature at end of combat" (Tolarian Entrancer):
+    # the same untimed contribution, about the object a delayed ability bound.
+    "gain_control_of_bound_permanent": "control",
     "gain_control_until_eot": "control",
     # An auction for one permanent's control (Illicit Auction). The same
     # category as the steals above, because where the permanent ends up is

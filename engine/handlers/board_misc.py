@@ -188,6 +188,30 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
                 f"{context.card.name} had no permanent to be about"
             )
             return True, "no object"
+    elif payload.get("binds_event_subject"):
+        # "Whenever a creature you control attacks, **it** phases out at end of
+        # combat." (Teferi's Veil.) CR 603.7c's object again, and a third place
+        # to read it from: the ability is created by a *trigger*, and the object
+        # it is about is the one that trigger's own event was about — an
+        # attacker the fire site stamped by id (CR 603.10) and never made the
+        # stack item's target.
+        #
+        # So neither branch above can find it. ``binds_recorded`` reads a step
+        # of this resolution's scratchpad and there is no such step;
+        # ``binds_target`` resolves the stack item's target and the announcement
+        # named none, which would arm an entry about nothing while the card
+        # compiled clean. The lowering is what decides which of the three
+        # applies, from the *creating* event, and refuses an event that freezes
+        # no object.
+        #
+        # The literal key, for the reason `binds_player` below spells its own:
+        # the fire sites write it and the handler layer does not import from the
+        # grammar's lowering package.
+        recorded = (context.trigger_context or {}).get("event_subject_permanent_id")
+        if not isinstance(recorded, int):
+            game.log.append(f"{context.card.name} had no permanent to be about")
+            return True, "no object"
+        bound_id = recorded
     elif payload.get("binds_target"):
         # The **innermost** binding, not the resolution's target list: inside
         # "for each of those creatures, … destroy that creature at end of

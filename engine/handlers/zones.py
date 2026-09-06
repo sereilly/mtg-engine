@@ -3147,6 +3147,70 @@ def exile_graveyard_position(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("reanimate_graveyard_position")
+def reanimate_graveyard_position(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the top creature card of defending player's graveyard onto the
+    battlefield **under your control**." (Bone Dancer.)
+
+    Which card is ``graveyard_order.positions_named`` — the one scan, shared
+    with ``exile_graveyard_position`` above and with the activation-cost payment
+    path, so a printed position read as a cost and the same position read as an
+    effect cannot name different cards. It answers with an **index** rather than
+    a card because two copies of one card in one graveyard are the same Python
+    object, and an identity filter over the pile would take both.
+
+    Whose pile is CR 506.2's defending player, frozen into the trigger's context
+    by the combat fire site rather than read off the board — the same key
+    ``exile_cards_from_graveyard`` reads, and for its reason: this resolves in a
+    priority window after the declaration, and an attacker removed from combat
+    in between would leave a board read naming nobody.
+
+    Whose **battlefield** is the ability's controller, which is the whole of the
+    card: CR 404.1 puts the card in its owner's graveyard, so the default
+    arrival (CR 400.3) would hand the creature back to the player being
+    attacked.
+
+    An empty pile reanimates nothing and still resolves (CR 608.2 finishes what
+    it can) — and returns False from the ``may`` it sits inside, which is what
+    keeps "If you do, this creature assigns no combat damage this turn" from
+    firing on a turn where nothing came back.
+    """
+    from ..graveyard_order import positions_named
+
+    if instruction.payload.get("graveyard_owner") != "defending_player":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(
+            f"{context.card.name}: no defending player was recorded"
+        )
+        return True, "no graveyard"
+    victim = game.players[seat]
+    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    if not taken:
+        game.log.append(
+            f"{victim.name}'s graveyard has nothing {context.card.name} can "
+            f"return"
+        )
+        return True, "no card"
+    caster_index = game.players.index(context.caster)
+    moved = []
+    # Highest index first: the positions were found against the pile as it
+    # stands, and removing a lower one renumbers every position above it.
+    for index in sorted(taken, reverse=True):
+        moved.append(victim.graveyard.pop(index))
+    for card in moved:
+        game._put_permanent_onto_battlefield(
+            caster_index, Permanent(card=card), None, from_zone="graveyard"
+        )
+        game.log.append(
+            f"{context.card.name} returned {card.name} from {victim.name}'s "
+            f"graveyard under {context.caster.name}'s control"
+        )
+    return True, "resolved"
+
+
 @effect_handler("exile_cost_sacrifices")
 def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…, then exile this artifact and those creature cards." (Sword of the
@@ -3983,6 +4047,78 @@ def phase_out_self(game: Game, instruction: OracleInstruction, context: OracleEx
         game.log.append(f"{context.card.name}: not on the battlefield to phase out")
         return True, "resolved"
     game.phase_out_permanent(source)
+    return True, "resolved"
+
+
+@effect_handler("phase_out_bound_permanent")
+def phase_out_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature you control attacks, **it phases out at end of
+    combat**." (Teferi's Veil, CR 511.1 / CR 603.7.)
+
+    The object is the one the ability that created this delay bound
+    (CR 603.7c), carried by id in the trigger's context — the attacker the
+    Veil's own trigger fired on, which by end of combat may have been removed
+    from combat, blocked, or renumbered by something else leaving (CR 400.7).
+    So it is an id, never an index and never a board search.
+
+    ``phase_out_self``'s twin for a permanent that is *not* the source: the
+    Veil is an enchantment and stays where it is, and its own source would be
+    an illegal reading of "it" that phases out the enchantment instead of the
+    creature.
+
+    **No re-check of the printed noun**, for ``destroy_event_subject``'s stated
+    reason one file over: the pronoun re-states the trigger's own noun phrase,
+    the condition already decided this creature is what the ability is about,
+    and asking again at end of combat would let a creature whose controller
+    changed mid-combat escape a phase-out CR 603.7c has already aimed at it.
+
+    A permanent already gone phases out nothing, which is CR 608.2b doing as
+    much as it can rather than a failure.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    game.phase_out_permanent(victim)
+    return True, "resolved"
+
+
+@effect_handler("forbid_source_phase_out")
+def forbid_source_phase_out(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{U}: Until your next upkeep, **this creature** can't phase out."
+    (Ertai's Familiar, CR 702.26.)
+
+    ``forbid_phase_out``'s twin on the ability's own source, and its own kind
+    for the reason ``phase_out_self`` is one beside ``phase_out_target``: the
+    sentence names nothing to pick, so routing it through the targeted kind
+    would raise a picker for a choice CR 602.2b says was never offered and then
+    lock whatever the resolution happened to be holding.
+
+    The record and the sweep that ends it are ``engine/phasing_locks.py``'s, so
+    a printed window with no sweep behind it refuses at lowering rather than
+    being written and never lifted. "**Your** next upkeep" is the ability's
+    controller (CR 109.5) — here the same seat as the creature's, but frozen
+    from the ability rather than read off the permanent, because that is the
+    seat the words name.
+    """
+    from ..phasing_locks import forbid_phase_out as record_lock
+
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: not on the battlefield to lock")
+        return True, "resolved"
+    seat = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
+    record_lock(
+        source,
+        duration=str(instruction.payload.get("duration") or "your_next_upkeep"),
+        seat=seat,
+    )
+    game.log.append(f"{source.card.name} can't phase out ({context.card.name})")
     return True, "resolved"
 
 

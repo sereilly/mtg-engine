@@ -324,6 +324,26 @@ def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool, str
     already has in hand — and because the clause that defines the sentence's X
     belongs *inside* the delay (see ``statements.parse_statement``).
     """
+    # "You gain control of that creature **if it regenerates this way**."
+    # (Debt of Loyalty.) The trailing spelling of the `when it regenerates
+    # this way` opener above, printed as an "if" — one delay, one event, and
+    # the same row it would reach from the other word order.
+    #
+    # **Not a condition on this resolution.** The shield is spent the next
+    # time the creature would be destroyed, which is later than the spell
+    # that made it (CR 701.19c: creating a shield is not regenerating), so a
+    # reading that asked the question now would answer no on every board and
+    # the control change would never happen.
+    #
+    # ``binds`` is True where the opener's row watches the **source**: this
+    # is a spell, so the creature that regenerates is the one it targeted,
+    # and CR 603.7d's own-source default would watch a sorcery in a
+    # graveyard. Left as ``watches=None``, the entry watches the object it
+    # is about, which is that same creature.
+    regen = stream.mark()
+    if stream.accept_phrase("if", "it", "regenerates", "this", "way"):
+        return "source_regenerates", True, "end_of_turn", True, None
+    stream.reset(regen)
     for phrase, kind, once, duration, binds in _DELAYED_OPENERS:
         mark = stream.mark()
         if stream.accept_phrase(*phrase):

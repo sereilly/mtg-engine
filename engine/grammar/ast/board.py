@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     Duration,
+    GraveyardPosition,
     ObjectFilter,
     PlayerRef,
     Recipient,
@@ -658,6 +659,30 @@ class PutOntoBattlefield:
     #: only reader that has the whole printed line in view —
     #: ``rebinding.bind_recorded_card``.
     bound_card_from: str | None = None
+
+
+@dataclass(frozen=True)
+class PutGraveyardPositionOntoBattlefield:
+    """"Put **the top creature card of defending player's graveyard** onto
+    the battlefield under your control." (Bone Dancer.)
+
+    Its own node beside :class:`PutOntoBattlefield` rather than a shape of
+    it, because what moves is not a :data:`Recipient` at all: CR 404.2 keeps
+    a graveyard in order and this names a card by its **position** in that
+    pile, which is what :class:`GraveyardPosition` is and what no noun
+    phrase can say. The same split ``ExileGraveyardPosition`` already makes
+    one zone over, and for that node's reason: a reader that flattened the
+    position into a filter would produce a phrase every card in the pile
+    answers.
+
+    ``under_your_control`` is recorded rather than assumed. CR 400.3 lets a
+    card arrive under a seat that is not its owner's, and the whole point of
+    the card printing it is that the creature comes back on the *other*
+    side — a sentence that shed the words would reanimate it for the player
+    being attacked.
+    """
+    position: GraveyardPosition
+    under_your_control: bool = False
 
 
 @dataclass(frozen=True)

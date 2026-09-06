@@ -22,7 +22,8 @@ from ._common import (_describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target,
                       _restrictions_beyond)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
-                      _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
+                      _BOUND_OBJECT_DELAYED_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      _UNTAPPED_PERMANENTS)
 
 
 def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
@@ -387,6 +388,28 @@ def _lower_gain_control(
         # a payload flag, because the handler both kinds share reads it to
         # decide the lifetime — a payload key would let a lowering that forgot
         # it record a steal that quietly ends at cleanup.
+        # "…gain control of **that creature** at end of combat." (Tolarian
+        # Entrancer.) The object the delayed ability was created about
+        # (CR 603.7c) — the blocker the Entrancer's own trigger named — which
+        # is neither a target this sentence chose nor a record an earlier step
+        # of this resolution wrote: the record was frozen a combat step ago,
+        # when the creating trigger resolved.
+        #
+        # Its own kind rather than the `permanents_from` spelling below, which
+        # reads the live scratchpad and would find nothing here: the steal would
+        # log itself resolved and take no creature at all.
+        if (
+            subject.quantifier in ("that", "it")
+            and not subject.targeted
+            and event in _BOUND_OBJECT_DELAYED_EVENTS
+        ):
+            if node.tap_when_lost or node.offered:
+                raise LoweringError(
+                    "no rider rides the delayed steal", node=node
+                )
+            return (
+                OracleInstruction("gain_control_of_bound_permanent", "", {}),
+            )
         if subject.quantifier != "target":
             raise LoweringError(
                 "the indefinite control change needs a named target", node=node

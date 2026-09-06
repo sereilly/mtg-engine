@@ -181,6 +181,12 @@ _BOUND_TO_A_RECORDED_PERMANENT: frozenset[str] = frozenset({
 #: :func:`_lower_create_delayed_trigger`.
 _BOUND_TO_THE_DELAYS_OBJECT = frozenset({
     "destroy_bound_permanent", "sacrifice_bound_permanent",
+    # "…**it** phases out at end of combat" (Teferi's Veil) and "…gain control
+    # of **that creature** at end of combat" (Tolarian Entrancer). CR 511.1's
+    # step with CR 603.7c's object: the same shape the two destroys above have,
+    # with a different verb — which is the whole reason this is a set and not an
+    # equality test.
+    "phase_out_bound_permanent", "gain_control_of_bound_permanent",
 })
 
 
@@ -188,6 +194,7 @@ def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
     produced: frozenset[str] = frozenset(),
+    creating_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """The ``create_delayed_trigger`` instruction for one printed delay.
 
@@ -203,7 +210,8 @@ def _lower_create_delayed_trigger(
     from ...delayed_triggers import (DELAYED_EVENTS,
                                      EVENTS_SEATED_BY_BOUND_PLAYER)
 
-    from ._events import (EXTRA_TURN_GRANTED, _RECORDED_PERMANENTS,
+    from ._events import (EXTRA_TURN_GRANTED, _EVENT_SUBJECT_OBJECTS,
+                          _RECORDED_PERMANENTS,
                           _PERMANENTS_MADE_BY_THIS_EFFECT)
 
     if node.event not in DELAYED_EVENTS:
@@ -348,7 +356,22 @@ def _lower_create_delayed_trigger(
             # be a second answer nothing consults.
             payload["binds_target"] = False
         elif not node.binds_target:
-            payload["binds_target"] = True
+            # "Whenever a creature you control attacks, **it** phases out at
+            # end of combat." (Teferi's Veil.) The delay is created by a
+            # *trigger*, and the object it is about is the one that trigger's
+            # own event was about — which the fire site stamps by id and never
+            # makes the stack item's target. So `binds_target` would resolve
+            # nothing and arm an entry about no object at all, which is the
+            # failure every bound payload in this file exists to prevent.
+            #
+            # Gated on the creating event, exactly as the pronoun readers in
+            # the effect families are: outside these events the words name an
+            # object no fire site recorded, and the delay keeps the target
+            # reading it had.
+            if creating_event in _EVENT_SUBJECT_OBJECTS:
+                payload["binds_event_subject"] = True
+            else:
+                payload["binds_target"] = True
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

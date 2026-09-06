@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 85.5% | 84.3% | 61.0% | 132 |
+| WTH *(measured)* | 167 | 249 | 87.6% | 87.6% | 64.3% | 139 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.3%** | **58.9%** | **2965** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -46,9 +46,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 329 | 140 | expected a subject |  |
+| 327 | 138 | expected a subject |  |
 | 101 | 45 | unrecognized effect verb |  |
-| 88 | 41 | unconsumed text |  |
+| 85 | 38 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -615,6 +615,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Bolt Hound**
   - `Whenever this creature attacks, other creatures you control get +1/+0 until end of turn.`
+- **Bone Dancer**
+  - `Whenever this creature attacks and isn't blocked, you may put the top creature card of defending player's graveyard onto the battlefield under your control. If you do, this creature assigns no combat damage this turn.`
 - **Bone Flute**
   - `{2}, {T}: All creatures get -1/-0 until end of turn.`
 - **Bone Harvest**
@@ -978,6 +980,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, remove a pupa counter from this Aura. If you can't, sacrifice it, put a +1/+1 counter on enchanted creature, and that creature gains flying.`
 - **Coercion**
   - `Target opponent reveals their hand. You choose a card from it. That player discards that card.`
+- **Coils of the Medusa**
+  - `Sacrifice this Aura: Destroy all non-Wall creatures blocking enchanted creature.`
 - **Cold Snap**
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of snow lands they control.`
 - **Colossus of Sardia**
@@ -1204,6 +1208,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
+- **Debt of Loyalty**
+  - `Regenerate target creature. You gain control of that creature if it regenerates this way.`
 - **Decomposition**
   - `When enchanted creature dies, its controller loses 2 life.`
 - **Deep Spawn**
@@ -1612,6 +1618,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ersatz Gnomes**
   - `{T}: Target spell becomes colorless.`
   - `{T}: Target permanent becomes colorless until end of turn.`
+- **Ertai's Familiar**
+  - `When this creature phases out or leaves the battlefield, mill three cards.`
+  - `{U}: Until your next upkeep, this creature can't phase out.`
 - **Essence Filter**
   - `Destroy all enchantments or all nonwhite enchantments.`
 - **Essence Flare**
@@ -2308,6 +2317,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Destroy target artifact creature.`
   - `• Attacking creatures get +1/+0 until end of turn.`
   - `• Target creature with power 2 or less can't be blocked this turn.`
+- **Heat Stroke**
+  - `At end of combat, destroy each creature that blocked or was blocked this turn.`
 - **Heat Wave**
   - `Blue creatures can't block creatures you control.`
 - **Heaven's Gate**
@@ -4960,6 +4971,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
   - `Whenever you draw a card, target opponent mills two cards. (They put the top two cards of their library into their graveyard.)`
+- **Teferi's Veil**
+  - `Whenever a creature you control attacks, it phases out at end of combat. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Teferi's Wavecaster**
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Telekinesis**
@@ -5171,6 +5184,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tolaria**
   - `{T}: Add {U}.`
   - `{T}: Target creature loses banding and all "bands with other" abilities until end of turn. Activate only during any upkeep step.`
+- **Tolarian Entrancer**
+  - `Whenever this creature becomes blocked by a creature, gain control of that creature at end of combat.`
 - **Tolarian Kraken**
   - `Whenever you draw a card, you may pay {1}. When you do, you may tap or untap target creature.`
 - **Tolarian Serpent**

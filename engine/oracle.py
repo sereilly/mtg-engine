@@ -71,8 +71,29 @@ from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .grammar.lowering._events import OPPONENT_CHOSE_MODE
 from .grammar.postmodifiers import COST_TAPPED_REFERENT
+from .grammar.readers import _SELF_NOUNS
 from .grammar.vocabulary import (IMPLEMENTED_KEYWORDS,
                                  TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES)
+
+#: The nouns a card uses for **itself** in a cost - "sacrifice this
+#: **Aura**", "exile this **artifact**", "return this **enchantment** to
+#: its owner's hand".
+#:
+#: Derived from the grammar's one list rather than spelled again. It *was*
+#: spelled again, three times, as a shorter hand-written alternation
+#: carrying only card types - so "Sacrifice this **Aura**" matched nothing
+#: and the cost was never charged. That is the quiet direction: nothing
+#: crashed, nothing read as unsupported, and Thrull Retainer and Carapace
+#: regenerated the creature they enchant every turn for free, for as long
+#: as the game lasted. ``Aura`` and ``Equipment`` are *subtypes*
+#: (CR 205.3h), which is exactly why a list of card types looked complete.
+#:
+#: ``card`` and ``spell`` are dropped: neither is a permanent, so neither
+#: can be sacrificed, exiled from the battlefield or returned to a hand as
+#: *this object* - and a cost regex admitting them would read "exile this
+#: card" on a line about somebody else's graveyard.
+_SELF_COST_NOUNS = "|".join(sorted(_SELF_NOUNS - {"card", "spell"}))
+
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -1087,6 +1108,21 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # alone, with this table quietly naming a different event.
     ("attached_creature_leaves_battlefield",
      r"when(?:ever)? (?:equipped|enchanted) creature leaves(?: the battlefield)?"),
+    # "When this creature **phases out or leaves the battlefield**, mill three
+    # cards." (Ertai's Familiar.) CR 603.1's one ability with two trigger
+    # events, exactly as `creature_attacks_or_blocks` is — one kind read at
+    # both fire sites, never two entries, because the ability is one ability
+    # and each of two would be waiting for its own half.
+    #
+    # Above the generic row for `created_token_leaves_battlefield`'s reason and
+    # a sharper one: that row's `.+` swallows "this creature phases out or" and
+    # reports the ability as watching the *departure alone*. Ertai's Familiar
+    # has phasing, so it phases out every other untap step and never leaves the
+    # battlefield at all — the card would have compiled supported and milled
+    # nothing for the whole game.
+    ("phases_out_or_leaves_battlefield",
+     r"when this (?:creature|artifact|enchantment|land|permanent) phases out "
+     r"or leaves(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     # "**When you lose control of this artifact**, put all cards exiled with
     # this artifact into their owner's graveyard." (Gustha's Scepter.) A CR
@@ -1992,7 +2028,9 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # as a cost.
     cost_lower = cost_part.lower()
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
-    exile_self = bool(re.search(r"\bexile this (artifact|creature|enchantment|permanent|land)\b", cost_lower))
+    exile_self = bool(
+        re.search(rf"\bexile this ({_SELF_COST_NOUNS})\b", cost_lower)
+    )
     # "Exile a creature you control" (City of Shadows) / "Exile a creature
     # card from your graveyard" (Necropolis) - a *chosen* object rather than
     # the source. The regex only **delimits** the noun phrase to the end of
@@ -2127,15 +2165,15 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # ``engine/cast_costs.py`` exists to refuse one announcement step earlier.
     #
     # A subtype among card types because those are the two vocabularies a
-    # permanent uses to name itself (CR 205.3g, CR 301.5), and only "aura"
-    # because only "aura" is printed: the pool has no "sacrifice this
-    # Equipment", and a word nothing prints is a claim nothing tests.
+    # permanent uses to name itself (CR 205.3g, CR 301.5). Two wave-2
+    # branches found this bug independently and fixed it twice - one by
+    # adding "aura" to the hand-written alternation, one by deriving the
+    # whole set from the grammar's ``_SELF_NOUNS``. The derived one is what
+    # survived the merge, because the alternation *was* the bug: a second
+    # copy of a list this file already owns, which went stale the moment a
+    # subtype was printed.
     sacrifice_self = bool(
-        re.search(
-            r"\bsacrifice this "
-            r"(artifact|aura|creature|enchantment|permanent|land|token)\b",
-            cost_lower,
-        )
+        re.search(rf"\bsacrifice this ({_SELF_COST_NOUNS})\b", cost_lower)
         # "Remove five fuse counters from this enchantment **and sacrifice
         # it**" (Goblin Bomb). The pronoun names the permanent the clause in
         # front of it just named, so it is read as part of that clause rather
@@ -2145,8 +2183,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         # position (``costs._parse_costs``'s remove branch), so the two halves
         # of the clause cannot admit different sentences.
         or re.search(
-            r"\bfrom this (?:artifact|creature|enchantment|permanent|land|token) "
-            r"and sacrifice it\b",
+            rf"\bfrom this ({_SELF_COST_NOUNS}) and sacrifice it\b",
             cost_lower,
         )
     )
@@ -2156,9 +2193,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # cost has.
     return_self_to_hand = bool(
         re.search(
-            r"\breturn this "
-            r"(artifact|aura|creature|enchantment|permanent|land|token)"
-            r" to its owner's hand\b",
+            rf"\breturn this ({_SELF_COST_NOUNS}) to its owner's hand\b",
             cost_lower,
         )
     )

@@ -121,6 +121,14 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # CR 702.26's two events (Teferi's Imp, Warping Wurm). One row per printed
     # noun, exactly as the untap rows above: the noun is not payload here, it
     # is the self-reference, and every spelling a Mirage card prints is listed.
+    # The joined event (Ertai's Familiar), above both halves it is a strict
+    # prefix of — matching the bare "phases out" first would leave "or leaves
+    # the battlefield" unconsumed and refuse the line, which is the same
+    # longest-first rule every pair in this table follows.
+    ("phases_out_or_leaves_battlefield",
+     ("this", "creature", "phases", "out", "or", "leaves", "the", "battlefield")),
+    ("phases_out_or_leaves_battlefield",
+     ("this", "permanent", "phases", "out", "or", "leaves", "the", "battlefield")),
     ("phases_out", ("this", "creature", "phases", "out")),
     ("phases_out", ("this", "artifact", "phases", "out")),
     ("phases_out", ("this", "permanent", "phases", "out")),

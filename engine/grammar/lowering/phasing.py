@@ -26,7 +26,7 @@ from ._common import (
     _describe_targets, _filter_payload, _is_enchanted, _is_source, _is_target,
     refuse_untestable
 )
-from ._events import binds_block_pair
+from ._events import _BOUND_OBJECT_DELAYED_EVENTS, binds_block_pair
 from ._filters import _restrictions_beyond, split_bound_card_type
 
 
@@ -164,6 +164,34 @@ def _lower_phase_out(
         return (
             OracleInstruction("phase_out_matching", "", {"filter": described}),
         )
+    # "…**it** phases out at end of combat." (Teferi's Veil.) The object the
+    # delayed ability was created about (CR 603.7c), which is neither a target
+    # nor the source: the Veil is an enchantment that stays where it is, and the
+    # creature is one its own trigger named a combat step earlier.
+    #
+    # Read before the block-pair branch below, whose quantifier it shares: that
+    # one asks `binds_block_pair`, which is False for every delayed event, so
+    # the two cannot both claim a line — but the refusal a delayed "that
+    # creature" would get there names a block trigger the card never printed.
+    #
+    # `is_source` is what tells the pronoun apart from `phase_out_self`'s: a
+    # bare "it" the rebinder left alone is still the ability's own source
+    # (`rebinding.rebind_pronoun_to_event_subject` only rewrites it where the
+    # sentence has something else to name), and no narrowing is carried, for
+    # `destroy_event_subject`'s reason — the pronoun re-states the creating
+    # trigger's own noun phrase, which that trigger already tested.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("it", "that")
+        and not subject.targeted
+        and not subject.filter.is_source
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        return (OracleInstruction("phase_out_bound_permanent", "", {}),)
     # "This creature and **that creature** phase out." (Dream Fighter.) The
     # other half of the block CR 509.3a-d announced, which the trigger froze —
     # the same referent `pump_block_pair` and `grant_keyword_to_block_pair`
@@ -244,6 +272,17 @@ def _lower_cant_phase_out(node: ast.CantPhaseOut) -> tuple[OracleInstruction, ..
     if duration is None:
         raise LoweringError(
             "a phase-out lock needs a printed duration a sweep ends", node=node
+        )
+    # "{U}: Until your next upkeep, **this creature** can't phase out."
+    # (Ertai's Familiar.) The ability's own source, which is a different
+    # question from a target and gets `phase_out_self`'s treatment beside
+    # `phase_out_target`'s: the sentence names nothing to pick, so there is
+    # nothing to describe and nothing to re-check — routing it through the
+    # targeted kind would ask CR 602.2b's picker for a choice the card never
+    # offered and then lock whatever the resolution was holding.
+    if _is_source(node.subject):
+        return (
+            OracleInstruction("forbid_source_phase_out", "", {"duration": duration}),
         )
     if not _is_target(node.subject):
         # Every other subject is a sentence nobody prints, and reading one as

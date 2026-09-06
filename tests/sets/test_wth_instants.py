@@ -611,3 +611,101 @@ def test_abeyance_names_one_player_not_two(set_pool):
     assert "targets" not in steps[1].payload
 
 # --- end W2G5 ---
+
+
+# --- W2G3: phasing and end of combat ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g3i_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g3i_debt(set_pool):
+    """Debt of Loyalty in hand, an opponent's creature to point it at."""
+    victim = Permanent(card=_w2g3i_creature("Victim", 2, 2))
+    victim.summoning_sick = False
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("WTH")["Debt of Loyalty"]]),
+        PlayerState(name="P2", battlefield=[victim]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    result = game.cast_from_hand(
+        0, "Debt of Loyalty", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result
+    for _ in range(20):
+        if not game.stack:
+            break
+        game.resolve_top_of_stack()
+    return game, victim
+
+
+def test_debt_of_loyalty_delays_the_steal_until_the_shield_is_spent(set_pool):
+    """"Regenerate target creature. You gain control of that creature **if it
+    regenerates this way**." (CR 603.7, CR 701.19c.)
+
+    The trailing "if" is a delay, not a condition on this resolution — CR 701.19c
+    is explicit that creating a regeneration shield is not regenerating, so a
+    reading that asked the question now would answer no on every board and the
+    control change would never happen at all.
+
+    The entry binds the spell's **target**, not its source: the source is an
+    instant that is in a graveyard by the time the shield is spent, and
+    CR 603.7d's own-source default would watch it.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Debt of Loyalty"])
+    assert program.supported, program.reason
+    (sequence,) = program.instructions
+    _regen, delay = sequence.payload["steps"]
+    assert delay.payload["event"] == "source_regenerates"
+    assert delay.payload["instruction"].kind == "gain_control_of_bound_permanent"
+    assert delay.payload["binds_target"] is True
+
+    game, victim = _w2g3i_debt(set_pool)
+    assert victim.regeneration_shield == 1
+    (entry,) = game.delayed_triggers
+    assert entry.bound_permanent_id == victim.permanent_id
+    assert game.controller_index_of(victim) == 1
+
+
+def test_debt_of_loyalty_takes_the_creature_when_it_regenerates(set_pool):
+    """The shield spent is the event, and the control change follows it."""
+    game, victim = _w2g3i_debt(set_pool)
+
+    game._destroy_swept_permanents(game.players[1], lambda p: p is victim)
+    for _ in range(20):
+        if not game.stack:
+            break
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert game.controller_index_of(victim) == 0, game.log
+    assert victim in game.players[0].battlefield
+    assert victim not in game.players[1].battlefield
+
+
+def test_debt_of_loyalty_takes_nothing_if_the_creature_is_never_destroyed(set_pool):
+    """The half the printed "if" is for.
+
+    A card that gained control on resolution would be a strictly better spell
+    than the one printed, and nothing in the compiled program would look wrong:
+    the steal happens, the log says so, and the creature simply changes hands a
+    turn early and unconditionally.
+    """
+    game, victim = _w2g3i_debt(set_pool)
+    game._settle()
+
+    assert game.controller_index_of(victim) == 1, game.log
+    assert victim in game.players[1].battlefield

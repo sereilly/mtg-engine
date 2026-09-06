@@ -1185,3 +1185,366 @@ def test_serrated_biskelion_offers_a_creature_picker(set_pool):
     assert derive_activation_spec(ability).get("kind") == "creature"
 
 # --- end W2G5 ---
+
+
+# --- W2G3: phasing and end of combat ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g3c_creature(name, power, toughness) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g3c_nosick(perm: Permanent) -> Permanent:
+    perm.summoning_sick = False
+    return perm
+
+
+def _w2g3c_combat(*seats) -> Game:
+    game = Game(players=[
+        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        for i, board in enumerate(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+def _w2g3c_resolve(game: Game) -> None:
+    for _ in range(40):
+        if not game.stack:
+            return
+        game.resolve_top_of_stack()
+
+
+def test_tolarian_entrancer_delays_the_steal_to_end_of_combat(set_pool):
+    """"Whenever this creature becomes blocked by a creature, gain control of
+    that creature **at end of combat**." (CR 511.1, CR 603.7.)
+
+    The compiled shape carries the whole of the card: a delayed ability at
+    ``next_end_of_combat`` whose effect addresses the delay's *bound* object.
+    Routed through the ordinary indefinite steal it would have needed a target
+    the card never printed; routed through the recorded-permanents spelling it
+    would have read a scratchpad that is a combat step gone.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Tolarian Entrancer"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "creature_becomes_blocked"
+    payload = trig.instruction.payload
+    assert payload["event"] == "next_end_of_combat"
+    assert payload["instruction"].kind == "gain_control_of_bound_permanent"
+    assert payload["binds_target"] is True
+
+
+def test_tolarian_entrancer_takes_the_blocker_after_damage(set_pool):
+    """The blocker changes hands at end of combat and not before.
+
+    Ordering is the assertion: a steal that happened on the block would have
+    removed the creature from combat (CR 506.4) and cancelled the damage the
+    card is printed to take. So the Wall is still blocking through the damage
+    step and only then moves — and it moves as a CR 613 layer-2 contribution,
+    which is why the bystander beside it is the control on "the trigger bound
+    exactly one creature".
+    """
+    entrancer = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Tolarian Entrancer"]))
+    wall = _w2g3c_nosick(Permanent(card=_w2g3c_creature("Wall", 0, 6)))
+    bystander = _w2g3c_nosick(Permanent(card=_w2g3c_creature("Bystander", 1, 1)))
+    game = _w2g3c_combat([entrancer], [wall, bystander])
+    assert game.declare_attackers(0, [0])[0]
+    _w2g3c_resolve(game)
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    _w2g3c_resolve(game)
+
+    (entry,) = game.delayed_triggers
+    assert entry.bound_permanent_id == wall.permanent_id
+    # Still the defender's while the damage is dealt.
+    assert game.controller_index_of(wall) == 1
+
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_resolve(game)
+    game.advance_combat_phase()   # end of combat
+    _w2g3c_resolve(game)
+
+    assert game.controller_index_of(wall) == 0, game.log
+    assert wall in game.players[0].battlefield
+    assert game.controller_index_of(bystander) == 1
+    # CR 108.3 / CR 613 layer 2: the change is a contribution, so the seat the
+    # permanent entered under is untouched and the Wall would revert if the
+    # contribution ever ended. An untimed steal has no end, which is CR 611.2a.
+    assert wall.metadata.get("base_controller_index", 1) == 1
+
+
+def _w2g3c_familiar(set_pool, set_cards):
+    """Ertai's Familiar on an empty board, both seats with a library to mill."""
+    mountain = set_pool("LEA")["Mountain"]
+    fam = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Ertai's Familiar"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[fam], library=[mountain] * 20),
+        PlayerState(name="P2", library=[mountain] * 20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, fam
+
+
+def _w2g3c_turn(game: Game, seat: int) -> None:
+    game.start_turn(seat)
+    game._close_current_priority_step()
+    _w2g3c_resolve(game)
+
+
+def test_ertais_familiar_reads_one_ability_with_two_trigger_events(set_pool):
+    """"When this creature **phases out or leaves the battlefield**, mill three
+    cards." (CR 603.1b.)
+
+    One condition kind, not two entries and not the bare leave. The generic
+    leaves-the-battlefield row in `oracle.py` matches `when (?:this|.+)
+    leaves…`, whose `.+` swallows "this creature phases out or" — so without a
+    longer row above it this card would have compiled supported while watching
+    only a departure it almost never makes.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Ertai's Familiar"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "phases_out_or_leaves_battlefield"
+    assert trig.instruction.kind == "mill_target_player"
+    assert trig.instruction.payload["amount"] == 3
+
+
+def test_ertais_familiar_mills_when_its_own_phasing_takes_it_out(set_pool):
+    """The phase-out half, fired by CR 702.26a's alternation.
+
+    The Familiar has phasing, so this is the event it actually meets — and it
+    is *not* a zone change (CR 702.26d), which is why the leave half cannot
+    stand in for it. Exactly three cards: one announcement, not one per half.
+    """
+    game, _fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)
+
+    assert [p.card.name for p in game.players[0].phased_out] == [
+        "Ertai's Familiar"
+    ], game.log
+    assert len(game.players[0].graveyard) == 3, game.log
+
+
+def test_ertais_familiar_mills_when_it_leaves_the_battlefield(set_pool):
+    """The other half of the same ability, from the removal transition.
+
+    Run to a turn where the Familiar has phased back in, so the departure is a
+    real one — a permanent already phased out is on no battlefield to leave.
+    """
+    game, fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)          # phases out, mills 3
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # phases in
+    assert fam in game.players[0].battlefield
+
+    before = len(game.players[0].graveyard)
+    game.remove_from_battlefield(fam)
+    _w2g3c_resolve(game)
+
+    assert len(game.players[0].graveyard) - before == 3, game.log
+
+
+def test_ertais_familiar_lock_stops_the_next_untap_steps_phase_out(set_pool):
+    """"{U}: Until your next upkeep, this creature can't phase out."
+    (CR 702.26a's alternation, refused.)
+
+    The whole of the card's value is that the phase-out **does not happen**, so
+    the assertion is an absence plus the mill that would have come with it. A
+    restriction nothing enforces is an ability that works more often than the
+    card allows, and this one would be silent: the Familiar would phase out on
+    schedule and mill three, exactly as it does without the ability.
+
+    The window ends at the controller's *upkeep*, which is one step after the
+    untap step it protects — so the creature survives that turn's alternation
+    and phases out on the next one.
+    """
+    game, fam = _w2g3c_familiar(set_pool, None)
+    _w2g3c_turn(game, 0)          # phases out
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # phases in
+    result = game.activate_permanent_ability(0, "Ertai's Familiar")
+    assert result.supported, result
+    _w2g3c_resolve(game)
+    assert fam.metadata["cant_phase_out"] == [
+        {"duration": "your_next_upkeep", "seat": 0}
+    ]
+    milled = len(game.players[0].graveyard)
+
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)          # the protected untap step
+
+    assert game.players[0].phased_out == [], game.log
+    assert fam in game.players[0].battlefield
+    assert len(game.players[0].graveyard) == milled, game.log
+    # The upkeep of that same turn is what ends it (CR 611.2's stated duration).
+    assert "cant_phase_out" not in fam.metadata
+
+    _w2g3c_turn(game, 1)
+    _w2g3c_turn(game, 0)
+
+    assert [p.card.name for p in game.players[0].phased_out] == [
+        "Ertai's Familiar"
+    ], game.log
+    assert len(game.players[0].graveyard) - milled == 3
+
+
+def _w2g3c_bone_dancer(set_pool, defender_graveyard, interactive=(0,)):
+    """Bone Dancer attacking unblocked into a seat whose graveyard holds
+    *defender_graveyard*, stopped with the offer owed.
+
+    The seat is interactive on purpose: a non-interactive one *declines* the
+    offer by default, so a test written without this proves only that the
+    decline branch runs.
+    """
+    dancer = _w2g3c_nosick(Permanent(card=set_pool("WTH")["Bone Dancer"]))
+    defender = PlayerState(name="P2")
+    defender.graveyard = list(defender_graveyard)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[dancer]), defender,
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare blockers
+    # CR 509.1h: a creature becomes unblocked as blocks are declared, so the
+    # trigger is announced when this step *ends*.
+    game.advance_combat_phase()
+    _w2g3c_settle(game)
+    return game, dancer, defender
+
+
+def _w2g3c_settle(game: Game) -> None:
+    """Resolve until the stack is empty **or** a seat is owed a decision.
+
+    Never a bare ``while game.stack`` — a prompt armed part-way through a
+    resolution holds the object on the stack (CR 608.2), so that loop spins.
+    """
+    for _ in range(40):
+        if not game.stack or game.waiting_prompt:
+            break
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def test_bone_dancer_reanimates_the_top_creature_card_under_your_control(set_pool):
+    """"…you may put **the top creature card of defending player's graveyard**
+    onto the battlefield **under your control**."
+
+    Three things at once, and each is a way the sentence could be read smaller.
+    The pile is the *defending player's* (CR 506.2), frozen by the combat fire
+    site. The card is the creature card **nearest the top**, not the top card if
+    it happens to be a creature — so the artifact sitting above it is skipped
+    rather than blocking the ability. And the creature arrives on the
+    **attacker's** side: CR 404.1 puts a card in its owner's graveyard, so the
+    default arrival under CR 400.3 would hand it straight back.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Bone Dancer"])
+    assert program.supported, program.reason
+    (trig,) = program.triggered_abilities
+    assert trig.condition.kind == "attacks_unblocked"
+    (action,) = trig.instruction.payload["action"]
+    assert action.kind == "reanimate_graveyard_position"
+    assert action.payload["graveyard_owner"] == "defending_player"
+    assert action.payload["position"] == "top"
+
+    land = CardDefinition(
+        name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
+    )
+    rock = CardDefinition(
+        name="Dead Rock", mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Rock", "type_line": "Artifact"},
+    )
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [land, _w2g3c_creature("Dead Ogre", 3, 3), rock],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Bone Dancer", "Dead Ogre",
+    ], game.log
+    assert [c.name for c in defender.graveyard] == ["Dead Land", "Dead Rock"]
+    assert not defender.battlefield
+
+
+def test_bone_dancer_assigns_no_combat_damage_after_it_reanimates(set_pool):
+    """"If you do, this creature assigns no combat damage this turn."
+
+    The half that is a *restriction*, and the only kind of thing this engine
+    calls a bug when nothing enforces it: unenforced, Bone Dancer would
+    reanimate a creature **and** connect for two, which is a strictly better
+    card than the one printed and nothing anywhere would look wrong.
+
+    Asserted through the defender's life rather than through the marker alone,
+    because a marker nothing reads is exactly the failure being tested for.
+    """
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [_w2g3c_creature("Dead Ogre", 3, 3)],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+    assert dancer.metadata.get("assigns_no_combat_damage_until_eot")
+
+    life = defender.life
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_settle(game)
+
+    assert defender.life == life, game.log
+
+
+def test_bone_dancer_that_declines_deals_its_damage(set_pool):
+    """The other branch, and the control on the one above: the restriction is
+    the *consequence* of the reanimation, not a property of the attack."""
+    game, dancer, defender = _w2g3c_bone_dancer(
+        set_pool, [_w2g3c_creature("Dead Ogre", 3, 3)],
+    )
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=False), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Bone Dancer"]
+    assert not dancer.metadata.get("assigns_no_combat_damage_until_eot")
+
+    life = defender.life
+    game.advance_combat_phase()   # combat damage
+    _w2g3c_settle(game)
+
+    assert defender.life == life - 2, game.log
+
+
+def test_bone_dancer_finds_nothing_in_a_graveyard_with_no_creature_card(set_pool):
+    """The printed noun narrows the pile, and a dropped narrowing is a card
+    reanimating a land."""
+    land = CardDefinition(
+        name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
+    )
+    game, _dancer, defender = _w2g3c_bone_dancer(set_pool, [land, land])
+    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    _w2g3c_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Bone Dancer"]
+    assert len(defender.graveyard) == 2

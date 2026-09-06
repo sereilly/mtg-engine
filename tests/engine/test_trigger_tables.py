@@ -245,6 +245,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # when
     "enters_battlefield": "when this creature enters the battlefield",
     "leaves_battlefield": "when this creature leaves the battlefield",
+    # Ertai's Familiar. CR 603.1's one ability with two trigger events, and the
+    # example is a *shadowing* check as much as a coverage one: the generic
+    # leave row above has a `.+` that swallows "this creature phases out or",
+    # so a table that matched it first would name the wrong event on a card
+    # whose whole point is that it phases out every other untap step.
+    "phases_out_or_leaves_battlefield":
+        "when this creature phases out or leaves the battlefield",
     # Gustha's Scepter. CR 603.10d's event, and a different one from the leave
     # above it even though a permanent leaving is one way to lose control of
     # it: the other way keeps the permanent on the battlefield under somebody

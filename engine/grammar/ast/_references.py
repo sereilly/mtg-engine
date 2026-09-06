@@ -443,6 +443,26 @@ class ObjectFilter:
     # lowering refuses them by name.
     blocking_target: "ObjectFilter | None" = None
     blocking_bound_target: bool = False
+    # "all non-Wall creatures **blocking enchanted creature**" (Coils of the
+    # Medusa). The same CR 509.1a relation once more, with the blocked object
+    # named as the Aura's own attachment: not the source (the source is the
+    # Aura, which is not in combat at all), not a target (the sentence chooses
+    # nothing), and not a nested phrase — an Aura enchants exactly one
+    # permanent, so the description is the attachment record.
+    #
+    # Emitted and testable, on ``blocking_source``'s footing: what it needs
+    # beyond the object is the ability's source, which ``subject_matches``
+    # already takes, and one hop from there to the host. A caller with no
+    # source answers no, which refuses the sweep rather than handing it every
+    # blocker on the board.
+    blocking_attached_host: bool = False
+    # "each creature **that blocked or was blocked this turn**" (Heat
+    # Stroke). CR 509.1a's relation with neither end named: the question
+    # is whether this creature was on *either* side of a block, which is
+    # readable off the permanent alone — so unlike every relation above
+    # it, the pure matcher answers it and it stays in
+    # ``OBJECT_ONLY_FILTER_KEYS``.
+    blocked_or_was_blocked_this_turn: bool = False
     # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall). The
     # mirror of ``blocking_source``: there the source is the attacker and the
     # set is its blockers, here the source is the *blocker* and the set is the
@@ -699,6 +719,10 @@ class ObjectFilter:
         # written before this are byte-identical.
         if self.blocking_source:
             payload["blocking_source"] = True
+        if self.blocking_attached_host:
+            payload["blocking_attached_host"] = True
+        if self.blocked_or_was_blocked_this_turn:
+            payload["blocked_or_was_blocked_this_turn"] = True
         if self.blocked_source_this_turn:
             payload["blocked_source_this_turn"] = True
         if self.tapped_to_pay_for_source_this_turn:

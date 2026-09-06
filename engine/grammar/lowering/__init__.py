@@ -296,6 +296,7 @@ from .library import (
     _lower_look_top_cycle_for_life,
     _lower_separate_library_top_into_piles,
     _lower_graveyard_pick_onto_battlefield,
+    _lower_put_graveyard_position_onto_battlefield,
 )
 from .search import (
     _SEARCH_HONOURED_FILTER_FIELDS,
@@ -560,6 +561,7 @@ __all__ = [
     "_lower_separate_library_top_into_piles",
     "_SEARCH_HONOURED_FILTER_FIELDS",
     "_lower_graveyard_pick_onto_battlefield",
+    "_lower_put_graveyard_position_onto_battlefield",
     "_lower_search_library",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
