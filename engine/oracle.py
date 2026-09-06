@@ -986,6 +986,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # exactly the position `targeting_controller` occupies above. Underworld
     # Dreams is the second spelling; Lorescale Coatl and Burlfist Oak the
     # first, whose absent group is how a pattern says "you".
+    # "Whenever **an opponent plays a land**, put a +1/+1 counter on this
+    # creature." (Dirtcowl Wurm.) CR 305.1: playing a land is a special action
+    # that uses no stack, so it is neither a cast nor — necessarily — a land
+    # *entering*: `land_enters` beside this one is announced for a land that
+    # arrives by any route, and a land put onto the battlefield by an effect was
+    # never played. Two events, and a card printing one must not fire on the
+    # other.
+    #
+    # The seat is the trigger's own narrowing rather than a second kind, which
+    # is `draws_card` below read one event over: one announcement, made where
+    # the land is played, and the printed word decides whose play it watches.
+    ("land_played",
+     r"whenever (?:you play|(?P<land_player>an opponent) plays) a land"),
     ("draws_card",
      r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
@@ -1195,6 +1208,19 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # swallow any line ending in the word.
     ("self_put_into_graveyard_from_library",
      r"when this card is put into your graveyard from your library"),
+    # "When this creature dies **during combat**, …" (Mongrel Pack). CR 506.1's
+    # phase, asked of the death rather than of the creature: the same death, in
+    # a different part of the turn, is a different card. The marker is an empty
+    # named group — the idiom this table uses everywhere a narrowing carries no
+    # text of its own — and the death fire site is what compares it against the
+    # phase the game is in.
+    #
+    # **Above** the bare row, which its `.+` would otherwise swallow whole:
+    # matched there the words "during combat" are left unread and the trigger
+    # fires on every death, which is a strictly more generous card than the one
+    # printed and invisible from the outside.
+    ("dies",
+     r"when this creature dies (?P<dies_during_combat>)during combat"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is
@@ -2786,6 +2812,21 @@ def trigger_condition_of_line(
     return condition, remainder
 
 
+def _reads_as_registry_line(line: str, card_name: str | None) -> bool:
+    """Whether the grammar reads *line* as a line a text-keyed registry runs.
+
+    Asked of the grammar rather than of a list of the registries' phrases, for
+    the reason every gate in this engine is asked that way: a second copy of
+    which sentences ``engine/grammar/registries.py`` claims would go stale the
+    first time one is added.
+    """
+    compiled = compile_grammar_line(line, card_name=card_name)
+    return (
+        compiled.parse_error is None
+        and isinstance(compiled.node, grammar_ast.RegistryLine)
+    )
+
+
 def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedTriggeredAbility | None:
     """Parse a single oracle text line as a triggered ability.
 
@@ -2797,6 +2838,25 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     condition, remainder = trigger_condition_of_line(line, card_name)
     if condition is None:
         return None  # not a triggered ability line
+    if _reads_as_registry_line(line, card_name):
+        # A line a **text-keyed registry already runs** is not an unimplemented
+        # trigger, however clearly its first clause reads as a condition
+        # (`engine/grammar/registries.py`; CLAUDE.md's "zero instructions is
+        # the correct lowering, not a gap").
+        #
+        # Fastbond is the card: "Whenever you play a land, if it wasn't the
+        # first land you played this turn, this enchantment deals 1 damage to
+        # you" is carried out by `engine/land_play_allowance.py`'s
+        # `damage_per_extra_land` off the land-drop path. Before a `land_played`
+        # row existed nothing here matched the sentence and the registry had it
+        # to itself; the moment one did, the card grew a triggered ability with
+        # no instruction — reported by `--hollow-lines` and, worse, offered to
+        # `engine/events.collect`, which does not ask whether a trigger has one.
+        #
+        # This is the **grammar before the derivation tables** ordering read one
+        # front end over: a production that claims a line takes it from the
+        # table, and a table that claims a line takes it from this one.
+        return None
 
     # Strip leading colon/comma that sometimes follows the condition clause
     remainder = remainder.lstrip(": ")

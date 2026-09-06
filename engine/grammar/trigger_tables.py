@@ -168,6 +168,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # dispatcher and no card, and the subject-led production below reads the
     # same words as `matching_permanent_enters`, which does fire.
     ("land_enters", ("a", "land", "enters")),
+    # "Whenever an opponent **plays** a land" (Dirtcowl Wurm) — CR 305.1's
+    # special action, not the entry above it, and not a cast. Both seat
+    # spellings are listed for `draws_card`'s reason below: which seat played is
+    # the event's, the printed word is the condition's narrowing, and a line
+    # only one front end reads is a card the other refuses.
+    ("land_played", ("an", "opponent", "plays", "a", "land")),
+    ("land_played", ("you", "play", "a", "land")),
     # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
     # article, so no prefix collision with the bare draw event above.
     ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),

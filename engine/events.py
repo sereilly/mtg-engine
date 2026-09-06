@@ -1107,6 +1107,34 @@ def _seat_scoped_filter(
     return seat is not None and game.controller_index_of(permanent) == seat
 
 
+@event_filter("land_played")
+def _land_played_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **an opponent** plays a land" (Dirtcowl Wurm).
+
+    The seat half of :func:`_draws_card_filter` below, word for word and for
+    its reason: one game-wide announcement, made at CR 305.1's special action,
+    with the printed seat as the trigger's own narrowing rather than a second
+    event kind. "You" is the permanent's controller (CR 109.5); "an opponent"
+    is any *other* seat, which is what makes the unnarrowed reading wrong in a
+    three-player game rather than merely inverted.
+
+    An announcement with no seat on it fires nothing, which is the safe
+    direction: a land play whose player nobody recorded cannot be compared
+    against the word the card printed.
+    """
+    seat = event.payload.get("seat")
+    if seat is None:
+        return False
+    observer = game.controller_index_of(permanent)
+    if observer is None:
+        return False
+    if trig.condition.payload.get("land_player") == "an opponent":
+        return seat != observer
+    return seat == observer
+
+
 @event_filter("draws_card")
 def _draws_card_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

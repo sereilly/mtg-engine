@@ -1097,6 +1097,18 @@ class GameHelpersMixin:
             ):
                 if trig.instruction is None or trig.instruction.kind in _INLINE_DIES_KINDS:
                     continue
+                # "When this creature dies **during combat**" (Mongrel Pack).
+                # CR 506.1's phase, asked of the death: the same death outside
+                # combat is a different card. Enforced here rather than
+                # dropped, for the reason every narrowing in this engine is —
+                # an unenforced restriction is an ability that works *more*
+                # often than the card allows, wrong in the player's favour and
+                # silent. An absent key is the unnarrowed printing.
+                if (
+                    trig.condition.payload.get("dies_during_combat") is not None
+                    and self.current_turn_phase != "combat"
+                ):
+                    continue
                 self._enqueue_triggered_ability(
                     controller_index=self.players.index(player),
                     source_permanent=permanent,

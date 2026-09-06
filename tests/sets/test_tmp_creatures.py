@@ -183,3 +183,117 @@ def test_bellowing_fiend_is_silent_on_damage_to_a_player(set_pool):
 
     assert game.players[0].life == 20
     assert game.players[1].life == 17
+
+
+# -- Spike Drone ------------------------------------------------------------
+
+
+def test_spike_drone_enters_with_its_counter(set_pool):
+    """"This creature enters with a +1/+1 counter on it."
+
+    CR 121.6 — an *entry* replacement, not a trigger, and the template
+    `engine/enter_effects.py` has read since Triskelion. What it could not read
+    was the number printed as an article and the noun printed singular, so a
+    0/0 Spike that is 1/1 on the table was unsupported.
+    """
+    p1 = PlayerState(name="P1", hand=[set_pool("TMP")["Spike Drone"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._settle()
+    game.cast_from_hand(0, "Spike Drone")
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    drone = next(p for p in p1.battlefield if p.card.name == "Spike Drone")
+    assert drone.metadata["plus_counters"] == 1
+    assert (drone.effective_power, drone.effective_toughness) == (1, 1)
+
+
+# -- Dirtcowl Wurm ----------------------------------------------------------
+
+
+def _w1g4_land_play(set_pool, land_seat):
+    wurm = _w1g4_perm(set_pool("TMP")["Dirtcowl Wurm"])
+    p1 = PlayerState(name="P1", battlefield=[wurm])
+    p2 = PlayerState(name="P2")
+    [p1, p2][land_seat].hand.append(_w1g4_lea()["Forest"])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(land_seat)
+    game._settle()
+    game.cast_from_hand(land_seat, "Forest")
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+    return wurm
+
+
+def test_dirtcowl_wurm_grows_when_an_opponent_plays_a_land(set_pool):
+    """"Whenever an opponent plays a land, put a +1/+1 counter on this
+    creature."
+
+    CR 305.1: playing a land is a special action that uses no stack, so it is
+    neither a cast nor necessarily an *entry* — the `land_enters` event beside
+    it fires for a land that arrives by any route. Two events, and the card
+    prints one of them.
+    """
+    wurm = _w1g4_land_play(set_pool, 1)
+
+    assert (wurm.effective_power, wurm.effective_toughness) == (4, 5)
+
+
+def test_dirtcowl_wurm_ignores_its_own_controllers_land(set_pool):
+    """The printed seat, enforced. Dropped, the Wurm grows on every land drop
+    in the game — an ability that works more often than the card allows.
+    """
+    wurm = _w1g4_land_play(set_pool, 0)
+
+    assert (wurm.effective_power, wurm.effective_toughness) == (3, 4)
+
+
+# -- Mongrel Pack -----------------------------------------------------------
+
+
+def _w1g4_dogs(player):
+    return sum(1 for p in player.battlefield if p.card.name == "Dog Token")
+
+
+def test_mongrel_pack_makes_dogs_for_a_death_during_combat(set_pool):
+    """"When this creature dies during combat, create four 1/1 green Dog
+    creature tokens." (CR 506.1's phase, asked of the death.)
+    """
+    pack = _w1g4_perm(set_pool("TMP")["Mongrel Pack"])
+    p1 = PlayerState(name="P1", battlefield=[pack])
+    game = Game(players=[p1, PlayerState(name="P2", battlefield=[])])
+    game.enforce_mana_costs = False
+    _w1g4_to_blockers(game, [0])
+    pack.damage_marked = 99
+    game.check_state_based_actions()
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert _w1g4_dogs(p1) == 4
+
+
+def test_mongrel_pack_makes_no_dogs_for_a_death_outside_combat(set_pool):
+    """The narrowing, in the direction the compiler could not see: both front
+    ends read "during combat" and the *bare* regex row would have swallowed the
+    words unread, leaving a card that makes four Dogs whenever it dies at all.
+    """
+    pack = _w1g4_perm(set_pool("TMP")["Mongrel Pack"])
+    p1 = PlayerState(name="P1", battlefield=[pack])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._settle()
+    assert game.current_turn_phase != "combat"
+    pack.damage_marked = 99
+    game.check_state_based_actions()
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert _w1g4_dogs(p1) == 0

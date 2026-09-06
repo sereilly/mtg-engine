@@ -619,6 +619,19 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 return ast.TriggerEvent(kind, "at")
         return None
     if stream.accept_word("when"):
+        # "…dies **during combat**" (Mongrel Pack). Read before the bare
+        # spelling it extends, for this file's standing ordering rule: matched
+        # there, the two extra words are left on the stream and the line fails
+        # full-token consumption — which is the *safe* half of the failure. The
+        # unsafe half is on the regex side, where an unanchored bare row reads
+        # them as nothing at all.
+        #
+        # The narrowing itself is `engine/oracle.py`'s payload and the death
+        # fire site's to enforce; what is owed here is reading the same
+        # sentence, so a line one front end claims is not a card the other
+        # refuses.
+        if accept_event_phrase(stream, ("this", "creature", "dies", "during", "combat")):
+            return ast.TriggerEvent("dies", "when")
         if accept_event_phrase(stream, ("this", "creature", "dies")):
             return ast.TriggerEvent("dies", "when")
         # CR 700.4: "dies" *means* "is put into a graveyard from the

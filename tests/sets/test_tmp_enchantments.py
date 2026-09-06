@@ -150,3 +150,42 @@ def test_spirit_mirror_reads_the_token_narrowing(set_pool):
     assert gate["kind"] == "on_battlefield"
     assert gate["filter"]["token_only"] is True
     assert (gate["count"], gate["op"]) == (0, "eq")
+
+
+# -- Sadistic Glee ----------------------------------------------------------
+
+
+def test_sadistic_glee_grows_its_host_when_a_creature_dies(set_pool):
+    """"Whenever a creature dies, put a +1/+1 counter on enchanted creature."
+
+    Grammar-clean before this round: the line parsed, lowered and reached a
+    real handler. What refused it was the *Aura support gate* — an Aura whose
+    effect line nothing claims is reported unsupported by design, and no row
+    named the death dispatcher. The row is the whole fix, and it is honest
+    because that dispatcher scans `permanents_with_controller()`, so an Aura
+    watching the whole board is enqueued exactly like a creature watching it.
+    """
+    from engine.auras import attach_aura
+    from engine import load_cards
+    from engine.card_loader import manifest_set_path
+
+    lea = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+    host = _w1g4_perm(lea["Grizzly Bears"])
+    glee = _w1g4_perm(set_pool("TMP")["Sadistic Glee"])
+    victim = _w1g4_perm(lea["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[host, glee])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(glee, host)
+    game.start_turn(0)
+    game._settle()
+    assert (host.effective_power, host.effective_toughness) == (2, 2)
+
+    victim.damage_marked = 99
+    game.check_state_based_actions()
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert (host.effective_power, host.effective_toughness) == (3, 3)

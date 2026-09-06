@@ -720,6 +720,21 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the attack-declaration trigger (CR 508.1) — "
             "phases/declare_attackers_step.py"
         )
+    if cond == "creature_dies" and kind in EFFECT_HANDLERS:
+        # "Whenever a creature dies, put a +1/+1 counter on enchanted creature."
+        # (Sadistic Glee.) CR 603.2's announcement of a death, made from the one
+        # site every death passes through — and that site scans
+        # ``permanents_with_controller()``, so an Aura watching the whole board
+        # is enqueued exactly like a creature watching it. This is the row the
+        # card needed and the only thing it needed: the line parses, lowers and
+        # reaches a real handler, and the gate refused it for want of a claim.
+        #
+        # Its own row rather than a widening of the ones above, for their
+        # stated reason: each names one condition and the site that fires it.
+        return (
+            "the creature-death trigger (CR 603.2) — "
+            "mixins/helpers._fire_creature_dies_triggers"
+        )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
     if (cond, kind) in UPKEEP_EFFECTS:

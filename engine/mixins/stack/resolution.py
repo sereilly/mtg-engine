@@ -1113,6 +1113,12 @@ class StackResolutionMixin:
                                 ),
                             )
                 self._process_land_enters(caster_index)
+                # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
+                # CR 305.1's special action, announced here because here is
+                # where it happens — `_process_land_enters` above is the
+                # *entry*, which a land put onto the battlefield by an effect
+                # also makes and this one does not.
+                emit(self, "land_played", subject=card, seat=caster_index)
                 # "When **you play a card**" (Juju Bubble). CR 701.18b's other
                 # half: a land is played rather than cast, so the cast
                 # announcement never reaches it. Beside `_process_land_enters`
