@@ -312,7 +312,14 @@ def lower_statement(
         return _lower_create_token(statement, produced, event)
 
     if isinstance(statement, ast.Conjunction):
-        if len(statement.effects) == 2 and all(
+        # **Any** run of damage clauses, not only a pair. Cone of Flame prints
+        # three, and the damage lowering is the only reader that can tell one
+        # announcement of three targets (CR 601.2c) from three announcements --
+        # so a length test here decided that question before the module that
+        # knows the answer was asked, and the run fell through to `_lower_steps`
+        # as three independent instructions with three pickers, of which one
+        # target would have reached the stack.
+        if len(statement.effects) >= 2 and all(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
         ):
             return _lower_damage_conjunction(statement)

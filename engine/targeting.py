@@ -2288,7 +2288,7 @@ def _from_targets_payload(targets) -> dict | None:
         # count the caster still chooses (Contagion's "one or two"). Folding the
         # two together would let a Firestorm announced with one target past a
         # gate that only ever asked "not too many".
-        printed_count = targets.get("count")
+        printed_count = targets.get("target_count")
         if printed_count is not None and not isinstance(printed_count, bool):
             spec["divided_target_count"] = printed_count
         bound = targets.get("max_targets")

@@ -125,6 +125,17 @@ def card_shares(total: int, count: int, *, division: str, shares) -> list[int]:
     return (printed + [0] * count)[:count]
 
 
+def _repeats_a_target(entries) -> bool:
+    """Whether *entries* name one object or player twice (CR 601.2c).
+
+    By ``(seat, index)`` — the pair that *is* the target on this channel — with
+    ``index`` None meaning that seat's face, so two entries for one player and
+    two for one creature are both caught by one comparison.
+    """
+    named = [(seat, index) for seat, index, _share in map(divided_entry, entries)]
+    return len(set(named)) != len(named)
+
+
 def stamp_card_shares(entries, amounts) -> list[tuple]:
     """*entries* with *amounts* attached positionally, as three-tuples.
 
@@ -212,6 +223,19 @@ def division_refusal(
             f"this spell has at most {max_targets} targets "
             f"({len(entries)} named, CR 601.2c)"
         )
+    if division in CARD_DIVIDED and _repeats_a_target(entries):
+        # CR 601.2c: the same object or player cannot be chosen for two targets
+        # of one spell. Both printed sentences say so in words as well —
+        # "**another** target", "a **third** target", "each of X targets" — so
+        # this is the card's own restriction and the rule's at once.
+        #
+        # Asked of these two divisions only, which is a smaller claim than the
+        # rule makes. "Any number of targets" is under exactly the same rule and
+        # nothing here checks it; that is a standing looseness this round
+        # inherits rather than introduces, and widening it would change what
+        # every shipped divided spell accepts on a round that is about two new
+        # ones.
+        return "each target must be a different one (CR 601.2c)"
     amounts = announced_division(entries)
     if amounts is None:
         return None

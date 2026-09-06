@@ -104,20 +104,132 @@ def card_divided_target_description(
     and now so does the share stamping in between.
 
     ``count`` is the printed number or the string ``"x"`` — the two spellings
-    ``_describe_several_targets`` already writes — because Firestorm's is the X
-    announced under CR 107.3a and does not exist until the cast. ``shares`` is
-    omitted for :data:`~engine.divided_damage.EACH`, where every target takes
-    the whole amount and a list would be a second copy of one number.
+    ``_describe_several_targets`` writes into its own ``count`` — because
+    Firestorm's is the X announced under CR 107.3a and does not exist until the
+    cast. ``shares`` is omitted for :data:`~engine.divided_damage.EACH`, where
+    every target takes the whole amount and a list would be a second copy of one
+    number.
+
+    **It is written under ``target_count``, not ``count``**, and the difference
+    is not cosmetic. ``targets["count"]`` already means "this description names
+    a list of *permanents*" to three readers that were written before a divided
+    description could carry a number — ``handlers/damage``'s several-targets
+    branch, ``ai_valuation._several_target_instruction`` and the graveyard
+    picker — and the first of those sits above the divided branch in the same
+    function, so a divided description carrying a ``count`` was silently
+    resolved as an "up to N target creatures" and dealt nothing at all.
     """
     described: dict[str, object] = {
         "quantifier": "divided",
         "kind": "divided",
         "division": division,
-        "count": count,
+        "target_count": count,
     }
     if shares is not None:
         described["shares"] = list(shares)
     return described
+
+
+def card_divided_each_description(
+    recipient: "ast.Recipient",
+) -> dict[str, object] | None:
+    """The description "…to **each of N targets**" means, or None.
+
+    "Firestorm deals X damage to each of X targets." Every target takes the
+    whole printed amount, so nothing is divided and nothing is announced —
+    what the card supplies is the *count*, and the caster supplies the targets.
+
+    None for the singular "any target", which is the shape every other burn
+    spell in the pool prints and which the ordinary one-target description
+    already reads.
+
+    Here rather than in ``lowering/damage.py`` for the reason
+    :func:`divided_target_description` is here: this description is read by the
+    casting path's gate, the picker, the share stamping and the handler, and the
+    module that builds it is not the module that owns any of them.
+    """
+    from ...divided_damage import EACH
+
+    if not (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "any_target"
+        and (recipient.count_from_x or recipient.count > 1)
+    ):
+        return None
+    return card_divided_target_description(
+        division=EACH,
+        count="x" if recipient.count_from_x else recipient.count,
+    )
+
+
+def card_divided_shares_payload(effects) -> dict[str, object] | None:
+    """The one ``deal_damage`` payload a run of same-source damage clauses with
+    **printed shares** means, or None when the run is not that shape.
+
+    "Cone of Flame deals 1 damage to any target, 2 damage to another target,
+    and 3 damage to a third target." Three clauses, three amounts and three
+    targets of the same kind — which CR 601.2c settles in one announcement, so
+    it must be one instruction: three would raise three pickers for one printed
+    choice, and only the first would reach the stack item.
+
+    Every condition below is a way the run could mean something else, and the
+    caller falls back to lowering the clauses separately when any of them fails:
+
+    * the clauses must share a **source**, or they are not one sentence's
+      damage;
+    * each must name exactly one recipient, and that recipient must be
+      CR 115.4's "any target" — the only recipient the ``divided_targets``
+      channel can carry, because it spans both battlefields and the faces;
+    * every clause after the first must print the distinctness the card states
+      ("**another** target", "a **third** target"), and the first must not:
+      a run of three identical "any target" clauses is a different sentence,
+      and reading it as this one would refuse a legal repeat;
+    * every amount must be a printed number, because the shares travel as
+      numbers on the announcement (there is nowhere on the wire to put an
+      unevaluated quantity);
+    * no clause may carry a rider, a chooser or a per-object multiplier — each
+      of those belongs to one clause, and this fuses the clauses into one
+      instruction that has one of each.
+
+    ``amount`` is the **sum**, which is what every reader that sizes a divided
+    spell already asks for (``casting._divided_total``, the AI's valuation) and
+    is honest: it is what the spell deals in total. The per-target numbers ride
+    the ``shares`` list, and the stamping at announcement is what pins each one
+    to its target.
+    """
+    from ...divided_damage import FIXED
+
+    if len(effects) < 2 or not all(
+        isinstance(effect, ast.DealDamage) for effect in effects
+    ):
+        return None
+    shares: list[int] = []
+    for position, clause in enumerate(effects):
+        if (
+            clause.source != effects[0].source
+            or clause.riders != ast.DamageRiders()
+            or clause.chooser is not None
+            or clause.per_each is not None
+            or len(clause.recipients) != 1
+            or not isinstance(clause.amount, ast.Fixed)
+        ):
+            return None
+        recipient = clause.recipients[0]
+        if not (
+            isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "any_target"
+            and recipient.count == 1
+            and not recipient.count_from_x
+            and recipient.distinct_from_prior == (position > 0)
+        ):
+            return None
+        shares.append(int(clause.amount.value))
+    return {
+        "amount": sum(shares),
+        "targets": card_divided_target_description(
+            division=FIXED, count=len(shares), shares=tuple(shares),
+        ),
+    }
 
 
 def _describe_targets(

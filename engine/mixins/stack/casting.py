@@ -312,15 +312,15 @@ def _card_divided_target_count(targets: dict, x_value: int | None) -> int | None
     spell in the pool before Weatherlight — so the caller may ask
     unconditionally and treat None as "CR 601.2c prints no number here".
 
-    ``count`` is a literal (Cone of Flame's three) or the string ``"x"``
-    (Firestorm's "each of **X** targets"), the same two spellings
-    ``_describe_several_targets`` already writes into a ``count``. Resolved
-    through the announced X rather than off the card, because CR 107.3a's
-    announcement is the only place that number exists.
+    ``target_count`` is a literal (Cone of Flame's three) or the string ``"x"``
+    (Firestorm's "each of **X** targets"). Resolved through the announced X
+    rather than off the card, because CR 107.3a's announcement is the only place
+    that number exists. Its own key rather than the ``count`` a several-targets
+    description carries -- see ``card_divided_target_description``.
     """
     from ...handlers._common import resolve_amount
 
-    count = targets.get("count")
+    count = targets.get("target_count")
     if count is None or isinstance(count, bool):
         return None
     if isinstance(count, int):

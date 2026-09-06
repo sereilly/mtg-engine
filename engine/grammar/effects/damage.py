@@ -415,14 +415,26 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     if unless is not None:
         return unless
 
-    # A second damage clause sharing the same source: "… and 3 damage to you".
-    mark = stream.mark()
-    # "…to any target**,** and half X damage, rounded up, to you" (Banshee).
-    # The comma is the Oxford separator this printing uses and nothing else in
-    # the sentence needs it; consumed inside the mark, so a comma introducing
-    # some other clause is put back with the rest of the failed probe.
-    stream.accept_punct(",")
-    if stream.accept_word("and"):
+    # Further damage clauses sharing the same source: "… and 3 damage to you".
+    #
+    # **A loop rather than one probe**, because a sentence may print three:
+    # "Cone of Flame deals 1 damage to any target, 2 damage to another target,
+    # and 3 damage to a third target." Its separators are a bare comma and then
+    # an Oxford "and", so neither word alone can be required -- what is required
+    # is that *something* separates the clauses and that what follows really is
+    # one, which the rewind below is what proves.
+    clauses = [first]
+    while True:
+        mark = stream.mark()
+        # "…to any target**,** and half X damage, rounded up, to you" (Banshee).
+        # The comma is the Oxford separator this printing uses and nothing else in
+        # the sentence needs it; consumed inside the mark, so a comma introducing
+        # some other clause is put back with the rest of the failed probe.
+        separated = bool(stream.accept_punct(","))
+        separated = bool(stream.accept_word("and")) or separated
+        if not separated:
+            stream.reset(mark)
+            break
         try:
             # "…and **an additional 1** damage to each green creature"
             # (Kaervek's Hex); "…and **1 additional** damage to each blue
@@ -465,14 +477,17 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
                 ast.DamageRiders(), second_chooser,
             )
             # The trailing "…, where X is the number of Mountains you control"
-            # (Eternal Flame) is *not* read here. It defines the X both halves
-            # spend, and `statements.py` already wraps the whole sentence in a
+            # (Eternal Flame) is *not* read here. It defines the X every conjunct
+            # spends, and `statements.py` already wraps the whole sentence in a
             # `WhereX` for exactly that reason — a binder here would consume the
             # same clause one conjunct early and bind only the half it saw.
-            return ast.Conjunction((first, second))
+            clauses.append(second)
         except GrammarError:
             stream.reset(mark)
+            break
 
+    if len(clauses) > 1:
+        return ast.Conjunction(tuple(clauses))
     return first
 
 

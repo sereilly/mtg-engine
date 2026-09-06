@@ -44,10 +44,9 @@ from ._sweeps import (
     lower_each_matching_damage,
     refuse_unswept_multiplier,
 )
-from ...divided_damage import EACH
 from ._common import (
     _describe_several_targets, _names_several_targets, _amount_payload,
-    card_divided_target_description,
+    card_divided_each_description, card_divided_shares_payload,
     _filter_payload, _is_source, _is_you, _targets_payload,
     player_deed_payload, testable_filter_payload
 )
@@ -488,29 +487,18 @@ def _lower_damage_shape(
         payload["targets"] = described
         return (OracleInstruction("deal_damage", "", payload),)
 
-    # "Firestorm deals X damage to **each of X targets**." A cross-seat list of
-    # chosen targets, which is what the branch above announces and the only
-    # channel the engine has for one — so it goes there, with the card's own
-    # count and with the share taken away from the caster (CR 601.2d asks for a
-    # division only where the sentence says "as you choose", and this one does
-    # not divide at all).
-    #
-    # Here rather than in the several-targets branch below, which describes a
-    # list of *permanents*: CR 115.4's "any target" spans both battlefields and
-    # the players' faces, and that description has nowhere to put a face.
-    if (
-        isinstance(recipient, ast.TargetSpec)
-        and recipient.quantifier == "any_target"
-        and (recipient.count_from_x or recipient.count > 1)
-    ):
+    # "Firestorm deals X damage to **each of X targets**." The same cross-seat
+    # announcement the branch above makes, with the card supplying the count and
+    # nothing supplying a division (`card_divided_each_description`). Here
+    # rather than in the several-targets branch below, which describes a list of
+    # *permanents*: CR 115.4's "any target" spans the players' faces too.
+    each_of = card_divided_each_description(recipient)
+    if each_of is not None:
         if back_reference or bonus:
             raise LoweringError(
                 "a card-divided damage cannot carry a computed amount", node=node
             )
-        payload["targets"] = card_divided_target_description(
-            division=EACH,
-            count="x" if recipient.count_from_x else recipient.count,
-        )
+        payload["targets"] = each_of
         return (OracleInstruction("deal_damage", "", payload),)
 
     # Damage aimed at the source's own controller rather than the spell's
@@ -955,6 +943,19 @@ def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction,
     the number of effects. Here the first shape decomposes into two ordinary
     damage instructions and the kind disappears.
     """
+    # "Cone of Flame deals 1 damage to any target, 2 damage to another target,
+    # and 3 damage to a third target." One announcement, so one instruction
+    # (`card_divided_shares_payload` states every condition and why).
+    shared = card_divided_shares_payload(node.effects)
+    if shared is not None:
+        return (OracleInstruction("deal_damage", "", shared),)
+    if len(node.effects) != 2:
+        # A run of three the fuse declined. Refused by name rather than
+        # destructured into two below, which is a ValueError at import-shaped
+        # distance from the card that caused it.
+        raise LoweringError(
+            "no handler deals three damage clauses of one sentence", node=node
+        )
     first, second = node.effects
     assert isinstance(first, ast.DealDamage) and isinstance(second, ast.DealDamage)
 
