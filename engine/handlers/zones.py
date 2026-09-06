@@ -741,6 +741,39 @@ def bin_revealed_card(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
+@effect_handler("put_revealed_card_onto_battlefield")
+def put_revealed_card_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top card of your library. If it's a creature card, **put it
+    onto the battlefield**." (Call of the Wild.)
+
+    ``bin_revealed_card`` above with the other destination, and located the same
+    way and for the same reason: CR 701.20 moves a revealed card nowhere, so it
+    is still in the library it was turned up in — found by **identity**, because
+    two copies of a card in a deck are the same immutable ``CardDefinition`` and
+    ``list.remove`` would take whichever entry came first.
+
+    It enters under its owner's control, which is the seat whose library it came
+    out of: the sentence names no other, and CR 110.2 gives a permanent nobody
+    was told to control to its owner. A card that has moved since is left alone
+    — CR 608.2 doing as much as it can.
+    """
+    card = context.results.get("revealed_card")
+    if card is None:
+        game.log.append(f"{context.card.name}: no card was turned up")
+        return True, "resolved"
+    for seat, player in enumerate(game.players):
+        for index, held in enumerate(player.library):
+            if held is card:
+                player.library.pop(index)
+                game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+                game.log.append(
+                    f"{context.card.name}: {card.name} enters the battlefield"
+                )
+                return True, "resolved"
+    game.log.append(f"{context.card.name}: {card.name} has already moved")
+    return True, "resolved"
+
+
 @effect_handler("graveyard_top_to_library")
 def graveyard_top_to_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"If the top card of target player's graveyard is a creature card, put

@@ -112,8 +112,19 @@ def _lower_return_self_instead_of_untapping(
     return (OracleInstruction("return_self_instead_of_untapping", "", {}),)
 
 
-def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
+def _lower_put_source_into_zone(
+    node, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """``Put it into your graveyard.`` (All Hallow's Eve.)
+
+    ``Reveal the top card of your library. … Otherwise, put it into your
+    graveyard.`` (Call of the Wild.) **The same printed words about a different
+    card**, and the parse cannot tell them apart: ``_parse_put_source_into_zone``
+    reads "it" as a self-reference and claims the clause before the
+    revealed-card production is ever asked. What separates them is whether an
+    earlier step of this same effect turned a card up, which is only in view
+    here — the arrangement ``RevealedCardIs`` already documents for "if it's a
+    …", and CR 608.2c is why it can be: the sentences are one effect.
 
     The zone stays payload — the handler switches on it — but only the
     destination that has a handler is admitted here. A "put it into your hand"
@@ -132,6 +143,13 @@ def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             f"no handler puts a source into a {zone.name}", node=node
         )
+    if "revealed_card" in produced:
+        # A reveal claims the pronoun first, and only a line with no reveal at
+        # all falls through to the source reading below. ``bin_revealed_card``
+        # is the instruction that already moves that card — out of whatever
+        # library it is still sitting in (CR 701.20 moves nothing) and into its
+        # owner's graveyard (CR 400.3).
+        return (OracleInstruction("bin_revealed_card", "", {}),)
     if zone.owner is not None and zone.owner.kind not in ("you", "owner"):
         raise LoweringError(
             "the source goes to its owner's graveyard, not a named player's",

@@ -1315,7 +1315,16 @@ class PendingChoicesMixin:
             del caster.library[:top_count]
             _bottom_the_rest(looked)
             self.discard_pending_choice(choice)
-            self.log.append(f"{caster.name} took nothing and put the rest on the bottom")
+            # The log names where the rest actually went. It said "on the
+            # bottom" for every printing, which is Garruk's Harbinger's and not
+            # Ancestral Knowledge's — the destination has been payload since
+            # `rest_destination` existed.
+            where = {
+                "library_top": "back on top", "graveyard": "into the graveyard",
+                "exile": "into exile",
+            }.get(str(choice.data.get("rest_destination", "library_bottom")),
+                  "on the bottom")
+            self.log.append(f"{caster.name} took nothing and put the rest {where}")
             return True
 
         if not isinstance(keep_index, int) or not (0 <= keep_index < top_count):
@@ -1335,11 +1344,22 @@ class PendingChoicesMixin:
         remaining = int(choice.data.get("remaining", 1))
         if remaining > 1 and top_count > 1:
             caster.library.pop(keep_index)
-            self.put_card_into_hand(caster, kept)
+            # Where the taken card goes, read the same way the terminal link
+            # below reads it. This branch put every card in a **hand** whatever
+            # the print said, which was safe only because the lowering refused
+            # any other destination for a counted pick — and the moment
+            # Ancestral Knowledge printed "exile any number of them", the first
+            # nine of its ten picks would have been drawn instead of exiled.
+            taken_to = str(choice.data.get("pick_destination", "hand"))
+            if taken_to == "exile":
+                caster.exile.append(kept)
+            else:
+                self.put_card_into_hand(caster, kept)
             self.discard_pending_choice(choice)
             self.log.append(
-                f"{caster.name} put {kept.name} into their hand "
-                f"({remaining - 1} more to take)"
+                f"{caster.name} took {kept.name} "
+                + ("into exile " if taken_to == "exile" else "into their hand ")
+                + f"({remaining - 1} more to take)"
             )
             # The keys are listed rather than the whole ``data`` dict passed
             # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
@@ -1358,6 +1378,7 @@ class PendingChoicesMixin:
                 rest_destination=choice.data.get("rest_destination", "library_bottom"),
                 pick_destination=choice.data.get("pick_destination", "hand"),
                 remaining=remaining - 1,
+                pile_index=choice.data.get("pile_index"),
             )
             return True
         del caster.library[:top_count]
@@ -1408,7 +1429,23 @@ class PendingChoicesMixin:
 
     def _default_look_top_pick(self, choice: PendingChoice) -> None:
         """A non-interactive seat keeps the first card it *may* keep, and takes
-        nothing when the phrase names none of them."""
+        nothing when the phrase names none of them.
+
+        The exception is an optional pick that **exiles from the chooser's own
+        library** (Ancestral Knowledge): "any number" includes none, and there
+        the pick is a cost rather than a gain — taking the first card ten times
+        would exile a tenth of the deck for nothing. A stated policy, like the
+        up-to-N maximum and the modal first mode; Sealed Fate's exile is not
+        optional and empties somebody else's library, so it is untouched.
+        """
+        exiles_own = (
+            choice.data.get("pick_destination") == "exile"
+            and self.look_top_pile_index(choice) == choice.player_index
+        )
+        if choice.data.get("optional") and exiles_own:
+            if not self._resolve_look_top_pick(choice, None):
+                self.discard_pending_choice(choice)
+            return
         eligible = self.live_look_top_candidates(choice)
         keep = eligible[0] if eligible else None
         if not self._resolve_look_top_pick(choice, keep):

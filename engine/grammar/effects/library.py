@@ -602,8 +602,41 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         # nothing reaches a hand, so it is a different statement that happens
         # to end the same way — the shared tail is read by the same words
         # below and carried out in the same place.
+        # "…**then** exile any number of them and put the rest back on top of
+        # your library in any order." (Ancestral Knowledge.) The conjunction is
+        # this card's punctuation — Orcish Librarian runs the two sentences on
+        # without it — so it is accepted here rather than treated as the word
+        # that ends the look. Read after the Sage Owl tail above, which spells
+        # its own "then put them back".
+        mark_exile = stream.mark()
+        stream.accept_word("then")
         if stream.at_word("exile"):
             stream.expect_word("exile")
+            # "exile **any number of** them" (Ancestral Knowledge): the count is
+            # the looker's, up to the whole pile, and none is a legal answer.
+            # A `LookTopPickToHand` rather than the random node below, because
+            # somebody chooses — which is the difference between the two, and
+            # the reason the shared tail is read by the same words either way.
+            if stream.accept_phrase("any", "number", "of", "them"):
+                stream.accept_punct(",")
+                stream.accept_word("and")
+                for word in ("put", "the", "rest"):
+                    stream.expect_word(word)
+                # "put the rest **back** on top" — the word Sage Owl also prints
+                # for the same move, optional because Orcish Librarian omits it.
+                stream.accept_word("back")
+                stream.expect_word("on")
+                if not stream.accept_phrase("top", "of", "your", "library"):
+                    raise stream.error("expected 'top of your library'")
+                for word in ("in", "any", "order"):
+                    stream.expect_word(word)
+                return ast.LookTopPickToHand(
+                    count,
+                    pick_count=count,
+                    pick_destination="exile",
+                    rest_destination="library_top",
+                    optional=True,
+                )
             exile_count = parse_amount(stream)
             for word in ("of", "them", "at", "random"):
                 stream.expect_word(word)
@@ -616,6 +649,7 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
             for word in ("in", "any", "order"):
                 stream.expect_word(word)
             return ast.LookTopExileRandom(count, exile_count)
+        stream.reset(mark_exile)
         stream.expect_word("put")
         # "Put **two** of them into your hand" (Ancestral Memories). The count
         # was the literal word "one", so the only card in the pool that takes

@@ -243,7 +243,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.WaiveShroud: _lower_waive_shroud,
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
-    ast.PutSourceIntoZone: _lower_put_source_into_zone,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
 }
 
@@ -339,4 +338,10 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "Put **it** into your graveyard" is All Hallow's Eve's own card or Call of
+    # the Wild's revealed one, and only a reveal earlier in the same effect
+    # tells them apart. It left the name-only table above for ``ast.Attach``'s
+    # reason, word for word: a pronoun is only a pronoun relative to what came
+    # before it, and with no record the same words mean something else.
+    ast.PutSourceIntoZone: _lower_put_source_into_zone,
 }
