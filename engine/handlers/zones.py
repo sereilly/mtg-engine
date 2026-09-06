@@ -1502,11 +1502,16 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
     # "Return **the top** creature card of your graveyard to the
-    # battlefield." (Shallow Grave.) CR 404.3 makes a graveyard ordered and
-    # CR 404.1 appends what arrives, so the *top* card is the last entry —
-    # the most recently added — and "the top creature card" is the last one
-    # of them. Nobody chooses, so any index the wire happened to carry is
-    # not this effect's: it is overwritten rather than preferred.
+    # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on *top* of
+    # its owner's graveyard and CR 404.2 keeps the pile in that order, and this
+    # engine appends — so the top card is the last entry, the most recently
+    # added, and "the top creature card" is the last one of them. Nobody
+    # chooses, so any index the wire happened to carry is not this effect's: it
+    # is overwritten rather than preferred.
+    #
+    # (CR 404.3 is the *simultaneous-arrival* tie-break and is not this rule;
+    # ``engine/graveyard_order.py`` records the correction and the W1G1 report
+    # lists the sites that copied it.)
     if instruction.payload.get("from_top"):
         idx = next(
             (
