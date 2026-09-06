@@ -228,6 +228,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             for index, other in enumerate(self.players)
         ):
             return False
+        # "Cumulative upkeep—Put a -1/-1 counter on this creature" (Aboroth),
+        # "—Draw a card" (Psychic Vortex). No resource is spent, so CR 118.3
+        # has nothing to ask about: `upkeep_costs._SELF_ACTION_KINDS` admits
+        # only acts that cannot fail, and CR 121.4 makes a draw from an empty
+        # library one of them — the player draws nothing and loses at the next
+        # state-based check, which is not the same as being unable to pay.
         return True
 
     def pay_upkeep_cost(
@@ -270,6 +276,44 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             )
         if cost.opponent_tokens:
             self._have_an_opponent_create(player, cost, reason=reason, source=source)
+        if cost.self_actions:
+            self._pay_self_action(player, cost, reason=reason, source=source)
+
+    def _pay_self_action(self, player, cost, *, reason: str, source) -> None:
+        """Pay a "cumulative upkeep—<do something>" cost (Aboroth, Psychic
+        Vortex).
+
+        The act is performed by executing the instruction the grammar lowered
+        the printed sentence to, against the payer's own seat and the permanent
+        that printed it — the same shape :meth:`_have_an_opponent_create` uses,
+        with the one difference that makes it safe to admit a wider set of
+        kinds: nothing is re-aimed.
+
+        Run **once per age counter** rather than once with a bigger number
+        (CR 702.24a: "pay [cost] for each age counter on it"). That is the whole
+        of the escalation for a cost whose content is an action, and it is why
+        ``scaled_cost`` multiplies the repetition count and leaves the payload
+        alone — three age counters buy three -1/-1 counters, and a payload
+        scaled instead would need a different key per instruction kind.
+        """
+        from ..game_types import OracleExecutionContext
+
+        action = cost.self_action or {}
+        kind = str(action.get("kind") or "")
+        if not kind:
+            return
+        instruction = OracleInstruction(kind, "", dict(action.get("payload") or {}))
+        context = OracleExecutionContext(
+            caster=player,
+            target=player,
+            card=source.card if source is not None else _reason_card(reason),
+            source_permanent=source,
+        )
+        for _ in range(cost.self_actions):
+            self._execute_oracle_instruction(instruction, context)
+        self.log.append(
+            f"{player.name} paid {cost.self_action_term()} for {reason}"
+        )
 
     def _have_an_opponent_create(self, player, cost, *, reason: str, source) -> None:
         """Pay a "have an opponent create <token>" cost (Varchild's War-Riders).

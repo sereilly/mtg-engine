@@ -162,6 +162,14 @@ def scaled_cost(instruction, counters: int) -> UpkeepCost:
         # means over a cost whose content is an action.
         opponent_token=printed.opponent_token,
         opponent_tokens=printed.opponent_tokens * counters,
+        # "Put a -1/-1 counter on this creature" (Aboroth) for each age counter
+        # — the repetition escalates and the act does not, which is the same
+        # shape the token above has. Listed here for the reason every field
+        # around it is: this constructor names every part, so a part left out is
+        # a cost half of which is silently free.
+        self_action=printed.self_action,
+        self_actions=printed.self_actions * counters,
+        self_action_text=printed.self_action_text,
     )
 
 

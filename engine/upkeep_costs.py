@@ -74,6 +74,25 @@ class UpkeepCost:
     #: escalation multiplies how many, never what each one is.
     opponent_token: dict | None = None
     opponent_tokens: int = 0
+    #: "Cumulative upkeep—**Put a -1/-1 counter on this creature**."
+    #: (Aboroth.) "Cumulative upkeep—**Draw a card**." (Psychic Vortex.)
+    #: CR 702.24a's licence taken in the third direction: a cost whose whole
+    #: content is something the **payer** does to themselves or to the
+    #: permanent, spending nothing anyone could run out of.
+    #:
+    #: ``{"kind": ..., "payload": {...}}`` — the instruction the grammar
+    #: lowered the printed sentence to, for ``opponent_token``'s reason exactly:
+    #: "a -1/-1 counter on this creature" already has one reader in this engine
+    #: and a second one would be free to disagree with it.
+    #:
+    #: Paired with a count like every other action here, and the count is a
+    #: number of **repetitions**: CR 702.24a says the cost is paid once for each
+    #: age counter, and a cost whose content is an action is paid again rather
+    #: than paid bigger. ``self_action_text`` is the printed clause, kept so the
+    #: prompt quotes the card rather than a rendering of a payload.
+    self_action: dict | None = None
+    self_actions: int = 0
+    self_action_text: str = ""
 
     def _paid_terms(self) -> list[str]:
         """The parts of the cost a player *pays*, as printed: "{1}{B}", "3
@@ -120,6 +139,25 @@ class UpkeepCost:
             return f"have an opponent create a {name}"
         return f"have an opponent create {self.opponent_tokens} {name}s"
 
+    def self_action_term(self) -> str:
+        """"put a -1/-1 counter on this creature", "draw a card 3 times" —
+        beside the three above and for their reason: nothing is handed over.
+
+        The one of the four that is public, because it has a second reader: the
+        payment path logs what it just did, and a log line spelling the
+        repetition itself would be a second copy of this arithmetic.
+
+        The clause as the card printed it rather than a rendering of the
+        instruction, and the repetition spelled out beside it, because that is
+        what CR 702.24a escalates: three age counters buy three -1/-1 counters,
+        not one bigger one.
+        """
+        if not self.self_actions:
+            return ""
+        if self.self_actions == 1:
+            return self.self_action_text
+        return f"{self.self_action_text} {self.self_actions} times"
+
     def _action_terms(self) -> list[str]:
         return [
             term
@@ -127,6 +165,7 @@ class UpkeepCost:
                 self._sacrifice_term(),
                 self._library_exile_term(),
                 self._opponent_token_term(),
+                self.self_action_term(),
             )
             if term
         ]
@@ -171,6 +210,10 @@ class UpkeepCost:
         if self.opponent_tokens:
             out["opponent_token"] = dict(self.opponent_token or {})
             out["opponent_tokens"] = self.opponent_tokens
+        if self.self_actions:
+            out["self_action"] = dict(self.self_action or {})
+            out["self_actions"] = self.self_actions
+            out["self_action_text"] = self.self_action_text
         return out
 
 
@@ -190,6 +233,9 @@ def cost_from_payload(payload: dict) -> UpkeepCost:
         exile_top_of_library=int(payload.get("exile_top_of_library") or 0),
         opponent_token=payload.get("opponent_token"),
         opponent_tokens=int(payload.get("opponent_tokens") or 0),
+        self_action=payload.get("self_action"),
+        self_actions=int(payload.get("self_actions") or 0),
+        self_action_text=str(payload.get("self_action_text") or ""),
     )
 
 
@@ -271,6 +317,91 @@ def _opponent_token_cost(clause: str) -> UpkeepCost | None:
     return UpkeepCost(opponent_token=payload, opponent_tokens=count)
 
 
+#: The instruction kinds a "cumulative upkeep—<do something>" cost may be.
+#: A whitelist for ``_opponent_token_cost``'s reason one function up, and the
+#: narrowing is the same one: what the payment *does* is execute the lowered
+#: instruction, so a kind admitted here is a promise that running it against the
+#: payer's own seat, with the permanent as the source, is the whole of the cost.
+#:
+#: Both of these are: nothing is chosen, nothing is targeted, nothing outside
+#: the payer's own board is touched, and neither can fail — CR 121.4 makes a
+#: draw from an empty library a legal thing to do rather than an unpayable cost,
+#: and a -1/-1 counter always fits. A kind that could prompt, target or run out
+#: refuses here and costs its card support, which is the loud direction.
+_SELF_ACTION_KINDS = frozenset({"add_counter_to_self", "draw_controller_cards"})
+
+#: Payload keys that make one of those instructions mean something other than
+#: what it says on its own: a count read off the board or off an earlier step, a
+#: recipient other than the payer, a target. A cost carrying one of them is a
+#: sentence this wrapper cannot re-run once per age counter, so it refuses.
+_SELF_ACTION_CONTEXT_KEYS = frozenset({
+    "x_from_count", "targets", "recipient", "recipient_players", "amount_from",
+})
+
+
+def _self_action_cost(clause: str) -> UpkeepCost | None:
+    """The cost "<do something>" names when the something is the payer's own
+    act, or None.
+
+    Read by **the grammar**, never by a pattern here, for the reason
+    :func:`_opponent_token_cost` gives: "a -1/-1 counter on this creature" has
+    one reader in this engine already.
+    """
+    from .grammar import compile_line
+
+    compiled = compile_line(clause[0].upper() + clause[1:] + ".")
+    if not compiled.usable or len(compiled.instructions) != 1:
+        return None
+    instruction = compiled.instructions[0]
+    if instruction.kind not in _SELF_ACTION_KINDS:
+        return None
+    payload = dict(instruction.payload)
+    if payload.keys() & _SELF_ACTION_CONTEXT_KEYS:
+        return None
+    # A count the sentence itself printed ("draw two cards") is data the
+    # instruction carries and the repetition multiplies; a count that is a word
+    # rather than a number is a back-reference this cannot re-run.
+    for key in ("count", "amount"):
+        if key in payload and not isinstance(payload[key], int):
+            return None
+    return UpkeepCost(
+        self_action={"kind": instruction.kind, "payload": payload},
+        self_actions=1,
+        self_action_text=clause,
+    )
+
+
+def _paid_cost(text: str) -> UpkeepCost | None:
+    """"{1}{U}", "pay 2 life", "pay {B} and 1 life" — the costs a player pays
+    *with* something, or None when the phrase is not one of them.
+
+    Split out of :func:`upkeep_cost_from_phrase` so the action costs below it
+    are reached by the phrase this reader refuses rather than by a pattern
+    guessing which of the two shapes a clause is. The whole phrase or nothing,
+    exactly as before: a term this cannot express refuses the lot.
+    """
+    if text.startswith("pay "):
+        text = text[len("pay "):]
+    mana: dict[str, int] = {}
+    life = 0
+    for term in text.split(" and "):
+        term = term.strip()
+        if _MANA_RUN.match(term):
+            symbols = mana_cost_from_symbols(term)
+            if symbols is None:
+                return None
+            for symbol, amount in symbols.items():
+                mana[symbol] = mana.get(symbol, 0) + amount
+            continue
+        life_term = _LIFE_TERM.match(term)
+        if life_term is None:
+            return None
+        life += int(life_term.group(1))
+    if not mana and not life:
+        return None
+    return UpkeepCost(mana=mana, life=life)
+
+
 def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
     """The cost a printed cost phrase names, or None when this engine cannot
     collect all of it.
@@ -300,26 +431,14 @@ def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
         if described is None:
             return None
         return UpkeepCost(sacrifice=described, sacrifices=1)
-    if text.startswith("pay "):
-        text = text[len("pay "):]
-    mana: dict[str, int] = {}
-    life = 0
-    for term in text.split(" and "):
-        term = term.strip()
-        if _MANA_RUN.match(term):
-            symbols = mana_cost_from_symbols(term)
-            if symbols is None:
-                return None
-            for symbol, amount in symbols.items():
-                mana[symbol] = mana.get(symbol, 0) + amount
-            continue
-        life_term = _LIFE_TERM.match(term)
-        if life_term is None:
-            return None
-        life += int(life_term.group(1))
-    if not mana and not life:
-        return None
-    return UpkeepCost(mana=mana, life=life)
+    paid = _paid_cost(text)
+    if paid is not None:
+        return paid
+    # "Cumulative upkeep—Put a -1/-1 counter on this creature." (Aboroth.)
+    # Last, so a phrase that is a payment is read as one: a clause reaching here
+    # is one no printed payment shape could take, which is what makes it safe to
+    # hand to the grammar rather than a guess about which shape it is.
+    return _self_action_cost(text)
 
 
 def _sacrifice_filter(phrase: str) -> dict | None:
